@@ -185,7 +185,7 @@ general proof against arbitrarily renamed storage.
 | Recipe editor "grams in one" memory — the grams this person gave for one of a food (food id + portion label, such as "fruit" or "medium") in place of a USDA typical size, ingredient-search round F4b. Written only when a recipe is saved; saved recipe lines carry their own grams and label, so clearing it changes no recipe — only which sizes the editor offers under "Your size" | UserDefaults `fernlet.recipePortionGrams.v1` (`RecipePortionGramsMemory`, device-local: never in the synced snapshot and never in CloudKit; like the sidecars above it rides an encrypted device backup and returns with a restore of this device; capped at 200 entries ≈ 18 KB, oldest evicted first) | `RecipePortionGramsMemory.clearAll` (plain UserDefaults removal — no failure signal), in `resetAll`, which `deleteAllData` reaches |
 | Workout tombstone ring — up to 200 UUIDs of removed workouts whose app-authored Health delete never confirmed | UserDefaults `fernlet.workout.tombstones` (`WorkoutTombstoneStore`) | `workoutTombstones.clearAll` (correct for both Health answers: the delete path already removed the samples, the keep path wants re-import — a surviving tombstone would delete a kept sample on the next re-enable) |
 | Group-activity rosters (persisted) | Sidecar (`ActivityLedger.json`, excluded from iCloud device backups) | `activities.clearAll` |
-| Guided-workout run state + Live Activity | App group + ActivityKit | `guidedRunStateStore.clear` |
+| Guided-workout run state + Live Activity — every field of the in-flight run, the Ready screen's optional food answer (`unfueled`, G12, 2026-10-20) among them; on a finished run it rides each lift's `ExerciseResult` into the day rows, which `resetDiary` and the repository purge take | App group + ActivityKit | `guidedRunStateStore.clear` (pinned with the field by `DeleteAllDataTests.roundTwosWorkoutSettingsAndTheRunsFoodAnswerGoWithTheWipe`) |
 | Cooking run state + Live Activity | App group + ActivityKit | `cookingRunStateStore.clear` |
 | Sensitive-visibility resolution | UserDefaults (`SensitiveVisibilityKeys`, device-local, non-synced): `sensitiveVisibilityResolved`, `sensitiveVisibilityResolvedPeriodVisible`, `sensitiveVisibilityResolvedIntimacyVisible` — the store's injectable `sensitiveVisibilityDefaults`, `.standard` in production. This column said "Memory" until 2026-08-20; it was wrong, and the difference matters — a memory-only resolution could not survive a wipe, and these keys can | `clearSensitiveVisibilityResolution` |
 | Age determination (intimacy 16+, mesh chat 13+) | UserDefaults `ageAssuranceRecord` | `ageAssurance.clear` |
@@ -215,7 +215,9 @@ general proof against arbitrarily renamed storage.
 | **Symbolic seams** `unresolved:key@FernletKit/Sources/LocalPersistence/LocalFernletRepository.swift` and `unresolved:$0@FernletKit/Sources/LocalPersistence/LocalFernletRepository.swift` — the parameter-keyed `loadLegacy(_:key:)` reader and the closure-shorthand removal loop beside it. Not distinct keys: they are the legacy `LegacyKeys` corpus in the row above, seen at seams whose key expression this wall cannot resolve | UserDefaults (`.standard`, legacy corpus) | `repository.purgeAllPersistedData` → `clearLegacyUserDefaultsIfPresent()`, which removes exactly that fixed set plus the `fernlet-day-` prefix sweep |
 
 (The `heartsAwayDelivery` consent flag itself lives in FernletSettings inside the snapshot — the
-repository purge takes it.)
+repository purge takes it. So do round 2's synced workout settings, 2026-10-20: the training focus
+`workoutStrengthFocus` and the food-logs switch `workoutFoodAware`, which `resetDiary`'s fresh
+`FernletSettings()` returns to Both and unset; `DeleteAllDataTests` pins both.)
 
 *The **MC peer-identity archive** row — `Application Support/FernletPeerID.archive`, the device name
 plus the stable `MCPeerID` the mesh and recipe-share radios advertised — was **retired on

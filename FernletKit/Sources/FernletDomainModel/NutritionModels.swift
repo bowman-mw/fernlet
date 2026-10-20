@@ -118,7 +118,7 @@ public nonisolated struct UserNutritionPreferences: Codable, Equatable {
 ///
 /// Also the derivation input for default period-surface visibility when the user has made no
 /// explicit choice (see ``FernletSettings``' `periodTrackingVisible`).
-public nonisolated enum BiologicalSex: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum BiologicalSex: String, Codable, CaseIterable, Identifiable, Sendable {
     case female
     case male
 

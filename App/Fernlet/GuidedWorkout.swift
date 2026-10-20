@@ -54,6 +54,8 @@ struct GuidedWorkoutSheet: View {
     @State private var lastWeightByName: [String: String] = [:]
     /// The exercise whose how-to sheet is open, by frozen name; nil when none is.
     @State private var howTo: ExerciseHowToRequest?
+    /// The Ready screen's optional "Eaten in the last few hours?" (G12): nil until answered.
+    @State private var fuelAnswer: Bool?
 
     init(
         store: FernletStore,
@@ -140,7 +142,7 @@ struct GuidedWorkoutSheet: View {
             onReplaceActiveRun: {
                 // R7: a replace can still be refused (the plan moved on under us) — name it and get
                 // out of the way rather than leaving the sheet pretending the run began.
-                if !store.startGuidedRun(session, replacingActiveRun: true) {
+                if !store.startGuidedRun(session, replacingActiveRun: true, unfueled: fuelAnswer == false) {
                     FernletAuditLog.log("workout.guided.startRefused", context: ["replacing": "true"])
                     dismiss()
                 }
@@ -282,12 +284,18 @@ struct GuidedWorkoutSheet: View {
             // A planned workout lists its lines as written; the app's own sessions, their steps.
             GuidedReadyList(exercises: session.exercises, writtenLines: store.plannedRunLink(for: session)?.lines ?? [:])
 
+            // G12: one optional tap before a long, high-volume session, when food logs may be used.
+            if WorkoutFuelCheck.asks(session.exercises, goal: store.settings.selectedGoal,
+                                     foodAware: store.settings.workoutUsesFoodLogs) {
+                GuidedFuelQuestion(answer: $fuelAnswer)
+            }
+
             primaryButton("Start", identifier: "workout.guided.start") {
                 // Another session's run may still be live — after a relaunch the Suggest sheet mints a
                 // fresh session, so this Start can arrive with sets already done elsewhere. Ask first.
                 if store.activeGuidedRunBlockingStart(of: session) != nil {
                     showReplaceConfirm = true
-                } else if !store.startGuidedRun(session) {
+                } else if !store.startGuidedRun(session, unfueled: fuelAnswer == false) {
                     // R7: the only refusal left is a run that became blocking between the check and
                     // the start — ask before throwing it away, instead of a Start that does nothing.
                     showReplaceConfirm = true

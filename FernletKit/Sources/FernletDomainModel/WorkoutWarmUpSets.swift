@@ -174,7 +174,7 @@ public nonisolated enum WorkoutWarmUpSets {
                 guidance: LoadGuidance(
                     targetReps: set.reps, prescription: weight, equipment: guidance.equipment,
                     unit: prescription.unit, calibration: .ramp, compoundsBefore: guidance.compoundsBefore,
-                    warmUp: true
+                    warmUp: true, loads: guidance.loads
                 )
             )
         }

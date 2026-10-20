@@ -40,13 +40,13 @@ struct WorkoutWarmUpSetsTests {
     /// A Push day for an intermediate lifter at a full gym, with the given history and switches.
     func pushSession(
         history: [String: [LiftExposure]] = [:], warmUpSets: Bool = true, intensity: WorkoutIntensity = .moderate,
-        calibrationDue: Bool = false
+        calibrationDue: Bool = false, goal: GoalType = .wellness
     ) throws -> WorkoutProgram.SessionSuggestion {
         let calibration = calibrationDue ? CalibrationSettings() : CalibrationSettings(hasCoach: true)
         let load = WorkoutLoadContext(exposures: history, today: day(30), defaultUnit: .lb,
                                       calibration: calibration, warmUpSets: warmUpSets)
         let plan = WorkoutProgram.dayPlan(
-            goal: .wellness, intensity: intensity, profile: WorkoutProfile(experience: .intermediate),
+            goal: goal, intensity: intensity, profile: WorkoutProfile(experience: .intermediate),
             location: .fullGym, context: "", split: Self.pushSplit, rotationIndex: 0, load: load
         )
         return try #require(plan.sessions.first)
@@ -356,7 +356,8 @@ struct WorkoutWarmUpSetsTests {
     @Test func aCalibratedLiftKeepsItsOwnRampAndGetsNoSecond() throws {
         let main = try mainLift()
         let history = [key(main.name): [lifted(21, 135, reps: 10), lifted(28, 135, reps: 10)]]
-        let session = try pushSession(history: history, calibrationDue: true)
+        // The monthly strength check runs for strength and sports prep (G7).
+        let session = try pushSession(history: history, calibrationDue: true, goal: .strength)
         let steps = lifting(session).filter { $0.name == main.name }
         let tags = steps.map { $0.guidance?.calibration }
         let expected: [CalibrationStep?] = [.ramp, .ramp, .ramp, .test]
@@ -420,18 +421,22 @@ struct WorkoutWarmUpSetsTests {
         #expect(afterAll == afterWorking, "the next prescription anchors on the working sets")
     }
 
-    @Test func warmUpSetsAreNeverPlateauEvidence() {
-        let stalled = [lifted(0, 135, reps: 10)]
-            + stride(from: 7, through: 28, by: 7).map { lifted($0, 135, reps: 9, effort: .tough) }
+    @Test func warmUpSetsAreNeverPlateauEvidenceNorCrowdTheCap() {
+        // Nine flat weeks, three sessions a week: a stall for a beginner whose age is known.
+        let stalled = (0..<9).flatMap { week in [0, 2, 4].map { lifted(week * 7 + $0, 135) } }
         var ramped: [LiftExposure] = []
         for session in stalled {
             let offset = Int(session.date.timeIntervalSince(Self.base) / 86_400)
             ramped += [lifted(offset, 55, calibration: .ramp), lifted(offset, 80, reps: 5, calibration: .ramp),
                        lifted(offset, 110, reps: 3, calibration: .ramp), session]
         }
-        let plain = WorkoutPlateau.status(of: stalled, unit: .lb, today: day(30))
-        let withWarmUps = WorkoutPlateau.status(of: ramped, unit: .lb, today: day(30))
-        #expect(plain != nil)
+        // 108 exposures, over the 64 a lift keeps: the ramps leave before the cap, not after.
+        #expect(ramped.count > WorkoutLoadEngine.maxExposuresPerLift)
+        let profile = TrendProfile(trainingAge: TrainingAge(weeks: 1 + 60.0 / 7))
+        let plain = WorkoutPlateau.status(of: stalled, unit: .lb, today: day(62), profile: profile)
+        let withWarmUps = WorkoutPlateau.status(of: ramped, unit: .lb, today: day(62), profile: profile)
+        let state = plain?.state
+        #expect(state == .stalled)
         #expect(withWarmUps == plain)
     }
 

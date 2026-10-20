@@ -71,6 +71,64 @@ extension WorkoutPlannerCopy {
                       comment: "Workout session note about one lift: a lighter weight today because the reps fell short last time. Arguments: the exercise name, then the weight with its unit.")
     }
 
+    /// "Bench press: the same again today — one more session like the last, and it moves on."
+    static func confirming(_ name: String) -> String {
+        String(localized: "workoutNote.load.confirming",
+               defaultValue: "\(name): the same again today — one more session like the last, and it moves on.",
+               bundle: .module,
+               comment: "Workout session note about one lift for someone past their first months of lifting: progress comes after two good sessions in a row, so today repeats the last one. The argument is the exercise name.")
+    }
+
+    /// N7: "If you'd like a harder step for Goblet squat, Bulgarian split squat works the same muscles
+    /// — it's the first swap when you edit the plan. Otherwise more reps, then a set, keep it moving."
+    static func harderVariation(_ variant: String, lift: String) -> String {
+        String(localized: "workoutNote.load.harderVariation",
+               defaultValue: "If you'd like a harder step for \(lift), \(variant) works the same muscles — it's the first swap when you edit the plan. Otherwise more reps, then a set, keep it moving.",
+               bundle: .module,
+               comment: "Workout session note: a lift is at the heaviest weight this place has, so a harder version of it is offered, never required. Arguments: the lift, then the harder exercise.")
+    }
+
+    /// G10: the load held after a miss on a flagged day, said as what happened alongside it.
+    static func heldAfterFlag(_ name: String, shortNight: Bool) -> String {
+        guard shortNight else {
+            return String(localized: "workoutNote.load.heldAfterLightDay",
+                          defaultValue: "\(name): the same weight today — last time fell on a light day, so it doesn't count as a miss.",
+                          bundle: .module,
+                          comment: "Workout session note about one lift: the reps fell short last time on a day the person took or was offered as light, so the weight stays. The argument is the exercise name.")
+        }
+        return String(localized: "workoutNote.load.heldAfterShortNight",
+                      defaultValue: "\(name): the same weight today — last time came after a short night, which can take a little off a session, so it doesn't count as a miss.",
+                      bundle: .module,
+                      comment: "Workout session note about one lift: the reps fell short last time on a day after a short night's sleep, so the weight stays. Said as something that happened alongside, never as blame. The argument is the exercise name.")
+    }
+
+    /// G12: the load held after a later-sets miss in a long session with nothing eaten for a while.
+    static func heldUnfueled(_ name: String) -> String {
+        String(localized: "workoutNote.load.heldUnfueled",
+               defaultValue: "\(name): the same again today — later sets often come up short in a long session when nothing's been eaten for a while, so last time doesn't count as a miss.",
+               bundle: .module,
+               comment: "Workout session note about one lift: its later sets fell short last time in a long session started without having eaten, so the weight stays and it isn't counted as a miss. Calm and factual, never advice to eat. The argument is the exercise name.")
+    }
+
+    /// The block calendar's line (G2): "Heavier block, week 2 of 4: main lifts are 5 sets of 3 reps —
+    /// fewer reps at more weight, then back to volume."
+    static func block(_ phase: BlockPhase, week: Int, of weeks: Int, sets: Int, reps: Int) -> String {
+        let current = week.formatted()
+        let total = weeks.formatted()
+        switch phase {
+        case .volume:
+            return String(localized: "workoutNote.block.volume",
+                          defaultValue: "Volume block, week \(current) of \(total): main lifts are \(setCount(sets)) of \(repCount(reps)) — more work at a moderate weight, then a heavier block.",
+                          bundle: .module,
+                          comment: "Workout session note for a trained strength lifter's planned block. Arguments: the week of the block (digits), the block's length in weeks (digits), a number of sets (e.g. '4 sets'), then a number of reps (e.g. '6 reps').")
+        case .heavier:
+            return String(localized: "workoutNote.block.heavier",
+                          defaultValue: "Heavier block, week \(current) of \(total): main lifts are \(setCount(sets)) of \(repCount(reps)) — fewer reps at more weight, then back to volume.",
+                          bundle: .module,
+                          comment: "Workout session note for a trained strength lifter's planned block. Arguments: the week of the block (digits), the block's length in weeks (digits), a number of sets (e.g. '5 sets'), then a number of reps (e.g. '3 reps').")
+        }
+    }
+
     /// "Bench press: lighter and one set fewer today — a reset, not a step back."
     static func lighterFewerSets(_ name: String) -> String {
         String(localized: "workoutNote.load.lighterFewerSets",

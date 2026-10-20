@@ -67,10 +67,11 @@ struct WorkoutWeightInventoryTests {
     )
 
     func pushSession(at location: WorkoutLocation, history: [String: [LiftExposure]] = [:],
-                     calibration: CalibrationSettings = CalibrationSettings(hasCoach: true)) throws -> WorkoutProgram.SessionSuggestion {
+                     calibration: CalibrationSettings = CalibrationSettings(hasCoach: true),
+                     goal: GoalType = .wellness) throws -> WorkoutProgram.SessionSuggestion {
         let load = WorkoutLoadContext(exposures: history, today: day(30), defaultUnit: .lb, calibration: calibration)
         let plan = WorkoutProgram.dayPlan(
-            goal: .wellness, intensity: .moderate, profile: WorkoutProfile(experience: .intermediate),
+            goal: goal, intensity: .moderate, profile: WorkoutProfile(experience: .intermediate),
             location: location, context: "", split: Self.pushSplit, rotationIndex: 0, load: load
         )
         return try #require(plan.sessions.first)
@@ -283,7 +284,8 @@ struct WorkoutWeightInventoryTests {
         let history = [WorkoutExerciseCatalog.normalizedName(main.name): [
             session(21, 135, reps: 10), session(28, 135, reps: 10),
         ]]
-        let session = try pushSession(at: garage, history: history, calibration: CalibrationSettings())
+        // The monthly strength check runs for strength and sports prep (G7).
+        let session = try pushSession(at: garage, history: history, calibration: CalibrationSettings(), goal: .strength)
         let steps = lifting(session).filter { $0.name == main.name }
         #expect(steps.compactMap(\.guidance?.calibration) == [.ramp, .test])
         // Estimate 189 lb; the 155 lb test lands on 135, the 80 lb ramp on 95, and the ramps that

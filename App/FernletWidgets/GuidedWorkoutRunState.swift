@@ -203,9 +203,40 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         /// The weight came written in a planned workout's line: `suggested` is that weight, preselected as
         /// written, with no range around it. Nil for the engine's own suggestion, and in an older run.
         var asWritten: Bool?
+        /// The loads the location owns for this lift's gear, lightest first, at most ``maxLoads`` (R6,
+        /// 2026-10-20): the lighter and heavier buttons step through these instead of by ``step``. Nil
+        /// when the location's weights say nothing, and in a run persisted before they were carried —
+        /// optional, so such a run still decodes.
+        var loads: [Double]?
 
         /// Sets an edit may carry at most.
         static let maxSets = 20
+        /// Owned loads a run carries for one lift at most (the planner sends 48 around the suggestion).
+        static let maxLoads = 64
+
+        /// The weight one tap of the lighter (`direction` −1) or heavier (+1) button picks: the next
+        /// owned load that way when the location's weights are known, else one ``step``. At the end of
+        /// the owned loads it stays put; with nothing picked yet it starts from `start`.
+        func steppedWeight(direction: Int, start: Double?) -> Double? {
+            guard let selected else { return start }
+            guard let loads, !loads.isEmpty else {
+                return step.map { selected + Double(direction.signum()) * $0 }
+            }
+            if direction > 0 { return loads.first { $0 > selected + 0.01 } ?? selected }
+            return loads.last { $0 < selected - 0.01 } ?? selected
+        }
+
+        /// `weight` placed on the owned loads (the nearest, a tie going lighter), or on the step when
+        /// none are known.
+        func snapped(_ weight: Double) -> Double? {
+            if let loads, !loads.isEmpty {
+                var best = loads[0]
+                for load in loads.prefix(Self.maxLoads) where abs(load - weight) < abs(best - weight) - 1e-9 { best = load }
+                return best
+            }
+            guard let step, step > 0 else { return nil }
+            return max(step, (weight / step).rounded() * step)
+        }
 
         /// The lift takes a load: the runner shows its weight picker.
         var isLoadable: Bool { step != nil && unitRaw != nil }
@@ -291,6 +322,12 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     /// calendar — which a natural finish completes, as "log it" does. Nil for the app's own sessions,
     /// and in a run persisted before planned workouts could be guided.
     var plannedWorkoutID: UUID?
+
+    /// True when the lifter answered "no" to the Ready screen's optional "Eaten in the last few
+    /// hours?" (G12, `WorkoutFuelCheck`). Every tracked lift's result carries it, so a shortfall in the
+    /// later sets is held rather than counted as a miss; it never changes a weight. Nil when not asked,
+    /// answered "yes", or in a run persisted before the question existed — which decodes unchanged.
+    var unfueled: Bool?
 
     // MARK: Cursor
 
@@ -722,11 +759,12 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         exercises.firstIndex { $0.id == id }
     }
 
-    /// The weight the lifter picked for one lift, snapped to the equipment's step and kept positive.
+    /// The weight the lifter picked for one lift, snapped to the location's owned loads when the run
+    /// carries them (R6), else to the equipment's step, and kept positive.
     mutating func selectWeight(_ weight: Double?, forExercise id: UUID) {
         guard let index = index(of: id), var tracking = exercises[index].tracking, tracking.isLoadable else { return }
-        if let weight, let step = tracking.step, step > 0, weight.isFinite {
-            tracking.selected = max(step, (weight / step).rounded() * step)
+        if let weight, weight.isFinite, let placed = tracking.snapped(weight) {
+            tracking.selected = placed
         } else {
             tracking.selected = nil
         }

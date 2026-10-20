@@ -27,6 +27,21 @@ public nonisolated enum ExperienceLevel: String, Codable, CaseIterable, Identifi
         }
     }
 
+    /// The level as the answer to Workout setup's "How long have you lifted regularly?" (G8,
+    /// 2026-10-20): under six months, six months to two years, more than two years — the training-age
+    /// tiers the load engine paces progression by (``TrainingTier``). The same stored field; nothing
+    /// new is kept, and each lift's own log refines it (``WorkoutLoadContext/trainingAge(for:)``).
+    public var trainingAgeLabel: String {
+        switch self {
+        case .beginner: String(localized: "experienceLevel.trainingAge.beginner", defaultValue: "Under 6 months",
+                               bundle: .module, comment: "Workout setup: answer to 'How long have you lifted regularly?' — less than six months")
+        case .intermediate: String(localized: "experienceLevel.trainingAge.intermediate", defaultValue: "6 months to 2 years",
+                                   bundle: .module, comment: "Workout setup: answer to 'How long have you lifted regularly?' — between six months and two years")
+        case .advanced: String(localized: "experienceLevel.trainingAge.advanced", defaultValue: "More than 2 years",
+                               bundle: .module, comment: "Workout setup: answer to 'How long have you lifted regularly?' — two years or longer")
+        }
+    }
+
     /// Beginners get fewer accessory slots so sessions stay sustainable.
     public var maxSlotsPerDay: Int {
         switch self {

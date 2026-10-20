@@ -638,8 +638,9 @@ The planner's words are localized without touching what it stores (2026-10-20, i
 
 ### Load-aware progression and plateaus
 
-The owner's spec of 2026-10-19. Given a ``WorkoutLoadContext`` (each lift's logged sessions as
-``LiftExposure``s, recent sleep and protein, the calibration state), `WorkoutProgram.dayPlan` runs
+The owner's spec of 2026-10-19, with round 2's trend and ladder (2026-10-20). Given a
+``WorkoutLoadContext`` (each lift's logged sessions as ``LiftExposure``s with their sleep and
+readiness flags, recent protein and logged weigh-ins, the calibration state), `WorkoutProgram.dayPlan` runs
 its lifting picks through a load pass. Everything is derived from the history each time — no stored
 estimate — so the same history always builds the same plan.
 
@@ -647,20 +648,83 @@ estimate — so the same history always builds the same plan.
   the tank added back (sets of 12 or fewer, three sessions in eight weeks weighted 3:2:1) and sets a
   ``WeightPrescription`` whose width follows ``EstimateConfidence``: ±10 % low, ±5 % medium, one step
   at high, on the equipment's steps.
-- **Next session.** Completed → one more rep, or at the top of the range more weight and back to the
-  bottom ("add weight now"); tough or a small miss → repeat; a real miss → lighter; a third in a row
-  → lighter and a set fewer. Two overrides the same way, or a "too heavy / too light" answer,
-  re-center the estimate on the lifter's picks; a third override in five sessions asks why once
-  (``OverrideReason``).
-- **Plateau.** ``WorkoutPlateau`` calls a lift stalled only after steady recent training (three
-  sessions in four weeks, no gap over 14 days) whose last four sessions, taken from the range and not
-  buried behind two other compound lifts, beat the earlier best by 1 % or less — and not when overrides
-  explain it. The response follows ``PlateauStage`` in the owner's order: rest check
-  (``RecoverySummary``), an easier session with the lift first and longer rest, support work for the
-  helper muscles, then a variation. A new best clears it.
+- **Next session.** Completed → one more rep, or at the top of the range a fixed step heavier and back
+  to the bottom ("add weight now"; G4: one equipment step on an upper-body lift, one or two on a
+  lower-body one, landing on the location's own weights) — as often as the lift's training age allows
+  (G3, ``TrainingTier``: after every successful session in the first six months, after two in a row
+  from six months to two years (`LoadChange.confirming`), once per four-week block past that
+  (`LoadChange.blockHold`)). The training age is Workout setup's "How long have you lifted
+  regularly?" — the existing ``ExperienceLevel``, nothing new stored — raised per lift by how long that
+  lift has been logged (``WorkoutLoadContext/trainingAge(for:)``); "under 6 months" keeps the trend's
+  age inferred. Tough or a miss → repeat; a second miss in a row on days with no sleep or
+  readiness flag → lighter; a third → lighter and a set fewer. A flagged miss (``WorkoutSessionFlag``)
+  always holds the load and never counts toward a cut (G10, 2026-10-20; `LoadChange.heldAfterFlag`,
+  its note said as what happened alongside it). Two overrides the same way,
+  or a "too heavy / too light" answer, re-center the estimate on the lifter's picks; a third override
+  in five sessions asks why once (``OverrideReason``).
+- **The trend (G1, 2026-10-20).** ``WorkoutTrend`` fits a robust weighted line through each lift's
+  session scores in log units (``WorkoutTrend/sessionScore(of:in:)``: the top one or two sets with
+  reps plus reps in reserve at 10 or fewer, 12 at most, averaged; a true single at its weight) and
+  judges its slope against the person's expected linear-log curve, b about 10 % from an untrained
+  start and 2.5 % from a trained one (``TrainingTier``, ``TrainingAge``, ``LifterTraits``; zero for a
+  long-trained lifter over 60, so a steady line there is success). The noise starts at the tier's
+  prior and becomes the person's own scatter after ten clean sessions. ``TrendState``: progressing,
+  slowing (a soft note), stalled (the upper 80 % bound of the slope under 1 % per four weeks and
+  clearly under the expected curve, on three readings in a row), dipping (two clean sessions more
+  than two typical errors under the line) or too early. A session after a short night or on a light
+  day (``WorkoutSessionFlags``: 6 h or less, or 90 minutes under the 14-night median) counts at half
+  weight when it falls short and never toward a stall. The trend restarts when the rep scheme moves
+  or after four weeks away. A seeded Monte Carlo (`WorkoutPlateauSimulationTests`) holds false
+  plateaus to 5 % or fewer of histories over 12 weeks, against nearly all of them for the rule it
+  replaced.
+- **Plateau (G5).** ``WorkoutPlateau`` reads the trend into a ``PlateauStatus`` — not when overrides
+  explain it or the lift is on a break — and a stall walks ``PlateauStage`` in order: a fair retest
+  (the lift first, at least three minutes' rest), a loading change (a short heavier block, or a set
+  more), a variant beside the lift (which stays, a set lighter), then holding steady with calm,
+  goal-appropriate options. A dip gets a deload instead: half the sets at the kept load, once. The old
+  helper-muscle support step is gone; the old ladder's tokens resolve to the nearest new step
+  (``PlateauStage/resolve(token:parkedToken:)``). The session note gives at most two context lines and
+  always a plain training option.
+- **What each goal hears (G7, 2026-10-20).** ``PlateauTracking``: wellness, mental health, recovery
+  and exploring get no plateau notes and no monthly strength test — they track minutes and sessions;
+  weight management hears only a quiet "strength held" check
+  (``WorkoutPlateau/strengthHeldStatus(of:unit:today:profile:)``, ``WorkoutTrend/hasEased(_:profile:)``:
+  weeks of a line falling beyond noise, said as something a calorie deficit can bring, never a push to
+  eat more); strength and sports prep follow their main lifts' full trend and keep the test.
+- **Food, as context only (G11–G13, 2026-10-20).** Workout setup's "Use food logs in workout notes"
+  (``WorkoutLoadContext/foodAware``, the synced `FernletSettings.workoutFoodAware`, on until switched
+  off) lets the trend story mention food once the logs can be read; food never cuts a weight or speeds
+  progress, and missing logs say nothing. Protein (``RecoverySummary``) is read against a fixed floor
+  of about 1.2 g per kg a day, allowing for self-logged intake running about a fifth low, only with
+  meals on five or more days in each of the last two weeks, beside a stall, a dip or a slowing, never
+  to weight management, with a doctor caveat for older lifters and kidney concerns. Logged weigh-ins
+  (``WorkoutBodyWeightTrend``: at least 0.5 % a week down over two to four weeks, 1.645 standard
+  errors clear of flat, on three weigh-ins in a row — 3 % of steady weights called falling over eight
+  weeks in its simulation) explain a Size lifter's stall, and beside weight management's strength-held
+  check bring a gentle check-in. Before a long, high-volume session the runner may ask one optional
+  "Eaten in the last few hours?" (``WorkoutFuelCheck``); a "no" holds a shortfall in the later sets
+  rather than counting it (`LoadChange.heldUnfueled`, ``ExerciseResult/unfueled``) and the trend
+  scores the top set alone.
+- **Training focus (G6).** ``WorkoutStrengthFocus``, a synced Workout setup choice: Strength (main
+  lifts 3–5 reps), Size (6–10 main, 10–15 the rest, a set more past six months on a lift and two past
+  two years) or Both — the default, the goal's own mix. A Size focus never follows the blocks.
+- **Age-adjusted copy (G9).** For a lifter of 60 or more the slowing and holding-steady notes say
+  that holding strength is progress, and a long-trained lifter past 60 expects a steady line.
+- **Blocks (G2, 2026-10-20).** A trained Strength lifter's main lifts follow ``WorkoutBlocks``: four
+  weeks of volume (``BlockPhase/volume``, 4 × 6) then four heavier (``BlockPhase/heavier``, 5 × 3),
+  counted from one fixed Monday so every device agrees (``BlockWeek``). The engine rebaselines each
+  lift from its estimate at a switch, the session note names the block and its week, and the plateau
+  trend reads both phases as one line — the backup to the plan.
 - **Calibration.** ``WorkoutCalibration`` turns the main lift into a submaximal test about every four
   weeks for people without a coach plan, a one-set strength check when the estimate is already
-  trusted, or — opt-in, trained lifters only (`WorkoutProfile.oneRepMaxTesting`) — a true max.
+  trusted, or — opt-in, trained lifters only (`WorkoutProfile.oneRepMaxTesting`) — a true max. On a
+  day whose time budget can't hold it (under 30 minutes, or the block with the check's rests over the
+  budget), the check waits for a roomier day and the note says so (N3).
+- **At the heaviest weight (N7).** While a lift sits at the heaviest load its location has, the plan
+  offers a harder variation — the same work one difficulty step up, a squat may step to a split
+  squat (``LoadGuidance/harderVariation``) — as the plan editor's first swap; more reps, then a set,
+  stays the plan. The guided runner's lighter and heavier buttons step through the loads the location
+  owns (``LoadGuidance/loads``, ``LoadLadder/window(around:count:)``; R6).
 - **Weights on hand (2026-10-20).** A location can list the dumbbell pairs, kettlebells, bar and
   plate pairs it has (``WorkoutWeightInventory``, presets in ``WorkoutWeightPresets``); every weight
   the load pass prescribes there — the range, the easier session, the calibration's sets — is then a
@@ -718,6 +782,17 @@ never drops them; an older build that drops `setWeights` still has them in the l
 - ``OverrideReason``
 - ``OverrideDirection``
 - ``EstimateConfidence``
+- ``WorkoutTrend``
+- ``TrendState``
+- ``TrendReading``
+- ``TrendPoint``
+- ``TrendProfile``
+- ``TrainingTier``
+- ``TrainingAge``
+- ``LifterTraits``
+- ``WorkoutSessionFlag``
+- ``SleepFlag``
+- ``WorkoutSessionFlags``
 - ``WorkoutPlateau``
 - ``PlateauStatus``
 - ``PlateauStage``
@@ -735,6 +810,14 @@ never drops them; an older build that drops `setWeights` still has them in the l
 - ``WarmUpSet``
 - ``WorkoutAdjustedLoad``
 - ``PlateCalculator``
+- ``WorkoutBlocks``
+- ``BlockPhase``
+- ``BlockWeek``
+- ``WorkoutStrengthFocus``
+- ``PlateauTracking``
+- ``WorkoutFuelCheck``
+- ``WorkoutBodyWeightTrend``
+- ``BodyWeightSample``
 - ``BarbellPlateSet``
 - ``PlateLoadout``
 

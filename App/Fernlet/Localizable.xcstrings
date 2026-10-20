@@ -3013,6 +3013,17 @@
         }
       }
     },
+    "Eaten in the last few hours?" : {
+      "comment" : "Guided workout ready screen: an optional question before a long, high-volume lifting session.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Eaten in the last few hours?"
+          }
+        }
+      }
+    },
     "Eating enough, eating well." : {
 
     },
@@ -3295,9 +3306,6 @@
     },
     "Exercises and swaps" : {
       "comment" : "Workout setup: entry to custom exercises, hidden exercises and saved swaps"
-    },
-    "Experience" : {
-
     },
     "Expired" : {
 
@@ -4208,6 +4216,17 @@
     },
     "How friends will see you" : {
 
+    },
+    "How long have you lifted regularly?" : {
+      "comment" : "Workout setup: the question that sets the person's training age, which paces how often their lifts move on. Answered with one of three durations.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "How long have you lifted regularly?"
+          }
+        }
+      }
     },
     "How long?" : {
 
@@ -5294,6 +5313,17 @@
     "Nicely done" : {
 
     },
+    "No" : {
+      "comment" : "Guided workout ready screen: the answer that nothing was eaten in the last few hours.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No"
+          }
+        }
+      }
+    },
     "No AI calls have been made from this device." : {
 
     },
@@ -5448,6 +5478,17 @@
     },
     "No worries — you can add a photo of the barcode, or just enter it by hand." : {
 
+    },
+    "No, I haven't eaten" : {
+      "comment" : "VoiceOver label for the ready screen's 'No' to 'Eaten in the last few hours?'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No, I haven't eaten"
+          }
+        }
+      }
     },
     "Nobody has joined this session yet — that message wasn't sent. Try again in a moment." : {
 
@@ -5608,6 +5649,17 @@
     "Once you've logged a few cycles, Fernlet can gently soften your daily score on the phases that tend to be harder for you, and show a cycle chip and outlook on Home. It's optional, stays on this device, and never leaves the app." : {
 
     },
+    "Once you've logged meals most days for two weeks, workout notes may mention protein. Before a long session, the workout may ask if you've eaten. Food never changes your weights." : {
+      "comment" : "Workout setup: the note under 'Use food logs in workout notes'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Once you've logged meals most days for two weeks, workout notes may mention protein. Before a long session, the workout may ask if you've eaten. Food never changes your weights."
+          }
+        }
+      }
+    },
     "One exercise per line, e.g. Squat 3x8 @60" : {
 
     },
@@ -5718,6 +5770,17 @@
     },
     "Optional" : {
 
+    },
+    "Optional. In a long session, later sets can come up short without food — a “no” keeps that from counting as a miss." : {
+      "comment" : "Guided workout ready screen: the note under 'Eaten in the last few hours?'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Optional. In a long session, later sets can come up short without food — a “no” keeps that from counting as a miss."
+          }
+        }
+      }
     },
     "Optional. With these set, Fernlet suggests only weights you can make here, and adds reps before a big jump." : {
       "comment" : "Location editor: what listing the weights a space has does"
@@ -8384,6 +8447,17 @@
     "This session stays on screen" : {
 
     },
+    "This sets how often Fernlet moves your lifts on. Each lift's own log fine-tunes it." : {
+      "comment" : "Workout setup: the note under 'How long have you lifted regularly?', saying what the answer does.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This sets how often Fernlet moves your lifts on. Each lift's own log fine-tunes it."
+          }
+        }
+      }
+    },
     "This tunes suggestions without locking you into rules." : {
 
     },
@@ -8519,6 +8593,17 @@
     },
     "Trainer summaries and manual plan exchange" : {
 
+    },
+    "Training focus" : {
+      "comment" : "Workout setup: the choice between Strength, Size and Both, which shapes reps and sets.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Training focus"
+          }
+        }
+      }
     },
     "Training here" : {
 
@@ -8701,6 +8786,28 @@
     },
     "Use Import workout plan to review a Fernlet plan file." : {
 
+    },
+    "Use food logs" : {
+      "comment" : "Voice Control name for Workout setup's food-logs switch.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Use food logs"
+          }
+        }
+      }
+    },
+    "Use food logs in workout notes" : {
+      "comment" : "Workout setup: the switch that lets workout notes mention logged protein and body weight, and lets the runner ask about food before a long session.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Use food logs in workout notes"
+          }
+        }
+      }
     },
     "Use infrastructure Wi-Fi" : {
 
@@ -9153,6 +9260,28 @@
     },
     "Write it down — the box can hold it for a while, so you don't have to." : {
 
+    },
+    "Yes" : {
+      "comment" : "Guided workout ready screen: the answer that food was eaten in the last few hours.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Yes"
+          }
+        }
+      }
+    },
+    "Yes, I've eaten" : {
+      "comment" : "VoiceOver label for the ready screen's 'Yes' to 'Eaten in the last few hours?'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Yes, I've eaten"
+          }
+        }
+      }
     },
     "Yesterday %@" : {
 

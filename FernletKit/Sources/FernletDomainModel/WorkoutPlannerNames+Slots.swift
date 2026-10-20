@@ -42,7 +42,7 @@ public nonisolated enum WorkoutSlotNames {
         case "Overhead press": String(localized: "workoutSlot.overheadPress", defaultValue: "Overhead press", bundle: .module, comment: "Part of a workout session: a press overhead")
         case "Dip / decline": String(localized: "workoutSlot.dip", defaultValue: "Dip / decline", bundle: .module, comment: "Part of a workout session: a dip or a decline press")
         case "Lower power": String(localized: "workoutSlot.lowerPower", defaultValue: "Lower power", bundle: .module, comment: "Part of a workout session: an explosive lower-body movement")
-        case "Support": String(localized: "workoutSlot.support", defaultValue: "Support", bundle: .module, comment: "Part of a workout session: extra work for the muscles that help a stalled lift")
+        case "Variant": String(localized: "workoutSlot.variant", defaultValue: "Variant", bundle: .module, comment: "Part of a workout session: a related exercise added beside a lift that has held steady for a while")
         default: nil
         }
     }

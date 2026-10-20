@@ -316,7 +316,8 @@ struct GuidedWorkoutEditorSheet: View {
     /// Opens the swap sheet for `row`, with options that skip everything already in the session.
     private func openSwap(for row: PrescribedExercise) {
         let options = store.exerciseSwapOptions(
-            for: row.name, excluding: Set(rows.map(\.name)), alsoHidden: preferenceEdits.hidden
+            for: row.name, excluding: Set(rows.map(\.name)), alsoHidden: preferenceEdits.hidden,
+            harder: row.guidance?.harderVariation
         )
         swapRequest = EditorSwapRequest(id: row.id, name: row.name, options: options)
     }
