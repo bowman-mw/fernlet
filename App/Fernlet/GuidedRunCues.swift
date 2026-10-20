@@ -209,14 +209,14 @@ final class GuidedRunCueDirector {
     ///   - isAppActive: Whether the app is in front, read at every play.
     ///   - scheduleBackground: Replaces the pending background cue.
     init(
-        feedback: FernletFeedback = .system,
+        feedback: FernletFeedback? = nil,
         preferences: @escaping @MainActor () -> FernletFeedbackPreferences = { WorkoutCuePreferences.current() },
         isAppActive: @escaping @MainActor () -> Bool = { UIApplication.shared.applicationState == .active },
         scheduleBackground: @escaping BackgroundScheduler = { cues, sound in
             await NotificationService.replaceWorkoutCues(cues, soundFileName: sound)
         }
     ) {
-        self.feedback = feedback
+        self.feedback = feedback ?? .system
         self.preferences = preferences
         self.isAppActive = isAppActive
         self.scheduleBackground = scheduleBackground
