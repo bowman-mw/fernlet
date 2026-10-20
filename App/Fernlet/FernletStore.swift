@@ -4953,6 +4953,8 @@ final class FernletStore {
         // The session's start, for the logged duration: the run carries it, so it survives a relaunch.
         state.startedAt = state.setStartedAt
         guidedRunState = state
+        // Spoken cues name the first step once, here at Start (never on a resume).
+        guidedRunCues.started(state)
         mirrorGuidedRunState(state)
         WorkoutLiveActivityController.start(state)
         // Starting a guided workout (and its Live Activity) is a first workout too: make the one
