@@ -7,8 +7,9 @@
 //
 // THE BUG THIS PINS SHUT. The gate auto-presents Face ID once per lock session, and someone who prefers
 // typing their passcode dismisses that sheet on every visit to the Private tab. The view used to filter
-// only the SPEECH for a dismissal. It still set the red error text, and `.sensoryFeedback` buzzed
-// `.error` on the arriving message, so every visit greeted that person with a failure.
+// only the SPEECH for a dismissal. It still set the red error text, and the error haptic (then
+// `.sensoryFeedback`, now `.fernletFeedback(.failed, …)`) buzzed on the arriving message, so every visit
+// greeted that person with a failure.
 //
 // The answer is pure, so the unit tests drive it directly. The last test is a source pin for the one
 // thing they cannot reach: that the view takes its message, its announcement and (through the message)
@@ -162,8 +163,10 @@ import FernletFoundation
                 "triggerBiometric() writes errorMessage twice: nil before the attempt, the answer after it")
         #expect(normalized.components(separatedBy: "unlockWithBiometrics(for: scope)").count == 2,
                 "the view attempts a biometric unlock in one place")
+        // The haptic moved onto FernletUI's FernletFeedback in the sounds-and-haptics pass (A6): the same
+        // trigger and the same "only an ARRIVING message" rule, through the app-wide Haptics level.
         #expect(normalized.contains(
-            ".sensoryFeedback(trigger: errorMessage) { _, message in message == nil ? nil : .error }"),
+            ".fernletFeedback(.failed, trigger: errorMessage) { _, message in message != nil }"),
             "the unlock screen's error haptic must key off errorMessage, so a nil answer cannot buzz")
     }
 }
