@@ -11277,6 +11277,7 @@
     },
     "workout.spoken.sentences" : {
       "comment" : "Guided workout, spoken cues and VoiceOver: two spoken sentences joined into one line, e.g. 'Next: Bench press.' then 'Suggested weight 105 pounds, last time 3 by 8 at 100 pounds'. Change only the separator or the order.",
+      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
