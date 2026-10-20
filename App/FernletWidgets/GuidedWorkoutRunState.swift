@@ -69,11 +69,15 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         /// The load plan and what actually happened, for a rep-counted lift the planner prescribed;
         /// nil on every other step and in a run persisted before load tracking existed.
         var tracking: Tracking?
+        /// Last time's numbers for this lift, baked in when the run starts so the Live Activity can
+        /// show them with no app state; nil for a step never logged, a timed or uncounted step, and a
+        /// run persisted before the Live Activity showed them.
+        var lastTime: LastTime?
 
         init(
             id: UUID = UUID(), name: String, sets: Int, reps: String, roleRaw: String, fromCatalog: Bool,
             restSeconds: Int, holdSeconds: Int? = nil, blockRaw: String? = nil, sideRaw: String? = nil,
-            tracking: Tracking? = nil
+            tracking: Tracking? = nil, lastTime: LastTime? = nil
         ) {
             self.id = id
             self.name = name
@@ -86,6 +90,7 @@ struct GuidedWorkoutRunState: Codable, Hashable {
             self.blockRaw = blockRaw
             self.sideRaw = sideRaw
             self.tracking = tracking
+            self.lastTime = lastTime
         }
 
         /// The step's block, with an untagged step (any run built before blocks existed) as lifting.
@@ -136,6 +141,18 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         }
     }
 
+    /// Last time's numbers for one lift — the logged history the runner's "Last time" pill reads
+    /// (`FernletStore.exerciseHistoryEntries()`), carried as numbers so the widget formats them in its
+    /// own locale. Display only; every field optional, so a partial record still decodes.
+    struct LastTime: Codable, Hashable {
+        var sets: Int?
+        /// The reps as logged ("8", "8-10").
+        var reps: String?
+        var weight: Double?
+        /// "lb" | "kg" — the domain `LoadUnit` raw value; nil when the logged line never said.
+        var unitRaw: String?
+    }
+
     /// Calibration-step tokens, spelled here for the same reason as ``BlockToken``.
     enum CalibrationToken {
         static let ramp = "ramp"
@@ -158,6 +175,14 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     /// 20-second stretch is held for 20 seconds, not 15. `nonisolated` so the Move tab's nonisolated
     /// time estimate can read it under the app target's default main-actor isolation.
     nonisolated static let holdLeadInSeconds = 5
+
+    /// One "−15 s" / "+15 s" tap on the Lock Screen, the Dynamic Island or the runner. The buttons'
+    /// words spell the same 15 (pinned by a test).
+    nonisolated static let restAdjustStepSeconds = 15
+    /// A "−15 s" never leaves less than this much of a rest: it shortens, it does not skip.
+    nonisolated static let minimumRestLeftSeconds = 5
+    /// A "+15 s" never stretches a rest past this, counted from when the rest began.
+    nonisolated static let maximumRestSeconds = 10 * 60
 
     // MARK: Identity + logging payload
     // Enough to log the finished workout from a cold-launched process, without the domain plan.
@@ -190,6 +215,7 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     var restStartedAt: Date?
     var restEndsAt: Date?
     /// Seconds of the most recent rest — surfaced separately so tests can assert length without a clock.
+    /// A "−15 s" / "+15 s" (``adjustRest(by:now:)``) moves it with the window.
     var restDuration: Int
     /// When the current set began — stamped on start, on moving to the next exercise, and on leaving
     /// a rest. A timed step's hold window counts from here (``holdWindow``); nil in a run persisted
@@ -315,7 +341,8 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     /// Heuristic, documented so it can be tuned in one place:
     /// - every remaining set of a catalog exercise costs `workSecondsPerSet` (default 45s — a
     ///   typical 8–12-rep working set), plus that exercise's baked `restSeconds` between its own
-    ///   sets (`sets - 1` rests per exercise; an in-flight rest counts as one whole rest);
+    ///   sets (`sets - 1` rests per exercise); an in-flight rest counts as one whole rest of its own
+    ///   window's length, so a "+15 s" or "−15 s" moves the estimate with it;
     /// - a descriptor line (`sets == 0` — cardio/mobility walked as one step) costs
     ///   `descriptorSeconds` (default 5 min);
     /// - the working phase counts the current set as still ahead; the resting phase counts the
@@ -335,12 +362,20 @@ struct GuidedWorkoutRunState: Codable, Hashable {
             let setsAhead = index == exerciseIndex
                 ? max(0, exercise.sets - currentSet + 1)
                 : exercise.sets
-            let restsAhead = index == exerciseIndex && isResting
-                ? max(0, setsAhead)             // the in-flight rest, plus one between each pair ahead
-                : max(0, setsAhead - 1)
-            total += setsAhead * perSet + restsAhead * max(0, exercise.restSeconds)
+            // The in-flight rest at its own (possibly adjusted) length, plus one between each pair ahead.
+            let inFlightRest = index == exerciseIndex && isResting
+                ? inFlightRestSeconds(fallback: exercise.restSeconds) : 0
+            let restsBetween = max(0, setsAhead - 1)
+            total += setsAhead * perSet + restsBetween * max(0, exercise.restSeconds) + inFlightRest
         }
         return total
+    }
+
+    /// The in-flight rest's whole length: its fixed window, which "−15 s" / "+15 s" move, or
+    /// `fallback` (the exercise's baked rest) when the window is missing.
+    private func inFlightRestSeconds(fallback: Int) -> Int {
+        guard let start = restStartedAt, let end = restEndsAt, start <= end else { return max(0, fallback) }
+        return Int(end.timeIntervalSince(start).rounded())
     }
 
     // MARK: Transitions (pure — mirror the old WorkoutSessionRunner state machine)
@@ -376,6 +411,33 @@ struct GuidedWorkoutRunState: Codable, Hashable {
             setStartedAt = now
             phase = .working
         }
+    }
+
+    /// Move the current rest's end by `seconds` — the "−15 s" / "+15 s" buttons. Returns whether it moved.
+    ///
+    /// A shorter rest never ends sooner than ``minimumRestLeftSeconds`` from `now` (a rest already
+    /// that close, or over, is left alone — "Skip rest" ends it). A longer one starts from `now` when
+    /// the timer has already run out, so "+15 s" over 0:00 means fifteen more seconds, and never runs
+    /// past ``maximumRestSeconds`` from the rest's start. Only the end moves: the window stays fixed
+    /// and ordered (`restStartedAt <= restEndsAt`), so the countdowns never invert; `restDuration`
+    /// and the time-left estimate follow it.
+    mutating func adjustRest(by seconds: Int, now: Date) -> Bool {
+        guard phase == .resting, seconds != 0, let start = restStartedAt, let end = restEndsAt, start <= end else {
+            return false
+        }
+        let earliestEnd = max(start, now.addingTimeInterval(TimeInterval(Self.minimumRestLeftSeconds)))
+        let proposed: Date
+        if seconds > 0 {
+            let latestEnd = start.addingTimeInterval(TimeInterval(Self.maximumRestSeconds))
+            proposed = min(max(end, now).addingTimeInterval(TimeInterval(seconds)), latestEnd)
+            guard proposed > end, proposed >= earliestEnd else { return false }
+        } else {
+            proposed = max(end.addingTimeInterval(TimeInterval(seconds)), earliestEnd)
+            guard proposed < end else { return false }
+        }
+        restEndsAt = proposed
+        restDuration = Int(proposed.timeIntervalSince(start).rounded())
+        return true
     }
 
     /// Skip the rest of the warm-up (to the first step after it) or of the cool-down. Skipping the
@@ -499,8 +561,24 @@ struct GuidedWorkoutRunState: Codable, Hashable {
             holdStartsAt: holdWindow?.lowerBound,
             holdEndsAt: holdWindow?.upperBound,
             blockRaw: currentExercise?.blockRaw,
-            sideRaw: currentExercise?.sideRaw
+            sideRaw: currentExercise?.sideRaw,
+            load: currentLoad
         )
+    }
+
+    /// The current set's load line for the Live Activity — the weight the runner shows (the
+    /// suggestion, preselected, or the lifter's own pick), the engine's range, and last time's
+    /// numbers. Display only. Nil for a timed step and for a step with nothing to show.
+    var currentLoad: WorkoutActivityAttributes.ContentState.Load? {
+        guard let exercise = currentExercise, exercise.holdSeconds == nil else { return nil }
+        let tracking = exercise.tracking?.isLoadable == true ? exercise.tracking : nil
+        let last = exercise.lastTime
+        let load = WorkoutActivityAttributes.ContentState.Load(
+            weight: tracking?.selected, suggested: tracking?.suggested,
+            rangeLow: tracking?.rangeLow, rangeHigh: tracking?.rangeHigh, unitRaw: tracking?.unitRaw,
+            lastSets: last?.sets, lastReps: last?.reps, lastWeight: last?.weight, lastUnitRaw: last?.unitRaw
+        )
+        return load.isEmpty ? nil : load
     }
 
     /// Named stale-date budgets (mirrors the old ContentState.Staleness).

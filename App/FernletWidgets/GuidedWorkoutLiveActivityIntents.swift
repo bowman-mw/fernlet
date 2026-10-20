@@ -2,16 +2,18 @@
 // FernletWidgets  —  compiled into BOTH the Fernlet app target AND the FernletWidgets extension.
 //
 // The interactive Live Activity buttons for the guided workout: "Done set" (which starts the rest
-// countdown) and "Skip rest". A `LiveActivityIntent` runs in the APP's process — the widget renders
-// the button, but the system executes `perform()` in the app (resuming or cold-launching it in the
-// background as needed). So these advance the shared app-group GuidedWorkoutRunState and push it onto
-// the activity directly, with NO dependency on any live in-app state: read the run from the group,
-// apply the pure transition, write it back, and update/end the activity. The app reconciles that same
-// file on its next foreground (FernletStore.reconcileGuidedRunFromAppGroup) to keep the in-app guided
-// sheet in step and to log a finish that happened entirely from the Lock Screen.
+// countdown), "Skip rest", and "−15 s" / "+15 s" beside it. A `LiveActivityIntent` runs in the APP's
+// process — the widget renders the button, but the system executes `perform()` in the app (resuming or
+// cold-launching it in the background as needed). So these advance the shared app-group
+// GuidedWorkoutRunState and push it onto the activity directly, with NO dependency on any live in-app
+// state: read the run from the group, apply the pure transition, write it back, and update/end the
+// activity. The app reconciles that same file on its next foreground
+// (FernletStore.reconcileGuidedRunFromAppGroup) to keep the in-app guided sheet in step and to log a
+// finish that happened entirely from the Lock Screen.
 //
-// A11y #15 — every path SPEAKS. Both intents are also App Shortcut phrases (FernletShortcuts), so
-// they are driven by voice as often as by a button, and a `LiveActivityIntent` that returns a bare
+// A11y #15 — every path SPEAKS. "Done set" and "Skip rest" are also App Shortcut phrases
+// (FernletShortcuts), and every intent here is a Shortcuts action, so they are driven by voice as
+// often as by a button, and a `LiveActivityIntent` that returns a bare
 // `.result()` makes Siri play the success chime for a tap that did nothing: no run on disk, the
 // wrong phase, or an app-group write that failed. Every `perform()` here returns
 // `IntentResult & ProvidesDialog` and says which of those happened, mirroring `LogWaterIntent`.
@@ -79,7 +81,39 @@ struct GuidedWorkoutSkipRestIntent: LiveActivityIntent {
     }
 }
 
-/// Shared transition applier for the two guided-workout intents.
+/// "+15 s" — adds fifteen seconds to the current rest (fifteen from now if its timer already ran out),
+/// up to ten minutes in all.
+///
+/// Rendered beside "Skip rest" on the Lock Screen card and in the expanded Dynamic Island; the system
+/// runs `perform()` in the app's process via ``GuidedWorkoutIntentRunner``. It moves only the rest's
+/// end, never a weight or a set. Speaks its outcome for the same reason as
+/// ``GuidedWorkoutMarkSetDoneIntent`` (a11y #15): a tap at the limit, or outside a rest, says so.
+struct GuidedWorkoutAddRestIntent: LiveActivityIntent {
+    static let title: LocalizedStringResource = "Add 15 seconds of rest"
+    static let description = IntentDescription("Adds 15 seconds to your current rest, up to 10 minutes in all.")
+    static let supportedModes: IntentModes = [.background]
+
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let outcome = await GuidedWorkoutIntentRunner.adjustRest(bySeconds: GuidedWorkoutRunState.restAdjustStepSeconds)
+        return .result(dialog: GuidedWorkoutIntentRunner.addRestDialog(for: outcome))
+    }
+}
+
+/// "−15 s" — takes fifteen seconds off the current rest, always leaving at least five.
+///
+/// The twin of ``GuidedWorkoutAddRestIntent``: same surfaces, same runner, same spoken outcome.
+struct GuidedWorkoutShortenRestIntent: LiveActivityIntent {
+    static let title: LocalizedStringResource = "Take 15 seconds off the rest"
+    static let description = IntentDescription("Takes 15 seconds off your current rest, always leaving at least 5 seconds.")
+    static let supportedModes: IntentModes = [.background]
+
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let outcome = await GuidedWorkoutIntentRunner.adjustRest(bySeconds: -GuidedWorkoutRunState.restAdjustStepSeconds)
+        return .result(dialog: GuidedWorkoutIntentRunner.shortenRestDialog(for: outcome))
+    }
+}
+
+/// Shared transition applier for the guided-workout intents.
 ///
 /// Reads → mutates → writes the app-group run state via ``GuidedWorkoutRunStateStore``, posts
 /// `.guidedWorkoutRunAdvancedByIntent` so the in-app guided sheet reconciles immediately, then
@@ -112,6 +146,22 @@ enum GuidedWorkoutIntentRunner {
         case notSaved
     }
 
+    /// What one "−15 s" / "+15 s" actually did. Its own type, not more ``Outcome`` cases, because only
+    /// a rest adjustment can hit a limit — and the other intents' dialogs then stay exhaustive without
+    /// lines that can never be said.
+    enum RestAdjustOutcome: Hashable {
+        /// The rest's end moved and was persisted.
+        case adjusted
+        /// The rest was already at its limit — ten minutes long, or about to end — so nothing moved.
+        case atLimit
+        /// No guided run is in the app group.
+        case noRunInProgress
+        /// A run exists but is not resting.
+        case wrongPhase
+        /// The adjustment was computed but the app-group write did not land.
+        case notSaved
+    }
+
     /// Complete the current set (rest / next exercise / finish, per the pure transition) and reflect
     /// the result onto the activity. Guarded on `.working`; any other phase reports `.wrongPhase`.
     ///
@@ -136,6 +186,23 @@ enum GuidedWorkoutIntentRunner {
         guard state.phase == .resting else { return .wrongPhase }
         state.skipRest()
         return await apply(state, store: store)
+    }
+
+    /// Move the current rest's end by `seconds` (``GuidedWorkoutRunState/adjustRest(by:now:)``: never
+    /// below five seconds left, never past ten minutes) and reflect it onto the activity. Guarded on
+    /// `.resting`. The write posts `.guidedWorkoutRunAdvancedByIntent` like every intent here, so the
+    /// store reconciles and its cue director re-arms the rest-end cue and its background notification
+    /// for the new end.
+    ///
+    /// - Parameters:
+    ///   - seconds: Positive to lengthen the rest, negative to shorten it.
+    ///   - directory: Same test seam as ``markSetDone(directory:)``.
+    static func adjustRest(bySeconds seconds: Int, directory: URL? = nil) async -> RestAdjustOutcome {
+        let store = GuidedWorkoutRunStateStore(directory: directory)
+        guard var state = store.read() else { return .noRunInProgress }
+        guard state.phase == .resting else { return .wrongPhase }
+        guard state.adjustRest(by: seconds, now: Date()) else { return .atLimit }
+        return await apply(state, store: store) == .notSaved ? .notSaved : .adjusted
     }
 
     /// The spoken result of a "Done set".
@@ -169,6 +236,28 @@ enum GuidedWorkoutIntentRunner {
         case .applied(.done): return "Rest skipped — your workout is finished."
         case .noRunInProgress: return "No workout is running, so there's no rest to skip."
         case .wrongPhase: return "You're not resting right now, so there's nothing to skip."
+        case .notSaved: return "Couldn't update your workout just now — please try again in a moment."
+        }
+    }
+
+    /// The spoken result of a "+15 s". `nonisolated` for the reason on ``markSetDoneDialog(for:)``.
+    nonisolated static func addRestDialog(for outcome: RestAdjustOutcome) -> IntentDialog {
+        switch outcome {
+        case .adjusted: return "Added 15 seconds to your rest."
+        case .atLimit: return "Your rest is already at its 10-minute limit."
+        case .noRunInProgress: return "No workout is running, so there's no rest to change."
+        case .wrongPhase: return "You're not resting right now, so there's no rest to change."
+        case .notSaved: return "Couldn't update your workout just now — please try again in a moment."
+        }
+    }
+
+    /// The spoken result of a "−15 s". `nonisolated` for the reason on ``markSetDoneDialog(for:)``.
+    nonisolated static func shortenRestDialog(for outcome: RestAdjustOutcome) -> IntentDialog {
+        switch outcome {
+        case .adjusted: return "Took 15 seconds off your rest."
+        case .atLimit: return "Your rest is nearly over, so there's nothing to take off."
+        case .noRunInProgress: return "No workout is running, so there's no rest to change."
+        case .wrongPhase: return "You're not resting right now, so there's no rest to change."
         case .notSaved: return "Couldn't update your workout just now — please try again in a moment."
         }
     }

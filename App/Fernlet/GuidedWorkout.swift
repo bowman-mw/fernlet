@@ -20,7 +20,8 @@ import FernletUI
 /// 2026-08-21 redesign (MOVE-26): the primary control lives in a FIXED bottom bar above the safe
 /// area — "Done set" while working ("Finish workout" on the last set), "Skip rest" while resting —
 /// with a quiet "Skip to next exercise" secondary beneath it. Everything else (set strip, rest
-/// preview, Up-next list) scrolls and is never a control. At accessibility sizes the labels
+/// preview, Up-next list) scrolls and is never a control — save the rest timer's quiet "−15 s" /
+/// "+15 s" chips (idea 7, the Live Activity's same adjustment). At accessibility sizes the labels
 /// abbreviate ("1 of 5", "1/4") so the numerals stay large, and the Last-time pill and Up-next
 /// list give way (1e·AX3).
 struct GuidedWorkoutSheet: View {
@@ -492,6 +493,7 @@ struct GuidedWorkoutSheet: View {
                     .accessibilityAddTraits(.updatesFrequently)
                     .accessibilityIdentifier("workout.guided.restTimer")
                     .task(id: restEndsAt) { await announceRestOver(at: restEndsAt) }
+                GuidedRestAdjustRow(store: store)
             }
 
             if let exercise = run.currentExercise {
@@ -779,6 +781,46 @@ private struct GuidedRunnerAlerts: ViewModifier {
             } message: {
                 Text(replaceConfirmMessage)
             }
+    }
+}
+
+/// "−15 s" and "+15 s" under the rest timer — the same adjustment as the Live Activity's buttons
+/// (`FernletStore.guidedAdjustRest(by:)`): never under five seconds left, never past ten minutes.
+///
+/// Quiet chips, not a second primary: "Skip rest" in the bottom bar stays the one big control. Each
+/// tap says what it did to VoiceOver — the timer's own spoken value is re-read only when the cursor
+/// lands on it — and at a limit, where nothing on screen moves, says why.
+private struct GuidedRestAdjustRow: View {
+    var store: FernletStore
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Button { adjust(by: -GuidedWorkoutRunState.restAdjustStepSeconds) } label: {
+                Text("−15 s")
+            }
+            .buttonStyle(ChipButtonStyle(selected: false))
+            .fernletTapTarget()
+            .accessibilityLabel("Take 15 seconds off the rest")
+            // Voice Control: the drawn "−15 s", spoken, plus the plain verbs.
+            .accessibilityInputLabels([Text("Minus 15 seconds"), Text("Minus 15"), Text("Shorter rest")])
+            .accessibilityIdentifier("workout.guided.rest.shorter")
+
+            Button { adjust(by: GuidedWorkoutRunState.restAdjustStepSeconds) } label: {
+                Text("+15 s")
+            }
+            .buttonStyle(ChipButtonStyle(selected: false))
+            .fernletTapTarget()
+            .accessibilityLabel("Add 15 seconds of rest")
+            .accessibilityInputLabels([Text("Plus 15 seconds"), Text("Plus 15"), Text("Longer rest")])
+            .accessibilityIdentifier("workout.guided.rest.longer")
+        }
+    }
+
+    /// Moves the rest's end and says what happened.
+    private func adjust(by seconds: Int) {
+        let moved = store.guidedAdjustRest(by: seconds)
+        let spoken = GuidedRunAnnouncement.restAdjusted(adding: seconds > 0, moved: moved)
+        FernletAnnouncer.system.announce(.status, spoken)
     }
 }
 

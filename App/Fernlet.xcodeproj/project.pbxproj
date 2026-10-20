@@ -139,6 +139,7 @@
 				GuidedWorkoutRunStateStore.swift,
 				LiveActivityRunReflecting.swift,
 				WorkoutActivityAttributes.swift,
+				WorkoutActivityLoadText.swift,
 			);
 			target = 6869C2E12FB8D39D0098A0F3 /* Fernlet */;
 		};

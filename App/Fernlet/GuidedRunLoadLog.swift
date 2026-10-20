@@ -37,6 +37,40 @@ enum GuidedRunLoadLog {
         )
     }
 
+    /// Whether a planned step shows last time's numbers: a counted catalog lift, the same steps the
+    /// runner's "Last time" pill appears on (never a hold, a stretch or a cardio line).
+    static func showsLastTime(_ exercise: PrescribedExercise) -> Bool {
+        exercise.fromCatalog && exercise.sets >= 1 && exercise.holdSeconds == nil
+    }
+
+    /// Last time's numbers for every logged lift, keyed by normalized name, from one history rollup
+    /// (`FernletStore.exerciseHistoryEntries()`, most recently trained first — the first entry of a
+    /// name wins). Bounded by the entries passed in.
+    static func lastTimes(
+        from entries: [TrainerExportBundle.ExerciseHistoryEntry]
+    ) -> [String: GuidedWorkoutRunState.LastTime] {
+        var byName: [String: GuidedWorkoutRunState.LastTime] = [:]
+        for entry in entries {
+            let key = WorkoutExerciseCatalog.normalizedName(entry.name)
+            guard byName[key] == nil, let last = lastTime(from: entry) else { continue }
+            byName[key] = last
+        }
+        return byName
+    }
+
+    /// One entry's last-time numbers — sets and reps, a weight, or both — or nil with neither. The
+    /// unit crosses as the `LoadUnit` token the line parser wrote ("lb" / "kg"), or nil.
+    static func lastTime(from entry: TrainerExportBundle.ExerciseHistoryEntry) -> GuidedWorkoutRunState.LastTime? {
+        let sets = entry.lastSets.flatMap { $0 > 0 ? $0 : nil }
+        let reps = entry.lastReps.flatMap { $0.isEmpty ? nil : $0 }
+        let weight = entry.lastWeight.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+        guard (sets != nil && reps != nil) || weight != nil else { return nil }
+        return GuidedWorkoutRunState.LastTime(
+            sets: sets, reps: reps, weight: weight,
+            unitRaw: entry.weightUnit.flatMap(LoadUnit.init(rawValue:))?.rawValue
+        )
+    }
+
     /// One tracked lift's result, or nil for an untracked step or one the runner skipped.
     static func result(for exercise: GuidedWorkoutRunState.Exercise) -> ExerciseResult? {
         guard let tracking = exercise.tracking, tracking.skipped != true, exercise.fromCatalog else { return nil }

@@ -10,6 +10,11 @@
 // inverts and fatalErrors once the deadline passes. `Text(timerInterval:)` clamps a fixed window to
 // 0:00 after expiry, so over-resting is safe. The window is only trusted when both ends are non-nil
 // AND `restStartedAt <= restEndsAt`; otherwise a static "Rest" label stands in.
+//
+// LOAD RULE: the set's weight, range and last time's numbers (`ContentState.load`) are DISPLAY ONLY.
+// The Live Activity never edits a weight — its only controls move the run (Done set / Next) or the rest
+// (−15 s / Skip rest / +15 s); the runner's weight panel is the one place a weight is picked. Compact
+// and minimal stay as they were: the load lives on the Lock Screen and in the expanded Island only.
 
 import ActivityKit
 import AppIntents
@@ -21,8 +26,10 @@ import WidgetKit
 ///
 /// Registered in ``FernletWidgetsBundle`` alongside ``CookingLiveActivity``. Renders the
 /// ``WorkoutActivityAttributes`` content the app publishes; its interactive controls are the "Done
-/// set" / "Skip rest" buttons (``GuidedWorkoutMarkSetDoneIntent`` / ``GuidedWorkoutSkipRestIntent``),
-/// which the system executes in the app's process. Stale snapshots (jetsam / force-quit orphans)
+/// set" / "Skip rest" buttons (``GuidedWorkoutMarkSetDoneIntent`` / ``GuidedWorkoutSkipRestIntent``)
+/// and, beside "Skip rest", "−15 s" / "+15 s" (``GuidedWorkoutShortenRestIntent`` /
+/// ``GuidedWorkoutAddRestIntent``), which the system executes in the app's process. The set's weight
+/// and last time's numbers are shown, never edited. Stale snapshots (jetsam / force-quit orphans)
 /// degrade to a dimmed "Paused" register instead of a frozen timer or set count.
 struct WorkoutLiveActivity: Widget {
     var body: some WidgetConfiguration {
@@ -125,8 +132,8 @@ private struct WorkoutIslandCenter: View {
     }
 }
 
-/// Expanded-Island bottom slot: the countdown / set line plus the interactive control, or the
-/// gentle "open Fernlet" line for a stale activity.
+/// Expanded-Island bottom slot: the countdown / set line, the set's weight and last time, and the
+/// interactive controls — or the gentle "open Fernlet" line for a stale activity.
 private struct WorkoutIslandBottom: View {
     let state: WorkoutActivityAttributes.ContentState
     let isStale: Bool
@@ -147,9 +154,7 @@ private struct WorkoutIslandBottom: View {
     private var liveContent: some View {
         VStack(spacing: 8) {
             if state.phase == .resting {
-                RestCountdownText(state: state,
-                                  font: .system(size: 38, weight: .semibold, design: .rounded),
-                                  color: .primary)
+                restHeader
                 nextUpLine(state)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -159,10 +164,43 @@ private struct WorkoutIslandBottom: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                if let load = state.load {
+                    workingLoadRow(load)
+                }
             }
             guidedActionButton(state)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// The rest countdown, beside the set's weight and last time when the lift has them. The
+    /// countdown takes its width first, so the numbers beside it shrink before it ever truncates.
+    @ViewBuilder private var restHeader: some View {
+        let countdown = RestCountdownText(state: state,
+                                          font: .system(size: 38, weight: .semibold, design: .rounded),
+                                          color: .primary)
+        if let load = state.load {
+            HStack(alignment: .center, spacing: 12) {
+                countdown
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(1)
+                Spacer(minLength: 8)
+                WorkoutLoadStack(load: load, showsLastTime: true)
+            }
+        } else {
+            countdown
+        }
+    }
+
+    /// Working a lift: its weight and range at the leading edge, last time's numbers at the trailing.
+    private func workingLoadRow(_ load: WorkoutActivityAttributes.ContentState.Load) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            if WorkoutActivityLoadText.drawsWeight(load) {
+                WorkoutLoadStack(load: load, alignment: .leading)
+            }
+            Spacer(minLength: 8)
+            WorkoutLastTimeLine(load: load)
+        }
     }
 }
 
@@ -365,17 +403,23 @@ private struct HoldCountdownText: View {
 // MARK: - Lock Screen card
 
 /// The Lock Screen / banner presentation of the workout activity: title, exercise or "Rest" line,
-/// the countdown or progress dots, and the phase-appropriate action button.
+/// last time's numbers, the countdown or progress dots with the set's weight under them, and the
+/// phase-appropriate controls.
 ///
 /// Splits on `isStale` — a live cream card with the interactive control, or a dimmed "Paused / Open
 /// Fernlet" resting-place for an activity that outlived its process. Used only from
 /// ``WorkoutLiveActivity``'s `ActivityConfiguration` closure.
+///
+/// Larger Text: the countdown is a fixed-size face that takes its width first and never truncates;
+/// the text beside it shrinks or wraps instead, and at accessibility sizes the workout title gives
+/// way (the Island still names it) so the card keeps room for the countdown and the buttons.
 private struct WorkoutLockScreenView: View {
     let attributes: WorkoutActivityAttributes
     let state: WorkoutActivityAttributes.ContentState
     /// The activity outlived its process (jetsam / force-quit) and its snapshot is stale — render a
     /// dimmed, gentle "paused" card rather than a frozen live timer.
     var isStale: Bool = false
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         if isStale {
@@ -419,78 +463,98 @@ private struct WorkoutLockScreenView: View {
         .padding(.vertical, 14)
     }
 
+    /// Spacing and padding are a touch tighter than the stale card's so the load line fits inside the
+    /// Lock Screen's 160-point height.
     private var liveCard: some View {
-        VStack(spacing: 12) {
-            HStack(alignment: .center, spacing: 16) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Label {
-                        Text(attributes.workoutTitle)
-                            .font(.caption)
-                            .foregroundStyle(FernletWidgetPalette.inkSoft)
-                            .lineLimit(1)
-                    } icon: {
-                        Image(systemName: "leaf.fill")
-                            .font(.caption)
-                            .foregroundStyle(FernletWidgetPalette.buttonFill)
-                    }
-
-                    if state.phase == .resting {
-                        Text("Rest")
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(FernletWidgetPalette.buttonFill)
-                        nextUpLine(state)
-                            .font(.subheadline)
-                            .foregroundStyle(FernletWidgetPalette.ink)
-                            .lineLimit(2)
-                    } else {
-                        Text(state.exerciseName)
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(FernletWidgetPalette.ink)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                        setRepsLine(state)
-                            .font(.subheadline)
-                            .foregroundStyle(FernletWidgetPalette.inkSoft)
-                            .lineLimit(1)
-                    }
-                }
-
+        VStack(spacing: 10) {
+            HStack(alignment: .center, spacing: 12) {
+                leadingColumn
                 Spacer(minLength: 8)
-
-                if state.phase == .resting {
-                    RestCountdownText(state: state,
-                                      font: .system(size: 40, weight: .semibold, design: .rounded),
-                                      color: FernletWidgetPalette.ink)
-                } else if holdWindow(state) != nil {
-                    HoldCountdownText(state: state,
-                                      font: .system(size: 40, weight: .semibold, design: .rounded),
-                                      color: FernletWidgetPalette.ink)
-                } else {
-                    ExerciseProgressDots(index: state.exerciseIndex, total: state.totalExercises)
-                }
+                trailingColumn
+                    // The countdown is the card's point: it takes its width first and never truncates,
+                    // however large the text beside it grows.
+                    .layoutPriority(1)
             }
-
             guidedActionButton(state)
         }
         .padding(.horizontal, 18)
-        .padding(.vertical, 14)
+        .padding(.vertical, 12)
+    }
+
+    /// The title, the exercise or "Rest", the set or next-up line, and last time's numbers.
+    private var leadingColumn: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if !typeSize.isAccessibilitySize {
+                Label {
+                    Text(attributes.workoutTitle)
+                        .font(.caption)
+                        .foregroundStyle(FernletWidgetPalette.inkSoft)
+                        .lineLimit(1)
+                } icon: {
+                    Image(systemName: "leaf.fill")
+                        .font(.caption)
+                        .foregroundStyle(FernletWidgetPalette.buttonFill)
+                }
+            }
+            if state.phase == .resting {
+                Text("Rest")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(FernletWidgetPalette.buttonFill)
+                nextUpLine(state)
+                    .font(.subheadline)
+                    .foregroundStyle(FernletWidgetPalette.ink)
+                    .lineLimit(state.load == nil ? 2 : 1)
+                    .minimumScaleFactor(0.8)
+            } else {
+                Text(state.exerciseName)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(FernletWidgetPalette.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                setRepsLine(state)
+                    .font(.subheadline)
+                    .foregroundStyle(FernletWidgetPalette.inkSoft)
+                    .lineLimit(1)
+            }
+            if let load = state.load {
+                WorkoutLastTimeLine(load: load, color: FernletWidgetPalette.inkSoft)
+            }
+        }
+    }
+
+    /// The rest or hold countdown — or the progress dots — with the set's weight and range under it.
+    private var trailingColumn: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            if state.phase == .resting {
+                RestCountdownText(state: state,
+                                  font: .system(size: 40, weight: .semibold, design: .rounded),
+                                  color: FernletWidgetPalette.ink)
+                    .fixedSize(horizontal: true, vertical: false)
+            } else if holdWindow(state) != nil {
+                HoldCountdownText(state: state,
+                                  font: .system(size: 40, weight: .semibold, design: .rounded),
+                                  color: FernletWidgetPalette.ink)
+                    .fixedSize(horizontal: true, vertical: false)
+            } else {
+                ExerciseProgressDots(index: state.exerciseIndex, total: state.totalExercises)
+            }
+            if let load = state.load, WorkoutActivityLoadText.drawsWeight(load) {
+                WorkoutLoadStack(load: load, weightColor: FernletWidgetPalette.ink,
+                                 detailColor: FernletWidgetPalette.inkSoft)
+            }
+        }
     }
 }
 
-/// The interactive "Done set" / "Skip rest" control shared by the Lock Screen card and the Dynamic
-/// Island. Each is a `LiveActivityIntent` the system runs in the app's process, advancing the shared
-/// app-group run state (see GuidedWorkoutLiveActivityIntents). Only ever rendered in a live (non-stale)
-/// state, so the run always exists when a tap lands.
+/// The interactive controls shared by the Lock Screen card and the Dynamic Island: "Done set" (or
+/// "Next" / "Finish workout") while working, "−15 s" · "Skip rest" · "+15 s" while resting. Each is a
+/// `LiveActivityIntent` the system runs in the app's process, advancing the shared app-group run state
+/// (see GuidedWorkoutLiveActivityIntents). Only ever rendered in a live (non-stale) state, so the run
+/// always exists when a tap lands.
 @ViewBuilder
 private func guidedActionButton(_ state: WorkoutActivityAttributes.ContentState) -> some View {
     if state.phase == .resting {
-        Button(intent: GuidedWorkoutSkipRestIntent()) {
-            Label("Skip rest", systemImage: "forward.fill")
-                .font(.subheadline.weight(.semibold))
-                .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.bordered)
-        .tint(FernletWidgetPalette.leaf)
+        WorkoutRestControls()
     } else {
         // Last set of the last exercise finishes (and logs) the workout.
         let finishing = state.setNumber >= state.totalSets && state.exerciseIndex >= state.totalExercises - 1
@@ -503,6 +567,111 @@ private func guidedActionButton(_ state: WorkoutActivityAttributes.ContentState)
         }
         .buttonStyle(.borderedProminent)
         .tint(FernletWidgetPalette.buttonFill)
+    }
+}
+
+/// "−15 s" · "Skip rest" · "+15 s" — the rest's three controls, in one row so the card grows no taller.
+///
+/// The two adjusters move only the rest's end (``GuidedWorkoutShortenRestIntent`` /
+/// ``GuidedWorkoutAddRestIntent``: never under five seconds left, never past ten minutes). Their drawn
+/// words are terse; VoiceOver hears the whole action ("Add 15 seconds of rest") and Voice Control
+/// answers to the drawn text spoken ("Plus 15 seconds") as well as plain words.
+private struct WorkoutRestControls: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            Button(intent: GuidedWorkoutShortenRestIntent()) {
+                Text("−15 s")
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .buttonStyle(.bordered)
+            .tint(FernletWidgetPalette.leaf)
+            .accessibilityLabel(Text("Take 15 seconds off the rest"))
+            .accessibilityInputLabels([Text("Minus 15 seconds"), Text("Minus 15"), Text("Shorter rest")])
+
+            Button(intent: GuidedWorkoutSkipRestIntent()) {
+                Label("Skip rest", systemImage: "forward.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .tint(FernletWidgetPalette.leaf)
+
+            Button(intent: GuidedWorkoutAddRestIntent()) {
+                Text("+15 s")
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .buttonStyle(.bordered)
+            .tint(FernletWidgetPalette.leaf)
+            .accessibilityLabel(Text("Add 15 seconds of rest"))
+            .accessibilityInputLabels([Text("Plus 15 seconds"), Text("Plus 15"), Text("Longer rest")])
+        }
+    }
+}
+
+// MARK: - Load (display only)
+
+/// The set's weight over its range ("105 lb" / "95–110 lb"), optionally with last time's numbers
+/// under them — beside the countdown or the progress dots.
+///
+/// DISPLAY ONLY (see the LOAD RULE at the top of this file). One VoiceOver element that speaks the
+/// whole load in words ("Suggested weight 105 pounds, range 95 to 110 pounds, last time 3 by 8 at 100
+/// pounds"), so "×" and "@" are never read out, and last time is heard here even where its own line
+/// is drawn elsewhere on the card.
+private struct WorkoutLoadStack: View {
+    let load: WorkoutActivityAttributes.ContentState.Load
+    var alignment: HorizontalAlignment = .trailing
+    /// Draw last time's numbers under the range — the expanded Island, which has no other line for them.
+    var showsLastTime = false
+    var weightColor: Color = .primary
+    var detailColor: Color = .secondary
+
+    var body: some View {
+        VStack(alignment: alignment, spacing: 1) {
+            if let weight = WorkoutActivityLoadText.weightText(load) {
+                Text(verbatim: weight)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(weightColor)
+            }
+            if let range = WorkoutActivityLoadText.rangeText(load) {
+                Text(verbatim: range)
+                    .font(.caption2)
+                    .foregroundStyle(detailColor)
+            }
+            if showsLastTime, let last = WorkoutActivityLoadText.lastTimeLine(load) {
+                Text(verbatim: last)
+                    .font(.caption2)
+                    .foregroundStyle(detailColor)
+            }
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: WorkoutActivityLoadText.spokenSummary(load) ?? ""))
+    }
+}
+
+/// "Last time: 3 × 8 @ 100 lb" on a line of its own. Silent to VoiceOver when a ``WorkoutLoadStack``
+/// is drawn on the same card (that element already says it); otherwise it speaks the load in words.
+private struct WorkoutLastTimeLine: View {
+    let load: WorkoutActivityAttributes.ContentState.Load
+    var color: Color = .secondary
+
+    var body: some View {
+        if let line = WorkoutActivityLoadText.lastTimeLine(load) {
+            Text(verbatim: line)
+                .font(.caption)
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .accessibilityLabel(Text(verbatim: WorkoutActivityLoadText.spokenSummary(load) ?? line))
+                .accessibilityHidden(WorkoutActivityLoadText.drawsWeight(load))
+        }
     }
 }
 
