@@ -502,7 +502,30 @@ a one-sided step carries `side`. Only the lifting block progresses
 the plan text a log records summarizes the warm-up and cool-down in one line each
 (``WorkoutSessionBlocks/planText(for:)``).
 
+Injuries reach the filter as one ``InjuryLimits`` (`WorkoutProfile.injuryLimits`), combined from
+three inputs: the body-area picker (`WorkoutProfile.injuryAreas`, each ``BodyArea`` at an
+``InjurySeverity``; frozen tokens with parked decoding, carried at the top level of the settings
+blob as `workoutInjuryAreas` so an older build's key parking keeps it through a re-save), the
+free-text note read by whole words
+(``InjuryNoteMatcher`` — "getting back into lifting" names no back), and the avoided sets older
+builds wrote. The picker wins for an area it names; the rest is severe. Severe leaves the area's work
+out (its muscles, its movement patterns, and for the spine a loaded bar); mild leaves out only the
+heavy end (barbell, advanced, jumps), scores machine, cable and bench-supported variants higher, and
+prescribes the area's main lift as accessory work.
+
+The 48-hour guard (``WorkoutRecoveryGuard``) reads yesterday's hard sets
+(``WorkoutRecoveryGuard/RecentTraining``, gathered app-side): when today's split day would train
+those primary muscles hard again it moves to the next split day that spares them — unless the
+overlap is the split's own order, which moving would only push back every pass — and otherwise takes
+a set off each overlapping lift, saying why in the note. Recovery and mobility days, and the warm-up,
+activation and cool-down, are exempt.
+
 - ``WorkoutProfile``
+- ``BodyArea``
+- ``InjurySeverity``
+- ``InjuryLimits``
+- ``InjuryNoteMatcher``
+- ``WorkoutRecoveryGuard``
 - ``ExperienceLevel``
 - ``WorkoutLocation``
 - ``LocationTemplate``

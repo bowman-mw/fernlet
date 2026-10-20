@@ -98,6 +98,9 @@ final class WorkoutPlanningService {
     /// round in turn whichever weekdays they train. Equipment + injuries are applied
     /// deterministically by the engine; sets, reps and weight ranges follow each lift's logged
     /// sessions (``WorkoutLoadContextBuilder``), with plateau handling and the monthly calibration.
+    /// The 48-hour guard reads the same history (``WorkoutRecentTrainingBuilder``): it moves to a
+    /// split day that spares muscles worked hard yesterday, or lightens the lifts that would repeat
+    /// them.
     func workoutDayPlan(intensity: WorkoutIntensity, context: String) -> WorkoutProgram.DayPlan {
         let history = host.loadDays()
         let split = activeWorkoutSplit(history: history)
@@ -116,7 +119,8 @@ final class WorkoutPlanningService {
             split: split,
             rotationIndex: rotation,
             progression: host.settings.workoutProgression,
-            load: load
+            load: load,
+            recent: WorkoutRecentTrainingBuilder.build(days: history, todayKey: host.todayKey)
         )
     }
 
@@ -205,7 +209,7 @@ final class WorkoutPlanningService {
         }
         return WorkoutProgram.DayPlan(
             splitName: plan.splitName, dayTitle: plan.dayTitle, sessions: sessions,
-            droppedSlots: plan.droppedSlots, locationName: plan.locationName
+            droppedSlots: plan.droppedSlots, locationName: plan.locationName, recovery: plan.recovery
         )
     }
 }

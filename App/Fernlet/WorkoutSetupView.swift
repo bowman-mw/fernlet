@@ -7,17 +7,18 @@ import FernletUI
 ///
 /// Covers the chosen split (auto or an explicit pick from the recommendations), where the user
 /// trains and the equipment there (via ``WorkoutLocationSetupView``), weekly frequency, experience,
-/// sport/interests, and areas to work around. Injury-area chips expand to the muscle-group and
-/// movement-pattern sets the planner avoids. Changing the split is a plain edit — a neutral note
-/// beside the options says training has been consistent, where a confirmation dialog used to
-/// interrupt the save; the sheet guards its draft like the other entry sheets instead.
+/// sport/interests, and areas to work around: a None · Mild · Severe picker per body area, the
+/// rested-muscle chips and the free-text note (``WorkoutInjurySection``, ``WorkoutInjuryDraft``).
+/// Changing the split is a plain edit — a neutral note beside the options says training has been
+/// consistent, where a confirmation dialog used to interrupt the save; the sheet guards its draft
+/// like the other entry sheets instead.
 struct WorkoutSetupSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
 
     @State private var profile: WorkoutProfile
     @State private var interestsText: String
-    @State private var avoidedAreas: Set<String>
+    @State private var injuryDraft: WorkoutInjuryDraft
     @State private var selectedSplitID: String?
     @State private var showingLocations = false
     private let recommendedSplits: [TrainingSplit]
@@ -31,31 +32,7 @@ struct WorkoutSetupSheet: View {
     /// an `interactiveDismissDisabled`.
     private let initialProfile: WorkoutProfile
     private let initialInterestsText: String
-    private let initialAvoidedAreas: Set<String>
-
-    /// One selectable "work around this" chip: a display name plus the muscle groups and movement
-    /// patterns the planner should avoid while it's on.
-    ///
-    /// Identified by its name; the selected chips are folded into the profile's
-    /// `avoidedMuscles`/`avoidedMovements` on save.
-    private struct InjuryArea: Identifiable {
-        var id: String { name }
-        var name: String
-        var muscles: Set<MuscleGroup>
-        var movements: Set<MovementPattern>
-    }
-
-    private static let injuryAreas: [InjuryArea] = [
-        InjuryArea(name: "Shoulders", muscles: [.frontDelts, .sideDelts, .rearDelts], movements: [.push]),
-        InjuryArea(name: "Knees", muscles: [.quads, .hamstrings], movements: [.squat, .lunge]),
-        InjuryArea(name: "Lower back", muscles: [.lowerBack], movements: [.hinge]),
-        InjuryArea(name: "Elbows", muscles: [.biceps, .triceps], movements: []),
-        InjuryArea(name: "Wrists", muscles: [.forearms], movements: []),
-        InjuryArea(name: "Hips", muscles: [.glutes, .adductors, .abductors], movements: []),
-        InjuryArea(name: "Hamstrings", muscles: [.hamstrings], movements: []),
-        InjuryArea(name: "Calves", muscles: [.calves], movements: []),
-        InjuryArea(name: "Chest", muscles: [.chest], movements: []),
-    ]
+    private let initialInjuryDraft: WorkoutInjuryDraft
 
     init(store: FernletStore) {
         self.store = store
@@ -71,14 +48,11 @@ struct WorkoutSetupSheet: View {
         _profile = State(initialValue: settings.workoutProfile)
         let seedInterests = settings.workoutProfile.interests.joined(separator: ", ")
         _interestsText = State(initialValue: seedInterests)
-        let avoided = settings.workoutProfile.avoidedMuscles
-        let preselected = Self.injuryAreas
-            .filter { $0.muscles.isEmpty == false && $0.muscles.isSubset(of: avoided) }
-            .map(\.name)
-        _avoidedAreas = State(initialValue: Set(preselected))
+        let draft = WorkoutInjuryDraft(profile: settings.workoutProfile)
+        _injuryDraft = State(initialValue: draft)
         self.initialProfile = settings.workoutProfile
         self.initialInterestsText = seedInterests
-        self.initialAvoidedAreas = Set(preselected)
+        self.initialInjuryDraft = draft
     }
 
     /// Any field diverges from what the sheet opened on. Shallow by design — a swipe-away guard,
@@ -86,7 +60,7 @@ struct WorkoutSetupSheet: View {
     private var isDirty: Bool {
         profile != initialProfile
             || interestsText != initialInterestsText
-            || avoidedAreas != initialAvoidedAreas
+            || injuryDraft != initialInjuryDraft
             || selectedSplitID != originalSelectedSplitID
     }
 
@@ -98,7 +72,7 @@ struct WorkoutSetupSheet: View {
                     locationsEntry
                     frequencySection
                     sportInterestsSection
-                    injurySection
+                    WorkoutInjurySection(draft: $injuryDraft, notes: $profile.injuryNotes)
                 }
                 .padding(20)
                 .padding(.bottom, 10)
@@ -282,27 +256,7 @@ struct WorkoutSetupSheet: View {
         }
     }
 
-    private var injurySection: some View {
-        SheetField("Areas to work around") {
-            VStack(alignment: .leading, spacing: 8) {
-                FlowLayout(spacing: 8) {
-                    ForEach(Self.injuryAreas) { area in
-                        Button(area.name) { toggleArea(area.name) }
-                            .buttonStyle(ChipButtonStyle(selected: avoidedAreas.contains(area.name)))
-                    }
-                }
-                TextField("Anything else to keep in mind (not medical advice)", text: $profile.injuryNotes,
-                          prompt: .fieldPrompt("Anything else to keep in mind (not medical advice)"))
-                    .sheetTextInput()
-            }
-        }
-    }
-
     // MARK: Helpers
-
-    private func toggleArea(_ name: String) {
-        if avoidedAreas.contains(name) { avoidedAreas.remove(name) } else { avoidedAreas.insert(name) }
-    }
 
     private func commit() {
         var updated = profile
@@ -310,9 +264,7 @@ struct WorkoutSetupSheet: View {
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { $0.isEmpty == false }
-        let selected = Self.injuryAreas.filter { avoidedAreas.contains($0.name) }
-        updated.avoidedMuscles = selected.reduce(into: Set<MuscleGroup>()) { $0.formUnion($1.muscles) }
-        updated.avoidedMovements = selected.reduce(into: Set<MovementPattern>()) { $0.formUnion($1.movements) }
+        updated = injuryDraft.applied(to: updated)
 
         store.setWorkoutProfile(updated)
         store.setSelectedSplit(selectedSplitID)

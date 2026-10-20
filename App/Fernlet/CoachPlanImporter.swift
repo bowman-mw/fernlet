@@ -442,25 +442,42 @@ extension FernletStore {
         return updated
     }
 
+    /// Why the profile's injury limits rule `target` out, one reason per conflict: an avoided
+    /// movement, avoided muscles, a body area kept out of training (severe), or the heavy end of an
+    /// area being trained around (mild). The same limits ``WorkoutSafetyFilter`` applies to the
+    /// app's own plans — the picker, the note read by whole words, and the older avoided sets.
+    static func injuryReasons(for target: ExerciseTarget, limits: InjuryLimits) -> [String] {
+        var reasons: [String] = []
+        if limits.avoidedMovements.contains(target.movementPattern) {
+            reasons.append("you avoid \(target.movementPattern.rawValue) movements")
+        }
+        let conflicting = target.primaryMuscles.union(target.secondaryMuscles).intersection(limits.avoidedMuscles)
+        if !conflicting.isEmpty {
+            reasons.append("it works \(conflicting.map(\.displayName).sorted().joined(separator: ", ")), which you avoid")
+        }
+        let severe = limits.severeAreas.filter { $0.isLoaded(by: target, primaryOnly: false) }
+        if !severe.isEmpty {
+            reasons.append("it loads your \(severe.map(\.displayName).sorted().joined(separator: ", ")), which you're resting")
+        }
+        let mild = limits.mildAreas.filter { $0.isLoaded(by: target, primaryOnly: true) }
+        if InjuryLimits.isHeavyLoading(target), !mild.isEmpty {
+            reasons.append("it loads your \(mild.map(\.displayName).sorted().joined(separator: ", ")) heavily, which you're easing")
+        }
+        return reasons
+    }
+
     /// The safety pass over an edit's proposed exercises.
     private static func safetyFlags(forEdits edits: [ResolvedCoachPlanEdit],
                                     resolvedByKey: [String: ExerciseTarget],
                                     location: WorkoutLocation,
                                     profile: WorkoutProfile) -> [CoachPlanSafetyFlag] {
         var flags: [CoachPlanSafetyFlag] = []
+        let limits = profile.injuryLimits
         for resolved in edits {
             for exercise in resolved.edit.exercises ?? [] {
                 let key = CoachPlan.normalizedName(exercise.name)
                 guard let target = resolvedByKey[key] else { continue }
-                var reasons: [String] = []
-                if profile.avoidedMovements.contains(target.movementPattern) {
-                    reasons.append("you avoid \(target.movementPattern.rawValue) movements")
-                }
-                let conflicting = target.primaryMuscles.union(target.secondaryMuscles)
-                    .intersection(profile.avoidedMuscles)
-                if !conflicting.isEmpty {
-                    reasons.append("it works \(conflicting.map(\.displayName).sorted().joined(separator: ", ")), which you avoid")
-                }
+                var reasons = injuryReasons(for: target, limits: limits)
                 let missing = WorkoutSafetyFilter.missingEquipment(for: target, at: location)
                 if !missing.isEmpty {
                     reasons.append("\(location.name) has no \(missing.joined(separator: " or ").lowercased())")
@@ -484,6 +501,7 @@ extension FernletStore {
                                     location: WorkoutLocation,
                                     profile: WorkoutProfile) -> [CoachPlanSafetyFlag] {
         var flags: [CoachPlanSafetyFlag] = []
+        let limits = profile.injuryLimits
         for day in plan.days {
             for session in day.sessions {
                 for exercise in session.exercises {
@@ -492,16 +510,7 @@ extension FernletStore {
                     // issue; flagging it again here would double-report the same problem.
                     guard let target = resolvedByKey[key] else { continue }
 
-                    var reasons: [String] = []
-                    if profile.avoidedMovements.contains(target.movementPattern) {
-                        reasons.append("you avoid \(target.movementPattern.rawValue) movements")
-                    }
-                    let worked = target.primaryMuscles.union(target.secondaryMuscles)
-                    let conflicting = worked.intersection(profile.avoidedMuscles)
-                    if !conflicting.isEmpty {
-                        let names = conflicting.map(\.displayName).sorted().joined(separator: ", ")
-                        reasons.append("it works \(names), which you avoid")
-                    }
+                    var reasons = injuryReasons(for: target, limits: limits)
                     let missing = WorkoutSafetyFilter.missingEquipment(for: target, at: location)
                     if !missing.isEmpty {
                         reasons.append("\(location.name) has no \(missing.joined(separator: " or ").lowercased())")
