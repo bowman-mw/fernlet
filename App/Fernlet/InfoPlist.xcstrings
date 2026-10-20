@@ -47,7 +47,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fernlet reads selected Health data only when you enable it — including workouts, body metrics, sleep, recovery, and (optionally) cycle data — to give you a complete, on-device picture of your wellbeing."
+            "value" : "Fernlet reads selected Health data only when you enable it — including workouts, body metrics, sleep, recovery, heart rate during guided cardio, and (optionally) cycle data — to give you a complete, on-device picture of your wellbeing."
           }
         }
       }

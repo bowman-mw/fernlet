@@ -687,12 +687,18 @@ struct WorkoutProgramTests {
         #expect(store.committedGuidedIntensity == nil)
     }
 
-    /// Finding 2 invariant: any recorded session completion pins the plan — rework refuses, so it can
-    /// never orphan an already-counted session.
-    @Test func reworkRefusesOnceAnySessionCompletionIsRecorded() {
+    /// Finding 2 invariant: a recorded completion of any of the plan's sessions pins the plan — rework
+    /// refuses, so it can never orphan an already-counted session. A completion that is not one of the
+    /// plan's sessions (a planned workout's run, round 2) does not pin it.
+    @Test func reworkRefusesOnceAPlanSessionCompletionIsRecorded() throws {
         let store = makeTestStore()
-        _ = store.commitTodaysGuidedWorkoutPlan(intensity: .hard)
+        _ = store.commitTodaysGuidedWorkoutPlan(intensity: .hard)   // pins today's day key
+        let s = session("Upper", [ex("Bench", sets: 3)])
+        let base = try #require(store.currentGuidedWorkoutPlan)
+        store.replaceGuidedWorkoutPlan(plan([s]), replacing: Set(base.sessions.map(\.id)))
         store.markGuidedSessionCompleted(UUID())
+        #expect(store.canReworkTodaysGuidedPlan == true, "another session's completion is not this plan's")
+        store.markGuidedSessionCompleted(s.id)
         #expect(store.canReworkTodaysGuidedPlan == false)
         #expect(store.reworkTodaysGuidedPlan() == false)
         #expect(store.currentGuidedWorkoutPlan != nil)

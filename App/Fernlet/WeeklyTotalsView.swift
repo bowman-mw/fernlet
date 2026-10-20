@@ -218,7 +218,7 @@ struct WeeklySetsSection: View {
             }
         }
         FernletRowDivider()
-        Text("A set counts in full for the muscles a lift mainly works, and as half a set for the muscles that help. Warm-ups, stretches, holds and ramp-up sets aren't counted.",
+        Text("A set counts in full for the muscles a lift mainly works, and as half a set for the muscles that help. A guided session marked done counts the sets it planned. Warm-ups, stretches, holds and ramp-up sets aren't counted.",
              comment: "Weekly totals screen: how the per-muscle set counts are worked out.")
             .font(.fernlet(.labelSmall))
             .foregroundStyle(Color.slate)
@@ -286,7 +286,7 @@ struct WeeklyAerobicSection: View {
             .foregroundStyle(Color.slate)
             .fernletWrappingText()
             .padding(.top, 6)
-        Text("Counts cardio, sports and dance, including workouts from Apple Health. Strength, yoga, Pilates and other mind-body sessions aren't counted.",
+        Text("Counts cardio, sports and dance, including workouts from Apple Health. A strength session adds only the planned minutes of a cardio block inside it; yoga, Pilates and other mind-body sessions aren't counted.",
              comment: "Weekly totals screen: which workouts the aerobic minutes include.")
             .font(.fernlet(.labelSmall))
             .foregroundStyle(Color.slate)

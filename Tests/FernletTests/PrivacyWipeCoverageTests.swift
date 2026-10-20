@@ -177,6 +177,9 @@ struct PrivacyWipeCoverageTests {
         "worryBoxResetHook",
         "BarcodeServingMemory.clearAll",
         "RecentActivityTypeMemory.clearAll",
+        // The person's own maximum heart rate (Workout setup's "My max heart rate", round 2 of
+        // 2026-10-20). The heart-rate switches stored beside it are kept; this is about their body.
+        "WorkoutZonePreferences.clearMaxHeartRate",
         "RecipeWebImageAttemptMemory.clearAll",
         // The local food-search correction memory (research §26 fix 1.10). Two tokens, because the
         // surface has two live copies: the defaults sidecar AND the `FoodCatalog`'s in-memory alias

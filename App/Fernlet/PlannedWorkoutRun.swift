@@ -126,8 +126,10 @@ enum PlannedWorkoutRun {
     /// (``PlannedWorkout/completedWorkout`` — the plan's name, split, muscles, targets and id, and the
     /// "Completed from coach plan." note that lets a removal put the plan back as a coach's), with what
     /// the run actually did in place of the plan: each tracked lift's line and its structured result,
-    /// timed cardio and stretching's minutes actually held, tagged as a guided log. A run that crossed
-    /// local midnight files under the plan's day at noon, as every guided log does.
+    /// timed cardio and stretching's minutes actually held, tagged as a guided log. The plan's own lines
+    /// ride along in ``Workout/plannedExercises``, so removing the row puts back the plan as written,
+    /// not the run's record. A run that crossed local midnight files under the plan's day at noon, as
+    /// every guided log does.
     ///
     /// MERGE NOTE (2026-10-20): the History lane's idea 14 logs a guided run's wall-clock length from the
     /// run's own start and finish in `finishGuidedRunLogging`. A planned run logs here instead, so give
@@ -135,6 +137,7 @@ enum PlannedWorkoutRun {
     static func loggedWorkout(for planned: PlannedWorkout, run state: GuidedWorkoutRunState, todayKey: String) -> Workout {
         var workout = planned.completedWorkout
         workout.loggedFromGuidedSession = true
+        workout.plannedExercises = planned.exercises
         if let log = GuidedRunLoadLog.log(for: state) {
             workout.exercises = log.text
             workout.exerciseResults = log.results.isEmpty ? nil : log.results

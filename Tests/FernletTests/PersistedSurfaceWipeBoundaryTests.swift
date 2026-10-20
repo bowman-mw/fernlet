@@ -228,6 +228,11 @@ struct PersistedSurfaceWipeBoundaryTests {
         "fernlet.messages.pendingInboxID": .cleared(token: "FernletMessagesRecipeImportRequest.clearPendingRequest"),
         "fernlet.messages.pendingRecipeInboxID": .cleared(token: "FernletMessagesRecipeImportRequest.clearPendingRequest"),
         "fernlet.recentActivityTypes": .cleared(token: "RecentActivityTypeMemory.clearAll"),
+        // The person's own maximum heart rate (round 2, 2026-10-20, WorkoutZonePreferences): stored
+        // beside the kept heart-rate switches, but a fact about their body, so the funnel clears it.
+        // The token is the CALL in `resetAll`; `clearMaxHeartRate` is declared in GuidedZones.swift,
+        // outside every registered wipe signature, so it cannot satisfy itself.
+        "fernlet.workoutCues.maxHeartRate": .cleared(token: "WorkoutZonePreferences.clearMaxHeartRate"),
         "fernlet.recipeWebImageAttempts.v1": .cleared(token: "RecipeWebImageAttemptMemory.clearAll"),
         "fernlet.sealedBackup.generation.*": .cleared(token: "generationStore.reset"),
         // The period backup's observed foreign head (Sealed backup v2 design 2026-09-30, §4.3, §9):
