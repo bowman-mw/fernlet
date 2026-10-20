@@ -21,7 +21,8 @@ import AppServices
 /// notifications, plus tap-to-sheet deep-linking.
 ///
 /// `willPresent` opts the daily check-in into banner+sound while the app is foregrounded
-/// (otherwise the system swallows it); `didReceive` maps a tap on the check-in to the journal
+/// (otherwise the system swallows it) and keeps a guided workout's cue notification quiet there,
+/// since the open runner has already cued that moment itself; `didReceive` maps a tap on the check-in to the journal
 /// sheet by storing `pendingSheetID` and posting `pendingSheetRequestNotification`, which
 /// `ContentView.consumePendingNotificationSheet()` consumes (cold launches read the flag from the
 /// startup task instead). Installed in `FernletApp.init` before launch finishes — the delegate
@@ -44,6 +45,13 @@ final class FernletNotificationDelegate: NSObject, UNUserNotificationCenterDeleg
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        // A guided workout's rest-end or hold-end cue is for a phone in the background. With Fernlet
+        // open, the runner has already played its own haptic or sound (GuidedRunCueDirector), and a
+        // banner on top would cue the same moment twice — and, under VoiceOver, speak it twice.
+        if NotificationService.isWorkoutCue(notification.request.identifier) {
+            completionHandler([])
+            return
+        }
         // Present gently even in the foreground — a check-in that never appears is confusing.
         completionHandler([.banner, .sound])
     }

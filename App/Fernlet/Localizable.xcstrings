@@ -1091,6 +1091,17 @@
     "A small record of being." : {
 
     },
+    "A tap when a rest or a hold ends. Sounds stay quiet, follow your ring/silent switch, and play over your music without pausing it. The screen stays on while a workout runs. If you lock your phone, the end of a rest or a hold comes as a notification when Fernlet's notifications are allowed, and the workout waits on that step until you open Fernlet again." : {
+      "comment" : "Workout setup sheet: the note under the workout cue switches. 'ring/silent switch' is the iPhone's Ring/Silent switch or Action button setting; the sounds never pause the person's music. With the phone locked, a rest's or hold's end arrives as a notification and the workout waits on that step.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A tap when a rest or a hold ends. Sounds stay quiet, follow your ring/silent switch, and play over your music without pausing it. The screen stays on while a workout runs. If you lock your phone, the end of a rest or a hold comes as a notification when Fernlet's notifications are allowed, and the workout waits on that step until you open Fernlet again."
+          }
+        }
+      }
+    },
     "A word about this one — optional" : {
 
     },
@@ -2139,6 +2150,17 @@
     },
     "Crypto format census (test-only view)" : {
 
+    },
+    "Cues during a workout" : {
+      "comment" : "Workout setup sheet: caption of the field holding the guided runner's haptic and sound switches.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cues during a workout"
+          }
+        }
+      }
     },
     "Cups of coffee and tea, stacked at about 12 cm a cup." : {
       "comment" : "Silly stat: how cups are counted"
@@ -3343,6 +3365,17 @@
     },
     "Hold both phones together. One of them is the phone you're protecting; the other becomes its recovery device and will hold the only key that can open it again." : {
 
+    },
+    "Hold now." : {
+      "comment" : "Spoken to VoiceOver when a timed step's 'Get into position' lead-in ends and the person should start holding (a stretch, a plank, a carry).",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hold now."
+          }
+        }
+      }
     },
     "Holds a heart until you're next nearby." : {
 
@@ -7386,6 +7419,17 @@
     "Workout finished and logged." : {
 
     },
+    "Workout haptics" : {
+      "comment" : "Workout setup sheet: switch for the guided runner's haptic cues (a tap when a rest or a hold ends). On by default.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Workout haptics"
+          }
+        }
+      }
+    },
     "Workout in progress" : {
 
     },
@@ -7406,6 +7450,17 @@
     },
     "Workout setup" : {
 
+    },
+    "Workout sounds" : {
+      "comment" : "Workout setup sheet: switch for the guided runner's quiet sound cues. Off by default.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Workout sounds"
+          }
+        }
+      }
     },
     "Workout type" : {
 

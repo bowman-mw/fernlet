@@ -44,9 +44,11 @@ enum CookingModeAvailability {
 // MARK: - Keep-screen-awake modifier (first use of isIdleTimerDisabled in the app)
 
 /// Keeps the screen awake while `isActive` and the scene is frontmost, restoring the system idle timer
-/// on disappear or when the app backgrounds. Scoped tightly to the cooking-mode cover — a cook reading a
-/// step shouldn't have the screen dim mid-recipe, but we must never leave the idle timer disabled once
-/// they leave or background the app. This is the app's ONLY `isIdleTimerDisabled` writer.
+/// on disappear or when the app backgrounds. Scoped tightly to two surfaces: the cooking-mode cover — a
+/// cook reading a step shouldn't have the screen dim mid-recipe — and, while a run is live, the guided
+/// workout runner (`GuidedWorkoutSheet`), so a phone on a bench does not lock mid-rest and silence the
+/// runner's cues. We must never leave the idle timer disabled once they leave or background the app.
+/// This is the app's ONLY `isIdleTimerDisabled` writer.
 private struct KeepScreenAwakeModifier: ViewModifier {
     let isActive: Bool
     @Environment(\.scenePhase) private var scenePhase
