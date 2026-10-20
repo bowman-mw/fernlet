@@ -54,6 +54,9 @@ public nonisolated enum FernletFeedbackEvent: String, CaseIterable, Sendable {
     case blockChanged
     /// The run finished naturally and was logged.
     case workoutFinished
+    /// During guided cardio, the live heart rate has sat outside the part's target zone for a while —
+    /// the opt-in "Zone nudges" cue. A light tap, never a sound: a suggestion, not an alarm.
+    case zoneDrift
 
     /// The haptic this event plays when haptics are on. Every event has one.
     ///
@@ -63,7 +66,7 @@ public nonisolated enum FernletFeedbackEvent: String, CaseIterable, Sendable {
         switch self {
         case .restEnded, .holdEnded: .attention
         case .holdStarted: .firm
-        case .setLogged: .light
+        case .setLogged, .zoneDrift: .light
         case .blockChanged: .heavy
         case .workoutFinished: .success
         }
@@ -71,12 +74,13 @@ public nonisolated enum FernletFeedbackEvent: String, CaseIterable, Sendable {
 
     /// The quiet sound this event plays when sounds are on, or nil for an event that stays silent.
     ///
-    /// A logged set is silent: the person just tapped, so a sound would only echo the tap.
+    /// A logged set is silent: the person just tapped, so a sound would only echo the tap. A zone
+    /// nudge is silent too: a heart rate drifting a little is never worth a sound over someone's music.
     public var sound: FernletSound? {
         switch self {
         case .restEnded, .holdEnded, .blockChanged, .workoutFinished: .chime
         case .holdStarted: .tick
-        case .setLogged: nil
+        case .setLogged, .zoneDrift: nil
         }
     }
 }

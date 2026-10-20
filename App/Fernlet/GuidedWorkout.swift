@@ -370,6 +370,10 @@ struct GuidedWorkoutSheet: View {
             if let window = run.holdWindow {
                 GuidedHoldTimer(window: window, paceRaw: exercise.segment?.paceRaw)
             }
+            // A cardio part's live heart rate against its target; nothing without a reading (idea 9).
+            if let zone = store.guidedZones.zone(for: run), zone.isLive {
+                GuidedZoneReadout(zone: zone)
+            }
 
             if Self.isSingleHold(exercise) {
                 // The countdown above says it all: no "Set 1 of 1", no "Hold 20 s" beside a 0:20.
@@ -721,11 +725,22 @@ struct GuidedWorkoutSheet: View {
         case GuidedWorkoutRunState.BlockToken.warmUp: Text("Ease into each stretch — no bouncing.")
         case GuidedWorkoutRunState.BlockToken.activation: Text("Light and steady — just waking things up.")
         case GuidedWorkoutRunState.BlockToken.coolDown: Text("Breathe out and let it go.")
-        case GuidedWorkoutRunState.BlockToken.cardio: GuidedSegmentWords.encouragement(run.currentExercise?.segment?.paceRaw)
+        case GuidedWorkoutRunState.BlockToken.cardio: cardioEncouragement(run)
         case GuidedWorkoutRunState.BlockToken.mobility: Text("Ease in and breathe. Stop anywhere that feels like enough.")
         default:
             run.currentSet == 1 ? Text("No rush getting started.") : Text("Steady — you've got this.")
         }
+    }
+
+    /// The line under a cardio part: the talk test for its zone when there is no live heart rate — the
+    /// silent fallback, with no number and no word about a missing reading — and the pace's own gentle
+    /// line beside a live reading (the card already shows where it sits).
+    private func cardioEncouragement(_ run: GuidedWorkoutRunState) -> Text {
+        let paceRaw = run.currentExercise?.segment?.paceRaw
+        guard let zone = store.guidedZones.zone(for: run), !zone.isLive, let target = zone.target else {
+            return GuidedSegmentWords.encouragement(paceRaw)
+        }
+        return GuidedZoneWords.talkTest(target: target)
     }
 
     /// Rebuilds the Last-time weight map from ONE `exerciseHistoryEntries()` pass — each per-name

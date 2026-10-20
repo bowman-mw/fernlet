@@ -2996,3 +2996,231 @@ extension HealthKitService: PeriodHealthKitServicing {
         }
     }
 }
+
+// MARK: - Live heart rate for guided cardio (comparison report idea 9, roadmap step 4b, 2026-10-20)
+
+/// An iPhone workout session (new in iOS 26) whose live builder reads heart rate for guided cardio's
+/// zone cue — the gateway's one door that runs a session, kept in this file beside the others because no
+/// shipping file outside it may touch the Health store (`HealthKitWriteGateTests`).
+///
+/// **Where a live reading comes from** (researched 2026-10-20; device checks owed): a Bluetooth LE strap
+/// on the standard Heart Rate GATT profile paired with the iPhone, Powerbeats Pro 2 (WWDC25 session 322,
+/// "Track workouts with HealthKit on iOS and iPadOS"), and AirPods Pro 3 (Apple's support article on
+/// heart rate during workouts with third-party apps). Not an Apple Watch in real time: nothing documents
+/// a watch feeding an iPhone-only session — Apple's path is a watch app mirroring its session — so a
+/// watch wearer sees the talk test. The iPhone alone has no sensor.
+///
+/// **Gated like a write.** A running session lets HealthKit record the sensor's samples, so
+/// ``start(activity:onReading:onEnded:)`` checks Fernlet's workout sharing (master and workout switch,
+/// read live) itself, as every write door does — the app's own check cannot be the only one. **Never a
+/// second workout:** the builder's workout is DISCARDED on ``stop()``; the guided run's log, through
+/// ``HealthKitService/saveWorkout(_:)``, stays the one workout Fernlet writes, with its provenance
+/// metadata, tombstones and edit re-sync. HealthKit keeps the samples the sensor delivered, as for any
+/// workout app. The data source collects heart rate and nothing else.
+///
+/// Concurrency: main-actor (this module's default); HealthKit calls the delegates on a background queue,
+/// so they are `nonisolated` and hop to the main actor before touching any state. The Health store is
+/// made on first use, so a process that never starts a cardio session never touches HealthKit.
+public final class HealthKitLiveHeartRateSource: NSObject {
+    /// The Health store the session, its builder and its data source share.
+    private lazy var healthStore = HKHealthStore()
+    /// The running session, if any.
+    private var session: HKWorkoutSession?
+    /// The running session's live builder, if any.
+    private var builder: HKLiveWorkoutBuilder?
+    /// Where readings go while a session runs.
+    private var onReading: (@MainActor (Int) -> Void)?
+    /// Called when the session stops by itself (a failure), not when ``stop()`` ends it.
+    private var onEnded: (@MainActor () -> Void)?
+
+    /// Creates an idle source; nothing touches HealthKit until a session starts.
+    public override init() {
+        super.init()
+    }
+
+    /// Whether this device has a Health store at all.
+    public var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
+
+    /// Asks Apple Health to let Fernlet read heart rate — the system sheet, shown only when the person has
+    /// not answered before. Called only from the person turning "Heart rate during cardio" on. Returns
+    /// whether the request completed; HealthKit never reveals a read grant.
+    public func requestReadAccess() async -> Bool {
+        guard isAvailable else { return false }
+        let read: Set<HKObjectType> = [HKQuantityType(.heartRate)]
+        do {
+            try await healthStore.requestAuthorization(toShare: Set<HKSampleType>(), read: read)
+            return true
+        } catch {
+            FernletAuditLog.log("workout.zones.readRequestFailed", context: ["errorType": "\(type(of: error))"])
+            return false
+        }
+    }
+
+    /// Starts a session of `activity` collecting heart rate only, delivering each new reading in whole beats
+    /// per minute to `onReading`, and calling `onEnded` if the session stops by itself. Refused (false) when
+    /// Fernlet's workout sharing is off, Health is missing, or HealthKit declines.
+    public func start(
+        activity: WorkoutActivityType,
+        onReading: @escaping @MainActor (Int) -> Void,
+        onEnded: @escaping @MainActor () -> Void
+    ) async -> Bool {
+        guard session == nil else { return true }
+        guard Self.workoutSharingAllowed() else {
+            FernletAuditLog.log("workout.zones.sessionRefusedBySharing")
+            return false
+        }
+        await retireRecoveredSession()
+        let configuration = HKWorkoutConfiguration()
+        configuration.activityType = ActivityTypeCatalog.hkActivityType(for: activity)
+        configuration.locationType = .unknown
+        guard let newSession = makeSession(configuration) else { return false }
+        let liveBuilder = newSession.associatedWorkoutBuilder()
+        liveBuilder.dataSource = Self.heartRateOnlySource(healthStore: healthStore, configuration: configuration)
+        newSession.delegate = self
+        liveBuilder.delegate = self
+        session = newSession
+        builder = liveBuilder
+        self.onReading = onReading
+        self.onEnded = onEnded
+        let now = Date()
+        newSession.startActivity(with: now)
+        guard await Self.beginCollection(liveBuilder, at: now) else {
+            FernletAuditLog.log("workout.zones.collectionRefused")
+            stop()
+            return false
+        }
+        return true
+    }
+
+    /// Ends the session and discards its workout. Safe to call with nothing running.
+    public func stop() {
+        guard let session else { return }
+        let ending = builder
+        self.session = nil
+        builder = nil
+        onReading = nil
+        onEnded = nil
+        session.end()
+        // Never a second workout in Health: the guided run's own log is the one writer.
+        ending?.discardWorkout()
+    }
+
+    /// Ends and discards a session HealthKit kept alive across a crash, if there is one.
+    public func retireRecoveredSession() async {
+        guard isAvailable, session == nil else { return }
+        guard let recovered = await Self.recoverSession(from: healthStore) else { return }
+        FernletAuditLog.log("workout.zones.recoveredSessionRetired")
+        recovered.end()
+        recovered.associatedWorkoutBuilder().discardWorkout()
+    }
+
+    /// Whole beats per minute from a heart-rate quantity, or nil for a value no heart makes.
+    nonisolated public static func beatsPerMinute(_ quantity: HKQuantity) -> Int? {
+        let value = quantity.doubleValue(for: HKUnit.count().unitDivided(by: .minute()))
+        guard value.isFinite, abs(value) < 1_000 else { return nil }
+        let bpm = Int(value.rounded())
+        return HeartRateZones.plausibleBPM.contains(bpm) ? bpm : nil
+    }
+
+    /// A new session for `configuration`, or nil (audited) when HealthKit refuses one.
+    private func makeSession(_ configuration: HKWorkoutConfiguration) -> HKWorkoutSession? {
+        do {
+            return try HKWorkoutSession(healthStore: healthStore, configuration: configuration)
+        } catch {
+            FernletAuditLog.log("workout.zones.sessionRefused", context: ["errorType": "\(type(of: error))"])
+            return nil
+        }
+    }
+
+    /// A reading arrived (on the main actor): pass it on while a session runs.
+    private func deliver(_ bpm: Int) {
+        guard session != nil, let onReading else { return }
+        onReading(bpm)
+    }
+
+    /// The session stopped by itself: tidy up, then say so.
+    private func sessionFailed() {
+        guard session != nil else { return }
+        let ended = onEnded
+        stop()
+        ended?()
+    }
+
+    /// Fernlet's workout sharing with Apple Health, read live — the same rule every write door applies.
+    private static func workoutSharingAllowed() -> Bool {
+        HealthKitService.isWriteSharingEnabled(
+            for: .workoutLogging,
+            in: StoragePreferencesStore.currentPreferences(),
+            healthDataAvailable: HKHealthStore.isHealthDataAvailable()
+        )
+    }
+
+    /// A live data source for `configuration` that collects heart rate and nothing else — no energy, no
+    /// distance — so the session adds nothing to Health beyond what the sensor itself delivers.
+    private static func heartRateOnlySource(
+        healthStore: HKHealthStore,
+        configuration: HKWorkoutConfiguration
+    ) -> HKLiveWorkoutDataSource {
+        let source = HKLiveWorkoutDataSource(healthStore: healthStore, workoutConfiguration: configuration)
+        let heartRate = HKQuantityType(.heartRate)
+        // R2: bounded by the data source's own default type set.
+        for type in source.typesToCollect where type != heartRate {
+            source.disableCollection(for: type)
+        }
+        source.enableCollection(for: heartRate, predicate: nil)
+        return source
+    }
+
+    /// Bridges `beginCollection` to `async`: whether collection began.
+    private static func beginCollection(_ builder: HKLiveWorkoutBuilder, at date: Date) async -> Bool {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+            builder.beginCollection(withStart: date) { success, _ in
+                continuation.resume(returning: success)
+            }
+        }
+    }
+
+    /// Bridges `recoverActiveWorkoutSession` to `async`: the session HealthKit kept across a crash, or nil.
+    private static func recoverSession(from healthStore: HKHealthStore) async -> HKWorkoutSession? {
+        await withCheckedContinuation { (continuation: CheckedContinuation<HKWorkoutSession?, Never>) in
+            healthStore.recoverActiveWorkoutSession { session, _ in
+                continuation.resume(returning: session)
+            }
+        }
+    }
+}
+
+extension HealthKitLiveHeartRateSource: HKWorkoutSessionDelegate {
+    nonisolated public func workoutSession(
+        _ workoutSession: HKWorkoutSession,
+        didChangeTo toState: HKWorkoutSessionState,
+        from fromState: HKWorkoutSessionState,
+        date: Date
+    ) {
+        // Nothing to do: Fernlet starts and ends the session itself, and readings carry the news.
+    }
+
+    nonisolated public func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
+        let errorType = "\(type(of: error))"
+        Task { @MainActor [weak self] in
+            FernletAuditLog.log("workout.zones.sessionFailed", context: ["errorType": errorType])
+            self?.sessionFailed()
+        }
+    }
+}
+
+extension HealthKitLiveHeartRateSource: HKLiveWorkoutBuilderDelegate {
+    nonisolated public func workoutBuilder(_ workoutBuilder: HKLiveWorkoutBuilder, didCollectDataOf collectedTypes: Set<HKSampleType>) {
+        let heartRate = HKQuantityType(.heartRate)
+        guard collectedTypes.contains(heartRate),
+              let quantity = workoutBuilder.statistics(for: heartRate)?.mostRecentQuantity(),
+              let bpm = Self.beatsPerMinute(quantity) else { return }
+        Task { @MainActor [weak self] in
+            self?.deliver(bpm)
+        }
+    }
+
+    nonisolated public func workoutBuilderDidCollectEvent(_ workoutBuilder: HKLiveWorkoutBuilder) {
+        // Events (pause, resume, laps) carry nothing the zone cue reads.
+    }
+}

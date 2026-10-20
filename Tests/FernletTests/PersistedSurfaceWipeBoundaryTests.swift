@@ -316,6 +316,14 @@ struct PersistedSurfaceWipeBoundaryTests {
         "fernlet.workoutCues.sounds": .kept(
             reason: "Guided-workout configuration, not a record: whether the runner plays its quiet chime. Same class as the haptics switch beside it, and clearing it would only hand back the default."
         ),
+        // Guided cardio's heart-rate switches (2026-10-20, idea 9, WorkoutZonePreferences): device-local,
+        // beside the cue switches. The heart rate itself is never persisted anywhere.
+        "fernlet.workoutCues.liveHeartRate": .kept(
+            reason: "Guided-workout configuration, not a record: whether the runner reads live heart rate during guided cardio. No content, nothing about any day, never a heart rate — and the session it allows also needs Fernlet's workout sharing with Apple Health."
+        ),
+        "fernlet.workoutCues.zoneNudges": .kept(
+            reason: "Guided-workout configuration, not a record: whether the runner taps when the heart rate drifts out of its target zone. Same class as the cue switches beside it, and clearing it would only hand back the default (off)."
+        ),
         // The two append-only ledgers' durable reset boundaries (tracker §3.6, 2026-09-24). Written BY
         // the wipe, before it deletes the rows, and retired by the ledger itself once the synced
         // marker lands — so a funnel clear would erase the one copy that outlives a process death.

@@ -12,7 +12,9 @@
 // imports. The type is a byte-portable snapshot, exactly like the app-group JSON contracts alongside
 // it in WidgetSharedModels.swift. The rest timer ticks natively via `Text(timerInterval:)`, so the
 // ContentState only changes on discrete moves — a set, an exercise, a ±15 s rest adjustment, a weight
-// picked in the app — never per-second, never via push.
+// picked in the app — never per-second, never via push. The one exception is opt-in and bounded: during
+// guided cardio with a live heart rate, the app pushes a changed reading at most every five seconds
+// (`GuidedZoneDirector`), from its own process, still never via push.
 
 import ActivityKit
 import Foundation
@@ -40,7 +42,10 @@ nonisolated struct WorkoutActivityAttributes: ActivityAttributes {
     ///
     /// Produced only by `GuidedWorkoutRunState.contentState` (the app-group run state's Live Activity
     /// mapping), so both drivers — the in-app guided sheet and the Lock Screen intents — publish
-    /// byte-identical snapshots.
+    /// byte-identical snapshots. The one addition is the app's: during guided cardio it lays the live
+    /// heart-rate reading over ``zone`` (`GuidedWorkoutActivityBridge.sync(to:zone:)`), which the run
+    /// state never stores; a Lock Screen tap publishes the run's own zone (the talk test) until the
+    /// app's next reading.
     nonisolated struct ContentState: Codable, Hashable {
         /// The two-case rendering phase: `working` = doing a set (show set / reps), `resting` =
         /// between sets (show the countdown).
@@ -87,6 +92,59 @@ nonisolated struct WorkoutActivityAttributes: ActivityAttributes {
         var paceRaw: String? = nil
         var round: Int? = nil
         var rounds: Int? = nil
+        /// A timed cardio segment's heart-rate cue: the zone its pace aims for and — while Fernlet is
+        /// reading a live heart rate — the reading against that zone's range. Nil on every other step,
+        /// and in a payload from before heart-rate zones existed.
+        var zone: Zone? = nil
+
+        /// The numbers behind a cardio segment's heart-rate cue: the zone its pace aims for, and the
+        /// live reading with the zone's range when there is one (comparison report idea 9).
+        ///
+        /// Numbers only, never text: the widget words them in its own locale
+        /// (``WorkoutActivityZoneText``). Every field is optional, so a payload missing one — or the
+        /// whole `zone` key — still decodes. With `target` alone the cue is the talk test; with `bpm`,
+        /// `low` and `high` as well it is the live reading ("118 bpm · aim 110–125"). Four scalars:
+        /// Live Activity payloads are small, and the heart rate itself is never stored anywhere.
+        nonisolated struct Zone: Codable, Hashable {
+            /// The zone the segment's pace aims for (2 for easy and steady, 4 for hard).
+            var target: Int?
+            /// The latest live heart rate, in beats per minute; nil without a live reading.
+            var bpm: Int?
+            /// The target zone's range, in beats per minute; nil without a live reading.
+            var low: Int?
+            var high: Int?
+
+            /// Where a live reading sits against the range — always said in words, never colour alone.
+            nonisolated enum Band: String, Hashable {
+                /// Under the range: "a little low".
+                case low
+                /// Within the range: "in range".
+                case inRange
+                /// Over the range: "a little high".
+                case high
+            }
+
+            /// Where `bpm` sits against `range`.
+            static func band(bpm: Int, range: ClosedRange<Int>) -> Band {
+                if bpm < range.lowerBound { return .low }
+                return bpm > range.upperBound ? .high : .inRange
+            }
+
+            /// The target range, when the cue carries one in order.
+            var range: ClosedRange<Int>? {
+                guard let low, let high, low <= high else { return nil }
+                return low...high
+            }
+
+            /// Where the live reading sits, or nil without one — the cue is then the talk test.
+            var band: Band? {
+                guard let bpm, let range else { return nil }
+                return Self.band(bpm: bpm, range: range)
+            }
+
+            /// Whether the cue carries a live reading to draw.
+            var isLive: Bool { band != nil }
+        }
 
         /// The numbers behind the set's load line: the weight the runner shows, the engine's range,
         /// and last time's sets, reps and weight.

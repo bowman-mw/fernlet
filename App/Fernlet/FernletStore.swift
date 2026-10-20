@@ -4821,12 +4821,23 @@ final class FernletStore {
     /// wipe — re-arms the run's haptic, sound and background cues, so they always describe the run as
     /// it is now and stop the moment it ends (`GuidedRunCues.swift`).
     private(set) var guidedRunState: GuidedWorkoutRunState? = nil {
-        didSet { guidedRunCues.runChanged(to: guidedRunState) }
+        didSet {
+            guidedRunCues.runChanged(to: guidedRunState)
+            guidedZones.runChanged(to: guidedRunState)
+        }
     }
     /// The guided runner's cue director: rest-end and hold-end haptics and sounds in the app, and the
     /// pending cue notification for a phone in the background. Internal and settable so the runner
     /// sheet can report its taps and a test can inject a recording director.
     @ObservationIgnored lazy var guidedRunCues = GuidedRunCueDirector()
+    /// Guided cardio's heart-rate cue (`GuidedZones.swift`): the live session on a cardio segment, the
+    /// reading the runner card draws, the opt-in zone nudge, and the Live Activity's reading. Internal and
+    /// settable so a test can inject a director over a fake heart-rate source.
+    @ObservationIgnored lazy var guidedZones: GuidedZoneDirector = GuidedZoneDirector(
+        sharingAllowed: { [weak self] in self?.isWorkoutHealthSharingEnabled ?? false },
+        zones: { [weak self] in self?.heartRateZones() },
+        publish: { [weak self] in self?.publishGuidedZone() }
+    )
     /// On THIS store's app-group root. `resetAll` clears this file and `GuidedWorkoutRunStoreTests`
     /// reads it, so the process-wide container was a live cross-suite race, not a latent one.
     @ObservationIgnored private lazy var guidedRunStateStore =
@@ -5046,8 +5057,36 @@ final class FernletStore {
             syncActivity { await GuidedWorkoutActivityBridge.end() }
         } else {
             mirrorGuidedRunState(state)
-            syncActivity { await GuidedWorkoutActivityBridge.sync(to: state) }
+            let zone = guidedZones.zone(for: state)
+            syncActivity { await GuidedWorkoutActivityBridge.sync(to: state, zone: zone) }
         }
+    }
+
+    /// Re-publishes the live run with guided cardio's current heart-rate cue — the zone director's call
+    /// when the reading moved enough to show (`GuidedZoneDirector`). Chained like every other update, so
+    /// it never lands out of order with a set or a rest. No-op without a live run.
+    private func publishGuidedZone() {
+        guard let state = guidedRunState, !state.isDone else { return }
+        let zone = guidedZones.zone(for: state)
+        syncActivity { await GuidedWorkoutActivityBridge.sync(to: state, zone: zone) }
+    }
+
+    /// Whether Fernlet may share workouts with Apple Health right now — the master and workout switches,
+    /// read live. The gate guided cardio's live heart-rate session needs (`GuidedZones.swift`).
+    var isWorkoutHealthSharingEnabled: Bool {
+        healthKitService?.isWriteSharingEnabled(for: .workoutLogging) == true
+    }
+
+    /// The person's heart-rate zones: their age as this device has it (typed, with any Apple Health
+    /// date of birth laid over it) and, when Health supplied one today, their resting heart rate.
+    func heartRateZones() -> HeartRateZones {
+        HeartRateZones(age: effectiveUserProfile.age, restingHeartRate: day.healthContext?.body?.restingHeartRateBPM)
+    }
+
+    /// Asks Apple Health to let Fernlet read heart rate — only from the person turning on "Heart rate
+    /// during cardio" in Workout setup, and only while workout sharing is on.
+    func requestLiveHeartRateAccess() async {
+        await guidedZones.requestReadAccess()
     }
 
     /// Applies an in-app load-tracking edit (a weight pick, edited reps, an effort tap, an override
@@ -5063,7 +5102,8 @@ final class FernletStore {
         mirrorGuidedRunState(state)
         if state.contentState != shown {
             let snapshot = state
-            syncActivity { await GuidedWorkoutActivityBridge.sync(to: snapshot) }
+            let zone = guidedZones.zone(for: snapshot)
+            syncActivity { await GuidedWorkoutActivityBridge.sync(to: snapshot, zone: zone) }
         }
     }
 
@@ -5089,6 +5129,8 @@ final class FernletStore {
     /// adopted so the sheet/card resume it; a run the process merely outlived (untouched for hours) is
     /// retired. When there is no run at all, any activity still on screen is retired.
     func reconcileGuidedRunFromAppGroup() {
+        // A heart-rate session HealthKit kept alive across a crash is ended here, once per launch.
+        guidedZones.retireRecoveredSessionIfNeeded()
         guard let fileState = guidedRunStateStore.read() else {
             // No backing run: retire any activity left on screen (an in-app finish whose immediate
             // end() didn't land, or an orphan from a prior build). No-op when nothing is live.

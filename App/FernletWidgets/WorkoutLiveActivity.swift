@@ -15,6 +15,11 @@
 // The Live Activity never edits a weight — its only controls move the run (Done set / Next) or the rest
 // (−15 s / Skip rest / +15 s); the runner's weight panel is the one place a weight is picked. Compact
 // and minimal stay as they were: the load lives on the Lock Screen and in the expanded Island only.
+//
+// ZONE RULE: a cardio segment's heart-rate cue (`ContentState.zone`) is one calm line — the live reading
+// against its target with a word for where it sits ("118 bpm · aim 110–125 · in range"), or, with no live
+// reading, the short talk test. Words, never colour alone; nothing pulses. Lock Screen and expanded
+// Island only, in the line the load uses for a lift (a segment has no load).
 
 import ActivityKit
 import AppIntents
@@ -166,6 +171,10 @@ private struct WorkoutIslandBottom: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if let load = state.load {
                     workingLoadRow(load)
+                }
+                if let zone = state.zone {
+                    WorkoutZoneLine(zone: zone)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             guidedActionButton(state)
@@ -538,6 +547,9 @@ private struct WorkoutLockScreenView: View {
             if let load = state.load {
                 WorkoutLastTimeLine(load: load, color: FernletWidgetPalette.inkSoft)
             }
+            if state.phase == .working, let zone = state.zone {
+                WorkoutZoneLine(zone: zone, color: FernletWidgetPalette.inkSoft)
+            }
         }
     }
 
@@ -690,6 +702,26 @@ private struct WorkoutLastTimeLine: View {
                 .minimumScaleFactor(0.75)
                 .accessibilityLabel(Text(verbatim: WorkoutActivityLoadText.spokenSummary(load) ?? line))
                 .accessibilityHidden(WorkoutActivityLoadText.drawsWeight(load))
+        }
+    }
+}
+
+/// A cardio segment's heart-rate cue on one line (see the ZONE RULE at the top of this file): the live
+/// reading, its target and where it sits, or the short talk test. VoiceOver hears the reading in full
+/// words ("Heart rate 118, aiming for 110 to 125, in range"); the talk test speaks as drawn. Static text —
+/// nothing animates, so Reduce Motion has nothing to stop.
+private struct WorkoutZoneLine: View {
+    let zone: WorkoutActivityAttributes.ContentState.Zone
+    var color: Color = .secondary
+
+    var body: some View {
+        if let line = WorkoutActivityZoneText.line(zone) {
+            Text(verbatim: line)
+                .font(.caption)
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .accessibilityLabel(Text(verbatim: WorkoutActivityZoneText.spoken(zone) ?? line))
         }
     }
 }

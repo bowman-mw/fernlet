@@ -30,6 +30,25 @@ enum GuidedWorkoutActivityBridge {
         await LiveActivityReflector.sync(to: state)
     }
 
+    /// Reflect the run state with the app's live heart-rate cue laid over the segment's own: the same
+    /// update (or end) as ``sync(to:)``, with `zone` — the reading against the segment's target, from
+    /// `GuidedZoneDirector` — in place of the run's talk-test zone. A nil `zone` keeps the run's own.
+    ///
+    /// App-only in practice: only the app process reads a heart rate. The Lock Screen intents keep
+    /// calling ``sync(to:)``, so a tap there shows the talk test until the app's next reading lands.
+    static func sync(to state: GuidedWorkoutRunState, zone: WorkoutActivityAttributes.ContentState.Zone?) async {
+        guard let zone, !state.isTerminal else {
+            await LiveActivityReflector.sync(to: state)
+            return
+        }
+        var content = state.contentState
+        content.zone = zone
+        let update = ActivityContent(state: content, staleDate: state.staleDate(postedAt: Date()))
+        for activity in Activity<WorkoutActivityAttributes>.activities {
+            await activity.update(update)
+        }
+    }
+
     /// End every live workout activity immediately (used on finish, abandon, and stale cleanup).
     static func end() async {
         await LiveActivityReflector.end(WorkoutActivityAttributes.self)

@@ -24,6 +24,8 @@ struct WorkoutSetupSheet: View {
     @State private var showingLocations = false
     /// The runner's cue switches, a draft like every other field: device-local, stored on Save.
     @State private var cuePreferences: FernletFeedbackPreferences
+    /// The heart-rate switches' draft (device-local, like the cue switches).
+    @State private var zonePreferences: WorkoutZonePreferences
     private let recommendedSplits: [TrainingSplit]
     private let originalSelectedSplitID: String?
     private let currentSplitName: String
@@ -37,6 +39,10 @@ struct WorkoutSetupSheet: View {
     private let initialInterestsText: String
     private let initialAvoidedAreas: Set<String>
     private let initialCuePreferences: FernletFeedbackPreferences
+    private let initialZonePreferences: WorkoutZonePreferences
+    /// Whether Fernlet shares workouts with Apple Health — read once at init (it reads keychain-backed
+    /// switches); the heart-rate switch needs it to turn on.
+    private let healthSharingAllowed: Bool
 
     /// One selectable "work around this" chip: a display name plus the muscle groups and movement
     /// patterns the planner should avoid while it's on.
@@ -87,6 +93,10 @@ struct WorkoutSetupSheet: View {
         let cues = WorkoutCuePreferences.current()
         _cuePreferences = State(initialValue: cues)
         self.initialCuePreferences = cues
+        let zones = WorkoutZonePreferences.current()
+        _zonePreferences = State(initialValue: zones)
+        self.initialZonePreferences = zones
+        self.healthSharingAllowed = store.isWorkoutHealthSharingEnabled
     }
 
     /// Any field diverges from what the sheet opened on. Shallow by design — a swipe-away guard,
@@ -97,6 +107,7 @@ struct WorkoutSetupSheet: View {
             || avoidedAreas != initialAvoidedAreas
             || selectedSplitID != originalSelectedSplitID
             || cuePreferences != initialCuePreferences
+            || zonePreferences != initialZonePreferences
     }
 
     var body: some View {
@@ -108,7 +119,9 @@ struct WorkoutSetupSheet: View {
                     frequencySection
                     sportInterestsSection
                     injurySection
-                    WorkoutCueSettingsSection(preferences: $cuePreferences)
+                    WorkoutCueSettingsSection(
+                        preferences: $cuePreferences, zones: $zonePreferences, healthSharingAllowed: healthSharingAllowed
+                    )
                 }
                 .padding(20)
                 .padding(.bottom, 10)
@@ -129,6 +142,13 @@ struct WorkoutSetupSheet: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
+        }
+        // Turning "Heart rate during cardio" on is the one place Fernlet asks Apple Health to let it
+        // read heart rate — at the person's own tap, never silently. Health shows its sheet only if
+        // they have not answered before.
+        .onChange(of: zonePreferences.liveHeartRate) { _, isOn in
+            guard isOn, healthSharingAllowed else { return }
+            Task { await store.requestLiveHeartRateAccess() }
         }
     }
 
@@ -327,6 +347,7 @@ struct WorkoutSetupSheet: View {
         store.setWorkoutProfile(updated)
         store.setSelectedSplit(selectedSplitID)
         WorkoutCuePreferences.save(cuePreferences)
+        WorkoutZonePreferences.save(zonePreferences)
         dismiss()
     }
 }

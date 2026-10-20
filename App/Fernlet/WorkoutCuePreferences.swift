@@ -40,12 +40,17 @@ enum WorkoutCuePreferences {
 }
 
 /// The Workout setup sheet's "Cues during a workout" field: the haptics and sounds switches, with one
-/// line saying what each does and how the sounds behave.
+/// line saying what each does and how the sounds behave, then guided cardio's heart-rate switches
+/// (``WorkoutZoneSettingsRows``).
 ///
-/// Edits a draft the sheet owns, so Cancel discards a change here like any other field and Save
-/// stores it through ``WorkoutCuePreferences/save(_:in:)``.
+/// Edits drafts the sheet owns, so Cancel discards a change here like any other field and Save
+/// stores them through ``WorkoutCuePreferences/save(_:in:)`` and ``WorkoutZonePreferences/save(_:in:)``.
 struct WorkoutCueSettingsSection: View {
     @Binding var preferences: FernletFeedbackPreferences
+    /// The heart-rate switches' draft.
+    @Binding var zones: WorkoutZonePreferences
+    /// Whether Fernlet shares workouts with Apple Health right now — the heart-rate switch needs it.
+    let healthSharingAllowed: Bool
 
     var body: some View {
         SheetField("Cues during a workout") {
@@ -64,6 +69,8 @@ struct WorkoutCueSettingsSection: View {
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
+                WorkoutZoneSettingsRows(preferences: $zones, sharingAllowed: healthSharingAllowed)
+                    .padding(.top, 6)
             }
         }
     }
