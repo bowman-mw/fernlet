@@ -58,8 +58,10 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
     /// card runner, the Suggest sheet's runner, or its "Mark done"). It is what lets name-based
     /// reconciliation match ONLY the guided flow's own rows — a manual Log-sheet entry or a planned
     /// completion sharing a guided session's name ("Legs", "Push") must not make the guided card claim
-    /// itself done or refuse a rework. `nil` on every non-guided row (and encoded only when set, so
-    /// untagged rows stay byte-identical); never written `false`.
+    /// itself done or refuse a rework. A guided run of a PLANNED workout carries the tag too, but it is
+    /// that plan's run, not a generated session's: ``isPlanRun`` sets it apart, and the name match
+    /// skips it. `nil` on every non-guided row (and encoded only when set, so untagged rows stay
+    /// byte-identical); never written `false`.
     public var loggedFromGuidedSession: Bool?
     public var intensity: WorkoutIntensity {
         didSet { unknownIntensityToken = nil }
@@ -126,6 +128,15 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
     /// Fernlet authored this Health sample; Fernlet owns it, so remove deletes the Health copy and edit
     /// re-syncs it.
     public var isHealthAuthored: Bool { healthKitAuthored == true }
+
+    /// A guided run of a planned workout (the plan sheet's or a coach's), not of a session Fernlet
+    /// generated: guided-logged and carrying the plan's id, or the plan's own lines when its planned
+    /// row was removed mid-run (``plannedExercises``). The generated plan's name reconciliation,
+    /// rework guard and rep ladder all leave such a row out, so a plan sharing a generated session's
+    /// name ("Legs") neither marks that session done nor undoes it on removal.
+    public var isPlanRun: Bool {
+        loggedFromGuidedSession == true && (plannedWorkoutID != nil || plannedExercises != nil)
+    }
 
     public var inferredCategory: WorkoutType {
         if mode == .activity, let activityType {
