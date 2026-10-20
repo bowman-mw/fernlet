@@ -119,7 +119,9 @@ struct GuidedWorkoutSheet: View {
         .onChange(of: isLive, initial: true) { _, live in store.guidedRunCues.runnerOnScreen = live }
         .onDisappear { store.guidedRunCues.runnerOnScreen = false }
         .interactiveDismissDisabled(isLive)
-        .exerciseHowToSheet($howTo, sex: store.effectiveUserProfile.sex)
+        // The store lets the how-to sheet offer "Don't suggest this" (N6). It only changes plans
+        // built later: this run is its own stored copy and goes on as it is.
+        .exerciseHowToSheet($howTo, sex: store.effectiveUserProfile.sex, preferences: store)
         .modifier(GuidedRunnerAlerts(
             showEndConfirm: $showEndConfirm,
             showReplaceConfirm: $showReplaceConfirm,

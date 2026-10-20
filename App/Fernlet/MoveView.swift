@@ -2239,8 +2239,9 @@ struct WorkoutSuggestionSheet: View {
             reworkPlanAffordance
         }
         // One presenter for every row's info button, on the plan rather than on each card, so two
-        // sessions never bind two sheets to the same state.
-        .exerciseHowToSheet($howTo, sex: store.effectiveUserProfile.sex)
+        // sessions never bind two sheets to the same state. The store lets the sheet offer "Don't
+        // suggest this" (N6); today's committed plan keeps the exercise, later plans leave it out.
+        .exerciseHowToSheet($howTo, sex: store.effectiveUserProfile.sex, preferences: store)
     }
 
     /// The one italic "what happens next" line of the committed plan (1d); rendered in the scroll

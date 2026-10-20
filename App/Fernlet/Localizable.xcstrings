@@ -2824,6 +2824,17 @@
     "Don't suggest %@" : {
       "comment" : "Spoken name of the plan editor's Don't suggest button; the argument is the exercise"
     },
+    "Don't suggest this" : {
+      "comment" : "Exercise how-to sheet: stop Fernlet suggesting this exercise in plans",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Don't suggest this"
+          }
+        }
+      }
+    },
     "Done" : {
 
     },
