@@ -180,13 +180,15 @@ def old_is_stalled(sessions):
 # ---------------------------------------------------------------------------------------------
 
 TIERS = {
-    # min clean sessions, min span (weeks), window (weeks), noise prior
-    "beginner": dict(min_sessions=5, min_weeks=1.5, max_weeks=4.0, prior=0.045),
-    "intermediate": dict(min_sessions=8, min_weeks=6.0, max_weeks=8.0, prior=0.035),
-    "advanced": dict(min_sessions=12, min_weeks=10.0, max_weeks=12.0, prior=0.03),
+    # min clean sessions, min span (weeks), trend window (weeks), stall window (weeks), noise prior
+    "beginner": dict(min_sessions=5, min_weeks=1.5, max_weeks=4.0, stall_weeks=6.0, prior=0.045),
+    "intermediate": dict(min_sessions=8, min_weeks=6.0, max_weeks=8.0, stall_weeks=8.0, prior=0.035),
+    "advanced": dict(min_sessions=12, min_weeks=10.0, max_weeks=12.0, stall_weeks=12.0, prior=0.03),
 }
 PARAMS = dict(
     z_upper=0.8416,          # one-sided 80 % bound
+    z_expected=0.0,          # how clearly the slope must sit under the expected curve, in SEs
+    stall_persist=1,         # consecutive evaluations the stall test must hold
     stall_gain=0.01,         # 1 % per 4 weeks
     huber_k=1.5,             # robust reweighting, in noise units
     huber_passes=3,
@@ -308,24 +310,55 @@ def evaluate(sessions, profile):
     if trend is None:
         return "tooEarly"
     (slope, icpt, sxx), xs, ys, ws = trend
-    if len(clean) >= PARAMS["personal_after"]:
-        res = [y - (icpt + slope * x) for s, x, y in zip(window, xs, ys) if not s.flagged]
-        personal = math.sqrt(sum(r * r for r in res) / max(1, len(res) - 2))
-        sigma = max(personal, PARAMS["personal_floor"] * p["prior"])
-    g = expected_slope(profile, window[0].day, now, origin)
+    sigma = noise(window, p, trend)
+    g =expected_slope(profile, window[0].day, now, origin)
     if is_dipping(window, sigma):
         return "dipping"
-    stall = fit_window(window, sigma, 0.0)
-    if stall is not None and profile.b > 0 and adherent(sessions):
-        (s_slope, _, s_sxx), _, _, _ = stall
-        upper = s_slope + PARAMS["z_upper"] * sigma / math.sqrt(s_sxx)
-        if upper * 4.0 < PARAMS["stall_gain"] and s_slope < g:
-            return "stalled"
+    persist = PARAMS["stall_persist"]
+    if all(stall_candidate(sessions[:len(sessions) - k], profile) for k in range(persist)):
+        return "stalled"
     upper = slope + PARAMS["z_upper"] * sigma / math.sqrt(sxx)
     previous = previous_slope(sessions, window[0].day, p, sigma)
     if upper < g or (previous is not None and previous > 0 and upper < 0.5 * previous):
         return "slowing"
     return "progressing"
+
+
+def noise(window, p, fit):
+    """The prior, or the person's own scatter around the line once there are enough clean sessions."""
+    (slope, icpt, _), xs, ys, _ = fit
+    clean = [(x, y) for s, x, y in zip(window, xs, ys) if not s.flagged]
+    if len(clean) < PARAMS["personal_after"]:
+        return p["prior"]
+    res = [y - (icpt + slope * x) for x, y in clean]
+    personal = math.sqrt(sum(r * r for r in res) / max(1, len(res) - 2))
+    return max(personal, PARAMS["personal_floor"] * p["prior"])
+
+
+def stall_candidate(sessions, profile):
+    """The stall test on its own longer window: the upper bound of the slope, flagged sessions
+    that fell short left out, stays under 1 % per 4 weeks AND clearly under the expected curve."""
+    if len(sessions) < 2 or profile.b <= 0 or not adherent(sessions):
+        return False
+    p = TIERS[profile.tier]
+    now = sessions[-1].day
+    window = [s for s in sessions if now - s.day <= p["stall_weeks"] * 7.0]
+    clean = [s for s in window if not s.flagged]
+    if len(clean) < p["min_sessions"] or (now - window[0].day) / 7.0 < p["stall_weeks"] - 0.5:
+        return False
+    if sum(1 for s in window if s.flagged) * 2 >= len(window):
+        return False
+    trend = fit_window(window, p["prior"], PARAMS["flagged_weight"])
+    if trend is None:
+        return False
+    sigma = noise(window, p, trend)
+    stall = fit_window(window, sigma, 0.0)
+    if stall is None:
+        return False
+    (slope, _, sxx), _, _, _ = stall
+    se = sigma / math.sqrt(sxx)
+    g = expected_slope(profile, window[0].day, now, sessions[0].day)
+    return (slope + PARAMS["z_upper"] * se) * 4.0 < PARAMS["stall_gain"] and slope + PARAMS["z_expected"] * se < g
 
 
 def is_dipping(window, sigma):
