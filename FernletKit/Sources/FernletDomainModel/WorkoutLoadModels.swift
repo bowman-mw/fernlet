@@ -480,8 +480,8 @@ public nonisolated struct LoadGuidance: Equatable, Sendable {
     public var easierSession: Bool
     public var compoundsBefore: Int
     /// True on a warm-up set the planner put before a heavy main lift (``WorkoutWarmUpSets``) — a
-    /// `.ramp` step like a calibration's, told apart so a time budget can drop it and the plan editor
-    /// can hide it. Plan-only: the run and the log know it as a ramp set.
+    /// `.ramp` step like a calibration's, told apart so a time budget can cut the ramp to one set and
+    /// the plan editor can hide it. Plan-only: the run and the log know it as a ramp set.
     public var warmUp: Bool
 
     public init(
