@@ -436,7 +436,9 @@ struct GuidedWorkoutRunState: Codable, Hashable {
                 total += Self.descriptorSeconds(named: exercise.name, fallback: descriptorSeconds)
                 continue
             }
-            let perSet = exercise.holdSeconds.map { $0 + exercise.holdLeadIn } ?? workSecondsPerSet
+            // A timed cardio part's get-ready lead-in is left out, as the plan card's estimate leaves it out.
+            let leadIn = exercise.segment == nil ? exercise.holdLeadIn : 0
+            let perSet = exercise.holdSeconds.map { $0 + leadIn } ?? workSecondsPerSet
             let setsAhead = index == exerciseIndex
                 ? max(0, exercise.sets - currentSet + 1)
                 : exercise.sets
