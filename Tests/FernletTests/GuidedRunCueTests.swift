@@ -58,18 +58,15 @@ private final class BackgroundRecorder {
 
     // MARK: Fixtures
 
-    private static let start = Date(timeIntervalSince1970: 2_000_000)
-    private static let hapticsOnly = FernletFeedbackPreferences(hapticsEnabled: true, soundsEnabled: false)
+    private nonisolated static let start = Date(timeIntervalSince1970: 2_000_000)
+    private nonisolated static let hapticsOnly = FernletFeedbackPreferences(hapticsEnabled: true, soundsEnabled: false)
     private static let bothOff = FernletFeedbackPreferences(hapticsEnabled: false, soundsEnabled: false)
 
-    /// A run starting at `origin` (nil: the fixed ``start``). The default is resolved in the body, not
-    /// in the signature: a default argument is evaluated outside the main actor, where this suite's
-    /// statics are out of reach.
-    private static func run(_ exercises: [GuidedWorkoutRunState.Exercise], at origin: Date? = nil) -> GuidedWorkoutRunState {
+    private static func run(_ exercises: [GuidedWorkoutRunState.Exercise], at origin: Date = GuidedRunCueTests.start) -> GuidedWorkoutRunState {
         GuidedWorkoutRunState(
             sessionID: UUID(), committedDayKey: "2026-10-20", intensityRaw: "moderate", title: "Cues",
             suggestionExercisesText: "", suggestionNotes: "", sessionKindRaw: "strength",
-            exercises: exercises, setStartedAt: origin ?? start
+            exercises: exercises, setStartedAt: origin
         )
     }
 
@@ -307,15 +304,12 @@ private final class BackgroundRecorder {
 
     // MARK: The director
 
-    /// A director over recorders. `preferences` nil means haptics only, resolved in the body for the
-    /// same reason as ``run(_:at:)``.
     private func director(
         _ cues: CueRecorder, _ background: BackgroundRecorder,
-        preferences: FernletFeedbackPreferences? = nil, active: Bool = true
+        preferences: FernletFeedbackPreferences = GuidedRunCueTests.hapticsOnly, active: Bool = true
     ) -> GuidedRunCueDirector {
-        let switches = preferences ?? Self.hapticsOnly
-        return GuidedRunCueDirector(
-            feedback: cues.feedback, preferences: { switches }, isAppActive: { active },
+        GuidedRunCueDirector(
+            feedback: cues.feedback, preferences: { preferences }, isAppActive: { active },
             scheduleBackground: background.scheduler
         )
     }
