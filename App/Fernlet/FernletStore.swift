@@ -4815,7 +4815,17 @@ final class FernletStore {
     /// can advance it from the Lock Screen — even after the app is suspended or terminated. Observable
     /// so the guided sheet and card reflect every transition, whether it came from the in-app buttons
     /// or the Lock Screen. Session-scoped; never part of the synced blob.
-    private(set) var guidedRunState: GuidedWorkoutRunState?
+    ///
+    /// Every assignment — an in-app move, a Lock Screen intent's reconcile, a finish, an abandon, the
+    /// wipe — re-arms the run's haptic, sound and background cues, so they always describe the run as
+    /// it is now and stop the moment it ends (`GuidedRunCues.swift`).
+    private(set) var guidedRunState: GuidedWorkoutRunState? = nil {
+        didSet { guidedRunCues.runChanged(to: guidedRunState) }
+    }
+    /// The guided runner's cue director: rest-end and hold-end haptics and sounds in the app, and the
+    /// pending cue notification for a phone in the background. Internal and settable so the runner
+    /// sheet can report its taps and a test can inject a recording director.
+    @ObservationIgnored lazy var guidedRunCues = GuidedRunCueDirector()
     /// On THIS store's app-group root. `resetAll` clears this file and `GuidedWorkoutRunStoreTests`
     /// reads it, so the process-wide container was a live cross-suite race, not a latent one.
     @ObservationIgnored private lazy var guidedRunStateStore =

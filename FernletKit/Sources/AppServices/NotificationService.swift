@@ -8,11 +8,13 @@ import FernletDomainModel
 ///
 /// A stateless, caseless namespace of async statics covering the app's entire notification surface:
 /// authorization (`requestAuthorization()` / `isAuthorized()`), the repeating daily check-in
-/// (`scheduleDailyCheckIn(hour:minute:)` / `cancelDailyCheckIn()` / `scheduledDailyCheckIn()`), and
-/// the best-effort mesh session-message ping (`postSessionMessage(from:)`). Callers are the app's
-/// onboarding permissions screen, `SettingsSheet`, `FernletNotificationDelegate` (which matches
-/// ``dailyCheckInID`` to deep-link a tapped check-in), and the mesh chat surface in
-/// `DisposableCameraView`.
+/// (`scheduleDailyCheckIn(hour:minute:)` / `cancelDailyCheckIn()` / `scheduledDailyCheckIn()`),
+/// the best-effort mesh session-message ping (`postSessionMessage(from:)`), and the guided workout's
+/// in-session rest-end and hold-end cues for a phone in the background (`replaceWorkoutCues(_:soundFileName:now:)`).
+/// Callers are the app's onboarding permissions screen, `SettingsSheet`, `FernletNotificationDelegate`
+/// (which matches ``dailyCheckInID`` to deep-link a tapped check-in, and ``isWorkoutCue(_:)`` to keep a
+/// cue quiet while the app is open), the mesh chat surface in `DisposableCameraView`, and the guided
+/// runner's `GuidedRunCueDirector`.
 ///
 /// Key invariant: the pending `UNNotificationRequest` under ``dailyCheckInID`` IS the persisted
 /// check-in preference — there is deliberately no shadow flag anywhere else, so Settings always
@@ -155,5 +157,116 @@ public enum NotificationService {
         guard let request = requests.first(where: { $0.identifier == dailyCheckInID }),
               let trigger = request.trigger as? UNCalendarNotificationTrigger else { return nil }
         return (trigger.dateComponents.hour ?? 19, trigger.dateComponents.minute ?? 0)
+    }
+}
+
+// MARK: - Guided workout cues (in-session, background only)
+
+extension NotificationService {
+    /// What a background workout cue says has ended. The raw value is FROZEN — it is the tail of the
+    /// pending request's identifier, so a renamed case would orphan a cue scheduled by the previous build.
+    public enum WorkoutCueKind: String, CaseIterable, Sendable {
+        /// A rest's countdown reached zero.
+        case restEnded
+        /// A timed hold ran out.
+        case holdEnded
+    }
+
+    /// One in-session cue for a phone in the background: what ends, and when.
+    ///
+    /// Built by the app from the live guided run; carries no exercise name or other content, so the
+    /// notification says only that a timer ran out.
+    public struct WorkoutCue: Equatable, Sendable {
+        /// What ends.
+        public let kind: WorkoutCueKind
+        /// When it ends.
+        public let fireAt: Date
+
+        /// Creates a cue.
+        public init(kind: WorkoutCueKind, fireAt: Date) {
+            self.kind = kind
+            self.fireAt = fireAt
+        }
+    }
+
+    /// The identifier prefix every workout cue request shares — the delegate's match for "keep this
+    /// quiet while the app is open, the in-app cue already played".
+    public static let workoutCueIDPrefix = "fernlet.workoutCue."
+
+    /// The fixed request identifier for one kind of cue. One per kind, so a new rest's cue REPLACES the
+    /// previous one rather than stacking beside it.
+    public static func workoutCueID(for kind: WorkoutCueKind) -> String {
+        workoutCueIDPrefix + kind.rawValue
+    }
+
+    /// Whether a notification identifier is one of the guided workout's cues.
+    public static func isWorkoutCue(_ identifier: String) -> Bool {
+        identifier.hasPrefix(workoutCueIDPrefix)
+    }
+
+    /// Replaces every pending AND delivered workout cue with `cues`, so the Lock Screen only ever
+    /// holds the cue for the rest or hold that is running now.
+    ///
+    /// An in-session cue, never a nudge: it is scheduled only while a guided run is live, for the
+    /// moment its current timer ends, and the app replaces it on every move of the run (an empty
+    /// `cues` cancels everything when the run ends). It **never prompts** for permission — like
+    /// ``postSessionMessage(from:)`` it is a no-op unless notifications are already allowed — and it
+    /// stays at the default `.active` interruption level: breaking through a Focus as Time Sensitive
+    /// would need the Time Sensitive Notifications entitlement, an owner decision not taken.
+    ///
+    /// - Parameters:
+    ///   - cues: The cues to schedule; any whose time has passed is skipped.
+    ///   - soundFileName: The bundled sound the cue plays (a quiet chime, or a silent file that still
+    ///     lets the system's notification haptic fire), or nil for a silent banner.
+    ///   - now: The clock, injectable for tests.
+    public static func replaceWorkoutCues(_ cues: [WorkoutCue], soundFileName: String?, now: Date = Date()) async {
+        let center = UNUserNotificationCenter.current()
+        let identifiers = WorkoutCueKind.allCases.map { workoutCueID(for: $0) }
+        center.removePendingNotificationRequests(withIdentifiers: identifiers)
+        center.removeDeliveredNotifications(withIdentifiers: identifiers)
+        // Bounded: at most one cue per kind is ever live (a run is resting OR holding).
+        let upcoming = Array(cues.filter { $0.fireAt > now }.prefix(WorkoutCueKind.allCases.count))
+        guard !upcoming.isEmpty, await isAuthorized() else { return }
+        for cue in upcoming {
+            let trigger = UNTimeIntervalNotificationTrigger(
+                timeInterval: max(1, cue.fireAt.timeIntervalSince(now)), repeats: false)
+            let request = UNNotificationRequest(
+                identifier: workoutCueID(for: cue.kind),
+                content: workoutCueContent(for: cue.kind, soundFileName: soundFileName),
+                trigger: trigger)
+            do {
+                try await center.add(request)
+            } catch {
+                // Recovery: none needed — the cue is a convenience for a phone in a pocket; the Live
+                // Activity's countdown still shows the time. Logged so a systematic failure is visible.
+                logger.notice("notifications.workoutCue.addFailed (best-effort; the Live Activity still counts down): \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    /// The content of one workout cue: a short title and body naming the timer that ended — never an
+    /// exercise, a weight or anything else from the person's log — and the bundled sound, if any.
+    static func workoutCueContent(for kind: WorkoutCueKind, soundFileName: String?) -> UNMutableNotificationContent {
+        let content = UNMutableNotificationContent()
+        switch kind {
+        case .restEnded:
+            content.title = String(localized: "notification.workoutCue.restEnded.title",
+                                   defaultValue: "Rest's over", bundle: .module,
+                                   comment: "Title of the in-session cue delivered when a guided workout's rest timer reaches zero while Fernlet is in the background. Gentle: the rest waits for the person; this only says the timer ran out.")
+            content.body = String(localized: "notification.workoutCue.restEnded.body",
+                                  defaultValue: "Start your next set when you're ready.", bundle: .module,
+                                  comment: "Body of the rest-ended workout cue. An invitation, never a command or a hurry.")
+        case .holdEnded:
+            content.title = String(localized: "notification.workoutCue.holdEnded.title",
+                                   defaultValue: "Hold's done", bundle: .module,
+                                   comment: "Title of the in-session cue delivered when a timed hold (a stretch, a plank, a carry) runs out while Fernlet is in the background.")
+            content.body = String(localized: "notification.workoutCue.holdEnded.body",
+                                  defaultValue: "Ease out of it. The next step is ready when you are.", bundle: .module,
+                                  comment: "Body of the hold-ended workout cue. Calm wording; the run moves on when the person opens Fernlet.")
+        }
+        content.sound = soundFileName.map { UNNotificationSound(named: UNNotificationSoundName(rawValue: $0)) }
+        content.interruptionLevel = .active
+        content.threadIdentifier = workoutCueIDPrefix + "thread"
+        return content
     }
 }

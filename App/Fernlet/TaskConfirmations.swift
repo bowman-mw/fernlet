@@ -150,4 +150,17 @@ enum GuidedRunAnnouncement {
     /// Spoken when a rest's timer reaches zero. The rest does not end by itself — the user decides —
     /// so this says the nudge is over, not that anything moved.
     static let restOver: LocalizedStringResource = "Rest's over. Start your next set when you're ready."
+
+    /// Spoken when a timed step's "Get into position" lead-in ends and the hold begins — the moment
+    /// the hold countdown's caption turns to "Hold" and the haptic cue plays. Without it a VoiceOver
+    /// user with haptics off had no signal to start holding.
+    static let holdStartedLine: LocalizedStringResource = "Hold now."
+
+    /// The hold-start line for a lead-in that ended at `leadInEnd`, or nil when that moment has
+    /// passed — the runner was reopened mid-hold, or the app slept through it — so the line is said
+    /// once, at the moment, and never late. Nothing else is spoken at that instant: the step's own
+    /// "Next: …" line was said five seconds earlier, when the step began.
+    static func holdStarted(leadInEndedAt leadInEnd: Date, now: Date) -> LocalizedStringResource? {
+        GuidedRunCuePlan.isOnTime(leadInEnd, now: now) ? holdStartedLine : nil
+    }
 }

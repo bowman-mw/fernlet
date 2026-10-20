@@ -103,6 +103,11 @@ struct GuidedWorkoutSheet: View {
             }
         }
         .background(Color.parchment)
+        // Cooking's rule, for the same reason: while a run is live and this sheet is in front the
+        // screen stays on, so a phone propped on a bench does not lock mid-rest — locked, the app is
+        // suspended, its in-app cues cannot play and the warm-up's hands-free advance stops. Scoped to
+        // this sheet; the idle timer comes back the moment the run ends or the sheet or app goes away.
+        .keepsScreenAwake(isLive)
         .interactiveDismissDisabled(isLive)
         .modifier(GuidedRunnerAlerts(
             showEndConfirm: $showEndConfirm,
@@ -303,12 +308,17 @@ struct GuidedWorkoutSheet: View {
             }
         }
         .task(id: run.holdWindow?.upperBound) { await advanceWhenHoldEnds(run) }
+        // While this view is up it moves a timed step on at its hold's end and plays that move's cue
+        // itself, so the store's cue director leaves the hold's end to it (`GuidedRunCues.swift`).
+        .onAppear { store.guidedRunCues.sheetDrivesHoldEnd = true }
+        .onDisappear { store.guidedRunCues.sheetDrivesHoldEnd = false }
     }
 
     /// Moves a timed step on by itself when its hold runs out — a stretch flow you can do without
     /// looking at the phone. Only while this exact set is still the one being worked (a tap, a Lock
     /// Screen button or a skip that got there first cancels it). Keyed by the hold's end, so the
-    /// next step re-arms it.
+    /// next step re-arms it. The move carries the hold-end cue, unless the app slept through the
+    /// hold's end — then the background notification already said it, and the move stays quiet.
     private func advanceWhenHoldEnds(_ run: GuidedWorkoutRunState) async {
         guard let end = run.holdWindow?.upperBound else { return }
         let remaining = end.timeIntervalSinceNow
@@ -321,7 +331,8 @@ struct GuidedWorkoutSheet: View {
         }
         guard let now = store.guidedRunState, now.isWorking,
               now.exerciseIndex == run.exerciseIndex, now.currentSet == run.currentSet else { return }
-        announcingTransition(store.guidedMarkSetDone)
+        let onTime = GuidedRunCuePlan.isOnTime(end, now: Date())
+        announcingTransition(store.guidedMarkSetDone, cue: onTime ? .holdRanOut : nil)
     }
 
     /// A one-set timed step — a stretch, a balance hold. Its countdown says everything, so it gets no
@@ -566,7 +577,8 @@ struct GuidedWorkoutSheet: View {
                     resting ? "Skip rest" : doneSetLabel(run),
                     identifier: resting ? "workout.guided.skipRest" : "workout.guided.doneSet"
                 ) {
-                    announcingTransition(resting ? store.guidedSkipRest : store.guidedMarkSetDone)
+                    announcingTransition(resting ? store.guidedSkipRest : store.guidedMarkSetDone,
+                                         cue: resting ? .skip : .setDone)
                 }
                 if run.canSkipBlock {
                     skipBlockButton(run)
@@ -601,7 +613,7 @@ struct GuidedWorkoutSheet: View {
     /// not removed — on the last exercise, so the bar's height never jumps.
     private func skipToNextButton(_ run: GuidedWorkoutRunState) -> some View {
         Button {
-            announcingTransition(store.guidedSkipToNextExercise)
+            announcingTransition(store.guidedSkipToNextExercise, cue: .skip)
         } label: {
             Text(dynamicTypeSize.isAccessibilitySize ? "Skip" : "Skip to next exercise")
                 .font(.fernlet(.label))
@@ -626,7 +638,7 @@ struct GuidedWorkoutSheet: View {
     private func skipBlockButton(_ run: GuidedWorkoutRunState) -> some View {
         let warmUp = run.currentBlock == GuidedWorkoutRunState.BlockToken.warmUp
         return Button {
-            announcingTransition(store.guidedSkipBlock)
+            announcingTransition(store.guidedSkipBlock, cue: .skip)
         } label: {
             Text(warmUp ? "Skip warm-up" : "Skip cool-down")
                 .font(.fernlet(.label))
@@ -637,14 +649,19 @@ struct GuidedWorkoutSheet: View {
         .accessibilityIdentifier(warmUp ? "workout.guided.skipWarmUp" : "workout.guided.skipCoolDown")
     }
 
-    /// Runs one of the bottom bar's transitions and says what it changed.
+    /// Runs one of the bottom bar's transitions, plays its haptic or sound cue, and says what it
+    /// changed.
     ///
     /// Everything a bar button changes — the set strip, the rest timer, the exercise card — is
     /// elsewhere on the screen, so without this a double-tap moved the whole workout in silence.
-    /// See ``GuidedRunAnnouncement``.
-    private func announcingTransition(_ transition: @MainActor () -> Void) {
+    /// See ``GuidedRunAnnouncement`` for the spoken line and ``GuidedRunCuePlan`` for the cue; `cue`
+    /// is why the run moved, or nil for a move that should stay quiet.
+    private func announcingTransition(_ transition: @MainActor () -> Void, cue: GuidedRunCuePlan.Cause?) {
         let before = run
         transition()
+        if let cue {
+            store.guidedRunCues.transition(from: before, to: store.guidedRunState, cause: cue)
+        }
         guard let before, let spoken = GuidedRunAnnouncement.spoken(from: before, to: store.guidedRunState) else {
             return
         }
@@ -882,7 +899,9 @@ private struct GuidedHoldTimer: View {
         .task(id: window.lowerBound) { await waitForHoldStart() }
     }
 
-    /// Flips the caption from "Get into position" to "Hold" when the lead-in ends.
+    /// Flips the caption from "Get into position" to "Hold" when the lead-in ends, and says so to
+    /// VoiceOver at that moment (``GuidedRunAnnouncement/holdStarted(leadInEndedAt:now:)``). A hold
+    /// already running when this view appears flips silently.
     private func waitForHoldStart() async {
         let remaining = window.lowerBound.timeIntervalSinceNow
         guard remaining > 0 else {
@@ -896,6 +915,9 @@ private struct GuidedHoldTimer: View {
             return
         }
         holding = true
+        if let line = GuidedRunAnnouncement.holdStarted(leadInEndedAt: window.lowerBound, now: Date()) {
+            FernletAnnouncer.system.announce(.status, line)
+        }
     }
 }
 

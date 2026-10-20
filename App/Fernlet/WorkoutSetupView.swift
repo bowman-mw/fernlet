@@ -7,7 +7,9 @@ import FernletUI
 ///
 /// Covers the chosen split (auto or an explicit pick from the recommendations), where the user
 /// trains and the equipment there (via ``WorkoutLocationSetupView``), weekly frequency, experience,
-/// sport/interests, and areas to work around. Injury-area chips expand to the muscle-group and
+/// sport/interests, and areas to work around — plus the guided runner's cue switches (Workout haptics
+/// and Workout sounds, ``WorkoutCueSettingsSection``), which are device-local rather than part of the
+/// synced profile and are stored on Save like the rest. Injury-area chips expand to the muscle-group and
 /// movement-pattern sets the planner avoids. Changing the split is a plain edit — a neutral note
 /// beside the options says training has been consistent, where a confirmation dialog used to
 /// interrupt the save; the sheet guards its draft like the other entry sheets instead.
@@ -20,6 +22,8 @@ struct WorkoutSetupSheet: View {
     @State private var avoidedAreas: Set<String>
     @State private var selectedSplitID: String?
     @State private var showingLocations = false
+    /// The runner's cue switches, a draft like every other field: device-local, stored on Save.
+    @State private var cuePreferences: FernletFeedbackPreferences
     private let recommendedSplits: [TrainingSplit]
     private let originalSelectedSplitID: String?
     private let currentSplitName: String
@@ -32,6 +36,7 @@ struct WorkoutSetupSheet: View {
     private let initialProfile: WorkoutProfile
     private let initialInterestsText: String
     private let initialAvoidedAreas: Set<String>
+    private let initialCuePreferences: FernletFeedbackPreferences
 
     /// One selectable "work around this" chip: a display name plus the muscle groups and movement
     /// patterns the planner should avoid while it's on.
@@ -79,6 +84,9 @@ struct WorkoutSetupSheet: View {
         self.initialProfile = settings.workoutProfile
         self.initialInterestsText = seedInterests
         self.initialAvoidedAreas = Set(preselected)
+        let cues = WorkoutCuePreferences.current()
+        _cuePreferences = State(initialValue: cues)
+        self.initialCuePreferences = cues
     }
 
     /// Any field diverges from what the sheet opened on. Shallow by design — a swipe-away guard,
@@ -88,6 +96,7 @@ struct WorkoutSetupSheet: View {
             || interestsText != initialInterestsText
             || avoidedAreas != initialAvoidedAreas
             || selectedSplitID != originalSelectedSplitID
+            || cuePreferences != initialCuePreferences
     }
 
     var body: some View {
@@ -99,6 +108,7 @@ struct WorkoutSetupSheet: View {
                     frequencySection
                     sportInterestsSection
                     injurySection
+                    WorkoutCueSettingsSection(preferences: $cuePreferences)
                 }
                 .padding(20)
                 .padding(.bottom, 10)
@@ -316,6 +326,7 @@ struct WorkoutSetupSheet: View {
 
         store.setWorkoutProfile(updated)
         store.setSelectedSplit(selectedSplitID)
+        WorkoutCuePreferences.save(cuePreferences)
         dismiss()
     }
 }
