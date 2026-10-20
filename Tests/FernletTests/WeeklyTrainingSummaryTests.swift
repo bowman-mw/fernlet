@@ -299,6 +299,16 @@ struct WeeklyTrainingSummaryTests {
         #expect(week.aerobicMinutes == 0)
     }
 
+    /// The sports added in round 2 (R5) count as well: a team or snow sport by its cardio category, and
+    /// boxing, wrestling, golf and surfing as moderate on the Compendium.
+    @Test func theAddedSportsCountAsAerobic() throws {
+        let week = try summary([("2026-10-21", [
+            activity(.volleyball, minutes: 30), activity(.downhillSkiing, minutes: 45), activity(.boxing, minutes: 20),
+            activity(.wrestling, minutes: 10), activity(.golf, minutes: 60), activity(.surfing, minutes: 25),
+        ])])
+        #expect(week.aerobicMinutes == 190)
+    }
+
     // MARK: - No data
 
     @Test func aWeekWithNothingLoggedHasNoRowsAndNoMinutes() throws {

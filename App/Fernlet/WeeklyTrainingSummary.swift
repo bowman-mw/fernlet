@@ -94,11 +94,14 @@ enum WeeklyTrainingSummaryBuilder {
     /// a calibration session ("Log it again") still shows which sets were the warm-up ramp.
     static let rampTag = "(ramp-up)"
 
-    /// Activities counted as aerobic beyond those whose Fernlet category is cardio. Dance and the
-    /// striking arts are moderate to vigorous on the Compendium of Physical Activities (Ainsworth et
-    /// al. 2011, at or above the 3-MET "moderate" line), while the mind-body, flexibility, strength,
-    /// core, climbing, recovery and "other" types stay out.
-    static let extraAerobicActivities: Set<WorkoutActivityType> = [.dance, .socialDance, .kickboxing, .martialArts]
+    /// Activities counted as aerobic beyond those whose Fernlet category is cardio. Dance, the
+    /// striking and grappling arts (boxing and wrestling among them), golf and surfing are moderate to
+    /// vigorous on the Compendium of Physical Activities (Ainsworth et al. 2011, at or above the 3-MET
+    /// "moderate" line), while the mind-body, flexibility, strength, core, climbing, recovery and
+    /// "other" types stay out.
+    static let extraAerobicActivities: Set<WorkoutActivityType> = [
+        .dance, .socialDance, .kickboxing, .martialArts, .boxing, .wrestling, .golf, .surfing,
+    ]
 
     // MARK: Weeks
 
