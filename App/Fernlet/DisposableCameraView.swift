@@ -281,7 +281,8 @@ final class CameraCaptureController: NSObject {
     // MARK: Wind / arm state machine
 
     /// Advance wind from a drag gesture. `progress` is in [0, 1].
-    /// Emits haptic detents at each third; arms with a medium thud at 1.0.
+    /// Clicks one detent (`windDetent`) per twelfth of the wheel; arms with a full rigid snap
+    /// (`wound`) at 1.0.
     func advanceWind(progress: Double) {
         guard !isArmed else { return }
         let clamped = max(0, min(progress, 1.0))
@@ -289,12 +290,12 @@ final class CameraCaptureController: NSObject {
         let newTick = Int(clamped * 12)
         windProgress = clamped
         if newTick > oldTick {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.55)
+            FernletFeedback.system.play(.windDetent)
         }
         if clamped >= 1.0 {
             isArmed = true
             windProgress = 0
-            UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: 1)
+            FernletFeedback.system.play(.wound)
         }
     }
 
@@ -692,8 +693,8 @@ struct DisposableCameraView: View {
             presentNextRemovalProposalIfNeeded()
         }
         // TF b19 item 6: a rising unread count means an inbound message arrived while the chat sheet
-        // was closed (the store only increments unread when it isn't being viewed). Signal it — a light
-        // haptic while the app is active, a best-effort local notification while it isn't.
+        // was closed (the store only increments unread when it isn't being viewed). Signal it — a soft,
+        // rate-limited haptic while the app is active, a best-effort local notification while it isn't.
         .onChange(of: features.chat.sessionMessages.unreadCount) { oldValue, newValue in
             guard newValue > oldValue else { return }
             handleUnreadMessageArrival()
@@ -1360,7 +1361,9 @@ struct DisposableCameraView: View {
     private func takePhoto() async {
         guard camera.isArmed, features.photos.filmRemaining > 0, camera.canCapturePhoto else { return }
         camera.disarm()  // openness → 0: the viewfinder retracts into the island.
-        UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+        // Still before the capture, as it always was. Apple warns a haptic can disturb the camera;
+        // moving it after `capturePhoto()` returns is report item B18, owed a device check.
+        FernletFeedback.system.play(.shutter)
         flashShutter()
         do {
             let data = try await camera.capturePhoto()
@@ -1521,7 +1524,8 @@ struct DisposableCameraView: View {
         defer { reviewWorking = nil }
         do {
             try await FriendPhotoLibrarySaver.save(toSave)
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            // A failure's cue is the shared failure alert's (`photoSaveFailureAlert`).
+            FernletFeedback.system.play(.done)
         } catch {
             photoSaveError = FriendPhotoLibrarySaver.userFacingFailure(for: error, photoCount: toSave.count)
         }
@@ -1964,8 +1968,9 @@ struct DisposableCameraView: View {
         let firstName = PeerNameDisplay.firstName(friend.displayName, fingerprint: friend.fingerprint, placeholder: .met, in: .fernlet)
         let state = SendGoodVibesLabel.state(onCooldown: onCooldown, reachable: reachable, sending: sending)
         return Button {
-            // Haptic acknowledgement so the tap is never silent (TF b19 item 5 tier 1).
-            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            // Haptic acknowledgement so the tap is never silent (TF b19 item 5 tier 1): `logged`, a
+            // one-tap action that landed in place.
+            FernletFeedback.system.play(.logged)
             switch transport {
             case .mesh: features.hearts.sendSessionHeart(to: friend)
             case .presence: store.presenceManager.sendHeart(to: friend)
@@ -2100,16 +2105,17 @@ struct DisposableCameraView: View {
 
     // MARK: - Incoming message signal (TF b19 item 6)
 
-    /// An inbound message arrived while the chat sheet was closed. While the app is active, a light
-    /// notification haptic is the reliable in-app nudge (the dot badge on the chat button is already
-    /// showing). While it isn't active, fire a best-effort local notification instead — the mesh radio
+    /// An inbound message arrived while the chat sheet was closed. While the app is active, a soft
+    /// knock (`messageIn`, at most one per ten seconds however fast peers send — never the success
+    /// pattern, which means "a task you started succeeded") is the in-app nudge (the dot badge on the
+    /// chat button is already showing). While it isn't active, fire a best-effort local notification instead — the mesh radio
     /// (MultipeerConnectivity then, QUIC now) usually suspends in the background, so this rarely reaches
     /// us there, but we fire it if it does. Never fires while the chat sheet is open (the store doesn't
     /// count those as unread).
     private func handleUnreadMessageArrival() {
         switch scenePhase {
         case .active:
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            FernletFeedback.system.play(.messageIn)
         default:
             postSessionMessageNotification()
         }

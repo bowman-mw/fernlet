@@ -302,7 +302,7 @@ struct FriendsView: View {
                 sessionReady = true
             } else {
                 connectionPeerName = connectedPeerName()
-                UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                FernletFeedback.system.play(.friendHere)
                 withAnimation { showConnectionAnimation = true }
             }
         } else if hadPeer && !hasPeer {
@@ -1395,7 +1395,8 @@ private struct FriendPhotoCarouselPostView: View {
             do {
                 try await FriendPhotoLibrarySaver.save(hydrated)
                 savedPhotoIDs.insert(photo.id)
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                // A failure's cue is the shared failure alert's (`photoSaveFailureAlert`).
+                FernletFeedback.system.play(.done)
             } catch {
                 saveErrorMessage = FriendPhotoLibrarySaver.userFacingFailure(for: error, photoCount: 1)
             }
@@ -1551,6 +1552,23 @@ private struct NearbySlotRow: View {
     /// that tore the sheet down, and SwiftUI drops an alert presented on a view whose sheet is
     /// mid-dismiss — so a failed scan closed the scanner and said nothing at all.
     @State private var pendingScanFailed = false
+    /// Set by the scanner callback when the code matched this row, so the "friend's here" cue plays
+    /// as the scanner goes away — a beat after the scanner's own "got it", never stacked on it (A10).
+    @State private var pendingScanMatched = false
+
+    /// The scanner has gone away. Raise the alert only now, and give each result its own cue here
+    /// (A10): the error beside "That code didn't match", or the friend cue for a code that matched.
+    /// A Cancel sets neither, so it stays silent.
+    private func verifyScannerDismissed() {
+        if pendingScanFailed {
+            pendingScanFailed = false
+            verifyMissed = true
+            FernletFeedback.system.play(.failed)
+        } else if pendingScanMatched {
+            pendingScanMatched = false
+            FernletFeedback.system.play(.friendHere)
+        }
+    }
 
     @ViewBuilder
     private var trailingControl: some View {
@@ -1596,15 +1614,11 @@ private struct NearbySlotRow: View {
             .sheet(isPresented: $verifyQRURL.isPresent(), onDismiss: onDismissVerifyQR) {
                 VerifyQRDisplaySheet(url: verifyQRURL)
             }
-            .sheet(isPresented: $showVerifyScanner, onDismiss: {
-                // Raise the alert only once the scanner has actually gone away.
-                if pendingScanFailed {
-                    pendingScanFailed = false
-                    verifyMissed = true
-                }
-            }) {
+            .sheet(isPresented: $showVerifyScanner, onDismiss: verifyScannerDismissed) {
                 VerifyQRScanSheet { url in
-                    pendingScanFailed = !onScanVerified(url)
+                    let matched = onScanVerified(url)
+                    pendingScanFailed = !matched
+                    pendingScanMatched = matched
                 }
             }
             .alert("That code didn't match", isPresented: $verifyMissed) {

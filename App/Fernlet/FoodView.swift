@@ -5804,6 +5804,9 @@ struct RecipeDetailView: View {
         .background(Color.parchment)
         .navigationTitle("Recipe")
         .navigationBarTitleDisplayMode(.inline)
+        // A6: a recipe photo that couldn't be sealed is a failure the person should feel, not only
+        // read in the italic notice line.
+        .fernletFeedback(.failed, trigger: photoNotice) { _, notice in notice != nil }
         // Warm the DNS/TLS connection to the source host while the detail is up, so the source
         // link opens near-instantly (owner decision 2026-08-09; documented in
         // Docs/No-Tracking-Wall.md §4b).

@@ -1336,9 +1336,13 @@ struct HomeView: View {
             // still opens the full water sheet, unchanged).
             button.overlay(alignment: .topTrailing) {
                 Button {
+                    let before = store.day.bottleCount
                     withAnimation(.easeInOut(duration: 0.18)) {
                         store.addBottle()
                     }
+                    // A7: the digit roll was the only sign the add landed, and at the cap a tap did
+                    // nothing at all. Compared, not assumed: the store clamps at its cap.
+                    FernletFeedback.system.play(Self.waterQuickAddEvent(before: before, after: store.day.bottleCount))
                 } label: {
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 20))
@@ -1420,6 +1424,13 @@ struct HomeView: View {
     private func countedState(_ count: Int, short: Bool) -> Text {
         if count == 0 { return Text("none yet") }
         return short ? Text(verbatim: "\(count)") : Text("\(count) logged")
+    }
+
+    /// What Home's one-tap "+1 bottle" feels like: `logged` when the count went up, `limit` when it
+    /// could not (the store holds the day at 30). Never a goal cue: reaching the water target feels
+    /// like any other bottle (the report's "never" list).
+    static func waterQuickAddEvent(before: Int, after: Int) -> FernletFeedbackEvent {
+        after > before ? .logged : .limit
     }
 
     private func waterState(short: Bool) -> Text {

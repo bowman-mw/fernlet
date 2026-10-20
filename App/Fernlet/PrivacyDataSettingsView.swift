@@ -632,6 +632,8 @@ struct PrivacyDataSettingsView: View {
         operationError = message
         operationErrorScope = scope
         guard let message else { return }
+        // A6: the error haptic beside the spoken error, so a sighted person feels it too.
+        FernletFeedback.system.play(.failed)
         FernletAnnouncer.system.announce(.error, resolved: message)
     }
 

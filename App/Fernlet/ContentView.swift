@@ -1891,6 +1891,9 @@ struct ContentView: View {
         // over whichever tab the log started from; jumping to Home meant a meal logged from Food
         // landed the user on another tab and cost them a tab switch to check the match.
         mealLogNotification = notification
+        // A8: the meal landed — often after a "Matching…" wait. Felt at once, not after the sheet's
+        // settle the announcement below waits for.
+        FernletFeedback.system.play(.done)
         // The toast appears with no focus change, so without this a VoiceOver user is never told
         // the meal landed or that an Undo exists. Spoken after the logging sheet has settled.
         Task { @MainActor in

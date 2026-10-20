@@ -2722,7 +2722,8 @@ struct AppLockSettingsView: View {
                 verifyError = error.localizedDescription
                 // Same rule the unlock screen adopted in batch A1: a passcode that did not verify
                 // clears the field and renders a line nothing focuses, so without this the only
-                // signal is an empty field — indistinguishable from a mis-typed digit.
+                // signal is an empty field — indistinguishable from a mis-typed digit. Felt too (A6).
+                FernletFeedback.system.play(.failed)
                 FernletAnnouncer.system.announce(.error, resolved: error.localizedDescription)
             }
         }
@@ -2760,7 +2761,9 @@ struct AppLockSettingsView: View {
                 FernletAuditLog.log("lock.biometric.disableFailed")
                 biometricDisableError = error.localizedDescription
                 // The toggle springs back on failure; the explanation is a line under it that
-                // nothing focuses. Spoken, so "it just flipped back" stops being the whole story.
+                // nothing focuses. Spoken and felt (A6), so "it just flipped back" stops being the
+                // whole story.
+                FernletFeedback.system.play(.failed)
                 FernletAnnouncer.system.announce(.error, resolved: error.localizedDescription)
             }
         }
@@ -2923,9 +2926,19 @@ private struct FernletLockChangePasscodeView: View {
                 step = .enterNew
             } catch {
                 currentPasscode = ""
-                errorMessage = error.localizedDescription
+                fail(error.localizedDescription)
             }
         }
+    }
+
+    /// Shows `message` as this flow's error and plays the error haptic beside it (A12). The lock
+    /// setup, change-passcode and duress-code flows each carry this same helper and the same one
+    /// `done` on success, one-to-one: a duress code is set up exactly as a passcode is changed, so the
+    /// two must feel identical as well as look identical. Imperative rather than keyed on
+    /// `errorMessage`, so a second identical mismatch is felt too.
+    private func fail(_ message: String) {
+        errorMessage = message
+        FernletFeedback.system.play(.failed)
     }
 
     // Enter new passcode
@@ -3017,7 +3030,7 @@ private struct FernletLockChangePasscodeView: View {
     private func commitChange() {
         guard newPasscode == confirmPasscode else {
             confirmPasscode = ""
-            errorMessage = "Passcodes don't match. Try again."
+            fail("Passcodes don't match. Try again.")
             return
         }
         Task { @MainActor in
@@ -3029,10 +3042,12 @@ private struct FernletLockChangePasscodeView: View {
                 case .alphanumeric: newCredential = .alphanumeric(newPasscode)
                 }
                 try await lockService.changeCredential(current: currentPasscode, new: newCredential)
+                // A12: the same `done` the lock setup and duress flows play.
+                FernletFeedback.system.play(.done)
                 dismiss()
             } catch {
                 confirmPasscode = ""
-                errorMessage = error.localizedDescription
+                fail(error.localizedDescription)
             }
         }
     }

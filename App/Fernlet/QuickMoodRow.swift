@@ -54,7 +54,11 @@ struct QuickMoodRow: View {
                         // a no-op there, and an announcement for it would claim a log that did not
                         // happen. A new entry or a re-tag is a write.
                         let after = (count: store.day.journals.count, tag: store.day.journals.last?.tag)
-                        if after != before { TaskConfirmation.moodLogged.announce() }
+                        if after != before {
+                            // A9: felt at once, while the announcement waits for its moment.
+                            FernletFeedback.system.play(.logged)
+                            TaskConfirmation.moodLogged.announce()
+                        }
                     } label: {
                         moodChipLabel(tag)
                     }

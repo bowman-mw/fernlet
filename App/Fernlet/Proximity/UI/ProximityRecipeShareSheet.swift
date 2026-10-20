@@ -105,8 +105,10 @@ struct ProximityRecipeShareSheet: View {
                     hasFinishedInitialSearch = false
                 }
             }
-            .sensoryFeedback(trigger: latch.confirmation) { _, shown in
-                shown.map { $0.tone == .sent ? .success : .error }
+            // `done` means "handed to the transport", which the panel's copy says honestly; a
+            // refusal is `failed`.
+            .fernletFeedback(trigger: latch.confirmation) { _, shown in
+                shown.map { $0.tone == .sent ? .done : .failed }
             }
         }
     }

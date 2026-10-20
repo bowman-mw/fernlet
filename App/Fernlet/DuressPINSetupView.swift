@@ -876,7 +876,7 @@ private struct DuressPINEntrySheet: View {
         case .confirm:
             guard entry == confirmation else {
                 confirmation = ""
-                errorMessage = "Those codes don't match. Try again."
+                fail("Those codes don't match. Try again.")
                 return
             }
             commit()
@@ -899,11 +899,21 @@ private struct DuressPINEntrySheet: View {
                 step = .enter
             } catch {
                 current = ""
-                errorMessage = error.localizedDescription
+                fail(error.localizedDescription)
                 // A pad entry that did not verify only empties its dots; say why out loud.
                 FernletAnnouncer.system.announce(.error, resolved: error.localizedDescription)
             }
         }
+    }
+
+    /// Shows `message` as this flow's error and plays the error haptic beside it (A12). The lock
+    /// setup, change-passcode and duress-code flows each carry this same helper and the same one
+    /// `done` on success, one-to-one: a duress code is set up exactly as a passcode is changed, so the
+    /// two must feel identical as well as look identical. Imperative rather than keyed on
+    /// `errorMessage`, so a second identical mismatch is felt too.
+    private func fail(_ message: String) {
+        errorMessage = message
+        FernletFeedback.system.play(.failed)
     }
 
     private func commit() {
@@ -918,6 +928,8 @@ private struct DuressPINEntrySheet: View {
             do {
                 try await lockService.configureDuress(pin: pin, mode: mode, current: passcode)
                 clearSecrets()
+                // A12: the same `done` the change-passcode and lock setup flows play.
+                FernletFeedback.system.play(.done)
                 onFinish(.configured)
                 dismiss()
             } catch {
@@ -926,7 +938,7 @@ private struct DuressPINEntrySheet: View {
                 // re-chosen, and the passcode is not kept in memory past a failed submission.
                 clearSecrets()
                 step = .verify
-                errorMessage = error.localizedDescription
+                fail(error.localizedDescription)
                 onFinish(.failed(error.localizedDescription))
             }
         }

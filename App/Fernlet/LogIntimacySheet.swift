@@ -274,6 +274,8 @@ struct LogIntimacySheet: View {
     ///     landed with a caveat the user still has to read.
     private func report(_ message: String, kind: FernletAnnouncementKind = .status) {
         statusMessage = message
+        // A6, as on the period sheet: the error haptic beside an error. Haptics only, no content.
+        if kind == .error { FernletFeedback.system.play(.failed) }
         FernletAnnouncer.system.announce(kind, resolved: message)
     }
 }

@@ -628,9 +628,19 @@ public struct FernletLockSetupView: View {
             errorMessage = nil
             step = .biometric
         } else {
-            errorMessage = FernletLockCopy.Setup.passcodeMismatch
+            fail(FernletLockCopy.Setup.passcodeMismatch)
             confirmation = ""
         }
+    }
+
+    /// Shows `message` as this flow's error and plays the error haptic beside it (A12). The lock
+    /// setup, change-passcode and duress-code flows each carry this same helper and the same one
+    /// `done` on success, one-to-one: a duress code is set up exactly as a passcode is changed, so the
+    /// two must feel identical as well as look identical. Imperative rather than keyed on
+    /// `errorMessage`, so a second identical mismatch is felt too.
+    private func fail(_ message: String) {
+        errorMessage = message
+        FernletFeedback.system.play(.failed)
     }
 
     // MARK: Step 4 — biometric toggle
@@ -831,6 +841,8 @@ public struct FernletLockSetupView: View {
                 }
 
                 withAnimation { showSuccess = true }
+                // A12: the passcode is set. The same `done` the change-passcode and duress flows play.
+                FernletFeedback.system.play(.done)
                 Self.announceSuccess(biometricFailed: biometricSetupFailed,
                                      biometry: biometricName(lockService.biometricType))
                 do {
@@ -840,12 +852,12 @@ public struct FernletLockSetupView: View {
                 }
                 dismiss()
             } catch let refusal as PriorEntriesRefusal {
-                errorMessage = refusal.message
+                fail(refusal.message)
                 step = .entry
                 passcode = ""
                 confirmation = ""
             } catch {
-                errorMessage = error.localizedDescription
+                fail(error.localizedDescription)
                 step = .entry
                 passcode = ""
                 confirmation = ""
@@ -1337,9 +1349,9 @@ public struct FernletLockView: View {
         }
         .onReceive(timer) { _ in refreshCooldown() }
         // The trigger is `String?`, and it is set to nil at the START of every attempt — feeding it
-        // to `.sensoryFeedback(.error, trigger:)` directly would buzz on the way INTO each try. Only
-        // an arriving message is a failure.
-        .sensoryFeedback(trigger: errorMessage) { _, message in message == nil ? nil : .error }
+        // to a plain trigger directly would buzz on the way INTO each try. Only an arriving message
+        // is a failure (`failed`: the error pattern, under the app-wide Haptics level).
+        .fernletFeedback(.failed, trigger: errorMessage) { _, message in message != nil }
         .animation(.easeInOut(duration: 0.2), value: errorMessage)
         .animation(.easeInOut(duration: 0.2), value: isInputDisabled)
     }

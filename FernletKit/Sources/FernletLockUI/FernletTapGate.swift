@@ -473,6 +473,9 @@ struct FernletTapGateOverlay: View {
             AccessibilityNotification.ScreenChanged().post()
         case .tryAgain:
             phase = .unlock(showsTryAgain: true)
+            // A6: the try-again is an error, felt as well as spoken. Success stays silent: the
+            // overlay going away is the confirmation.
+            FernletFeedback.system.play(.failed)
             FernletAnnouncer.system.announce(.error, resolved: GateCopy.Tap.tryAgain)
         case .unrecoverable:
             phase = .unrecoverable

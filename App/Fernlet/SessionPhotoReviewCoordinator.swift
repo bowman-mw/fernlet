@@ -27,6 +27,7 @@ import ProximityKit
 import FernletSocial
 import FernletProximityUI
 import FernletConnections
+import FernletUI
 
 // MARK: - SessionPhotoReviewGate
 
@@ -751,7 +752,8 @@ final class SessionPhotoReviewCoordinator {
         defer { workingMessage = nil }
         do {
             try await saveKeptPhotosToLibrary(toSave)
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            // A failure's cue is the shared failure alert's (`photoSaveFailureAlert`).
+            FernletFeedback.system.play(.done)
         } catch {
             photoSaveError = FriendPhotoLibrarySaver.userFacingFailure(for: error, photoCount: toSave.count)
         }

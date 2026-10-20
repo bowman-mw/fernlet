@@ -90,7 +90,7 @@ private final class SpokenLog {
     @Test func everyConfirmationSaysSomething() {
         let all: [TaskConfirmation] = [
             .mealLogged(count: 1), .mealLogged(count: 2), .mealUndone(count: 1), .mealUndone(count: 2),
-            .moodLogged, .workoutLogged, .journalSaved, .recipeAdded
+            .moodLogged, .workoutLogged, .journalSaved, .recipeAdded, .onboardingFinished
         ]
         for confirmation in all {
             #expect(!String(localized: confirmation.sentence).isEmpty, "\(confirmation)")

@@ -804,9 +804,21 @@ struct CookingModeView: View {
             await MainActor.run {
                 guard !Task.isCancelled else { return }
                 timerFired = true
+                // A15: the freshness check runs AFTER the sleep too. A `.task` sleep keeps counting
+                // while the app is suspended and wakes the moment it resumes, so the check before the
+                // sleep alone let a cook who came back minutes later get a buzz for a moment long
+                // gone. Next still turns goldenrod — the visual twin — either way.
+                guard Self.signalsExpiry(endingAt: end, now: Date()) else { return }
                 signalTimerExpiry()
             }
         }
+    }
+
+    /// Whether a timer that ended at `end` may still be signalled at `now`: the guided runner's
+    /// lateness rule (`GuidedRunCuePlan.isOnTime`, 2 s), so "time's up" means the same thing in the
+    /// kitchen as on the bench.
+    static func signalsExpiry(endingAt end: Date, now: Date) -> Bool {
+        GuidedRunCuePlan.isOnTime(end, now: now)
     }
 
     /// The longest passive countdown this view will wait out — the same 240-minute ceiling the
@@ -814,16 +826,17 @@ struct CookingModeView: View {
     /// state so an absurd `timerEndsAt` can't schedule an unbounded sleep.
     private static let maxTimerWindowSeconds: TimeInterval = 240 * 60
 
-    /// The timer's expiry, in the two channels a cook with their hands in a bowl can receive: one
-    /// haptic tap, and one spoken sentence.
+    /// The timer's expiry, in the two channels a cook with their hands in a bowl can receive: the
+    /// "time's up" haptic, and one spoken sentence.
     ///
-    /// The haptic alone was the whole signal, and it is indistinguishable from every other
-    /// notification the phone makes. The words are the SAME catalog key the card above already
-    /// renders — one sentence, one key, translated once: a near-duplicate written for the
-    /// announcement could drift from the one on screen and leave a translator guessing which is
-    /// authoritative.
+    /// The haptic is FernletFeedback's `timerEnded` — the same two firm knocks as a rest or a hold
+    /// running out (A15), no longer the success pattern, which means "a task you started succeeded".
+    /// Sounds stay off: there is no cooking sound switch yet (report C1). The words are the SAME
+    /// catalog key the card above already renders — one sentence, one key, translated once: a
+    /// near-duplicate written for the announcement could drift from the one on screen and leave a
+    /// translator guessing which is authoritative.
     private func signalTimerExpiry() {
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        FernletFeedback.system.play(.timerEnded, preferences: .resolved(haptics: true, sounds: false))
         FernletAnnouncer.system.announce(
             .status,
             LocalizedStringResource("Timer's up — tap Next when you're ready. Nothing advances on its own.")

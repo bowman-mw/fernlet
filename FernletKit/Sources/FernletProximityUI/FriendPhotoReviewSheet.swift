@@ -622,25 +622,30 @@ extension View {
     /// offers it, and an OK cancel button; every button clears the binding. The title stays a
     /// parameter because the carousel's single-photo alert is deliberately titled in the
     /// singular ("Couldn't Save Photo") while the review sheets use the plural.
+    ///
+    /// Every surface's failure is felt as well as shown (sounds-and-haptics pass A6): the error
+    /// haptic plays as a failure arrives, here once for all three save surfaces, matching the
+    /// "saved" cue their successes already play.
     public func photoSaveFailureAlert(
         _ title: String,
         failure: Binding<PhotoSaveFailure?>
     ) -> some View {
-        alert(title, isPresented: failure.isPresent()) {
-            if failure.wrappedValue?.offersSettings == true {
-                Button(FernletProximityUICopy.SaveFailure.openSettings) {
-                    if let url = URL(string: UIApplication.openSettingsURLString) {
-                        UIApplication.shared.open(url)
+        fernletFeedback(.failed, trigger: failure.wrappedValue) { _, arrived in arrived != nil }
+            .alert(title, isPresented: failure.isPresent()) {
+                if failure.wrappedValue?.offersSettings == true {
+                    Button(FernletProximityUICopy.SaveFailure.openSettings) {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                        failure.wrappedValue = nil
                     }
-                    failure.wrappedValue = nil
                 }
+                Button(FernletProximityUICopy.SaveFailure.ok, role: .cancel) { failure.wrappedValue = nil }
+            } message: {
+                // `verbatim:` because `PhotoSaveFailure.message` is a caller-supplied, already-final
+                // sentence — the hosts assemble it. The label also states that plainly, which is what
+                // keeps the display-literal wall from having to guess about the `?? ""` fallback.
+                Text(verbatim: failure.wrappedValue?.message ?? "")
             }
-            Button(FernletProximityUICopy.SaveFailure.ok, role: .cancel) { failure.wrappedValue = nil }
-        } message: {
-            // `verbatim:` because `PhotoSaveFailure.message` is a caller-supplied, already-final
-            // sentence — the hosts assemble it. The label also states that plainly, which is what
-            // keeps the display-literal wall from having to guess about the `?? ""` fallback.
-            Text(verbatim: failure.wrappedValue?.message ?? "")
-        }
     }
 }

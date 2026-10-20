@@ -234,6 +234,7 @@ struct WorryEntryView: View {
                 comment: "Shown and spoken when saving a worry from the gentle prompt fails. Reassures that nothing typed was lost."
             )
             gentleError = failure
+            FernletFeedback.system.play(.failed)
             FernletAnnouncer.system.announce(.error, resolved: failure)
         }
     }
@@ -631,6 +632,7 @@ struct WorryBoxView: View {
                 comment: "Shown and spoken when saving a worry from the compose sheet fails."
             )
             composeError = failure
+            FernletFeedback.system.play(.failed)
             FernletAnnouncer.system.announce(.error, resolved: failure)
         }
     }
@@ -845,6 +847,7 @@ struct WorryBoxView: View {
                 comment: "Shown and spoken when releasing (deleting) a saved worry fails."
             )
             releaseError = failure
+            FernletFeedback.system.play(.failed)
             FernletAnnouncer.system.announce(.error, resolved: failure)
         }
     }

@@ -864,6 +864,9 @@ struct LogPeriodSheet: View {
     private func report(_ message: String, kind: FernletAnnouncementKind = .status) {
         statusMessage = message
         statusIsError = kind == .error
+        // A6: nothing was written, so the error haptic sits beside the words. Haptics only — a private
+        // surface never makes a sound, and the haptic carries no content.
+        if kind == .error { FernletFeedback.system.play(.failed) }
         FernletAnnouncer.system.announce(kind, resolved: message)
     }
 }
