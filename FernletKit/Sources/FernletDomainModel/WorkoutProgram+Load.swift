@@ -8,8 +8,9 @@
 // Where the location has its weights set (``WorkoutLocation/weights``), every weight here — the
 // prescription, the easier session's lighter load and the calibration's sets — is a load it has.
 //
-// The plan's note copy is plain English, like every other line the planner writes: the domain's plan
-// text is persisted on the logged row and is not localized yet (see the rest-day plan in the app).
+// The note sentences are String Catalog keys in ``WorkoutPlannerCopy`` (2026-10-20, idea 16), composed
+// in the device's language when the plan is built; the plan TEXT (exercise names, sets and reps) stays
+// the frozen English the history parser reads.
 
 import Foundation
 
@@ -208,7 +209,7 @@ extension WorkoutProgram {
                                                completions: inputs.progression[stand.name] ?? 0, inputs: inputs)
             loaded[index].target = stand
             loaded[index].standsInFor = original.name
-            notes.append("\(stand.name) stands in for \(original.name) for a few weeks — a fresh angle often gets things moving.")
+            notes.append(WorkoutPlannerCopy.standsIn(stand.name, for: original.name))
         }
     }
 
@@ -237,7 +238,7 @@ extension WorkoutProgram {
             loaded[slotIndex].target = support
             loaded[slotIndex].slot = slot
             loaded[slotIndex].plateau = nil
-            notes.append("For a few weeks, \(support.name) takes an accessory spot to build up the muscles that help your \(stalled.target.name).")
+            notes.append(WorkoutPlannerCopy.supportSwap(support.name, helping: stalled.target.name))
             return
         }
     }

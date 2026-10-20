@@ -227,7 +227,7 @@ struct WorkoutLocationSetupView: View {
 
     /// "Hotel gym and Home setup presets are behind Add." — nil once every preset is saved.
     private var presetsBehindAddLine: Text? {
-        let names = availableTemplates.map(\.name)
+        let names = availableTemplates.map(\.displayName)
         guard let first = names.first else { return nil }
         if names.count == 1 { return Text("The \(first) preset is behind Add.") }
         let list = names.formatted(.list(type: .and))
@@ -307,10 +307,10 @@ struct WorkoutLocationSetupView: View {
                 LocationGlyph(templateID: template.id, fallbackSystemImage: template.systemImage, size: 32)
                     .foregroundStyle(Color.moss)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(template.name)
+                    Text(template.displayName)
                         .font(.fernlet(.headerMedium))
                         .foregroundStyle(Color.bark)
-                    Text(template.subtitle)
+                    Text(template.displaySubtitle)
                         .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                 }
@@ -541,12 +541,16 @@ struct WorkoutLocationSetupView: View {
     ///
     /// A blank name is allowed WHILE typing — clearing the field to retype is normal — and is repaired on
     /// commit, not by fighting the user's keystrokes mid-edit.
+    ///
+    /// The field shows a built-in location's name in the user's language (`displayedName`) and saves
+    /// through `savedName(editing:)`, so text left as drawn keeps the stored English name — the name
+    /// the presets list and the trainer export read.
     private var editingNameBinding: Binding<String> {
         Binding(
-            get: { editingLocation?.name ?? "" },
+            get: { editingLocation?.displayedName ?? "" },
             set: { newValue in
                 guard let index = editingIndex, locations.indices.contains(index) else { return }
-                locations[index].name = newValue
+                locations[index].name = locations[index].savedName(editing: newValue)
             }
         )
     }
@@ -684,7 +688,7 @@ struct WorkoutLocationSetupView: View {
         guard locations.indices.contains(index) else { return }
         let location = locations[index]
         pendingDestructiveAction = DestructiveConfirmation(
-            title: "Delete \(location.name)?",
+            title: "Delete \(location.displayedName)?",
             message: Self.deleteMessage(equipmentCount: location.ownedEquipment.count),
             confirmLabel: "Delete",
             auditEvent: "workout.location.deleteConfirmed",
@@ -757,13 +761,13 @@ private struct SavedSpaceRow: View {
                     .padding(.top, 2)
                 VStack(alignment: .leading, spacing: 3) {
                     if dynamicTypeSize.isAccessibilitySize {
-                        Text(location.name)
+                        Text(location.displayedName)
                             .font(.fernlet(.headerMedium))
                             .foregroundStyle(Color.bark)
                         if isActive { inUseBadge }
                     } else {
                         HStack(spacing: 8) {
-                            Text(location.name)
+                            Text(location.displayedName)
                                 .font(.fernlet(.headerMedium))
                                 .foregroundStyle(Color.bark)
                             if isActive { inUseBadge }
@@ -776,11 +780,11 @@ private struct SavedSpaceRow: View {
                 Spacer(minLength: 8)
                 if canDelete {
                     LocationCardChip(systemImage: "trash", tint: Color.terracottaInk) { onDelete() }
-                        .accessibilityLabel("Delete \(location.name)")
+                        .accessibilityLabel("Delete \(location.displayedName)")
                         .accessibilityIdentifier("workout.location.delete")
                 }
                 LocationCardChip(systemImage: "pencil", tint: Color.slate) { onEdit() }
-                    .accessibilityLabel("Edit \(location.name)")
+                    .accessibilityLabel("Edit \(location.displayedName)")
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .padding(14)

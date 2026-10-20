@@ -78,7 +78,8 @@ enum CoachExportPromptBuilder {
         3. Aim for about `trainingSetup.trainingDaysPerWeek` training days; use rest days for the rest.
         4. Use `exerciseHistory` to pick starting loads and sensible progression — `lastWeight`, \
         `bestWeight`, and `estimatedOneRepMax` are in the unit shown by `weightUnit`. Put load and \
-        tempo advice in each exercise's `guidance` field, not in the exercise name.
+        tempo advice in each exercise's `guidance` field, not in the exercise name. `distanceMiles` \
+        is always in miles and treadmill speeds are always in mph, whatever my phone's region.
         5. The plan must be between 1 and 30 days. Number days from 1.
         6. Include an entry in `newExercises` for EVERY exercise you prescribe. Fernlet ignores \
         definitions for exercises it already knows, so redundant ones are harmless — but an \

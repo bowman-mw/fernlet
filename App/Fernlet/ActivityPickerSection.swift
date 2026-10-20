@@ -223,7 +223,8 @@ struct ActivityPickerSection: View {
                         .accessibilityIdentifier("activity.duration")
                 }
                 if type.expectsDistance {
-                    SheetField("Distance (mi)", namesControl: true) {
+                    // Typed in the device's units; the sheet stores miles (`WorkoutMeasurementEntry`).
+                    SheetField(WorkoutMeasurementEntry.usesImperial ? "Distance (mi)" : "Distance (km)", namesControl: true) {
                         TextField("3.0", text: $distance, prompt: .fieldPrompt("3.0"))
                             .keyboardType(.decimalPad)
                             .sheetTextInput(font: .fernlet(.label))

@@ -325,6 +325,42 @@ history rollup and trainer export, the planner and AI prompts, and the coach-pla
 screens (which show the coach's own text). **Still English:** a logged row's exercise lines are
 stored text and are drawn as stored; plateau, calibration and session notes embed names in English
 sentences (idea 16).
+**Addendum (2026-10-20, workout copy, comparison-report idea 16):** the workout planner's own words.
+- **Notes are keys, composed at plan time.** Every session-note sentence the planner writes — the load
+  pass's progression and weights-on-hand lines, the plateau story and rest check, the calibration
+  brief, the 48-hour guard, the time budget, "Noted: …", the skipped-slot lines, the AI-adjusted tag
+  and the rest-day note — is a `String(localized:…, bundle: .module)` key in `WorkoutPlannerCopy`, with
+  format specifiers a translator can reorder and plural-ruled count phrases (`workoutNote.count.*`). A
+  note is stored on the logged row (`Workout.notes`) in the language the device ran when the plan was
+  built and is never re-translated; an optional " (25 lb)" that used to be spliced in is now a second
+  whole sentence. The names inside a note are drawn names (the location, the slot labels, the split
+  days); exercise names stay the frozen catalog names, which idea 3's lookup deliberately keeps out of
+  the planner.
+- **Planner names are frozen tokens with draw-time mappings.** A guided session is logged under its
+  English name ("Full Body A", "Morning · Easy cardio") and the rotation and guided reconciliation
+  match it; `StoredWorkoutName` gained a third case so a row the guided flow logged draws it through
+  `WorkoutSessionNames` (a hand-logged "Push" stays the user's own). Split names (the export's
+  `splitName`), day titles, slot labels (`mainLabels`, `droppedSlots`) and the plan-text descriptors
+  ("Easy cardio - 20 min", which `descriptorMinutes` reads back) keep their English and draw through
+  `TrainingSplit.displayName`, `WorkoutSplitDayNames`, `WorkoutSlotNames` and `WorkoutPlanLine`. Split
+  summaries, `frequencySummary`, `SplitSpecificity`, `WorkoutConsistency`, `ExperienceLevel`,
+  `WorkoutPlanSource.title` and `GymEquipment.displayName` had no token reader and are localized in
+  place. `WorkoutPlanSource.completionNote` (the §3.4 residual above) now draws through
+  `Workout.displayedNotes`.
+- **Location names without a schema change.** The `LocationTemplate` debt recorded in review A4/F4
+  proposed a `templateID`; instead a location whose stored name is still exactly a built-in English
+  name ("Full gym", "Home", "Hotel gym", …) draws `WorkoutLocation.displayedName`, and the rename
+  field saves through `savedName(editing:)`, so the presets list (which matches stored names) and the
+  export are unchanged.
+- **Units (Phase 0 §2.4, extended).** Workout distance and treadmill speed follow the lb/kg rule
+  (`measurementSystem == .us` reads miles and mph, everything else kilometres and km/h) at the
+  entry/display boundary only (`WorkoutMeasurementEntry`, app target): `distanceMiles`,
+  `targetDistanceMiles`, HealthKit's mile quantity, the export's `distanceMiles` and a treadmill line's
+  "5.5 mph" are stored exactly as before.
+- **Still English, on purpose:** the plan TEXT's lift lines and calibration tags ("(test set)"), the
+  Live Activity's exercise names (idea 3's lane), the coach-plan importer's reason sentences, the
+  "Location N" a blank rename is repaired to, and an activity plan's `exercises` default name.
+  Pinned by `WorkoutCopyLocalizationTests`.
 
 ---
 

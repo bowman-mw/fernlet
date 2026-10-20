@@ -28219,6 +28219,42 @@
         }
       }
     },
+    "experienceLevel.advanced" : {
+      "comment" : "Training experience level in Workout setup: years of lifting",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Advanced"
+          }
+        }
+      }
+    },
+    "experienceLevel.beginner" : {
+      "comment" : "Training experience level in Workout setup: new to lifting",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Beginner"
+          }
+        }
+      }
+    },
+    "experienceLevel.intermediate" : {
+      "comment" : "Training experience level in Workout setup: some lifting experience",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intermediate"
+          }
+        }
+      }
+    },
     "feeling.bright" : {
       "comment" : "Journal mood tag: the brightest of the six moods",
       "extractionState" : "extracted_with_value",
@@ -28383,6 +28419,270 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Steady"
+          }
+        }
+      }
+    },
+    "gymEquipment.barbell" : {
+      "comment" : "Gym equipment: a barbell",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Barbell"
+          }
+        }
+      }
+    },
+    "gymEquipment.battleRopes" : {
+      "comment" : "Gym equipment: heavy battle ropes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Battle ropes"
+          }
+        }
+      }
+    },
+    "gymEquipment.cableMachine" : {
+      "comment" : "Gym equipment: a cable machine",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cable machine"
+          }
+        }
+      }
+    },
+    "gymEquipment.chestPress" : {
+      "comment" : "Gym equipment: a chest press machine",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Chest press"
+          }
+        }
+      }
+    },
+    "gymEquipment.dumbbells" : {
+      "comment" : "Gym equipment: dumbbells",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Dumbbells"
+          }
+        }
+      }
+    },
+    "gymEquipment.elliptical" : {
+      "comment" : "Gym equipment: an elliptical trainer",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Elliptical"
+          }
+        }
+      }
+    },
+    "gymEquipment.exerciseBike" : {
+      "comment" : "Gym equipment: a stationary exercise bike",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Exercise bike"
+          }
+        }
+      }
+    },
+    "gymEquipment.foamRoller" : {
+      "comment" : "Gym equipment: a foam roller",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Foam roller"
+          }
+        }
+      }
+    },
+    "gymEquipment.kettlebells" : {
+      "comment" : "Gym equipment: kettlebells",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Kettlebells"
+          }
+        }
+      }
+    },
+    "gymEquipment.latPulldown" : {
+      "comment" : "Gym equipment: a lat pulldown machine",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lat pulldown"
+          }
+        }
+      }
+    },
+    "gymEquipment.legPress" : {
+      "comment" : "Gym equipment: a leg press machine",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Leg press"
+          }
+        }
+      }
+    },
+    "gymEquipment.medicineBall" : {
+      "comment" : "Gym equipment: a medicine ball",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Medicine ball"
+          }
+        }
+      }
+    },
+    "gymEquipment.pullUpBar" : {
+      "comment" : "Gym equipment: a pull-up bar",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pull-up bar"
+          }
+        }
+      }
+    },
+    "gymEquipment.resistanceBands" : {
+      "comment" : "Gym equipment: elastic resistance bands",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Resistance bands"
+          }
+        }
+      }
+    },
+    "gymEquipment.rowingMachine" : {
+      "comment" : "Gym equipment: a rowing machine",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rowing machine"
+          }
+        }
+      }
+    },
+    "gymEquipment.smithMachine" : {
+      "comment" : "Gym equipment: a Smith machine, a barbell on guide rails",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Smith machine"
+          }
+        }
+      }
+    },
+    "gymEquipment.squatRack" : {
+      "comment" : "Gym equipment: a squat rack",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Squat rack"
+          }
+        }
+      }
+    },
+    "gymEquipment.stairClimber" : {
+      "comment" : "Gym equipment: a stair-climbing machine",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Stair climber"
+          }
+        }
+      }
+    },
+    "gymEquipment.treadmill" : {
+      "comment" : "Gym equipment: a treadmill",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Treadmill"
+          }
+        }
+      }
+    },
+    "gymEquipment.weightBench" : {
+      "comment" : "Gym equipment: a weight bench",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Weight bench"
+          }
+        }
+      }
+    },
+    "gymEquipment.weightPlates" : {
+      "comment" : "Gym equipment: weight plates for a barbell",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Weight plates"
+          }
+        }
+      }
+    },
+    "gymEquipment.yogaMat" : {
+      "comment" : "Gym equipment: a yoga mat",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Yoga mat"
           }
         }
       }
@@ -29467,6 +29767,42 @@
         }
       }
     },
+    "sessionTime.evening" : {
+      "comment" : "Time of day of a workout session, in a day with two sessions",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Evening"
+          }
+        }
+      }
+    },
+    "sessionTime.midday" : {
+      "comment" : "Time of day of a workout session, in a day with two sessions",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Midday"
+          }
+        }
+      }
+    },
+    "sessionTime.morning" : {
+      "comment" : "Time of day of a workout session, in a day with two sessions",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Morning"
+          }
+        }
+      }
+    },
     "sleep.quality.good" : {
       "comment" : "Sleep quality rating, third of four",
       "extractionState" : "extracted_with_value",
@@ -29683,6 +30019,507 @@
         }
       }
     },
+    "splitSpecificity.balanced" : {
+      "comment" : "How specific a workout split is: balanced, like upper/lower days",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Balanced"
+          }
+        }
+      }
+    },
+    "splitSpecificity.focused" : {
+      "comment" : "How specific a workout split is: focused, like push/pull/legs",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Focused"
+          }
+        }
+      }
+    },
+    "splitSpecificity.minimal" : {
+      "comment" : "How specific a workout split is: very broad, like daily movement or full-body days",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Very broad"
+          }
+        }
+      }
+    },
+    "splitSpecificity.specialized" : {
+      "comment" : "How specific a workout split is: very specific, like one body part a day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Very specific"
+          }
+        }
+      }
+    },
+    "trainingSplit.arnold6" : {
+      "comment" : "Workout split name: chest and back, shoulders and arms, legs, twice a week (named after Arnold Schwarzenegger)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Arnold Split"
+          }
+        }
+      }
+    },
+    "trainingSplit.arnold6.summary" : {
+      "comment" : "One-line description of a workout split in Workout setup",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Chest+back, shoulders+arms, legs — twice over, six days."
+          }
+        }
+      }
+    },
+    "trainingSplit.bro5" : {
+      "comment" : "Workout split name: one body part per day (gym slang)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bro Split"
+          }
+        }
+      }
+    },
+    "trainingSplit.bro5.summary" : {
+      "comment" : "One-line description of a workout split in Workout setup",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "One body part per day for maximum focus."
+          }
+        }
+      }
+    },
+    "trainingSplit.cardioStrength4" : {
+      "comment" : "Workout split name: morning cardio and evening lifting",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cardio + Strength"
+          }
+        }
+      }
+    },
+    "trainingSplit.cardioStrength4.summary" : {
+      "comment" : "One-line description of a workout split in Workout setup",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Morning cardio, evening lifting — for fat loss and conditioning."
+          }
+        }
+      }
+    },
+    "trainingSplit.dailyMove" : {
+      "comment" : "Workout split name: easy full-body days and walks",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Daily Movement"
+          }
+        }
+      }
+    },
+    "trainingSplit.dailyMove.summary" : {
+      "comment" : "One-line description of a workout split in Workout setup",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Easy full-body days and walks — just keep moving."
+          }
+        }
+      }
+    },
+    "trainingSplit.frequency.days" : {
+      "comment" : "How many days a week a workout split trains, e.g. '4 days', shown before the session count",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld day"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld days"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "trainingSplit.frequency.daysPerWeek" : {
+      "comment" : "How often a workout split trains, e.g. '3 days/week'",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld day/week"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld days/week"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "trainingSplit.frequency.sessionsPerWeek" : {
+      "comment" : "How many sessions a week a workout split has, e.g. '8 sessions/week', shown after the day count",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld session/week"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld sessions/week"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "trainingSplit.fullBody2" : {
+      "comment" : "Workout split name: two full-body sessions a week",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Full Body ×2"
+          }
+        }
+      }
+    },
+    "trainingSplit.fullBody2.summary" : {
+      "comment" : "One-line description of a workout split in Workout setup",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Two full-body sessions a week. Simple and forgiving."
+          }
+        }
+      }
+    },
+    "trainingSplit.fullBody3" : {
+      "comment" : "Workout split name: three full-body sessions a week",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Full Body ×3"
+          }
+        }
+      }
+    },
+    "trainingSplit.fullBody3.summary" : {
+      "comment" : "One-line description of a workout split in Workout setup",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Three full-body sessions — the most efficient way to cover everything."
+          }
+        }
+      }
+    },
+    "trainingSplit.ppl3" : {
+      "comment" : "Workout split name: push, pull and legs days",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Push / Pull / Legs"
+          }
+        }
+      }
+    },
+    "trainingSplit.ppl3.summary" : {
+      "comment" : "One-line description of a workout split in Workout setup",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Classic three-day split organised by movement."
+          }
+        }
+      }
+    },
+    "trainingSplit.ppl6" : {
+      "comment" : "Workout split name: push, pull and legs, twice a week",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Push / Pull / Legs ×2"
+          }
+        }
+      }
+    },
+    "trainingSplit.ppl6.summary" : {
+      "comment" : "One-line description of a workout split in Workout setup",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Six high-frequency days for serious volume."
+          }
+        }
+      }
+    },
+    "trainingSplit.pplUL5" : {
+      "comment" : "Workout split name: push, pull, legs, then upper and lower days. 'PPL' abbreviates push / pull / legs.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "PPL + Upper / Lower"
+          }
+        }
+      }
+    },
+    "trainingSplit.pplUL5.summary" : {
+      "comment" : "One-line description of a workout split in Workout setup",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Five days mixing push/pull/legs with upper/lower."
+          }
+        }
+      }
+    },
+    "trainingSplit.recoveryFlow" : {
+      "comment" : "Workout split name: mobility and easy movement",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Recovery Flow"
+          }
+        }
+      }
+    },
+    "trainingSplit.recoveryFlow.summary" : {
+      "comment" : "One-line description of a workout split in Workout setup",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mobility and easy movement to feel better, not beat up."
+          }
+        }
+      }
+    },
+    "trainingSplit.restDay" : {
+      "comment" : "The plan's heading on a day the person marked themselves unwell",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rest day"
+          }
+        }
+      }
+    },
+    "trainingSplit.sportPrep" : {
+      "comment" : "Workout split name: conditioning for a sport plus strength work",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sport Prep"
+          }
+        }
+      }
+    },
+    "trainingSplit.sportPrep.summary" : {
+      "comment" : "One-line description of a workout split in Workout setup",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sport-specific conditioning paired with strength work."
+          }
+        }
+      }
+    },
+    "trainingSplit.twoADay" : {
+      "comment" : "Workout split name: two strength sessions a day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Two-a-Day Strength"
+          }
+        }
+      }
+    },
+    "trainingSplit.twoADay.summary" : {
+      "comment" : "One-line description of a workout split in Workout setup",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Two strength sessions a day — advanced, high volume."
+          }
+        }
+      }
+    },
+    "trainingSplit.upperLower4" : {
+      "comment" : "Workout split name: four days alternating upper and lower body",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Upper / Lower"
+          }
+        }
+      }
+    },
+    "trainingSplit.upperLower4.summary" : {
+      "comment" : "One-line description of a workout split in Workout setup",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Four days alternating upper and lower body."
+          }
+        }
+      }
+    },
+    "trainingSplit.upperLowerFull3" : {
+      "comment" : "Workout split name: an upper-body day, a lower-body day and a full-body day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Upper / Lower / Full"
+          }
+        }
+      }
+    },
+    "trainingSplit.upperLowerFull3.summary" : {
+      "comment" : "One-line description of a workout split in Workout setup",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A bit more focus than full-body, still only three days."
+          }
+        }
+      }
+    },
+    "workoutConsistency.high" : {
+      "comment" : "How consistently the person has trained lately: very consistent",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Very consistent"
+          }
+        }
+      }
+    },
+    "workoutConsistency.low" : {
+      "comment" : "How consistently the person has trained lately: just getting started",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Getting started"
+          }
+        }
+      }
+    },
+    "workoutConsistency.medium" : {
+      "comment" : "How consistently the person has trained lately: fairly consistent",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fairly consistent"
+          }
+        }
+      }
+    },
     "workoutIntensity.hard" : {
       "comment" : "Workout intensity, mid-sentence: a demanding day",
       "extractionState" : "extracted_with_value",
@@ -29719,6 +30556,114 @@
         }
       }
     },
+    "workoutLocation.apartmentGym" : {
+      "comment" : "Name of a workout location preset: the gym in an apartment building",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Apartment gym"
+          }
+        }
+      }
+    },
+    "workoutLocation.apartmentGym.subtitle" : {
+      "comment" : "Subtitle of the 'Apartment gym' location preset",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Building amenity"
+          }
+        }
+      }
+    },
+    "workoutLocation.fullGym" : {
+      "comment" : "Name of a built-in workout location: a gym with all the usual equipment",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Full gym"
+          }
+        }
+      }
+    },
+    "workoutLocation.fullGym.subtitle" : {
+      "comment" : "Subtitle of the 'Full gym' location preset",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Commercial or studio"
+          }
+        }
+      }
+    },
+    "workoutLocation.home" : {
+      "comment" : "Name of a built-in workout location: training at home",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Home"
+          }
+        }
+      }
+    },
+    "workoutLocation.homeSetup" : {
+      "comment" : "Name of a workout location preset: equipment kept at home",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Home setup"
+          }
+        }
+      }
+    },
+    "workoutLocation.homeSetup.subtitle" : {
+      "comment" : "Subtitle of the 'Home setup' location preset",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your own space"
+          }
+        }
+      }
+    },
+    "workoutLocation.hotelGym" : {
+      "comment" : "Name of a workout location preset: a small hotel gym",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hotel gym"
+          }
+        }
+      }
+    },
+    "workoutLocation.hotelGym.subtitle" : {
+      "comment" : "Subtitle of the 'Hotel gym' location preset",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Small, shared space"
+          }
+        }
+      }
+    },
     "workoutMode.activity" : {
       "comment" : "Workout kind chip: a named activity or class, e.g. running or yoga",
       "extractionState" : "extracted_with_value",
@@ -29739,6 +30684,1346 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Strength Training"
+          }
+        }
+      }
+    },
+    "workoutNote.adjusted" : {
+      "comment" : "Workout session note: the exercises were changed on device to match what the person asked for",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Adjusted to your note."
+          }
+        }
+      }
+    },
+    "workoutNote.budget.fewerCoolDown" : {
+      "comment" : "Part of a list in a workout session note, after 'Fitted to 30 min:' — some cool-down stretches were left out",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "fewer cool-down stretches"
+          }
+        }
+      }
+    },
+    "workoutNote.budget.fewerSets" : {
+      "comment" : "Part of a list in a workout session note, after 'Fitted to 30 min:' — some exercises got fewer sets. The argument is a comma-separated list of exercise names.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "fewer sets of %@"
+          }
+        }
+      }
+    },
+    "workoutNote.budget.fitted" : {
+      "comment" : "Workout session note: the session was trimmed to fit the person's session length. Arguments: minutes, then a semicolon-separated list of what changed (e.g. 'shorter warm-up; fewer sets of Bench press').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fitted to %1$lld min: %2$@."
+          }
+        }
+      }
+    },
+    "workoutNote.budget.leftOut" : {
+      "comment" : "Part of a list in a workout session note, after 'Fitted to 30 min:' — exercises left out. The argument is a comma-separated list of exercise names.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "left out %@"
+          }
+        }
+      }
+    },
+    "workoutNote.budget.over" : {
+      "comment" : "Workout session note: even trimmed, the session runs past the person's session length. Arguments: the estimated minutes, then the chosen session length in minutes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Runs about %1$lld min — over your %2$lld min, but as short as today's session goes with its main lifts kept."
+          }
+        }
+      }
+    },
+    "workoutNote.budget.overTrimmed" : {
+      "comment" : "Workout session note: even trimmed, the session runs past the person's session length. Arguments: the estimated minutes, the chosen session length in minutes, and a semicolon-separated list of what was trimmed.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Runs about %1$lld min — over your %2$lld min, but as short as today's session goes with its main lifts kept. Trimmed: %3$@."
+          }
+        }
+      }
+    },
+    "workoutNote.budget.shortened" : {
+      "comment" : "Workout session note: a cardio or mobility session was cut to the person's session length. The argument is minutes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Shortened to fit %lld min."
+          }
+        }
+      }
+    },
+    "workoutNote.budget.shorterWarmUp" : {
+      "comment" : "Part of a list in a workout session note, after 'Fitted to 30 min:' — the warm-up stretches were shortened. Lowercase in English because it continues a sentence.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "shorter warm-up"
+          }
+        }
+      }
+    },
+    "workoutNote.calibration.oneRepMax" : {
+      "comment" : "Workout session note for an opt-in one-rep-max test. Arguments: the exercise name, then the first attempt's weight with its unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Max test today: %1$@ builds up to three single attempts, starting at %2$@. Use a spotter or safety arms, stop if your form breaks, and skip it if you're sore, sick or short on sleep. Miss one and the rest are skipped."
+          }
+        }
+      }
+    },
+    "workoutNote.calibration.strengthCheck" : {
+      "comment" : "Workout session note for the quick monthly strength check. Arguments: the exercise name, then the set's weight with its unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Quick strength check today: one %1$@ set at %2$@ for as many good reps as you can, stopping with 1–2 left — edit the reps when you're done. Accessories are a set lighter."
+          }
+        }
+      }
+    },
+    "workoutNote.calibration.submaximal" : {
+      "comment" : "Workout session note for the monthly strength check. Arguments: the exercise name, then the test set's weight with its unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Strength check today: %1$@ builds up over a few lighter sets, then one test set at %2$@ — as many good reps as you can, stopping with 1–2 left. Accessories are a set lighter."
+          }
+        }
+      }
+    },
+    "workoutNote.count.hours" : {
+      "comment" : "Workout session note: a number of hours, e.g. '48 hours'. Placed inside other note sentences.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld hour"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld hours"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "workoutNote.count.reps" : {
+      "comment" : "Workout session note: a number of repetitions of a lift, e.g. '12 reps'. Placed inside other note sentences.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld rep"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld reps"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "workoutNote.count.sets" : {
+      "comment" : "Workout session note: a number of sets of a lift, e.g. '3 sets'. Placed inside other note sentences.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld set"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld sets"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "workoutNote.count.weeks" : {
+      "comment" : "Workout session note: a number of weeks, e.g. '3 weeks'. Placed inside other note sentences.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld week"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld weeks"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "workoutNote.ladder.backTo" : {
+      "comment" : "Workout session note: the reps reset to the bottom of the range and the weight goes up a little. The argument is a number of reps (e.g. '8 reps').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Back to %@ — add weight now, about 2.5–5%%."
+          }
+        }
+      }
+    },
+    "workoutNote.ladder.climb" : {
+      "comment" : "Workout session note: where today's reps sit in the rep range. Arguments: today's reps, the bottom of the range, the top of the range, and the top again (when to add weight).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rep ladder: %1$lld of %2$lld–%3$lld today. One more rep each time; at %4$lld, add weight."
+          }
+        }
+      }
+    },
+    "workoutNote.ladder.sameReps" : {
+      "comment" : "Workout session note: keep the same reps; add a little weight when it feels easy",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Same reps as last time — nudge the weight up a little when the last set feels solid."
+          }
+        }
+      }
+    },
+    "workoutNote.load.addWeight" : {
+      "comment" : "Workout session note about one lift: the weight goes up today. Arguments: the exercise name, then a weight with its unit (e.g. '105 lb').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: up to %2$@ today."
+          }
+        }
+      }
+    },
+    "workoutNote.load.afterBreak" : {
+      "comment" : "Workout session note about one lift after a break from training: start a little lighter. The argument is the exercise name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@: welcome back — a little lighter to start."
+          }
+        }
+      }
+    },
+    "workoutNote.load.afterBreakAt" : {
+      "comment" : "Workout session note about one lift after a break from training: start a little lighter. Arguments: the exercise name, then the weight with its unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: welcome back — a little lighter to start (%2$@)."
+          }
+        }
+      }
+    },
+    "workoutNote.load.backToBottom" : {
+      "comment" : "Workout session note about one lift: the reps reset to the bottom of the range because it is time to add weight. Arguments: the exercise name, then a number of reps (e.g. '8 reps').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: back to %2$@ — add weight now."
+          }
+        }
+      }
+    },
+    "workoutNote.load.backToBottomAt" : {
+      "comment" : "Workout session note about one lift: the reps reset to the bottom of the range because it is time to add weight. Arguments: the exercise name, a number of reps (e.g. '8 reps'), and the new weight with its unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: back to %2$@ — add weight now (%3$@)."
+          }
+        }
+      }
+    },
+    "workoutNote.load.heaviestBarLoad" : {
+      "comment" : "Clause inside a workout session note. The argument is a weight with its unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ is the most your bar and plates make"
+          }
+        }
+      }
+    },
+    "workoutNote.load.heaviestDumbbell" : {
+      "comment" : "Clause inside a workout session note. The argument is a weight with its unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ is your heaviest dumbbell"
+          }
+        }
+      }
+    },
+    "workoutNote.load.heaviestKettlebell" : {
+      "comment" : "Clause inside a workout session note. The argument is a weight with its unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ is your heaviest kettlebell"
+          }
+        }
+      }
+    },
+    "workoutNote.load.holdForEquipment" : {
+      "comment" : "Workout session note about one lift: the person's weights can't go up a step, so add a rep instead. The argument is the exercise name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@: same weight, one more rep — working with the equipment you have."
+          }
+        }
+      }
+    },
+    "workoutNote.load.holdForPain" : {
+      "comment" : "Workout session note about one lift the person reported pain on: the weight stays the same. The argument is the exercise name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@: holding steady after it hurt last time. If it still hurts, try a different exercise or check with a professional."
+          }
+        }
+      }
+    },
+    "workoutNote.load.lighter" : {
+      "comment" : "Workout session note about one lift: a lighter weight today because the reps fell short last time. The argument is the exercise name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@: a little lighter today to get the reps back."
+          }
+        }
+      }
+    },
+    "workoutNote.load.lighterAt" : {
+      "comment" : "Workout session note about one lift: a lighter weight today because the reps fell short last time. Arguments: the exercise name, then the weight with its unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: a little lighter today (%2$@) to get the reps back."
+          }
+        }
+      }
+    },
+    "workoutNote.load.lighterFewerSets" : {
+      "comment" : "Workout session note about one lift: a lighter, shorter day after several hard sessions. The argument is the exercise name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@: lighter and one set fewer today — a reset, not a step back."
+          }
+        }
+      }
+    },
+    "workoutNote.load.moreReps" : {
+      "comment" : "Workout session note about one lift. Arguments: the exercise name, then a number of reps (e.g. '9 reps').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$@ today, one more than last time."
+          }
+        }
+      }
+    },
+    "workoutNote.load.moreSets" : {
+      "comment" : "Workout session note about one lift: one extra set today. The argument is the exercise name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@: one more set today."
+          }
+        }
+      }
+    },
+    "workoutNote.load.newLifts" : {
+      "comment" : "Workout session note: some lifts have no weight history yet; how to choose a first weight",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "New lifts: pick a weight you could lift about 2 more times than asked — Fernlet learns from there."
+          }
+        }
+      }
+    },
+    "workoutNote.load.nextBarLoad" : {
+      "comment" : "Clause inside a workout session note, after the exercise name and a colon. The argument is a weight with its unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "the next load your bar and plates make is %@"
+          }
+        }
+      }
+    },
+    "workoutNote.load.nextDumbbell" : {
+      "comment" : "Clause inside a workout session note, after the exercise name and a colon. The argument is a weight with its unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your next dumbbell is %@"
+          }
+        }
+      }
+    },
+    "workoutNote.load.nextKettlebell" : {
+      "comment" : "Clause inside a workout session note, after the exercise name and a colon. The argument is a weight with its unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your next kettlebell is %@"
+          }
+        }
+      }
+    },
+    "workoutNote.load.recalibrated" : {
+      "comment" : "Workout session note about one lift: its weight now comes from a new strength estimate. The argument is the exercise name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@: starting from a fresh estimate."
+          }
+        }
+      }
+    },
+    "workoutNote.load.recalibratedAt" : {
+      "comment" : "Workout session note about one lift: its weight now comes from a new strength estimate. Arguments: the exercise name, then the weight with its unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: starting from a fresh estimate (%2$@)."
+          }
+        }
+      }
+    },
+    "workoutNote.load.recentered" : {
+      "comment" : "Workout session note about one lift: its suggested weight range moved to match what the person has been lifting. The argument is the exercise name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@: the range now centers on the weights you've been choosing."
+          }
+        }
+      }
+    },
+    "workoutNote.load.repsFirstBigJump" : {
+      "comment" : "Workout session note about one lift: the next weight is too big a step, so reps go up first. Arguments: the exercise name, the next weight, the current weight (both with units), and today's number of reps.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$@ would be a big jump from %3$@, so add reps first — %4$lld today."
+          }
+        }
+      }
+    },
+    "workoutNote.load.repsFirstHeaviest" : {
+      "comment" : "Workout session note about one lift. Arguments: the exercise name, a clause saying the person's heaviest weight is reached (e.g. '25 lb is your heaviest dumbbell'), and today's number of reps.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$@, so more reps instead — %3$lld today."
+          }
+        }
+      }
+    },
+    "workoutNote.load.repsFirstNext" : {
+      "comment" : "Workout session note about one lift. Arguments: the exercise name, a clause naming the next weight the person owns (e.g. 'your next dumbbell is 25 lb'), and today's number of reps.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$@, so add reps first — %3$lld today."
+          }
+        }
+      }
+    },
+    "workoutNote.load.setFirstHeaviest" : {
+      "comment" : "Workout session note about one lift. Arguments: the exercise name, then a clause saying the person's heaviest weight is reached (e.g. '25 lb is your heaviest dumbbell').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: one more set today — %2$@."
+          }
+        }
+      }
+    },
+    "workoutNote.load.setFirstNext" : {
+      "comment" : "Workout session note about one lift: an extra set comes before the next weight. Arguments: the exercise name, then the next weight with its unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: one more set today, then up to %2$@."
+          }
+        }
+      }
+    },
+    "workoutNote.noted" : {
+      "comment" : "Workout session note: echoes the note the person typed when asking for a plan. The argument is their own text.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Noted: %@"
+          }
+        }
+      }
+    },
+    "workoutNote.plateau.backTo" : {
+      "comment" : "Workout session note: a stalled lift returns after a few weeks of a different exercise. Arguments: the exercise name, then the extra rest (e.g. '+1 min').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Back to %1$@, with a little more rest between sets (%2$@)."
+          }
+        }
+      }
+    },
+    "workoutNote.plateau.easier" : {
+      "comment" : "Workout session note: a lighter day for a lift that has stalled. Arguments: the exercise name, then a number of sets (e.g. '2 sets').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Today is an easier %1$@ session: %2$@, lighter than usual. An extra rest day instead is fine too — both count as training."
+          }
+        }
+      }
+    },
+    "workoutNote.plateau.easierAt" : {
+      "comment" : "Workout session note: a lighter day for a lift that has stalled. Arguments: the exercise name, a number of sets (e.g. '2 sets'), and a weight with its unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Today is an easier %1$@ session: %2$@ at about %3$@. An extra rest day instead is fine too — both count as training."
+          }
+        }
+      }
+    },
+    "workoutNote.plateau.extraRestAccessory" : {
+      "comment" : "Extra rest between sets, inside a workout session note: thirty more seconds",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "+30 s"
+          }
+        }
+      }
+    },
+    "workoutNote.plateau.extraRestMain" : {
+      "comment" : "Extra rest between sets, inside a workout session note: one more minute",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "+1 min"
+          }
+        }
+      }
+    },
+    "workoutNote.plateau.goesFirst" : {
+      "comment" : "Workout session note about a stalled lift. Arguments: the exercise name, then the extra rest (e.g. '+1 min').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ goes first today, with a little more rest between sets (%2$@)."
+          }
+        }
+      }
+    },
+    "workoutNote.plateau.leadSessions" : {
+      "comment" : "Workout session note opening the plateau story for one lift. The argument is the exercise name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ has held steady for a few sessions. That's normal — strength comes in steps, and a pause often means your body wants more recovery."
+          }
+        }
+      }
+    },
+    "workoutNote.plateau.leadWeeks" : {
+      "comment" : "Workout session note opening the plateau story for one lift. Arguments: the exercise name, then a number of weeks (e.g. '3 weeks').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ has held steady for %2$@. That's normal — strength comes in steps, and a pause often means your body wants more recovery."
+          }
+        }
+      }
+    },
+    "workoutNote.plateau.moreRest" : {
+      "comment" : "Workout session note about a stalled lift. Arguments: the exercise name, then the extra rest (e.g. '+1 min').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A little more rest between %1$@ sets (%2$@)."
+          }
+        }
+      }
+    },
+    "workoutNote.plateau.proteinLow" : {
+      "comment" : "Workout session note in the plateau story, said only when protein ran low. The argument is a whole percentage of the person's protein target.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Protein has run about %lld%% of your target lately — a little more helps muscles rebuild."
+          }
+        }
+      }
+    },
+    "workoutNote.plateau.sleepLow" : {
+      "comment" : "Workout session note in the plateau story, said only when sleep ran low. The argument is the average hours of sleep with one decimal, e.g. '6.5'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sleep has averaged %@ hours these past two weeks. More sleep is often the quickest way through."
+          }
+        }
+      }
+    },
+    "workoutNote.plateau.support" : {
+      "comment" : "Workout session note: an extra exercise builds the helper muscles of a stalled lift. Arguments: the extra exercise, then the stalled lift.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "For a few weeks, %1$@ takes an accessory spot to build up the muscles that help your %2$@."
+          }
+        }
+      }
+    },
+    "workoutNote.plateau.variation" : {
+      "comment" : "Workout session note: a different exercise replaces a stalled lift for a few weeks. Arguments: the replacement exercise, then the stalled one.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ stands in for %2$@ for a few weeks — a fresh angle often gets things moving."
+          }
+        }
+      }
+    },
+    "workoutNote.recovery.lightened" : {
+      "comment" : "Workout session note: some lifts get one set fewer because the same muscles trained hard recently. Arguments: a comma-separated list of exercise names, and a number of hours (e.g. '48 hours').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "One set fewer on %1$@ — those muscles worked hard in the last %2$@."
+          }
+        }
+      }
+    },
+    "workoutNote.recovery.moved" : {
+      "comment" : "Workout session note: the planner moved to a different day of the split. Arguments: the day planned (e.g. 'Push'), the day that was due (e.g. 'Legs'), and a number of hours (e.g. '48 hours').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ today instead of %2$@ — those muscles worked hard in the last %3$@."
+          }
+        }
+      }
+    },
+    "workoutNote.restDay" : {
+      "comment" : "Workout session note on a day the person marked themselves unwell: rest is the plan, the gentle movement is optional",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You marked yourself unwell, so rest is the real plan today. This is here only if moving would feel good."
+          }
+        }
+      }
+    },
+    "workoutNote.simpleOption" : {
+      "comment" : "Workout session note on the fallback session: an easy full-body circuit offered when nothing else could be planned",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A simple option for today."
+          }
+        }
+      }
+    },
+    "workoutNote.skipped.hidden" : {
+      "comment" : "Workout session note: parts of the session left out because the only exercises that fit are ones the person chose not to be suggested. The argument is a comma-separated list of slot names.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Skipped %@ — the only options here are ones you've hidden."
+          }
+        }
+      }
+    },
+    "workoutNote.skipped.noSafeOption" : {
+      "comment" : "Workout session note: parts of the session left out because nothing at this location was safe for them. The argument is a comma-separated list of slot names, e.g. 'Hinge, Core'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Skipped %@ — no safe option here."
+          }
+        }
+      }
+    },
+    "workoutNote.workedAroundLimits" : {
+      "comment" : "Workout session note: the plan avoided the body areas or movements the person said to work around",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Worked around your noted limits."
+          }
+        }
+      }
+    },
+    "workoutPlanLine.bodyweightCircuit" : {
+      "comment" : "A line of a workout plan: a circuit of bodyweight exercises, three times through",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Full-body bodyweight circuit - 3 rounds"
+          }
+        }
+      }
+    },
+    "workoutPlanLine.conditioningIntervals" : {
+      "comment" : "A line of a workout plan: interval conditioning. The argument is minutes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Conditioning intervals - %lld min"
+          }
+        }
+      }
+    },
+    "workoutPlanLine.coolDown" : {
+      "comment" : "A line of a workout plan: the cool-down stretches. The argument is minutes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cool-down stretches - %lld min"
+          }
+        }
+      }
+    },
+    "workoutPlanLine.easyCardio" : {
+      "comment" : "A line of a workout plan: gentle cardio. The argument is minutes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Easy cardio - %lld min"
+          }
+        }
+      }
+    },
+    "workoutPlanLine.easyWalk" : {
+      "comment" : "A line of a workout plan: an easy walk. The argument is minutes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Easy walk - %lld min"
+          }
+        }
+      }
+    },
+    "workoutPlanLine.gentleMobilityWalk" : {
+      "comment" : "A line of a workout plan: gentle mobility work and a walk. The argument is minutes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Gentle mobility + walk - %lld min"
+          }
+        }
+      }
+    },
+    "workoutPlanLine.intervals" : {
+      "comment" : "A line of a workout plan: eight rounds of one hard minute and one easy minute",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intervals - 8 × 1 min hard / 1 min easy"
+          }
+        }
+      }
+    },
+    "workoutPlanLine.mobilityFlow" : {
+      "comment" : "A line of a workout plan: a mobility routine. The argument is minutes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mobility flow - %lld min"
+          }
+        }
+      }
+    },
+    "workoutPlanLine.optionalCardio" : {
+      "comment" : "A line of a workout plan: cardio if the person wants it. The argument is minutes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Optional cardio - %lld min"
+          }
+        }
+      }
+    },
+    "workoutPlanLine.restDayMovement" : {
+      "comment" : "A line of a workout plan on a day the person marked themselves unwell. The argument is minutes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Gentle stretching or an easy walk - %lld min"
+          }
+        }
+      }
+    },
+    "workoutPlanLine.sportDrills" : {
+      "comment" : "A line of a workout plan: drills for the person's sport. Arguments: the sport as they typed it, then minutes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ drills / conditioning - %2$lld min"
+          }
+        }
+      }
+    },
+    "workoutPlanLine.steadyCardio" : {
+      "comment" : "A line of a workout plan: cardio at an even pace. The argument is minutes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Steady cardio - %lld min"
+          }
+        }
+      }
+    },
+    "workoutPlanLine.warmUpFlow" : {
+      "comment" : "A line of a workout plan: the warm-up stretches. The argument is minutes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Warm-up stretch flow - %lld min"
+          }
+        }
+      }
+    },
+    "workoutPlanSource.coach" : {
+      "comment" : "Tag on a planned workout that came from a coach's plan",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Coach"
+          }
+        }
+      }
+    },
+    "workoutPlanSource.coach.completionNote" : {
+      "comment" : "Note on a logged workout that was completed from a coach's plan",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Completed from coach plan."
+          }
+        }
+      }
+    },
+    "workoutPlanSource.user" : {
+      "comment" : "Tag on a planned workout the person planned themselves",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "User"
+          }
+        }
+      }
+    },
+    "workoutPlanSource.user.completionNote" : {
+      "comment" : "Note on a logged workout that was completed from the person's own plan",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Completed from user plan."
+          }
+        }
+      }
+    },
+    "workoutSession.arms" : {
+      "comment" : "Workout session name: an arm day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Arms"
+          }
+        }
+      }
+    },
+    "workoutSession.back" : {
+      "comment" : "Workout session name: a back day (the body part)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Back"
+          }
+        }
+      }
+    },
+    "workoutSession.chest" : {
+      "comment" : "Workout session name: a chest day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Chest"
+          }
+        }
+      }
+    },
+    "workoutSession.chestAndBack" : {
+      "comment" : "Workout session name: chest and back together",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Chest & Back"
+          }
+        }
+      }
+    },
+    "workoutSession.easyCardio" : {
+      "comment" : "Workout session name: a gentle cardio session",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Easy cardio"
+          }
+        }
+      }
+    },
+    "workoutSession.easyFullBody" : {
+      "comment" : "Workout session name: the fallback full-body circuit offered when nothing else could be planned",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Easy full body"
+          }
+        }
+      }
+    },
+    "workoutSession.fullBodyA" : {
+      "comment" : "Workout session name: the first of three full-body sessions",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Full Body A"
+          }
+        }
+      }
+    },
+    "workoutSession.fullBodyB" : {
+      "comment" : "Workout session name: the second of three full-body sessions",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Full Body B"
+          }
+        }
+      }
+    },
+    "workoutSession.fullBodyC" : {
+      "comment" : "Workout session name: the third of three full-body sessions",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Full Body C"
+          }
+        }
+      }
+    },
+    "workoutSession.gentleMovement" : {
+      "comment" : "Workout session name on a rest day: optional gentle movement",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Gentle movement"
+          }
+        }
+      }
+    },
+    "workoutSession.intervals" : {
+      "comment" : "Workout session name: interval cardio, hard and easy in turns",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intervals"
+          }
+        }
+      }
+    },
+    "workoutSession.legs" : {
+      "comment" : "Workout session name: legs",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Legs"
+          }
+        }
+      }
+    },
+    "workoutSession.lower" : {
+      "comment" : "Workout session name: lower body",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lower"
+          }
+        }
+      }
+    },
+    "workoutSession.mobility" : {
+      "comment" : "Workout session name: mobility and stretching",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mobility"
+          }
+        }
+      }
+    },
+    "workoutSession.move" : {
+      "comment" : "Workout session name of the fallback day: just move",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Move"
+          }
+        }
+      }
+    },
+    "workoutSession.pull" : {
+      "comment" : "Workout session name: pulling movements (back, biceps)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pull"
+          }
+        }
+      }
+    },
+    "workoutSession.push" : {
+      "comment" : "Workout session name: pushing movements (chest, shoulders, triceps)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Push"
+          }
+        }
+      }
+    },
+    "workoutSession.rest" : {
+      "comment" : "Workout plan day name on a day the person marked themselves unwell",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rest"
+          }
+        }
+      }
+    },
+    "workoutSession.shoulders" : {
+      "comment" : "Workout session name: a shoulder day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Shoulders"
+          }
+        }
+      }
+    },
+    "workoutSession.shouldersAndArms" : {
+      "comment" : "Workout session name: shoulders and arms together",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Shoulders & Arms"
+          }
+        }
+      }
+    },
+    "workoutSession.sportConditioning" : {
+      "comment" : "Workout session name: sport-specific conditioning with some strength work",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sport conditioning"
+          }
+        }
+      }
+    },
+    "workoutSession.steadyCardio" : {
+      "comment" : "Workout session name: a longer cardio session at an even pace",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Steady cardio"
+          }
+        }
+      }
+    },
+    "workoutSession.timed" : {
+      "comment" : "A session's name in a day with two sessions. Arguments: the time of day (e.g. 'Morning'), then the session's name (e.g. 'Easy cardio').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "workoutSession.upper" : {
+      "comment" : "Workout session name: upper body",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Upper"
           }
         }
       }
@@ -29799,6 +32084,438 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "No limit"
+          }
+        }
+      }
+    },
+    "workoutSlot.biceps" : {
+      "comment" : "Part of a workout session: a biceps exercise",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Biceps"
+          }
+        }
+      }
+    },
+    "workoutSlot.biceps2" : {
+      "comment" : "Part of a workout session: a second biceps exercise",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Biceps 2"
+          }
+        }
+      }
+    },
+    "workoutSlot.calves" : {
+      "comment" : "Part of a workout session: a calf exercise",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Calves"
+          }
+        }
+      }
+    },
+    "workoutSlot.carry" : {
+      "comment" : "Part of a workout session: a loaded carry, walking while holding weights",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Carry / loaded"
+          }
+        }
+      }
+    },
+    "workoutSlot.chestIsolation" : {
+      "comment" : "Part of a workout session: a single-joint chest exercise, like a fly",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Chest isolation"
+          }
+        }
+      }
+    },
+    "workoutSlot.core" : {
+      "comment" : "Part of a workout session: core (trunk) work",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Core"
+          }
+        }
+      }
+    },
+    "workoutSlot.dip" : {
+      "comment" : "Part of a workout session: a dip or a decline press",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Dip / decline"
+          }
+        }
+      }
+    },
+    "workoutSlot.flatPress" : {
+      "comment" : "Part of a workout session: a flat bench press",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Flat press"
+          }
+        }
+      }
+    },
+    "workoutSlot.forearms" : {
+      "comment" : "Part of a workout session: forearm and grip work",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Forearms / grip"
+          }
+        }
+      }
+    },
+    "workoutSlot.frontDelts" : {
+      "comment" : "Part of a workout session: an exercise for the front of the shoulders",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Front delts"
+          }
+        }
+      }
+    },
+    "workoutSlot.hinge" : {
+      "comment" : "Part of a workout session: a hip hinge, like a deadlift",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hinge"
+          }
+        }
+      }
+    },
+    "workoutSlot.horizontalPull" : {
+      "comment" : "Part of a workout session: pulling toward the chest, like a row",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Horizontal pull"
+          }
+        }
+      }
+    },
+    "workoutSlot.horizontalPush" : {
+      "comment" : "Part of a workout session: pressing straight out in front, like a bench press",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Horizontal push"
+          }
+        }
+      }
+    },
+    "workoutSlot.inclinePress" : {
+      "comment" : "Part of a workout session: an incline bench press",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Incline press"
+          }
+        }
+      }
+    },
+    "workoutSlot.inclinePush" : {
+      "comment" : "Part of a workout session: an incline press",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Incline push"
+          }
+        }
+      }
+    },
+    "workoutSlot.lowerPower" : {
+      "comment" : "Part of a workout session: an explosive lower-body movement",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lower power"
+          }
+        }
+      }
+    },
+    "workoutSlot.lunge" : {
+      "comment" : "Part of a workout session: a lunge",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lunge"
+          }
+        }
+      }
+    },
+    "workoutSlot.overheadPress" : {
+      "comment" : "Part of a workout session: a press overhead",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Overhead press"
+          }
+        }
+      }
+    },
+    "workoutSlot.rearDelts" : {
+      "comment" : "Part of a workout session: an exercise for the back of the shoulders",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rear delts"
+          }
+        }
+      }
+    },
+    "workoutSlot.row" : {
+      "comment" : "Part of a workout session: a rowing movement",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Row"
+          }
+        }
+      }
+    },
+    "workoutSlot.rowVariation" : {
+      "comment" : "Part of a workout session: a second, different rowing movement",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Row variation"
+          }
+        }
+      }
+    },
+    "workoutSlot.sideDelts" : {
+      "comment" : "Part of a workout session: an exercise for the side of the shoulders",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Side delts"
+          }
+        }
+      }
+    },
+    "workoutSlot.squat" : {
+      "comment" : "Part of a workout session: a squat movement",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Squat"
+          }
+        }
+      }
+    },
+    "workoutSlot.support" : {
+      "comment" : "Part of a workout session: extra work for the muscles that help a stalled lift",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Support"
+          }
+        }
+      }
+    },
+    "workoutSlot.traps" : {
+      "comment" : "Part of a workout session: a trapezius exercise, like a shrug",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Traps"
+          }
+        }
+      }
+    },
+    "workoutSlot.triceps" : {
+      "comment" : "Part of a workout session: a triceps exercise",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Triceps"
+          }
+        }
+      }
+    },
+    "workoutSlot.triceps2" : {
+      "comment" : "Part of a workout session: a second triceps exercise",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Triceps 2"
+          }
+        }
+      }
+    },
+    "workoutSlot.verticalPull" : {
+      "comment" : "Part of a workout session: pulling down from overhead, like a pull-up",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Vertical pull"
+          }
+        }
+      }
+    },
+    "workoutSlot.verticalPush" : {
+      "comment" : "Part of a workout session: pressing overhead",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Vertical push"
+          }
+        }
+      }
+    },
+    "workoutSplitDay.legsA" : {
+      "comment" : "A day of the six-day split: the first legs day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Legs A"
+          }
+        }
+      }
+    },
+    "workoutSplitDay.legsB" : {
+      "comment" : "A day of the six-day split: the second legs day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Legs B"
+          }
+        }
+      }
+    },
+    "workoutSplitDay.numbered" : {
+      "comment" : "A day of a weekly workout split, numbered from 1, e.g. 'Day 2'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Day %lld"
+          }
+        }
+      }
+    },
+    "workoutSplitDay.pullA" : {
+      "comment" : "A day of the six-day split: the first pull day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pull A"
+          }
+        }
+      }
+    },
+    "workoutSplitDay.pullB" : {
+      "comment" : "A day of the six-day split: the second pull day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pull B"
+          }
+        }
+      }
+    },
+    "workoutSplitDay.pushA" : {
+      "comment" : "A day of the six-day split: the first push day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Push A"
+          }
+        }
+      }
+    },
+    "workoutSplitDay.pushB" : {
+      "comment" : "A day of the six-day split: the second push day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Push B"
           }
         }
       }

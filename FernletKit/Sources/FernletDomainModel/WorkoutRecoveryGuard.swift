@@ -120,19 +120,22 @@ public nonisolated enum WorkoutRecoveryGuard {
     }
 
     /// The note for a day the guard moved: "Push today instead of Legs — those muscles worked hard
-    /// in the last 48 hours." Plain English, like the planner's other notes.
+    /// in the last 48 hours." A String Catalog key (``WorkoutPlannerCopy``), with the days' names in
+    /// the device's language.
     static func movedNote(to day: WorkoutSplitDay, from due: WorkoutSplitDay) -> String {
-        "\(label(day)) today instead of \(label(due)) — those muscles worked hard in the last \(windowHours) hours."
+        WorkoutPlannerCopy.recoveryMoved(to: label(day), from: label(due), hours: windowHours)
     }
 
     /// The note for lightened lifts: "One set fewer on Back squat, Lunge — those muscles worked hard
     /// in the last 48 hours."
     static func lightenedNote(lifts: [String]) -> String {
-        "One set fewer on \(lifts.joined(separator: ", ")) — those muscles worked hard in the last \(windowHours) hours."
+        WorkoutPlannerCopy.recoveryLightened(lifts: lifts.joined(separator: ", "), hours: windowHours)
     }
 
-    /// A day's name in a note: its one session's title ("Legs", "Full Body B"), else the day's own title.
+    /// A day's name in a note: its one session's title ("Legs", "Full Body B"), else the day's own
+    /// title — drawn in the device's language (``WorkoutSessionNames``, ``WorkoutSplitDay/displayTitle``),
+    /// since the note is display text. The titles themselves stay frozen.
     static func label(_ day: WorkoutSplitDay) -> String {
-        day.sessions.count == 1 ? day.sessions[0].title : day.title
+        day.sessions.count == 1 ? WorkoutSessionNames.drawn(day.sessions[0].title) : day.displayTitle
     }
 }

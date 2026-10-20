@@ -572,6 +572,14 @@ anything else one step marked done that shows the line. Nothing is filtered or d
 names is preselected as written (``WorkoutPlanRun/Step/weightAsWritten``); only a catalog lift whose line
 names none gets the load engine's suggestion, for the sets and reps as written.
 
+The planner's words are localized without touching what it stores (2026-10-20, idea 16). Every session-note sentence is a String Catalog key in ``WorkoutPlannerCopy``, composed in the device's language when the plan is built. The names the planner stores and matches stay frozen English — a session's name is what its guided log is saved under and what the rotation matches, a split's and a location's name are what the trainer export carries, the plan text is what the history parser reads — and screens draw them through ``WorkoutSessionNames``, ``WorkoutSplitDayNames``, `TrainingSplit.displayName`, ``WorkoutSlotNames``, ``WorkoutLocationNames`` (`WorkoutLocation.displayedName`, which a rename field saves back through `savedName(editing:)`) and ``WorkoutPlanLine``.
+
+- ``WorkoutPlannerCopy``
+- ``WorkoutSessionNames``
+- ``WorkoutSplitDayNames``
+- ``WorkoutSlotNames``
+- ``WorkoutLocationNames``
+- ``WorkoutPlanLine``
 - ``WorkoutExercisePreferences``
 - ``WorkoutExerciseSwapOptions``
 - ``CustomExerciseDraft``

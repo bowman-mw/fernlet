@@ -95,7 +95,15 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
     /// read ``name``, and a name field seeded from this saves back through ``savedName(editing:)``.
     public var displayedName: String {
         StoredWorkoutName.displayed(name, mode: mode, activityType: activityType,
-                                    matchesSplitDefault: plannedWorkoutID != nil)
+                                    matchesSplitDefault: plannedWorkoutID != nil,
+                                    matchesPlannerSession: loggedFromGuidedSession == true)
+    }
+
+    /// The notes a screen DRAWS for this row: ``notes``, unless they are still a plan completion's
+    /// frozen note ("Completed from user plan."), which is drawn in the user's language. Display only;
+    /// `reconstructPlannedWorkout` matches the stored note (2026-10-20, idea 16).
+    public var displayedNotes: String {
+        WorkoutPlanSource.allCases.first { $0.completionNote == notes }?.completionNoteDisplay ?? notes
     }
 
     /// The name to SAVE when a name field seeded with ``displayedName`` comes back as `typed` (already
@@ -441,17 +449,34 @@ public nonisolated enum WorkoutPlanSource: String, Codable, CaseIterable, Identi
 
     public var id: String { rawValue }
 
+    /// Who made the plan, on screen (the planned row's tag), localized (2026-10-20, idea 16). Display
+    /// only: ``rawValue`` is the persisted token.
     public var title: String {
         switch self {
-        case .user: "User"
-        case .coach: "Coach"
+        case .user: String(localized: "workoutPlanSource.user", defaultValue: "User", bundle: .module,
+                           comment: "Tag on a planned workout the person planned themselves")
+        case .coach: String(localized: "workoutPlanSource.coach", defaultValue: "Coach", bundle: .module,
+                            comment: "Tag on a planned workout that came from a coach's plan")
         }
     }
 
+    /// The FROZEN note a completed plan's logged row is saved with. `reconstructPlannedWorkout`
+    /// matches it to rebuild the plan when the completion is removed, so it stays English; screens
+    /// draw ``Workout/displayedNotes``.
     public var completionNote: String {
         switch self {
         case .user: "Completed from user plan."
         case .coach: "Completed from coach plan."
+        }
+    }
+
+    /// ``completionNote`` on screen, localized.
+    public var completionNoteDisplay: String {
+        switch self {
+        case .user: String(localized: "workoutPlanSource.user.completionNote", defaultValue: "Completed from user plan.",
+                           bundle: .module, comment: "Note on a logged workout that was completed from the person's own plan")
+        case .coach: String(localized: "workoutPlanSource.coach.completionNote", defaultValue: "Completed from coach plan.",
+                            bundle: .module, comment: "Note on a logged workout that was completed from a coach's plan")
         }
     }
 }
@@ -544,18 +569,28 @@ public nonisolated enum WorkoutSplit: String, Codable, CaseIterable, Identifiabl
 /// stored default for its localized form at draw time, and leaves every other name, including any
 /// the user typed, exactly as it is. Display only: what it returns is never persisted, exported,
 /// put in a prompt or matched against; those read `name`.
+///
+/// The planner's session names are the third kind of stored default (2026-10-20, idea 16): a guided
+/// session is logged under its frozen English name ("Full Body A", "Morning · Easy cardio"), which the
+/// rotation and the guided reconciliation match, and a row the guided flow logged draws it through
+/// ``WorkoutSessionNames``.
 nonisolated enum StoredWorkoutName {
     /// The name to draw for a row stored as `name`.
     ///
     /// `matchesSplitDefault` is whether the row can carry a split default at all: every plan can,
     /// and a logged workout only when a plan's completion minted it (`plannedWorkoutID` is set).
+    /// `matchesPlannerSession` is whether it can carry a planner session's name: only a row the
+    /// guided flow logged (`loggedFromGuidedSession`), so a hand-logged "Push" stays the user's own.
     static func displayed(_ name: String, mode: WorkoutMode, activityType: WorkoutActivityType?,
-                          matchesSplitDefault: Bool) -> String {
+                          matchesSplitDefault: Bool, matchesPlannerSession: Bool = false) -> String {
         if mode == .activity, let activityType, name == activityType.defaultName {
             return activityType.displayName
         }
         if matchesSplitDefault, let split = WorkoutSplit.savingDefaultPlanName(name) {
             return split.defaultPlanDisplayName
+        }
+        if matchesPlannerSession, let session = WorkoutSessionNames.displayed(name) {
+            return session
         }
         return name
     }

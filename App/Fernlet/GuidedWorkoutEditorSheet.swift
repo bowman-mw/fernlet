@@ -67,10 +67,11 @@ struct GuidedWorkoutEditorSheet: View {
         VStack(spacing: 0) {
             // The 2026-08-21 template header: Cancel top-left (wired to the discard prompt via
             // `attemptCancel`), Fraunces title, and the session name as the runtime subtitle —
-            // `Text(verbatim:)` because a session name is user/planner data, never a catalog key.
+            // `Text(verbatim:)` because a session name is user/planner data, never a catalog key; a
+            // planner session's frozen name is drawn in the user's language.
             SheetHeader(
                 title: Text("Edit workout"),
-                subtitle: Text(verbatim: session.suggestion.name),
+                subtitle: Text(verbatim: session.displayedName),
                 onCancel: { attemptCancel() }
             )
             ScrollView {
