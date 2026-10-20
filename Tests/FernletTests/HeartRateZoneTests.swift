@@ -7,7 +7,9 @@
 // of it, where a reading sits and the words for it, the silent talk-test fallback with no fresh reading,
 // the nudge's throttling, the Live Activity content and its tolerant decoding, the zone director over a
 // fake live heart-rate source (start, stop, stale, failure, the nudge, the Live Activity refresh), the
-// store driving it through a run, and the device-local switches.
+// store driving it through a run, and the device-local switches. Round 2 adds "My max heart rate": the
+// person's own maximum winning over Tanaka's, a value outside 120–220 ignored, and its storage — read back
+// only in range, a typed entry only as a whole number, and cleared (while the switches beside it stay).
 //
 // What no test here can check is owed on a device: live heart rate from an Apple Watch, AirPods Pro 3 and a
 // BLE strap reaching an iPhone-only session; iOS's one-time workout-session notice; no second workout in
@@ -207,6 +209,41 @@ private final class ZoneCueRecorder {
         #expect(HeartRateZones(age: 40, restingHeartRate: 120).method == .percentOfMaximum)
         #expect(HeartRateZones(age: 40, restingHeartRate: .nan).method == .percentOfMaximum)
         #expect(HeartRateZones(age: 40, restingHeartRate: 25) == HeartRateZones(age: 40))
+    }
+
+    /// "My max heart rate": the person's own maximum wins over Tanaka's, for both ways of reading zones.
+    @Test func yourOwnMaximumWinsOverTheAgeEstimate() {
+        let own = HeartRateZones(age: 40, ownMaximum: 200)
+        #expect(own.isOwnMaximum)
+        #expect(Self.close(own.maximumHeartRate, 200))
+        #expect(own.method == .percentOfMaximum)
+        let two = own.range(zone: 2)
+        let five = own.range(zone: 5)
+        #expect(two == 120...140)
+        #expect(five == 180...200)
+
+        // Karvonen stands on the person's maximum too: 60 + p × (200 − 60).
+        let reserve = HeartRateZones(age: 40, restingHeartRate: 60, ownMaximum: 200)
+        #expect(reserve.method == .heartRateReserve)
+        let reserveTwo = reserve.range(zone: 2)
+        #expect(reserveTwo == 144...158)
+
+        // The resting rate's trust check reads against the maximum that won.
+        let narrow = HeartRateZones(age: 20, restingHeartRate: 105, ownMaximum: 120)
+        #expect(narrow.method == .percentOfMaximum, "less than 20 beats of reserve below the person's own maximum")
+        #expect(HeartRateZones(age: 40).isOwnMaximum == false)
+    }
+
+    /// An own maximum outside 120–220 is ignored, never clamped: the age estimate stands.
+    @Test func anOwnMaximumOutsideTheRangeIsIgnored() {
+        let estimate = HeartRateZones(age: 40)
+        #expect(HeartRateZones(age: 40, ownMaximum: 119) == estimate)
+        #expect(HeartRateZones(age: 40, ownMaximum: 221) == estimate)
+        #expect(HeartRateZones(age: 40, ownMaximum: 0) == estimate)
+        #expect(HeartRateZones(age: 40, ownMaximum: nil) == estimate)
+        #expect(HeartRateZones(age: 40, ownMaximum: 120).isOwnMaximum)
+        #expect(HeartRateZones(age: 40, ownMaximum: 220).isOwnMaximum)
+        #expect(HeartRateZones.ownMaximumRange == 120...220)
     }
 
     // MARK: Paces and targets
@@ -635,6 +672,49 @@ private final class ZoneCueRecorder {
         #expect(WorkoutZonePreferences.current(in: defaults) == on)
         #expect(WorkoutZonePreferences.liveHeartRateKey == "fernlet.workoutCues.liveHeartRate")
         #expect(WorkoutZonePreferences.zoneNudgesKey == "fernlet.workoutCues.zoneNudges")
+    }
+
+    /// "My max heart rate" lives on this device under a frozen key, reads back only in range, and clears —
+    /// by an emptied field, an unusable one, or Delete everything's call — while the switches stay.
+    @Test func myMaxHeartRateIsStoredInRangeAndClears() throws {
+        let suite = "fernlet.tests.zones.max.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        #expect(WorkoutZonePreferences.maxHeartRateKey == "fernlet.workoutCues.maxHeartRate")
+        #expect(WorkoutZonePreferences.maxHeartRate(in: defaults) == nil)
+
+        WorkoutZonePreferences.saveMaxHeartRate(185, in: defaults)
+        #expect(WorkoutZonePreferences.maxHeartRate(in: defaults) == 185)
+        WorkoutZonePreferences.saveMaxHeartRate(nil, in: defaults)
+        #expect(WorkoutZonePreferences.maxHeartRate(in: defaults) == nil, "an emptied field clears it")
+
+        WorkoutZonePreferences.saveMaxHeartRate(185, in: defaults)
+        WorkoutZonePreferences.saveMaxHeartRate(250, in: defaults)
+        let afterUnusable = defaults.object(forKey: WorkoutZonePreferences.maxHeartRateKey)
+        #expect(afterUnusable == nil, "an out-of-range save clears rather than storing")
+
+        defaults.set(90, forKey: WorkoutZonePreferences.maxHeartRateKey)
+        #expect(WorkoutZonePreferences.maxHeartRate(in: defaults) == nil, "a stored value out of range is never trusted")
+
+        let on = WorkoutZonePreferences(liveHeartRate: true, zoneNudges: true)
+        WorkoutZonePreferences.save(on, in: defaults)
+        WorkoutZonePreferences.saveMaxHeartRate(185, in: defaults)
+        WorkoutZonePreferences.clearMaxHeartRate(in: defaults)
+        #expect(WorkoutZonePreferences.maxHeartRate(in: defaults) == nil)
+        #expect(WorkoutZonePreferences.current(in: defaults) == on, "the switches beside it are kept")
+    }
+
+    /// What the field takes: a whole number of beats per minute from 120 to 220, nothing else.
+    @Test func aTypedMaxHeartRateIsAWholeNumberInRange() {
+        #expect(WorkoutZonePreferences.maxHeartRate(typed: "185") == 185)
+        #expect(WorkoutZonePreferences.maxHeartRate(typed: " 185 ") == 185)
+        #expect(WorkoutZonePreferences.maxHeartRate(typed: "120") == 120)
+        #expect(WorkoutZonePreferences.maxHeartRate(typed: "220") == 220)
+        #expect(WorkoutZonePreferences.maxHeartRate(typed: "") == nil)
+        #expect(WorkoutZonePreferences.maxHeartRate(typed: "18") == nil)
+        #expect(WorkoutZonePreferences.maxHeartRate(typed: "1850") == nil)
+        #expect(WorkoutZonePreferences.maxHeartRate(typed: "185.5") == nil)
+        #expect(WorkoutZonePreferences.maxHeartRate(typed: "max") == nil)
     }
 
     /// The nudge is a light tap and never a sound.
