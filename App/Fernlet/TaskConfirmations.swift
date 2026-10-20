@@ -29,7 +29,8 @@ import FernletUI
 /// under the cursor — the mechanism `FernletAnnouncer` reserves for counters — so announcing as well
 /// would say the new count twice.
 enum TaskConfirmation: Equatable {
-    /// A meal sheet, the recipe book or a Food row logged `count` meals, and the Undo toast is up.
+    /// A meal sheet, the recipe book, a Food row, the planner, cooking mode's finish, the recipe
+    /// editor's "Log & save" or a Home meal chip logged `count` meals, and the Undo toast is up.
     case mealLogged(count: Int)
     /// The toast's Undo removed the `count` meals it had just logged. The Undo button the cursor
     /// was on goes with the toast, so this is the only word that the undo happened.

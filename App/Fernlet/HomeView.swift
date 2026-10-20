@@ -48,6 +48,9 @@ struct HomeView: View {
     /// The root `TabView` retains Home offscreen. Continuous Canvas clocks must pause whenever
     /// another tab or a root sheet covers Home, otherwise they render forever while invisible.
     var isActive: Bool = true
+    /// The meal-logged toast, for the ambient cards' one-tap meal chips (forgotten favorites and the
+    /// nutrient nudge's "add it"), which log in place and are confirmed like every other meal log.
+    var onMealsLogged: MealLogReporter = .none
     @State private var hasRecentPeriodEvent = false
     @State private var didLoadRecentPeriodActivity = false
     @State private var isCompanionThoughtVisible = true
@@ -352,7 +355,8 @@ struct HomeView: View {
                 store: store,
                 activeSheet: $activeSheet,
                 periodPrediction: homePeriodPrediction,
-                stressState: store.settings.stressAwarenessEnabled ? stressService?.assessment?.state : nil
+                stressState: store.settings.stressAwarenessEnabled ? stressService?.assessment?.state : nil,
+                onMealsLogged: onMealsLogged
             )
         case .milestones:
             milestonesCard

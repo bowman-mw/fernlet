@@ -269,6 +269,7 @@ split is by concern, not alphabetical.
 | `appendMeal(_:date:)` | Central meal append path that mutates the right day, invalidates summaries, updates recents, and schedules one save. |
 | `copyMeal(_:)` | Copies a meal for today and appends it. |
 | `deleteMeal(_:)` | Removes a current-day meal and deletes its photo if present. |
+| `deleteMeal(_:loggedTo:)` | The meal-logged toast's Undo: removes a meal from the day it was logged to. Today forwards to `deleteMeal(_:)`; any other day (a cook that began before midnight) goes through `mutateDay(date:_:)` with the same photo rule, scoped to that day, and clears the meal's AI retry. Returns whether the removal was written (R7, not discardable). |
 | `updateMealCorrection(...)` | Applies manual nutrition/name/type correction to current day and recent meal copies. |
 | `correctedNutrition(macros:componentSnapshots:)` | Uses component totals when component snapshots exist; otherwise keeps manual macros. |
 | `applyMealCorrection(...)` | Updates meal nutrition, note, confidence, fallback flag, and quality. |

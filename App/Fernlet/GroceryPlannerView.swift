@@ -208,10 +208,14 @@ struct ShoppingListBuilderView: View {
 ///
 /// 2026-08-21 (FOOD-35 / XCUT-21): today's card carries the moss outline, a "N planned" count and
 /// per-recipe Log pills that log against the planned meal slot; other days keep remove only, now
-/// in the destructive tint. Logging confirms inline (a quiet line under the header) rather than
-/// through the cross-tab toast — the planner is a pushed page, not a tab root.
+/// in the destructive tint. A Log confirms through the meal-logged toast with Undo (2026-10-20,
+/// B1), which replaced a quiet inline line that offered no Undo and was never spoken. The planner
+/// is pushed from the recipe book: in the Food tab the toast shows over it, and in the book
+/// presented from Home the book closes on a log, as it does for every other log made in it.
 struct WeeklyMealPlannerView: View {
     var store: FernletStore
+    /// The recipe book's toast route (``MealLogReporter``): the Log pill reports what it logged.
+    var onMealsLogged: MealLogReporter = .none
 
     /// A day key wrapped for `.sheet(item:)` identity — avoids a broad retroactive `String: Identifiable`.
     ///
@@ -221,9 +225,6 @@ struct WeeklyMealPlannerView: View {
     @State private var weekOffset = 0
     @State private var plannedByDay: [String: [PlannedMealEntry]] = [:]
     @State private var pickingForDay: DayPick?
-    /// The recipe name a Log pill just committed — drives the quiet inline confirmation line,
-    /// which clears itself after a beat (same pattern as the recipe book's created notice).
-    @State private var loggedRecipeName: String?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private let calendar = Calendar.current
@@ -262,16 +263,6 @@ struct WeeklyMealPlannerView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityIdentifier("screen.mealPlanner")
 
-                if let loggedRecipeName {
-                    Text("\u{201C}\(loggedRecipeName)\u{201D} logged to today.")
-                        .font(.fernlet(.bodySmall))
-                        .italic()
-                        // F3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
-                        .foregroundStyle(Color.mossInk)
-                        .fernletWrappingText()
-                        .accessibilityIdentifier("mealPlanner.loggedNotice")
-                }
-
                 weekSwitcher
 
                 ForEach(weekDayKeys, id: \.self) { key in
@@ -299,20 +290,6 @@ struct WeeklyMealPlannerView: View {
         .navigationTitle("Meal planner")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear(perform: reload)
-        // The confirmation line clears after a beat; a newer log supersedes the sleeper.
-        .task(id: loggedRecipeName) {
-            guard loggedRecipeName != nil else { return }
-            // A confirmation line with nothing to act on — the notice window.
-            let window = FernletDismissalWindow.system.window(
-                standard: .seconds(4),
-                assistive: FernletDismissalWindow.assistiveNoticeWindow)
-            do {
-                try await Task.sleep(for: window)
-            } catch {
-                return
-            }
-            loggedRecipeName = nil
-        }
         .sheet(item: $pickingForDay) { pick in
             RecipePickerSheet(store: store) { recipeID, mealType in
                 store.planRecipe(recipeID, mealType: mealType, date: pick.id)
@@ -465,15 +442,14 @@ struct WeeklyMealPlannerView: View {
         .fernletIconButton("Remove \(recipe.name) from \(dayHeading(dayKey))")
     }
 
-    /// Logs a planned recipe to today through the store half that owns it, then raises the quiet
-    /// inline confirmation. The plan entry is kept — a plan describes the day, not a to-do list.
+    /// Logs a planned recipe to today through the store half that owns it, then reports the meal to
+    /// the toast. The plan entry is kept — a plan describes the day, not a to-do list.
     private func logPlanned(_ entry: PlannedMealEntry, recipe: RecipeDefinition) {
         if store.savedRecipes.contains(where: { $0.id == recipe.id }) {
-            store.logSavedRecipe(recipe, mealType: entry.mealType)
-        } else {
-            store.logRecipe(recipe, mealType: entry.mealType)
+            onMealsLogged([store.logSavedRecipe(recipe, mealType: entry.mealType)])
+        } else if let meal = store.logRecipe(recipe, mealType: entry.mealType) {
+            onMealsLogged([meal])
         }
-        loggedRecipeName = recipe.name
     }
 
     private func dayHeading(_ key: String) -> String {

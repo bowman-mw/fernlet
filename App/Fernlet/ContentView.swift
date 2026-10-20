@@ -86,7 +86,7 @@ struct ContentView: View {
     @State private var trainerExportLaunchAction: TrainerExportLaunchAction?
     @State private var mealLogNotification: MealLogNotification?
     /// True while VoiceOver's cursor is on the meal-logged toast, which then waits rather than
-    /// vanishing from under it (see ``showMealLogNotification(_:)``).
+    /// vanishing from under it (see ``showMealLogNotification(_:loggedTo:)``).
     @State private var isMealToastUnderCursor = false
     /// The just-logged meal the toast's "Adjust" action opens the correction sheet for — a local
     /// `.sheet(item:)` slot beside the `activeSheet` router (the toast fires only after the logging
@@ -948,10 +948,11 @@ struct ContentView: View {
                 tabResetToken: resetTokenBinding(for: .home),
                 periodStore: periodStore,
                 stressService: stressService,
-                isActive: selectedTab == .home && !rootSheetIsCoveringTabs
+                isActive: selectedTab == .home && !rootSheetIsCoveringTabs,
+                onMealsLogged: mealLogReporter
             )
             .tabPage(.home)
-            FoodView(store: store, onMealsLogged: showMealLogNotification, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .food))
+            FoodView(store: store, onMealsLogged: mealLogReporter, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .food))
                 .tabPage(.food)
             MoveView(
                 store: store,
@@ -1175,7 +1176,8 @@ struct ContentView: View {
                     detents: dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large]
                 )
         case .recipe:
-            RecipeSheet(store: store)
+            // "Log & save" reports its meal to the toast, which shows once this sheet has closed.
+            RecipeSheet(store: store, onMealsLogged: mealLogReporter)
                 .fernletSheetChrome(anchor: "sheet.recipe", detents: [.large])
         case .water:
             // [.medium, .large] per the 2026-08-21 template (artboard 2c): the whole task fits
@@ -1241,7 +1243,7 @@ struct ContentView: View {
                 store: store,
                 editingRecipe: $editingRecipeFromHome,
                 editingSavedRecipe: $editingSavedRecipeFromHome,
-                onMealsLogged: showMealLogNotification
+                onMealsLogged: mealLogReporter
             )
             .fernletSheetChrome(anchor: "sheet.recipeBook", detents: [.large])
         case .trends:
@@ -1884,9 +1886,23 @@ struct ContentView: View {
         periodContext.refresh(unlocked: unlocked, wellbeingByDay: store.periodWellbeingByDay)
     }
 
+    /// Raises the meal-logged toast for meals logged to today. The meal sheet's `onLogged`.
     private func showMealLogNotification(_ meals: [Meal]) {
+        showMealLogNotification(meals, loggedTo: nil)
+    }
+
+    /// The meal-logged toast as the food surfaces report to it (``MealLogReporter``), so a log made
+    /// anywhere on the Food tab, in the recipe book or on Home lands on the same toast.
+    private var mealLogReporter: MealLogReporter {
+        MealLogReporter { meals, dayKey in showMealLogNotification(meals, loggedTo: dayKey) }
+    }
+
+    /// Raises the meal-logged toast: Undo, Adjust for a single meal logged to today, and the spoken
+    /// confirmation. `dayKey` is the day the meals went to, `nil` for today; a cook that began before
+    /// midnight passes the day it began, and the toast names that day and undoes the meals from it.
+    private func showMealLogNotification(_ meals: [Meal], loggedTo dayKey: String?) {
         guard meals.isEmpty == false else { return }
-        let notification = MealLogNotification(meals: meals)
+        let notification = MealLogNotification(meals: meals, dayKey: dayKey ?? store.todayKey, todayKey: store.todayKey)
         // Deliberately does NOT switch to Home. The toast overlays the tab pages, so it shows
         // over whichever tab the log started from; jumping to Home meant a meal logged from Food
         // landed the user on another tab and cost them a tab switch to check the match.
@@ -1954,23 +1970,28 @@ struct ContentView: View {
         }
     }
 
-    /// The toast's "Undo": removes the just-logged meal(s) exactly as the meal row's X does —
-    /// `store.deleteMeal` per meal (sealed photo cleanup and AI-retry clearing included).
+    /// The toast's "Undo": removes the just-logged meal(s) from the day they were logged to — for
+    /// today exactly as the meal row's X does (`store.deleteMeal`, sealed photo cleanup and AI-retry
+    /// clearing included). Only the meals actually removed are announced: a past day's write can
+    /// fail, and "removed" must not be said over a meal that is still there.
     private func undoLoggedMeals(_ notification: MealLogNotification) {
+        var removedCount = 0
         for meal in notification.meals {
-            store.deleteMeal(meal)
+            if store.deleteMeal(meal, loggedTo: notification.dayKey) { removedCount += 1 }
         }
         if mealLogNotification?.id == notification.id {
             mealLogNotification = nil
         }
-        TaskConfirmation.mealUndone(count: notification.meals.count).announce()
+        guard removedCount > 0 else { return }
+        TaskConfirmation.mealUndone(count: removedCount).announce()
     }
 
     /// The toast's "Adjust": opens the meal-correction sheet for the single just-logged meal.
-    /// A multi-meal log has no single target, so the view only offers Adjust when
-    /// `notification.singleMeal` exists — this guard is the belt to that suspender.
+    /// A multi-meal log has no single target, and the correction sheet edits today's meals only, so
+    /// the view offers Adjust only when `notification.adjustableMeal` exists — this guard is the
+    /// belt to that suspender.
     private func adjustLoggedMeal(_ notification: MealLogNotification) {
-        guard let meal = notification.singleMeal else { return }
+        guard let meal = notification.adjustableMeal else { return }
         if mealLogNotification?.id == notification.id {
             mealLogNotification = nil
         }
@@ -2108,21 +2129,42 @@ extension View {
 /// Built by `ContentView.showMealLogNotification`; the fresh `id` per instance is what lets a
 /// newer toast supersede an older one's auto-dismiss timer. Carries the full `[Meal]` (FLOW-15)
 /// so the toast's Undo can remove exactly what was logged and Adjust can open the correction
-/// sheet for a single-meal log.
+/// sheet for a single-meal log. Carries the day the meals went to (B1, 2026-10-20): a cook that
+/// began before midnight logs to the day it began, and the toast must neither undo from today nor
+/// pass that meal off as today's.
 struct MealLogNotification: Identifiable, Equatable {
     let id = UUID()
     /// The just-logged meals, in the order the sheet reported them. Never empty (the presenter
     /// guards), and the Undo action deletes each one exactly as the meal row's X does.
     let meals: [Meal]
+    /// The day key the meals were logged to. Undo removes them from this day.
+    let dayKey: String
+    /// Whether ``dayKey`` was today when the meals were logged. False for a back-dated log, which
+    /// names its day on the toast and offers no Adjust (the correction sheet edits today's meals).
+    let isLoggedToToday: Bool
 
-    init(meals: [Meal]) {
+    /// Creates the payload for meals logged to `dayKey`, judged against today's `todayKey`.
+    init(meals: [Meal], dayKey: String, todayKey: String) {
         self.meals = meals
+        self.dayKey = dayKey
+        self.isLoggedToToday = dayKey == todayKey
     }
 
-    /// The one logged meal when exactly one was logged — the only case with an Adjust target
-    /// (a multi-meal log has no single meal to correct).
+    /// The one logged meal when exactly one was logged (a multi-meal log has no single meal to
+    /// name or correct).
     var singleMeal: Meal? {
         meals.count == 1 ? meals.first : nil
+    }
+
+    /// The Adjust target: the single logged meal, and only when it went to today, because the
+    /// correction sheet edits today's meals and nothing else.
+    var adjustableMeal: Meal? {
+        isLoggedToToday ? singleMeal : nil
+    }
+
+    /// The day the toast names because it is not today, or `nil` for a log to today.
+    var otherLoggedDay: Date? {
+        isLoggedToToday ? nil : FernletDate.date(fromDayKey: dayKey)
     }
 
     /// The summed macros across every logged meal, for the toast's detail line.
@@ -2151,8 +2193,8 @@ struct MealLogNotificationView: View {
     @Binding var isUnderCursor: Bool
     /// Removes the just-logged meal(s); the presenter owns the store call.
     var onUndo: () -> Void
-    /// Opens the correction sheet for ``MealLogNotification/singleMeal``; only invoked when the
-    /// Adjust pill renders (single-meal logs).
+    /// Opens the correction sheet for ``MealLogNotification/adjustableMeal``; only invoked when the
+    /// Adjust pill renders (single-meal logs to today).
     var onAdjust: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// Which of the toast's three elements VoiceOver's cursor is on, if any. Read, never written:
@@ -2219,16 +2261,31 @@ struct MealLogNotificationView: View {
 
     /// "Lunch · P 42g · C 58g · F 14g" for a single meal; macros alone for a multi-meal log
     /// (the meals may span slots). `displayName` is already localized, so it interpolates as data.
+    /// A log to another day leads with that day ("Sun, Oct 19 · Dinner · …"), so a meal the Food
+    /// tab's today list will not show is never mistaken for today's.
     private var detailText: Text {
         let macros = notification.macros
+        if let day = notification.otherLoggedDay {
+            return otherDayDetailText(day, macros: macros)
+        }
         if let meal = notification.singleMeal {
             return Text("\(meal.mealType.displayName) · P \(macros.protein)g · C \(macros.carbs)g · F \(macros.fat)g")
         }
         return Text("P \(macros.protein)g · C \(macros.carbs)g · F \(macros.fat)g")
     }
 
-    /// Undo (always) and Adjust (single-meal logs only), side by side — or stacked full-width,
-    /// one per row, at accessibility sizes (artboard 4b·AX3).
+    /// ``detailText`` for a back-dated log: the day, in the locale's own short form, then the slot
+    /// (single meal only) and the macros.
+    private func otherDayDetailText(_ day: Date, macros: MacroTotals) -> Text {
+        let dayFormat = Date.FormatStyle.dateTime.weekday(.abbreviated).month(.abbreviated).day()
+        if let meal = notification.singleMeal {
+            return Text("\(day, format: dayFormat) · \(meal.mealType.displayName) · P \(macros.protein)g · C \(macros.carbs)g · F \(macros.fat)g")
+        }
+        return Text("\(day, format: dayFormat) · P \(macros.protein)g · C \(macros.carbs)g · F \(macros.fat)g")
+    }
+
+    /// Undo (always) and Adjust (single-meal logs to today only), side by side — or stacked
+    /// full-width, one per row, at accessibility sizes (artboard 4b·AX3).
     @ViewBuilder
     private var actionButtons: some View {
         let expands = dynamicTypeSize.isAccessibilitySize
@@ -2238,7 +2295,7 @@ struct MealLogNotificationView: View {
                 .buttonStyle(MealToastPillStyle(prominent: false, expands: expands))
                 .accessibilityIdentifier("mealToast.undo")
                 .accessibilityFocused($cursor, equals: .undo)
-            if notification.singleMeal != nil {
+            if notification.adjustableMeal != nil {
                 Button("Adjust", action: onAdjust)
                     .buttonStyle(MealToastPillStyle(prominent: true, expands: expands))
                     .accessibilityIdentifier("mealToast.adjust")

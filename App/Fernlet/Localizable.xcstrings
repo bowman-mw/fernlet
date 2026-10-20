@@ -202,6 +202,16 @@
         }
       }
     },
+    "%@ · %@ · P %lldg · C %lldg · F %lldg" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@ · P %3$lldg · C %4$lldg · F %5$lldg"
+          }
+        }
+      }
+    },
     "%@ · %lld items" : {
       "localizations" : {
         "en" : {
@@ -12155,9 +12165,6 @@
 
     },
     "“%@” and any photo attached to it are removed from this device. Fernlet can't undo this." : {
-
-    },
-    "“%@” logged to today." : {
 
     },
     "“%@” wasn't sent" : {
