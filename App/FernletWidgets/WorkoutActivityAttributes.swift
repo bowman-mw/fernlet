@@ -52,6 +52,8 @@ nonisolated struct WorkoutActivityAttributes: ActivityAttributes {
             case resting
         }
 
+        /// The exercise's name as drawn — the run step's `displayedName`, already in the user's
+        /// language. Display only; nothing reads it back as an identifier.
         var exerciseName: String
         var setNumber: Int
         var totalSets: Int

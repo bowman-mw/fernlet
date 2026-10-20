@@ -310,6 +310,22 @@ is persisted as a completed row's notes and drawn verbatim. Both are stored text
 tokens (`reconstructPlannedWorkout` matches the note), so each needs the same draw-time mapping
 rather than a localized write.
 
+**Addendum (2026-10-20, exercise display names and how-to text, D-L2):** `ExerciseTarget.name` stays
+the frozen identity. `ExerciseHowToCatalog` (FernletDomainModel) holds, for each of the 118 catalog
+exercises, a display name plus 3–5 cues, one common mistake and one easier version, every string a
+`String(localized:bundle: .module)` key under `exercise.<keyStem>.` in the domain catalog (889 keys,
+`en` only). `displayName(for:)` is an exact match on the frozen spelling, like `StoredWorkoutName`.
+Draws routed through it: the plan card's exercise rows, the guided runner (title, Next up, Up next,
+Ready list via `PrescribedExercise.displayLine`), its spoken transitions, the editor sheet, the reps
+editor, Exercise history, the Log sheet's picker, Recent chips and added rows, and the Live Activity,
+which reads the name the app bakes into `GuidedWorkoutRunState.Exercise.displayName` (the widget
+cannot import the domain). The picker's search matches display names as well as the frozen ones.
+Kept on `name`: plan text (`line`), logged lines and `ExerciseResult.name`, progression keys, the
+history rollup and trainer export, the planner and AI prompts, and the coach-plan wire and review
+screens (which show the coach's own text). **Still English:** a logged row's exercise lines are
+stored text and are drawn as stored; plateau, calibration and session notes embed names in English
+sentences (idea 16).
+
 ---
 
 ## 4. Phase 2 — Translation pass (es / fr / de)

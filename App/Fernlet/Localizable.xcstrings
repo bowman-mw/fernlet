@@ -1840,6 +1840,9 @@
     "Comfortable — could hold a conversation." : {
 
     },
+    "Common mistake" : {
+
+    },
     "Companion" : {
 
     },
@@ -2506,6 +2509,9 @@
 
     },
     "Ease into each stretch — no bouncing." : {
+
+    },
+    "Easier version" : {
 
     },
     "Easy" : {
@@ -3413,6 +3419,15 @@
     "How many servings?" : {
 
     },
+    "How to" : {
+
+    },
+    "How to do %@" : {
+
+    },
+    "How to do it" : {
+
+    },
     "How today felt" : {
 
     },
@@ -3531,6 +3546,9 @@
 
     },
     "Include picture" : {
+
+    },
+    "Info" : {
 
     },
     "Ingredient substitution" : {
@@ -3949,6 +3967,9 @@
           }
         }
       }
+    },
+    "Main muscles" : {
+
     },
     "Make Fernlet yours" : {
 
@@ -6471,6 +6492,9 @@
     "Stop cooking %@?" : {
 
     },
+    "Stop if you feel sharp pain." : {
+
+    },
     "Stop sharing" : {
 
     },
@@ -6750,6 +6774,9 @@
 
     },
     "Theme, backgrounds, companion, Home widgets" : {
+
+    },
+    "There's no how-to for this exercise yet." : {
 
     },
     "These are optional except age. Fernlet never asks for weight goals." : {

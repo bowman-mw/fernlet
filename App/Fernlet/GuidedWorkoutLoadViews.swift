@@ -289,7 +289,7 @@ struct GuidedPreviousLiftFix: View {
 
     var body: some View {
         if let previous {
-            GuidedEditRepsButton(store: store, exercise: previous, label: Text("Edit reps for \(previous.name)"))
+            GuidedEditRepsButton(store: store, exercise: previous, label: Text("Edit reps for \(previous.displayedName)"))
         }
     }
 
@@ -323,7 +323,7 @@ struct GuidedRepsEditor: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SheetHeader(title: Text("Edit reps"), subtitle: Text(verbatim: exercise.name), onCancel: { dismiss() })
+            SheetHeader(title: Text("Edit reps"), subtitle: Text(verbatim: exercise.displayedName), onCancel: { dismiss() })
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Change only the sets that went differently.")

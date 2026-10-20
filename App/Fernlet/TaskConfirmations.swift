@@ -114,7 +114,8 @@ enum GuidedRunAnnouncement {
     /// user needs to hear changed (a refused transition, a run that went away).
     ///
     /// Exercise names are spoken: they are the plan's own words, already on screen, and nothing
-    /// about them is sealed.
+    /// about them is sealed. They are spoken as drawn (`displayedName`, the user's language), never
+    /// as the frozen catalog name.
     static func spoken(
         from before: GuidedWorkoutRunState,
         to after: GuidedWorkoutRunState?
@@ -132,16 +133,16 @@ enum GuidedRunAnnouncement {
             // A one-sided step (a stretch, a balance hold) says its side; a single timed step has no
             // set to count ("Set 1 of 1" for every stretch would be noise).
             switch exercise.sideRaw {
-            case "left": return (.status, "Next: \(exercise.name), left side.")
-            case "right": return (.status, "Next: \(exercise.name), right side.")
+            case "left": return (.status, "Next: \(exercise.displayedName), left side.")
+            case "right": return (.status, "Next: \(exercise.displayedName), right side.")
             default: break
             }
             if exercise.holdSeconds != nil && exercise.sets <= 1 {
-                return (.status, "Next: \(exercise.name).")
+                return (.status, "Next: \(exercise.displayedName).")
             }
             return countsSets
-                ? (.status, "Next exercise: \(exercise.name). Set 1 of \(after.totalSetsForCurrent).")
-                : (.status, "Next exercise: \(exercise.name).")
+                ? (.status, "Next exercise: \(exercise.displayedName). Set 1 of \(after.totalSetsForCurrent).")
+                : (.status, "Next exercise: \(exercise.displayedName).")
         }
         guard countsSets else { return nil }
         return (.status, "Set \(after.currentSet) of \(after.totalSetsForCurrent).")

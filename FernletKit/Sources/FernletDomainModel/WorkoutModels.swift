@@ -1153,8 +1153,8 @@ public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable, Send
     ///   CloudKit — so a translated name silently orphans the user's accumulated progression on
     ///   every device, and a phone in a second language would grow a parallel set of keys.
     ///
-    /// If a localized exercise name is ever wanted, it belongs in a lookup keyed BY this string,
-    /// never as a replacement for it.
+    /// A localized exercise name lives in a lookup keyed BY this string, never as a replacement for
+    /// it: ``ExerciseHowToCatalog/displayName(for:)``, which screens reach through ``displayName``.
     public var name: String
     public var primaryMuscles: Set<MuscleGroup>
     public var secondaryMuscles: Set<MuscleGroup>
@@ -1455,6 +1455,9 @@ public nonisolated enum WorkoutExerciseCatalog {
         let normalized = trimmed.lowercased()
         return allExercises.filter { exercise in
             exercise.name.lowercased().contains(normalized)
+                // The drawn name too (D-L2): a translated name finds its exercise, and the frozen
+                // English name above stays a searchable alias on every device.
+                || exercise.displayName.lowercased().contains(normalized)
                 || exercise.category.rawValue.lowercased().contains(normalized)
                 // Match the FROZEN tokens as well as the localized names. Tokens alone would break
                 // English search ("upper back" no longer finds `upperBack`); localized names alone
