@@ -2732,6 +2732,17 @@
         }
       }
     },
+    "Demonstration" : {
+      "comment" : "Exercise how-to sheet: short Voice Control name of the demonstration picture",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Demonstration"
+          }
+        }
+      }
+    },
     "Demonstration of %@" : {
       "comment" : "VoiceOver label for the exercise demonstration animation or picture in the how-to sheet. %@ is the exercise name."
     },
@@ -5753,6 +5764,28 @@
     "Pattern" : {
 
     },
+    "Pause" : {
+      "comment" : "Exercise how-to sheet: the action that pauses the looping demonstration; also its Voice Control name while it plays",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pause"
+          }
+        }
+      }
+    },
+    "Paused" : {
+      "comment" : "Exercise how-to sheet: VoiceOver value of the demonstration while its loop is paused",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Paused"
+          }
+        }
+      }
+    },
     "People" : {
 
     },
@@ -5931,6 +5964,28 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Plates"
+          }
+        }
+      }
+    },
+    "Play" : {
+      "comment" : "Exercise how-to sheet: the action that plays a paused demonstration again; also its Voice Control name while paused",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Play"
+          }
+        }
+      }
+    },
+    "Playing" : {
+      "comment" : "Exercise how-to sheet: VoiceOver value of the demonstration while its loop plays",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Playing"
           }
         }
       }
