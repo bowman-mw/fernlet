@@ -19,7 +19,7 @@ import FernletLockUI
 /// The Settings hub: a searchable, four-group Form (2026-08-21 restructure, artboard 5a —
 /// SETT-14/26/28/29) that routes to every settings sub-page. Each row carries a one-line sub-label
 /// breadcrumb saying what is inside it; the groups are **Your day** (Appearance, Goal & nutrition,
-/// Reminders, Personal care tasks, Quick-log shortcuts), **Data & sources** (AI & data sources,
+/// Reminders, Personal care tasks, Quick-log shortcuts, Sounds & haptics), **Data & sources** (AI & data sources,
 /// Health), **Privacy & data** (Privacy & Data, App lock, Safety & reporting, Privacy Policy, AI
 /// activity log), and **Friends & private** (Nearby friends, Period & sensitive content), followed
 /// by the Danger zone and — in DEBUG builds only — an Advanced section holding the one Connection
@@ -31,6 +31,7 @@ import FernletLockUI
 /// sources, personal care, memories, signals, debug, connection log) are built inline here, while
 /// the standalone screens (``PrivacyDataSettingsView``, ``HealthAccessSettingsView``,
 /// ``NearbyFriendsSettingsView``, ``PeriodSensitiveSettingsView``, ``QuickLogShortcutsEditor``,
+/// ``SoundsHapticsSettingsView``,
 /// ``PrivacyPolicyView``, `SafetyReportingView`, ``AIAuditLogView``, ``AppLockSettingsView``)
 /// return with their own chrome. A non-empty search query swaps the Form for a
 /// ``SettingsSearchIndex`` results list.
@@ -310,6 +311,8 @@ struct SettingsSheet: View {
             settingsDestination(title: "Personal care tasks") { personalCareSettings }
         case .layoutShortcuts:
             QuickLogShortcutsEditor(store: store)
+        case .soundsHaptics:
+            SoundsHapticsSettingsView()
         case .aiDataSources:
             settingsDestination(title: "AI & data sources") { aiDataSourcesTab }
         case .health:
@@ -436,6 +439,8 @@ struct SettingsSheet: View {
                 .accessibilityIdentifier("settings.row.personalCare")
             hubLink("Quick-log shortcuts", subtitle: Text("Six tiles on Home"), .layoutShortcuts)
                 .accessibilityIdentifier("settings.row.quickLog")
+            hubLink("Sounds & haptics", subtitle: Text("Haptics, workout sounds, spoken cues"), .soundsHaptics)
+                .accessibilityIdentifier("settings.row.soundsHaptics")
         } header: {
             hubSectionHeader("Your day")
         }

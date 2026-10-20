@@ -325,6 +325,13 @@ struct PersistedSurfaceWipeBoundaryTests {
         "fernlet.workoutCues.spoken": .kept(
             reason: "Guided-workout configuration, not a record: whether the runner says its moments aloud. Same class as the haptics and sounds switches beside it — nothing spoken is ever stored — and clearing it would only hand back the default (off)."
         ),
+        // The app-wide Haptics level (2026-10-20, sounds-and-haptics pass): Settings › Sounds & haptics,
+        // device-local, above the workout and breathing switches it shows. The key is declared and read
+        // in FernletKit's FernletFeedback.swift (`FernletHapticsLevel`); the app's two bindings are the
+        // seam rows below.
+        "fernlet.feedback.haptics": .kept(
+            reason: "How the phone should feel, not a record: all, fewer or off. The breathing and workout switches' class — no content, nothing about any day — and clearing it would turn haptics back on for someone who turned them off."
+        ),
         // Guided cardio's heart-rate switches (2026-10-20, idea 9, WorkoutZonePreferences): device-local,
         // beside the cue switches. The heart rate itself is never persisted anywhere.
         "fernlet.workoutCues.liveHeartRate": .kept(
@@ -427,6 +434,12 @@ struct PersistedSurfaceWipeBoundaryTests {
         "unresolved:FernletAppearanceMode.storageKey@App/Fernlet/SettingsSheet.swift": .kept(
             reason: "@AppStorage(FernletAppearanceMode.storageKey) — the appearance mode `fernletAppearanceMode`, kept as app chrome. The constant lives in FernletNavigation.swift, so the key resolves in neither direction from here."
         ),
+        "unresolved:FernletHapticsLevel.storageKey@App/Fernlet/SoundsHapticsSettingsView.swift": .kept(
+            reason: "@AppStorage(FernletHapticsLevel.storageKey) — the app-wide Haptics level `fernlet.feedback.haptics`, the Sounds & haptics page's picker. Kept as a preference; the constant lives in FernletKit's FernletFeedback.swift."
+        ),
+        "unresolved:FernletHapticsLevel.storageKey@App/Fernlet/BreathingExerciseView.swift": .kept(
+            reason: "@AppStorage(FernletHapticsLevel.storageKey) — the app-wide Haptics level `fernlet.feedback.haptics`, read by the breathing screen for its \"haptics are off\" note and never written there. Kept as a preference; the constant lives in FernletKit's FernletFeedback.swift."
+        ),
         "unresolved:FernletThemeDefaults.customLightBackgroundKey@App/Fernlet/ContentView.swift": .kept(
             reason: "@AppStorage(FernletThemeDefaults.customLightBackgroundKey) — the custom light background `fernletCustomLightBackgroundHex`, kept as app chrome. The constant lives in FernletKit's FernletTheme.swift."
         ),
@@ -502,6 +515,8 @@ struct PersistedSurfaceWipeBoundaryTests {
         "unresolved:CompanionEmotionPreferences.wakeMinuteKey@App/Fernlet/HomeView.swift": 1,
         "unresolved:FernletAppearanceMode.storageKey@App/Fernlet/FernletApp.swift": 1,
         "unresolved:FernletAppearanceMode.storageKey@App/Fernlet/SettingsSheet.swift": 1,
+        "unresolved:FernletHapticsLevel.storageKey@App/Fernlet/BreathingExerciseView.swift": 1,
+        "unresolved:FernletHapticsLevel.storageKey@App/Fernlet/SoundsHapticsSettingsView.swift": 1,
         "unresolved:FernletThemeDefaults.customDarkBackgroundKey@App/Fernlet/ContentView.swift": 1,
         "unresolved:FernletThemeDefaults.customDarkBackgroundKey@App/Fernlet/SettingsSheet.swift": 1,
         "unresolved:FernletThemeDefaults.customLightBackgroundKey@App/Fernlet/ContentView.swift": 1,

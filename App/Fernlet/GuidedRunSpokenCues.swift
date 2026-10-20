@@ -50,8 +50,11 @@ enum GuidedRunSpokenCue {
             return String(localized: GuidedSegmentWords.goLine(paceRaw))
         case .holdEnded:
             return paceRaw == nil ? holdDone : partDone
-        // A zone drift (idea 9) speaks through the zone director's own VoiceOver line, not here.
-        case .setLogged, .blockChanged, .workoutFinished, .zoneDrift:
+        // A zone drift (idea 9) speaks through the zone director's own VoiceOver line, not here. The
+        // app-wide events (sounds-and-haptics pass) never come from the run's clock.
+        case .setLogged, .blockChanged, .workoutFinished, .zoneDrift, .tick, .logged, .limit, .moved,
+             .held, .captured, .done, .caveat, .failed, .friendHere, .pace, .timerEnded, .messageIn,
+             .windDetent, .wound, .shutter:
             return nil
         }
     }

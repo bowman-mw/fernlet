@@ -72,6 +72,28 @@ public enum NotificationService {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [dailyCheckInID])
 
+        var components = DateComponents()
+        components.hour = hour
+        components.minute = minute
+        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
+        let request = UNNotificationRequest(identifier: dailyCheckInID, content: dailyCheckInContent(), trigger: trigger)
+        do {
+            try await center.add(request)
+        } catch {
+            // Recovery: nothing is pending, so `scheduledDailyCheckIn()` reports nil and the
+            // Settings toggle reads back off — the failure is visible to the user AND in the log.
+            logger.error("notifications.dailyCheckIn.scheduleFailed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// What the daily check-in says, and how it arrives: a quiet banner.
+    ///
+    /// **No sound** (owner's decision 6, 2026-10-20, "Sounds good"): it is the one recurring thing
+    /// Fernlet sends outside a session, so it arrives as a banner on the Lock Screen and in
+    /// Notification Center and never rings. `sound` stays nil; `FernletNotificationDelegate` drops the
+    /// sound in the foreground too, and ``silenceDailyCheckInIfNeeded()`` re-files a check-in an older
+    /// build scheduled with the default sound.
+    public static func dailyCheckInContent() -> UNMutableNotificationContent {
         let content = UNMutableNotificationContent()
         // T2-19: the daily check-in is delivered to Announce Notifications and to a Braille
         // display as well as to the Lock Screen, and it is the one sentence of Fernlet many users
@@ -84,20 +106,24 @@ public enum NotificationService {
                               defaultValue: "However today went, a small note of care still counts.",
                               bundle: .module,
                               comment: "Body of the once-a-day reminder notification. Must stay unconditional — care counts regardless of how the day went.")
-        content.sound = .default
+        content.sound = nil
+        return content
+    }
 
-        var components = DateComponents()
-        components.hour = hour
-        components.minute = minute
-        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
-        let request = UNNotificationRequest(identifier: dailyCheckInID, content: content, trigger: trigger)
-        do {
-            try await center.add(request)
-        } catch {
-            // Recovery: nothing is pending, so `scheduledDailyCheckIn()` reports nil and the
-            // Settings toggle reads back off — the failure is visible to the user AND in the log.
-            logger.error("notifications.dailyCheckIn.scheduleFailed: \(error.localizedDescription, privacy: .public)")
-        }
+    /// Re-files a pending daily check-in that still carries a sound, at the same time, so a check-in
+    /// scheduled by a build before decision 6 stops ringing without the person touching Settings.
+    ///
+    /// Called once per launch. A check-in that is already quiet, or none at all, is left exactly as
+    /// it is — this never schedules a check-in nobody asked for.
+    public static func silenceDailyCheckInIfNeeded() async {
+        let requests = await UNUserNotificationCenter.current().pendingNotificationRequests()
+        guard let request = requests.first(where: { $0.identifier == dailyCheckInID }),
+              request.content.sound != nil,
+              let trigger = request.trigger as? UNCalendarNotificationTrigger,
+              let hour = trigger.dateComponents.hour,
+              let minute = trigger.dateComponents.minute else { return }
+        logger.notice("notifications.dailyCheckIn.silenced: re-filed without sound")
+        await scheduleDailyCheckIn(hour: hour, minute: minute)
     }
 
     /// Cancels the daily check-in reminder. Public so the Settings toggle can turn it off

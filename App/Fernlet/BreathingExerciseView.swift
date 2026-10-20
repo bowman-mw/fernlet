@@ -129,7 +129,10 @@ struct BreathingExerciseView: View {
     /// had to re-pick both every single time before Begin.
     @AppStorage("fernlet.breathing.presetID") private var presetID = BreathingPreset.box.id
     @AppStorage("fernlet.breathing.minutes") private var minutes = 1
-    @AppStorage("fernlet.breathing.haptics") private var hapticsEnabled = true
+    @AppStorage(BreathingPreferences.hapticsKey) private var hapticsEnabled = BreathingPreferences.defaultHaptics
+    /// The app-wide Haptics level (Settings › Sounds & haptics), read here only for the note under the
+    /// Haptics switch; the pacer's tap reads it through FernletUI's resolver at every phase.
+    @AppStorage(FernletHapticsLevel.storageKey) private var appHapticsLevel = FernletHapticsLevel.defaultLevel
 
     /// The stored pattern, resolved against the curated presets (falling back to Box if the stored
     /// id ever names a preset that no longer exists).
@@ -485,6 +488,15 @@ struct BreathingExerciseView: View {
                     Text("a soft tap on each turn")
                         .font(.fernlet(.bubble))
                         .foregroundStyle(Color.slate)
+                    // Owner's decision 5: this switch stays, under the app-wide level. When that
+                    // level is Off, an "on" switch here plays nothing, so say why.
+                    if appHapticsLevel == .off {
+                        Text("Haptics are off for all of Fernlet in Settings.")
+                            .font(.fernlet(.bubble))
+                            .foregroundStyle(Color.slate)
+                            .fernletWrappingText()
+                            .accessibilityIdentifier("breathing.hapticsOffNote")
+                    }
                 }
                 Spacer()
                 // The switch draws with its label hidden — the "Haptics" heading to its left is the
@@ -634,10 +646,37 @@ struct BreathingExerciseView: View {
         withAnimation(.easeInOut(duration: 0.8)) { circleScale = restingScale }
     }
 
+    /// The pacer's tap: FernletFeedback's `pace`, which plays only when both this screen's Haptics
+    /// switch and the app-wide level allow it (owner's decision 5, "Keep it").
     private func tickHaptic() {
         #if canImport(UIKit)
-        guard hapticsEnabled else { return }
-        UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.6)
+        FernletFeedback.system.play(.pace, preferences: .resolved(haptics: hapticsEnabled))
         #endif
+    }
+}
+
+/// The breathing timer's device-local switch: whether its pacer taps on each turn (on until the person
+/// turns it off). The key is a FROZEN persisted token, spelled once here; every access stays in this
+/// file, where the wipe wall resolves it to its literal. "Delete everything" keeps it
+/// (`Docs/PrivacyWipeCoverage.md`): a preference, not a record.
+enum BreathingPreferences {
+    /// `Bool`, default ``defaultHaptics``.
+    static let hapticsKey = "fernlet.breathing.haptics"
+    /// The switch until the person changes it: on.
+    static let defaultHaptics = true
+}
+
+/// The breathing switch as Settings › Sounds & haptics shows it: the same key the breathing screen's
+/// Haptics switch edits, never a copy.
+struct BreathingHapticsSwitch: View {
+    @AppStorage(BreathingPreferences.hapticsKey) private var haptics = BreathingPreferences.defaultHaptics
+
+    var body: some View {
+        SoundsHapticsSwitchRow(
+            title: "Breathing haptics",
+            footnote: "A soft tap on each turn of the breath, in First aid › Slow breathing.",
+            isOn: $haptics,
+            identifier: "settings.soundsHaptics.breathingHaptics"
+        )
     }
 }

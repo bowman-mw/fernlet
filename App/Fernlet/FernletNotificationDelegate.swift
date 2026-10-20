@@ -20,9 +20,11 @@ import AppServices
 /// The app's `UNUserNotificationCenterDelegate`: foreground presentation for the gentle local
 /// notifications, plus tap-to-sheet deep-linking.
 ///
-/// `willPresent` opts the daily check-in into banner+sound while the app is foregrounded
-/// (otherwise the system swallows it) and keeps a guided workout's cue notification quiet there,
-/// since the open runner has already cued that moment itself; `didReceive` maps a tap on the check-in to the journal
+/// `willPresent` opts the daily check-in into a banner WITHOUT sound while the app is foregrounded
+/// (otherwise the system swallows it; owner's decision 6, 2026-10-20: the check-in never rings),
+/// keeps a guided workout's cue notification quiet there, since the open runner has already cued
+/// that moment itself, and presents anything else (the best-effort session-message ping) as banner
+/// and sound; `didReceive` maps a tap on the check-in to the journal
 /// sheet by storing `pendingSheetID` and posting `pendingSheetRequestNotification`, which
 /// `ContentView.consumePendingNotificationSheet()` consumes (cold launches read the flag from the
 /// startup task instead). Installed in `FernletApp.init` before launch finishes — the delegate
@@ -45,15 +47,29 @@ final class FernletNotificationDelegate: NSObject, UNUserNotificationCenterDeleg
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        completionHandler(Self.foregroundPresentation(for: notification.request.identifier))
+    }
+
+    /// How a notification shows while Fernlet is open, by its identifier.
+    ///
+    /// The daily check-in shows as a quiet banner (decision 6: delivered without sound, and never with
+    /// sound in the foreground either — even a request an older build filed with the default sound).
+    /// A workout cue never shows here. Anything else presents gently, banner and
+    /// sound — a notification that never appears is confusing.
+    nonisolated static func foregroundPresentation(for identifier: String) -> UNNotificationPresentationOptions {
         // A guided workout's rest-end or hold-end cue is for a phone in the background. With Fernlet
         // open, the runner has already played its own haptic or sound (GuidedRunCueDirector), and a
         // banner on top would cue the same moment twice — and, under VoiceOver, speak it twice.
-        if NotificationService.isWorkoutCue(notification.request.identifier) {
-            completionHandler([])
-            return
-        }
-        // Present gently even in the foreground — a check-in that never appears is confusing.
-        completionHandler([.banner, .sound])
+        if NotificationService.isWorkoutCue(identifier) { return [] }
+        if identifier == NotificationService.dailyCheckInID { return [.banner, .list] }
+        return [.banner, .sound]
+    }
+
+    /// Re-files a daily check-in an older build scheduled with the default sound, at the same time, so
+    /// it stops ringing (decision 6). Fire-and-forget at launch: nothing waits on it, and it changes
+    /// nothing when the check-in is already quiet or off.
+    static func silenceLegacyCheckIn() {
+        Task { await NotificationService.silenceDailyCheckInIfNeeded() }
     }
 
     nonisolated func userNotificationCenter(

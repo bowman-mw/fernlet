@@ -86,7 +86,7 @@ struct WorkoutSetupSheet: View {
         self.initialProfile = settings.workoutProfile
         self.initialInterestsText = seedInterests
         self.initialInjuryDraft = draft
-        let cues = WorkoutCuePreferences.current()
+        let cues = WorkoutCuePreferences.stored()
         _cuePreferences = State(initialValue: cues)
         self.initialCuePreferences = cues
         _sessionOptions = State(initialValue: settings.workoutSessionOptions)
