@@ -3284,8 +3284,9 @@ final class FernletStore {
         return true
     }
 
-    /// Replaces a logged workout in place (used by the edit sheet, which only exposes
-    /// name/intensity/duration/notes). Provenance and timestamps the edit UI can't reach are re-asserted
+    /// Replaces a logged workout in place (used by the edit sheet, which exposes name/intensity/duration/
+    /// notes and each lift's sets — the corrected `exerciseResults` and their lines arrive on `workout`
+    /// and are stored as given). Provenance and timestamps the edit UI can't reach are re-asserted
     /// from the stored row so a partial edit can't drop them. Genuine Health *imports* are refused (not
     /// editable — another app owns them). A Fernlet-*authored* row IS editable — its immutable Health
     /// sample is re-synced (delete-old + save-new) so the Health copy never silently diverges from the

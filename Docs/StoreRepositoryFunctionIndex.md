@@ -116,7 +116,7 @@ split is by concern, not alphabetical.
 | `Workout.exerciseLines` | Splits workout exercise text into trimmed lines for display and classification. |
 | `Workout.inferredCategory` | Infers workout category from explicit type or exercise text. |
 | `Workout.init(from:)` / `encode(to:)` | Preserve compatibility for newer activity, muscle, HealthKit, and planning fields. |
-| `Workout.exerciseResults` | Additive optional per-lift record of a guided session (`ExerciseResult`: prescribed sets/reps and weight range, weight picked, edited reps, effort, override reason); encoded only when set, capped at 64 on decode, nameless entries dropped. The load planner reads it (`WorkoutLoadContextBuilder`); the same facts are in `exercises` as text. |
+| `Workout.exerciseResults` | Additive optional per-lift record (`ExerciseResult`: prescribed sets/reps and weight range, weight picked, edited reps, per-set weights when they differed, effort, override reason) — written by a guided session, by the Log sheet's set-by-set entry, and by a correction in the Edit sheet (`WorkoutSetEditing`, saved through `updateWorkout`); encoded only when set, capped at 64 on decode, nameless entries dropped, a newer build's unknown keys parked and written back. The load planner reads it (`WorkoutLoadContextBuilder`); the same facts are in `exercises` as text, rewritten with every correction. |
 | `WorkoutExerciseCatalog.inferredCategory(for workout:)` | Infers workout category from a `Workout`. |
 | `WorkoutExerciseCatalog.inferredCategory(for text:)` | Scores free-form exercise text against known movement categories. |
 | `WorkoutExerciseCatalog.targetSummary(for:)` | Produces a muscle/equipment summary for a workout. |

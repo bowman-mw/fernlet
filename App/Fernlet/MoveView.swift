@@ -824,6 +824,12 @@ struct WorkoutSheet: View {
     /// The row the name field was last prefilled from by "Log again". The field draws its
     /// `displayedName`; ``typedName`` hands the stored name back while that text is untouched.
     @State private var prefilledFrom: Workout?
+    /// "Log set by set" (idea 6): the picked lift takes one row per set instead of the Sets / Reps /
+    /// Weight fields, and saves the same structured record a guided run does. Off by default, so the
+    /// free-text entry works exactly as before.
+    @State private var logsBySet = false
+    /// The picked lift's set rows while ``logsBySet`` is on; rebuilt whenever the pick changes.
+    @State private var setsDraft: ExerciseSetsDraft?
 
     var intensity: WorkoutIntensity {
         if logMode == .activity {
@@ -1024,7 +1030,10 @@ struct WorkoutSheet: View {
         if let minutes = workout.duration { duration = String(minutes) }
     }
 
-    /// The exercise builder plus the rows already added — strength mode only.
+    /// The exercise builder plus the rows already added — strength mode only. With "Log set by set"
+    /// on, the builder keeps its picker (which also takes a typed name) and the set rows replace its
+    /// Sets / Reps / Weight fields. The switch sits under the builder, so the quick path above it —
+    /// Kind, Recent and the search — still fits the medium detent (artboard 3b).
     @ViewBuilder private var strengthSection: some View {
         WorkoutExerciseBuilder(
             selectedExercise: $draft.exercise,
@@ -1036,9 +1045,18 @@ struct WorkoutSheet: View {
             details: $draft.details,
             resetToken: $draft.resetToken,
             mode: logMode,
+            showAddButton: !logsBySet,
             historyStore: store,
+            showsStrengthFields: !logsBySet,
+            allowsTypedExercise: logsBySet,
             onAdd: addDraftExercise
         )
+
+        bySetToggle
+
+        if logsBySet {
+            bySetEntry
+        }
 
         if !exerciseRows.isEmpty {
             SheetField("Workout exercises") {
@@ -1051,6 +1069,68 @@ struct WorkoutSheet: View {
                 }
             }
         }
+    }
+
+    /// The "Log set by set" switch above the builder.
+    private var bySetToggle: some View {
+        Toggle(isOn: $logsBySet) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Log set by set")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.bark)
+                Text("Each set gets its own reps and weight.")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
+        }
+        .tint(Color.moss)
+        // Voice Control: the spoken label runs on into the explainer line.
+        .accessibilityInputLabels([Text("Log set by set"), Text("Set by set")])
+        .accessibilityIdentifier("workout.log.bySet")
+    }
+
+    /// The picked lift's set rows and its Add button, while "Log set by set" is on. A treadmill pick
+    /// keeps the builder's own speed and incline fields; the button adds it the usual way.
+    @ViewBuilder private var bySetEntry: some View {
+        if let exercise = draft.exercise, exercise.inputKind == .strength, let binding = Binding($setsDraft) {
+            ExerciseSetsEditor(draft: binding, identifier: "workout.log.sets", showsName: false)
+        }
+        Button(action: addDraftExercise) {
+            Label("Add exercise", systemImage: "plus.circle.fill")
+                .font(.fernlet(.label))
+                .foregroundStyle(draft.exercise == nil ? Color.bark : Color.moss)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .disabled(draft.exercise == nil)
+        .accessibilityIdentifier("workout.log.sets.add")
+    }
+
+    /// A fresh set-by-set draft for the newly picked lift (nil when the pick was cleared), in the
+    /// unit the person's region weighs in.
+    private func resetSetsDraft(for exercise: ExerciseTarget?) {
+        guard let exercise else {
+            setsDraft = nil
+            return
+        }
+        setsDraft = ExerciseSetsDraft.blank(
+            name: exercise.name, unit: WorkoutLoadContextBuilder.defaultUnit(for: .current),
+            equipment: exercise.equipment)
+    }
+
+    /// The picked lift's set rows as a logged row, or nil when set-by-set entry does not apply (it is
+    /// off, nothing is picked, or the pick is a treadmill entry).
+    private func structuredEntry() -> WorkoutExerciseEntry? {
+        guard logsBySet, logMode == .strengthTraining, let exercise = draft.exercise,
+              exercise.inputKind == .strength, var sets = setsDraft else { return nil }
+        sets.name = exercise.name
+        guard let result = sets.handLoggedResult() else { return nil }
+        return WorkoutExerciseEntry(exercise: exercise, sets: "", reps: "", weight: "", speed: "", incline: "",
+                                    details: "", result: result)
     }
 
     /// RPE + duration, side by side — strength mode only.
@@ -1182,6 +1262,7 @@ struct WorkoutSheet: View {
             draft.clear()
             lastLogged = store.mostRecentLoggedWorkout(mode: logMode)
         }
+        .onChange(of: draft.exercise) { _, exercise in resetSetsDraft(for: exercise) }
     }
 
     /// Builds the workout from the sheet's fields and logs it against the target day.
@@ -1194,6 +1275,8 @@ struct WorkoutSheet: View {
         if logMode == .strengthTraining, draft.hasExercise {
             addDraftExercise()
         }
+        // Lifts entered set by set carry their structured record too; a free-text-only log has none.
+        let structured = logMode == .strengthTraining ? exerciseRows.compactMap(\.result) : []
         var workout = Workout(
             name: workoutName,
             type: inferredCategory,
@@ -1207,7 +1290,8 @@ struct WorkoutSheet: View {
             activeEnergyKcal: logMode == .activity ? LocaleTolerantNumber.double(from: energyKcal) : nil,
             effort: logMode == .activity ? LocaleTolerantNumber.int(from: effort) : nil,
             muscleGroups: logMode == .strengthTraining ? aggregatedMuscleGroups : [],
-            intensity: intensity
+            intensity: intensity,
+            exerciseResults: structured.isEmpty ? nil : Array(structured.prefix(Workout.maxExerciseResults))
         )
         workout.completedAt = completedAtDate
         workout.loggedAt = completedAtDate
@@ -1270,6 +1354,13 @@ struct WorkoutSheet: View {
     /// a silent behaviour change rather than a simplification. The plan sheet has no such guard, which is
     /// exactly why the shared draft takes it as a parameter instead of assuming one side's answer.
     private func addDraftExercise() {
+        // Set by set: the picked lift's rows become a structured row (its record plus its line).
+        if let entry = structuredEntry() {
+            exerciseRows.append(entry)
+            draft.clear()
+            setsDraft = nil
+            return
+        }
         // R7: `commit` returns false and leaves the rows untouched when no exercise is chosen —
         // consume it (mirroring ``WorkoutPlanSheet``, which already guards the same call).
         guard draft.commit(into: &exerciseRows, includingSetsAndReps: logMode == .strengthTraining) else { return }
@@ -2499,9 +2590,12 @@ struct WorkoutRow: View {
 
 /// A small editor for an already-logged workout — the reversible half of the recoverability feature.
 ///
-/// It edits only the fields that make sense to correct after the fact (name, intensity, duration,
-/// notes) and reuses the manual Log sheet's field idiom (`SheetField`, `SheetTextEditor`, chips,
-/// `SheetSaveBar`). Everything else — provenance (planned/guided/Health), exercises, targets,
+/// It edits the fields that make sense to correct after the fact (name, intensity, duration, notes)
+/// and each lift's sets — reps, weight, how it felt and why it left the range (idea 6) — and reuses
+/// the manual Log sheet's field idiom (`SheetField`, `SheetTextEditor`, chips, `SheetSaveBar`). A
+/// corrected set rewrites the lift's structured record and its readable line together
+/// (``WorkoutSetEditing``), and the load engine reads it from there, so a mis-tapped set no longer
+/// skews the next prescription. Everything else — provenance (planned/guided/Health), targets,
 /// timestamps — is carried straight through by editing a copy of the original and letting the store
 /// re-assert provenance on save. A guided-logged row's name is pinned (it's the guided card's
 /// reconciliation key), and a store refusal (a genuine Health import) keeps the sheet open with an
@@ -2518,6 +2612,10 @@ struct EditWorkoutSheet: View {
     @State private var duration: String
     @State private var rpe: String
     @State private var notes: String
+    /// Each editable lift's sets (``WorkoutSetEditing/drafts(for:defaultUnit:)``), and what they were
+    /// when the sheet opened — the save writes back only the lifts that changed.
+    @State private var setDrafts: [ExerciseSetsDraft]
+    private let originalSetDrafts: [ExerciseSetsDraft]
     @State private var showHealthRefusalAlert = false
     @State private var showDiscardConfirm = false
 
@@ -2533,6 +2631,10 @@ struct EditWorkoutSheet: View {
         _duration = State(initialValue: workout.duration.map(String.init) ?? "")
         _rpe = State(initialValue: Self.rpeText(workout.rpe))
         _notes = State(initialValue: workout.notes)
+        let drafts = WorkoutSetEditing.drafts(
+            for: workout, defaultUnit: WorkoutLoadContextBuilder.defaultUnit(for: .current))
+        _setDrafts = State(initialValue: drafts)
+        originalSetDrafts = drafts
     }
 
     /// The RPE as the field shows it — "7", not "7.0" — and empty when the row carries none.
@@ -2550,6 +2652,7 @@ struct EditWorkoutSheet: View {
             || duration != (workout.duration.map(String.init) ?? "")
             || rpe != Self.rpeText(workout.rpe)
             || notes != workout.notes
+            || setDrafts != originalSetDrafts
     }
 
     private func attemptCancel() {
@@ -2590,13 +2693,34 @@ struct EditWorkoutSheet: View {
         }
     }
 
+    /// Each editable lift's sets — a guided lift, one logged set by set, or a hand-written line that
+    /// reads as sets × reps. Absent for a row with none (an activity, or a guided log from before
+    /// load tracking, whose lines are the plan rather than a record).
+    private var setsSection: some View {
+        SheetField("Sets") {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Fix any set that went differently. Fernlet plans your next weights from these.")
+                    .font(.fernlet(.bubble))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+                ForEach($setDrafts) { $draft in
+                    let index = setDrafts.firstIndex { $0.id == draft.id } ?? 0
+                    ExerciseSetsEditor(draft: $draft, identifier: "workout.edit.sets.\(index)")
+                        .padding(14)
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                }
+            }
+        }
+    }
+
     /// Writes the edited fields back through the store.
     ///
     /// Consumes the store's refusal Bool: on a refusal (a genuine Health import) keep the sheet open
     /// and explain, rather than dismissing as if the edit saved.
     private func saveEdits() {
         guard !trimmedName.isEmpty else { return }
-        var updated = workout
+        // Corrected sets first: each changed lift's record and its line, rewritten together.
+        var updated = WorkoutSetEditing.applying(setDrafts, original: originalSetDrafts, to: workout)
         updated.name = workout.savedName(editing: trimmedName)
         updated.intensity = intensity
         updated.duration = WorkoutSheetRules.durationMinutes(from: duration)
@@ -2637,6 +2761,10 @@ struct EditWorkoutSheet: View {
                                 .sheetTextInput(font: .fernlet(.label))
                                 .accessibilityIdentifier("workout.edit.duration")
                         }
+                    }
+
+                    if !setDrafts.isEmpty {
+                        setsSection
                     }
 
                     SheetField("Workout notes") {
@@ -2929,8 +3057,24 @@ struct WorkoutExerciseEntry: Identifiable, Equatable {
     var speed: String
     var incline: String
     var details: String
+    /// The structured record of a lift entered set by set in the Log sheet (idea 6); nil for every
+    /// free-text row. When set, the row's line is the record's own ``ExerciseResult/loggedLine``, so
+    /// the readable log and the record cannot disagree.
+    var result: ExerciseResult? = nil
+
+    /// The row's line without its name, for the added-row card ("3 x 8 @ 100 lb (did 8, 8, 6)").
+    var detailSummary: String {
+        guard let result else {
+            return summary.replacingOccurrences(of: exercise.name, with: "").trimmingCharacters(in: .whitespaces)
+        }
+        let line = result.loggedLine
+        let prefix = "\(result.name) - "
+        guard line.hasPrefix(prefix) else { return line }
+        return String(line.dropFirst(prefix.count))
+    }
 
     var summary: String {
+        if let result { return result.loggedLine }
         var parts: [String] = [exercise.name]
         let cleanSets = sets.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanReps = reps.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -3105,6 +3249,11 @@ struct WorkoutExerciseBuilder: View {
     /// Backs the "last time" recall line with the store's logged day history; `nil` (the default)
     /// hides the line entirely, so call sites without a store are untouched.
     var historyStore: FernletStore? = nil
+    /// Draws the Sets / Reps / Weight / Details fields for a strength pick. The Log sheet turns it off
+    /// while "Log set by set" is on, where per-set rows take their place.
+    var showsStrengthFields = true
+    /// Forwarded to ``ExerciseSearchPicker`` — lets a typed name stand as the exercise.
+    var allowsTypedExercise = false
     var onAdd: () -> Void
 
     /// The resolved recall values for the current pick — held as state so the rollup runs once per
@@ -3196,7 +3345,8 @@ struct WorkoutExerciseBuilder: View {
                 resetToken: $resetToken,
                 title: pickerTitle,
                 placeholder: searchPlaceholder,
-                autofocus: autofocusSearch
+                autofocus: autofocusSearch,
+                allowsTypedExercise: allowsTypedExercise
             )
 
             if let lastTimeValues {
@@ -3209,7 +3359,7 @@ struct WorkoutExerciseBuilder: View {
 
             switch inputKind {
             case .strength:
-                strengthFields
+                if showsStrengthFields { strengthFields }
             case .treadmill:
                 treadmillFields
             case .none:
@@ -3241,13 +3391,57 @@ struct ExerciseSearchPicker: View {
     /// Puts the keyboard in the search field as the sheet opens. Only the speed-first Quick exercise
     /// sheet asks for it — a sheet with fields above the picker shouldn't yank focus past them.
     var autofocus = false
+    /// Offers the typed text itself as the exercise when no catalog name matches it — the Log sheet's
+    /// set-by-set entry, where a lift outside the catalog can still be recorded. Off everywhere else.
+    var allowsTypedExercise = false
     @FocusState private var searchFocused: Bool
     /// One in-flight result-count announcement at a time (T2-14) — the debounce itself. Held as
     /// state so a newer keystroke can cancel the pending one; see ``announceResultCount(_:)``.
     @State private var resultAnnouncementTask: Task<Void, Never>?
 
+    /// Longest typed name taken as an exercise.
+    static let maxTypedNameLength = 80
+
     private var results: [ExerciseTarget] {
         Array(WorkoutExerciseCatalog.search(query).prefix(8))
+    }
+
+    /// The typed text as an exercise of its own, when typed names are allowed and the text names no
+    /// catalog exercise. It carries no muscles or gear: it is logged and recalled by name only.
+    private var typedExercise: ExerciseTarget? {
+        guard allowsTypedExercise, selectedExercise == nil else { return nil }
+        let name = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name.count <= Self.maxTypedNameLength,
+              WorkoutExerciseCatalog.exercise(named: name) == nil else { return nil }
+        return ExerciseTarget(name: name, primaryMuscles: [])
+    }
+
+    /// "Use “Farmer's walk”" — picks the typed name as the exercise.
+    private func typedExerciseRow(_ exercise: ExerciseTarget) -> some View {
+        Button {
+            selectedExercise = exercise
+            query = exercise.name
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "pencil")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.moss)
+                    .accessibilityHidden(true)
+                Text("Use “\(exercise.name)”")
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.bark)
+                    .fernletWrappingText()
+                Spacer(minLength: 0)
+            }
+            .padding(10)
+            .frame(minHeight: 44)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        // Voice Control: the drawn label quotes whatever was typed; "Use typed name" always works.
+        .accessibilityInputLabels([Text("Use typed name")])
+        .accessibilityIdentifier("exercise.useTyped")
     }
 
     /// The count worth SPEAKING, or `nil` when there is nothing to say.
@@ -3350,6 +3544,10 @@ struct ExerciseSearchPicker: View {
                     .accessibilityElement(children: .contain)
                     .accessibilityLabel(Text("Exercise results"))
                     .accessibilityValue(Text(verbatim: Self.resultCountText(results.count)))
+
+                    if let typedExercise {
+                        typedExerciseRow(typedExercise)
+                    }
                 }
             }
         }
@@ -3424,7 +3622,7 @@ struct LoggedExerciseRow: View {
                 Text(verbatim: entry.exercise.displayName)
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
-                Text(entry.summary.replacingOccurrences(of: entry.exercise.name, with: "").trimmingCharacters(in: .whitespaces))
+                Text(entry.detailSummary)
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                 Text(entry.exercise.muscles.joined(separator: ", "))
