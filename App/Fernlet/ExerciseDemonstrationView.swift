@@ -5,7 +5,9 @@
 //  Draws the how-to sheet's demonstration (comparison report idea 8): a bundled GIF played a frame at
 //  a time with ImageIO, a still illustration or frozen first frame, or the placeholder tile. Frames
 //  are decoded downsampled to the drawn size, one at a time, so a long GIF never sits in memory whole.
-//  Playback stops when the tile scrolls out of view, the app leaves the foreground or the sheet closes.
+//  Playback stops when the tile scrolls out of view, the app leaves the foreground or the sheet closes,
+//  and a tap pauses a loop on the frame it shows (WCAG 2.2.2; tracker row C1), with a small pause or
+//  play mark in the corner so the tap is discoverable.
 //
 
 import SwiftUI
@@ -42,9 +44,17 @@ enum ExerciseDemonstrationLayout {
 ///
 /// VoiceOver reads it as one image, "Demonstration of <display name>"; the numbered cues below it
 /// are the description an animation cannot give. It ignores Smart Invert, like a photo. The loop
-/// runs only while the tile is on screen and the app is in the foreground: `.task` is cancelled when
-/// the sheet closes, and the playback key changes (ending the loop) when the tile scrolls out of
-/// view or the scene leaves `.active`.
+/// runs only while the tile is on screen, the app is in the foreground and the person has not paused
+/// it: `.task` is cancelled when the sheet closes, and the playback key changes (ending the loop)
+/// when the tile scrolls out of view, the scene leaves `.active` or a tap pauses it.
+///
+/// **Pausing (WCAG 2.2.2, tracker row C1).** A tap on a looping tile pauses it on the frame it
+/// shows and a second tap carries on from that frame; a small pause or play mark in the corner
+/// (``ExerciseDemonstrationPauseBadge``) says the tap is there. VoiceOver keeps the one image
+/// element and gains a value ("Playing" or "Paused") and an action ("Pause" or "Play"), which a
+/// double-tap also performs; Voice Control answers to "Pause" or "Play" and "Demonstration" (rule
+/// A9). A still, the Reduce Motion picture or the placeholder has nothing to pause and shows none
+/// of it.
 struct ExerciseDemonstrationMedia: View {
     let fileName: String
     let animates: Bool
@@ -57,7 +67,12 @@ struct ExerciseDemonstrationMedia: View {
     @Environment(\.scenePhase) private var scenePhase
     /// The frame on screen; nil until the first decode.
     @State private var currentFrame: CGImage?
+    /// Which frame ``currentFrame`` is, so a pause, a scroll away or a trip to the background holds
+    /// it and the next playback carries on from it.
+    @State private var frameIndex = 0
     @State private var isOnScreen = true
+    /// The person paused the loop: a tap on the tile, or the Pause action.
+    @State private var isPaused = false
 
     /// "Demonstration of Bulgarian split squat": three spoken words around the drawn name.
     private var spokenName: Text {
@@ -68,7 +83,8 @@ struct ExerciseDemonstrationMedia: View {
     private var playback: ExerciseDemonstrationPlayback {
         ExerciseDemonstrationPlayback(
             fileName: fileName,
-            loops: animates && isOnScreen && scenePhase == .active,
+            loops: ExerciseDemonstrationPlayback.loops(
+                animates: animates, isOnScreen: isOnScreen, isActive: scenePhase == .active, isPaused: isPaused),
             maxPixelSize: Int((ExerciseDemonstrationLayout.maxSide * displayScale).rounded(.up))
         )
     }
@@ -83,49 +99,166 @@ struct ExerciseDemonstrationMedia: View {
             }
         }
         .aspectRatio(1, contentMode: .fit)
+        .overlay(alignment: .bottomTrailing) {
+            if animates {
+                ExerciseDemonstrationPauseBadge(isPaused: isPaused)
+            }
+        }
         .frame(maxWidth: side)
         .clipShape(RoundedRectangle(cornerRadius: ExerciseDemonstrationLayout.cornerRadius))
+        .contentShape(RoundedRectangle(cornerRadius: ExerciseDemonstrationLayout.cornerRadius))
+        .onTapGesture { togglePause() }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spokenName)
         .accessibilityAddTraits(.isImage)
+        .modifier(ExerciseDemonstrationPauseAccess(pausable: animates, isPaused: isPaused, toggle: togglePause))
         .accessibilityIgnoresInvertColors()
         .frame(maxWidth: .infinity)
         .onScrollVisibilityChange(threshold: 0.1) { isOnScreen = $0 }
         .task(id: playback) { await play(playback) }
     }
 
-    /// Draws the first frame, then, for a looping playback, each next frame after the current one's
-    /// delay until the task is cancelled or ``ExerciseDemonstrationFrames/maxTicks`` frames have
-    /// shown.
+    /// Pauses a looping demonstration, or plays it again. A still has nothing to pause.
+    private func togglePause() {
+        guard animates else { return }
+        isPaused.toggle()
+    }
+
+    /// Draws the frame the last playback stopped on (the first, for a still), then, for a looping
+    /// playback, each next frame after the current one's delay until the task is cancelled or
+    /// ``ExerciseDemonstrationFrames/maxTicks`` frames have shown.
     private func play(_ playback: ExerciseDemonstrationPlayback) async {
         guard let url = ExerciseDemonstrationLibrary.url(for: playback.fileName),
               let frames = ExerciseDemonstrationFrames(url: url, maxPixelSize: playback.maxPixelSize) else {
             currentFrame = nil
             return
         }
-        currentFrame = frames.image(at: 0)
+        var index = ExerciseDemonstrationPlayback.startFrame(saved: frameIndex, count: frames.count, animates: animates)
+        show(frames, at: index)
         guard playback.loops, frames.count > 1 else { return }
         // Bounded by maxTicks (Power of 10 rule 2); cancellation ends it far sooner in practice.
-        for tick in 1...ExerciseDemonstrationFrames.maxTicks {
+        for _ in 1...ExerciseDemonstrationFrames.maxTicks {
             do {
-                try await Task.sleep(for: .seconds(frames.delay(at: (tick - 1) % frames.count)))
+                try await Task.sleep(for: .seconds(frames.delay(at: index)))
             } catch {
-                // Cancelled: the sheet closed, the tile left the screen, or the playback changed.
+                // Cancelled: the sheet closed, the tile left the screen, it was paused, or the
+                // playback changed. The frame on screen stays, and so does its index.
                 return
             }
-            currentFrame = frames.image(at: tick % frames.count)
+            index = (index + 1) % frames.count
+            show(frames, at: index)
         }
+    }
+
+    /// Puts frame `index` on screen and remembers which it is.
+    private func show(_ frames: ExerciseDemonstrationFrames, at index: Int) {
+        currentFrame = frames.image(at: index)
+        frameIndex = index
     }
 }
 
 /// What a demonstration tile is playing, as its `.task` identity: a change restarts playback.
 struct ExerciseDemonstrationPlayback: Equatable {
     let fileName: String
-    /// Animate in a loop; false draws the first frame only (a still, Reduce Motion, off screen or
-    /// in the background).
+    /// Animate in a loop; false holds one frame (a still, Reduce Motion, off screen, in the
+    /// background, or paused).
     let loops: Bool
     /// The longest side, in pixels, frames are decoded at.
     let maxPixelSize: Int
+
+    /// Whether a tile loops: an animation that is on screen, in an active scene, and not paused by
+    /// the person. Anything else holds the frame on screen.
+    static func loops(animates: Bool, isOnScreen: Bool, isActive: Bool, isPaused: Bool) -> Bool {
+        animates && isOnScreen && isActive && !isPaused
+    }
+
+    /// The frame a playback starts on: for an animation, the one the last playback stopped on
+    /// (`saved`), wrapped into this file's `count` frames, so a pause holds its frame and play carries
+    /// on from it; for a still (Reduce Motion's frozen first frame included), always the first.
+    static func startFrame(saved: Int, count: Int, animates: Bool) -> Int {
+        guard animates, count > 0, saved > 0 else { return 0 }
+        return saved % count
+    }
+}
+
+/// The words a pausable demonstration speaks and answers to, written once so each catalog key
+/// carries one comment.
+enum ExerciseDemonstrationPauseWords {
+    /// The action that stops the loop, and its Voice Control name while it plays.
+    static var pause: Text {
+        Text("Pause", comment: "Exercise how-to sheet: the action that pauses the looping demonstration; also its Voice Control name while it plays")
+    }
+    /// The action that starts the loop again, and its Voice Control name while it is paused.
+    static var play: Text {
+        Text("Play", comment: "Exercise how-to sheet: the action that plays a paused demonstration again; also its Voice Control name while paused")
+    }
+    /// The spoken value while the loop is paused.
+    static var paused: Text {
+        Text("Paused", comment: "Exercise how-to sheet: VoiceOver value of the demonstration while its loop is paused")
+    }
+    /// The spoken value while the loop plays.
+    static var playing: Text {
+        Text("Playing", comment: "Exercise how-to sheet: VoiceOver value of the demonstration while its loop plays")
+    }
+    /// The demonstration's short Voice Control name, whatever its state.
+    static var demonstration: Text {
+        Text("Demonstration", comment: "Exercise how-to sheet: short Voice Control name of the demonstration picture")
+    }
+}
+
+/// The pause controls a looping demonstration adds to its one image element, and nothing for a
+/// still: the value ("Playing" or "Paused"), the named action ("Pause" or "Play"), the same toggle
+/// on activation (a VoiceOver double-tap, Voice Control's "Tap Pause"), short input labels (rule A9)
+/// and the flag that makes Voice Control offer the element at all.
+private struct ExerciseDemonstrationPauseAccess: ViewModifier {
+    /// The tile animates, so there is a loop to pause.
+    let pausable: Bool
+    let isPaused: Bool
+    let toggle: () -> Void
+
+    func body(content: Content) -> some View {
+        if pausable {
+            content
+                .accessibilityValue(isPaused ? ExerciseDemonstrationPauseWords.paused : ExerciseDemonstrationPauseWords.playing)
+                .accessibilityAction(named: isPaused ? ExerciseDemonstrationPauseWords.play : ExerciseDemonstrationPauseWords.pause) { toggle() }
+                .accessibilityAction(.default) { toggle() }
+                .accessibilityInputLabels([
+                    isPaused ? ExerciseDemonstrationPauseWords.play : ExerciseDemonstrationPauseWords.pause,
+                    ExerciseDemonstrationPauseWords.demonstration,
+                ])
+                .accessibilityRespondsToUserInteraction(true)
+        } else {
+            content
+        }
+    }
+}
+
+/// The small mark in a looping demonstration's bottom-trailing corner: a pause glyph while it plays
+/// and a play glyph while it is paused, so a sighted person knows a tap pauses it.
+///
+/// Drawn in theme tokens so it holds its contrast in light, dark, Increase Contrast and a custom
+/// theme alike: a `bark` glyph on a `parchment` disc (the theme's own body-text pair), ringed in
+/// full-strength `slate`, which the theme keeps at 4.5:1 or more against `parchment`, so the disc
+/// stands apart from a white frame and a dark one. The glyph's shape, not its colour, carries the
+/// state. Decorative to assistive technologies: the tile's own value and action say the same.
+/// The tile is the tap target; the mark only shows it. Its glyph grows with Dynamic Type up to
+/// extra large, inside a disc that stays small so it never covers the demonstration.
+struct ExerciseDemonstrationPauseBadge: View {
+    let isPaused: Bool
+    /// The disc's diameter, in points.
+    static let diameter: CGFloat = 34
+
+    var body: some View {
+        Image(systemName: isPaused ? "play.fill" : "pause.fill")
+            .font(.callout.weight(.bold))
+            .foregroundStyle(Color.bark)
+            .frame(width: Self.diameter, height: Self.diameter)
+            .background(Color.parchment, in: Circle())
+            .overlay(Circle().strokeBorder(Color.slate, lineWidth: 1.5))
+            .dynamicTypeSize(...DynamicTypeSize.xLarge)
+            .padding(10)
+            .accessibilityHidden(true)
+    }
 }
 
 /// One bundled image file, decoded a frame at a time at a bounded pixel size with ImageIO.

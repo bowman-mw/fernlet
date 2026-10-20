@@ -284,12 +284,101 @@ struct ExerciseDemonstrationTests {
         #expect(view.contains("Text(\"Demonstration of \\(ExerciseHowToCatalog.displayName(for: exerciseName))\""))
         #expect(view.contains(".accessibilityLabel(spokenName)") && view.contains(".accessibilityAddTraits(.isImage)"))
         #expect(view.contains(".accessibilityIgnoresInvertColors()"))
-        #expect(view.contains("loops: animates && isOnScreen && scenePhase == .active"))
+        #expect(view.contains("animates: animates, isOnScreen: isOnScreen, isActive: scenePhase == .active, isPaused: isPaused)"))
+        #expect(view.contains("animates && isOnScreen && isActive && !isPaused"))
         #expect(view.contains(".onScrollVisibilityChange(") && view.contains(".task(id: playback)"))
         let sheet = try RepoRoot.source("App/Fernlet/ExerciseHowToSheet.swift")
         #expect(sheet.contains("@Environment(\\.accessibilityReduceMotion) private var reduceMotion"))
         #expect(sheet.contains("for: exerciseName, sex: sex, reduceMotion: reduceMotion)"))
         #expect(!sheet.contains("EmptyView()"), "the demonstration slot is filled")
+    }
+
+    // MARK: - Pausing a loop (WCAG 2.2.2, tracker row C1)
+
+    /// A tile loops only when it animates, is on screen, the scene is active and the person has not
+    /// paused it; any one of those false holds the frame. A pause changes the playback key, so the
+    /// running loop is cancelled.
+    @Test func theLoopRunsOnlyWhenAnimatedOnScreenActiveAndNotPaused() {
+        var looping: [[Bool]] = []
+        for animates in [false, true] {
+            for isOnScreen in [false, true] {
+                for isActive in [false, true] {
+                    for isPaused in [false, true] {
+                        let loops = ExerciseDemonstrationPlayback.loops(
+                            animates: animates, isOnScreen: isOnScreen, isActive: isActive, isPaused: isPaused)
+                        if loops { looping.append([animates, isOnScreen, isActive, isPaused]) }
+                    }
+                }
+            }
+        }
+        let onlyUnpausedVisibleActive: [[Bool]] = [[true, true, true, false]]
+        #expect(looping == onlyUnpausedVisibleActive, "only an unpaused animation, on screen and active, loops")
+        let playing = ExerciseDemonstrationPlayback(
+            fileName: "1113.gif",
+            loops: ExerciseDemonstrationPlayback.loops(animates: true, isOnScreen: true, isActive: true, isPaused: false),
+            maxPixelSize: 960)
+        let paused = ExerciseDemonstrationPlayback(
+            fileName: "1113.gif",
+            loops: ExerciseDemonstrationPlayback.loops(animates: true, isOnScreen: true, isActive: true, isPaused: true),
+            maxPixelSize: 960)
+        #expect(playing != paused, "a pause must change the task identity, or the loop would keep running")
+        #expect(!paused.loops)
+    }
+
+    /// A pause holds the frame on screen and play carries on from it; a frame index from a longer
+    /// file wraps; a still always shows its first frame.
+    @Test func aPauseHoldsItsFrameAndPlayCarriesOnFromIt() {
+        #expect(ExerciseDemonstrationPlayback.startFrame(saved: 0, count: 24, animates: true) == 0)
+        #expect(ExerciseDemonstrationPlayback.startFrame(saved: 17, count: 24, animates: true) == 17)
+        #expect(ExerciseDemonstrationPlayback.startFrame(saved: 30, count: 24, animates: true) == 6)
+        #expect(ExerciseDemonstrationPlayback.startFrame(saved: 17, count: 1, animates: true) == 0)
+        // Reduce Motion's frozen first frame, or an illustration: nothing moves, nothing to resume.
+        #expect(ExerciseDemonstrationPlayback.startFrame(saved: 17, count: 24, animates: false) == 0)
+        #expect(ExerciseDemonstrationPlayback.startFrame(saved: -3, count: 24, animates: true) == 0)
+        #expect(ExerciseDemonstrationPlayback.startFrame(saved: 5, count: 0, animates: true) == 0)
+    }
+
+    /// A tap on the tile toggles the pause; the corner mark shows only on an animation, drawn in the
+    /// theme's body-text pair with a slate ring and hidden from assistive technologies; VoiceOver
+    /// keeps the one image element and gains a value and a named action; Voice Control gets short
+    /// names. The placeholder has none of it.
+    @Test func aLoopPausesByTapVoiceOverAndVoiceControl() throws {
+        let view = try RepoRoot.source("App/Fernlet/ExerciseDemonstrationView.swift")
+        let mediaStart = try #require(view.range(of: "struct ExerciseDemonstrationMedia"))
+        let mediaEnd = try #require(view.range(of: "struct ExerciseDemonstrationPlayback"))
+        let media = view[mediaStart.lowerBound..<mediaEnd.lowerBound]
+        for needle in [".onTapGesture { togglePause() }", "guard animates else { return }", "isPaused.toggle()",
+                       "if animates {\n                ExerciseDemonstrationPauseBadge(isPaused: isPaused)",
+                       ".modifier(ExerciseDemonstrationPauseAccess(pausable: animates, isPaused: isPaused, toggle: togglePause))",
+                       ".accessibilityElement(children: .ignore)"] {
+            #expect(media.contains(needle), "the demonstration lost `\(needle)`")
+        }
+        let accessStart = try #require(view.range(of: "private struct ExerciseDemonstrationPauseAccess"))
+        let access = view[accessStart.lowerBound...]
+        for needle in [".accessibilityValue(isPaused ? ExerciseDemonstrationPauseWords.paused : ExerciseDemonstrationPauseWords.playing)",
+                       ".accessibilityAction(named: isPaused ? ExerciseDemonstrationPauseWords.play : ExerciseDemonstrationPauseWords.pause)",
+                       ".accessibilityAction(.default) { toggle() }", ".accessibilityInputLabels([",
+                       "ExerciseDemonstrationPauseWords.demonstration", ".accessibilityRespondsToUserInteraction(true)"] {
+            #expect(access.contains(needle), "the pause accessibility lost `\(needle)`")
+        }
+        for word in ["Text(\"Pause\"", "Text(\"Play\"", "Text(\"Paused\"", "Text(\"Playing\"", "Text(\"Demonstration\""] {
+            #expect(view.contains(word), "the pause words lost \(word)")
+        }
+        let badgeStart = try #require(view.range(of: "struct ExerciseDemonstrationPauseBadge"))
+        let badgeEnd = try #require(view.range(of: "struct ExerciseDemonstrationFrames"))
+        let badge = view[badgeStart.lowerBound..<badgeEnd.lowerBound]
+        for needle in ["isPaused ? \"play.fill\" : \"pause.fill\"", ".foregroundStyle(Color.bark)",
+                       ".background(Color.parchment, in: Circle())", ".strokeBorder(Color.slate, lineWidth: 1.5)",
+                       ".accessibilityHidden(true)"] {
+            #expect(badge.contains(needle), "the pause mark lost `\(needle)`")
+        }
+        #expect(!badge.contains("opacity("), "the pause mark is drawn at full strength, never thinned")
+        let placeholderStart = try #require(view.range(of: "struct ExerciseDemonstrationPlaceholder"))
+        let placeholderEnd = try #require(view.range(of: "static func glyph(for target:"))
+        let placeholder = view[placeholderStart.lowerBound..<placeholderEnd.lowerBound]
+        for needle in ["togglePause", "ExerciseDemonstrationPauseBadge(", "ExerciseDemonstrationPauseAccess(", "onTapGesture"] {
+            #expect(!placeholder.contains(needle), "the placeholder has nothing to pause but draws `\(needle)`")
+        }
     }
 
     // MARK: - The drop folder and the licence
