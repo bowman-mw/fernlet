@@ -34,15 +34,18 @@ def report(label, count):
     sys.stdout.flush()
 
 
+B8I10 = {"beginner": {"stall_weeks": 8.0}, "intermediate": {"stall_weeks": 10.0}}
+B6I10 = {"beginner": {"stall_weeks": 6.0}, "intermediate": {"stall_weeks": 10.0}}
+B6I12 = {"beginner": {"stall_weeks": 6.0}, "intermediate": {"stall_weeks": 12.0}}
 CANDIDATES = [
     ("baseline", {}, {}),
-    ("persist2", {"stall_persist": 2}, {}),
-    ("persist3", {"stall_persist": 3}, {}),
-    ("persist2 zexp0.84", {"stall_persist": 2, "z_expected": 0.8416}, {}),
-    ("persist3 zexp0.84", {"stall_persist": 3, "z_expected": 0.8416}, {}),
-    ("persist3 beg8 int10", {"stall_persist": 3}, {"beginner": {"stall_weeks": 8.0}, "intermediate": {"stall_weeks": 10.0}}),
-    ("persist3 zexp0.84 beg8 int10", {"stall_persist": 3, "z_expected": 0.8416},
-     {"beginner": {"stall_weeks": 8.0}, "intermediate": {"stall_weeks": 10.0}}),
+    ("p3 ze0.84 b8i10", {"stall_persist": 3, "z_expected": 0.8416}, B8I10),
+    ("p3 ze1.28 b8i10", {"stall_persist": 3, "z_expected": 1.2816}, B8I10),
+    ("p3 ze1.64 b8i10", {"stall_persist": 3, "z_expected": 1.645}, B8I10),
+    ("p3 ze1.28 b6i10", {"stall_persist": 3, "z_expected": 1.2816}, B6I10),
+    ("p3 ze1.28 b6i12", {"stall_persist": 3, "z_expected": 1.2816}, B6I12),
+    ("p2 ze1.64 b6i10", {"stall_persist": 2, "z_expected": 1.645}, B6I10),
+    ("p3 ze1.28 b6i10 own6", {"stall_persist": 3, "z_expected": 1.2816, "own_weeks": 6.0}, B6I10),
 ]
 
 

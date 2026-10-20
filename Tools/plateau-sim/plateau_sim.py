@@ -189,6 +189,8 @@ PARAMS = dict(
     z_upper=0.8416,          # one-sided 80 % bound
     z_expected=0.0,          # how clearly the slope must sit under the expected curve, in SEs
     stall_persist=1,         # consecutive evaluations the stall test must hold
+    own_weeks=4.0,           # inferred training age: the earlier stretch the own-progress slope reads
+    own_min_sessions=6,
     stall_gain=0.01,         # 1 % per 4 weeks
     huber_k=1.5,             # robust reweighting, in noise units
     huber_passes=3,
@@ -238,10 +240,11 @@ def robust_fit(xs, ys, ws, sigma):
 
 
 class Profile:
-    def __init__(self, b, start_weeks, tier):
+    def __init__(self, b, start_weeks, tier, inferred=False):
         self.b = b
         self.start_weeks = start_weeks
         self.tier = tier
+        self.inferred = inferred
 
 
 def explicit_profile(history):
@@ -250,7 +253,7 @@ def explicit_profile(history):
 
 def inferred_profile(sessions):
     weeks = 1.0 + (sessions[-1].day - sessions[0].day) / 7.0
-    return Profile(0.10, 1.0, tier_for(weeks))
+    return Profile(0.10, 1.0, tier_for(weeks), inferred=True)
 
 
 def expected_slope(profile, first_day, last_day, origin_day):
@@ -357,8 +360,27 @@ def stall_candidate(sessions, profile):
         return False
     (slope, _, sxx), _, _, _ = stall
     se = sigma / math.sqrt(sxx)
-    g = expected_slope(profile, window[0].day, now, sessions[0].day)
+    if profile.inferred:
+        g = own_expected_slope(sessions, window[0].day, p, sigma)
+        if g is None:
+            return False
+    else:
+        g = expected_slope(profile, window[0].day, now, sessions[0].day)
     return (slope + PARAMS["z_upper"] * se) * 4.0 < PARAMS["stall_gain"] and slope + PARAMS["z_expected"] * se < g
+
+
+def own_expected_slope(sessions, window_start, p, sigma):
+    """With the training age only inferred, the expected slope is the lift's own earlier progress:
+    the lower 80 % bound of the slope just before the stall window (never below zero)."""
+    weeks = PARAMS["own_weeks"]
+    prior = [s for s in sessions if window_start - weeks * 7.0 <= s.day < window_start]
+    if sum(1 for s in prior if not s.flagged) < PARAMS["own_min_sessions"]:
+        return None
+    fit = fit_window(prior, sigma, PARAMS["flagged_weight"])
+    if fit is None:
+        return None
+    (slope, _, sxx), _, _, _ = fit
+    return max(0.0, slope - PARAMS["z_upper"] * sigma / math.sqrt(sxx))
 
 
 def is_dipping(window, sigma):
@@ -369,10 +391,11 @@ def is_dipping(window, sigma):
     if fit is None:
         return False
     (slope, icpt, _), _, _, _ = fit
-    origin = base[0].day
+    # The line's level at the last earlier session, never extrapolated: a rising curve can only
+    # lift the newest sessions, so a beginner's bending curve never reads as a dip.
+    level = icpt + slope * (base[-1].day - base[0].day) / 7.0
     for s in window[-2:]:
-        line = icpt + slope * (s.day - origin) / 7.0
-        if math.log(s.score) - line >= -PARAMS["dip_errors"] * sigma:
+        if math.log(s.score) - level >= -PARAMS["dip_errors"] * sigma:
             return False
     return True
 
