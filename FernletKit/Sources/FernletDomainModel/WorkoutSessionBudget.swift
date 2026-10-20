@@ -4,6 +4,9 @@
 // Fits a session into its time budget (2026-10-20, idea 5). A rival's "30 minute" workouts ran 45 to
 // 60-plus minutes; a Fernlet session set to 30 minutes is planned to take 30 by the same estimate the
 // plan card shows and the guided runner counts down from — or its note says plainly how long it runs.
+// The estimate counts about a minute of changeover before each exercise after the first (the owner's
+// answer, 2026-10-20), so a fitted session leaves time to move between stations, and dropping a lift
+// gives back its changeover too.
 //
 // A lifting session trims in a fixed order, each step only while the session is still over:
 // 1. the short warm-up — about four minutes of the owner's flow, chosen for the day's muscles;
@@ -26,7 +29,8 @@ import Foundation
 /// ``holdLeadInSeconds`` get-into-position lead-in, with the step's rest between its own sets (the
 /// step's override, else ``WorkoutRestGuidance``'s default for the goal — the same rest the runner
 /// bakes in). A descriptor line (no sets: a conditioning finisher, the fallback circuit) takes the
-/// minutes it names ("Conditioning intervals - 12 min"), else ``descriptorFallbackSeconds``. The plan
+/// minutes it names ("Conditioning intervals - 12 min"), else ``descriptorFallbackSeconds``. Each
+/// exercise after the session's first adds ``changeoverSeconds`` (``changeovers(in:)``). The plan
 /// card shows ``minutes(of:goal:)``, and a run started from the same steps begins its header countdown
 /// (`GuidedWorkoutRunState.estimatedSecondsRemaining`) at the same total. Pure and deterministic.
 public nonisolated enum WorkoutSessionTime {
@@ -37,6 +41,10 @@ public nonisolated enum WorkoutSessionTime {
     public static let workSecondsPerSet = 45
     /// A descriptor line that names no minutes.
     public static let descriptorFallbackSeconds = 300
+    /// The changeover before each exercise after the session's first: moving to the next station,
+    /// setting up a bench, loading a bar (the owner's "about a minute per exercise", 2026-10-20). The
+    /// run state spells the same number (a test pins the two equal).
+    public static let changeoverSeconds = 60
 
     /// The rest between one step's own sets: its override, else the research default for `goal`.
     public static func restSeconds(for step: PrescribedExercise, goal: GoalType) -> Int {
@@ -57,9 +65,38 @@ public nonisolated enum WorkoutSessionTime {
         return seconds(of: step, restSeconds: restSeconds(for: step, goal: goal))
     }
 
-    /// Seconds a whole session takes.
+    /// Seconds a whole session takes: its steps, plus a changeover before each exercise after the first.
     public static func seconds(of steps: [PrescribedExercise], goal: GoalType) -> Int {
-        steps.reduce(0) { $0 + seconds(of: $1, goal: goal) }
+        steps.reduce(0) { $0 + seconds(of: $1, goal: goal) } + changeovers(in: steps) * changeoverSeconds
+    }
+
+    /// The exercise a step belongs to, for counting changeovers — nil for a step that takes none.
+    ///
+    /// The warm-up and the cool-down flow from one hold to the next, their lead-in the only changeover,
+    /// so their steps belong to no exercise. A stretch session (``SessionBlock/mobility``, expanded from
+    /// a "Mobility flow" line when a run starts) is one exercise, as the line it came from was. A cardio
+    /// segment belongs to the plan line it was read from, so an interval line's parts are the one
+    /// exercise the plan showed. Every other step is its frozen name, so a lift's warm-up sets, a
+    /// calibration's ramp and a one-sided drill's second side are the same exercise as the step before.
+    public static func exerciseKey(_ step: PrescribedExercise) -> String? {
+        switch step.block {
+        case .warmUp, .coolDown: return nil
+        case .mobility: return SessionBlock.mobility.rawValue
+        case .activation, .lifting, .cardio: return step.segment?.descriptor ?? step.name
+        }
+    }
+
+    /// How many changeovers a session has: one before each exercise after its first. A step starts an
+    /// exercise when it belongs to one (``exerciseKey(_:)``) and the step before it belongs to another.
+    public static func changeovers(in steps: [PrescribedExercise]) -> Int {
+        var previousKey: String?
+        var exercises = 0
+        for step in steps {
+            let key = exerciseKey(step)
+            if let key, key != previousKey { exercises += 1 }
+            previousKey = key
+        }
+        return max(0, exercises - 1)
     }
 
     /// Whole minutes a session takes, rounded up and never under one: the plan card's "~45 min".
@@ -226,12 +263,14 @@ public nonisolated enum WorkoutSessionBudget {
             }
         }
 
-        /// Seconds `steps` take (``WorkoutSessionTime``), with each step's rest from the lookup.
+        /// Seconds `steps` take (``WorkoutSessionTime``), with each step's rest from the lookup and a
+        /// changeover before each exercise after the first — so dropping a lift gives back its changeover.
         func seconds(_ steps: [PrescribedExercise]) -> Int {
-            steps.reduce(0) { total, step in
+            let work = steps.reduce(0) { total, step in
                 let rest = step.restSecondsOverride ?? rests[step.id] ?? 0
                 return total + WorkoutSessionTime.seconds(of: step, restSeconds: rest)
             }
+            return work + WorkoutSessionTime.changeovers(in: steps) * WorkoutSessionTime.changeoverSeconds
         }
     }
 

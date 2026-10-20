@@ -125,6 +125,18 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         /// This step's lead-in before its hold starts, in seconds — never negative.
         var holdLeadIn: Int { max(0, leadInSeconds ?? GuidedWorkoutRunState.holdLeadInSeconds) }
 
+        /// The exercise this step belongs to, for the changeover estimate: the domain's
+        /// `WorkoutSessionTime.exerciseKey(_:)`, spelled here because this file cannot import the domain
+        /// (a test pins the two equal). Nil for a warm-up or cool-down stretch, which takes no changeover;
+        /// one key for a whole stretch session; a cardio segment's plan line; else the frozen name.
+        var changeoverKey: String? {
+            switch block {
+            case BlockToken.warmUp, BlockToken.coolDown: return nil
+            case BlockToken.mobility: return BlockToken.mobility
+            default: return segment?.descriptor ?? name
+            }
+        }
+
         /// A ramp-up set: a warm-up set before a heavy lift, or a calibration's ramp — light, one set,
         /// never a working set. The runner calls both "Warm-up set"; the log tags both "(ramp-up)".
         var isRampSet: Bool { tracking?.calibrationRaw == CalibrationToken.ramp }
@@ -240,6 +252,12 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     /// 20-second stretch is held for 20 seconds, not 15. `nonisolated` so the Move tab's nonisolated
     /// time estimate can read it under the app target's default main-actor isolation.
     nonisolated static let holdLeadInSeconds = 5
+
+    /// The changeover before each exercise after the run's first — moving to the next station, loading a
+    /// bar. The domain's `WorkoutSessionTime.changeoverSeconds`, spelled here because this file cannot
+    /// import the domain (a test pins the two equal), so a started run counts down from the plan card's
+    /// estimate.
+    nonisolated static let changeoverSeconds = 60
 
     /// One "−15 s" / "+15 s" tap on the Lock Screen, the Dynamic Island or the runner. The buttons'
     /// words spell the same 15 (pinned by a test).
@@ -477,7 +495,9 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     /// - a descriptor line (`sets == 0` — cardio/mobility walked as one step) costs the minutes it
     ///   names ("Conditioning intervals - 12 min"), else `descriptorSeconds` (default 5 min);
     /// - the working phase counts the current set as still ahead; the resting phase counts the
-    ///   upcoming set (the counter already advanced when the rest began).
+    ///   upcoming set (the counter already advanced when the rest began);
+    /// - each exercise still ahead after the run's first adds a ``changeoverSeconds`` changeover
+    ///   (``changeoverSecondsAhead()``); the current step's own changeover is already behind it.
     ///
     /// At the start of a run this is the plan card's estimate to the second (the domain's
     /// `WorkoutSessionTime`, which a session-length budget fits by; pinned by a test).
@@ -503,7 +523,27 @@ struct GuidedWorkoutRunState: Codable, Hashable {
             let restsBetween = max(0, setsAhead - 1)
             total += setsAhead * perSet + restsBetween * max(0, exercise.restSeconds) + inFlightRest
         }
-        return total
+        return total + changeoverSecondsAhead()
+    }
+
+    /// The changeovers still ahead, in seconds: one ``changeoverSeconds`` before each step after the
+    /// current one that starts an exercise (``Exercise/changeoverKey``, a key other than the step
+    /// before it's), unless it starts the run's first exercise. The domain's
+    /// `WorkoutSessionTime.changeovers(in:)` counted from the current step, so a run starts at the plan
+    /// card's total. Bounded: one pass over `exercises`.
+    func changeoverSecondsAhead() -> Int {
+        var previousKey: String?
+        var started = false
+        var ahead = 0
+        for (index, exercise) in exercises.enumerated() {
+            let key = exercise.changeoverKey
+            let startsExercise = key != nil && key != previousKey
+            previousKey = key
+            guard startsExercise else { continue }
+            if started && index > exerciseIndex { ahead += 1 }
+            started = true
+        }
+        return ahead * Self.changeoverSeconds
     }
 
     /// A descriptor step's seconds: the minutes its trailing clause names ("Steady cardio - 20 min"

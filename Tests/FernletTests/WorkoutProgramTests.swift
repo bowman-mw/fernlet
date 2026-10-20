@@ -408,13 +408,15 @@ struct WorkoutProgramTests {
 
     @Test func estimatedSecondsRemainingCountsSetsAndRestsAcrossPhases() {
         var run = makeRun([ex("Squat", sets: 2), ex("Bench", sets: 2)], restSeconds: 90)
-        // Working ex0 set 1: (2×45 + 1×90) + (2×45 + 1×90) = 360.
-        #expect(run.estimatedSecondsRemaining() == 360)
+        // Working ex0 set 1: (2×45 + 1×90) + (2×45 + 1×90) + Bench's 60 s changeover = 420.
+        #expect(run.estimatedSecondsRemaining() == 420)
         run.markSetDone(now: fixedNow)
-        // Resting before ex0 set 2: (1×45 + the in-flight 90) + 180 = 315.
-        #expect(run.estimatedSecondsRemaining() == 315)
+        // Resting before ex0 set 2: (1×45 + the in-flight 90) + 180 + 60 = 375.
+        #expect(run.estimatedSecondsRemaining() == 375)
         run.skipRest()
         run.markSetDone(now: fixedNow)  // last Squat set → working Bench
+        // On Bench, its changeover is behind it: 2×45 + 1×90 = 180.
+        #expect(run.estimatedSecondsRemaining() == 180)
         run.markSetDone(now: fixedNow)  // → resting before Bench set 2
         run.skipRest()
         run.markSetDone(now: fixedNow)  // done
@@ -426,8 +428,9 @@ struct WorkoutProgramTests {
             ex("Squat", sets: 1),
             ex("Cooldown walk", sets: 0, role: .accessory, reps: "", fromCatalog: false),
         ], restSeconds: 60)
-        // One set (45s, no rest — it's the exercise's only set) + one 300s descriptor step.
-        #expect(run.estimatedSecondsRemaining() == 345)
+        // One set (45s, no rest — it's the exercise's only set) + one 300s descriptor step + the 60 s
+        // changeover before it.
+        #expect(run.estimatedSecondsRemaining() == 405)
     }
 
     // MARK: - Rest guidance (WorkoutRestGuidance)

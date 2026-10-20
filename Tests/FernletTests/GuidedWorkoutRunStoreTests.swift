@@ -100,6 +100,28 @@ struct GuidedWorkoutRunStoreTests {
         #expect(run.estimatedSecondsRemaining() == WorkoutSessionTime.seconds(of: s.exercises, goal: goal))
     }
 
+    /// A planned lifting session — warm-up, activation, lifts, cool-down — starts its run at the plan
+    /// card's estimate with its changeovers in it: about a minute before each exercise after the first.
+    @Test func aStartedLiftingRunCountsTheChangeoversTheCardCounts() throws {
+        let store = makeStore()
+        store.clearGuidedRun()
+        let goal = store.settings.selectedGoal
+        let split = TrainingSplit(id: "probe", name: "Probe", summary: "", specificity: .balanced, goalFit: [goal],
+                                  days: [WorkoutSplitDay(title: "Day", sessions: [WorkoutSessions.upper])])
+        let planned = WorkoutProgram.dayPlan(
+            goal: goal, intensity: .moderate, profile: WorkoutProfile(experience: .intermediate),
+            location: .fullGym, context: "", split: split, rotationIndex: 0
+        )
+        let s = try #require(planned.sessions.first)
+        let changeovers = WorkoutSessionTime.changeovers(in: s.exercises)
+        #expect(changeovers >= 2, "the lifts change over")
+        commitPlan(store, s)
+        #expect(store.startGuidedRun(s) == true)
+        let run = try #require(store.guidedRunState)
+        #expect(run.changeoverSecondsAhead() == changeovers * WorkoutSessionTime.changeoverSeconds)
+        #expect(run.estimatedSecondsRemaining() == WorkoutSessionTime.seconds(of: s.exercises, goal: goal))
+    }
+
     // MARK: Mark set done → finish → log (deduped)
 
     @Test func finishingAGuidedRunLogsOnceAndClears() {

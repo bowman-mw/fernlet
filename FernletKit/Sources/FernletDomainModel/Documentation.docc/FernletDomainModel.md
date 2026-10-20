@@ -532,7 +532,9 @@ minutes of it, a subset in its order chosen for the day's worked areas,
 ``WorkoutSessionBlocks/shortWarmUpSeconds``) or not at all; ``WorkoutCoolDownMode`` keeps or drops the
 cool-down; and ``WorkoutSessionLength`` sets a 20, 30, 45 or 60-minute budget. ``WorkoutSessionTime``
 times a session by the guided runner's own rule — the plan card's estimate and the run's countdown start
-equal — and ``WorkoutSessionBudget`` fits each session into the budget in the owner's order: the short
+equal, and both count about a minute of changeover before each exercise after the first
+(``WorkoutSessionTime/changeoverSeconds``; the warm-up and cool-down flows take none) — and
+``WorkoutSessionBudget`` fits each session into the budget in the owner's order: the short
 warm-up, cool-down stretches down to two, accessory work (the jumps, the accessory lifts from the last,
 the balance drill), accessory sets, then main-lift sets down to two. Main lifts are never dropped and
 nothing grows, so the injury limits and the guard's lighter sets hold; when even the shortest version is
