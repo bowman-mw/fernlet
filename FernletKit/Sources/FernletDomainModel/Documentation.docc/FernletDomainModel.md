@@ -532,6 +532,24 @@ the balance drill), accessory sets, then main-lift sets down to two. Main lifts 
 nothing grows, so the injury limits and the guard's lighter sets hold; when even the shortest version is
 over, the note says how long it runs. A cardio session's descriptor minutes are capped instead.
 
+Exercise preferences (``WorkoutExercisePreferences``, synced at the top level of the settings blob as
+`workoutHiddenExercises` and `workoutExerciseAlternates`, frozen names decoded tolerantly and bounded)
+reach every block: an exercise the user hid ("Don't suggest this") leaves the feasible pool, so each
+slot falls back to its next eligible pick, a slot only hidden exercises could fill is dropped with its
+own note, and the AI adjuster never sees it. A saved alternate ("Always use this instead", one hop)
+replaces the planner's pick only when it is in the feasible pool (equipment, injury limits, not hidden),
+unused, eligible for the slot, and — under a time budget — no longer than the pick; otherwise the pick
+stands silently. ``WorkoutExerciseSwapOptions`` ranks the plan editor's stand-ins. A hand-made custom
+exercise (``CustomExerciseDraft``) carries every curation field a catalog row does, so the safety filter
+and eligibility judge it the same way; ``CustomExerciseLibrary`` checks the name (not empty, no clash
+with a bundled or another custom name) and the shared 500-exercise cap, and deleting one never touches
+a logged workout.
+
+- ``WorkoutExercisePreferences``
+- ``WorkoutExerciseSwapOptions``
+- ``CustomExerciseDraft``
+- ``CustomExerciseIssue``
+- ``CustomExerciseLibrary``
 - ``WorkoutProfile``
 - ``BodyArea``
 - ``InjurySeverity``

@@ -1129,6 +1129,78 @@
         }
       }
     },
+    "customExercise.issue.atCapacity" : {
+      "comment" : "Custom exercise form: the custom exercise list is full",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That's the most exercises Fernlet keeps. Delete one to add another."
+          }
+        }
+      }
+    },
+    "customExercise.issue.clashesWithCatalog" : {
+      "comment" : "Custom exercise form: the name matches a built-in exercise",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet already has an exercise with that name. Pick another name."
+          }
+        }
+      }
+    },
+    "customExercise.issue.duplicateName" : {
+      "comment" : "Custom exercise form: the name matches another custom exercise",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "One of your exercises already has that name."
+          }
+        }
+      }
+    },
+    "customExercise.issue.emptyName" : {
+      "comment" : "Custom exercise form: the name is empty",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Give it a name."
+          }
+        }
+      }
+    },
+    "customExercise.issue.nameTooLong" : {
+      "comment" : "Custom exercise form: the name is over the length limit",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That name is too long. Keep it under 80 characters."
+          }
+        }
+      }
+    },
+    "customExercise.issue.noPrimaryMuscle" : {
+      "comment" : "Custom exercise form: no main muscle chosen",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pick at least one main muscle."
+          }
+        }
+      }
+    },
     "dietaryPattern.balanced" : {
       "comment" : "Eating pattern: a flexible mix, no macro bias",
       "extractionState" : "extracted_with_value",
@@ -1353,6 +1425,126 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Recovery"
+          }
+        }
+      }
+    },
+    "exerciseDifficulty.advanced" : {
+      "comment" : "Exercise difficulty: needs skill and control, like a pull-up",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Advanced"
+          }
+        }
+      }
+    },
+    "exerciseDifficulty.foundational" : {
+      "comment" : "Exercise difficulty: simple to learn, good for beginners",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Foundational"
+          }
+        }
+      }
+    },
+    "exerciseDifficulty.standard" : {
+      "comment" : "Exercise difficulty: a typical exercise",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Standard"
+          }
+        }
+      }
+    },
+    "exerciseMeasure.reps" : {
+      "comment" : "How an exercise's sets are counted: in repetitions",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Reps"
+          }
+        }
+      }
+    },
+    "exerciseMeasure.seconds" : {
+      "comment" : "How an exercise's sets are counted: held for time",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Seconds"
+          }
+        }
+      }
+    },
+    "exerciseModality.balance" : {
+      "comment" : "Kind of exercise: balance drills",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Balance"
+          }
+        }
+      }
+    },
+    "exerciseModality.cardio" : {
+      "comment" : "Kind of exercise: conditioning that raises the heart rate",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cardio"
+          }
+        }
+      }
+    },
+    "exerciseModality.mobility" : {
+      "comment" : "Kind of exercise: stretches and mobility work",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mobility"
+          }
+        }
+      }
+    },
+    "exerciseModality.power" : {
+      "comment" : "Kind of exercise: explosive jumps and throws",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Power"
+          }
+        }
+      }
+    },
+    "exerciseModality.strength" : {
+      "comment" : "Kind of exercise: strength training",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Strength"
           }
         }
       }
@@ -1905,6 +2097,138 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Snack"
+          }
+        }
+      }
+    },
+    "movementPattern.carry" : {
+      "comment" : "Movement pattern: walking while holding a weight",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Carry"
+          }
+        }
+      }
+    },
+    "movementPattern.hinge" : {
+      "comment" : "Movement pattern: bending at the hips, like a deadlift",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hinge"
+          }
+        }
+      }
+    },
+    "movementPattern.isolation" : {
+      "comment" : "Movement pattern: a single-joint exercise, like a curl",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Isolation"
+          }
+        }
+      }
+    },
+    "movementPattern.locomotion" : {
+      "comment" : "Movement pattern: travelling movement, like crawling or skipping",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Moving around"
+          }
+        }
+      }
+    },
+    "movementPattern.lunge" : {
+      "comment" : "Movement pattern: a split stance, one leg forward",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lunge"
+          }
+        }
+      }
+    },
+    "movementPattern.pull" : {
+      "comment" : "Movement pattern: pulling toward the body",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pull"
+          }
+        }
+      }
+    },
+    "movementPattern.push" : {
+      "comment" : "Movement pattern: pressing away from the body",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Push"
+          }
+        }
+      }
+    },
+    "movementPattern.squat" : {
+      "comment" : "Movement pattern: squatting",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Squat"
+          }
+        }
+      }
+    },
+    "movementPattern.twist" : {
+      "comment" : "Movement pattern: rotating or resisting rotation of the trunk",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Twist"
+          }
+        }
+      }
+    },
+    "movementPlane.horizontal" : {
+      "comment" : "Direction of a push or pull: straight out in front, like a bench press or a row",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Horizontal"
+          }
+        }
+      }
+    },
+    "movementPlane.vertical" : {
+      "comment" : "Direction of a push or pull: overhead, like a shoulder press or a pull-up",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Vertical"
           }
         }
       }

@@ -14,6 +14,12 @@ import FernletUI
 /// Edits the LIFTING block only. The warm-up, activation, cardio and cool-down blocks around it are
 /// generated, are not what anyone means by "edit my workout", and would blow the row cap (the warm-up
 /// alone is twenty-odd stretches); saving puts them back around the edited lifting rows unchanged.
+///
+/// Each catalog row also carries the exercise preferences (idea 15): "Swap" replaces it in place
+/// from ``ExerciseSwapSheet``, after which the card offers "Always use this instead"; "Don't
+/// suggest" marks it for the planner to leave out from now on. Both are pending until Save, which
+/// writes them with the edited rows (``FernletStore/applyExercisePreferenceEdits(hidden:alternates:)``)
+/// — Cancel drops them like any other edit.
 struct GuidedWorkoutEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -24,6 +30,10 @@ struct GuidedWorkoutEditorSheet: View {
     @State private var pickerResetToken = 0
     @State private var showDiscardConfirm = false
     @State private var showCouldNotSave = false
+    /// The row being swapped, with its options; nil = the swap sheet is closed.
+    @State private var swapRequest: EditorSwapRequest?
+    /// Pending preferences, written on Save (``GuidedEditorPreferences``).
+    @State private var preferenceEdits = GuidedEditorPreferences()
 
     /// The resolved "Last time" recall values keyed by row name — held as state so the per-name
     /// history rollups run once per name-set change (see ``refreshLastTime()``), not on every
@@ -45,7 +55,7 @@ struct GuidedWorkoutEditorSheet: View {
 
     /// The row list diverges from the session this editor opened on (reorder, add, remove, or a
     /// sets/reps/rest tweak). `PrescribedExercise` is Equatable, so this is an honest compare.
-    private var isDirty: Bool { rows != Self.liftingRows(of: session) }
+    private var isDirty: Bool { rows != Self.liftingRows(of: session) || preferenceEdits.hasPending }
 
     private func attemptCancel() {
         if isDirty { showDiscardConfirm = true } else { dismiss() }
@@ -91,6 +101,14 @@ struct GuidedWorkoutEditorSheet: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text("That workout has already started or changed. Close this and open it again to edit.")
+        }
+        .sheet(item: $swapRequest) { request in
+            ExerciseSwapSheet(originalName: request.name, options: request.options) { target in
+                swapRow(request.id, to: target)
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(20)
         }
     }
 
@@ -139,6 +157,8 @@ struct GuidedWorkoutEditorSheet: View {
                              onDecrement: { setRest(index, effectiveRest(row) - 15) },
                              onIncrement: { setRest(index, effectiveRest(row) + 15) },
                              fullWidth: true)
+
+                preferenceActions(for: row)
             } else {
                 Text("Conditioning / mobility — walked as a single step, no rest timer.")
                     .font(.fernlet(.bubble))
@@ -271,6 +291,62 @@ struct GuidedWorkoutEditorSheet: View {
         }
     }
 
+    // MARK: Exercise preferences
+
+    /// The card's Swap and Don't-suggest actions and the lines that say what is pending.
+    private func preferenceActions(for row: PrescribedExercise) -> some View {
+        let original = preferenceEdits.swappedFrom[row.id]
+        return GuidedEditorPreferenceActions(
+            exerciseName: row.name,
+            swappedFrom: original,
+            alwaysChosen: original.map { preferenceEdits.alternates[$0] == row.name } ?? false,
+            hidden: preferenceEdits.hiddenState(of: row.name,
+                                                saved: store.settings.workoutExercisePreferences),
+            onSwap: { openSwap(for: row) },
+            onAlways: { preferenceEdits.chooseAlways(row.name, for: original) },
+            onUndoAlways: { preferenceEdits.undoAlways(for: original) },
+            onHide: { preferenceEdits.hide(row.name) },
+            onUndoHide: { preferenceEdits.undoHide(row.name) }
+        )
+    }
+
+    /// Opens the swap sheet for `row`, with options that skip everything already in the session.
+    private func openSwap(for row: PrescribedExercise) {
+        let options = store.exerciseSwapOptions(
+            for: row.name, excluding: Set(rows.map(\.name)), alsoHidden: preferenceEdits.hidden
+        )
+        swapRequest = EditorSwapRequest(id: row.id, name: row.name, options: options)
+    }
+
+    /// Replaces the row `id` with `target` in place, keeping its prescription
+    /// (``swapped(_:to:goal:)``), and records what it was swapped from.
+    private func swapRow(_ id: UUID, to target: ExerciseTarget) {
+        guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
+        preferenceEdits.recordSwap(row: id, from: rows[index].name, to: target.name)
+        rows[index] = Self.swapped(rows[index], to: target, goal: goal)
+    }
+
+    /// `row` with `target` in its place: the same slot role, sets, rest and position, a hold when the
+    /// new exercise is timed (and reps when it is not), and no load guidance — the weight range
+    /// belonged to the lift that left. `static` so it is testable without the view.
+    static func swapped(_ row: PrescribedExercise, to target: ExerciseTarget, goal: GoalType) -> PrescribedExercise {
+        var replaced = row
+        let style = WorkoutGoalStyle.style(for: goal, energy: .moderate, sport: "")
+        replaced.name = target.name
+        replaced.fromCatalog = true
+        replaced.side = nil
+        replaced.guidance = nil
+        if target.measure == .seconds {
+            let hold = row.holdSeconds ?? style.holdSeconds
+            replaced.holdSeconds = hold
+            replaced.reps = PrescribedExercise.holdText(seconds: hold)
+        } else {
+            replaced.holdSeconds = nil
+            replaced.reps = row.holdSeconds == nil ? row.reps : style.reps(for: row.role)
+        }
+        return replaced
+    }
+
     // MARK: Mutations
 
     /// R3: a hand-edited session is capped at the same size an imported one is, so repeated picker
@@ -375,7 +451,182 @@ struct GuidedWorkoutEditorSheet: View {
             showCouldNotSave = true
             return
         }
+        // Only once the rows landed, so a refused save never half-applies the sheet.
+        store.applyExercisePreferenceEdits(hidden: preferenceEdits.hidden, alternates: preferenceEdits.alternates)
         dismiss()
+    }
+}
+
+/// The swap sheet's subject in ``GuidedWorkoutEditorSheet``: the row being swapped (its id), its
+/// name, and the options computed when Swap was tapped.
+struct EditorSwapRequest: Identifiable {
+    let id: UUID
+    let name: String
+    let options: [ExerciseTarget]
+}
+
+/// Whether the planner will still suggest an exercise, as one card in the editor sees it.
+enum GuidedEditorHiddenState: Equatable {
+    /// Suggested as usual — the card offers "Don't suggest".
+    case suggested
+    /// Marked in this sheet, written on Save — the card offers "Undo".
+    case pending
+    /// Already hidden in Workout setup — shown again only from there.
+    case saved
+}
+
+/// The editor's pending exercise preferences, written on Save.
+///
+/// `swappedFrom` remembers, per row id, the exercise the plan had there before any swap, so a row
+/// swapped twice still pairs the plan's original with the final pick, and a row swapped back to its
+/// original pairs nothing. Pure, so the rules are testable without the view.
+struct GuidedEditorPreferences: Equatable {
+    /// Row id → the frozen name the plan had in that row before it was swapped.
+    var swappedFrom: [UUID: String] = [:]
+    /// "Always use this instead" picks: the plan's original → the alternate.
+    var alternates: [String: String] = [:]
+    /// "Don't suggest this" marks, in the order they were made.
+    var hidden: [String] = []
+
+    /// Anything waiting for Save.
+    var hasPending: Bool { !alternates.isEmpty || !hidden.isEmpty }
+
+    /// Records a swap of row `row` from `old` to `new`. A pending "always" for the row's original is
+    /// dropped (it named the exercise that just left); swapping back to the original clears the row.
+    mutating func recordSwap(row: UUID, from old: String, to new: String) {
+        let original = swappedFrom[row] ?? old
+        alternates[original] = nil
+        let same = WorkoutExerciseCatalog.normalizedName(original) == WorkoutExerciseCatalog.normalizedName(new)
+        swappedFrom[row] = same ? nil : original
+    }
+
+    /// "Always use `name` instead of `original`."
+    mutating func chooseAlways(_ name: String, for original: String?) {
+        guard let original else { return }
+        alternates[original] = name
+    }
+
+    /// Takes back a pending "always" for `original`.
+    mutating func undoAlways(for original: String?) {
+        guard let original else { return }
+        alternates[original] = nil
+    }
+
+    /// Marks `name` "Don't suggest this".
+    mutating func hide(_ name: String) {
+        let key = WorkoutExerciseCatalog.normalizedName(name)
+        guard !hidden.contains(where: { WorkoutExerciseCatalog.normalizedName($0) == key }) else { return }
+        hidden.append(name)
+    }
+
+    /// Takes back a pending "Don't suggest this".
+    mutating func undoHide(_ name: String) {
+        let key = WorkoutExerciseCatalog.normalizedName(name)
+        hidden.removeAll { WorkoutExerciseCatalog.normalizedName($0) == key }
+    }
+
+    /// Where `name` stands: hidden already (`saved`), marked here, or suggested.
+    func hiddenState(of name: String, saved: WorkoutExercisePreferences) -> GuidedEditorHiddenState {
+        if saved.isHidden(name) { return .saved }
+        let key = WorkoutExerciseCatalog.normalizedName(name)
+        return hidden.contains { WorkoutExerciseCatalog.normalizedName($0) == key } ? .pending : .suggested
+    }
+}
+
+/// One editor card's preference row: "Swap" and "Don't suggest" as text buttons, then a line for a
+/// swap ("Swapped in for Back squat." with "Always use this instead", or what was chosen with
+/// "Undo") and a line for a pending or saved hide.
+///
+/// The buttons wrap (`FlowLayout`) and every line wraps, so nothing truncates at accessibility text
+/// sizes. VoiceOver hears each button with the exercise it acts on ("Swap Goblet squat"); Voice
+/// Control answers to the visible words ("Swap", "Undo"), numbering the repeats across cards.
+private struct GuidedEditorPreferenceActions: View {
+    let exerciseName: String
+    let swappedFrom: String?
+    let alwaysChosen: Bool
+    let hidden: GuidedEditorHiddenState
+    let onSwap: () -> Void
+    let onAlways: () -> Void
+    let onUndoAlways: () -> Void
+    let onHide: () -> Void
+    let onUndoHide: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            FlowLayout(spacing: 16) {
+                actionButton(Text("Swap"),
+                             systemImage: "arrow.left.arrow.right", action: onSwap)
+                    .accessibilityLabel(Text("Swap \(exerciseName)"))
+                    .accessibilityInputLabels([Text("Swap")])
+                    .accessibilityIdentifier("workout.editor.swap")
+                if hidden == .suggested {
+                    actionButton(Text("Don't suggest", comment: "Plan editor: stop Fernlet suggesting this exercise"),
+                                 systemImage: "eye.slash", action: onHide)
+                        .accessibilityLabel(Text("Don't suggest \(exerciseName)", comment: "Spoken name of the plan editor's Don't suggest button; the argument is the exercise"))
+                        .accessibilityInputLabels([Text("Don't suggest")])
+                        .accessibilityIdentifier("workout.editor.hide")
+                }
+            }
+            if let swappedFrom { swapLine(swappedFrom) }
+            hiddenLine
+        }
+    }
+
+    @ViewBuilder private func swapLine(_ original: String) -> some View {
+        if alwaysChosen {
+            statusLine(Text("From now on, Fernlet plans \(exerciseName) instead of \(original).",
+                            comment: "Plan editor: a saved swap, written on Save; the arguments are the new and the original exercise"))
+            actionButton(Text("Undo"), systemImage: "arrow.uturn.backward", action: onUndoAlways)
+                .accessibilityLabel(Text("Stop always using \(exerciseName)", comment: "Spoken name of the Undo button under a saved swap; the argument is the exercise"))
+                .accessibilityInputLabels([Text("Undo")])
+                .accessibilityIdentifier("workout.editor.undoAlways")
+        } else {
+            statusLine(Text("Swapped in for \(original).", comment: "Plan editor: this exercise replaced another; the argument is the one it replaced"))
+            actionButton(Text("Always use this instead", comment: "Plan editor: always plan this exercise where the one it replaced would be"),
+                         systemImage: "pin", action: onAlways)
+                .accessibilityInputLabels([Text("Always use this instead"), Text("Always")])
+                .accessibilityIdentifier("workout.editor.always")
+        }
+    }
+
+    @ViewBuilder private var hiddenLine: some View {
+        switch hidden {
+        case .suggested:
+            EmptyView()
+        case .pending:
+            statusLine(Text("Fernlet won't suggest this again.", comment: "Plan editor: this exercise is marked Don't suggest, written on Save"))
+            actionButton(Text("Undo"), systemImage: "arrow.uturn.backward", action: onUndoHide)
+                .accessibilityLabel(Text("Keep suggesting \(exerciseName)", comment: "Spoken name of the Undo button under a Don't suggest mark; the argument is the exercise"))
+                .accessibilityInputLabels([Text("Undo")])
+                .accessibilityIdentifier("workout.editor.undoHide")
+        case .saved:
+            statusLine(Text("Hidden from suggestions. You can show it again in Workout setup.",
+                            comment: "Plan editor: this exercise was already hidden in Workout setup"))
+        }
+    }
+
+    private func statusLine(_ text: Text) -> some View {
+        text
+            .font(.fernlet(.bubble))
+            .foregroundStyle(Color.slate)
+            .fernletWrappingText()
+    }
+
+    /// A text button in the moss text ink, with its glyph decorative, grown to a 44pt target.
+    private func actionButton(_ title: Text, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: systemImage)
+                    .font(.caption.weight(.semibold))
+                    .accessibilityHidden(true)
+                title
+                    .font(.fernlet(.label))
+                    .fernletWrappingText()
+            }
+            .foregroundStyle(Color.mossInk)
+        }
+        .buttonStyle(.plain)
+        .fernletTapTarget()
     }
 }
 
