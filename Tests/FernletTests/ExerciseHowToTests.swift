@@ -237,7 +237,8 @@ struct ExerciseHowToTests {
         let sites: [(path: String, needle: String, count: Int, what: String)] = [
             ("App/Fernlet/GuidedWorkout.swift", "Text(verbatim: exercise.displayedName)", 3,
              "the runner's exercise title, its resting Next up and its Up next list"),
-            ("App/Fernlet/GuidedWorkout.swift", "map(\\.displayedName)", 1, "the runner's Up next rotor entry"),
+            ("App/Fernlet/GuidedTimedRun.swift", "exercise.displayName ?? exercise.name", 1,
+             "the runner's Up next rotor entry (through GuidedSegmentWords.upNextName)"),
             ("App/Fernlet/GuidedWorkout.swift", "Text(verbatim: exercise.displayLine)", 1, "the runner's Ready list"),
             ("App/Fernlet/TaskConfirmations.swift", "\\(exercise.displayedName)", 5, "the spoken transitions"),
             ("App/FernletWidgets/GuidedWorkoutRunState.swift", "exerciseName: currentExercise?.displayedName", 1,
