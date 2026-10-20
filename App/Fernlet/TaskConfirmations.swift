@@ -164,4 +164,16 @@ enum GuidedRunAnnouncement {
     static func holdStarted(leadInEndedAt leadInEnd: Date, now: Date) -> LocalizedStringResource? {
         GuidedRunCuePlan.isOnTime(leadInEnd, now: now) ? holdStartedLine : nil
     }
+
+    /// Spoken after the runner's "+15 s" / "−15 s": what the tap did to the rest, or — at a limit, when
+    /// nothing on screen moves — why it did nothing. The timer beside the buttons changes too, but its
+    /// spoken value is re-read only when VoiceOver lands on it.
+    static func restAdjusted(adding: Bool, moved: Bool) -> LocalizedStringResource {
+        switch (adding, moved) {
+        case (true, true): return "Added 15 seconds of rest."
+        case (false, true): return "Took 15 seconds off the rest."
+        case (true, false): return "Your rest is already at its 10-minute limit."
+        case (false, false): return "Your rest is nearly over, so there's nothing to take off."
+        }
+    }
 }

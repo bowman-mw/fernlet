@@ -4914,26 +4914,7 @@ final class FernletStore {
         guard replacingActiveRun || activeGuidedRunBlockingStart(of: session) == nil else { return false }
         let dayKey = guidedPlanDayKey ?? todayKey
         let intensity = committedGuidedIntensityStorage ?? recommendedWorkoutIntensity() ?? .moderate
-        let goal = settings.selectedGoal
-        let exercises = session.exercises.map { pe in
-            GuidedWorkoutRunState.Exercise(
-                id: pe.id,
-                name: pe.name,
-                sets: pe.sets,
-                reps: pe.reps,
-                roleRaw: Self.roleRaw(pe.role),
-                fromCatalog: pe.fromCatalog,
-                restSeconds: pe.restSecondsOverride
-                    ?? WorkoutRestGuidance.restSeconds(forExerciseNamed: pe.name, role: pe.role, goal: goal),
-                holdSeconds: pe.holdSeconds,
-                blockRaw: pe.block.rawValue,
-                sideRaw: pe.side?.rawValue,
-                tracking: GuidedRunLoadLog.tracking(for: pe),
-                // The drawn name, baked in for the Live Activity and the Lock Screen intents, which
-                // cannot reach the domain lookup. `name` above stays the frozen one the log reads.
-                displayName: pe.displayName
-            )
-        }
+        let exercises = guidedRunExercises(for: session)
         guard !exercises.isEmpty else { return false }
 
         var state = GuidedWorkoutRunState(
@@ -4958,6 +4939,40 @@ final class FernletStore {
         return true
     }
 
+    /// The run's steps for `session`: each exercise's rest baked in (per-exercise override, else the
+    /// research-based default), its load plan, and — for a counted lift — last time's numbers, so the
+    /// Live Activity can show them with no app state. One history rollup covers the whole run, the
+    /// same data the runner's "Last time" pill reads, and none at all when no step shows them.
+    private func guidedRunExercises(for session: WorkoutProgram.SessionSuggestion) -> [GuidedWorkoutRunState.Exercise] {
+        guard !session.exercises.isEmpty else { return [] }
+        let goal = settings.selectedGoal
+        let lastTimes = session.exercises.contains(where: { GuidedRunLoadLog.showsLastTime($0) })
+            ? GuidedRunLoadLog.lastTimes(from: exerciseHistoryEntries())
+            : [:]
+        return session.exercises.map { pe in
+            let lastTime = GuidedRunLoadLog.showsLastTime(pe)
+                ? lastTimes[WorkoutExerciseCatalog.normalizedName(pe.name)] : nil
+            return GuidedWorkoutRunState.Exercise(
+                id: pe.id,
+                name: pe.name,
+                sets: pe.sets,
+                reps: pe.reps,
+                roleRaw: Self.roleRaw(pe.role),
+                fromCatalog: pe.fromCatalog,
+                restSeconds: pe.restSecondsOverride
+                    ?? WorkoutRestGuidance.restSeconds(forExerciseNamed: pe.name, role: pe.role, goal: goal),
+                holdSeconds: pe.holdSeconds,
+                blockRaw: pe.block.rawValue,
+                sideRaw: pe.side?.rawValue,
+                tracking: GuidedRunLoadLog.tracking(for: pe),
+                // The drawn name, baked in for the Live Activity and the Lock Screen intents, which
+                // cannot reach the domain lookup. `name` above stays the frozen one the log reads.
+                displayName: pe.displayName,
+                lastTime: lastTime
+            )
+        }
+    }
+
     /// Mark the current set done from the in-app sheet (mirrors the Live Activity "Done set" button):
     /// advance the runner, mirror it, and reflect it onto the activity — finishing (and logging) when
     /// the last set of the last exercise is done.
@@ -4972,6 +4987,19 @@ final class FernletStore {
         guard var state = guidedRunState, state.phase == .resting else { return }
         state.skipRest(now: Date())
         applyGuidedTransition(state)
+    }
+
+    /// Move the current rest's end by `seconds` from the in-app sheet — the runner's "−15 s" / "+15 s",
+    /// the same adjustment as the Live Activity's buttons (``GuidedWorkoutRunState/adjustRest(by:now:)``).
+    /// Mirrored and reflected like any transition; setting the run re-arms the rest-end cue and its
+    /// background notification for the new end. Returns whether the rest moved (false at a limit or
+    /// outside a rest), so the sheet can say so.
+    func guidedAdjustRest(by seconds: Int) -> Bool {
+        guard var state = guidedRunState, state.phase == .resting, state.adjustRest(by: seconds, now: Date()) else {
+            return false
+        }
+        applyGuidedTransition(state)
+        return true
     }
 
     /// Skip the rest of the warm-up or the cool-down from the in-app sheet — the runner's quiet
@@ -5019,15 +5047,16 @@ final class FernletStore {
 
     /// Applies an in-app load-tracking edit (a weight pick, edited reps, an effort tap, an override
     /// reason, a skip mark) to the live run and mirrors it, so a finish from the Lock Screen still
-    /// logs it. No phase change, so the Live Activity is re-synced only when the step count moved (a
-    /// missed max attempt drops the attempts after it). No-op once the run is done.
+    /// logs it. No phase change, so the Live Activity is re-synced only when what it shows moved — a
+    /// weight pick changes its load line; a missed max attempt drops the attempts after it. No-op once
+    /// the run is done.
     func editGuidedRun(_ edit: (inout GuidedWorkoutRunState) -> Void) {
         guard var state = guidedRunState, !state.isDone else { return }
-        let stepCount = state.exercises.count
+        let shown = state.contentState
         edit(&state)
         guidedRunState = state
         mirrorGuidedRunState(state)
-        if state.exercises.count != stepCount {
+        if state.contentState != shown {
             let snapshot = state
             syncActivity { await GuidedWorkoutActivityBridge.sync(to: snapshot) }
         }

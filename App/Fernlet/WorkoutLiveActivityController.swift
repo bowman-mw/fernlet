@@ -6,9 +6,9 @@
 // into both targets) — see FernletStore's guided-run transitions and GuidedWorkoutLiveActivityIntents.
 //
 // The rest COUNTDOWN ticks natively in the widget via `Text(timerInterval:)`, so there is NO
-// time-based update path and NO push/APNs — only discrete set/exercise transitions push a new
-// snapshot. Degrades to in-app-only SILENTLY when Live Activities are disabled. One workout activity
-// at a time.
+// time-based update path and NO push/APNs — only discrete moves (a set, an exercise, a ±15 s rest
+// adjustment, a weight picked in the app) push a new snapshot. Degrades to in-app-only SILENTLY when
+// Live Activities are disabled. One workout activity at a time.
 
 import ActivityKit
 import Foundation
@@ -19,9 +19,10 @@ import Foundation
 /// are shared with the Live Activity buttons and go through `GuidedWorkoutActivityBridge` (compiled
 /// into both targets) from ``FernletStore``'s guided-run transitions. The rest countdown ticks
 /// natively in the widget via `Text(timerInterval:)`, so there is no time-based update path and no
-/// push/APNs — only discrete set/exercise transitions push a new snapshot. Degrades to in-app-only
-/// silently when Live Activities are disabled, and ends any activity already live before requesting,
-/// so at most one workout activity is ever on screen.
+/// push/APNs — only discrete moves (a set, an exercise, a ±15 s rest adjustment, a weight picked in
+/// the app) push a new snapshot. Degrades to in-app-only silently when Live Activities are disabled,
+/// and ends any activity already live before requesting, so at most one workout activity is ever on
+/// screen.
 @MainActor
 enum WorkoutLiveActivityController {
 

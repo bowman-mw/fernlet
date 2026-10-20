@@ -29,6 +29,9 @@ extension FernletStore {
 // MARK: - Formatting
 
 /// Weights as the runner shows them: the locale's number format and unit abbreviation ("62,5 kg").
+///
+/// The formatting itself is ``WorkoutActivityLoadText``'s, shared with the Live Activity, so the
+/// weight panel and the Lock Screen never draw one weight two ways.
 enum GuidedLoadFormat {
     /// The unit a tracked lift is weighed in.
     static func unit(_ tracking: GuidedWorkoutRunState.Tracking) -> UnitMass {
@@ -36,18 +39,12 @@ enum GuidedLoadFormat {
     }
 
     static func weight(_ value: Double, unit: UnitMass) -> String {
-        Measurement(value: value, unit: unit).formatted(
-            .measurement(width: .abbreviated, usage: .asProvided, numberFormatStyle: .number.precision(.fractionLength(0...1)))
-        )
+        WorkoutActivityLoadText.weight(value, unit: unit, width: .abbreviated, locale: .current)
     }
 
     /// "95–110 lb", or one weight when the range is a single step.
     static func range(_ tracking: GuidedWorkoutRunState.Tracking) -> String? {
-        guard let low = tracking.rangeLow, let high = tracking.rangeHigh else { return nil }
-        let unit = unit(tracking)
-        guard high - low > 0.01 else { return weight(low, unit: unit) }
-        let lowText = low.formatted(.number.precision(.fractionLength(0...1)))
-        return "\(lowText)–\(weight(high, unit: unit))"
+        WorkoutActivityLoadText.range(low: tracking.rangeLow, high: tracking.rangeHigh, unit: unit(tracking), locale: .current)
     }
 
     /// Where the picker starts when there is no suggestion yet: an empty bar, a light dumbbell, a
