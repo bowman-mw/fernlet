@@ -18,6 +18,8 @@ import FernletUI
 enum MoveRoute: Hashable {
     /// The per-exercise recall list, ``ExerciseHistoryView``.
     case exerciseHistory
+    /// One week's sets per muscle and aerobic minutes, ``WeeklyTotalsView``.
+    case weeklyTotals
 }
 
 /// Display half of the Exercise history screen's "best" line, beside

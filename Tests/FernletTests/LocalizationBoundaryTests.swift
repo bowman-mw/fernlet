@@ -2937,6 +2937,10 @@ struct LocalizationBoundaryTests {
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
                      key: "move.goalCount",
                      source: "the Move header's goal count"),
+        // Weekly totals (idea 18, 2026-10-20): a whole set count, spoken after a muscle name.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "weekly.sets.spoken.whole",
+                     source: "the Weekly totals screen's spoken set count"),
         // The Messages extension's four counts. All are hand-authored: the recipe subtitle is
         // three INDEPENDENT plurals ("4 servings · 9 ingredients · 6 steps"), which is why they are
         // three keys joined by punctuation rather than one key with three `%lld` slots — a single

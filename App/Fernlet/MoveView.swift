@@ -15,7 +15,7 @@ import FernletUI
 /// local `@State`. Day rollover and Live Activity progress are reconciled on scene activation
 /// because a foreground can cross local midnight without re-firing `onAppear`. Navigation pushes a
 /// day-key `String` for ``MoveDayDetailView``, a `ProgressPhotoRecord` for the photo detail, and a
-/// ``MoveRoute`` for the parameterless screens (``ExerciseHistoryView``).
+/// ``MoveRoute`` for the parameterless screens (``ExerciseHistoryView``, ``WeeklyTotalsView``).
 struct MoveView: View {
     var store: FernletStore
     @Binding var activeSheet: FernletSheet?
@@ -319,6 +319,8 @@ struct MoveView: View {
 
             exerciseHistoryLink
 
+            WeeklyTotalsLink { path.append(MoveRoute.weeklyTotals) }
+
             todaysMovementSection
 
             #if canImport(UIKit)
@@ -391,6 +393,8 @@ struct MoveView: View {
         switch route {
         case .exerciseHistory:
             ExerciseHistoryView(store: store)
+        case .weeklyTotals:
+            WeeklyTotalsView(store: store)
         }
     }
 

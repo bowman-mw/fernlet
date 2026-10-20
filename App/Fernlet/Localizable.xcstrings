@@ -1085,6 +1085,9 @@
     "A second code you can give away" : {
 
     },
+    "A set counts in full for the muscles a lift mainly works, and as half a set for the muscles that help. Warm-ups, stretches, holds and ramp-up sets aren't counted." : {
+      "comment" : "Weekly totals screen: how the per-muscle set counts are worked out."
+    },
     "A small daily care companion built around privacy, local control, and enoughness." : {
 
     },
@@ -1294,6 +1297,9 @@
     },
     "Advanced" : {
 
+    },
+    "Aerobic minutes" : {
+      "comment" : "Weekly totals screen: heading of the section with the week's aerobic minutes."
     },
     "Age" : {
 
@@ -2106,6 +2112,9 @@
     },
     "Counting every sealed surface…" : {
 
+    },
+    "Counts cardio, sports and dance, including workouts from Apple Health. Strength, yoga, Pilates and other mind-body sessions aren't counted." : {
+      "comment" : "Weekly totals screen: which workouts the aerobic minutes include."
     },
     "Counts stored blobs by their format MARKER BYTES only — nothing is decrypted, and nothing is written or saved. One row per cryptographic surface; a surface that cannot be counted shows a dash and says why, never a zero." : {
 
@@ -3257,6 +3266,9 @@
     "Haptics" : {
 
     },
+    "Hard sets per muscle" : {
+      "comment" : "Weekly totals screen: heading of the section with the week's working sets for each muscle group."
+    },
     "Hard — talking takes effort." : {
 
     },
@@ -4261,6 +4273,9 @@
     "No activities yet — start one above, or wait for a nearby friend to invite you." : {
 
     },
+    "No aerobic minutes logged." : {
+      "comment" : "Weekly totals screen: the aerobic section when the week has no aerobic minutes. Plain and quiet, never a nudge."
+    },
     "No biometric authentication available on this device." : {
 
     },
@@ -4299,6 +4314,9 @@
     },
     "No journal entries" : {
 
+    },
+    "No lifting sets logged." : {
+      "comment" : "Weekly totals screen: the sets section when the week has no lifting sets. Plain and quiet, never a nudge."
     },
     "No macros yet" : {
 
@@ -6067,6 +6085,9 @@
     "Sets" : {
 
     },
+    "Sets per muscle and aerobic minutes, as logged." : {
+      "comment" : "Subtitle of the Weekly totals screen."
+    },
     "Sets × reps × weight in your logged exercises. A line without a weight doesn't add any." : {
       "comment" : "Silly stat: how weight lifted is counted"
     },
@@ -6878,6 +6899,9 @@
     "This version can't say where this went" : {
 
     },
+    "This week" : {
+      "comment" : "Weekly totals screen: caption under the date range when it is the current week."
+    },
     "This will delete data from iCloud, which may also remove it from other Fernlet devices signed into the same Apple ID. Your encrypted (sealed) backups in iCloud are deleted too — if you lose this device, that data can't be recovered. This device keeps a local copy of everything else." : {
 
     },
@@ -7255,6 +7279,9 @@
     },
     "Web nutrition search" : {
 
+    },
+    "Weekly totals" : {
+      "comment" : "Title of the Move tab screen with one week's sets per muscle and aerobic minutes; also the label of the link that opens it."
     },
     "Weight" : {
 
@@ -9851,6 +9878,89 @@
     },
     "tempo, form note" : {
 
+    },
+    "weekly.aerobic.line" : {
+      "comment" : "Weekly totals screen: aerobic minutes logged this week out of the 150-minute guideline, e.g. '95 of 150 minutes'. The first number is what was logged; the second is always 150.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ of %2$@ minutes"
+          }
+        }
+      }
+    },
+    "weekly.aerobic.reference" : {
+      "comment" : "Weekly totals screen: neutral context under the aerobic minutes. The numbers are the World Health Organization's weekly minimums (150 moderate, 75 vigorous). Keep it a plain statement, never advice.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The WHO guideline for adults is at least %1$@ minutes of moderate activity a week, or %2$@ minutes of vigorous activity."
+          }
+        }
+      }
+    },
+    "weekly.aerobic.spoken" : {
+      "comment" : "Weekly totals screen, spoken: aerobic minutes logged this week out of the 150-minute guideline. The first number is what was logged; the second is always 150.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ of %2$@ aerobic minutes"
+          }
+        }
+      }
+    },
+    "weekly.sets.reference" : {
+      "comment" : "Weekly totals screen: neutral context above the per-muscle set counts. The numbers are the low and high ends of the range (10 and 20). Keep it a plain statement, never advice or a target.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@–%2$@ hard sets a week per muscle is a common range for muscle growth."
+          }
+        }
+      }
+    },
+    "weekly.sets.spoken.half" : {
+      "comment" : "Weekly totals screen, spoken after a muscle name: how many hard sets it had this week. The number always has a half (for example 9.5), because helper muscles get half a set.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ hard sets"
+          }
+        }
+      }
+    },
+    "weekly.sets.spoken.whole" : {
+      "comment" : "Weekly totals screen, spoken after a muscle name: how many hard sets it had this week, a whole number. Needs a plural variation per language; English also needs the one-set form.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld hard set"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld hard sets"
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "what to do in this step" : {
 
