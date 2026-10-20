@@ -660,6 +660,12 @@ final class WriteRecordingStoreController: HealthKitStoreControlling {
     private(set) var savedBatches: [[HKObject]] = []
     private(set) var savedWorkoutCount = 0
     private(set) var lastSavedWorkoutUUID: UUID?
+    /// The last workout that reached the store, as the builder would have collected it: activity
+    /// type, the collection's start and end, and how many energy/distance samples rode along.
+    private(set) var lastSavedWorkoutActivityType: HKWorkoutActivityType?
+    private(set) var lastSavedWorkoutStart: Date?
+    private(set) var lastSavedWorkoutEnd: Date?
+    private(set) var lastSavedWorkoutSampleCount: Int?
     private(set) var deleteCallCount = 0
     private(set) var executedQueries: [HKQuery] = []
     private(set) var authorizationRequests: [Set<String>] = []
@@ -719,6 +725,10 @@ final class WriteRecordingStoreController: HealthKitStoreControlling {
         metadata: [String: Any]
     ) async throws -> UUID {
         savedWorkoutCount += 1
+        lastSavedWorkoutActivityType = configuration.activityType
+        lastSavedWorkoutStart = start
+        lastSavedWorkoutEnd = end
+        lastSavedWorkoutSampleCount = samples.count
         let uuid = UUID()
         lastSavedWorkoutUUID = uuid
         return uuid

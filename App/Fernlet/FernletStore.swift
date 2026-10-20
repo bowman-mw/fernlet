@@ -4922,6 +4922,8 @@ final class FernletStore {
         )
         state.phase = .working
         state.setStartedAt = Date()
+        // The session's start, for the logged duration: the run carries it, so it survives a relaunch.
+        state.startedAt = state.setStartedAt
         guidedRunState = state
         mirrorGuidedRunState(state)
         WorkoutLiveActivityController.start(state)
@@ -5059,6 +5061,8 @@ final class FernletStore {
     /// plan is gone). Anchors the logged workout to the day/intensity the plan was committed with — a
     /// rest can cross local midnight — tags it as a guided log, advances progression, and records the
     /// completion. Deduped by session id so a finish seen by both the sheet and a reconcile logs once.
+    /// The row carries the session's duration and ends at the run's own finish, which is what its
+    /// Apple Health copy is written from.
     private func finishGuidedRunLogging(_ state: GuidedWorkoutRunState) {
         guard !guidedCompletedSessionIDs.contains(state.sessionID) else { return }
         let dayKey = state.committedDayKey
@@ -5072,13 +5076,23 @@ final class FernletStore {
         // Tracked lifts log what happened — the weight picked and any edited reps — as text and as
         // structured results; a run with nothing tracked logs its plan text as before.
         let loadLog = GuidedRunLoadLog.log(for: state)
+        // The session's length from the run's own start and finish, in the minutes a hand-logged
+        // workout keeps (`GuidedRunDuration`); nil for a run persisted before it recorded a start.
+        let timing = GuidedRunDuration.minutes(startedAt: state.startedAt, finishedAt: state.finishedAt)
         var workout = Workout(
             name: state.title, type: type, mode: mode, exercises: loadLog?.text ?? state.suggestionExercisesText,
-            rpe: nil, notes: state.suggestionNotes, duration: nil,
+            rpe: nil, notes: GuidedRunDuration.notes(state.suggestionNotes, capped: timing?.capped == true),
+            duration: timing?.minutes,
             loggedFromGuidedSession: true, intensity: intensity,
             exerciseResults: loadLog.flatMap { $0.results.isEmpty ? nil : $0.results }
         )
-        if dayKey != todayKey,
+        // The run's own finish when it falls on the day the workout is filed under, so a Lock Screen
+        // finish logged at a later reconcile still ends when it did, and the row and its Health copy
+        // span the real session. A finish on another day keeps the noon back-dating below.
+        if let finishedAt = state.finishedAt, FernletDate.dayKey(for: finishedAt) == dayKey {
+            workout.completedAt = finishedAt
+            workout.loggedAt = finishedAt
+        } else if dayKey != todayKey,
            let targetDate = FernletDate.date(fromDayKey: dayKey),
            let completedAt = Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: targetDate) {
             workout.completedAt = completedAt

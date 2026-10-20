@@ -9858,6 +9858,18 @@
     "woke up twice..." : {
 
     },
+    "workout.guided.durationCappedNote" : {
+      "comment" : "Added to the notes of a guided workout whose runner was left open for more than three hours (for example overnight). The logged duration is capped at 3 hours; the sentence tells the person they can correct it in the Edit sheet. Keep the number 3 in step with the cap.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This session was open for more than 3 hours, so it's logged as 3. Edit the duration if you know the real time."
+          }
+        }
+      }
+    },
     "worryBox.error.compose" : {
       "comment" : "Shown and spoken when saving a worry from the compose sheet fails.",
       "extractionState" : "extracted_with_value",
