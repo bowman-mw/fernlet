@@ -75,7 +75,7 @@ public nonisolated enum WorkoutWarmUpSets {
 
     /// Whether a planned lift is a heavy main lift — the kind a ramp is for: a main lift in the lifting
     /// block, rep-counted, a compound `pattern`, on a barbell or dumbbells (``rampEquipment``). Only the
-    /// session's first one is considered (``firstHeavyMainLift(in:pattern:)``).
+    /// session's first one is considered (``firstHeavyMainLift(in:patterns:)``).
     public static func isHeavyMainLift(_ exercise: PrescribedExercise, pattern: MovementPattern) -> Bool {
         guard exercise.role == .main, exercise.block == .lifting, exercise.holdSeconds == nil,
               compoundPatterns.contains(pattern), let equipment = exercise.guidance?.equipment else { return false }
