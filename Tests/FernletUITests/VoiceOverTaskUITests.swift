@@ -238,11 +238,16 @@ final class VoiceOverTaskUITests: XCTestCase {
             // the whole block (the cool-down skip finishes and logs), so the walk stays short.
             let skipWarmUp = app.buttons["workout.guided.skipWarmUp"].firstMatch
             let skipCoolDown = app.buttons["workout.guided.skipCoolDown"].firstMatch
+            // A heavy lift's warm-up sets (idea 12) replace the skip-to-next secondary with "Skip
+            // warm-up sets", which lands on the lift's first working set.
+            let skipWarmUpSets = app.buttons["workout.guided.skipWarmUpSets"].firstMatch
             if skipRest.exists {
                 if !auditedResting { try walk.audit("Runner · resting"); auditedResting = true }
                 walk.activate(skipRest)
             } else if skipWarmUp.exists {
                 walk.activate(skipWarmUp)
+            } else if skipWarmUpSets.exists {
+                walk.activate(skipWarmUpSets)
             } else if skipCoolDown.exists {
                 walk.activate(skipCoolDown)
             } else if skipExercise.exists && skipExercise.isEnabled {
