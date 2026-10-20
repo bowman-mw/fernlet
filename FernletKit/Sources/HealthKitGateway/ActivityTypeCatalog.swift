@@ -62,6 +62,8 @@ public enum ActivityTypeCatalog {
         case .hiit: .highIntensityIntervalTraining
         case .kickboxing: .kickboxing
         case .martialArts: .martialArts
+        case .boxing: .boxing
+        case .wrestling: .wrestling
         case .climbing: .climbing
         case .jumpRope: .jumpRope
         case .tennis: .tennis
@@ -72,6 +74,19 @@ public enum ActivityTypeCatalog {
         case .tableTennis: .tableTennis
         case .racquetball: .racquetball
         case .squash: .squash
+        case .volleyball: .volleyball
+        case .americanFootball: .americanFootball
+        case .baseball: .baseball
+        case .softball: .softball
+        case .hockey: .hockey
+        case .rugby: .rugby
+        case .lacrosse: .lacrosse
+        case .golf: .golf
+        case .downhillSkiing: .downhillSkiing
+        case .crossCountrySkiing: .crossCountrySkiing
+        case .snowboarding: .snowboarding
+        case .skating: .skatingSports
+        case .surfing: .surfingSports
         case .coreTraining: .coreTraining
         case .flexibility: .flexibility
         case .mindAndBody: .mindAndBody
@@ -110,6 +125,8 @@ public enum ActivityTypeCatalog {
         case .highIntensityIntervalTraining: .hiit
         case .kickboxing: .kickboxing
         case .martialArts: .martialArts
+        case .boxing: .boxing
+        case .wrestling: .wrestling
         case .climbing: .climbing
         case .jumpRope: .jumpRope
         case .tennis: .tennis
@@ -120,6 +137,19 @@ public enum ActivityTypeCatalog {
         case .tableTennis: .tableTennis
         case .racquetball: .racquetball
         case .squash: .squash
+        case .volleyball: .volleyball
+        case .americanFootball: .americanFootball
+        case .baseball: .baseball
+        case .softball: .softball
+        case .hockey: .hockey
+        case .rugby: .rugby
+        case .lacrosse: .lacrosse
+        case .golf: .golf
+        case .downhillSkiing: .downhillSkiing
+        case .crossCountrySkiing: .crossCountrySkiing
+        case .snowboarding: .snowboarding
+        case .skatingSports: .skating
+        case .surfingSports: .surfing
         case .coreTraining: .coreTraining
         case .flexibility: .flexibility
         case .mindAndBody: .mindAndBody

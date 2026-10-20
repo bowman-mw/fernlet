@@ -881,8 +881,10 @@ public nonisolated enum WorkoutActivityType: String, Codable, CaseIterable, Iden
     case running, walking, hiking, cycling, indoorCycling
     case yoga, pilates, barre, dance, socialDance
     case swimmingPool, swimmingOpenWater, rowing, elliptical, stairClimbing, stairs
-    case hiit, kickboxing, martialArts, climbing, jumpRope
+    case hiit, kickboxing, martialArts, boxing, wrestling, climbing, jumpRope
     case tennis, basketball, soccer, pickleball, badminton, tableTennis, racquetball, squash
+    case volleyball, americanFootball, baseball, softball, hockey, rugby, lacrosse, golf
+    case downhillSkiing, crossCountrySkiing, snowboarding, skating, surfing
     case coreTraining, flexibility, mindAndBody, taiChi
     case functionalStrengthTraining, traditionalStrengthTraining
     case crossTraining, mixedCardio, preparationAndRecovery, cooldown
@@ -923,6 +925,8 @@ public nonisolated enum WorkoutActivityType: String, Codable, CaseIterable, Iden
         case .hiit: "HIIT"
         case .kickboxing: "Kickboxing"
         case .martialArts: "Martial Arts"
+        case .boxing: "Boxing"
+        case .wrestling: "Wrestling"
         case .climbing: "Climbing"
         case .jumpRope: "Jump Rope"
         case .tennis: "Tennis"
@@ -933,6 +937,19 @@ public nonisolated enum WorkoutActivityType: String, Codable, CaseIterable, Iden
         case .tableTennis: "Table Tennis"
         case .racquetball: "Racquetball"
         case .squash: "Squash"
+        case .volleyball: "Volleyball"
+        case .americanFootball: "American Football"
+        case .baseball: "Baseball"
+        case .softball: "Softball"
+        case .hockey: "Hockey"
+        case .rugby: "Rugby"
+        case .lacrosse: "Lacrosse"
+        case .golf: "Golf"
+        case .downhillSkiing: "Downhill Skiing"
+        case .crossCountrySkiing: "Cross-Country Skiing"
+        case .snowboarding: "Snowboarding"
+        case .skating: "Skating"
+        case .surfing: "Surfing"
         case .coreTraining: "Core Training"
         case .flexibility: "Flexibility"
         case .mindAndBody: "Mind and Body"
@@ -952,7 +969,7 @@ public nonisolated enum WorkoutActivityType: String, Codable, CaseIterable, Iden
     /// still ``defaultName`` (``Workout/displayedName``). Never persist or match it — a workout saved
     /// with a blank name takes ``defaultName``.
     ///
-    /// One case per line, unlike the two-line siblings: forty cases at two lines each exceed rule
+    /// One case per line, unlike the two-line siblings: fifty-five cases at two lines each exceed rule
     /// 4's 60-line body, which is met by formatting here because the extractor only harvests a
     /// literal written inside `String(localized:)` itself, so the calls cannot move into a helper.
     public var displayName: String {
@@ -976,6 +993,8 @@ public nonisolated enum WorkoutActivityType: String, Codable, CaseIterable, Iden
         case .hiit: String(localized: "activityType.hiit", defaultValue: "HIIT", bundle: .module, comment: "Workout activity type: high-intensity interval training")
         case .kickboxing: String(localized: "activityType.kickboxing", defaultValue: "Kickboxing", bundle: .module, comment: "Workout activity type: kickboxing")
         case .martialArts: String(localized: "activityType.martialArts", defaultValue: "Martial Arts", bundle: .module, comment: "Workout activity type: martial arts")
+        case .boxing: String(localized: "activityType.boxing", defaultValue: "Boxing", bundle: .module, comment: "Workout activity type: boxing, on a bag or in the ring")
+        case .wrestling: String(localized: "activityType.wrestling", defaultValue: "Wrestling", bundle: .module, comment: "Workout activity type: wrestling")
         case .climbing: String(localized: "activityType.climbing", defaultValue: "Climbing", bundle: .module, comment: "Workout activity type: rock or wall climbing")
         case .jumpRope: String(localized: "activityType.jumpRope", defaultValue: "Jump Rope", bundle: .module, comment: "Workout activity type: skipping with a jump rope")
         case .tennis: String(localized: "activityType.tennis", defaultValue: "Tennis", bundle: .module, comment: "Workout activity type: tennis")
@@ -986,6 +1005,19 @@ public nonisolated enum WorkoutActivityType: String, Codable, CaseIterable, Iden
         case .tableTennis: String(localized: "activityType.tableTennis", defaultValue: "Table Tennis", bundle: .module, comment: "Workout activity type: table tennis")
         case .racquetball: String(localized: "activityType.racquetball", defaultValue: "Racquetball", bundle: .module, comment: "Workout activity type: racquetball")
         case .squash: String(localized: "activityType.squash", defaultValue: "Squash", bundle: .module, comment: "Workout activity type: squash, the racket sport")
+        case .volleyball: String(localized: "activityType.volleyball", defaultValue: "Volleyball", bundle: .module, comment: "Workout activity type: volleyball, indoors or on the beach")
+        case .americanFootball: String(localized: "activityType.americanFootball", defaultValue: "American Football", bundle: .module, comment: "Workout activity type: American football, flag football included (not soccer)")
+        case .baseball: String(localized: "activityType.baseball", defaultValue: "Baseball", bundle: .module, comment: "Workout activity type: baseball")
+        case .softball: String(localized: "activityType.softball", defaultValue: "Softball", bundle: .module, comment: "Workout activity type: softball")
+        case .hockey: String(localized: "activityType.hockey", defaultValue: "Hockey", bundle: .module, comment: "Workout activity type: hockey, on ice or on a field")
+        case .rugby: String(localized: "activityType.rugby", defaultValue: "Rugby", bundle: .module, comment: "Workout activity type: rugby")
+        case .lacrosse: String(localized: "activityType.lacrosse", defaultValue: "Lacrosse", bundle: .module, comment: "Workout activity type: lacrosse")
+        case .golf: String(localized: "activityType.golf", defaultValue: "Golf", bundle: .module, comment: "Workout activity type: golf")
+        case .downhillSkiing: String(localized: "activityType.downhillSkiing", defaultValue: "Downhill Skiing", bundle: .module, comment: "Workout activity type: downhill (alpine) skiing")
+        case .crossCountrySkiing: String(localized: "activityType.crossCountrySkiing", defaultValue: "Cross-Country Skiing", bundle: .module, comment: "Workout activity type: cross-country (Nordic) skiing")
+        case .snowboarding: String(localized: "activityType.snowboarding", defaultValue: "Snowboarding", bundle: .module, comment: "Workout activity type: snowboarding")
+        case .skating: String(localized: "activityType.skating", defaultValue: "Skating", bundle: .module, comment: "Workout activity type: skating on ice, inline or roller skates, or a skateboard")
+        case .surfing: String(localized: "activityType.surfing", defaultValue: "Surfing", bundle: .module, comment: "Workout activity type: surfing and other board sports on the water")
         case .coreTraining: String(localized: "activityType.coreTraining", defaultValue: "Core Training", bundle: .module, comment: "Workout activity type: core training, e.g. abs and planks")
         case .flexibility: String(localized: "activityType.flexibility", defaultValue: "Flexibility", bundle: .module, comment: "Workout activity type: flexibility and stretching")
         case .mindAndBody: String(localized: "activityType.mindAndBody", defaultValue: "Mind and Body", bundle: .module, comment: "Workout activity type: meditation, breathwork and similar practice")
@@ -1017,6 +1049,8 @@ public nonisolated enum WorkoutActivityType: String, Codable, CaseIterable, Iden
         case .hiit, .crossTraining, .mixedCardio: "figure.highintensity.intervaltraining"
         case .kickboxing: "figure.kickboxing"
         case .martialArts: "figure.martial.arts"
+        case .boxing: "figure.boxing"
+        case .wrestling: "figure.wrestling"
         case .climbing: "figure.climbing"
         case .jumpRope: "figure.jumprope"
         case .tennis: "figure.tennis"
@@ -1027,6 +1061,19 @@ public nonisolated enum WorkoutActivityType: String, Codable, CaseIterable, Iden
         case .tableTennis: "figure.table.tennis"
         case .racquetball: "figure.racquetball"
         case .squash: "figure.squash"
+        case .volleyball: "figure.volleyball"
+        case .americanFootball: "figure.american.football"
+        case .baseball: "figure.baseball"
+        case .softball: "figure.softball"
+        case .hockey: "figure.hockey"
+        case .rugby: "figure.rugby"
+        case .lacrosse: "figure.lacrosse"
+        case .golf: "figure.golf"
+        case .downhillSkiing: "figure.skiing.downhill"
+        case .crossCountrySkiing: "figure.skiing.crosscountry"
+        case .snowboarding: "figure.snowboarding"
+        case .skating: "figure.skating"
+        case .surfing: "figure.surfing"
         case .coreTraining: "figure.core.training"
         case .flexibility, .cooldown, .preparationAndRecovery: "figure.flexibility"
         case .taiChi: "figure.taichi"
@@ -1039,7 +1086,7 @@ public nonisolated enum WorkoutActivityType: String, Codable, CaseIterable, Iden
         switch self {
         case .running, .walking, .hiking, .cycling, .swimmingPool, .swimmingOpenWater, .rowing:
             true
-        case .indoorCycling, .yoga, .pilates, .barre, .dance, .socialDance, .elliptical, .stairClimbing, .stairs, .hiit, .kickboxing, .martialArts, .climbing, .jumpRope, .tennis, .basketball, .soccer, .pickleball, .badminton, .tableTennis, .racquetball, .squash, .coreTraining, .flexibility, .mindAndBody, .taiChi, .functionalStrengthTraining, .traditionalStrengthTraining, .crossTraining, .mixedCardio, .preparationAndRecovery, .cooldown, .other:
+        case .indoorCycling, .yoga, .pilates, .barre, .dance, .socialDance, .elliptical, .stairClimbing, .stairs, .hiit, .kickboxing, .martialArts, .climbing, .jumpRope, .tennis, .basketball, .soccer, .pickleball, .badminton, .tableTennis, .racquetball, .squash, .boxing, .wrestling, .volleyball, .americanFootball, .baseball, .softball, .hockey, .rugby, .lacrosse, .golf, .downhillSkiing, .crossCountrySkiing, .snowboarding, .skating, .surfing, .coreTraining, .flexibility, .mindAndBody, .taiChi, .functionalStrengthTraining, .traditionalStrengthTraining, .crossTraining, .mixedCardio, .preparationAndRecovery, .cooldown, .other:
             false
         }
     }
@@ -1048,7 +1095,7 @@ public nonisolated enum WorkoutActivityType: String, Codable, CaseIterable, Iden
         switch self {
         case .running, .walking, .hiking:
             true
-        case .cycling, .indoorCycling, .yoga, .pilates, .barre, .dance, .socialDance, .swimmingPool, .swimmingOpenWater, .rowing, .elliptical, .stairClimbing, .stairs, .hiit, .kickboxing, .martialArts, .climbing, .jumpRope, .tennis, .basketball, .soccer, .pickleball, .badminton, .tableTennis, .racquetball, .squash, .coreTraining, .flexibility, .mindAndBody, .taiChi, .functionalStrengthTraining, .traditionalStrengthTraining, .crossTraining, .mixedCardio, .preparationAndRecovery, .cooldown, .other:
+        case .cycling, .indoorCycling, .yoga, .pilates, .barre, .dance, .socialDance, .swimmingPool, .swimmingOpenWater, .rowing, .elliptical, .stairClimbing, .stairs, .hiit, .kickboxing, .martialArts, .climbing, .jumpRope, .tennis, .basketball, .soccer, .pickleball, .badminton, .tableTennis, .racquetball, .squash, .boxing, .wrestling, .volleyball, .americanFootball, .baseball, .softball, .hockey, .rugby, .lacrosse, .golf, .downhillSkiing, .crossCountrySkiing, .snowboarding, .skating, .surfing, .coreTraining, .flexibility, .mindAndBody, .taiChi, .functionalStrengthTraining, .traditionalStrengthTraining, .crossTraining, .mixedCardio, .preparationAndRecovery, .cooldown, .other:
             false
         }
     }
@@ -1057,18 +1104,18 @@ public nonisolated enum WorkoutActivityType: String, Codable, CaseIterable, Iden
         switch self {
         case .functionalStrengthTraining, .traditionalStrengthTraining:
             30
-        case .yoga, .pilates, .barre, .flexibility, .mindAndBody, .taiChi:
+        case .yoga, .pilates, .barre, .flexibility, .mindAndBody, .taiChi, .golf, .downhillSkiing, .crossCountrySkiing, .snowboarding, .surfing:
             60
-        case .running, .walking, .hiking, .cycling, .indoorCycling, .dance, .socialDance, .swimmingPool, .swimmingOpenWater, .rowing, .elliptical, .stairClimbing, .stairs, .hiit, .kickboxing, .martialArts, .climbing, .jumpRope, .tennis, .basketball, .soccer, .pickleball, .badminton, .tableTennis, .racquetball, .squash, .coreTraining, .crossTraining, .mixedCardio, .preparationAndRecovery, .cooldown, .other:
+        case .running, .walking, .hiking, .cycling, .indoorCycling, .dance, .socialDance, .swimmingPool, .swimmingOpenWater, .rowing, .elliptical, .stairClimbing, .stairs, .hiit, .kickboxing, .martialArts, .climbing, .jumpRope, .tennis, .basketball, .soccer, .pickleball, .badminton, .tableTennis, .racquetball, .squash, .boxing, .wrestling, .volleyball, .americanFootball, .baseball, .softball, .hockey, .rugby, .lacrosse, .skating, .coreTraining, .crossTraining, .mixedCardio, .preparationAndRecovery, .cooldown, .other:
             45
         }
     }
 
     public var fernletCategory: WorkoutType {
         switch self {
-        case .running, .walking, .hiking, .cycling, .indoorCycling, .swimmingPool, .swimmingOpenWater, .rowing, .elliptical, .stairClimbing, .stairs, .jumpRope, .hiit, .crossTraining, .mixedCardio, .tennis, .basketball, .soccer, .pickleball, .badminton, .tableTennis, .racquetball, .squash:
+        case .running, .walking, .hiking, .cycling, .indoorCycling, .swimmingPool, .swimmingOpenWater, .rowing, .elliptical, .stairClimbing, .stairs, .jumpRope, .hiit, .crossTraining, .mixedCardio, .tennis, .basketball, .soccer, .pickleball, .badminton, .tableTennis, .racquetball, .squash, .volleyball, .americanFootball, .baseball, .softball, .hockey, .rugby, .lacrosse, .downhillSkiing, .crossCountrySkiing, .snowboarding, .skating:
             .cardio
-        case .yoga, .pilates, .barre, .dance, .socialDance, .flexibility, .mindAndBody, .taiChi, .coreTraining, .functionalStrengthTraining, .traditionalStrengthTraining, .other, .preparationAndRecovery, .cooldown, .kickboxing, .martialArts, .climbing:
+        case .yoga, .pilates, .barre, .dance, .socialDance, .flexibility, .mindAndBody, .taiChi, .coreTraining, .functionalStrengthTraining, .traditionalStrengthTraining, .other, .preparationAndRecovery, .cooldown, .kickboxing, .martialArts, .climbing, .boxing, .wrestling, .golf, .surfing:
             .fullBody
         }
     }

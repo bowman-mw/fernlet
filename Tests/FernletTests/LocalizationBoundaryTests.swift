@@ -835,9 +835,12 @@ struct LocalizationBoundaryTests {
                 "Running", "Walking", "Hiking", "Cycling", "Indoor Cycling",
                 "Yoga", "Pilates", "Barre", "Dance", "Social Dance",
                 "Pool Swim", "Open Water Swim", "Rowing", "Elliptical", "Stair Climbing", "Stairs",
-                "HIIT", "Kickboxing", "Martial Arts", "Climbing", "Jump Rope",
+                "HIIT", "Kickboxing", "Martial Arts", "Boxing", "Wrestling", "Climbing", "Jump Rope",
                 "Tennis", "Basketball", "Soccer", "Pickleball", "Badminton", "Table Tennis",
                 "Racquetball", "Squash",
+                "Volleyball", "American Football", "Baseball", "Softball", "Hockey", "Rugby", "Lacrosse",
+                "Golf",
+                "Downhill Skiing", "Cross-Country Skiing", "Snowboarding", "Skating", "Surfing",
                 "Core Training", "Flexibility", "Mind and Body", "Tai Chi",
                 "Functional Strength Training", "Traditional Strength Training",
                 "Cross Training", "Mixed Cardio", "Preparation and Recovery", "Cooldown",
@@ -2802,7 +2805,7 @@ struct LocalizationBoundaryTests {
                      source: "OnboardingChoiceRow.subtitle, forked String → LocalizedStringKey"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Lower-carb options without strict tracking.",
                      source: "OnboardingChoiceRow.subtitle, forked String → LocalizedStringKey"),
-        // Domain display names (2026-10-19). The forty `activityType.*` keys are checked from
+        // Domain display names (2026-10-19). The `activityType.*` keys (fifty-five since round 2's R5) are checked from
         // `allCases` in `everyActivityTypeNameReachedTheDomainCatalog`.
         HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings", key: "workoutMode.strengthTraining",
                      source: "WorkoutMode.label, literal → String(localized:bundle: .module)"),
@@ -2918,7 +2921,7 @@ struct LocalizationBoundaryTests {
 
     /// Every activity type's localized name reached the domain catalog (2026-10-19).
     ///
-    /// Forty `String(localized:)` lines, each revertible to a bare literal on its own without a
+    /// Fifty-five `String(localized:)` lines, each revertible to a bare literal on its own without a
     /// compile error or a visible change in English, so they are checked from `allCases` rather
     /// than pinned one by one in ``harvestedForkKeys``. The key is the case name, which is also the
     /// raw value: the enum declares no custom raw values.
