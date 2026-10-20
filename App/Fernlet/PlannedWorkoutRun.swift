@@ -17,6 +17,7 @@
 //
 
 import Foundation
+import DiaryStore
 import FernletDomainModel
 import FernletFoundation
 
