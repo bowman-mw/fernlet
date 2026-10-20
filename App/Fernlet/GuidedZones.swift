@@ -32,18 +32,24 @@ import FernletUI
 import HealthKitGateway
 
 /// The guided runner's heart-rate switches: "Heart rate during cardio" and "Zone nudges", both off until
-/// the person turns them on.
+/// the person turns them on — and, beside them, the person's own maximum heart rate ("My max heart
+/// rate"), which the zones stand on in place of the age estimate when it is set.
 ///
 /// **Device-local `UserDefaults`, never synced**, beside ``WorkoutCuePreferences`` and for the same
-/// reason: which sensors are paired, and whether this phone may buzz, belong to the device in hand. Kept
-/// by "Delete everything", like the cue switches (`Docs/PrivacyWipeCoverage.md`): preferences, not
-/// records. The keys are FROZEN persisted tokens, spelled once here and read and written only through
-/// this type, so the wipe wall resolves every access to its literal.
+/// reason: which sensors are paired, and whether this phone may buzz, belong to the device in hand. The
+/// switches are kept by "Delete everything", like the cue switches (`Docs/PrivacyWipeCoverage.md`):
+/// preferences, not records. The maximum heart rate is CLEARED by it (``clearMaxHeartRate(in:)``): it is
+/// a fact about the person's body, not a preference. The keys are FROZEN persisted tokens, spelled once
+/// here and read and written only through this type, so the wipe wall resolves every access to its
+/// literal.
 struct WorkoutZonePreferences: Equatable {
     /// `Bool`, default `false`: read live heart rate during guided cardio.
     static let liveHeartRateKey = "fernlet.workoutCues.liveHeartRate"
     /// `Bool`, default `false`: a light tap when the heart rate drifts out of the target zone.
     static let zoneNudgesKey = "fernlet.workoutCues.zoneNudges"
+    /// `Int`, unset by default: the person's own maximum heart rate in beats per minute. Only a value in
+    /// ``HeartRateZones/ownMaximumRange`` is ever read back.
+    static let maxHeartRateKey = "fernlet.workoutCues.maxHeartRate"
 
     /// Read live heart rate during guided cardio.
     var liveHeartRate: Bool
@@ -65,6 +71,41 @@ struct WorkoutZonePreferences: Equatable {
     static func save(_ preferences: WorkoutZonePreferences, in defaults: UserDefaults = .standard) {
         defaults.set(preferences.liveHeartRate, forKey: liveHeartRateKey)
         defaults.set(preferences.zoneNudges, forKey: zoneNudgesKey)
+    }
+
+    // MARK: My max heart rate
+
+    /// The person's own maximum heart rate, or nil when none is stored or the stored value lies outside
+    /// ``HeartRateZones/ownMaximumRange`` (a value from elsewhere is never trusted).
+    static func maxHeartRate(in defaults: UserDefaults = .standard) -> Int? {
+        guard let value = defaults.object(forKey: maxHeartRateKey) as? Int,
+              HeartRateZones.ownMaximumRange.contains(value) else { return nil }
+        return value
+    }
+
+    /// Stores `value` as the person's own maximum heart rate — the Workout setup sheet's Save. Nil, or a
+    /// value outside ``HeartRateZones/ownMaximumRange``, clears it, so the zones go back to the age
+    /// estimate.
+    static func saveMaxHeartRate(_ value: Int?, in defaults: UserDefaults = .standard) {
+        guard let value, HeartRateZones.ownMaximumRange.contains(value) else {
+            clearMaxHeartRate(in: defaults)
+            return
+        }
+        defaults.set(value, forKey: maxHeartRateKey)
+    }
+
+    /// Removes the stored maximum heart rate: an emptied field's Save, and "Delete everything".
+    static func clearMaxHeartRate(in defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: maxHeartRateKey)
+    }
+
+    /// The maximum heart rate `text` (what the person typed) gives: a whole number of beats per minute
+    /// in ``HeartRateZones/ownMaximumRange``, or nil — empty, not a whole number, or out of range.
+    static func maxHeartRate(typed text: String) -> Int? {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard let number = LocaleTolerantNumber.double(from: trimmed), number == number.rounded(),
+              let whole = Int(exactly: number), HeartRateZones.ownMaximumRange.contains(whole) else { return nil }
+        return whole
     }
 }
 
