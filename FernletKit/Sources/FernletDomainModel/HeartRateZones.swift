@@ -4,11 +4,14 @@ import Foundation
 /// resting heart rate, and the zone each guided cardio pace aims for (comparison report idea 9, roadmap
 /// step 4b, 2026-10-20).
 ///
-/// **Maximum heart rate: Tanaka.** `208 − 0.7 × age` (Tanaka, Monahan & Seals, *J Am Coll Cardiol*
-/// 2001: a meta-analysis of 351 studies and 18,712 people, checked in a lab study of 514). It tracks
-/// measured maxima better than the older `220 − age`, which under-reads after about 40. Age is clamped
-/// to ``ageRange`` first; a formula is a population estimate, which is why every target is a range to
-/// aim for and the talk test is always the fallback.
+/// **Maximum heart rate: the person's own, else Tanaka.** A maximum they know (Workout setup's "My max
+/// heart rate": from a lab test, or a hard effort they measured) wins when it lies in
+/// ``ownMaximumRange``; anything outside is ignored. Otherwise `208 − 0.7 × age` (Tanaka, Monahan &
+/// Seals, *J Am Coll Cardiol* 2001: a meta-analysis of 351 studies and 18,712 people, checked in a lab
+/// study of 514). It tracks measured maxima better than the older `220 − age`, which under-reads after
+/// about 40. Age is clamped to ``ageRange`` first; a formula is a population estimate — one person's
+/// true maximum can sit 10–20 beats either side of it — which is why the person may give their own,
+/// every target is a range to aim for, and the talk test is always the fallback.
 ///
 /// **Zones: heart-rate reserve (Karvonen) when there is a resting heart rate,** `rest + p × (max −
 /// rest)` (Karvonen, Kentala & Mustala 1957): the same percentage asks a heart with a lower resting
@@ -44,6 +47,9 @@ public nonisolated struct HeartRateZones: Equatable, Sendable {
     public static let restingHeartRateRange: ClosedRange<Double> = 30...110
     /// The least heart-rate reserve (maximum minus resting) Karvonen is used with, in beats per minute.
     public static let minimumReserve: Double = 20
+    /// The maximum heart rates taken as the person's own, in beats per minute. Wide enough for any
+    /// measured adult maximum, narrow enough that a typo ("1800", "18") is ignored rather than trusted.
+    public static let ownMaximumRange: ClosedRange<Int> = 120...220
     /// The live readings taken as real heart rates, in beats per minute; anything else is sensor noise.
     public static let plausibleBPM: ClosedRange<Int> = 25...250
 
@@ -54,22 +60,29 @@ public nonisolated struct HeartRateZones: Equatable, Sendable {
     /// The zone an interval's hard part aims for.
     public static let hardZone = 4
 
-    /// The estimated maximum heart rate (Tanaka), in beats per minute.
+    /// The maximum heart rate, in beats per minute: the person's own when they gave one, else Tanaka's.
     public let maximumHeartRate: Double
+    /// Whether ``maximumHeartRate`` is the person's own number rather than Tanaka's estimate.
+    public let isOwnMaximum: Bool
     /// The resting heart rate the zones were built on, or nil when they are percent of maximum.
     public let restingHeartRate: Double?
 
     /// How the zones were computed: Karvonen when a trusted resting rate was given.
     public var method: Method { restingHeartRate == nil ? .percentOfMaximum : .heartRateReserve }
 
-    /// Zones for a person of `age`, on their resting heart rate when one is given and trusted.
+    /// Zones for a person of `age`, on their own maximum and their resting heart rate when each is
+    /// given and trusted.
     ///
     /// - Parameters:
-    ///   - age: Years; clamped to ``ageRange``.
+    ///   - age: Years; clamped to ``ageRange``. Unused when `ownMaximum` is trusted.
     ///   - restingHeartRate: Apple Health's latest resting heart rate in beats per minute, or nil.
-    public init(age: Int, restingHeartRate: Double? = nil) {
-        let maximum = Self.tanakaMaximum(age: age)
+    ///   - ownMaximum: The person's own maximum heart rate ("My max heart rate"), or nil. Used in place
+    ///     of Tanaka's estimate when it lies in ``ownMaximumRange``; ignored otherwise.
+    public init(age: Int, restingHeartRate: Double? = nil, ownMaximum: Int? = nil) {
+        let own = ownMaximum.flatMap { Self.ownMaximumRange.contains($0) ? Double($0) : nil }
+        let maximum = own ?? Self.tanakaMaximum(age: age)
         maximumHeartRate = maximum
+        isOwnMaximum = own != nil
         self.restingHeartRate = Self.trustedResting(restingHeartRate, maximum: maximum)
     }
 
