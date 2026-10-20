@@ -7,6 +7,7 @@
 
 import SwiftUI
 import LocalAuthentication
+import Security
 import Combine
 import FernletDomainModel
 import FernletFoundation
@@ -1733,8 +1734,9 @@ public struct FernletLockView: View {
     /// **Security — this must never be reachable from a success.** `FernletLockService.unlock`
     /// answers a duress code and a real passcode identically, on purpose; an announcement keyed off
     /// *which* credential matched would be a duress oracle audible from across the room. So this is
-    /// called only from ``attemptUnlock()``'s catch arms, where nothing knows or can know which
-    /// secret was tried — every path through it has already failed.
+    /// called only from the catch arms of ``attemptUnlock()`` and ``triggerBiometric()``, where
+    /// nothing knows or can know which secret was tried — every path through them has already
+    /// failed.
     ///
     /// Where a failure ALSO sets `errorMessage`, two channels carry it: this announcement and the
     /// `@AccessibilityFocusState` move onto the error text, which speaks the same words. A focus
@@ -1758,23 +1760,10 @@ public struct FernletLockView: View {
         FernletAnnouncer.system.announce(.error, resolved: spoken)
     }
 
-    /// Whether a biometric error is the user declining biometrics rather than biometrics failing.
-    ///
-    /// The gate auto-presents Face ID once per lock session, so someone who prefers to type their
-    /// passcode dismisses that sheet on EVERY entry to the Private tab. Announcing those as failures
-    /// would greet them with an error each time — the opposite of the nothing-silent intent. Real
-    /// failures (a face that did not match, a lockout, a keychain refusal) still speak.
-    private static func isUserDismissal(_ error: any Error) -> Bool {
-        guard let code = (error as? LAError)?.code else { return false }
-        switch code {
-        case .userCancel, .userFallback, .appCancel, .systemCancel: return true
-        default: return false
-        }
-    }
-
-    /// Runs `FernletLockService.unlockWithBiometrics(for:)`. Unavailable biometrics fall back
-    /// silently to passcode entry; recognition failures and reset-required states surface
-    /// as inline messages. Re-entrant calls are ignored while a check is in flight.
+    /// Runs `FernletLockService.unlockWithBiometrics(for:)`. Unavailable biometrics and a
+    /// dismissed system sheet fall back silently to passcode entry; recognition failures and
+    /// reset-required states surface as inline messages. Re-entrant calls are ignored while a
+    /// check is in flight.
     private func triggerBiometric() {
         guard !isCheckingBiometric else { return }
         errorMessage = nil
@@ -1787,25 +1776,14 @@ public struct FernletLockView: View {
                 // way through), so the terminal state is over.
                 contentKeyUnrecoverableCount = 0
                 onUnlocked()
-            } catch FernletLockError.biometricNotAvailable {
-                // Quietly fall back to passcode entry.
-            } catch FernletLockError.biometricFailed {
-                // Named from the service's reported biometry rather than hard-coded "Face ID": the
-                // English literal this replaced told Touch ID and Optic ID users that a sensor they
-                // do not have failed to recognise them, and it would have baked that same wrong
-                // product name into every translation.
-                let unrecognized = FernletLockCopy.Unlock.errorBiometricUnrecognized(
-                    biometricName(lockService.biometricType))
-                errorMessage = unrecognized
-                announceUnlockFailure(unrecognized)
-            } catch FernletLockError.resetRequired {
-                errorMessage = FernletLockCopy.Unlock.errorTooManyAttempts
-                announceUnlockFailure(FernletLockCopy.Unlock.errorTooManyAttempts)
             } catch {
-                // Rendered text unchanged (pre-existing behaviour); only the SPEECH is filtered, so
-                // a dismissed Face ID sheet stops sounding like something went wrong.
-                errorMessage = error.localizedDescription
-                if !Self.isUserDismissal(error) { announceUnlockFailure(error.localizedDescription) }
+                // One answer feeds all three failure channels — the inline text, the error haptic
+                // `body` keys off that text, and the announcement — so a `nil` (a dismissed sheet,
+                // unavailable biometrics) means no text, no buzz and no speech, just the keypad.
+                let failure = FernletBiometricUnlockFailure.message(
+                    for: error, biometry: lockService.biometricType)
+                errorMessage = failure
+                if let failure { announceUnlockFailure(failure) }
             }
         }
     }
@@ -2023,6 +2001,83 @@ public extension View {
                     .frame(maxWidth: .infinity, minHeight: proxy.size.height)
             }
             .scrollBounceBehavior(.basedOnSize)
+        }
+    }
+}
+
+// MARK: - Biometric unlock failures
+
+/// What ``FernletLockView`` says when a biometric unlock does not unlock: the inline message, or
+/// `nil` to fall back to the keypad without a word.
+///
+/// The view sets its `errorMessage` from this answer and nothing else, and the screen's error
+/// haptic and its failure announcement both key off that message, so leaving a dismissal out of
+/// the answer keeps it out of all three channels. It used to be decided per channel. The speech
+/// skipped a dismissed sheet, but the red text and the error buzz still fired, and the gate
+/// auto-presents Face ID once per lock session. Someone who prefers typing their passcode waves
+/// that sheet away on every visit to the Private tab, and every visit greeted them with a failure.
+///
+/// Decided from the error alone. It never knows which credential last opened the lock and must not
+/// learn it: a duress session suppresses biometrics with the same `.biometricNotAvailable` every
+/// other refusal uses, and this answers that refusal with the same silence.
+///
+/// Pure and main-actor (the module's default isolation), so a unit test drives every error the
+/// biometric path can throw without hosting the view.
+enum FernletBiometricUnlockFailure {
+    /// The inline message for a biometric attempt that failed with `error`, or `nil` when the screen
+    /// should stay as it is.
+    ///
+    /// - `nil`: the person dismissed the system sheet (``isDismissal(_:)``), or biometrics are not
+    ///   available right now (`FernletLockError.biometricNotAvailable`, which also covers
+    ///   PIN-before-biometrics and duress suppression). Either way the keypad is the answer.
+    /// - The "didn't recognize you" line for `FernletLockError.biometricFailed`, named from the
+    ///   device's biometry rather than a hard-coded "Face ID". The English literal this replaced
+    ///   told Touch ID and Optic ID users that a sensor they do not have failed, and it would have
+    ///   baked the wrong product name into every translation.
+    /// - The too-many-attempts line for `FernletLockError.resetRequired`.
+    /// - The error's own description for anything else: a lockout, a face that never matched within
+    ///   the system's retry limit, a keychain that refused to answer.
+    ///
+    /// - Parameters:
+    ///   - error: What `FernletLockService.unlockWithBiometrics(for:)` threw.
+    ///   - biometry: The device's biometry, for the product name in the unrecognized line.
+    /// - Returns: An already-localized sentence for the inline error, or `nil` for silence.
+    static func message(for error: any Error, biometry: LABiometryType) -> String? {
+        guard !isDismissal(error) else { return nil }
+        switch error as? FernletLockError {
+        case .biometricNotAvailable?:
+            return nil
+        case .biometricFailed?:
+            return FernletLockCopy.Unlock.errorBiometricUnrecognized(biometricName(biometry))
+        case .resetRequired?:
+            return FernletLockCopy.Unlock.errorTooManyAttempts
+        default:
+            return error.localizedDescription
+        }
+    }
+
+    /// Whether `error` is the person (or the system on their behalf) closing the biometric sheet,
+    /// rather than biometrics failing.
+    ///
+    /// The cancel arrives in one of two shapes, depending on which step was showing UI:
+    /// - **LocalAuthentication** (the usual one): `KeychainItem.loadBiometricBypassSync` evaluates
+    ///   the access control first and rethrows the reply's error unwrapped, an `NSError` in
+    ///   `LAErrorDomain` that bridges to `LAError`. Cancel, the sheet's fallback button, the app
+    ///   cancelling, and the system cancelling (the app leaving the foreground) are all declines.
+    /// - **Keychain**: if the read that follows ever puts up its own prompt, a cancel there comes
+    ///   back as `errSecUserCanceled`, wrapped by that read as
+    ///   `FernletLockError.keychainFailure(operation:status:)`.
+    ///
+    /// Every other status and code, `errSecAuthFailed` and `.biometryLockout` included, is a real
+    /// failure and still shows, speaks and buzzes.
+    static func isDismissal(_ error: any Error) -> Bool {
+        if case .keychainFailure(_, let status)? = error as? FernletLockError {
+            return status == errSecUserCanceled
+        }
+        guard let code = (error as? LAError)?.code else { return false }
+        switch code {
+        case .userCancel, .userFallback, .appCancel, .systemCancel: return true
+        default: return false
         }
     }
 }
