@@ -10,8 +10,12 @@
 @font-face { font-family: "Playfair Display"; src: url("fonts/PlayfairDisplay-Italic.woff2") format("woff2-variations"); font-style: italic; font-display: swap; }
 
 :root{
-  --color-parchment:#F5EFE0; --color-cream:#FBF7EE; --color-bark:#3D2E1E; --color-slate:#7B8B99;
-  --color-moss:#5A7A52; --color-fern:#8AAD7E; --color-lichen:#C8DBC2;
+  /* Slate and moss are a shade darker than the app's design-system values (#7B8B99, #5A7A52) so the
+     text they colour clears WCAG AA 4.5:1 on parchment and cream: slate 4.70:1 / 5.04:1, moss
+     4.77:1 / 5.12:1 (it was 3.05 / 3.28 and 4.22 / 4.53). The brand mark and decorative fills keep
+     #5A7A52. */
+  --color-parchment:#F5EFE0; --color-cream:#FBF7EE; --color-bark:#3D2E1E; --color-slate:#5E6C79;
+  --color-moss:#53714C; --color-fern:#8AAD7E; --color-lichen:#C8DBC2;
   --color-terracotta:#C0674A; --color-goldenrod:#D4A843;
   --journal-bright:#EDD87A; --journal-good:#A8C89C; --journal-neutral:#B8B0A4;
   --journal-quiet:#94AEBF; --journal-tired:#A08898; --journal-hard:#C88070;
@@ -305,7 +309,7 @@ h2{font-family:var(--font-header);font-size:clamp(28px,3.6vw,42px);font-weight:4
 
 /* ── Workouts ────────────────────────────────────── */
 /* --wk-soft is the section's secondary ink: the slate hue, darkened in light mode so 16px body
-   text clears 4.5:1 on both cream and parchment (slate itself sits near 3:1 there). */
+   text clears 4.5:1 on both cream and parchment (5.05:1 on parchment; slate itself now clears 4.70:1). */
 #workouts{--wk-soft:#5A6773}
 .wk-row+.wk-row{margin-top:clamp(24px,4vw,48px)}
 .wk-row .feature p,.wk-row .step p{color:var(--wk-soft)}
@@ -544,20 +548,21 @@ footer{border-top:1px solid var(--hair);padding:30px 0 44px}
 
   /* The lit-object islands. Everything inside keeps the light palette. */
   .room,.phone,.mini-body{
-    --color-parchment:#F5EFE0; --color-cream:#FBF7EE; --color-bark:#3D2E1E; --color-slate:#7B8B99;
+    --color-parchment:#F5EFE0; --color-cream:#FBF7EE; --color-bark:#3D2E1E; --color-slate:#5E6C79;
     --color-lichen:#C8DBC2; --ink2:#5B4A38; --ink3:#4A3A2A;
     --hair:rgba(61,46,30,.09); --hair-2:rgba(61,46,30,.18); --sunken:rgba(61,46,30,.07);
     color:#3D2E1E}
   .room{border-color:rgba(0,0,0,.45)}
 
-  /* Buttons: moss stays a mid green so cream text keeps its contrast, and the bark chip
-     inverts to a light chip — a near-black button disappears on a near-black page. */
-  .btn-moss{background:#5E8054;color:#F5EFE0}
-  .btn-moss:hover{background:#527147;color:#F5EFE0}
+  /* Buttons: moss stays the light theme's mid green so cream text keeps its contrast (4.77:1;
+     the brighter #5E8054 it had was 3.90:1), and the bark chip inverts to a light chip — a
+     near-black button disappears on a near-black page. */
+  .btn-moss{background:#53714C;color:#F5EFE0}
+  .btn-moss:hover{background:#4E6B47;color:#F5EFE0}
   .btn-bark{background:#F1EDE3;color:#1C1E1B}
   .btn-cream{color:#1C1E1B}
   .btn-cream:hover{color:#1C1E1B}
-  .tabs button.on{background:#5E8054;color:#F5EFE0}
+  .tabs button.on{background:#53714C;color:#F5EFE0}
 
   /* Green tints that carried dark-green text in light mode. */
   .pill{background:rgba(127,176,105,.16);color:#A8C89C}
