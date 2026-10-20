@@ -101,23 +101,26 @@ extension WorkoutProgram {
                         slots: loaded.map(\.slot))
     }
 
-    /// Puts warm-up sets in front of each heavy main lift (``WorkoutWarmUpSets``) when the lifter has
-    /// them on and today isn't a light day. Runs after the calibration, so a lift the calibration
-    /// already ramps into gets no second ramp; each warm-up is a copy of its lift's pick, so it shares
-    /// the lift's slot, target and fatigue context.
+    /// Puts warm-up sets in front of the session's first heavy main lift (``WorkoutWarmUpSets``) when
+    /// the lifter has them on and today isn't a light day — that lift only, and none when it doesn't
+    /// qualify. Runs after the calibration, so a lift the calibration already ramps into gets no second
+    /// ramp; the sets land on the location's own loads when its weights are set. Each warm-up is a copy
+    /// of its lift's pick, so it shares the lift's slot, target and fatigue context.
     static func addWarmUpSets(_ loaded: inout [LoadedPick], inputs: SlotInputs, load: WorkoutLoadContext) {
-        guard load.warmUpSets, inputs.intensity != .light else { return }
-        var expanded: [LoadedPick] = []
-        for pick in loaded {
-            for step in WorkoutWarmUpSets.steps(for: pick.exercise, pattern: pick.target.movementPattern) {
-                var warmUp = pick
-                warmUp.exercise = step
-                warmUp.plan = nil
-                expanded.append(warmUp)
-            }
-            expanded.append(pick)
+        guard load.warmUpSets, inputs.intensity != .light,
+              let index = WorkoutWarmUpSets.firstHeavyMainLift(
+                  in: loaded.map(\.exercise), patterns: loaded.map { Optional($0.target.movementPattern) }
+              ) else { return }
+        let pick = loaded[index]
+        let ladder = pick.exercise.guidance.flatMap { loadLadder(for: $0, at: inputs.location) }
+        let steps = WorkoutWarmUpSets.steps(for: pick.exercise, pattern: pick.target.movementPattern, ladder: ladder)
+        let warmUps = steps.map { step in
+            var warmUp = pick
+            warmUp.exercise = step
+            warmUp.plan = nil
+            return warmUp
         }
-        loaded = expanded
+        loaded.insert(contentsOf: warmUps, at: index)
     }
 
     /// The plateau status of a rep-counted lift, nil for holds and lifts with no history.
