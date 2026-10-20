@@ -4904,7 +4904,8 @@ final class FernletStore {
                     ?? WorkoutRestGuidance.restSeconds(forExerciseNamed: pe.name, role: pe.role, goal: goal),
                 holdSeconds: pe.holdSeconds,
                 blockRaw: pe.block.rawValue,
-                sideRaw: pe.side?.rawValue
+                sideRaw: pe.side?.rawValue,
+                tracking: GuidedRunLoadLog.tracking(for: pe)
             )
         }
         guard !exercises.isEmpty else { return false }
@@ -4990,6 +4991,22 @@ final class FernletStore {
         }
     }
 
+    /// Applies an in-app load-tracking edit (a weight pick, edited reps, an effort tap, an override
+    /// reason, a skip mark) to the live run and mirrors it, so a finish from the Lock Screen still
+    /// logs it. No phase change, so the Live Activity is re-synced only when the step count moved (a
+    /// missed max attempt drops the attempts after it). No-op once the run is done.
+    func editGuidedRun(_ edit: (inout GuidedWorkoutRunState) -> Void) {
+        guard var state = guidedRunState, !state.isDone else { return }
+        let stepCount = state.exercises.count
+        edit(&state)
+        guidedRunState = state
+        mirrorGuidedRunState(state)
+        if state.exercises.count != stepCount {
+            let snapshot = state
+            syncActivity { await GuidedWorkoutActivityBridge.sync(to: snapshot) }
+        }
+    }
+
     /// Abandon the active run (the sheet's "End without logging"): nothing is logged. Clears the group
     /// file and ends the activity.
     func abandonGuidedRun() {
@@ -5052,10 +5069,14 @@ final class FernletStore {
         let kind = SessionKind(rawValue: state.sessionKindRaw) ?? .fullBody
         let mode: WorkoutMode = (kind == .strength || kind == .fullBody) ? .strengthTraining : .activity
         let type: WorkoutType = (kind == .cardio) ? .cardio : .fullBody
+        // Tracked lifts log what happened — the weight picked and any edited reps — as text and as
+        // structured results; a run with nothing tracked logs its plan text as before.
+        let loadLog = GuidedRunLoadLog.log(for: state)
         var workout = Workout(
-            name: state.title, type: type, mode: mode, exercises: state.suggestionExercisesText,
+            name: state.title, type: type, mode: mode, exercises: loadLog?.text ?? state.suggestionExercisesText,
             rpe: nil, notes: state.suggestionNotes, duration: nil,
-            loggedFromGuidedSession: true, intensity: intensity
+            loggedFromGuidedSession: true, intensity: intensity,
+            exerciseResults: loadLog.flatMap { $0.results.isEmpty ? nil : $0.results }
         )
         if dayKey != todayKey,
            let targetDate = FernletDate.date(fromDayKey: dayKey),

@@ -1699,6 +1699,9 @@
     "Change name" : {
 
     },
+    "Change only the sets that went differently." : {
+
+    },
     "Change passcode" : {
 
     },
@@ -2483,6 +2486,9 @@
     "Ease into each stretch — no bouncing." : {
 
     },
+    "Easy" : {
+
+    },
     "Easy — you could keep this up for a long while." : {
 
     },
@@ -2520,6 +2526,15 @@
 
     },
     "Edit recipe" : {
+
+    },
+    "Edit reps" : {
+
+    },
+    "Edit reps for %@" : {
+
+    },
+    "Edit reps so far" : {
 
     },
     "Edit workout" : {
@@ -2650,6 +2665,9 @@
 
     },
     "Equip" : {
+
+    },
+    "Equipment" : {
 
     },
     "Equipment & limits · %@" : {
@@ -3200,6 +3218,9 @@
     "Goals are crafted entirely on your device — your health details never leave your phone." : {
 
     },
+    "Good" : {
+
+    },
     "Good vibes" : {
 
     },
@@ -3299,6 +3320,9 @@
     "Hearts travel in person for now — tap Send to turn on delivery while apart." : {
 
     },
+    "Heavier" : {
+
+    },
     "Height" : {
 
     },
@@ -3363,6 +3387,9 @@
 
     },
     "How your phases tend to go" : {
+
+    },
+    "How's it feeling?" : {
 
     },
     "How's today feeling?" : {
@@ -3693,6 +3720,9 @@
     "Light and steady — just waking things up." : {
 
     },
+    "Lighter" : {
+
+    },
     "Likely next period" : {
 
     },
@@ -3940,6 +3970,9 @@
 
     },
     "Matching" : {
+
+    },
+    "Max attempt — use a spotter or safety arms, and stop if your form breaks. Missed it? Set the reps to 0 and the rest are skipped." : {
 
     },
     "Meal" : {
@@ -4387,6 +4420,9 @@
     "Not recorded" : {
 
     },
+    "Not set" : {
+
+    },
     "Not shared" : {
 
     },
@@ -4474,6 +4510,9 @@
     "Off in Settings" : {
 
     },
+    "Off, the check is a few lighter sets and one hard set — easier on you, and usually the better guide to your training weights." : {
+
+    },
     "On" : {
 
     },
@@ -4520,6 +4559,9 @@
 
     },
     "Only say yes if that phone is in front of you and it is the one you set this up with. Saying yes hands back the key to everything it had sealed." : {
+
+    },
+    "Only with a spotter or safety arms. Stop if your form breaks, and skip it when you're sore, sick or short on sleep." : {
 
     },
     "Open" : {
@@ -4600,6 +4642,9 @@
     "Oreos and other sandwich cookies" : {
 
     },
+    "Other" : {
+
+    },
     "Other cycle sample" : {
 
     },
@@ -4669,6 +4714,9 @@
       }
     },
     "PER SERVING" : {
+
+    },
+    "Pain" : {
 
     },
     "Pain, form issues, stopped early..." : {
@@ -4869,6 +4917,9 @@
     "Pick a starter name and color. You can change these later." : {
 
     },
+    "Pick a weight you could lift about 2 more times than asked." : {
+
+    },
     "Pick an eating pattern" : {
 
     },
@@ -4936,6 +4987,9 @@
 
     },
     "Point the camera at the product's barcode." : {
+
+    },
+    "Preference" : {
 
     },
     "Preferences" : {
@@ -5084,6 +5138,19 @@
     },
     "RPE (1–10)" : {
 
+    },
+    "Ramp-up set — light, just getting ready." : {
+
+    },
+    "Range %@ · suggested %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Range %1$@ · suggested %2$@"
+          }
+        }
+      }
     },
     "Re-import" : {
 
@@ -5954,6 +6021,16 @@
         }
       }
     },
+    "Set %lld: %lld reps" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set %1$lld: %2$lld reps"
+          }
+        }
+      }
+    },
     "Set a passcode" : {
 
     },
@@ -6486,6 +6563,18 @@
     "Targets: %@" : {
 
     },
+    "Test a true max?" : {
+
+    },
+    "Test set: as many good reps as you can, stopping with 1–2 left. Edit the reps when you're done." : {
+
+    },
+    "Thanks — Fernlet will adjust from here." : {
+
+    },
+    "Thanks — Fernlet will hold this lift steady. If it keeps hurting, try a different exercise or check with a professional." : {
+
+    },
     "That code didn't match" : {
 
     },
@@ -6856,10 +6945,19 @@
     "Together, in person." : {
 
     },
+    "Too heavy" : {
+
+    },
+    "Too light" : {
+
+    },
     "Total Tonnage" : {
       "comment" : "Silly stat title: total weight lifted"
     },
     "Total today" : {
+
+    },
+    "Tough" : {
 
     },
     "Tour de France: %@ ridden. Nobody tell the peloton." : {
@@ -6881,6 +6979,9 @@
 
     },
     "Trends" : {
+
+    },
+    "True max at monthly strength checks" : {
 
     },
     "Try again" : {
@@ -7462,6 +7563,9 @@
     },
     "You've moved %@ so far. Gently, I hope." : {
       "comment" : "Companion line about weight lifted"
+    },
+    "You've picked outside the range a few times. What's up?" : {
+
     },
     "You've saved %lld locations — remove one to add another." : {
 

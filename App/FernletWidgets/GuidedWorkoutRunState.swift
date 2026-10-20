@@ -66,10 +66,14 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         var blockRaw: String?
         /// "left" | "right" for a one-sided step — the domain `ExerciseSide` raw value; nil otherwise.
         var sideRaw: String?
+        /// The load plan and what actually happened, for a rep-counted lift the planner prescribed;
+        /// nil on every other step and in a run persisted before load tracking existed.
+        var tracking: Tracking?
 
         init(
             id: UUID = UUID(), name: String, sets: Int, reps: String, roleRaw: String, fromCatalog: Bool,
-            restSeconds: Int, holdSeconds: Int? = nil, blockRaw: String? = nil, sideRaw: String? = nil
+            restSeconds: Int, holdSeconds: Int? = nil, blockRaw: String? = nil, sideRaw: String? = nil,
+            tracking: Tracking? = nil
         ) {
             self.id = id
             self.name = name
@@ -81,10 +85,62 @@ struct GuidedWorkoutRunState: Codable, Hashable {
             self.holdSeconds = holdSeconds
             self.blockRaw = blockRaw
             self.sideRaw = sideRaw
+            self.tracking = tracking
         }
 
         /// The step's block, with an untagged step (any run built before blocks existed) as lifting.
         var block: String { blockRaw ?? BlockToken.lifting }
+    }
+
+    /// One lift's load plan (fixed when the run starts) and what happened (set in the app as the
+    /// lifter picks a weight, edits reps, taps an effort, or says why they left the range).
+    ///
+    /// Tokens are the domain's raw values (`LoadUnit`, `Equipment`, `EstimateConfidence`,
+    /// `CalibrationStep`, `ExerciseEffort`, `OverrideReason`), spelled as strings because this shared
+    /// file cannot import the domain. Untouched, the lift logs as "completed as prescribed" at
+    /// `selected` — the suggestion, preselected — with no extra step.
+    struct Tracking: Codable, Hashable {
+        var targetReps: Int
+        var rangeLow: Double?
+        var rangeHigh: Double?
+        var suggested: Double?
+        /// The equipment's weight step; nil when the lift takes no load.
+        var step: Double?
+        var unitRaw: String?
+        var equipmentRaw: String?
+        var confidenceRaw: String?
+        var askReasonOnOverride: Bool
+        var calibrationRaw: String?
+        var easierSession: Bool
+        var compoundsBefore: Int
+
+        /// The weight the lifter will use; the suggestion until they change it.
+        var selected: Double?
+        /// Reps per set when they differed from the target; nil = completed as prescribed.
+        var actualReps: [Int]?
+        var effortRaw: String?
+        var overrideReasonRaw: String?
+        /// The runner skipped past this lift; it is logged as skipped and never read as a result.
+        var skipped: Bool?
+
+        /// Sets an edit may carry at most.
+        static let maxSets = 20
+
+        /// The lift takes a load: the runner shows its weight picker.
+        var isLoadable: Bool { step != nil && unitRaw != nil }
+
+        /// The chosen weight sits outside the prescribed range.
+        var isOutsideRange: Bool {
+            guard let selected, let rangeLow, let rangeHigh else { return false }
+            return selected < rangeLow - 0.01 || selected > rangeHigh + 0.01
+        }
+    }
+
+    /// Calibration-step tokens, spelled here for the same reason as ``BlockToken``.
+    enum CalibrationToken {
+        static let ramp = "ramp"
+        static let test = "test"
+        static let attempt = "attempt"
     }
 
     /// The session-block tokens, spelled here because this shared file cannot import the domain:
@@ -361,6 +417,67 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         restEndsAt = nil
         completedNaturally = true
         phase = .done
+    }
+
+    // MARK: Load tracking (in-app only; the Live Activity never edits these)
+
+    /// The index of the step with `id`, or nil.
+    private func index(of id: UUID) -> Int? {
+        exercises.firstIndex { $0.id == id }
+    }
+
+    /// The weight the lifter picked for one lift, snapped to the equipment's step and kept positive.
+    mutating func selectWeight(_ weight: Double?, forExercise id: UUID) {
+        guard let index = index(of: id), var tracking = exercises[index].tracking, tracking.isLoadable else { return }
+        if let weight, let step = tracking.step, step > 0, weight.isFinite {
+            tracking.selected = max(step, (weight / step).rounded() * step)
+        } else {
+            tracking.selected = nil
+        }
+        exercises[index].tracking = tracking
+    }
+
+    /// The reps of each set when they differed. All-on-target clears the edit (back to "as
+    /// prescribed"). A missed max attempt drops the attempts after it.
+    mutating func setActualReps(_ reps: [Int], forExercise id: UUID) {
+        guard let index = index(of: id), var tracking = exercises[index].tracking else { return }
+        let clean = Array(reps.prefix(Tracking.maxSets)).map { max(0, $0) }
+        let asPrescribed = Array(repeating: tracking.targetReps, count: max(1, exercises[index].sets))
+        tracking.actualReps = clean == asPrescribed ? nil : clean
+        exercises[index].tracking = tracking
+        if tracking.calibrationRaw == CalibrationToken.attempt, clean.allSatisfy({ $0 == 0 }) {
+            dropAttempts(after: index)
+        }
+    }
+
+    /// How the lift felt; nil clears it.
+    mutating func setEffort(_ raw: String?, forExercise id: UUID) {
+        guard let index = index(of: id), exercises[index].tracking != nil else { return }
+        exercises[index].tracking?.effortRaw = raw
+    }
+
+    /// Why the lifter left the range; nil clears it.
+    mutating func setOverrideReason(_ raw: String?, forExercise id: UUID) {
+        guard let index = index(of: id), exercises[index].tracking != nil else { return }
+        exercises[index].tracking?.overrideReasonRaw = raw
+    }
+
+    /// Marks the current lift skipped before the runner jumps past it.
+    mutating func markCurrentSkipped() {
+        guard exercises.indices.contains(exerciseIndex), exercises[exerciseIndex].tracking != nil else { return }
+        exercises[exerciseIndex].tracking?.skipped = true
+    }
+
+    /// Removes the remaining max attempts of the same lift after a miss: only steps after both
+    /// `index` and the cursor, so the cursor stays on the step it was on.
+    private mutating func dropAttempts(after index: Int) {
+        let name = exercises[index].name
+        let floor = max(index, exerciseIndex)
+        exercises = exercises.enumerated().compactMap { offset, exercise in
+            let isLaterAttempt = offset > floor && exercise.name == name
+                && exercise.tracking?.calibrationRaw == CalibrationToken.attempt
+            return isLaterAttempt ? nil : exercise
+        }
     }
 
     // MARK: Live Activity mapping

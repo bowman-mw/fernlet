@@ -96,12 +96,16 @@ final class WorkoutPlanningService {
     /// Builds today's session(s) from the active split: the day after the last split day the user
     /// logged (``WorkoutProgram/nextDayIndex(in:recentSessionNames:)``), so every session comes
     /// round in turn whichever weekdays they train. Equipment + injuries are applied
-    /// deterministically by the engine, and reps/sets reflect logged progression.
+    /// deterministically by the engine; sets, reps and weight ranges follow each lift's logged
+    /// sessions (``WorkoutLoadContextBuilder``), with plateau handling and the monthly calibration.
     func workoutDayPlan(intensity: WorkoutIntensity, context: String) -> WorkoutProgram.DayPlan {
         let history = host.loadDays()
         let split = activeWorkoutSplit(history: history)
         let rotation = WorkoutProgram.nextDayIndex(
             in: split, recentSessionNames: recentWorkoutNamesByDay(history: history)
+        )
+        let load = WorkoutLoadContextBuilder.build(
+            days: history, today: host.day, todayKey: host.todayKey, settings: host.settings
         )
         return WorkoutProgram.dayPlan(
             goal: host.settings.selectedGoal,
@@ -111,7 +115,8 @@ final class WorkoutPlanningService {
             context: context,
             split: split,
             rotationIndex: rotation,
-            progression: host.settings.workoutProgression
+            progression: host.settings.workoutProgression,
+            load: load
         )
     }
 
