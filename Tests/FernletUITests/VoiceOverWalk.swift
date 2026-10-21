@@ -121,7 +121,28 @@ struct VoiceOverWalk {
     /// never through a coordinate.
     func activate(_ element: XCUIElement, file: StaticString = #file, line: UInt = #line) {
         XCTAssertTrue(element.isEnabled, "[\(task)] '\(element.label)' is disabled", file: file, line: line)
+        scrollClearOfTabBar(element)
         element.tap()
+    }
+
+    /// Most drags spent bringing one element out from under the tab bar.
+    static let maxTabBarClearingDrags = 4
+
+    /// iOS 26's floating tab bar draws over the bottom of a scrolling screen, and XCUITest counts an
+    /// element under it as visible, so `tap()` lands on the bar instead (Home's first Quick log row at
+    /// launch, once the sick-day card pushes it down). VoiceOver's cursor would bring the element fully
+    /// into view, so drag the content up until the element clears the bar. Only while the bar itself is
+    /// hittable: a sheet over it means the element is in the sheet, which is never dragged.
+    private func scrollClearOfTabBar(_ element: XCUIElement) {
+        let bar = app.tabBars.firstMatch
+        guard bar.exists, bar.isHittable else { return }
+        for _ in 0..<Self.maxTabBarClearingDrags {
+            let covered = element.frame.maxY - bar.frame.minY
+            guard covered > 0, element.frame.minY < bar.frame.maxY else { return }
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
+            let end = start.withOffset(CGVector(dx: 0, dy: -min(300, covered + 60)))
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
     }
 
     /// Finds and activates the button for `key`.
