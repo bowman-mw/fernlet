@@ -2965,7 +2965,8 @@ struct WorkoutExerciseRow: View {
 ///
 /// The category is derived live from the typed name and exercises (see
 /// `WorkoutSheet.inferredCategory`), so this preview is how the user sees what the log will be
-/// classified as before saving.
+/// classified as before saving. Every word is inked at text contrast; the category's accent colour
+/// is carried by the dot and the "Auto" capsule's tint only.
 struct WorkoutCategoryPreview: View {
     var category: WorkoutType
 
@@ -2984,9 +2985,14 @@ struct WorkoutCategoryPreview: View {
                     .foregroundStyle(Color.bark)
             }
             Spacer()
+            // A text ink, not the category's accent hue: on its own 12% tint over cream the hue
+            // measured 3.50:1 (moss), 2.17:1 (goldenrod), 3.11:1 (dusty rose) and 3.84:1 (terracotta),
+            // and 3.83:1 for dark terracotta (2026-10-20). `slate` falls short on that tint too (4.40:1
+            // on terracotta) and dusty rose has no ink token, so the word takes `bark` — 9.8:1 or
+            // better on every tint in both appearances. The dot and the tint keep the category's colour.
             Text("Auto")
                 .font(.fernlet(.labelSmall))
-                .foregroundStyle(category.color)
+                .foregroundStyle(Color.bark)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(category.color.opacity(0.12), in: Capsule())
