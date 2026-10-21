@@ -147,6 +147,11 @@ public nonisolated struct ExerciseResult: Codable, Equatable, Sendable {
     /// set, a corrected set), aligned with ``repsPerSet``; nil when every set used it. Additive
     /// optional, encoded only when set, so every other result stays byte-identical.
     public var setWeights: [Double]?
+    /// True when the lifter answered "no" to the runner's optional "Eaten in the last few hours?"
+    /// before a long, high-volume session (G12, 2026-10-20): a shortfall in the later sets is then
+    /// held, not counted as a miss. Nil when the question wasn't asked or was answered "yes". Additive
+    /// optional, encoded only when set; an older build parks the key and writes it back.
+    public var unfueled: Bool?
     /// Keys a newer build wrote that this one does not know, kept verbatim and re-emitted on encode
     /// (the `FernletSettings.parkedUnknownKeys` pattern). Never read for meaning.
     public var parkedUnknownKeys: [String: JSONValue] = [:]
@@ -157,7 +162,7 @@ public nonisolated struct ExerciseResult: Codable, Equatable, Sendable {
         equipment: Equipment? = nil, actualReps: [Int]? = nil, effort: ExerciseEffort? = nil,
         overrideReason: OverrideReason? = nil, confidence: EstimateConfidence? = nil,
         calibration: CalibrationStep? = nil, easierSession: Bool? = nil, compoundsBefore: Int = 0,
-        setWeights: [Double]? = nil
+        setWeights: [Double]? = nil, unfueled: Bool? = nil
     ) {
         self.name = name
         self.prescribedSets = prescribedSets
@@ -176,6 +181,7 @@ public nonisolated struct ExerciseResult: Codable, Equatable, Sendable {
         self.easierSession = easierSession
         self.compoundsBefore = compoundsBefore
         self.setWeights = Self.validWeights(setWeights)
+        self.unfueled = unfueled == true ? true : nil
     }
 
     public init(from decoder: Decoder) throws {
@@ -198,6 +204,7 @@ public nonisolated struct ExerciseResult: Codable, Equatable, Sendable {
         easierSession = try c.decodeIfPresent(Bool.self, forKey: .easierSession)
         compoundsBefore = max(0, try c.decodeIfPresent(Int.self, forKey: .compoundsBefore) ?? 0)
         setWeights = Self.validWeights(try c.decodeIfPresent([Double].self, forKey: .setWeights))
+        unfueled = try c.decodeIfPresent(Bool.self, forKey: .unfueled) == true ? true : nil
         parkedUnknownKeys = try Self.parkedKeys(from: decoder)
     }
 
@@ -222,6 +229,7 @@ public nonisolated struct ExerciseResult: Codable, Equatable, Sendable {
         try c.encodeIfPresent(easierSession, forKey: .easierSession)
         try c.encode(compoundsBefore, forKey: .compoundsBefore)
         try c.encodeIfPresent(setWeights, forKey: .setWeights)
+        try c.encodeIfPresent(unfueled, forKey: .unfueled)
         // No second container when nothing is parked, so every result written so far keeps its shape.
         guard !parkedUnknownKeys.isEmpty else { return }
         let known = Set(CodingKeys.allCases.map(\.stringValue))
@@ -237,7 +245,7 @@ public nonisolated struct ExerciseResult: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case name, prescribedSets, targetReps, rangeLow, rangeHigh, suggestedWeight, selectedWeight
         case unitToken, equipmentToken, actualReps, effortToken, overrideReasonToken, confidenceToken
-        case calibrationToken, easierSession, compoundsBefore, setWeights
+        case calibrationToken, easierSession, compoundsBefore, setWeights, unfueled
     }
 
     /// Every top-level key this build does not know, with its raw value — at most ``maxParkedKeys``,
@@ -360,13 +368,21 @@ public nonisolated struct LiftExposure: Equatable, Sendable {
     /// Each set's weight when the sets differed, aligned with ``repsPerSet``; nil when every set was
     /// lifted at ``weight``. A list that does not line up with the sets is dropped at init.
     public var setWeights: [Double]?
+    /// The session's sleep or readiness flag (G10), set by the app from the day history; never
+    /// persisted. A flagged miss holds the load, and a flagged session that falls short of the trend
+    /// counts at half weight and never toward a stall.
+    public var flag: WorkoutSessionFlag?
+    /// The lifter said nothing had been eaten for a while before this long session (G12,
+    /// ``ExerciseResult/unfueled``): its later sets' shortfall is held, and its trend score reads
+    /// the top set alone.
+    public var unfueled: Bool
 
     public init(
         date: Date, weight: Double?, unit: LoadUnit?, targetReps: Int, repsPerSet: [Int],
         effort: ExerciseEffort? = nil, rangeLow: Double? = nil, rangeHigh: Double? = nil,
         overrideReason: OverrideReason? = nil, calibration: CalibrationStep? = nil,
         easierSession: Bool = false, compoundsBefore: Int = 0, structured: Bool = false,
-        setWeights: [Double]? = nil
+        setWeights: [Double]? = nil, flag: WorkoutSessionFlag? = nil, unfueled: Bool = false
     ) {
         self.date = date
         self.weight = weight
@@ -383,17 +399,19 @@ public nonisolated struct LiftExposure: Equatable, Sendable {
         self.structured = structured
         let aligned = setWeights.map { Array($0.prefix(ExerciseResult.maxSets)) }
         self.setWeights = aligned?.count == self.repsPerSet.count ? aligned : nil
+        self.flag = flag
+        self.unfueled = unfueled
     }
 
     /// A structured result, dated by the day it was logged. Its working weight (the heaviest set's
     /// when the sets differed) is the session's weight.
-    public init(date: Date, result: ExerciseResult) {
+    public init(date: Date, result: ExerciseResult, flag: WorkoutSessionFlag? = nil) {
         self.init(
             date: date, weight: result.workingWeight, unit: result.unit, targetReps: result.targetReps,
             repsPerSet: result.repsPerSet, effort: result.effort, rangeLow: result.rangeLow,
             rangeHigh: result.rangeHigh, overrideReason: result.overrideReason, calibration: result.calibration,
             easierSession: result.easierSession == true, compoundsBefore: result.compoundsBefore,
-            structured: true, setWeights: result.alignedSetWeights
+            structured: true, setWeights: result.alignedSetWeights, flag: flag, unfueled: result.unfueled == true
         )
     }
 
@@ -417,6 +435,14 @@ public nonisolated struct LiftExposure: Equatable, Sendable {
 
     /// Every set reached its target, all at the session's weight.
     public var completed: Bool { !workingSetReps.isEmpty && shortfall == 0 && lighterSets == 0 }
+
+    /// A miss in the later sets only, on a session the lifter said they hadn't eaten for a while
+    /// before (G12): the first set reached its target. Carbohydrate tops up volume, not the top set,
+    /// so such a miss is held rather than counted.
+    public var backOffMissUnfueled: Bool {
+        guard unfueled, !completed, let first = repsPerSet.first else { return false }
+        return first >= targetReps
+    }
 
     /// Which way the chosen weight left the prescribed range, or nil when it stayed inside (or the
     /// session had no range — a hand log never counts as an override).
@@ -480,14 +506,26 @@ public nonisolated struct LoadGuidance: Equatable, Sendable {
     public var easierSession: Bool
     public var compoundsBefore: Int
     /// True on a warm-up set the planner put before a heavy main lift (``WorkoutWarmUpSets``) — a
-    /// `.ramp` step like a calibration's, told apart so a time budget can drop it and the plan editor
-    /// can hide it. Plan-only: the run and the log know it as a ramp set.
+    /// `.ramp` step like a calibration's, told apart so a time budget can cut the ramp to one set and
+    /// the plan editor can hide it. Plan-only: the run and the log know it as a ramp set.
     public var warmUp: Bool
+    /// A harder variation the planner offers while the lift sits at the heaviest load this location
+    /// has (N7, 2026-10-20) — its frozen catalog name, which the plan editor's swap offers first.
+    /// Plan-only; nil otherwise. More reps, then a set, stays the plan either way.
+    public var harderVariation: String?
+    /// The loads this location owns for the lift's gear, in ``unit``, lightest first and at most
+    /// ``maxRunnerLoads`` around the suggestion (R6) — what the runner's lighter and heavier buttons
+    /// step through. Nil when the location's weights say nothing about the gear.
+    public var loads: [Double]?
+
+    /// Owned loads a lift carries into a run at most: the nearest this many around the suggestion.
+    public static let maxRunnerLoads = 48
 
     public init(
         targetReps: Int, prescription: WeightPrescription? = nil, equipment: Equipment? = nil,
         unit: LoadUnit = .lb, askReasonOnOverride: Bool = false, calibration: CalibrationStep? = nil,
-        easierSession: Bool = false, compoundsBefore: Int = 0, warmUp: Bool = false
+        easierSession: Bool = false, compoundsBefore: Int = 0, warmUp: Bool = false,
+        harderVariation: String? = nil, loads: [Double]? = nil
     ) {
         self.targetReps = targetReps
         self.prescription = prescription
@@ -498,6 +536,8 @@ public nonisolated struct LoadGuidance: Equatable, Sendable {
         self.easierSession = easierSession
         self.compoundsBefore = compoundsBefore
         self.warmUp = warmUp
+        self.harderVariation = harderVariation
+        self.loads = loads.map { Array($0.prefix(Self.maxRunnerLoads)) }
     }
 
     /// The lift takes a load (the runner shows a weight picker even with no suggestion yet).

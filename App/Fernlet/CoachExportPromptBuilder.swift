@@ -73,9 +73,16 @@ enum CoachExportPromptBuilder {
 
         1. SAFETY FIRST. Do not prescribe anything that works a muscle in `profile.avoidedMuscles` \
         or uses a movement in `profile.avoidedMovements`, and respect `profile.injuryNotes`. If \
-        that makes part of the plan impossible, prescribe less rather than working around the limit.
-        2. Only use equipment listed in `trainingSetup.ownedEquipment`. Bodyweight is always available.
-        3. Aim for about `trainingSetup.trainingDaysPerWeek` training days; use rest days for the rest.
+        that makes part of the plan impossible, prescribe less rather than working around the limit. \
+        Train around the body areas in `profile.trainAroundAreas`: for work that loads them, choose \
+        supported variants (machines, cables, a bench) at lighter weights and higher reps, and leave \
+        out barbell, advanced, jumping and throwing work for them.
+        2. Only use equipment listed in `trainingSetup.ownedEquipment`. Bodyweight is always available. \
+        Where `trainingSetup.weightsOnHand` lists my weights for a location, prescribe only loads they \
+        can make there: a dumbbell or kettlebell I own, or the bar plus pairs of my plates.
+        3. Aim for about `trainingSetup.trainingDaysPerWeek` training days; use rest days for the rest. \
+        Keep each session within `trainingSetup.sessionLength` when it names minutes, allowing about a \
+        minute to move between exercises.
         4. Use `exerciseHistory` to pick starting loads and sensible progression — `lastWeight`, \
         `bestWeight`, and `estimatedOneRepMax` are in the unit shown by `weightUnit`. Put load and \
         tempo advice in each exercise's `guidance` field, not in the exercise name. `distanceMiles` \

@@ -236,6 +236,18 @@ final class VoiceOverTaskUITests: XCTestCase {
         try walk.audit("Exercise how-to")
         XCTAssertTrue(app.staticTexts["Stop if you feel sharp pain."].waitForExistence(timeout: 4),
                       "the how-to sheet lost its safety line")
+        // N6: opened from the plan, the sheet ends with "Don't suggest this", a named control, and
+        // its Undo is one too. A plan just suggested never holds a hidden exercise, so the button is
+        // there; the round trip leaves the preference as it found it.
+        let hide = walk.button("workout.howTo.hide")
+        XCTAssertTrue(hide.label.hasPrefix("Don't suggest"), "the how-to sheet's Don't suggest button reads '\(hide.label)'")
+        walk.activate(hide)
+        let undo = walk.button("workout.howTo.undoHide")
+        XCTAssertTrue(undo.label.hasPrefix("Keep suggesting "), "the Undo under Don't suggest reads '\(undo.label)'")
+        try walk.audit("Exercise how-to · hidden")
+        walk.activate(undo)
+        XCTAssertTrue(app.buttons["workout.howTo.hide"].firstMatch.waitForExistence(timeout: 4),
+                      "Undo did not bring Don't suggest this back")
         walk.press("sheet.done")
         XCTAssertTrue(app.descendants(matching: .any)["sheet.exerciseHowTo"].waitForNonExistence(timeout: 6),
                       "the how-to sheet did not close after Done")

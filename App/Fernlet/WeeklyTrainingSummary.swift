@@ -27,21 +27,26 @@ struct WeeklyTrainingSummary: Equatable {
     /// The muscles with any credit this week, in ``MuscleGroup``'s declaration order (head to toe).
     /// Never ranked by count: a ranking reads as a leaderboard.
     let muscleSets: [MuscleSets]
-    /// Minutes of aerobic workouts in the week (``WeeklyTrainingSummaryBuilder/countsAsAerobic(_:)``).
+    /// Minutes of aerobic workouts in the week (``WeeklyTrainingSummaryBuilder/countsAsAerobic(_:)``),
+    /// plus the planned minutes of cardio blocks inside other workouts
+    /// (``WeeklyTrainingSummaryBuilder/cardioLineMinutes(of:)``).
     let aerobicMinutes: Int
 }
 
 /// Builds a ``WeeklyTrainingSummary`` from the day history. Pure over its inputs.
 ///
-/// **Sets** come from the same two sources the load engine reads (``WorkoutLoadContextBuilder``):
+/// **Sets** come from two sources:
 /// - a row's structured ``ExerciseResult``s (the guided runner's record, and any other row that
 ///   carries results), counting each set done with at least one rep;
-/// - a hand-logged row's lines, read by ``ExerciseLineParser`` ("Squat 5x5 @225lb"), counting the
-///   sets written, rep ranges included.
+/// - any other row's lines, read by ``ExerciseLineParser`` ("Squat 5x5 @225lb"), counting the sets
+///   written, rep ranges included: a hand-logged row's record, and a guided row with no results — a
+///   session the person marked done ("Mark done", and every guided log before load tracking), whose
+///   lines are the sets it planned.
 ///
-/// A row with results is read from its results only, and a guided row WITHOUT results is skipped,
-/// exactly as the load engine does: its text is the plan that was suggested ("Mark done", and every
-/// guided log before load tracking), not a record of what was lifted.
+/// A row with results is read from its results only, never its lines as well. Unlike the load engine
+/// (``WorkoutLoadContextBuilder``), which reads a guided row's lines as no performance at all, a week's
+/// total takes a session marked done at its word: the planned sets count as done, since the person
+/// said they did the session, though no weight or rep in them is a measurement.
 ///
 /// A set counts only for a catalog exercise (bundled or the user's own) that is strength work
 /// counted in reps. Warm-up stretches (`.mobility`), balance drills, jumps and throws (`.power`),
@@ -61,7 +66,9 @@ struct WeeklyTrainingSummary: Equatable {
 /// the most growth, and Baz-Valle et al. (2022, J Hum Kinet 81:199–210) concluded 12 to 20 weekly
 /// sets per muscle group. It is shown as neutral context, never as a grade or a target.
 ///
-/// **Aerobic minutes** sum `Workout.duration` over the week's aerobic rows, against the WHO 2020
+/// **Aerobic minutes** sum `Workout.duration` over the week's aerobic rows, plus the planned minutes of
+/// the cardio lines inside any other row (a lifting session's "Easy cardio - 20 min" finisher,
+/// ``cardioLineMinutes(of:)``), against the WHO 2020
 /// guideline (Bull et al., Br J Sports Med 54:1451–1462) and the ACSM position stand (Garber et al.
 /// 2011, Med Sci Sports Exerc 43(7):1334–1359): at least 150 minutes of moderate activity a week, or
 /// 75 of vigorous. Each minute counts once — vigorous minutes are not doubled — so the figure never
@@ -87,6 +94,8 @@ enum WeeklyTrainingSummaryBuilder {
     static let daysPerWeek = 7
     /// The most minutes one row may add (R3: `duration` arrives from synced storage).
     static let maxMinutesPerWorkout = 24 * 60
+    /// The most lines of one row read for cardio minutes (R2: a row's text arrives from synced storage).
+    static let maxCardioLinesPerWorkout = 64
 
     /// The calibration tag a ramp-up line carries in the log text ("Back squat - 1 x 5 @ 95 lb
     /// (ramp-up)"). A FROZEN log token, never localized: it is what `ExerciseResult.loggedLine`
@@ -94,11 +103,14 @@ enum WeeklyTrainingSummaryBuilder {
     /// a calibration session ("Log it again") still shows which sets were the warm-up ramp.
     static let rampTag = "(ramp-up)"
 
-    /// Activities counted as aerobic beyond those whose Fernlet category is cardio. Dance and the
-    /// striking arts are moderate to vigorous on the Compendium of Physical Activities (Ainsworth et
-    /// al. 2011, at or above the 3-MET "moderate" line), while the mind-body, flexibility, strength,
-    /// core, climbing, recovery and "other" types stay out.
-    static let extraAerobicActivities: Set<WorkoutActivityType> = [.dance, .socialDance, .kickboxing, .martialArts]
+    /// Activities counted as aerobic beyond those whose Fernlet category is cardio. Dance, the
+    /// striking and grappling arts (boxing and wrestling among them), golf and surfing are moderate to
+    /// vigorous on the Compendium of Physical Activities (Ainsworth et al. 2011, at or above the 3-MET
+    /// "moderate" line), while the mind-body, flexibility, strength, core, climbing, recovery and
+    /// "other" types stay out.
+    static let extraAerobicActivities: Set<WorkoutActivityType> = [
+        .dance, .socialDance, .kickboxing, .martialArts, .boxing, .wrestling, .golf, .surfing,
+    ]
 
     // MARK: Weeks
 
@@ -164,12 +176,12 @@ enum WeeklyTrainingSummaryBuilder {
 
     // MARK: Sets
 
-    /// Adds one row's working sets to `credit`: its results when it has them, else its lines unless
-    /// it is a guided row (whose text is a plan, not a record).
+    /// Adds one row's working sets to `credit`: its results when it has them, else its lines — a
+    /// hand-logged row's record, or the sets a guided session marked done planned.
     static func creditSets(in workout: Workout, index: [String: ExerciseTarget], into credit: inout [MuscleGroup: Double]) {
         if let results = workout.exerciseResults {
             for result in results { creditResult(result, index: index, into: &credit) }
-        } else if workout.loggedFromGuidedSession != true {
+        } else {
             for line in workout.exerciseLines { creditLine(line, index: index, into: &credit) }
         }
     }
@@ -223,9 +235,10 @@ enum WeeklyTrainingSummaryBuilder {
     /// walking, cycling, swimming, rowing, HIIT, racquet and team sports …) or it is one of
     /// ``extraAerobicActivities``; Apple Health imports carry their type, so they are read the same
     /// way. A row without one counts when its stored category is cardio — a guided cardio session, or
-    /// a hand-logged row the Log sheet filed under Cardio — or a legacy run or hike. Strength
-    /// sessions (guided, hand-logged or imported) never count, even when they end with a cardio block:
-    /// their minutes are mostly lifting.
+    /// a hand-logged row the Log sheet filed under Cardio — or a legacy run or hike. A strength
+    /// session's (guided, hand-logged or imported) own duration never counts, since its minutes are
+    /// mostly lifting; a cardio block inside it adds that block's planned minutes instead
+    /// (``cardioLineMinutes(of:)``).
     static func countsAsAerobic(_ workout: Workout) -> Bool {
         if let activity = workout.activityType {
             return activity.fernletCategory == .cardio || extraAerobicActivities.contains(activity)
@@ -236,10 +249,35 @@ enum WeeklyTrainingSummaryBuilder {
         }
     }
 
-    /// A row's aerobic minutes: its logged duration when it counts as aerobic, else 0. A row with no
-    /// duration adds nothing rather than a guess.
+    /// A row's aerobic minutes, at most ``maxMinutesPerWorkout``: its logged duration when it counts as
+    /// aerobic (an aerobic row with no duration adds nothing rather than a guess, and its lines are not
+    /// read as well, so nothing counts twice); otherwise the planned minutes of its cardio lines.
     static func aerobicMinutes(of workout: Workout) -> Int {
-        guard countsAsAerobic(workout), let duration = workout.duration else { return 0 }
+        guard countsAsAerobic(workout) else { return cardioLineMinutes(of: workout) }
+        guard let duration = workout.duration else { return 0 }
         return min(max(duration, 0), maxMinutesPerWorkout)
+    }
+
+    /// The minutes a row's cardio lines plan, as the guided runner reads them
+    /// (``WorkoutTimedSessions/classify(_:)``): a steady line's minutes ("Easy cardio - 20 min"), and an
+    /// interval line's rounds × (hard + easy), in whole minutes rounded down ("Intervals - 8 × 1 min hard /
+    /// 1 min easy" is 16). A mobility flow, the gentle stretch and any line the runner would not time add
+    /// nothing. These are the PLANNED minutes as the row's text gives them, not a measurement: a guided
+    /// run logs a cardio block's line as planned even when the block was cut short. At most
+    /// ``maxMinutesPerWorkout``; only the first ``maxCardioLinesPerWorkout`` lines are read.
+    static func cardioLineMinutes(of workout: Workout) -> Int {
+        var minutes = 0
+        for line in workout.exerciseLines.prefix(maxCardioLinesPerWorkout) {
+            switch WorkoutTimedSessions.classify(line) {
+            case .steady(let planned, _):
+                minutes += planned
+            case .intervals(let rounds, let workSeconds, let easySeconds):
+                minutes += rounds * (workSeconds + easySeconds) / 60
+            case .mobilityFlow, .gentleStretch, nil:
+                break
+            }
+            if minutes >= maxMinutesPerWorkout { return maxMinutesPerWorkout }
+        }
+        return minutes
     }
 }

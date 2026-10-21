@@ -177,8 +177,8 @@ struct GuidedWeightPicker: View {
 
     private func stepButton(systemImage: String, label: Text, identifier: String, direction: Double) -> some View {
         Button {
-            let step = tracking.step ?? 0
-            let next = tracking.selected.map { $0 + direction * step } ?? GuidedLoadFormat.startWeight(tracking)
+            // R6: through the weights this location owns when the run knows them, else by the step.
+            let next = tracking.steppedWeight(direction: Int(direction), start: GuidedLoadFormat.startWeight(tracking))
             store.guidedSelectWeight(next, exerciseID: exerciseID)
         } label: {
             Image(systemName: systemImage)

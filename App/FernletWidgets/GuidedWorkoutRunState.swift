@@ -125,6 +125,18 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         /// This step's lead-in before its hold starts, in seconds — never negative.
         var holdLeadIn: Int { max(0, leadInSeconds ?? GuidedWorkoutRunState.holdLeadInSeconds) }
 
+        /// The exercise this step belongs to, for the changeover estimate: the domain's
+        /// `WorkoutSessionTime.exerciseKey(_:)`, spelled here because this file cannot import the domain
+        /// (a test pins the two equal). Nil for a warm-up or cool-down stretch, which takes no changeover;
+        /// one key for a whole stretch session; a cardio segment's plan line; else the frozen name.
+        var changeoverKey: String? {
+            switch block {
+            case BlockToken.warmUp, BlockToken.coolDown: return nil
+            case BlockToken.mobility: return BlockToken.mobility
+            default: return segment?.descriptor ?? name
+            }
+        }
+
         /// A ramp-up set: a warm-up set before a heavy lift, or a calibration's ramp — light, one set,
         /// never a working set. The runner calls both "Warm-up set"; the log tags both "(ramp-up)".
         var isRampSet: Bool { tracking?.calibrationRaw == CalibrationToken.ramp }
@@ -191,9 +203,40 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         /// The weight came written in a planned workout's line: `suggested` is that weight, preselected as
         /// written, with no range around it. Nil for the engine's own suggestion, and in an older run.
         var asWritten: Bool?
+        /// The loads the location owns for this lift's gear, lightest first, at most ``maxLoads`` (R6,
+        /// 2026-10-20): the lighter and heavier buttons step through these instead of by ``step``. Nil
+        /// when the location's weights say nothing, and in a run persisted before they were carried —
+        /// optional, so such a run still decodes.
+        var loads: [Double]?
 
         /// Sets an edit may carry at most.
         static let maxSets = 20
+        /// Owned loads a run carries for one lift at most (the planner sends 48 around the suggestion).
+        static let maxLoads = 64
+
+        /// The weight one tap of the lighter (`direction` −1) or heavier (+1) button picks: the next
+        /// owned load that way when the location's weights are known, else one ``step``. At the end of
+        /// the owned loads it stays put; with nothing picked yet it starts from `start`.
+        func steppedWeight(direction: Int, start: Double?) -> Double? {
+            guard let selected else { return start }
+            guard let loads, !loads.isEmpty else {
+                return step.map { selected + Double(direction.signum()) * $0 }
+            }
+            if direction > 0 { return loads.first { $0 > selected + 0.01 } ?? selected }
+            return loads.last { $0 < selected - 0.01 } ?? selected
+        }
+
+        /// `weight` placed on the owned loads (the nearest, a tie going lighter), or on the step when
+        /// none are known.
+        func snapped(_ weight: Double) -> Double? {
+            if let loads, !loads.isEmpty {
+                var best = loads[0]
+                for load in loads.prefix(Self.maxLoads) where abs(load - weight) < abs(best - weight) - 1e-9 { best = load }
+                return best
+            }
+            guard let step, step > 0 else { return nil }
+            return max(step, (weight / step).rounded() * step)
+        }
 
         /// The lift takes a load: the runner shows its weight picker.
         var isLoadable: Bool { step != nil && unitRaw != nil }
@@ -241,6 +284,12 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     /// time estimate can read it under the app target's default main-actor isolation.
     nonisolated static let holdLeadInSeconds = 5
 
+    /// The changeover before each exercise after the run's first — moving to the next station, loading a
+    /// bar. The domain's `WorkoutSessionTime.changeoverSeconds`, spelled here because this file cannot
+    /// import the domain (a test pins the two equal), so a started run counts down from the plan card's
+    /// estimate.
+    nonisolated static let changeoverSeconds = 60
+
     /// One "−15 s" / "+15 s" tap on the Lock Screen, the Dynamic Island or the runner. The buttons'
     /// words spell the same 15 (pinned by a test).
     nonisolated static let restAdjustStepSeconds = 15
@@ -273,6 +322,12 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     /// calendar — which a natural finish completes, as "log it" does. Nil for the app's own sessions,
     /// and in a run persisted before planned workouts could be guided.
     var plannedWorkoutID: UUID?
+
+    /// True when the lifter answered "no" to the Ready screen's optional "Eaten in the last few
+    /// hours?" (G12, `WorkoutFuelCheck`). Every tracked lift's result carries it, so a shortfall in the
+    /// later sets is held rather than counted as a miss; it never changes a weight. Nil when not asked,
+    /// answered "yes", or in a run persisted before the question existed — which decodes unchanged.
+    var unfueled: Bool?
 
     // MARK: Cursor
 
@@ -477,7 +532,9 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     /// - a descriptor line (`sets == 0` — cardio/mobility walked as one step) costs the minutes it
     ///   names ("Conditioning intervals - 12 min"), else `descriptorSeconds` (default 5 min);
     /// - the working phase counts the current set as still ahead; the resting phase counts the
-    ///   upcoming set (the counter already advanced when the rest began).
+    ///   upcoming set (the counter already advanced when the rest began);
+    /// - each exercise still ahead after the run's first adds a ``changeoverSeconds`` changeover
+    ///   (``changeoverSecondsAhead()``); the current step's own changeover is already behind it.
     ///
     /// At the start of a run this is the plan card's estimate to the second (the domain's
     /// `WorkoutSessionTime`, which a session-length budget fits by; pinned by a test).
@@ -503,7 +560,27 @@ struct GuidedWorkoutRunState: Codable, Hashable {
             let restsBetween = max(0, setsAhead - 1)
             total += setsAhead * perSet + restsBetween * max(0, exercise.restSeconds) + inFlightRest
         }
-        return total
+        return total + changeoverSecondsAhead()
+    }
+
+    /// The changeovers still ahead, in seconds: one ``changeoverSeconds`` before each step after the
+    /// current one that starts an exercise (``Exercise/changeoverKey``, a key other than the step
+    /// before it's), unless it starts the run's first exercise. The domain's
+    /// `WorkoutSessionTime.changeovers(in:)` counted from the current step, so a run starts at the plan
+    /// card's total. Bounded: one pass over `exercises`.
+    func changeoverSecondsAhead() -> Int {
+        var previousKey: String?
+        var started = false
+        var ahead = 0
+        for (index, exercise) in exercises.enumerated() {
+            let key = exercise.changeoverKey
+            let startsExercise = key != nil && key != previousKey
+            previousKey = key
+            guard startsExercise else { continue }
+            if started && index > exerciseIndex { ahead += 1 }
+            started = true
+        }
+        return ahead * Self.changeoverSeconds
     }
 
     /// A descriptor step's seconds: the minutes its trailing clause names ("Steady cardio - 20 min"
@@ -682,11 +759,12 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         exercises.firstIndex { $0.id == id }
     }
 
-    /// The weight the lifter picked for one lift, snapped to the equipment's step and kept positive.
+    /// The weight the lifter picked for one lift, snapped to the location's owned loads when the run
+    /// carries them (R6), else to the equipment's step, and kept positive.
     mutating func selectWeight(_ weight: Double?, forExercise id: UUID) {
         guard let index = index(of: id), var tracking = exercises[index].tracking, tracking.isLoadable else { return }
-        if let weight, let step = tracking.step, step > 0, weight.isFinite {
-            tracking.selected = max(step, (weight / step).rounded() * step)
+        if let weight, weight.isFinite, let placed = tracking.snapped(weight) {
+            tracking.selected = placed
         } else {
             tracking.selected = nil
         }
@@ -760,7 +838,9 @@ struct GuidedWorkoutRunState: Codable, Hashable {
             paceRaw: currentExercise?.segment?.paceRaw,
             round: currentExercise?.segment?.round,
             rounds: currentExercise?.segment?.rounds,
-            zone: currentZone
+            zone: currentZone,
+            warmUpSet: warmUpPosition?.index,
+            warmUpSets: warmUpPosition?.count
         )
     }
 

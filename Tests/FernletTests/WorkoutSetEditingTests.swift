@@ -208,10 +208,12 @@ struct WorkoutSetEditingTests {
         #expect(before.change == .moreReps)
         #expect((before.reps, before.prescription?.suggested) == (9, 100))
 
+        // One miss now holds the load rather than cutting it (round 2, G10: lighter takes two misses in
+        // a row on unflagged days), so the corrected miss stops the rep step and repeats today's weight.
         let missed = try edited(workout) { $0.rows[2].reps = 5 }
         let after = nextBench(after: [missed])
-        #expect(after.change == .lighter)
-        #expect((after.reps, after.prescription?.suggested) == (8, 95))
+        #expect(after.change == .same)
+        #expect((after.reps, after.prescription?.suggested) == (8, 100))
     }
 
     @Test func aCorrectedWeightIsWhatTheNextSessionBuildsOn() throws {

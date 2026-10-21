@@ -100,14 +100,20 @@ private struct WorkoutIslandLeading: View {
     }
 }
 
-/// Expanded-Island trailing slot: "Set X of Y", omitted while stale or for a single-step entry.
+/// Expanded-Island trailing slot: "Warm-up X of Y" on a warm-up set, else "Set X of Y", omitted while
+/// stale or for a single-step entry.
 private struct WorkoutIslandTrailing: View {
     let state: WorkoutActivityAttributes.ContentState
     let isStale: Bool
 
     var body: some View {
         // No live "Set X of Y" once the snapshot is stale — it would read as if still going.
-        if !isStale && !isSimpleStep(state) && state.totalSets > 1 {
+        if !isStale, let warmUp = state.warmUp {
+            warmUpLabel(warmUp)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        } else if !isStale && !isSimpleStep(state) && state.totalSets > 1 {
             Text("Set \(state.setNumber) of \(state.totalSets)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -235,6 +241,13 @@ private struct WorkoutIslandCompactTrailing: View {
         } else if holdWindow(state) != nil {
             HoldCountdownText(state: state, font: .caption2.monospacedDigit(), color: .primary)
                 .frame(maxWidth: 44)
+        } else if let warmUp = state.warmUp {
+            Text("\(warmUp.index)/\(warmUp.count)")
+                .font(.caption2)
+                .monospacedDigit()
+                .foregroundStyle(.primary)
+                // "1/3" on a warm-up set is spoken as the expanded slot's words: "Warm-up 1 of 3".
+                .accessibilityLabel(warmUpLabel(warmUp))
         } else if !isSimpleStep(state) {
             Text("\(state.setNumber)/\(state.totalSets)")
                 .font(.caption2)
@@ -294,9 +307,20 @@ private func isSimpleStep(_ state: WorkoutActivityAttributes.ContentState) -> Bo
 /// can say so, which a runtime join of pre-built fragments can never allow.
 private func setRepsLine(_ state: WorkoutActivityAttributes.ContentState) -> Text {
     if holdWindow(state) != nil { return holdLine(state) }
+    if let warmUp = state.warmUp, !state.reps.isEmpty {
+        return Text("Warm-up \(warmUp.index) of \(warmUp.count) · \(state.reps) reps",
+                    comment: "Live Activity: the working line on a lighter warm-up set before a lift's working sets, e.g. 'Warm-up 1 of 3 · 8 reps'.")
+    }
     guard !isSimpleStep(state) else { return Text("Take it at your own pace") }
     guard !state.reps.isEmpty else { return Text("Set \(state.setNumber) of \(state.totalSets)") }
     return Text("Set \(state.setNumber) of \(state.totalSets) · \(state.reps) reps")
+}
+
+/// "Warm-up 1 of 3" — a warm-up set's place among its lift's warm-up sets: the expanded Island's
+/// trailing words, and what VoiceOver says for the compact "1/3".
+private func warmUpLabel(_ warmUp: (index: Int, count: Int)) -> Text {
+    Text("Warm-up \(warmUp.index) of \(warmUp.count)",
+         comment: "Live Activity: which lighter warm-up set this is before a lift's working sets, e.g. 'Warm-up 1 of 3'. Also what VoiceOver reads for the compact '1/3'.")
 }
 
 /// The ordered hold window of a timed step being worked (a stretch, a plank), or nil. Same rule as

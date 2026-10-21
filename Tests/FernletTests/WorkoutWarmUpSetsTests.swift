@@ -1,11 +1,13 @@
 // WorkoutWarmUpSetsTests.swift
 // FernletTests
 //
-// Pins warm-up ramp sets before heavy main lifts (comparison report idea 12, 2026-10-20): the ramp
-// itself (about 40 % × 8, 60 % × 5, 80 % × 3 of the working weight, on loadable weights, never under
-// the bar, never at or over the working weight, no repeats), which lifts get one and when (main
-// compound lifts with a suggested weight; never accessories, light days, a lift with no weight yet, or
-// a lift the calibration already ramps into; the level default and the lifter's own choice), the run
+// Pins warm-up ramp sets before heavy main lifts (comparison report idea 12, 2026-10-20; the owner's
+// round-2 picks, R1): the ramp itself (a barbell's empty bar × 8, then about 60 % × 5 and 80 % × 3 on
+// loadable plates; dumbbells at about 40, 60 and 80 % on the dumbbells owned; never at or over the
+// working weight, no repeats), which lift gets one and when (the session's FIRST heavy main lift on a
+// barbell or dumbbells, with a suggested weight, or none; never accessories, light days, a lift with no
+// weight yet, or a lift the calibration already ramps into; the level default and the lifter's own
+// choice), the run
 // ("Warm-up set 1 of 3", "Skip warm-up sets", what VoiceOver and spoken cues say), and the record:
 // logged "(ramp-up)", read by no estimate, no plateau check, no hand-log reader and no history rollup.
 //
@@ -38,13 +40,13 @@ struct WorkoutWarmUpSetsTests {
     /// A Push day for an intermediate lifter at a full gym, with the given history and switches.
     func pushSession(
         history: [String: [LiftExposure]] = [:], warmUpSets: Bool = true, intensity: WorkoutIntensity = .moderate,
-        calibrationDue: Bool = false
+        calibrationDue: Bool = false, goal: GoalType = .wellness
     ) throws -> WorkoutProgram.SessionSuggestion {
         let calibration = calibrationDue ? CalibrationSettings() : CalibrationSettings(hasCoach: true)
         let load = WorkoutLoadContext(exposures: history, today: day(30), defaultUnit: .lb,
                                       calibration: calibration, warmUpSets: warmUpSets)
         let plan = WorkoutProgram.dayPlan(
-            goal: .wellness, intensity: intensity, profile: WorkoutProfile(experience: .intermediate),
+            goal: goal, intensity: intensity, profile: WorkoutProfile(experience: .intermediate),
             location: .fullGym, context: "", split: Self.pushSplit, rotationIndex: 0, load: load
         )
         return try #require(plan.sessions.first)
@@ -113,17 +115,42 @@ struct WorkoutWarmUpSetsTests {
 
     // MARK: - The ramp
 
-    @Test func aBarbellRampIsFortySixtyEightyOnThePlates() {
+    @Test func aBarbellRampIsTheEmptyBarThenSixtyAndEightyOnThePlates() {
         let sets = WorkoutWarmUpSets.sets(working: 135, equipment: .barbell, unit: .lb)
         let weights = sets.map(\.weight)
         let reps = sets.map(\.reps)
-        let expectedWeights: [Double] = [55, 80, 110]
+        let expectedWeights: [Double] = [45, 80, 110]
         let expectedReps: [Int] = [8, 5, 3]
         #expect(weights == expectedWeights)
         #expect(reps == expectedReps)
         let heavy = WorkoutWarmUpSets.sets(working: 315, equipment: .barbell, unit: .lb).map(\.weight)
-        let expectedHeavy: [Double] = [125, 190, 250]
+        let expectedHeavy: [Double] = [45, 190, 250]
         #expect(heavy == expectedHeavy)
+    }
+
+    @Test func aBarbellRampUsesTheLocationsOwnBarAndPlatesWhenSet() throws {
+        var weights = WorkoutWeightInventory()
+        weights.setBar(35)
+        for plate in [25.0, 10, 5] { weights.setPairs(1, of: plate) }
+        let ladder = try #require(weights.ladder(for: .barbell, in: .lb))
+        // The bar alone, then 81 lb and 108 lb snapped onto 35 + one each of 25, 10 and 5 per side.
+        let ramp = WorkoutWarmUpSets.sets(working: 135, equipment: .barbell, unit: .lb, ladder: ladder).map(\.weight)
+        let expected: [Double] = [35, 85, 105]
+        #expect(ramp == expected)
+    }
+
+    @Test func aDumbbellRampSnapsToTheDumbbellsOwned() throws {
+        let ladder = try #require(LoadLadder([10, 25, 40, 55]))
+        let owned = WorkoutWarmUpSets.sets(working: 60, equipment: .dumbbell, unit: .lb, ladder: ladder)
+        let weights = owned.map(\.weight)
+        let reps = owned.map(\.reps)
+        let expectedWeights: [Double] = [25, 40, 55]
+        let expectedReps: [Int] = [8, 5, 3]
+        #expect(weights == expectedWeights)
+        #expect(reps == expectedReps)
+        let sparse = try #require(LoadLadder([20, 50]))
+        let one = WorkoutWarmUpSets.sets(working: 50, equipment: .dumbbell, unit: .lb, ladder: sparse)
+        #expect(one.isEmpty, "fewer than two distinct weights under the working one: no ramp")
     }
 
     @Test func theRampNeverGoesUnderTheBarRepeatsAWeightOrReachesTheWorkingWeight() {
@@ -152,7 +179,7 @@ struct WorkoutWarmUpSetsTests {
 
     @Test func kilogramLiftsRampOnKilogramPlates() {
         let barbell = WorkoutWarmUpSets.sets(working: 60, equipment: .barbell, unit: .kg).map(\.weight)
-        let expectedBarbell: [Double] = [25, 35, 47.5]
+        let expectedBarbell: [Double] = [20, 35, 47.5]
         #expect(barbell == expectedBarbell)
         let dumbbell = WorkoutWarmUpSets.sets(working: 20, equipment: .dumbbell, unit: .kg).map(\.weight)
         let expectedDumbbell: [Double] = [8, 12, 16]
@@ -165,6 +192,9 @@ struct WorkoutWarmUpSetsTests {
         #expect(heavy == expectedHeavy)
         #expect(WorkoutWarmUpSets.sets(working: 10, equipment: .dumbbell, unit: .lb).isEmpty)
         #expect(WorkoutWarmUpSets.sets(working: 100, equipment: .bodyweight, unit: .lb).isEmpty)
+        #expect(WorkoutWarmUpSets.sets(working: 100, equipment: .machine, unit: .lb).isEmpty, "barbell and dumbbell only")
+        #expect(WorkoutWarmUpSets.sets(working: 100, equipment: .cable, unit: .lb).isEmpty, "barbell and dumbbell only")
+        #expect(WorkoutWarmUpSets.sets(working: 53, equipment: .kettlebell, unit: .lb).isEmpty, "barbell and dumbbell only")
         for bad in [0.0, -20, .nan, .infinity] {
             #expect(WorkoutWarmUpSets.sets(working: bad, equipment: .barbell, unit: .lb).isEmpty)
         }
@@ -172,6 +202,7 @@ struct WorkoutWarmUpSetsTests {
 
     @Test func theStepsAreSingleFixedRampSetsOfTheLift() throws {
         let steps = WorkoutWarmUpSets.steps(for: planned(), pattern: .squat)
+        #expect(WorkoutWarmUpSets.steps(for: planned(equipment: .machine), pattern: .squat).isEmpty)
         let names = steps.map(\.name)
         let sets = steps.map(\.sets)
         let reps = steps.map(\.reps)
@@ -179,7 +210,7 @@ struct WorkoutWarmUpSetsTests {
         let fixed = steps.map { $0.guidance?.prescription?.low == $0.guidance?.prescription?.high }
         let tags = steps.map { $0.guidance?.calibration }
         let warmUps = steps.map { WorkoutWarmUpSets.isWarmUpSet($0) }
-        let expectedWeights: [Double?] = [55, 80, 110]
+        let expectedWeights: [Double?] = [45, 80, 110]
         let expectedTags: [CalibrationStep?] = [.ramp, .ramp, .ramp]
         #expect(names == ["Back squat", "Back squat", "Back squat"])
         #expect(sets == [1, 1, 1])
@@ -223,11 +254,51 @@ struct WorkoutWarmUpSetsTests {
         #expect(!WorkoutWarmUpSets.qualifies(planned(role: .accessory), pattern: .squat))
         #expect(!WorkoutWarmUpSets.qualifies(planned(), pattern: .isolation))
         #expect(!WorkoutWarmUpSets.qualifies(planned(equipment: .bodyweight), pattern: .push))
+        #expect(!WorkoutWarmUpSets.qualifies(planned(equipment: .machine), pattern: .push), "barbell and dumbbell only")
+        #expect(!WorkoutWarmUpSets.qualifies(planned(equipment: .cable), pattern: .pull), "barbell and dumbbell only")
+        #expect(!WorkoutWarmUpSets.qualifies(planned(equipment: .kettlebell), pattern: .hinge), "barbell and dumbbell only")
         #expect(!WorkoutWarmUpSets.qualifies(planned(equipment: nil), pattern: .push))
         #expect(!WorkoutWarmUpSets.qualifies(planned(suggested: nil), pattern: .squat))
         #expect(!WorkoutWarmUpSets.qualifies(planned(calibration: .test), pattern: .squat))
         #expect(!WorkoutWarmUpSets.qualifies(planned(calibration: .ramp), pattern: .squat))
         #expect(!WorkoutWarmUpSets.qualifies(planned(hold: 30), pattern: .squat))
+    }
+
+    @Test func theRampGoesToTheFirstHeavyMainLiftOrToNone() {
+        let press = planned("Leg press", equipment: .machine)
+        let squat = planned("Back squat")
+        let bench = planned("Bench press")
+        let patterns: [MovementPattern?] = [.squat, .squat, .push]
+        let first = WorkoutWarmUpSets.firstHeavyMainLift(in: [press, squat, bench], patterns: patterns)
+        #expect(first == 1, "a machine main lift is not a heavy lift")
+        let noWeight = planned("Back squat", suggested: nil)
+        let unready = WorkoutWarmUpSets.firstHeavyMainLift(in: [noWeight, bench], patterns: [.squat, .push])
+        #expect(unready == 0, "the first heavy lift is the one, even when it can't ramp")
+        #expect(!WorkoutWarmUpSets.qualifies(noWeight, pattern: .squat))
+        let unknown = WorkoutWarmUpSets.firstHeavyMainLift(in: [squat], patterns: [nil])
+        #expect(unknown == nil)
+    }
+
+    @Test func onlyTheSessionsFirstHeavyMainLiftRampsUp() throws {
+        let baseline = lifting(try pushSession(warmUpSets: false))
+        let mains = baseline.filter { WorkoutWarmUpSets.isHeavyMainLift($0, pattern: .push) }
+        #expect(mains.count >= 2, "the Push day at a full gym opens with two heavy presses")
+        let firstMain = try #require(mains.first)
+        var history: [String: [LiftExposure]] = [:]
+        for step in baseline { history[key(step.name)] = [lifted(28, 135)] }
+        let steps = lifting(try pushSession(history: history))
+        let ramped = Set(steps.filter { WorkoutWarmUpSets.isWarmUpSet($0) }.map(\.name))
+        let expected: Set<String> = [firstMain.name]
+        #expect(ramped == expected)
+    }
+
+    @Test func aFirstHeavyLiftWithNoWeightYetHandsItsRampToNoOne() throws {
+        let baseline = lifting(try pushSession(warmUpSets: false))
+        let mains = baseline.filter { WorkoutWarmUpSets.isHeavyMainLift($0, pattern: .push) }
+        let later = try #require(mains.dropFirst().first)
+        let session = try pushSession(history: [key(later.name): [lifted(28, 135)]])
+        let count = lifting(session).filter { WorkoutWarmUpSets.isWarmUpSet($0) }.count
+        #expect(count == 0)
     }
 
     @Test func aHeavyMainLiftRampsUpRightBeforeItsWorkingSets() throws {
@@ -285,7 +356,8 @@ struct WorkoutWarmUpSetsTests {
     @Test func aCalibratedLiftKeepsItsOwnRampAndGetsNoSecond() throws {
         let main = try mainLift()
         let history = [key(main.name): [lifted(21, 135, reps: 10), lifted(28, 135, reps: 10)]]
-        let session = try pushSession(history: history, calibrationDue: true)
+        // The monthly strength check runs for strength and sports prep (G7).
+        let session = try pushSession(history: history, calibrationDue: true, goal: .strength)
         let steps = lifting(session).filter { $0.name == main.name }
         let tags = steps.map { $0.guidance?.calibration }
         let expected: [CalibrationStep?] = [.ramp, .ramp, .ramp, .test]
@@ -329,7 +401,7 @@ struct WorkoutWarmUpSetsTests {
         let tags = log.results.map(\.calibration)
         let expectedTags: [CalibrationStep?] = [.ramp, .ramp, .ramp, nil]
         #expect(tags == expectedTags)
-        #expect(log.text.contains("Back squat - 1 x 8 @ 55 lb (ramp-up)"))
+        #expect(log.text.contains("Back squat - 1 x 8 @ 45 lb (ramp-up)"))
         #expect(log.text.contains("Back squat - 3 x 8 @ 135 lb"))
         let exposures = log.results.map { LiftExposure(date: day(0), result: $0) }
         let rampMaxes = exposures.prefix(3).compactMap { WorkoutLoadEngine.estimatedMax(of: $0, in: .lb) }
@@ -349,18 +421,22 @@ struct WorkoutWarmUpSetsTests {
         #expect(afterAll == afterWorking, "the next prescription anchors on the working sets")
     }
 
-    @Test func warmUpSetsAreNeverPlateauEvidence() {
-        let stalled = [lifted(0, 135, reps: 10)]
-            + stride(from: 7, through: 28, by: 7).map { lifted($0, 135, reps: 9, effort: .tough) }
+    @Test func warmUpSetsAreNeverPlateauEvidenceNorCrowdTheCap() {
+        // Nine flat weeks, three sessions a week: a stall for a beginner whose age is known.
+        let stalled = (0..<9).flatMap { week in [0, 2, 4].map { lifted(week * 7 + $0, 135) } }
         var ramped: [LiftExposure] = []
         for session in stalled {
             let offset = Int(session.date.timeIntervalSince(Self.base) / 86_400)
             ramped += [lifted(offset, 55, calibration: .ramp), lifted(offset, 80, reps: 5, calibration: .ramp),
                        lifted(offset, 110, reps: 3, calibration: .ramp), session]
         }
-        let plain = WorkoutPlateau.status(of: stalled, unit: .lb, today: day(30))
-        let withWarmUps = WorkoutPlateau.status(of: ramped, unit: .lb, today: day(30))
-        #expect(plain != nil)
+        // 108 exposures, over the 64 a lift keeps: the ramps leave before the cap, not after.
+        #expect(ramped.count > WorkoutLoadEngine.maxExposuresPerLift)
+        let profile = TrendProfile(trainingAge: TrainingAge(weeks: 1 + 60.0 / 7))
+        let plain = WorkoutPlateau.status(of: stalled, unit: .lb, today: day(62), profile: profile)
+        let withWarmUps = WorkoutPlateau.status(of: ramped, unit: .lb, today: day(62), profile: profile)
+        let state = plain?.state
+        #expect(state == .stalled)
         #expect(withWarmUps == plain)
     }
 

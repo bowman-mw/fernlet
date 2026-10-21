@@ -98,6 +98,17 @@ nonisolated struct WorkoutActivityAttributes: ActivityAttributes {
         /// reading a live heart rate — the reading against that zone's range. Nil on every other step,
         /// and in a payload from before heart-rate zones existed.
         var zone: Zone? = nil
+        /// On a lift's lighter warm-up set, its place among them ("Warm-up 1 of 3") — the run state's
+        /// `warmUpPosition`. Both nil on every other step, and in a payload from before the Live
+        /// Activity labelled warm-up sets (round 2, R2), so an older payload still decodes.
+        var warmUpSet: Int? = nil
+        var warmUpSets: Int? = nil
+
+        /// The warm-up position when both halves are present and in order, else nil.
+        var warmUp: (index: Int, count: Int)? {
+            guard let warmUpSet, let warmUpSets, warmUpSet >= 1, warmUpSet <= warmUpSets else { return nil }
+            return (warmUpSet, warmUpSets)
+        }
 
         /// The numbers behind a cardio segment's heart-rate cue: the zone its pace aims for, and the
         /// live reading with the zone's range when there is one (comparison report idea 9).

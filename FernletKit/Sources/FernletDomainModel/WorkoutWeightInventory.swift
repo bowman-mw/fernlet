@@ -309,6 +309,16 @@ public nonisolated struct LoadLadder: Equatable, Sendable {
         return best
     }
 
+    /// At most `count` loads around `weight`, lightest first — the nearest on either side, so a guided
+    /// run carries what its lighter and heavier buttons can step to (R6) without the whole ladder.
+    public func window(around weight: Double, count: Int) -> [Double] {
+        guard count > 0 else { return [] }
+        guard loads.count > count else { return loads }
+        let center = loads.firstIndex { $0 >= weight - WorkoutLoadEngine.weightTolerance } ?? loads.count - 1
+        let start = min(max(0, center - count / 2), loads.count - count)
+        return Array(loads[start..<(start + count)])
+    }
+
     /// The step the runner's −/+ moves by on these loads: their common step (5 on a 5–25 set, 2.5 on
     /// an adjustable pair, 4 on 8/12/16 kg bells) when it is at least half the equipment's usual
     /// `step`, else the usual step — an irregular set (18, 26, 35 lb) has no useful common step.

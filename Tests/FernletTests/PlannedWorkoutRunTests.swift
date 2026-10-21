@@ -8,7 +8,10 @@
 // names preselected over the load engine's suggestion, the engine filling in only what a line left out,
 // starting the run (rest by name, the lines as written, the plan's id), finishing it (structured
 // results, the planned row completed as "log it" does, no double log, a removal putting the plan back),
-// and the guards (today only, a plan with lines, resume instead of restart). What no test here can check
+// and the guards (today only, a plan with lines, resume instead of restart). Round 2 adds the plan run
+// as its own thing beside the generated plan: matched by its plan's id, never by name (a same-named plan
+// neither marks the generated session logged, nor pins the plan, nor undoes its progress on removal),
+// and an undo that puts back the plan's own lines (`Workout.plannedExercises`). What no test here can check
 // — the Start button's look at AX5 and its Voice Control name on screen — is owed on the simulator.
 
 import Foundation
@@ -93,6 +96,22 @@ import FernletFoundation
     /// Today's logged rows that completed `planned`.
     private static func logs(of planned: PlannedWorkout, in store: FernletStore) -> [Workout] {
         store.day.workouts.filter { $0.plannedWorkoutID == planned.id }
+    }
+
+    /// Commits today's generated plan as one deterministic session named `name` (one set of bench, so a
+    /// single "done" finishes it), as `GuidedWorkoutRunStoreTests` does. Returns the session.
+    private static func commitGenerated(named name: String, in store: FernletStore) -> WorkoutProgram.SessionSuggestion {
+        let lift = PrescribedExercise(name: "Bench Press", sets: 1, reps: "5", role: .main, fromCatalog: true)
+        let session = WorkoutProgram.SessionSuggestion(
+            title: name, timeLabel: "", kind: .strength, exercises: [lift],
+            suggestion: WorkoutSuggestion(name: name, exercises: lift.line, notes: "")
+        )
+        let base = store.commitTodaysGuidedWorkoutPlan(intensity: .moderate)
+        let plan = WorkoutProgram.DayPlan(
+            splitName: "Test", dayTitle: "Day", sessions: [session], droppedSlots: [], locationName: "Test"
+        )
+        store.replaceGuidedWorkoutPlan(plan, replacing: Set(base.sessions.map(\.id)))
+        return session
     }
 
     /// Starts `planned`'s run from its row's Start, the way the Move root does.
@@ -418,5 +437,106 @@ import FernletFoundation
         #expect(workout.duration == 45)
         #expect(FernletDate.dayKey(for: workout.completedAt) == dayKey)
         #expect(Calendar.current.component(.hour, from: workout.completedAt) == 12)
+    }
+
+    // MARK: A plan's run beside the generated plan
+
+    @Test func aSameNamedPlanNeitherMarksTheGeneratedSessionLoggedNorPinsThePlan() throws {
+        let planned = Self.plan(["Bench press - 1 x 5 @ 135 lb"])
+        let store = Self.store(planning: planned)
+        let generated = Self.commitGenerated(named: planned.name, in: store)
+        _ = try Self.startedRun(of: planned, in: store)
+        store.guidedMarkSetDone()
+        let logged = Self.logs(of: planned, in: store)
+        #expect(logged.count == 1)
+        let workout = try #require(logged.first)
+        #expect(workout.isPlanRun)
+
+        let names = store.loggedGuidedWorkoutNamesToday
+        #expect(names.contains(planned.name) == false, "a plan's run is matched by its id, never by name")
+        let alreadyLogged = GuidedWorkoutAvailability.isAlreadyLogged(
+            generated, completed: store.guidedCompletedSessionIDs, loggedGuidedWorkoutNames: names
+        )
+        #expect(alreadyLogged == false, "the generated session of the same name is still to do")
+        #expect(store.canReworkTodaysGuidedPlan, "nothing of the generated plan was logged")
+    }
+
+    @Test func removingAPlansRunLeavesTheGeneratedSessionsProgressAlone() throws {
+        let planned = Self.plan(["Bench press - 1 x 5 @ 135 lb"])
+        let store = Self.store(planning: planned)
+        let generated = Self.commitGenerated(named: planned.name, in: store)
+        #expect(store.startGuidedRun(generated))
+        store.guidedMarkSetDone()
+        #expect(store.guidedCompletedSessionIDs.contains(generated.id))
+        let ladder = store.settings.workoutProgression
+
+        _ = try Self.startedRun(of: planned, in: store)
+        store.guidedMarkSetDone()
+        let workout = try #require(Self.logs(of: planned, in: store).first)
+        #expect(store.removeWorkout(id: workout.id, date: store.todayKey))
+
+        #expect(store.guidedCompletedSessionIDs.contains(generated.id), "the generated session stays done")
+        #expect(store.settings.workoutProgression == ladder, "its rep ladder is not stepped back")
+        #expect(store.canReworkTodaysGuidedPlan == false)
+    }
+
+    @Test func undoingAPlansRunPutsBackThePlansOwnLines() throws {
+        let planned = Self.plan(["Bench press - 1 x 5 @ 135 lb (pause at the chest)"], source: .user)
+        let store = Self.store(planning: planned)
+        _ = try Self.startedRun(of: planned, in: store)
+        store.guidedMarkSetDone()
+        let workout = try #require(Self.logs(of: planned, in: store).first)
+        #expect(workout.exercises == "Bench press - 1 x 5 @ 135 lb", "the row records what was done")
+        #expect(workout.plannedExercises == planned.exercises)
+
+        // An edit (the sheet cannot reach the plan's lines) keeps them.
+        var edited = workout
+        edited.notes = "Felt quick."
+        edited.plannedExercises = nil
+        #expect(store.updateWorkout(edited, date: store.todayKey))
+
+        #expect(store.removeWorkout(id: workout.id, date: store.todayKey))
+        let back = store.day.plannedWorkouts.filter { $0.id == planned.id }
+        let restored = try #require(back.first)
+        #expect(restored.exercises == planned.exercises, "the plan as written, cue and all")
+    }
+
+    @Test func aPlanRemovedDuringTheRunLogsAsThatPlansRun() throws {
+        let planned = Self.plan(["Bench press - 1 x 5 @ 135 lb"], source: .user)
+        let store = Self.store(planning: planned)
+        let generated = Self.commitGenerated(named: planned.name, in: store)
+        #expect(store.startGuidedRun(generated))
+        store.guidedMarkSetDone()
+        let ladder = store.settings.workoutProgression
+
+        _ = try Self.startedRun(of: planned, in: store)
+        store.deletePlannedWorkout(planned, date: store.todayKey)
+        store.guidedMarkSetDone()
+
+        let runs = store.day.workouts.filter { $0.isPlanRun }
+        #expect(runs.count == 1, "the generated session's same-named log does not swallow the run")
+        let workout = try #require(runs.first)
+        #expect(workout.plannedWorkoutID == nil)
+        #expect(workout.plannedExercises == planned.exercises)
+        #expect(store.settings.workoutProgression == ladder, "a plan's run never climbs the generated ladder")
+    }
+
+    @Test func plannedExercisesRoundTripsAndIsAbsentWhenUnset() throws {
+        var workout = Workout(
+            name: "Coach push", type: .upper, exercises: "Bench press - 1 x 5 @ 135 lb", rpe: nil, notes: "",
+            duration: nil, loggedFromGuidedSession: true, intensity: .moderate
+        )
+        let plain = try JSONEncoder().encode(workout)
+        let plainText = String(decoding: plain, as: UTF8.self)
+        #expect(plainText.contains("plannedExercises") == false, "an unset field writes no key")
+        let fromPlain = try JSONDecoder().decode(Workout.self, from: plain)
+        #expect(fromPlain.plannedExercises == nil)
+        #expect(fromPlain.isPlanRun == false)
+
+        workout.plannedExercises = "Bench press - 1 x 5 @ 135 lb (pause at the chest)"
+        let data = try JSONEncoder().encode(workout)
+        let decoded = try JSONDecoder().decode(Workout.self, from: data)
+        #expect(decoded.plannedExercises == workout.plannedExercises)
+        #expect(decoded.isPlanRun)
     }
 }

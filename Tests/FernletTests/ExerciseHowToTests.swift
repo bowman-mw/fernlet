@@ -279,19 +279,20 @@ struct ExerciseHowToTests {
     }
 
     /// VoiceOver reads the sheet in layout order, so the layout order IS the reading order: name,
-    /// media slot, facts, the numbered cues, the mistake, the easier version, the safety line. The
-    /// headings are `SectionLabel`s (header trait), and both entry points present it from a labelled
-    /// button with short Voice Control names.
+    /// media slot, facts, the numbered cues, the mistake, the easier version, the safety line, then
+    /// (from a plan or the runner) "Don't suggest this". The headings are `SectionLabel`s (header
+    /// trait), and both entry points present it from a labelled button with short Voice Control names.
     @Test func theSheetReadsInOrderBehindALabelledButtonOnBothEntryPoints() throws {
         let sheet = try RepoRoot.source("App/Fernlet/ExerciseHowToSheet.swift")
         let order = [
             "title: Text(verbatim: ExerciseHowToCatalog.displayName(for: exerciseName))",
-            "ExerciseDemonstrationSlot(exerciseName: exerciseName, sex: sex)",
+            "ExerciseDemonstrationSlot(",
             "ExerciseHowToFacts(target:",
             "ExerciseHowToSteps(cues: entry.cues)",
             "ExerciseHowToNote(title: \"Common mistake\"",
             "ExerciseHowToNote(title: \"Easier version\"",
             "ExerciseHowToSafetyLine()",
+            "ExerciseHowToHideControl(exerciseName: exerciseName, store: preferences)",
         ]
         let offsets = order.map { sheet.range(of: $0)?.lowerBound }
         #expect(offsets.allSatisfy { $0 != nil }, "a section of the sheet is missing: \(zip(order, offsets).filter { $0.1 == nil }.map(\.0))")
@@ -307,8 +308,66 @@ struct ExerciseHowToTests {
             #expect(source.contains("ExerciseHowToButton(exerciseName: exercise.name)"), "\(path) lost its how-to button")
             #expect(source.components(separatedBy: ".exerciseHowToSheet($howTo").count - 1 == 1,
                     "\(path) presents the how-to sheet from exactly one place")
-            #expect(source.contains(".exerciseHowToSheet($howTo, sex: store.effectiveUserProfile.sex)"),
-                    "\(path) must pass the profile's sex, which picks the demonstration's version")
+            #expect(source.contains(".exerciseHowToSheet($howTo, sex: store.effectiveUserProfile.sex, preferences: store)"),
+                    "\(path) must pass the profile's sex, which picks the demonstration's version, and the store \"Don't suggest this\" writes")
+        }
+    }
+
+    // MARK: - "Don't suggest this" on the sheet (tracker row N6)
+
+    /// Offered for every bundled catalog exercise and for nothing else: a typed name, a different
+    /// casing (the how-to lookup is exact) or an unknown exercise gets no control. And only from a
+    /// presenter that hands the sheet the store: the plan and the runner do; the default is nil.
+    @Test func dontSuggestIsOfferedForCatalogExercisesFromThePlanAndTheRunner() throws {
+        for row in try Self.catalogRows() {
+            #expect(ExerciseHowToHideControl.isOffered(for: row.name), "\(row.name) gets no Don't suggest on its how-to sheet")
+        }
+        for name in ["", "bench press", "Zercher squat", "Easy cardio - 20 min"] {
+            #expect(!ExerciseHowToHideControl.isOffered(for: name), "'\(name)' is not a catalog exercise with a how-to")
+        }
+        let sheet = try RepoRoot.source("App/Fernlet/ExerciseHowToSheet.swift")
+        #expect(sheet.contains("sex: BiologicalSex, preferences: FernletStore? = nil"),
+                "a presenter that passes no store must get the read-only sheet")
+        #expect(sheet.contains("if let preferences, ExerciseHowToHideControl.isOffered(for: exerciseName) {"))
+        #expect(sheet.contains("ExerciseHowToSheet(exerciseName: shown.name, sex: sex, preferences: preferences)"))
+    }
+
+    /// The saved preference decides; this sheet's own mark only decides whether Undo is offered.
+    @Test func theHideStateFollowsTheSavedPreference() {
+        #expect(ExerciseHowToHideState(isHidden: false, hidHere: false) == .suggested)
+        #expect(ExerciseHowToHideState(isHidden: false, hidHere: true) == .suggested, "shown again elsewhere reads as suggested")
+        #expect(ExerciseHowToHideState(isHidden: true, hidHere: true) == .hiddenHere)
+        #expect(ExerciseHowToHideState(isHidden: true, hidHere: false) == .hiddenEarlier)
+    }
+
+    /// The sheet writes idea 15's preference through the store's own calls and never edits the list
+    /// itself, and it speaks the editor's words with the editor's comments, so each catalog key keeps
+    /// one comment. The control is a named button for VoiceOver and Voice Control, with an Undo.
+    @Test func dontSuggestReusesIdea15sStoreAndWords() throws {
+        let sheet = try RepoRoot.source("App/Fernlet/ExerciseHowToSheet.swift")
+        let editor = try RepoRoot.source("App/Fernlet/GuidedWorkoutEditorSheet.swift")
+        let start = try #require(sheet.range(of: "struct ExerciseHowToHideControl"))
+        let control = sheet[start.lowerBound...]
+        #expect(control.contains("store.hideExercise(exerciseName)") && control.contains("store.showExerciseAgain(exerciseName)"))
+        for needle in ["workoutExercisePreferences =", "preferences.hide(", "applyExercisePreferenceEdits"] {
+            #expect(!sheet.contains(needle), "the how-to sheet must not edit the preference list itself (`\(needle)`)")
+        }
+        let shared = [
+            "Text(\"Fernlet won't suggest this again.\", comment: \"Plan editor: this exercise is marked Don't suggest, written on Save\")",
+            "Text(\"Hidden from suggestions. You can show it again in Workout setup.\",",
+            "comment: \"Plan editor: this exercise was already hidden in Workout setup\")",
+            "comment: \"Spoken name of the Undo button under a Don't suggest mark; the argument is the exercise\")",
+            "Text(\"Don't suggest\", comment: \"Plan editor: stop Fernlet suggesting this exercise\")",
+        ]
+        for words in shared {
+            #expect(control.contains(words), "the how-to sheet lost the editor's `\(words)`")
+            #expect(editor.contains(words), "the editor's wording or comment changed: keep the sheet's copy in step (`\(words)`)")
+        }
+        for needle in ["Text(\"Don't suggest this\", comment:", ".accessibilityIdentifier(\"workout.howTo.hide\")",
+                       ".accessibilityIdentifier(\"workout.howTo.undoHide\")", "Text(\"Keep suggesting \\(",
+                       ".accessibilityInputLabels([Text(\"Undo\")])", ".fernletTapTarget()", ".fernletWrappingText()",
+                       "FernletAnnouncer.system.announce(.success,"] {
+            #expect(control.contains(needle), "the Don't suggest control lost `\(needle)`")
         }
     }
 
@@ -409,6 +468,52 @@ struct ExerciseHowToStoreTests {
         let history = FernletStore.rollUpExerciseHistory(days: [store.day]).entries
         #expect(history.map(\.name).contains("Bench press"))
         #expect(!history.map(\.name).contains("Press de banca"))
+        store.clearGuidedRun()
+    }
+
+    /// N6: "Don't suggest this" from the how-to sheet in the middle of a run writes idea 15's
+    /// preference and nothing else. The live run and today's committed plan keep the exercise, the
+    /// run still finishes and logs it, and Undo takes the mark back.
+    @Test func hidingFromTheHowToSheetMidRunLeavesTheRunAndTodaysPlanAlone() throws {
+        let store = makeTestStore(appGroupDirectory: appGroupDirectory)
+        store.clearGuidedRun()
+        let step = PrescribedExercise(name: "Bench press", sets: 1, reps: "5", role: .main, fromCatalog: true)
+        let session = WorkoutProgram.SessionSuggestion(
+            title: "Quick", timeLabel: "", kind: .strength, exercises: [step],
+            suggestion: WorkoutSuggestion(name: "Quick", exercises: step.line, notes: "")
+        )
+        let base = store.commitTodaysGuidedWorkoutPlan(intensity: .moderate)
+        let plan = WorkoutProgram.DayPlan(splitName: "Test", dayTitle: "Day", sessions: [session], droppedSlots: [],
+                                          locationName: "Test")
+        store.replaceGuidedWorkoutPlan(plan, replacing: Set(base.sessions.map(\.id)))
+        let started = store.startGuidedRun(session)
+        #expect(started)
+        let before = try #require(store.guidedRunState)
+
+        let hid = store.hideExercise("Bench press")
+        #expect(hid)
+        let isHidden = store.settings.workoutExercisePreferences.isHidden("Bench press")
+        #expect(isHidden)
+        let during = try #require(store.guidedRunState)
+        #expect(during == before, "hiding mid-run must leave the run exactly as it was")
+        let committed = try #require(store.currentGuidedWorkoutPlan)
+        let committedIDs = committed.sessions.map(\.id)
+        let planIDs = plan.sessions.map(\.id)
+        #expect(committedIDs == planIDs, "today's committed plan stays the one the run belongs to")
+        let committedNames = committed.sessions.flatMap(\.exercises).map(\.name)
+        let expectedNames = ["Bench press"]
+        #expect(committedNames == expectedNames, "today's committed plan keeps the hidden exercise")
+
+        store.guidedMarkSetDone()
+        let logged = store.day.workouts.contains { workout in
+            workout.name == "Quick" && workout.loggedFromGuidedSession == true
+                && workout.exercises.contains("Bench press - 1 x 5")
+        }
+        #expect(logged, "the run still finishes and logs the exercise it started with")
+
+        store.showExerciseAgain("Bench press")
+        let stillHidden = store.settings.workoutExercisePreferences.isHidden("Bench press")
+        #expect(!stillHidden, "Undo lets Fernlet suggest it again")
         store.clearGuidedRun()
     }
 }

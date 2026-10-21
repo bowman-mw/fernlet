@@ -5,10 +5,11 @@ import FernletFoundation
 @testable import Fernlet
 
 /// The Move tab's Weekly totals (comparison report, idea 18): hard sets per muscle group counted
-/// from guided results and hand-logged lines (the load engine's two sources), full credit for a
-/// primary muscle and half for a secondary one, warm-up stretches, holds, jumps, conditioning and
-/// calibration ramps left out, the week starting on the calendar's own first weekday, aerobic minutes
-/// from manual and Apple Health rows against the 150-minute guideline, the empty week, and the words
+/// from guided results, hand-logged lines and the planned lines of a guided session marked done (round
+/// 2), full credit for a primary muscle and half for a secondary one, warm-up stretches, holds, jumps,
+/// conditioning and calibration ramps left out, the week starting on the calendar's own first weekday,
+/// aerobic minutes from manual and Apple Health rows — and, round 2, the planned minutes of a cardio
+/// block inside a lifting session — against the 150-minute guideline, the empty week, and the words
 /// VoiceOver reads.
 ///
 /// Set counting runs against a small fixture catalog, so curating the bundled catalog never moves
@@ -113,10 +114,20 @@ struct WeeklyTrainingSummaryTests {
         #expect(sets(week, .hamstrings) == 2.5)
     }
 
-    @Test func aGuidedRowWithoutResultsIsAPlanNotARecord() throws {
-        let markedDone = guided(nil, text: "Bench press - 4 x 5\nBack squat - 3 x 8")
+    /// "Mark done" logs the session's plan with no results: the week counts the sets it planned.
+    @Test func aGuidedSessionMarkedDoneCountsTheSetsItPlanned() throws {
+        let markedDone = guided(nil, text: "Bench press - 3 x 8")
         let week = try summary([("2026-10-20", [markedDone])])
-        #expect(week.muscleSets.isEmpty)
+        #expect(sets(week, .chest) == 3)
+        #expect(sets(week, .triceps) == 1.5)
+    }
+
+    /// A row with results is read from its results only: the lines beside them are never counted too.
+    @Test func aRowWithResultsIgnoresItsLines() throws {
+        let workout = guided([result("Bench press", sets: 3)], text: "Bench press - 3 x 8\nBack squat - 3 x 8")
+        let week = try summary([("2026-10-20", [workout])])
+        #expect(sets(week, .chest) == 3)
+        #expect(sets(week, .quads) == 0, "a line beside results is not read")
     }
 
     @Test func setsAddUpAcrossTheWeeksDaysAndBothSources() throws {
@@ -282,6 +293,35 @@ struct WeeklyTrainingSummaryTests {
         #expect(week.aerobicMinutes == 0)
     }
 
+    /// A cardio block inside a lifting session adds its planned minutes: a steady line's minutes, an
+    /// interval line's rounds × (hard + easy); stretching and mobility add nothing, and no muscle is
+    /// credited for any of them.
+    @Test func aCardioBlockInsideALiftingSessionAddsItsPlannedMinutes() throws {
+        let finisher = handLogged("Bench press - 3 x 8\nEasy cardio - 20 min", minutes: 60)
+        let intervals = guided(nil, text: "Back squat - 3 x 5\nIntervals - 8 × 1 min hard / 1 min easy", minutes: 50)
+        let stretches = guided([result("Bench press", sets: 3)],
+                               text: "Bench press - 3 x 8 @ 135 lb\nMobility flow - 15 min\nStanding quad stretch - 2 x 30 s",
+                               minutes: 45)
+        #expect(WeeklyTrainingSummaryBuilder.aerobicMinutes(of: finisher) == 20)
+        #expect(WeeklyTrainingSummaryBuilder.aerobicMinutes(of: intervals) == 16)
+        #expect(WeeklyTrainingSummaryBuilder.aerobicMinutes(of: stretches) == 0)
+
+        let week = try summary([("2026-10-20", [finisher, intervals, stretches])])
+        #expect(week.aerobicMinutes == 36)
+        #expect(sets(week, .chest) == 6, "the lifts alone credit muscles")
+        #expect(sets(week, .quads) == 3)
+    }
+
+    /// An aerobic row counts its own duration once, never its lines as well; a row's cardio lines are
+    /// capped like a duration.
+    @Test func cardioMinutesNeverCountTwiceAndAreCapped() throws {
+        let cardio = guided(nil, text: "Easy cardio - 20 min", type: .cardio, minutes: 22)
+        #expect(WeeklyTrainingSummaryBuilder.aerobicMinutes(of: cardio) == 22)
+        let long = Array(repeating: "Easy cardio - 180 min", count: 10).joined(separator: "\n")
+        let capped = WeeklyTrainingSummaryBuilder.aerobicMinutes(of: handLogged(long))
+        #expect(capped == WeeklyTrainingSummaryBuilder.maxMinutesPerWorkout)
+    }
+
     @Test func danceAndStrikingArtsCountAsAerobic() throws {
         let week = try summary([("2026-10-21", [activity(.socialDance, minutes: 40), activity(.martialArts, minutes: 30)])])
         #expect(week.aerobicMinutes == 70)
@@ -297,6 +337,16 @@ struct WeeklyTrainingSummaryTests {
     @Test func anAerobicRowWithNoDurationAddsNothing() throws {
         let week = try summary([("2026-10-21", [activity(.running, minutes: nil), activity(.walking, minutes: -5)])])
         #expect(week.aerobicMinutes == 0)
+    }
+
+    /// The sports added in round 2 (R5) count as well: a team or snow sport by its cardio category, and
+    /// boxing, wrestling, golf and surfing as moderate on the Compendium.
+    @Test func theAddedSportsCountAsAerobic() throws {
+        let week = try summary([("2026-10-21", [
+            activity(.volleyball, minutes: 30), activity(.downhillSkiing, minutes: 45), activity(.boxing, minutes: 20),
+            activity(.wrestling, minutes: 10), activity(.golf, minutes: 60), activity(.surfing, minutes: 25),
+        ])])
+        #expect(week.aerobicMinutes == 190)
     }
 
     // MARK: - No data

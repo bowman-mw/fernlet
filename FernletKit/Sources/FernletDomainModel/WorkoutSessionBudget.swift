@@ -4,6 +4,9 @@
 // Fits a session into its time budget (2026-10-20, idea 5). A rival's "30 minute" workouts ran 45 to
 // 60-plus minutes; a Fernlet session set to 30 minutes is planned to take 30 by the same estimate the
 // plan card shows and the guided runner counts down from — or its note says plainly how long it runs.
+// The estimate counts about a minute of changeover before each exercise after the first (the owner's
+// answer, 2026-10-20), so a fitted session leaves time to move between stations, and dropping a lift
+// gives back its changeover too.
 //
 // A lifting session trims in a fixed order, each step only while the session is still over:
 // 1. the short warm-up — about four minutes of the owner's flow, chosen for the day's muscles;
@@ -11,7 +14,9 @@
 // 3. accessory work, lowest priority first: the activation's jumps, the lifting block's accessory
 //    lifts from the last one up, then the activation's balance drill;
 // 4. accessory sets, one at a time from the last accessory lift, round after round, never below two;
-// 5. main-lift sets, the same way, never below two.
+// 5. the warm-up ramp (``WorkoutWarmUpSets``), cut to its one set nearest 60 % of the working weight —
+//    never to none (the owner's pick R1, 2026-10-20);
+// 6. main-lift sets, the same way as accessory sets, never below two.
 // Main lifts are never dropped (a lift eased to accessory work for a mild injury is still the slot's
 // main lift), the activation block keeps at least one move and the lifting block at least one lift.
 // Nothing is ever added or made harder, so the injury limits and the 48-hour guard's lighter sets still
@@ -26,7 +31,8 @@ import Foundation
 /// ``holdLeadInSeconds`` get-into-position lead-in, with the step's rest between its own sets (the
 /// step's override, else ``WorkoutRestGuidance``'s default for the goal — the same rest the runner
 /// bakes in). A descriptor line (no sets: a conditioning finisher, the fallback circuit) takes the
-/// minutes it names ("Conditioning intervals - 12 min"), else ``descriptorFallbackSeconds``. The plan
+/// minutes it names ("Conditioning intervals - 12 min"), else ``descriptorFallbackSeconds``. Each
+/// exercise after the session's first adds ``changeoverSeconds`` (``changeovers(in:)``). The plan
 /// card shows ``minutes(of:goal:)``, and a run started from the same steps begins its header countdown
 /// (`GuidedWorkoutRunState.estimatedSecondsRemaining`) at the same total. Pure and deterministic.
 public nonisolated enum WorkoutSessionTime {
@@ -37,6 +43,10 @@ public nonisolated enum WorkoutSessionTime {
     public static let workSecondsPerSet = 45
     /// A descriptor line that names no minutes.
     public static let descriptorFallbackSeconds = 300
+    /// The changeover before each exercise after the session's first: moving to the next station,
+    /// setting up a bench, loading a bar (the owner's "about a minute per exercise", 2026-10-20). The
+    /// run state spells the same number (a test pins the two equal).
+    public static let changeoverSeconds = 60
 
     /// The rest between one step's own sets: its override, else the research default for `goal`.
     public static func restSeconds(for step: PrescribedExercise, goal: GoalType) -> Int {
@@ -57,9 +67,38 @@ public nonisolated enum WorkoutSessionTime {
         return seconds(of: step, restSeconds: restSeconds(for: step, goal: goal))
     }
 
-    /// Seconds a whole session takes.
+    /// Seconds a whole session takes: its steps, plus a changeover before each exercise after the first.
     public static func seconds(of steps: [PrescribedExercise], goal: GoalType) -> Int {
-        steps.reduce(0) { $0 + seconds(of: $1, goal: goal) }
+        steps.reduce(0) { $0 + seconds(of: $1, goal: goal) } + changeovers(in: steps) * changeoverSeconds
+    }
+
+    /// The exercise a step belongs to, for counting changeovers — nil for a step that takes none.
+    ///
+    /// The warm-up and the cool-down flow from one hold to the next, their lead-in the only changeover,
+    /// so their steps belong to no exercise. A stretch session (``SessionBlock/mobility``, expanded from
+    /// a "Mobility flow" line when a run starts) is one exercise, as the line it came from was. A cardio
+    /// segment belongs to the plan line it was read from, so an interval line's parts are the one
+    /// exercise the plan showed. Every other step is its frozen name, so a lift's warm-up sets, a
+    /// calibration's ramp and a one-sided drill's second side are the same exercise as the step before.
+    public static func exerciseKey(_ step: PrescribedExercise) -> String? {
+        switch step.block {
+        case .warmUp, .coolDown: return nil
+        case .mobility: return SessionBlock.mobility.rawValue
+        case .activation, .lifting, .cardio: return step.segment?.descriptor ?? step.name
+        }
+    }
+
+    /// How many changeovers a session has: one before each exercise after its first. A step starts an
+    /// exercise when it belongs to one (``exerciseKey(_:)``) and the step before it belongs to another.
+    public static func changeovers(in steps: [PrescribedExercise]) -> Int {
+        var previousKey: String?
+        var exercises = 0
+        for step in steps {
+            let key = exerciseKey(step)
+            if let key, key != previousKey { exercises += 1 }
+            previousKey = key
+        }
+        return max(0, exercises - 1)
     }
 
     /// Whole minutes a session takes, rounded up and never under one: the plan card's "~45 min".
@@ -99,16 +138,19 @@ public nonisolated enum WorkoutSessionBudget {
         case coolDownStretch(String)
         case accessory(String)
         case accessorySet(String)
+        /// A lift's warm-up ramp cut to one set.
+        case warmUpRamp(String)
         case mainSet(String)
 
-        /// The trim's step in the order (1 … 5): the trims of a fit never step backwards.
+        /// The trim's step in the order (1 … 6): the trims of a fit never step backwards.
         public var stage: Int {
             switch self {
             case .shortWarmUp: 1
             case .coolDownStretch: 2
             case .accessory: 3
             case .accessorySet: 4
-            case .mainSet: 5
+            case .warmUpRamp: 5
+            case .mainSet: 6
             }
         }
     }
@@ -177,6 +219,7 @@ public nonisolated enum WorkoutSessionBudget {
         dropAccessoryLifts(&work)
         dropActivation(&work, timed: true)
         reduceSets(&work, mainLifts: false)
+        trimWarmUpRamps(&work)
         reduceSets(&work, mainLifts: true)
         return Outcome(blocks: work.blocks, trims: work.trims, estimatedSeconds: work.seconds, budgetMinutes: budget)
     }
@@ -226,12 +269,14 @@ public nonisolated enum WorkoutSessionBudget {
             }
         }
 
-        /// Seconds `steps` take (``WorkoutSessionTime``), with each step's rest from the lookup.
+        /// Seconds `steps` take (``WorkoutSessionTime``), with each step's rest from the lookup and a
+        /// changeover before each exercise after the first — so dropping a lift gives back its changeover.
         func seconds(_ steps: [PrescribedExercise]) -> Int {
-            steps.reduce(0) { total, step in
+            let work = steps.reduce(0) { total, step in
                 let rest = step.restSecondsOverride ?? rests[step.id] ?? 0
                 return total + WorkoutSessionTime.seconds(of: step, restSeconds: rest)
             }
+            return work + WorkoutSessionTime.changeovers(in: steps) * WorkoutSessionTime.changeoverSeconds
         }
     }
 
@@ -272,7 +317,29 @@ public nonisolated enum WorkoutSessionBudget {
         }
     }
 
-    /// Steps 4 and 5: one set at a time from the last lift of the kind, round after round, never
+    /// Step 5: each lift's warm-up ramp cut to the one set nearest 60 % of its working weight
+    /// (``WorkoutWarmUpSets/keptOnTrim(_:working:)``) — never to none. A warm-up set is one of the
+    /// lift's main-lift steps, so no earlier step drops it.
+    static func trimWarmUpRamps(_ work: inout Work) {
+        let lifts = orderedNames(work.blocks.lifting.filter(WorkoutWarmUpSets.isWarmUpSet))
+        for name in lifts {
+            guard work.isOver else { return }
+            let ramp = work.blocks.lifting.filter { $0.name == name && WorkoutWarmUpSets.isWarmUpSet($0) }
+            let lift = work.blocks.lifting.first { $0.name == name && !WorkoutWarmUpSets.isWarmUpSet($0) }
+            guard ramp.count > 1,
+                  let kept = WorkoutWarmUpSets.keptOnTrim(ramp, working: lift?.guidance?.prescription?.suggested ?? 0)
+            else { continue }
+            for index in work.blocks.lifting.indices.reversed() {
+                let step = work.blocks.lifting[index]
+                guard step.name == name, WorkoutWarmUpSets.isWarmUpSet(step), step.id != kept.id else { continue }
+                work.blocks.lifting.remove(at: index)
+                work.blocks.mainLift.remove(at: index)
+            }
+            work.trims.append(.warmUpRamp(name))
+        }
+    }
+
+    /// Steps 4 and 6: one set at a time from the last lift of the kind, round after round, never
     /// below ``minimumSets``.
     static func reduceSets(_ work: inout Work, mainLifts: Bool) {
         for _ in 0..<maxSetRounds {
@@ -310,16 +377,20 @@ public nonisolated enum WorkoutSessionBudget {
     }
 
     /// "shorter warm-up; fewer cool-down stretches; left out Squat jump, Cable curl; fewer sets of
-    /// Bench press" — the trims in order, empty when there were none.
+    /// Bench press; one warm-up set for Back squat" — the trims in order, empty when there were none.
+    /// The trims carry frozen names; the summary draws them in the device's language
+    /// (``WorkoutPlannerCopy/exerciseList(_:)``).
     static func changeSummary(_ trims: [Trim]) -> String {
         var dropped: [String] = []
         var fewerSets: [String] = []
+        var oneWarmUp: [String] = []
         var coolDown = false
         for trim in trims {
             switch trim {
             case .shortWarmUp: continue
             case .coolDownStretch: coolDown = true
             case .accessory(let name): dropped.append(name)
+            case .warmUpRamp(let name): oneWarmUp.append(name)
             case .accessorySet(let name), .mainSet(let name):
                 if !fewerSets.contains(name) { fewerSets.append(name) }
             }
@@ -327,8 +398,9 @@ public nonisolated enum WorkoutSessionBudget {
         var parts: [String] = []
         if trims.contains(.shortWarmUp) { parts.append(WorkoutPlannerCopy.budgetShorterWarmUp) }
         if coolDown { parts.append(WorkoutPlannerCopy.budgetFewerCoolDown) }
-        if !dropped.isEmpty { parts.append(WorkoutPlannerCopy.budgetLeftOut(dropped.joined(separator: ", "))) }
-        if !fewerSets.isEmpty { parts.append(WorkoutPlannerCopy.budgetFewerSets(fewerSets.joined(separator: ", "))) }
+        if !dropped.isEmpty { parts.append(WorkoutPlannerCopy.budgetLeftOut(WorkoutPlannerCopy.exerciseList(dropped))) }
+        if !fewerSets.isEmpty { parts.append(WorkoutPlannerCopy.budgetFewerSets(WorkoutPlannerCopy.exerciseList(fewerSets))) }
+        if !oneWarmUp.isEmpty { parts.append(WorkoutPlannerCopy.budgetOneWarmUpSet(WorkoutPlannerCopy.exerciseList(oneWarmUp))) }
         return parts.joined(separator: "; ")
     }
 }

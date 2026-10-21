@@ -12,8 +12,8 @@ import FernletUI
 /// the way into the user's own exercises, hidden exercises and saved swaps
 /// (``WorkoutExercisePreferencesEntry``), which save as they change rather than with this draft —
 /// plus the guided runner's cue switches (Workout haptics, Workout sounds and
-/// Spoken cues, ``WorkoutCueSettingsSection``), which are device-local rather than part of the synced profile and are
-/// stored on Save like the rest. Changing the split is a plain edit — a neutral note beside the options
+/// Spoken cues, ``WorkoutCueSettingsSection``) and guided cardio's heart-rate switches and "My max heart
+/// rate", which are device-local rather than part of the synced profile and are stored on Save like the rest. Changing the split is a plain edit — a neutral note beside the options
 /// says training has been consistent, where a confirmation dialog used to interrupt the save; the sheet
 /// guards its draft like the other entry sheets instead.
 struct WorkoutSetupSheet: View {
@@ -34,8 +34,18 @@ struct WorkoutSetupSheet: View {
     /// "Warm-up sets before heavy lifts": nil until chosen (the level's default shows), synced on Save.
     @State private var warmUpSets: Bool?
     private let initialWarmUpSets: Bool?
+    @State private var strengthFocus: WorkoutStrengthFocus
+    private let initialStrengthFocus: WorkoutStrengthFocus
+    /// "Use food logs in workout notes": nil until chosen (reads as on), synced on Save.
+    @State private var foodAware: Bool?
+    private let initialFoodAware: Bool?
     /// The heart-rate switches' draft (device-local, like the cue switches).
     @State private var zonePreferences: WorkoutZonePreferences
+    /// "My max heart rate" as typed (device-local, stored on Save; empty or unusable clears it).
+    @State private var maxHeartRateText: String
+    private let initialMaxHeartRateText: String
+    /// The age estimate of the maximum heart rate (Tanaka), in whole bpm, for the field's footnote.
+    private let estimatedMaxHeartRate: Int
     private let recommendedSplits: [TrainingSplit]
     private let originalSelectedSplitID: String?
     private let currentSplitName: String
@@ -86,9 +96,17 @@ struct WorkoutSetupSheet: View {
         self.initialSpokenCues = spoken
         _warmUpSets = State(initialValue: settings.workoutWarmUpSets)
         self.initialWarmUpSets = settings.workoutWarmUpSets
+        _strengthFocus = State(initialValue: settings.workoutStrengthFocus)
+        self.initialStrengthFocus = settings.workoutStrengthFocus
+        _foodAware = State(initialValue: settings.workoutFoodAware)
+        self.initialFoodAware = settings.workoutFoodAware
         let zones = WorkoutZonePreferences.current()
         _zonePreferences = State(initialValue: zones)
         self.initialZonePreferences = zones
+        let maxText = WorkoutZonePreferences.maxHeartRate().map(String.init) ?? ""
+        _maxHeartRateText = State(initialValue: maxText)
+        self.initialMaxHeartRateText = maxText
+        self.estimatedMaxHeartRate = Int(HeartRateZones.tanakaMaximum(age: store.effectiveUserProfile.age).rounded())
         self.healthSharingAllowed = store.isWorkoutHealthSharingEnabled
     }
 
@@ -103,7 +121,10 @@ struct WorkoutSetupSheet: View {
             || sessionOptions != initialSessionOptions
             || spokenCues != initialSpokenCues
             || warmUpSets != initialWarmUpSets
+            || strengthFocus != initialStrengthFocus
+            || foodAware != initialFoodAware
             || zonePreferences != initialZonePreferences
+            || maxHeartRateText != initialMaxHeartRateText
     }
 
     var body: some View {
@@ -119,7 +140,8 @@ struct WorkoutSetupSheet: View {
                     WorkoutExercisePreferencesEntry(store: store)
                     WorkoutCueSettingsSection(
                         preferences: $cuePreferences, spoken: $spokenCues,
-                        zones: $zonePreferences, healthSharingAllowed: healthSharingAllowed
+                        zones: $zonePreferences, maxHeartRate: $maxHeartRateText,
+                        healthSharingAllowed: healthSharingAllowed, estimatedMaximum: estimatedMaxHeartRate
                     )
                 }
                 .padding(20)
@@ -285,20 +307,50 @@ struct WorkoutSetupSheet: View {
                 }
             }
 
-            SheetField("Experience") {
-                FlowLayout(spacing: 8) {
-                    ForEach(ExperienceLevel.allCases) { level in
-                        Button(level.displayName) { profile.experience = level }
-                            .buttonStyle(ChipButtonStyle(selected: profile.experience == level))
+            // G8 (2026-10-20): the experience field asked as a training age. The same stored level —
+            // nothing new is kept — and each lift's own log refines it on this device.
+            SheetField("How long have you lifted regularly?") {
+                VStack(alignment: .leading, spacing: 8) {
+                    FlowLayout(spacing: 8) {
+                        ForEach(ExperienceLevel.allCases) { level in
+                            Button(level.trainingAgeLabel) { profile.experience = level }
+                                .buttonStyle(ChipButtonStyle(selected: profile.experience == level))
+                        }
                     }
+                    Text("This sets how often Fernlet moves your lifts on. Each lift's own log fine-tunes it.")
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.slate)
+                        .fernletWrappingText()
                 }
             }
+
+            focusField
 
             if profile.experience != .beginner {
                 OneRepMaxOptIn(isOn: $profile.oneRepMaxTesting)
             }
 
             WarmUpSetsToggle(choice: $warmUpSets, experience: profile.experience)
+
+            FoodLogsToggle(choice: $foodAware)
+        }
+    }
+
+    /// G6 (2026-10-20): Strength, Size, or Both — what the lifting aims at, with a line on what each does.
+    private var focusField: some View {
+        SheetField("Training focus") {
+            VStack(alignment: .leading, spacing: 8) {
+                FlowLayout(spacing: 8) {
+                    ForEach(WorkoutStrengthFocus.allCases) { focus in
+                        Button(focus.displayName) { strengthFocus = focus }
+                            .buttonStyle(ChipButtonStyle(selected: strengthFocus == focus))
+                    }
+                }
+                Text(verbatim: strengthFocus.summary)
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
         }
     }
 
@@ -335,7 +387,10 @@ struct WorkoutSetupSheet: View {
         store.setWorkoutSessionOptions(sessionOptions)
         WorkoutCuePreferences.saveSpoken(spokenCues)
         store.setWorkoutWarmUpSets(warmUpSets)
+        store.setWorkoutStrengthFocus(strengthFocus)
+        store.setWorkoutFoodAware(foodAware)
         WorkoutZonePreferences.save(zonePreferences)
+        WorkoutZonePreferences.saveMaxHeartRate(WorkoutZonePreferences.maxHeartRate(typed: maxHeartRateText))
         dismiss()
     }
 }

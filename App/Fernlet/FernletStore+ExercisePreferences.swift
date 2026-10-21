@@ -80,8 +80,12 @@ extension FernletStore {
     /// The swap options for `name` in the plan editor: up to four exercises that do the same work
     /// (``WorkoutExerciseSwapOptions``), drawn from what the planner itself may suggest here — the
     /// active location's equipment, the injury limits, nothing hidden (saved or `alsoHidden`, the
-    /// editor's pending marks) — and none already in the session (`excluding`).
-    func exerciseSwapOptions(for name: String, excluding names: Set<String>, alsoHidden: [String] = []) -> [ExerciseTarget] {
+    /// editor's pending marks) — and none already in the session (`excluding`). A `harder` variation
+    /// the planner offered for a lift at its heaviest load (N7, `LoadGuidance.harderVariation`) comes
+    /// first when the same rules allow it.
+    func exerciseSwapOptions(
+        for name: String, excluding names: Set<String>, alsoHidden: [String] = [], harder: String? = nil
+    ) -> [ExerciseTarget] {
         guard let original = WorkoutExerciseCatalog.exercise(named: name) else { return [] }
         var preferences = settings.workoutExercisePreferences
         for pending in alsoHidden.prefix(WorkoutExercisePreferences.maxHidden) { preferences.hide(pending) }
@@ -91,7 +95,13 @@ extension FernletStore {
             location: settings.activeWorkoutLocation,
             profile: settings.workoutProfile
         ).filter { !hidden.contains(WorkoutExerciseCatalog.normalizedName($0.name)) }
-        return WorkoutExerciseSwapOptions.options(for: original, in: pool, excluding: names)
+        let options = WorkoutExerciseSwapOptions.options(for: original, in: pool, excluding: names)
+        let excluded = Set(names.map(WorkoutExerciseCatalog.normalizedName))
+        guard let harder, let first = pool.first(where: {
+            WorkoutExerciseCatalog.normalizedName($0.name) == WorkoutExerciseCatalog.normalizedName(harder)
+        }), !excluded.contains(WorkoutExerciseCatalog.normalizedName(first.name)) else { return options }
+        let rest = options.filter { $0.name != first.name }
+        return Array(([first] + rest).prefix(WorkoutExerciseSwapOptions.defaultLimit))
     }
 
     // MARK: Custom exercises

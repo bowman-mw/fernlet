@@ -9,11 +9,15 @@
 // in the language the device ran then. That is deliberate and stays: a stored note is never
 // re-translated. What this file guarantees is that the COMPOSITION is translatable — each sentence is
 // one key with its arguments as format specifiers a translator can reorder, and every counted noun is
-// a plural-ruled count phrase (``repCount(_:)``, ``setCount(_:)``, ``weekCount(_:)``, ``hourCount(_:)``).
+// a plural-ruled count phrase (``repCount(_:)``, ``setCount(_:)``, ``weekCount(_:)``, ``sessionCount(_:)``,
+// ``hourCount(_:)``).
 //
-// Exercise names reach these sentences as the frozen catalog names. The planner keeps the frozen name
-// everywhere (it is the progression key and the plan text), so a note names a lift the way the plan
-// text and the history do.
+// Exercise names reach these sentences in the person's language (2026-10-20, N8): a note builder draws
+// each frozen catalog name through ``WorkoutPlannerCopy/exerciseName(_:)`` or ``exerciseList(_:)``
+// (``ExerciseHowToCatalog/displayName(for:)``) as it composes the note, the same name the plan card and
+// the runner draw. The planner itself keeps the frozen name everywhere else — the plan text, the log,
+// the progression keys, exports and prompts — and nothing ever reads a note back, so a drawn name in a
+// stored note can never re-identify a lift.
 
 import Foundation
 
@@ -44,10 +48,31 @@ public nonisolated enum WorkoutPlannerCopy {
                comment: "Workout session note: a number of weeks, e.g. '3 weeks'. Placed inside other note sentences.")
     }
 
+    /// "8 sessions".
+    static func sessionCount(_ count: Int) -> String {
+        String(localized: "workoutNote.count.sessions", defaultValue: "\(count) sessions", bundle: .module,
+               comment: "Workout session note: a number of training sessions of one lift, e.g. '8 sessions'. Placed inside other note sentences.")
+    }
+
     /// "48 hours".
     static func hourCount(_ count: Int) -> String {
         String(localized: "workoutNote.count.hours", defaultValue: "\(count) hours", bundle: .module,
                comment: "Workout session note: a number of hours, e.g. '48 hours'. Placed inside other note sentences.")
+    }
+
+    // MARK: - Exercise names (N8)
+
+    /// An exercise as a note names it: the frozen catalog name `name` drawn in the person's language
+    /// (``ExerciseHowToCatalog/displayName(for:)``), or a custom or typed name as it is. Display only —
+    /// the planner passes the frozen name everywhere else.
+    static func exerciseName(_ name: String) -> String {
+        ExerciseHowToCatalog.displayName(for: name)
+    }
+
+    /// Exercises as a note lists them: each drawn by ``exerciseName(_:)``, joined with ", " (which reads
+    /// correctly in English, Spanish, French and German), in the order given.
+    static func exerciseList(_ names: [String]) -> String {
+        names.map { exerciseName($0) }.joined(separator: ", ")
     }
 
     // MARK: - Session-level notes (WorkoutProgram)
@@ -167,5 +192,12 @@ public nonisolated enum WorkoutPlannerCopy {
     static func budgetFewerSets(_ names: String) -> String {
         String(localized: "workoutNote.budget.fewerSets", defaultValue: "fewer sets of \(names)", bundle: .module,
                comment: "Part of a list in a workout session note, after 'Fitted to 30 min:' — some exercises got fewer sets. The argument is a comma-separated list of exercise names.")
+    }
+
+    /// One change in a budget note: "one warm-up set for Back squat" — a lift's warm-up ramp was cut to
+    /// its one set nearest 60 % of the working weight.
+    static func budgetOneWarmUpSet(_ names: String) -> String {
+        String(localized: "workoutNote.budget.oneWarmUpSet", defaultValue: "one warm-up set for \(names)", bundle: .module,
+               comment: "Part of a list in a workout session note, after 'Fitted to 30 min:' — a lift's lighter warm-up sets were cut to just one. The argument is a comma-separated list of exercise names.")
     }
 }

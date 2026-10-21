@@ -1230,8 +1230,16 @@
     "A second code you can give away" : {
 
     },
-    "A set counts in full for the muscles a lift mainly works, and as half a set for the muscles that help. Warm-ups, stretches, holds and ramp-up sets aren't counted." : {
-      "comment" : "Weekly totals screen: how the per-muscle set counts are worked out."
+    "A set counts in full for the muscles a lift mainly works, and as half a set for the muscles that help. A guided session marked done counts the sets it planned. Warm-ups, stretches, holds and ramp-up sets aren't counted." : {
+      "comment" : "Weekly totals screen: how the per-muscle set counts are worked out. 'Marked done' = the guided session's Mark done button, used instead of running it set by set.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A set counts in full for the muscles a lift mainly works, and as half a set for the muscles that help. A guided session marked done counts the sets it planned. Warm-ups, stretches, holds and ramp-up sets aren't counted."
+          }
+        }
+      }
     },
     "A small daily care companion built around privacy, local control, and enoughness." : {
 
@@ -1679,6 +1687,17 @@
     },
     "Apple Private Cloud Compute" : {
 
+    },
+    "Apple Watch isn't supported yet; AirPods Pro 3, Powerbeats Pro 2 and Bluetooth chest straps are." : {
+      "comment" : "Workout setup, under the heart-rate switches: which sensors the live heart rate works with. Product names stay as Apple writes them; 'Bluetooth chest straps' = heart-rate chest straps paired over Bluetooth.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Apple Watch isn't supported yet; AirPods Pro 3, Powerbeats Pro 2 and Bluetooth chest straps are."
+          }
+        }
+      }
     },
     "Areas to work around" : {
 
@@ -2447,8 +2466,16 @@
     "Counting every sealed surface…" : {
 
     },
-    "Counts cardio, sports and dance, including workouts from Apple Health. Strength, yoga, Pilates and other mind-body sessions aren't counted." : {
-      "comment" : "Weekly totals screen: which workouts the aerobic minutes include."
+    "Counts cardio, sports and dance, including workouts from Apple Health. A strength session adds only the planned minutes of a cardio block inside it; yoga, Pilates and other mind-body sessions aren't counted." : {
+      "comment" : "Weekly totals screen: which workouts the aerobic minutes include. A 'cardio block' is a cardio part inside a lifting session, such as 'Easy cardio - 20 min'; its minutes count as planned.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Counts cardio, sports and dance, including workouts from Apple Health. A strength session adds only the planned minutes of a cardio block inside it; yoga, Pilates and other mind-body sessions aren't counted."
+          }
+        }
+      }
     },
     "Counts stored blobs by their format MARKER BYTES only — nothing is decrypted, and nothing is written or saved. One row per cryptographic surface; a surface that cannot be counted shows a dash and says why, never a zero." : {
 
@@ -2732,6 +2759,17 @@
         }
       }
     },
+    "Demonstration" : {
+      "comment" : "Exercise how-to sheet: short Voice Control name of the demonstration picture",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Demonstration"
+          }
+        }
+      }
+    },
     "Demonstration of %@" : {
       "comment" : "VoiceOver label for the exercise demonstration animation or picture in the how-to sheet. %@ is the exercise name."
     },
@@ -2812,6 +2850,17 @@
     },
     "Don't suggest %@" : {
       "comment" : "Spoken name of the plan editor's Don't suggest button; the argument is the exercise"
+    },
+    "Don't suggest this" : {
+      "comment" : "Exercise how-to sheet: stop Fernlet suggesting this exercise in plans",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Don't suggest this"
+          }
+        }
+      }
     },
     "Done" : {
 
@@ -2964,6 +3013,17 @@
         }
       }
     },
+    "Eaten in the last few hours?" : {
+      "comment" : "Guided workout ready screen: an optional question before a long, high-volume lifting session.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Eaten in the last few hours?"
+          }
+        }
+      }
+    },
     "Eating enough, eating well." : {
 
     },
@@ -3098,6 +3158,17 @@
     },
     "Enough to feel it, not enough to drain." : {
 
+    },
+    "Enter a whole number from 120 to 220, or leave it empty." : {
+      "comment" : "Workout setup, under My max heart rate, shown only while the field holds something unusable (it would be cleared on Save). Calm, not an error.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Enter a whole number from 120 to 220, or leave it empty."
+          }
+        }
+      }
     },
     "Enter details by hand" : {
 
@@ -3235,9 +3306,6 @@
     },
     "Exercises and swaps" : {
       "comment" : "Workout setup: entry to custom exercises, hidden exercises and saved swaps"
-    },
-    "Experience" : {
-
     },
     "Expired" : {
 
@@ -3553,6 +3621,39 @@
     },
     "First day of cycle" : {
 
+    },
+    "First: %@, left side." : {
+      "comment" : "Guided workout, spoken cue at Start: the run's first step, one-sided, e.g. 'First: Cat-cow, left side.'",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "First: %@, left side."
+          }
+        }
+      }
+    },
+    "First: %@, right side." : {
+      "comment" : "Guided workout, spoken cue at Start: the run's first step, one-sided, e.g. 'First: Cat-cow, right side.'",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "First: %@, right side."
+          }
+        }
+      }
+    },
+    "First: %@." : {
+      "comment" : "Guided workout, spoken cue at Start: the run's first step, e.g. 'First: Goblet squat.' A suggested weight may follow.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "First: %@."
+          }
+        }
+      }
     },
     "Fix any set that went differently. Fernlet plans your next weights from these." : {
       "comment" : "Edit workout: the note above each exercise's sets. Correcting a set changes the weights Fernlet suggests next time.",
@@ -4116,6 +4217,17 @@
     "How friends will see you" : {
 
     },
+    "How long have you lifted regularly?" : {
+      "comment" : "Workout setup: the question that sets the person's training age, which paces how often their lifts move on. Answered with one of three durations.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "How long have you lifted regularly?"
+          }
+        }
+      }
+    },
     "How long?" : {
 
     },
@@ -4511,6 +4623,17 @@
     "Leave" : {
 
     },
+    "Left empty, Fernlet estimates it from your age with 208 − 0.7 × age (Tanaka): about %lld bpm for you. If you know your own, from a lab test or a hard effort you measured, enter it and your zones use it instead." : {
+      "comment" : "Workout setup, under My max heart rate. Keep the formula as written; Tanaka is the researcher's surname. The argument is the estimate for this person in beats per minute.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Left empty, Fernlet estimates it from your age with 208 − 0.7 × age (Tanaka): about %lld bpm for you. If you know your own, from a lab test or a hard effort you measured, enter it and your zones use it instead."
+          }
+        }
+      }
+    },
     "Left out because of your note: %@" : {
       "comment" : "Body areas the free-text injury note names, which the planner leaves out; the argument is a list of areas"
     },
@@ -4827,8 +4950,30 @@
     "Matching" : {
 
     },
+    "Max" : {
+      "comment" : "Voice Control's shortest name for the My max heart rate field in Workout setup (short for maximum). One word.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Max"
+          }
+        }
+      }
+    },
     "Max attempt — use a spotter or safety arms, and stop if your form breaks. Missed it? Set the reps to 0 and the rest are skipped." : {
 
+    },
+    "Max heart rate" : {
+      "comment" : "Voice Control name for the My max heart rate field in Workout setup. Keep it short: it is what the person says to reach the field.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Max heart rate"
+          }
+        }
+      }
     },
     "Meal" : {
 
@@ -5029,6 +5174,28 @@
     "Muscles to rest" : {
       "comment" : "Caption over the single-muscle chips in the workout injury section"
     },
+    "My max heart rate" : {
+      "comment" : "Workout setup: the name of the optional field for the person's own maximum heart rate, in beats per minute.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "My max heart rate"
+          }
+        }
+      }
+    },
+    "My max heart rate (bpm)" : {
+      "comment" : "Workout setup, under the heart-rate switches: the caption of an optional field for the person's own maximum heart rate. bpm = beats per minute.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "My max heart rate (bpm)"
+          }
+        }
+      }
+    },
     "Name" : {
 
     },
@@ -5145,6 +5312,17 @@
     },
     "Nicely done" : {
 
+    },
+    "No" : {
+      "comment" : "Guided workout ready screen: the answer that nothing was eaten in the last few hours.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No"
+          }
+        }
+      }
     },
     "No AI calls have been made from this device." : {
 
@@ -5300,6 +5478,17 @@
     },
     "No worries — you can add a photo of the barcode, or just enter it by hand." : {
 
+    },
+    "No, I haven't eaten" : {
+      "comment" : "VoiceOver label for the ready screen's 'No' to 'Eaten in the last few hours?'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No, I haven't eaten"
+          }
+        }
+      }
     },
     "Nobody has joined this session yet — that message wasn't sent. Try again in a moment." : {
 
@@ -5460,6 +5649,17 @@
     "Once you've logged a few cycles, Fernlet can gently soften your daily score on the phases that tend to be harder for you, and show a cycle chip and outlook on Home. It's optional, stays on this device, and never leaves the app." : {
 
     },
+    "Once you've logged meals most days for two weeks, workout notes may mention protein. Before a long session, the workout may ask if you've eaten. Food never changes your weights." : {
+      "comment" : "Workout setup: the note under 'Use food logs in workout notes'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Once you've logged meals most days for two weeks, workout notes may mention protein. Before a long session, the workout may ask if you've eaten. Food never changes your weights."
+          }
+        }
+      }
+    },
     "One exercise per line, e.g. Squat 3x8 @60" : {
 
     },
@@ -5570,6 +5770,17 @@
     },
     "Optional" : {
 
+    },
+    "Optional. In a long session, later sets can come up short without food — a “no” keeps that from counting as a miss." : {
+      "comment" : "Guided workout ready screen: the note under 'Eaten in the last few hours?'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Optional. In a long session, later sets can come up short without food — a “no” keeps that from counting as a miss."
+          }
+        }
+      }
     },
     "Optional. With these set, Fernlet suggests only weights you can make here, and adds reps before a big jump." : {
       "comment" : "Location editor: what listing the weights a space has does"
@@ -5753,6 +5964,28 @@
     "Pattern" : {
 
     },
+    "Pause" : {
+      "comment" : "Exercise how-to sheet: the action that pauses the looping demonstration; also its Voice Control name while it plays",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pause"
+          }
+        }
+      }
+    },
+    "Paused" : {
+      "comment" : "Exercise how-to sheet: VoiceOver value of the demonstration while its loop is paused",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Paused"
+          }
+        }
+      }
+    },
     "People" : {
 
     },
@@ -5931,6 +6164,28 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Plates"
+          }
+        }
+      }
+    },
+    "Play" : {
+      "comment" : "Exercise how-to sheet: the action that plays a paused demonstration again; also its Voice Control name while paused",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Play"
+          }
+        }
+      }
+    },
+    "Playing" : {
+      "comment" : "Exercise how-to sheet: VoiceOver value of the demonstration while its loop plays",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Playing"
           }
         }
       }
@@ -8192,6 +8447,17 @@
     "This session stays on screen" : {
 
     },
+    "This sets how often Fernlet moves your lifts on. Each lift's own log fine-tunes it." : {
+      "comment" : "Workout setup: the note under 'How long have you lifted regularly?', saying what the answer does.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This sets how often Fernlet moves your lifts on. Each lift's own log fine-tunes it."
+          }
+        }
+      }
+    },
     "This tunes suggestions without locking you into rules." : {
 
     },
@@ -8327,6 +8593,17 @@
     },
     "Trainer summaries and manual plan exchange" : {
 
+    },
+    "Training focus" : {
+      "comment" : "Workout setup: the choice between Strength, Size and Both, which shapes reps and sets.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Training focus"
+          }
+        }
+      }
     },
     "Training here" : {
 
@@ -8509,6 +8786,28 @@
     },
     "Use Import workout plan to review a Fernlet plan file." : {
 
+    },
+    "Use food logs" : {
+      "comment" : "Voice Control name for Workout setup's food-logs switch.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Use food logs"
+          }
+        }
+      }
+    },
+    "Use food logs in workout notes" : {
+      "comment" : "Workout setup: the switch that lets workout notes mention logged protein and body weight, and lets the runner ask about food before a long session.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Use food logs in workout notes"
+          }
+        }
+      }
     },
     "Use infrastructure Wi-Fi" : {
 
@@ -8961,6 +9260,28 @@
     },
     "Write it down — the box can hold it for a while, so you don't have to." : {
 
+    },
+    "Yes" : {
+      "comment" : "Guided workout ready screen: the answer that food was eaten in the last few hours.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Yes"
+          }
+        }
+      }
+    },
+    "Yes, I've eaten" : {
+      "comment" : "VoiceOver label for the ready screen's 'Yes' to 'Eaten in the last few hours?'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Yes, I've eaten"
+          }
+        }
+      }
     },
     "Yesterday %@" : {
 

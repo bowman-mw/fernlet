@@ -5,7 +5,8 @@ import FernletDomainModel
 
 /// Pins the session-time budget and the stretch switches (2026-10-20, idea 5): every budget across
 /// the goals and splits fits or says how long it runs, the trim order (short warm-up, cool-down
-/// stretches, accessory work, accessory sets, main-lift sets), main lifts never dropped, the injury
+/// stretches, accessory work, accessory sets, the warm-up ramp cut to one set, main-lift sets), main
+/// lifts never dropped, the injury
 /// limits and the 48-hour guard holding after trimming, the short warm-up chosen by the day's muscles,
 /// the Off switches, the cardio cap, the estimate the plan card and the runner share, and the
 /// settings' tolerant decoding.
@@ -57,7 +58,9 @@ struct WorkoutSessionBudgetTests {
 
     /// A session whose every cost is fixed by overrides, so the trims can be traced by hand:
     /// warm-up 10 × (30 + 5) = 350 s (short: 4 steps, 140 s); activation 110 + 50 + 135 = 295 s;
-    /// lifting 720 + 315 + 255 = 1,290 s; cool-down 4 × 50 = 200 s — 2,135 s in all.
+    /// lifting 720 + 315 + 255 = 1,290 s; cool-down 4 × 50 = 200 s; and five 60 s changeovers (six
+    /// exercises — Dead bug, the stance's two sides as one, Squat jump and the three lifts — less the
+    /// first) = 300 s — 2,435 s in all.
     func tracedBlocks() -> (blocks: WorkoutSessionBudget.Blocks, short: [PrescribedExercise]) {
         let warmUp = (1...10).map { timed("Stretch \($0)", hold: 30, block: .warmUp) }
         let activation = [
@@ -169,28 +172,33 @@ struct WorkoutSessionBudgetTests {
             .accessory("Squat jump"), .accessory("Calf raise"), .accessory("Lunge"), .accessory("Single-leg stance"),
             .mainSet("Back squat"), .mainSet("Back squat"),
         ])
-        #expect(outcome.estimatedSeconds == 620 && !outcome.fits)
+        // Short warm-up 140 + Dead bug 110 + Back squat 2 × 45 + 180 + two cool-down holds 100, and one
+        // changeover (Dead bug, then Back squat) 60.
+        #expect(outcome.estimatedSeconds == 680 && !outcome.fits)
         #expect(outcome.blocks.activation.map(\.name) == ["Dead bug"], "the activation keeps one move")
         #expect(outcome.blocks.lifting.map(\.name) == ["Back squat"])
         #expect(outcome.blocks.lifting.first?.sets == 2)
         #expect(outcome.blocks.coolDown.map(\.name) == ["Cool A", "Cool B"])
-        #expect(outcome.note?.hasPrefix("Runs about 11 min") == true)
+        #expect(outcome.note?.hasPrefix("Runs about 12 min") == true)
     }
 
-    /// Trimming stops as soon as the session fits: 30 minutes needs only the first three steps, 20
-    /// minutes the accessory lifts too, and 36 minutes nothing at all.
+    /// Trimming stops as soon as the session fits: 33 minutes needs only the first three steps, 21
+    /// minutes the accessory lifts too, and 41 minutes nothing at all. Each dropped move gives back
+    /// its changeover with its sets.
     @Test func trimmingStopsAsSoonAsItFits() {
         let traced = tracedBlocks()
-        let thirty = WorkoutSessionBudget.fit(traced.blocks, budgetMinutes: 30, goal: .strength, shortWarmUp: traced.short)
-        #expect(thirty.trims == [.shortWarmUp, .coolDownStretch("Cool D"), .coolDownStretch("Cool C"), .accessory("Squat jump")])
-        #expect(thirty.fits && thirty.estimatedSeconds == 1_690)
-        #expect(thirty.note == "Fitted to 30 min: shorter warm-up; fewer cool-down stretches; left out Squat jump.")
-        let twenty = WorkoutSessionBudget.fit(traced.blocks, budgetMinutes: 20, goal: .strength, shortWarmUp: traced.short)
-        #expect(twenty.trims.map(\.stage) == [1, 2, 2, 3, 3, 3])
-        #expect(twenty.blocks.lifting.map(\.name) == ["Back squat"])
-        #expect(twenty.blocks.activation.contains { $0.name == "Single-leg stance" }, "balance outlasts the accessory lifts")
-        let roomy = WorkoutSessionBudget.fit(traced.blocks, budgetMinutes: 36, goal: .strength, shortWarmUp: traced.short)
+        let thirtyThree = WorkoutSessionBudget.fit(traced.blocks, budgetMinutes: 33, goal: .strength, shortWarmUp: traced.short)
+        #expect(thirtyThree.trims == [.shortWarmUp, .coolDownStretch("Cool D"), .coolDownStretch("Cool C"), .accessory("Squat jump")])
+        #expect(thirtyThree.fits && thirtyThree.estimatedSeconds == 1_930)
+        #expect(thirtyThree.note == "Fitted to 33 min: shorter warm-up; fewer cool-down stretches; left out Squat jump.")
+        let twentyOne = WorkoutSessionBudget.fit(traced.blocks, budgetMinutes: 21, goal: .strength, shortWarmUp: traced.short)
+        #expect(twentyOne.trims.map(\.stage) == [1, 2, 2, 3, 3, 3])
+        #expect(twentyOne.estimatedSeconds == 1_240)
+        #expect(twentyOne.blocks.lifting.map(\.name) == ["Back squat"])
+        #expect(twentyOne.blocks.activation.contains { $0.name == "Single-leg stance" }, "balance outlasts the accessory lifts")
+        let roomy = WorkoutSessionBudget.fit(traced.blocks, budgetMinutes: 41, goal: .strength, shortWarmUp: traced.short)
         #expect(roomy.trims.isEmpty && roomy.note == nil && roomy.blocks == traced.blocks)
+        #expect(roomy.estimatedSeconds == 2_435)
     }
 
     /// With no main lift to fall back on, the last lift stays and its sets come down instead
@@ -200,10 +208,131 @@ struct WorkoutSessionBudgetTests {
             activation: [lift("Dead bug", sets: 2, rest: 20, role: .core, block: .activation)],
             lifting: [lift("Curl", sets: 4, rest: 60, role: .accessory), lift("Pushdown", sets: 4, rest: 60, role: .accessory)]
         )
-        let outcome = WorkoutSessionBudget.fit(blocks, budgetMinutes: 5, goal: .strength)
+        // 110 + 360 + 360 + two changeovers 120 = 950 s; without Pushdown 530; Curl at 3 sets 425, at 2 sets 320.
+        let outcome = WorkoutSessionBudget.fit(blocks, budgetMinutes: 6, goal: .strength)
         #expect(outcome.trims == [.accessory("Pushdown"), .accessorySet("Curl"), .accessorySet("Curl")])
         #expect(outcome.fits && outcome.blocks.lifting.first?.sets == 2)
-        #expect(outcome.note == "Fitted to 5 min: left out Pushdown; fewer sets of Curl.")
+        #expect(outcome.estimatedSeconds == 320)
+        #expect(outcome.note == "Fitted to 6 min: left out Pushdown; fewer sets of Curl.")
+    }
+
+    // MARK: - Changeover
+
+    /// About a minute of changeover before each exercise after the first (the owner's answer,
+    /// 2026-10-20): the warm-up and cool-down flows take none, a lift's warm-up sets and a one-sided
+    /// drill's second side are the exercise before them, and a lone exercise has none at all.
+    @Test func eachExerciseAfterTheFirstAddsAChangeover() {
+        #expect(WorkoutSessionTime.changeoverSeconds == 60)
+        let traced = tracedBlocks()
+        #expect(WorkoutSessionTime.changeovers(in: traced.blocks.exercises) == 5)
+        #expect(WorkoutSessionTime.changeovers(in: traced.blocks.warmUp + traced.blocks.coolDown) == 0)
+        let squat = lift("Back squat", sets: 3, rest: 120, role: .main)
+        #expect(WorkoutSessionTime.changeovers(in: [squat]) == 0)
+        let rampSet = lift("Back squat", sets: 1, rest: 0, role: .main)
+        let press = lift("Overhead press", sets: 3, rest: 90, role: .main)
+        #expect(WorkoutSessionTime.changeovers(in: [rampSet, rampSet, squat, press]) == 1)
+        let alone = WorkoutSessionTime.seconds(of: [squat], goal: .strength)
+        let pair = WorkoutSessionTime.seconds(of: [squat, press], goal: .strength)
+        let each = WorkoutSessionTime.seconds(of: squat, goal: .strength) + WorkoutSessionTime.seconds(of: press, goal: .strength)
+        #expect(alone == WorkoutSessionTime.seconds(of: squat, goal: .strength))
+        #expect(pair == each + WorkoutSessionTime.changeoverSeconds)
+    }
+
+    /// An interval line is one exercise however many parts the runner times it as, and a stretch
+    /// session one however many stretches — so the plan's count and the run's agree.
+    @Test func aTimedLineIsOneExerciseBeforeAndAfterTheRunExpandsIt() {
+        let line = "Intervals - 8 × 1 min hard / 1 min easy"
+        let squat = lift("Back squat", sets: 3, rest: 120, role: .main)
+        let plan = [squat, PrescribedExercise(name: line, sets: 0, reps: "", role: .accessory, fromCatalog: false, block: .cardio)]
+        let expanded = WorkoutTimedSessions.expand(plan, feasible: [])
+        #expect(expanded.count == 17, "the line becomes sixteen parts")
+        #expect(WorkoutSessionTime.changeovers(in: plan) == 1)
+        #expect(WorkoutSessionTime.changeovers(in: expanded) == 1)
+        let stretches = (1...6).map { timed("Stretch \($0)", hold: 40, block: .mobility) }
+        #expect(WorkoutSessionTime.changeovers(in: stretches) == 0)
+        #expect(WorkoutSessionTime.changeovers(in: [squat] + stretches) == 1)
+    }
+
+    /// The run state counts changeovers by the domain's rule, from the same steps.
+    @Test func theRunnerCountsChangeoversLikeThePlanner() {
+        #expect(GuidedWorkoutRunState.changeoverSeconds == WorkoutSessionTime.changeoverSeconds)
+        let traced = tracedBlocks()
+        let runSteps = traced.blocks.exercises.map { step in
+            GuidedWorkoutRunState.Exercise(
+                id: step.id, name: step.name, sets: step.sets, reps: step.reps, roleRaw: "accessory",
+                fromCatalog: step.fromCatalog, restSeconds: step.restSecondsOverride ?? 0,
+                holdSeconds: step.holdSeconds, blockRaw: step.block.rawValue, sideRaw: step.side?.rawValue
+            )
+        }
+        for (step, runStep) in zip(traced.blocks.exercises, runSteps) {
+            #expect(runStep.changeoverKey == WorkoutSessionTime.exerciseKey(step), "\(step.name)")
+        }
+        let run = GuidedWorkoutRunState(
+            sessionID: UUID(), committedDayKey: "2026-10-20", intensityRaw: "moderate", title: "Probe",
+            suggestionExercisesText: "", suggestionNotes: "", sessionKindRaw: "strength", exercises: runSteps
+        )
+        #expect(run.changeoverSecondsAhead() == 5 * WorkoutSessionTime.changeoverSeconds)
+        #expect(run.estimatedSecondsRemaining() == WorkoutSessionTime.seconds(of: traced.blocks.exercises, goal: .strength))
+        // Mid-run, the current exercise's changeover is behind it: on Back squat (step 15), two lifts are left.
+        let onSquat = GuidedWorkoutRunState(
+            sessionID: UUID(), committedDayKey: "2026-10-20", intensityRaw: "moderate", title: "Probe",
+            suggestionExercisesText: "", suggestionNotes: "", sessionKindRaw: "strength", exercises: runSteps,
+            exerciseIndex: 14
+        )
+        #expect(onSquat.changeoverSecondsAhead() == 2 * WorkoutSessionTime.changeoverSeconds)
+    }
+
+    /// A back squat at 135 lb behind its warm-up ramp (45, 80 and 110 lb; 45 s each), then a lunge:
+    /// 135 + 720 + 315 = 1,170 s.
+    func rampedBlocks() -> WorkoutSessionBudget.Blocks {
+        let prescription = WeightPrescription(low: 125, high: 145, suggested: 135, step: 5, unit: .lb, confidence: .medium)
+        var squat = lift("Back squat", sets: 4, rest: 180, role: .main)
+        squat.guidance = LoadGuidance(targetReps: 8, prescription: prescription, equipment: .barbell, unit: .lb)
+        let ramp = WorkoutWarmUpSets.steps(for: squat, pattern: .squat)
+        return WorkoutSessionBudget.Blocks(lifting: ramp + [squat, lift("Lunge", sets: 3, rest: 90, role: .accessory)])
+    }
+
+    func weights(_ steps: [PrescribedExercise]) -> [Double?] {
+        steps.map { $0.guidance?.prescription?.suggested }
+    }
+
+    /// The warm-up ramp is step 5 (owner's pick R1): after the accessory work and sets, before any
+    /// main-lift set, it comes down to its one set nearest 60 % of the working weight.
+    @Test func aRampIsCutToItsSixtyPercentSetAfterAccessoriesAndBeforeMainSets() {
+        let blocks = rampedBlocks()
+        #expect(blocks.lifting.count == 5)
+        #expect(WorkoutSessionBudget.Trim.warmUpRamp("Back squat").stage == 5)
+        #expect(WorkoutSessionBudget.Trim.mainSet("Back squat").stage == 6)
+        let thirteen = WorkoutSessionBudget.fit(blocks, budgetMinutes: 13, goal: .strength)
+        #expect(thirteen.trims == [.accessory("Lunge"), .warmUpRamp("Back squat")])
+        #expect(thirteen.fits)
+        #expect(thirteen.estimatedSeconds == 765)
+        let kept = weights(thirteen.blocks.lifting)
+        let expectedKept: [Double?] = [80, 135]
+        #expect(kept == expectedKept, "the 60 % set and the working sets")
+        let workingSets = thirteen.blocks.lifting.last.map(\.sets)
+        #expect(workingSets == 4, "no main-lift set came off")
+        #expect(thirteen.note == "Fitted to 13 min: left out Lunge; one warm-up set for Back squat.")
+        let ten = WorkoutSessionBudget.fit(blocks, budgetMinutes: 10, goal: .strength)
+        let stages = ten.trims.map(\.stage)
+        #expect(stages == [3, 5, 6])
+        #expect(ten.note == "Fitted to 10 min: left out Lunge; fewer sets of Back squat; one warm-up set for Back squat.")
+    }
+
+    /// However tight the budget, the ramp keeps one set: it is cut once, never dropped.
+    @Test func aRampNeverDropsToNone() {
+        let outcome = WorkoutSessionBudget.fit(rampedBlocks(), budgetMinutes: 1, goal: .strength)
+        let ramps = outcome.trims.filter { $0 == .warmUpRamp("Back squat") }.count
+        #expect(ramps == 1)
+        #expect(!outcome.fits)
+        let warmUps = outcome.blocks.lifting.filter { WorkoutWarmUpSets.isWarmUpSet($0) }
+        let warmUpWeights = weights(warmUps)
+        let expected: [Double?] = [80]
+        #expect(warmUpWeights == expected)
+        let floorSets = outcome.blocks.lifting.last.map(\.sets)
+        #expect(floorSets == WorkoutSessionBudget.minimumSets)
+        let roomy = WorkoutSessionBudget.fit(rampedBlocks(), budgetMinutes: 60, goal: .strength)
+        #expect(roomy.trims.isEmpty, "a session that fits keeps its whole ramp")
     }
 
     /// A main lift prescribed as accessory work for a mild injury is still a main lift: kept, and

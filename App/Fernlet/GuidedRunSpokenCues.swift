@@ -72,10 +72,19 @@ enum GuidedRunSpokenCue {
         if after.isFinishedNaturally { return workoutDone }
         guard !after.isDone else { return nil }
         if after.isWorking, after.exerciseIndex != before.exerciseIndex, let exercise = after.currentExercise {
-            return nextStep(exercise, in: after)
+            return stepLine(exercise, in: after, first: false)
         }
         guard cause == .holdRanOut else { return nil }
         return before.currentExercise?.segment == nil ? holdDone : partDone
+    }
+
+    /// The words at Start (round 2, R4): the run's first step, said once as the run begins so the
+    /// person can set up without looking — "First: Goblet squat. Suggested weight 35 pounds …", a
+    /// warm-up set's own "Warm-up set 1 of 3: Back squat. …", a one-sided step's side, or an interval's
+    /// pace and round. Nil for a run that is not working on a step.
+    static func start(_ run: GuidedWorkoutRunState) -> String? {
+        guard run.isWorking, let exercise = run.currentExercise else { return nil }
+        return stepLine(exercise, in: run, first: true)
     }
 
     /// The new lift's suggested weight and last time for a move onto it — the one thing spoken cues
@@ -109,8 +118,10 @@ enum GuidedRunSpokenCue {
 
     /// "Next: Cat-cow, left side.", "Next: Row. Suggested weight …", a warm-up set's "Warm-up set 1 of
     /// 3: Back squat. Suggested weight 95 pounds …", or an interval's "Hard, round 3 of 8." — VoiceOver's
-    /// own words for the same step, minus its set count.
-    private static func nextStep(_ exercise: GuidedWorkoutRunState.Exercise, in run: GuidedWorkoutRunState) -> String {
+    /// own words for the same step, minus its set count. At Start (`first`) the step is "First: …".
+    private static func stepLine(
+        _ exercise: GuidedWorkoutRunState.Exercise, in run: GuidedWorkoutRunState, first: Bool
+    ) -> String {
         if let segment = exercise.segment {
             return segmentLine(segment, seconds: exercise.holdSeconds ?? 0)
         }
@@ -118,13 +129,32 @@ enum GuidedRunSpokenCue {
             let line = GuidedWarmUpWords.setLine(index: warmUp.index, count: warmUp.count, name: exercise.name)
             return sentences(String(localized: line), loadClause(for: run))
         }
-        let named: String
-        switch exercise.sideRaw {
-        case "left": named = String(localized: "Next: \(exercise.name), left side.")
-        case "right": named = String(localized: "Next: \(exercise.name), right side.")
-        default: named = String(localized: "Next: \(exercise.name).")
-        }
+        let named = first ? firstName(exercise) : nextName(exercise)
         return sentences(named, loadClause(for: run))
+    }
+
+    /// "Next: Squat.", with the side for a one-sided step.
+    private static func nextName(_ exercise: GuidedWorkoutRunState.Exercise) -> String {
+        switch exercise.sideRaw {
+        case "left": String(localized: "Next: \(exercise.name), left side.")
+        case "right": String(localized: "Next: \(exercise.name), right side.")
+        default: String(localized: "Next: \(exercise.name).")
+        }
+    }
+
+    /// "First: Goblet squat." — the run's first step, said at Start — with the side for a one-sided step.
+    private static func firstName(_ exercise: GuidedWorkoutRunState.Exercise) -> String {
+        switch exercise.sideRaw {
+        case "left":
+            String(localized: "First: \(exercise.name), left side.",
+                   comment: "Guided workout, spoken cue at Start: the run's first step, one-sided, e.g. 'First: Cat-cow, left side.'")
+        case "right":
+            String(localized: "First: \(exercise.name), right side.",
+                   comment: "Guided workout, spoken cue at Start: the run's first step, one-sided, e.g. 'First: Cat-cow, right side.'")
+        default:
+            String(localized: "First: \(exercise.name).",
+                   comment: "Guided workout, spoken cue at Start: the run's first step, e.g. 'First: Goblet squat.' A suggested weight may follow.")
+        }
     }
 
     /// An interval part's pace and round ("Hard, round 3 of 8."), or a steady segment's pace and length

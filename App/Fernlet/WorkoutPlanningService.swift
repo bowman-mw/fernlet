@@ -13,12 +13,18 @@ import HealthKitGateway
 @MainActor
 protocol WorkoutPlanningContext: AnyObject {
     var settings: FernletSettings { get }
+    /// The body profile in effect on this device (typed, with this device's Health import laid over
+    /// it), for the load pass's expected strength curve.
+    var effectiveUserProfile: UserNutritionProfile { get }
     var day: FernletDay { get }
     var todayKey: String { get }
     func loadDays() -> [String: FernletDay]
     /// Routes the on-device workout-adjustment model call through the provider ladder (capability cap
     /// + device-local quota + audit). Rebuilt per read so a mid-session AI-toggle is reflected.
     var aiGate: FernletAIGate { get }
+    /// The intensity today's committed guided plan was built with, nil when none is committed today —
+    /// an adjusted session gets its warm-up ramp back only when it isn't a light day.
+    var committedGuidedIntensity: WorkoutIntensity? { get }
 }
 
 /// Workout split recommendation + day-plan generation + AI day-plan adjustment,
@@ -115,7 +121,8 @@ final class WorkoutPlanningService {
             in: split, recentSessionNames: recentWorkoutNamesByDay(history: history)
         )
         let load = WorkoutLoadContextBuilder.build(
-            days: history, today: host.day, todayKey: host.todayKey, settings: host.settings
+            days: history, today: host.day, todayKey: host.todayKey, settings: host.settings,
+            body: host.effectiveUserProfile
         )
         return WorkoutProgram.dayPlan(
             goal: host.settings.selectedGoal,
@@ -184,11 +191,19 @@ final class WorkoutPlanningService {
     /// Applies a natural-language adjustment to a generated day plan using on-device Foundation
     /// Models, constrained to the equipment/injury-filtered catalog. Returns the plan unchanged when
     /// AI is off/unavailable or the request is empty.
+    ///
+    /// An adjusted session's lifting block is loaded again (``WorkoutAdjustedLoad``): suggested
+    /// weights from each lift's history, the fatigue context, and the warm-up ramp before the first
+    /// heavy main lift. The time budget is not applied again.
     func adjustWorkoutDayPlan(_ plan: WorkoutProgram.DayPlan, request: String) async -> WorkoutProgram.DayPlan {
         let trimmed = request.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false, host.settings.aiStatus != .off else { return plan }
         let location = host.settings.activeWorkoutLocation
         let profile = host.settings.workoutProfile
+        let load = WorkoutLoadContextBuilder.build(
+            days: host.loadDays(), today: host.day, todayKey: host.todayKey, settings: host.settings
+        )
+        let intensity = host.committedGuidedIntensity
         // Hidden exercises ("Don't suggest this") never reach the model's candidate list.
         let preferences = host.settings.workoutExercisePreferences
         // User-invoked adjustment (the person typed a request and tapped): routes through the store's
@@ -211,7 +226,10 @@ final class WorkoutPlanningService {
                     payload, candidates: candidates,
                     currentLines: session.exercises.filter { $0.block == .lifting }.map(\.line), gate: gate
                 ) {
-                    sessions[index] = WorkoutProgram.applyAdjustment(to: session, exercises: adjusted)
+                    sessions[index] = WorkoutAdjustedLoad.reload(
+                        WorkoutProgram.applyAdjustment(to: session, exercises: adjusted), original: session,
+                        location: location, load: load, intensity: intensity
+                    )
                 }
             } catch {
                 // Degrade, don't fail: this session keeps its generated exercises. Named so a plan

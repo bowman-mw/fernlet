@@ -789,6 +789,33 @@ struct DeleteAllDataTests {
         #expect(store.day.workouts.isEmpty, "a guided run re-logged a workout after the wipe")
     }
 
+    /// Round 2's workout fields (2026-10-20) ride on surfaces this funnel already clears, and are pinned
+    /// here so a later move off those surfaces is caught: the training focus and the food-logs switch
+    /// in the settings blob (`resetDiary`'s fresh settings), and the Ready screen's food answer on an
+    /// in-flight run (the run-state file; on a logged lift's result it goes with the day rows).
+    @Test func roundTwosWorkoutSettingsAndTheRunsFoodAnswerGoWithTheWipe() async {
+        let store = makeTestStore()
+        store.clearGuidedRun()
+        store.setWorkoutStrengthFocus(.size)
+        store.setWorkoutFoodAware(false)
+        let s = WorkoutProgram.SessionSuggestion(
+            title: "Push", timeLabel: "", kind: .strength,
+            exercises: [PrescribedExercise(name: "Bench", sets: 3, reps: "8", role: .main, fromCatalog: true)],
+            suggestion: WorkoutSuggestion(name: "Push", exercises: "Bench 3x8", notes: "")
+        )
+        #expect(store.startGuidedRun(s, unfueled: true) == true)
+        let answer = store.guidedRunState?.unfueled
+        #expect(answer == true, "precondition: the food answer did not ride on the run")
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        #expect(store.settings.workoutStrengthFocus == .both)
+        #expect(store.settings.workoutFoodAware == nil)
+        #expect(store.guidedRunState == nil)
+        store.reconcileGuidedRunFromAppGroup()
+        #expect(store.guidedRunState == nil, "the run and its food answer survived the wipe in the app-group file")
+    }
+
     /// BV15 / design 2026-09-30 §4.7: the Sealed backup v2 engine (the period settle, the un-hide
     /// settle, every intent) is a live writer like the guided run and the widget queue. The funnel
     /// quiesces it — moves its epoch, cancels its worker and WAITS until it stopped — after its first

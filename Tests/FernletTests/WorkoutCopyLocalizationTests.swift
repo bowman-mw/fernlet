@@ -127,12 +127,55 @@ struct WorkoutCopyLocalizationTests {
         #expect(ladder == "Rep ladder: 9 of 8–12 today. One more rep each time; at 12, add weight.")
         let bottom = WorkoutPlannerCopy.ladderBackTo(reps: 8)
         #expect(bottom == "Back to 8 reps — add weight now, about 2.5–5%.")
-        let protein = WorkoutPlannerCopy.proteinLow(percent: 70)
-        #expect(protein.hasPrefix("Protein has run about 70% of your target"))
+        let protein = WorkoutPlannerCopy.proteinFloor
+        #expect(protein.hasPrefix("Protein logged over the last two weeks has been under about 1.2 g per kg of body weight a day"))
+        #expect(protein.hasSuffix("If you're older or have kidney concerns, check with your doctor before changing how much protein you eat."))
+        // G10: a flagged miss's hold is said as what happened alongside it, never as the person's fault.
+        let night = WorkoutPlannerCopy.heldAfterFlag("Back squat", shortNight: true)
+        #expect(night == "Back squat: the same weight today — last time came after a short night, which can take a little off a session, so it doesn't count as a miss.")
+        let light = WorkoutPlannerCopy.heldAfterFlag("Back squat", shortNight: false)
+        #expect(light == "Back squat: the same weight today — last time fell on a light day, so it doesn't count as a miss.")
+        let unfueled = WorkoutPlannerCopy.heldUnfueled("Back squat")
+        #expect(unfueled.hasPrefix("Back squat: the same again today — later sets often come up short in a long session"))
         let skipped = WorkoutProgram.hiddenDropNote(["Hinge", "Core"])
         #expect(skipped == "Skipped Hinge, Core — the only options here are ones you've hidden.")
         let fitted = WorkoutPlannerCopy.budgetFitted(minutes: 30, changes: WorkoutPlannerCopy.budgetShorterWarmUp)
         #expect(fitted == "Fitted to 30 min: shorter warm-up.")
+    }
+
+    // MARK: - Exercise names in notes (N8)
+
+    /// A note names an exercise by its display name — the name the plan card draws — and a custom or
+    /// typed name as it is, in the order given.
+    @Test func notesNameExercisesByTheirDisplayNames() throws {
+        var mismatched: [String] = []
+        for entry in ExerciseHowToCatalog.allEntries where WorkoutPlannerCopy.exerciseName(entry.name) != entry.displayName {
+            mismatched.append(entry.name)
+        }
+        #expect(mismatched.isEmpty, "note names that are not the display name: \(mismatched)")
+        #expect(WorkoutPlannerCopy.exerciseName("My odd lift") == "My odd lift")
+        let squat = ExerciseHowToCatalog.displayName(for: "Back squat")
+        let bench = ExerciseHowToCatalog.displayName(for: "Bench press")
+        let list = WorkoutPlannerCopy.exerciseList(["Back squat", "My odd lift", "Bench press"])
+        #expect(list == "\(squat), My odd lift, \(bench)")
+        let budget = WorkoutSessionBudget.changeSummary([.accessory("Back squat"), .mainSet("Bench press")])
+        #expect(budget == "left out \(squat); fewer sets of \(bench)")
+        let lightened = WorkoutRecoveryGuard.lightenedNote(lifts: ["Back squat", "Bench press"])
+        #expect(lightened.hasPrefix("One set fewer on \(squat), \(bench) — "))
+        let calibration = WorkoutProgram.calibrationNote(kind: .submaximal, lift: "Bench press", sets: [], unit: .lb)
+        #expect(calibration.contains(bench))
+    }
+
+    /// The note builders draw names through ``WorkoutPlannerCopy/exerciseName(_:)`` and
+    /// ``WorkoutPlannerCopy/exerciseList(_:)`` rather than joining or splicing frozen names themselves:
+    /// the source pin that keeps a new list from slipping back to English names in another language.
+    @Test func theNoteBuildersDrawNamesThroughTheCopyHelpers() throws {
+        let drawing = ["WorkoutSessionBudget.swift", "WorkoutRecoveryGuard.swift", "WorkoutProgram+LoadNotes.swift"]
+        for file in drawing {
+            let source = Self.withoutCommentLines(try RepoRoot.source(Self.domainRoot + file))
+            #expect(source.contains("WorkoutPlannerCopy.exercise"), "\(file) no longer draws exercise names")
+            #expect(!source.contains(#".joined(separator: ", ")"#), "\(file) joins names itself; use WorkoutPlannerCopy.exerciseList")
+        }
     }
 
     // MARK: - Frozen names
@@ -325,6 +368,38 @@ struct WorkoutCopyLocalizationTests {
         #expect(WorkoutMeasurementEntry.displayedSpeeds(in: imperial, imperial: true) == imperial)
     }
 
+    /// N9 (2026-10-20): distance and speed follow the system's measurement setting, as Apple Fitness
+    /// does — the UK reads miles and mph, the US miles, metric kilometres and km/h — while loads keep
+    /// pounds for the US system only.
+    @Test func theUKReadsMilesAndMph() throws {
+        let britain = Locale(identifier: "en_GB")
+        #expect(britain.measurementSystem == .uk, "precondition: en_GB is the UK system")
+        #expect(WorkoutMeasurementEntry.readsImperial(britain))
+        #expect(WorkoutMeasurementEntry.readsImperial(Locale(identifier: "en_US")))
+        #expect(!WorkoutMeasurementEntry.readsImperial(Locale(identifier: "de_DE")))
+        #expect(!WorkoutMeasurementEntry.readsImperial(Locale(identifier: "en_AU")))
+        #expect(!WorkoutMeasurementEntry.readsImperial(Locale(identifier: "fr_CA")))
+
+        // The setting, not the region: a US-region device set to Metric reads kilometres, and one set
+        // to the UK system reads miles.
+        var metricUS = Locale.Components(identifier: "en_US")
+        metricUS.measurementSystem = .metric
+        #expect(!WorkoutMeasurementEntry.readsImperial(Locale(components: metricUS)))
+        var ukSystem = Locale.Components(identifier: "fr_FR")
+        ukSystem.measurementSystem = .uk
+        #expect(WorkoutMeasurementEntry.readsImperial(Locale(components: ukSystem)))
+
+        let readsMiles = WorkoutMeasurementEntry.readsImperial(britain)
+        #expect(WorkoutMeasurementEntry.distanceText(miles: 3.1, imperial: readsMiles, locale: britain) == "3.1 mi")
+        let line = "Treadmill walk 5.5 mph 2% incline"
+        #expect(WorkoutMeasurementEntry.displayedSpeeds(in: line, imperial: readsMiles, locale: britain) == line)
+        let stored = try #require(WorkoutMeasurementEntry.miles(fromEntry: "3.1", imperial: readsMiles))
+        #expect(stored == 3.1, "a UK distance is typed and stored in miles")
+        #expect(WorkoutMeasurementEntry.storedSpeed(fromEntry: "5.5", imperial: readsMiles) == "5.5")
+
+        #expect(WorkoutLoadContextBuilder.defaultUnit(for: britain) == .kg, "a UK gym's loads stay in kilograms")
+    }
+
     // MARK: - Helpers
 
     /// Every session name the split catalog can plan: a title, or a time label and a title.
@@ -342,7 +417,7 @@ struct WorkoutCopyLocalizationTests {
 
     /// Every slot label the session templates use.
     static func allSlotLabels() -> [String] {
-        var labels: Set<String> = ["Support"]
+        var labels: Set<String> = [WorkoutProgram.variantSlotLabel]
         for split in WorkoutSplitCatalog.all {
             for day in split.days {
                 for session in day.sessions { labels.formUnion(session.slots.map(\.label)) }

@@ -58,19 +58,25 @@ enum WorkoutCuePreferences {
 
 /// The Workout setup sheet's "Cues during a workout" field: the haptics, sounds and spoken-cue
 /// switches, with one line saying what the taps and sounds do and one saying what is spoken and how
-/// it sits with the person's music, then guided cardio's heart-rate switches (``WorkoutZoneSettingsRows``).
+/// it sits with the person's music, then guided cardio's heart-rate switches and "My max heart rate"
+/// (``WorkoutZoneSettingsRows``).
 ///
 /// Edits drafts the sheet owns, so Cancel discards a change here like any other field and Save
 /// stores them through ``WorkoutCuePreferences/save(_:in:)``,
-/// ``WorkoutCuePreferences/saveSpoken(_:in:)`` and ``WorkoutZonePreferences/save(_:in:)``.
+/// ``WorkoutCuePreferences/saveSpoken(_:in:)``, ``WorkoutZonePreferences/save(_:in:)`` and
+/// ``WorkoutZonePreferences/saveMaxHeartRate(_:in:)``.
 struct WorkoutCueSettingsSection: View {
     @Binding var preferences: FernletFeedbackPreferences
     /// The "Spoken cues" switch's draft.
     @Binding var spoken: Bool
     /// The heart-rate switches' draft.
     @Binding var zones: WorkoutZonePreferences
+    /// The "My max heart rate" field's text draft.
+    @Binding var maxHeartRate: String
     /// Whether Fernlet shares workouts with Apple Health right now — the heart-rate switch needs it.
     let healthSharingAllowed: Bool
+    /// The age estimate of the maximum heart rate, in whole beats per minute.
+    let estimatedMaximum: Int
 
     var body: some View {
         SheetField("Cues during a workout") {
@@ -98,8 +104,11 @@ struct WorkoutCueSettingsSection: View {
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
-                WorkoutZoneSettingsRows(preferences: $zones, sharingAllowed: healthSharingAllowed)
-                    .padding(.top, 6)
+                WorkoutZoneSettingsRows(
+                    preferences: $zones, maxHeartRate: $maxHeartRate,
+                    sharingAllowed: healthSharingAllowed, estimatedMaximum: estimatedMaximum
+                )
+                .padding(.top, 6)
             }
         }
     }

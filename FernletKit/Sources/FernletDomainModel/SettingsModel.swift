@@ -301,6 +301,24 @@ public nonisolated struct FernletSettings: Codable {
     /// default with it. Synced, because it shapes the plan every device builds; at the top level, so an
     /// older build parks the key and writes it back (`parkedUnknownKeys`). Absent from a blob until set.
     public var workoutWarmUpSets: Bool? = nil
+    /// The lifting focus — Strength, Size or Both (``WorkoutStrengthFocus``, G6, 2026-10-20). `.both`,
+    /// the default, plans exactly as before and is not written, so every blob saved before keeps its
+    /// shape; a chosen focus is written at the top level (`workoutStrengthFocus`), where an older
+    /// build parks the key and writes it back. Decoded tolerantly with a parked side channel.
+    public var workoutStrengthFocus: WorkoutStrengthFocus = .both {
+        didSet { unknownWorkoutStrengthFocusToken = nil }
+    }
+    /// Unknown `workoutStrengthFocus` token from a newer build; contract of `unknownConnectionInspectorModeToken`.
+    public var unknownWorkoutStrengthFocusToken: String? = nil
+    /// "Use food logs in workout notes" (Workout setup, G13, 2026-10-20): nil until the person flips it,
+    /// which reads as on — the notes then mention logged protein and body weight once the logs are good
+    /// enough to read, and the runner may ask about food before a long session (G12). `false` keeps
+    /// food out of the workout entirely. Food never cuts a weight or speeds progress either way.
+    /// Synced, at the top level, and absent from a blob until chosen (`workoutWarmUpSets`' contract).
+    public var workoutFoodAware: Bool? = nil
+
+    /// The switch as the planner reads it: on unless switched off.
+    public var workoutUsesFoodLogs: Bool { workoutFoodAware ?? true }
 
     /// Every top-level settings key this build does NOT know, captured verbatim on decode and written
     /// back verbatim on encode. The GENERIC, systemic counterpart to the per-field `unknown…Token`
@@ -595,6 +613,12 @@ public nonisolated struct FernletSettings: Codable {
         trainerExportIncludesSickness = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesSickness) ?? false
         trainerExportIncludesWellbeing = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesWellbeing) ?? false
         workoutWarmUpSets = try container.decodeIfPresent(Bool.self, forKey: .workoutWarmUpSets)
+        let focusSplit = try container.decodeTolerantEnum(
+            WorkoutStrengthFocus.self, forKey: .workoutStrengthFocus,
+            parkedTokenKey: .unknownWorkoutStrengthFocusToken, default: .both)
+        workoutStrengthFocus = focusSplit.value
+        unknownWorkoutStrengthFocusToken = focusSplit.parkedToken
+        workoutFoodAware = try container.decodeIfPresent(Bool.self, forKey: .workoutFoodAware)
     }
 
     /// The session-length budget and the stretch switches: tolerant scalar enums with parked tokens
@@ -704,6 +728,8 @@ public nonisolated struct FernletSettings: Codable {
              trainerExportIncludesHydration, trainerExportIncludesSleep,
              trainerExportIncludesSickness, trainerExportIncludesWellbeing
         case workoutWarmUpSets
+        case workoutStrengthFocus, unknownWorkoutStrengthFocusToken
+        case workoutFoodAware
     }
 
     /// Custom encode (required so `parkedUnknownKeys` can be re-emitted at the top level). It writes the
@@ -844,6 +870,10 @@ public nonisolated struct FernletSettings: Codable {
         try container.encode(trainerExportIncludesWellbeing, forKey: .trainerExportIncludesWellbeing)
         // Written only once chosen, so every blob saved before keeps its shape exactly.
         try container.encodeIfPresent(workoutWarmUpSets, forKey: .workoutWarmUpSets)
+        // Written only once chosen (or while a newer build's token is parked), for the same reason.
+        if workoutStrengthFocus != .both { try container.encode(workoutStrengthFocus, forKey: .workoutStrengthFocus) }
+        try container.encodeIfPresent(unknownWorkoutStrengthFocusToken, forKey: .unknownWorkoutStrengthFocusToken)
+        try container.encodeIfPresent(workoutFoodAware, forKey: .workoutFoodAware)
     }
 
     /// The split logic (and its defensive bounds) moved to `EnumDecodeCompat.splitRawTokens` when

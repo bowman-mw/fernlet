@@ -153,6 +153,13 @@ extension FernletStore {
         guard settings.workoutWarmUpSets != choice else { return }
         settings.workoutWarmUpSets = choice
     }
+
+    /// Saves Workout setup's training focus (`FernletSettings.workoutStrengthFocus`, G6). Writes only on
+    /// a change; synced like the rest of the workout settings.
+    func setWorkoutStrengthFocus(_ focus: WorkoutStrengthFocus) {
+        guard settings.workoutStrengthFocus != focus else { return }
+        settings.workoutStrengthFocus = focus
+    }
 }
 
 /// "Warm-up sets before heavy lifts" in Workout setup. Shows the saved choice, or the default for the

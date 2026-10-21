@@ -57,13 +57,25 @@
      journal, period-data and intimate-log backups work with or without a Fernlet passcode; the old
      sentence said they required the app lock, which stopped being true when the Private tab gained
      its no-passcode mode. A clarification that widens an option; nothing new leaves the device and
-     no promise is weakened under §13). Before
+     no promise is weakened under §13), and 2026-10-20 (DRAFT for the owner's review — workout round
+     2: §3 names workout suggestions as a use of Health data — sleep, resting heart rate and
+     heart-rate variability set today's training readiness, recent sleep feeds the check on a lift
+     that has stopped progressing, and age and resting heart rate set guided cardio's heart-rate
+     zones — adds heart rate to the read list, and describes the opt-in live heart rate during
+     guided cardio, which Fernlet holds in memory only; §2 lists the workout details and workout
+     settings Fernlet stores: per-set weights, warm-up sets, the suggested weight, the
+     Easy/Good/Tough rating, the reason for choosing a weight outside the suggested range (pain
+     among them), training experience, a per-lift estimate of training age, weights on hand, warm-up
+     preference, injuries and the avoid lists, and an optional maximum heart rate, which is kept on
+     the device only (UserDefaults `fernlet.workoutCues.maxHeartRate`: never synced, cleared by
+     Delete Everything). New disclosures of processing on the device and of fields kept with
+     workouts and settings; nothing new leaves the device and no promise is weakened under §13). Before
      submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
      (2) keep it in sync with the in-app copy in App/Fernlet/PrivacyPolicyView.swift (Settings →
      Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
      the effective date in all three. -->
 
-**Effective date:** September 30, 2026
+**Effective date:** October 20, 2026
 **Developer:** Michael Bowman Olay
 **Contact:** fernletapp@gmail.com
 
@@ -104,6 +116,20 @@ Almost everything, including:
 
 - **Health & activity you log:** meals and their nutrition, workouts, hydration, hygiene, sleep,
   and your daily wellbeing score.
+- **Workout details:** for each lift you log, the sets and reps, the weight of each set when they
+  were not all the same, any warm-up sets (marked as warm-ups), and the weight Fernlet suggested;
+  your optional Easy, Good or Tough answer about how a lift felt; and, if you chose a weight outside
+  the suggested range, the reason you picked, if you picked one — too heavy, too light, equipment,
+  pain, preference, or other. A "pain" answer keeps that lift's weight where it was next time instead
+  of raising it. Fernlet uses the rating and the reason only on your device, to set your next
+  suggestion; neither is in your data export or in a training summary you share (Section 7). Like
+  the rest of a logged workout, these details sync if you use iCloud sync (Section 4). Live heart
+  rate from guided cardio is never stored (Section 3).
+- **Workout settings:** your training experience, how long you have trained each lift (which
+  Fernlet works out on your device from your logged workouts), the weights you have at each place
+  you train, whether you want warm-up sets, any injuries and the muscles and movements you avoid, and
+  an optional maximum heart rate you enter for your heart-rate zones. That maximum heart rate is
+  kept on this device only: it is never synced, and **Delete Everything** removes it.
 - **Journal entries** and the gentle reflections derived from them.
 - **Memories** — short notes Fernlet keeps so it can respond to you thoughtfully over time. A
   memory drawn from a journal entry never holds your words: it keeps only that entry's mood (for
@@ -152,6 +178,8 @@ needs it — and Fernlet reads a kind only while it is shared:
 - **Body signals:** sleep analysis (including sleep stages), resting heart rate, and heart-rate
   variability — plus respiratory rate and sleeping wrist temperature if you turn on "Notice body
   tension".
+- **Heart rate during guided cardio:** only if you turn on "Heart rate during cardio" in Workout
+  setup, and only while a guided cardio part is running (see below).
 - **Mindfulness:** mindful minutes.
 - **Body measurements:** your age, sex, height, and weight, for your nutrition targets.
 - **Cycle tracking** and **intimate logging**, if you use them: your cycle observations and
@@ -194,13 +222,33 @@ rate, breathing rate and wrist temperature it compares against is kept the same 
 only, never synced, and excluded from its device backup. Turning that setting off, or deleting
 everything, erases it.
 
+**Heart rate during guided cardio (off by default).** If you turn on "Heart rate during cardio", and
+Fernlet's workout sharing with Apple Health is on, each guided cardio part starts an Apple Health
+workout session that reads your heart rate live from a heart-rate sensor paired with your iPhone.
+Fernlet shows the latest reading against the part's target zone — on the workout screen, and on the
+Lock Screen and in the Dynamic Island while the run lasts — and, if you also turn on "Zone nudges",
+gives a light tap when it has stayed outside the zone for half a minute.
+Fernlet holds the reading in memory only: it is never saved to your records, never synced, and never
+included in an export, and Fernlet writes no heart-rate value to Apple Health. When the cardio ends,
+the session's own workout record is discarded, so the run appears in Apple Health once, as the
+workout you log; Apple Health keeps the heart-rate readings your sensor recorded, as it does for any
+workout app. Both switches are kept on this device and never synced.
+
 Health data accessed through HealthKit is used only on the device that read it, to compute your
-companion's state, your derived trends, and your nutrition targets. It is **never** used for
-advertising, never sold, and never shared with us or any third party. Your daily wellbeing score,
-your companion's state, and the coins you earn for an active day are Fernlet's own results, worked
-out partly from these readings; if you use iCloud sync they sync with the rest of your app data,
-while the readings themselves never do. Deleting Fernlet does not delete samples Fernlet wrote to
-Apple Health — remove those in the Health app if you wish.
+companion's state, your derived trends, your nutrition targets, and your workout suggestions. It is
+**never** used for advertising, never sold, and never shared with us or any third party. Your daily
+wellbeing score, your companion's state, the coins you earn for an active day, and today's training
+readiness are Fernlet's own results, worked out partly from these readings; if you use iCloud sync
+they sync with the rest of your app data, while the readings themselves never do. Deleting Fernlet
+does not delete samples Fernlet wrote to Apple Health — remove those in the Health app if you wish.
+
+**Workout suggestions.** Fernlet's workout planner uses these readings too, on your device. Your
+sleep, resting heart rate and heart-rate variability over the last few days set today's training
+readiness — whether today suits light, moderate or hard training — which shapes the workout Fernlet
+suggests. When a lift stops progressing, your sleep over the last two weeks (from your own sleep log
+first, then Apple Health) is one of the things Fernlet checks before suggesting what to change. And
+your age and resting heart rate set the heart-rate zones guided cardio aims for, unless you enter
+your own maximum heart rate.
 
 **Your companion's feelings.** Your companion also shows how it feels right now — happy, sad, tired,
 sleepy, hungry, thirsty and a few more. Fernlet works each feeling out on your device, moment to

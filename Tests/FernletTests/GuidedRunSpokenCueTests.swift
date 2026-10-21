@@ -303,6 +303,70 @@ private final class SpeechRig {
         #expect(clause.hasPrefix("Weight") && clause.contains("110"))
     }
 
+    // MARK: The words — Start (round 2, R4)
+
+    /// One of a back squat's warm-up sets at 45 lb.
+    private static func warmUpSet() -> GuidedWorkoutRunState.Exercise {
+        let tracking = GuidedWorkoutRunState.Tracking(
+            targetReps: 8, rangeLow: 45, rangeHigh: 45, suggested: 45, step: 5, unitRaw: "lb",
+            equipmentRaw: "barbell", confidenceRaw: nil, askReasonOnOverride: false,
+            calibrationRaw: GuidedWorkoutRunState.CalibrationToken.ramp, easierSession: false, compoundsBefore: 0,
+            selected: 45
+        )
+        return GuidedWorkoutRunState.Exercise(
+            name: "Back squat", sets: 1, reps: "8", roleRaw: "main", fromCatalog: true, restSeconds: 90,
+            blockRaw: "lifting", tracking: tracking
+        )
+    }
+
+    /// At Start the first step is named as the first — "First: Goblet squat." — with its suggested
+    /// weight and last time, as a move onto it would say them.
+    @Test func startNamesTheFirstStepAndItsWeight() throws {
+        let state = Self.run([Self.trackedLift("Goblet squat"), Self.plainLift("Row")])
+        let line = try #require(GuidedRunSpokenCue.start(state))
+        let clause = try #require(GuidedRunSpokenCue.loadClause(for: state))
+        #expect(line == GuidedRunSpokenCue.sentences("First: Goblet squat.", clause))
+        #expect(line.contains("Suggested weight") && line.contains("105"))
+        let plain = GuidedRunSpokenCue.start(Self.run([Self.plainLift("Squat")]))
+        #expect(plain == "First: Squat.")
+    }
+
+    /// A first step that is a warm-up set says the warm-up line; a one-sided stretch says its side; an
+    /// interval says its pace and round; a run not working on a step says nothing.
+    @Test func startSaysEachKindOfFirstStep() throws {
+        let ramped = Self.run([Self.warmUpSet(), Self.warmUpSet(), Self.trackedLift("Back squat")])
+        let warmUp = try #require(GuidedRunSpokenCue.start(ramped))
+        #expect(warmUp.hasPrefix("Warm-up set 1 of 2: Back squat."))
+        let sided = GuidedRunSpokenCue.start(Self.run([Self.hold("Cat-cow", side: "left")]))
+        #expect(sided == "First: Cat-cow, left side.")
+        let intervals = GuidedRunSpokenCue.start(Self.run([Self.part("hard", round: 1, rounds: 8)]))
+        #expect(intervals == "Hard, round 1 of 8.")
+        var done = Self.run([Self.plainLift("Squat")])
+        done.phase = .done
+        let silent = GuidedRunSpokenCue.start(done) == nil
+        #expect(silent)
+    }
+
+    /// The director says the start line aloud once, at Start — only with spoken cues on and the app in
+    /// front, and never to VoiceOver, which hears the runner screen itself.
+    @Test func theFirstStepIsSpokenAtStart() throws {
+        let state = Self.run([Self.trackedLift("Goblet squat")])
+        let expected = try #require(GuidedRunSpokenCue.start(state))
+        let rig = SpeechRig()
+        director(rig).started(state)
+        #expect(rig.voice.said == [expected])
+        #expect(rig.announcements.posted.isEmpty)
+        let off = SpeechRig()
+        director(off, spoken: false).started(state)
+        #expect(off.isSilent)
+        let away = SpeechRig()
+        director(away, active: false).started(state)
+        #expect(away.isSilent)
+        let voiceOver = SpeechRig(voiceOver: true)
+        director(voiceOver).started(state)
+        #expect(voiceOver.isSilent)
+    }
+
     /// Two sentences join with the locale's separator; a missing or empty second leaves the first alone.
     @Test func sentencesJoin() {
         #expect(GuidedRunSpokenCue.sentences("Next: Row.", "Suggested weight 105 pounds") == "Next: Row. Suggested weight 105 pounds")

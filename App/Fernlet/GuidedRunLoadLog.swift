@@ -35,7 +35,8 @@ enum GuidedRunLoadLog {
             calibrationRaw: guidance.calibration?.rawValue,
             easierSession: guidance.easierSession,
             compoundsBefore: guidance.compoundsBefore,
-            selected: guidance.prescription?.suggested
+            selected: guidance.prescription?.suggested,
+            loads: step == nil ? nil : guidance.loads.map { Array($0.prefix(GuidedWorkoutRunState.Tracking.maxLoads)) }
         )
     }
 
@@ -73,8 +74,9 @@ enum GuidedRunLoadLog {
         )
     }
 
-    /// One tracked lift's result, or nil for an untracked step or one the runner skipped.
-    static func result(for exercise: GuidedWorkoutRunState.Exercise) -> ExerciseResult? {
+    /// One tracked lift's result, or nil for an untracked step or one the runner skipped. `unfueled`
+    /// is the run's answer to the Ready screen's food question (G12).
+    static func result(for exercise: GuidedWorkoutRunState.Exercise, unfueled: Bool = false) -> ExerciseResult? {
         guard let tracking = exercise.tracking, tracking.skipped != true, exercise.fromCatalog else { return nil }
         return ExerciseResult(
             name: exercise.name, prescribedSets: max(1, exercise.sets), targetReps: tracking.targetReps,
@@ -88,7 +90,8 @@ enum GuidedRunLoadLog {
             confidence: tracking.confidenceRaw.flatMap(EstimateConfidence.init(rawValue:)),
             calibration: tracking.calibrationRaw.flatMap(CalibrationStep.init(rawValue:)),
             easierSession: tracking.easierSession ? true : nil,
-            compoundsBefore: tracking.compoundsBefore
+            compoundsBefore: tracking.compoundsBefore,
+            unfueled: unfueled
         )
     }
 
@@ -102,7 +105,7 @@ enum GuidedRunLoadLog {
         var lines: [UUID: String] = [:]
         var results: [ExerciseResult] = []
         for exercise in kept {
-            if let result = result(for: exercise) {
+            if let result = result(for: exercise, unfueled: state.unfueled == true) {
                 results.append(result)
                 lines[exercise.id] = result.loggedLine
             } else if exercise.tracking?.skipped == true {
