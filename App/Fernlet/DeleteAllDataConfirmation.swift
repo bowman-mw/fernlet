@@ -300,17 +300,148 @@ enum DeleteAllDataConfirmation {
     static func failureMessage(for outcome: FernletStore.DeleteAllOutcome) -> String {
         // The sibling assembled body, and it had zero `String(localized:)` — the same gap review
         // T2-1 closed in `message(…)` next door. The store list stays an argument: it is built from
-        // store NAMES and joined with `ListFormatter.localizedString(byJoining:)`, which already
+        // store NAMES, each drawn through `DeleteAllStoreNames` (the names themselves are frozen
+        // tokens), and joined with `ListFormatter.localizedString(byJoining:)`, which already
         // applies the locale's own list conjunction.
         String(
             localized: "deleteAll.failure",
             defaultValue: """
                 Fernlet deleted everything it could, but couldn't finish: \
-                \(ListFormatter.localizedString(byJoining: outcome.incompleteStores)). \
+                \(ListFormatter.localizedString(byJoining: outcome.incompleteStores.map(DeleteAllStoreNames.displayName(for:)))). \
                 Anything named there may still exist. Trying again can help for anything still on this phone.
                 """,
             comment: "Shown when a delete-everything wipe came back incomplete. The argument is the list of stores that failed. Deliberately does NOT promise a retry fixes everything — records already gone from the outbox cannot be reached again."
         )
+    }
+}
+
+/// The names the delete-everything failure alert draws for the stores a wipe could not finish.
+///
+/// `FernletStore.DeleteAllOutcome.incompleteStores` holds frozen English store NAMES, and they are
+/// tokens: the funnel compares them (`contains("your encrypted iCloud backup")`) and dedupes them, and
+/// the wipe suites assert them by spelling. So they never localize — this is their display half, an
+/// exact match on each frozen name for its `deleteAll.store.*` catalog key (the house shape of
+/// `StoredWorkoutName`). A name this build does not know draws as itself, so a store added later
+/// still names itself rather than vanishing from the alert; `DeleteAllDataTests` pins that every name
+/// the funnel writes has an entry here. `nonisolated`: a pure lookup over `Sendable` resources.
+nonisolated enum DeleteAllStoreNames {
+    /// Every frozen store name the wipe funnel writes, keyed to its display resource.
+    static let names: [String: LocalizedStringResource] = [
+        "your day history": LocalizedStringResource(
+            "deleteAll.store.dayHistory", defaultValue: "your day history",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "leftover traces in your local records": LocalizedStringResource(
+            "deleteAll.store.leftoverLocalTraces", defaultValue: "leftover traces in your local records",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your storage settings": LocalizedStringResource(
+            "deleteAll.store.storageSettings", defaultValue: "your storage settings",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your encrypted iCloud backup": LocalizedStringResource(
+            "deleteAll.store.encryptedICloudBackup", defaultValue: "your encrypted iCloud backup",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your iCloud copy": LocalizedStringResource(
+            "deleteAll.store.iCloudCopy", defaultValue: "your iCloud copy",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your cycle history": LocalizedStringResource(
+            "deleteAll.store.cycleHistory", defaultValue: "your cycle history",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your intimate logs": LocalizedStringResource(
+            "deleteAll.store.intimateLogs", defaultValue: "your intimate logs",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your journal entries": LocalizedStringResource(
+            "deleteAll.store.journalEntries", defaultValue: "your journal entries",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your Apple Health entries (Fernlet's Health access is turned off — remove them in the Health app)": LocalizedStringResource(
+            "deleteAll.store.appleHealthEntriesAccessOff", defaultValue: "your Apple Health entries (Fernlet's Health access is turned off — remove them in the Health app)",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your Apple Health entries": LocalizedStringResource(
+            "deleteAll.store.appleHealthEntries", defaultValue: "your Apple Health entries",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "meal photos": LocalizedStringResource(
+            "deleteAll.store.mealPhotos", defaultValue: "meal photos",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "progress photos": LocalizedStringResource(
+            "deleteAll.store.progressPhotos", defaultValue: "progress photos",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "recipe photos": LocalizedStringResource(
+            "deleteAll.store.recipePhotos", defaultValue: "recipe photos",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "session photos you hadn't chosen yet": LocalizedStringResource(
+            "deleteAll.store.unchosenSessionPhotos", defaultValue: "session photos you hadn't chosen yet",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "shared recipe inbox": LocalizedStringResource(
+            "deleteAll.store.sharedRecipeInbox", defaultValue: "shared recipe inbox",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "Messages import inbox": LocalizedStringResource(
+            "deleteAll.store.messagesImportInbox", defaultValue: "Messages import inbox",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your exported data file": LocalizedStringResource(
+            "deleteAll.store.exportedDataFile", defaultValue: "your exported data file",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "widget data": LocalizedStringResource(
+            "deleteAll.store.widgetData", defaultValue: "widget data",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "Messages catalog": LocalizedStringResource(
+            "deleteAll.store.messagesCatalog", defaultValue: "Messages catalog",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your Apple Health permission history": LocalizedStringResource(
+            "deleteAll.store.appleHealthPermissionHistory", defaultValue: "your Apple Health permission history",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "AI activity log": LocalizedStringResource(
+            "deleteAll.store.aiActivityLog", defaultValue: "AI activity log",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your nearby-friends identity": LocalizedStringResource(
+            "deleteAll.store.nearbyFriendsIdentity", defaultValue: "your nearby-friends identity",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "nearby designer bans": LocalizedStringResource(
+            "deleteAll.store.nearbyDesignerBans", defaultValue: "nearby designer bans",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "hearts parked in iCloud": LocalizedStringResource(
+            "deleteAll.store.heartsParkedInICloud", defaultValue: "hearts parked in iCloud",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your nearby-friends session state": LocalizedStringResource(
+            "deleteAll.store.nearbyFriendsSessionState", defaultValue: "your nearby-friends session state",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your nearby-friends delivery state": LocalizedStringResource(
+            "deleteAll.store.nearbyFriendsDeliveryState", defaultValue: "your nearby-friends delivery state",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your saved recipes": LocalizedStringResource(
+            "deleteAll.store.savedRecipes", defaultValue: "your saved recipes",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your custom items": LocalizedStringResource(
+            "deleteAll.store.customItems", defaultValue: "your custom items",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your coins": LocalizedStringResource(
+            "deleteAll.store.coins", defaultValue: "your coins",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your milestone history": LocalizedStringResource(
+            "deleteAll.store.milestoneHistory", defaultValue: "your milestone history",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your exchange import history": LocalizedStringResource(
+            "deleteAll.store.exchangeImportHistory", defaultValue: "your exchange import history",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your body-signals baseline": LocalizedStringResource(
+            "deleteAll.store.bodySignalsBaseline", defaultValue: "your body-signals baseline",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your cached Apple Health readings": LocalizedStringResource(
+            "deleteAll.store.cachedAppleHealthReadings", defaultValue: "your cached Apple Health readings",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your day summaries": LocalizedStringResource(
+            "deleteAll.store.daySummaries", defaultValue: "your day summaries",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your Worry Box notes": LocalizedStringResource(
+            "deleteAll.store.worryBoxNotes", defaultValue: "your Worry Box notes",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your sealed store": LocalizedStringResource(
+            "deleteAll.store.sealedStore", defaultValue: "your sealed store",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+    ]
+
+    /// The localized name for the frozen store name `token`, or `token` itself for one this build
+    /// has no entry for.
+    static func displayName(for token: String) -> String {
+        guard let resource = names[token] else { return token }
+        return String(localized: resource)
     }
 }
 

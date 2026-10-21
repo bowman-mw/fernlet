@@ -2434,6 +2434,9 @@
     "Couldn't find" : {
 
     },
+    "Couldn't lock the photos to this device just now. Your choice is saved — Fernlet will finish it the next time it can reach the keychain." : {
+
+    },
     "Couldn't log that just now — please try again in a moment." : {
 
     },
@@ -2445,12 +2448,6 @@
 
     },
     "Couldn't reach Open Food Facts right now. You can try again, or name it yourself below." : {
-
-    },
-    "Couldn't read %lld of your photos while verifying your encrypted backup, so some may be missing from iCloud or out of date there. Copies already backed up were kept. Tap Retry to verify again." : {
-
-    },
-    "Couldn't read 1 of your photos while verifying your encrypted backup, so it may be missing from iCloud or out of date there. Copies already backed up were kept. Tap Retry to verify again." : {
 
     },
     "Couldn't read that" : {
@@ -2472,6 +2469,9 @@
 
     },
     "Couldn't update your workout just now — please try again in a moment." : {
+
+    },
+    "Couldn't upload your photos to your encrypted backup just now, so some or all of them may not be in iCloud yet. We'll keep trying, or tap Retry." : {
 
     },
     "Counted as %@ %@%@ (%@ g)" : {
@@ -3344,6 +3344,9 @@
     "Explains how body signals are estimated" : {
 
     },
+    "Export a readable copy of your own Fernlet data as a JSON file. It leaves out your sealed period, intimate, and sensitive-memory data, and your photos." : {
+
+    },
     "Export connection history" : {
 
     },
@@ -3497,6 +3500,9 @@
 
     },
     "Fernlet is holding all it can, so that photo stayed on your own wall." : {
+
+    },
+    "Fernlet is still checking your existing photos. Locking them to this device becomes available once that finishes." : {
 
     },
     "Fernlet is still connected to %@. Recipe sharing links two Fernlets at a time, so nothing went to %@." : {
@@ -3746,12 +3752,12 @@
     "Fortune cookie (mostly fortune)" : {
 
     },
-    "Found %lld meal logs, %lld journal entries, %lld workouts in this iCloud account." : {
+    "Found ^[%lld meal log](inflect: true), ^[%lld journal entry](inflect: true), ^[%lld workout](inflect: true) in this iCloud account." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Found %1$lld meal logs, %2$lld journal entries, %3$lld workouts in this iCloud account."
+            "value" : "Found ^[%1$lld meal log](inflect: true), ^[%2$lld journal entry](inflect: true), ^[%3$lld workout](inflect: true) in this iCloud account."
           }
         }
       }
@@ -4791,6 +4797,12 @@
 
     },
     "Locked (reset required)" : {
+
+    },
+    "Locks your meal, recipe and progress photos to a key that never leaves this device, so a copy of your device backup can't open them. Because the encrypted photo backup (under Backups) is off, these photos then won't come back on a new or erased phone. This can't be undone." : {
+
+    },
+    "Locks your meal, recipe and progress photos to a key that never leaves this device, so a copy of your device backup can't open them. Your encrypted photo backup still restores them onto a new phone." : {
 
     },
     "Log" : {
@@ -6719,9 +6731,6 @@
     "Remove step %lld" : {
 
     },
-    "Remove them" : {
-      "comment" : "Privacy & Data: remove the Sealed backup entries (journal or intimate logs) this iPhone cannot open."
-    },
     "Remove this meal?" : {
 
     },
@@ -8391,6 +8400,12 @@
     "These only ever grow, in their own time. There's nothing to keep up with here." : {
 
     },
+    "These photos are locked to this device: their key never leaves it, so a copy of your device backup can't open them. They won't restore onto a new phone at all. Turn on the encrypted photo backup under Backups if you want them to survive a phone swap." : {
+
+    },
+    "These photos are locked to this device: their key never leaves it, so a copy of your device backup can't open them. They won't restore onto a new phone from a device backup — the encrypted photo backup under Backups is how they come back." : {
+
+    },
     "These words weren't matched to a food, so they aren't counted below. Check the matched items or adjust the numbers before logging." : {
 
     },
@@ -8944,6 +8959,12 @@
 
     },
     "Verify passcode" : {
+
+    },
+    "Verify to continue" : {
+
+    },
+    "Verifying" : {
 
     },
     "Very easy — barely trying." : {
@@ -10435,6 +10456,438 @@
         }
       }
     },
+    "deleteAll.store.aiActivityLog" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "AI activity log"
+          }
+        }
+      }
+    },
+    "deleteAll.store.appleHealthEntries" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your Apple Health entries"
+          }
+        }
+      }
+    },
+    "deleteAll.store.appleHealthEntriesAccessOff" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your Apple Health entries (Fernlet's Health access is turned off — remove them in the Health app)"
+          }
+        }
+      }
+    },
+    "deleteAll.store.appleHealthPermissionHistory" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your Apple Health permission history"
+          }
+        }
+      }
+    },
+    "deleteAll.store.bodySignalsBaseline" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your body-signals baseline"
+          }
+        }
+      }
+    },
+    "deleteAll.store.cachedAppleHealthReadings" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your cached Apple Health readings"
+          }
+        }
+      }
+    },
+    "deleteAll.store.coins" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your coins"
+          }
+        }
+      }
+    },
+    "deleteAll.store.customItems" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your custom items"
+          }
+        }
+      }
+    },
+    "deleteAll.store.cycleHistory" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your cycle history"
+          }
+        }
+      }
+    },
+    "deleteAll.store.dayHistory" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your day history"
+          }
+        }
+      }
+    },
+    "deleteAll.store.daySummaries" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your day summaries"
+          }
+        }
+      }
+    },
+    "deleteAll.store.encryptedICloudBackup" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your encrypted iCloud backup"
+          }
+        }
+      }
+    },
+    "deleteAll.store.exchangeImportHistory" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your exchange import history"
+          }
+        }
+      }
+    },
+    "deleteAll.store.exportedDataFile" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your exported data file"
+          }
+        }
+      }
+    },
+    "deleteAll.store.heartsParkedInICloud" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "hearts parked in iCloud"
+          }
+        }
+      }
+    },
+    "deleteAll.store.iCloudCopy" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your iCloud copy"
+          }
+        }
+      }
+    },
+    "deleteAll.store.intimateLogs" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your intimate logs"
+          }
+        }
+      }
+    },
+    "deleteAll.store.journalEntries" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your journal entries"
+          }
+        }
+      }
+    },
+    "deleteAll.store.leftoverLocalTraces" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "leftover traces in your local records"
+          }
+        }
+      }
+    },
+    "deleteAll.store.mealPhotos" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "meal photos"
+          }
+        }
+      }
+    },
+    "deleteAll.store.messagesCatalog" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Messages catalog"
+          }
+        }
+      }
+    },
+    "deleteAll.store.messagesImportInbox" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Messages import inbox"
+          }
+        }
+      }
+    },
+    "deleteAll.store.milestoneHistory" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your milestone history"
+          }
+        }
+      }
+    },
+    "deleteAll.store.nearbyDesignerBans" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "nearby designer bans"
+          }
+        }
+      }
+    },
+    "deleteAll.store.nearbyFriendsDeliveryState" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your nearby-friends delivery state"
+          }
+        }
+      }
+    },
+    "deleteAll.store.nearbyFriendsIdentity" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your nearby-friends identity"
+          }
+        }
+      }
+    },
+    "deleteAll.store.nearbyFriendsSessionState" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your nearby-friends session state"
+          }
+        }
+      }
+    },
+    "deleteAll.store.progressPhotos" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "progress photos"
+          }
+        }
+      }
+    },
+    "deleteAll.store.recipePhotos" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "recipe photos"
+          }
+        }
+      }
+    },
+    "deleteAll.store.savedRecipes" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your saved recipes"
+          }
+        }
+      }
+    },
+    "deleteAll.store.sealedStore" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your sealed store"
+          }
+        }
+      }
+    },
+    "deleteAll.store.sharedRecipeInbox" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "shared recipe inbox"
+          }
+        }
+      }
+    },
+    "deleteAll.store.storageSettings" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your storage settings"
+          }
+        }
+      }
+    },
+    "deleteAll.store.unchosenSessionPhotos" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "session photos you hadn't chosen yet"
+          }
+        }
+      }
+    },
+    "deleteAll.store.widgetData" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "widget data"
+          }
+        }
+      }
+    },
+    "deleteAll.store.worryBoxNotes" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your Worry Box notes"
+          }
+        }
+      }
+    },
     "designed by %@" : {
 
     },
@@ -11696,6 +12149,161 @@
         }
       }
     },
+    "privacy.ownPhotos.bindingDisclosure" : {
+      "comment" : "Privacy & Data: the last paragraph of the encrypted photo backup's consent alert. Turning the backup on is what eventually locks the photos' key to this iPhone.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Once your photos are safely in the backup, Fernlet locks their encryption key to this device, so a copy of your device backup can't open them. That can't be undone, and from then on this encrypted backup is how they come back on a new phone."
+          }
+        }
+      }
+    },
+    "privacy.ownPhotos.sizeDisclosure" : {
+      "comment" : "Privacy & Data: under the encrypted photo backup switch, and the first paragraph of its consent alert. The sizes are approximate; keep the numbers.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your meal, recipe and progress photos, encrypted. Fernlet doesn't limit how many photos you keep, so this can use a lot of your iCloud storage — roughly 150–400 KB per photo, which is 100–250 MB or more for a big library. Only photos that changed are uploaded."
+          }
+        }
+      }
+    },
+    "privacy.ownPhotos.verifiedUnreadable" : {
+      "comment" : "Privacy & Data: the encrypted photo backup's verification pass could not read this many photos. Needs a plural variation; the one-photo English says 'so it may be missing'.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Couldn't read %lld of your photos while verifying your encrypted backup, so it may be missing from iCloud or out of date there. Copies already backed up were kept. Tap Retry to verify again."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Couldn't read %lld of your photos while verifying your encrypted backup, so some may be missing from iCloud or out of date there. Copies already backed up were kept. Tap Retry to verify again."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "privacy.sealedBackup.disclosure.appleCantRead" : {
+      "comment" : "Encrypted backup consent alert, second paragraph: 'it' is the encrypted backup.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Apple can't read it."
+          }
+        }
+      }
+    },
+    "privacy.sealedBackup.disclosure.encryptedOnly" : {
+      "comment" : "Encrypted backup consent alert, first paragraph.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your data leaves this device only in encrypted form."
+          }
+        }
+      }
+    },
+    "privacy.sealedBackup.disclosure.intimacy" : {
+      "comment" : "Encrypted backup consent alert, last paragraph when turning on the intimate log backup.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intimate logs are sensitive; they are uploaded only in this encrypted form."
+          }
+        }
+      }
+    },
+    "privacy.sealedBackup.disclosure.journal" : {
+      "comment" : "Encrypted backup consent alert, last paragraph when turning on the journal backup.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your journal text is uploaded only in this encrypted form."
+          }
+        }
+      }
+    },
+    "privacy.sealedBackup.disclosure.keychainLoss" : {
+      "comment" : "Encrypted backup consent alert, third paragraph: the backup's key lives in iCloud Keychain.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "If iCloud Keychain is ever permanently lost, this backup can't be recovered on a new device."
+          }
+        }
+      }
+    },
+    "privacy.sealedBackup.disclosure.period" : {
+      "comment" : "Encrypted backup consent alert, last paragraph when turning on the cycle backup.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Period data is sensitive; it is uploaded only in this encrypted form."
+          }
+        }
+      }
+    },
+    "privacy.sealedBackup.intimacy.removeThem" : {
+      "comment" : "Privacy & Data: remove the intimate logs this iPhone cannot open from the intimate-log Sealed backup. 'Them' is the logs.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Remove them"
+          }
+        }
+      }
+    },
+    "privacy.sealedBackup.journal.removeThem" : {
+      "comment" : "Privacy & Data: remove the journal entries this iPhone cannot open from the journal Sealed backup. 'Them' is the entries.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Remove them"
+          }
+        }
+      }
+    },
+    "privacy.verify.reason" : {
+      "comment" : "Shown by iOS in the Face ID or device passcode prompt that guards Privacy & Data.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Verify to access Privacy & Data settings."
+          }
+        }
+      }
+    },
     "productImport.error.emptyHTML" : {
       "comment" : "Inline notice when a product page loaded but its body decoded to empty or whitespace-only text.",
       "extractionState" : "extracted_with_value",
@@ -11974,6 +12582,18 @@
         }
       }
     },
+    "sealedBackup.noun.ownPhotos" : {
+      "comment" : "Mid-sentence noun for the encrypted backup of the user's own meal, recipe and progress photos, e.g. 'Couldn't reach your photo backup just now.'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "photo"
+          }
+        }
+      }
+    },
     "sealedBackup.noun.periodData" : {
       "comment" : "Mid-sentence noun for the sealed backup of cycle data, e.g. 'the encrypted period backup'.",
       "extractionState" : "extracted_with_value",
@@ -11998,6 +12618,42 @@
         }
       }
     },
+    "sealedBackup.restore.deferredKeyNotSynced" : {
+      "comment" : "Privacy & Data: a Sealed backup could not be restored yet because its key has not arrived through iCloud Keychain. The placeholder is a mid-sentence backup noun such as 'period' or 'photo'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couldn't restore your %@ backup on this device yet — iCloud Keychain may still be syncing. We'll keep trying, or tap Retry."
+          }
+        }
+      }
+    },
+    "sealedBackup.restore.deferredLocked" : {
+      "comment" : "Privacy & Data: a Sealed backup is waiting for Fernlet's app lock to be unlocked. The placeholder is a mid-sentence backup noun such as 'period' or 'photo'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your %@ backup is ready to restore, but Fernlet is locked. Unlock, then tap Retry."
+          }
+        }
+      }
+    },
+    "sealedBackup.restore.deferredTransient" : {
+      "comment" : "Privacy & Data: iCloud could not be reached for a Sealed backup. The placeholder is a mid-sentence backup noun such as 'period' or 'photo'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couldn't reach your %@ backup just now. We'll keep trying, or tap Retry."
+          }
+        }
+      }
+    },
     "sealedBackup.restore.needsNewerFernlet" : {
       "comment" : "Privacy & Data: a Sealed backup, or entries on this iPhone, were written by a newer version of Fernlet that this version can't read. The placeholder is a mid-sentence backup noun such as 'period'.",
       "extractionState" : "extracted_with_value",
@@ -12006,6 +12662,30 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Some %1$@ entries or the %2$@ backup need a newer version of Fernlet. Update Fernlet to keep backing them up."
+          }
+        }
+      }
+    },
+    "sealedBackup.restore.notRecognized" : {
+      "comment" : "Privacy & Data: a Sealed backup in iCloud was sealed with a different account's key. The placeholder is a mid-sentence backup noun such as 'period' or 'photo'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A %@ backup was found in iCloud, but it isn't encrypted with this account's key, so it can't be restored on this device."
+          }
+        }
+      }
+    },
+    "sealedBackup.restore.rolledBack" : {
+      "comment" : "Privacy & Data: the Sealed backup in iCloud is older than this iPhone's copy, so it was not restored. The placeholder is a mid-sentence backup noun such as 'period' or 'photo'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The %@ backup in iCloud is older than one this device already has, so Fernlet didn't restore it — that shouldn't happen on its own. Nothing was changed. If you still have this data on another device, back it up again from there."
           }
         }
       }

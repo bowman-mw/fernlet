@@ -2928,6 +2928,20 @@ struct LocalizationBoundaryTests {
             ("appearanceMode.light", "FernletAppearanceMode.label, once bare literals"),
             ("appearanceMode.dark", "FernletAppearanceMode.label, once bare literals"),
             ("settings.haptics.level.off", "the haptics segmented control's own Off, apart from the status 'Off'"),
+            ("Verify to continue", "PrivacyDataSettingsView.verifyButtonTitle, forked String → LocalizedStringKey"),
+            ("Verifying", "PrivacyDataSettingsView.verifyButtonTitle, forked String → LocalizedStringKey"),
+            ("privacy.verify.reason", "the Privacy & Data Face ID / passcode prompt's reason line"),
+            ("privacy.ownPhotos.sizeDisclosure", "the photo backup's size disclosure, once a `+`-built String"),
+            ("privacy.ownPhotos.bindingDisclosure", "the photo backup's binding disclosure, once a `+`-built String"),
+            ("privacy.sealedBackup.disclosure.encryptedOnly", "the encrypted-backup consent alert, once bare String lines"),
+            ("privacy.sealedBackup.disclosure.journal", "the encrypted-backup consent alert, once bare String lines"),
+            ("sealedBackup.noun.ownPhotos", "the photo route's restore lines, once the bare English noun 'photo'"),
+            ("sealedBackup.restore.deferredKeyNotSynced", "restoreStatusMessage, once English sentences returned as String"),
+            ("sealedBackup.restore.rolledBack", "restoreStatusMessage, once English sentences returned as String"),
+            ("privacy.sealedBackup.journal.removeThem", "the journal backup's Remove them, apart from the intimate logs' (gender)"),
+            ("privacy.sealedBackup.intimacy.removeThem", "the intimate-log backup's Remove them, apart from the journal's (gender)"),
+            ("Found ^[%lld meal log](inflect: true), ^[%lld journal entry](inflect: true), ^[%lld workout](inflect: true) in this iCloud account.",
+             "the multiple-devices banner's counts, once fixed English plurals"),
         ] + ["moodTrend", "energyTrend", "eatingPattern", "progressionTrend", "intensityReadiness",
              "micronutrientGaps7Day", "micronutrientGaps14Day"].map {
             ("signal.name.\($0)", "SettingsSignalNames, the Debug page's derived-signal names once drawn raw")
@@ -3087,6 +3101,11 @@ struct LocalizationBoundaryTests {
         // Workout setup's Days-per-week stepper, which spliced an English "s" into its key.
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
                      key: "%lld days a week", source: "Workout setup's days-per-week stepper"),
+        // Spanish round, settings lane (2026-10-20): the photo-verification line, once two English
+        // sentences picked by `== 1`. Its one-photo English ("so it may be missing") is the `one` form.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "privacy.ownPhotos.verifiedUnreadable",
+                     source: "Privacy & Data's encrypted photo backup verification line"),
     ]
 
     /// Every count-bearing key carries real plural variations.
