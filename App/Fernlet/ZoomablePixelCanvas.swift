@@ -25,12 +25,13 @@ struct ZoomablePixelCanvas: UIViewRepresentable {
     let rows: Int
     let palette: [String]
     /// Called once at the start of each paint stroke (a drag or a tap), so the editor can snapshot for undo.
+    /// It is also where the editor's one stroke tick lives (report C6).
     var onStrokeBegan: () -> Void
     /// Called when a zoom/pan begins while a stroke is in flight, so the editor can revert that stroke
     /// (pop the snapshot `onStrokeBegan` pushed). Fires only when a stroke was actually in progress.
     var onStrokeCancelled: () -> Void
     /// Called with the grid cell under the touch for every paint sample. The editor applies the colour +
-    /// symmetry.
+    /// symmetry. Never a cue: a drag samples dozens of cells a second, so a tick here would buzz.
     var onPaintCell: (Int, Int) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }

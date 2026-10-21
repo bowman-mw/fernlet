@@ -1127,6 +1127,9 @@ struct ContentView: View {
         .simultaneousGesture(
             LongPressGesture(minimumDuration: 0.5).onEnded { _ in
                 guard tab == .home else { return }
+                // B12: the hidden press was caught. The VoiceOver action below opens the same sheet
+                // without it: a named action is not a press.
+                FernletFeedback.system.play(.held)
                 selectedTab = .home
                 activeSheet = .settings
             }

@@ -253,6 +253,10 @@ struct WardrobeView: View {
         .buttonStyle(.plain)
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button {
+                // Report B16: an equip landed in place (`logged`, with the "Equipped" pill as its
+                // twin); taking one off is just a changed choice. The swipe's own system feel
+                // stays as it is.
+                FernletFeedback.system.play(isEquipped ? .tick : .logged)
                 if isEquipped {
                     store.unequipCustomSlot(item.slot)
                 } else {
@@ -384,7 +388,9 @@ struct WardrobeView: View {
             return
         }
         let price = ClothingShopLimits.clampedPrice(item.price)
-        switch store.listCustomItemForSale(id: item.id, price: price) {
+        let outcome = store.listCustomItemForSale(id: item.id, price: price)
+        if let cue = Self.listingFeedbackEvent(for: outcome) { FernletFeedback.system.play(cue) }
+        switch outcome {
         case .listed: break
         case .notAllowed:
             // Unreachable behind the `isShareable`/self-designed gate above — but an unreachable
@@ -393,6 +399,19 @@ struct WardrobeView: View {
         case .nameFlagged: shopAlert = .nameFlagged
         case .capReached: shopAlert = .capReached
         case .storeBanned(let remainingSeconds): shopAlert = .storeBanned(remainingSeconds: remainingSeconds)
+        }
+    }
+}
+
+extension WardrobeView {
+    /// What a swipe "Sell" feels like once the shop has answered (report B16): a refusal is a
+    /// `caveat` — the item is fine, and the alert says why it isn't in the shop. A listing that
+    /// lands plays nothing extra: the swipe has its own system feel, and the row's "In your shop"
+    /// line shows it. Unlisting never refuses.
+    static func listingFeedbackEvent(for outcome: FernletStore.ShopListingResult) -> FernletFeedbackEvent? {
+        switch outcome {
+        case .listed, .notAllowed: nil
+        case .nameFlagged, .capReached, .storeBanned: .caveat
         }
     }
 }

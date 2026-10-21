@@ -654,7 +654,7 @@ struct SettingsSheet: View {
             SheetField("Appearance") {
                 FlowLayout(spacing: 8) {
                     ForEach(FernletAppearanceMode.allCases) { mode in
-                        Button(mode.label) { appearanceMode = mode }
+                        Button(mode.label) { chooseAppearanceMode(mode) }
                             .buttonStyle(ChipButtonStyle(selected: appearanceMode == mode))
                     }
                 }
@@ -843,9 +843,7 @@ struct SettingsSheet: View {
                     }
                 }
 
-                Button("Reset home widgets") {
-                    store.setHomeWidgets(HomeWidget.defaultWidgets)
-                }
+                Button("Reset home widgets") { resetHomeWidgets() }
                 .buttonStyle(.plain)
                 .font(.fernlet(.label))
                 .foregroundStyle(Color.moss)
@@ -929,16 +927,30 @@ struct SettingsSheet: View {
         .foregroundStyle(Color.slate)
     }
 
+    /// One Appearance chip: a choice on a custom control, so a tick when it changes the mode (the
+    /// system's own segmented controls tick; these chips otherwise said nothing).
+    private func chooseAppearanceMode(_ mode: FernletAppearanceMode) {
+        if appearanceMode != mode { FernletFeedback.system.play(.tick) }
+        appearanceMode = mode
+    }
+
+    // Every layout change below plays `moved` (report B13) when it really changes the list, and the
+    // list redrawing in its new order is the visual twin. A no-op — Reset on the default layout —
+    // says nothing.
+
     private func addHomeWidget(_ widget: HomeWidget) {
         var widgets = store.settings.homeWidgets
         guard !widgets.contains(widget) else { return }
         widgets.append(widget)
+        FernletFeedback.system.play(.moved)
         store.setHomeWidgets(widgets)
     }
 
     private func removeHomeWidget(_ widget: HomeWidget) {
         var widgets = store.settings.homeWidgets
+        guard widgets.contains(widget) else { return }
         widgets.removeAll { $0 == widget }
+        FernletFeedback.system.play(.moved)
         store.setHomeWidgets(widgets)
     }
 
@@ -947,7 +959,13 @@ struct SettingsSheet: View {
         var widgets = store.settings.homeWidgets
         guard widgets.indices.contains(index), widgets.indices.contains(destination) else { return }
         widgets.swapAt(index, destination)
+        FernletFeedback.system.play(.moved)
         store.setHomeWidgets(widgets)
+    }
+
+    private func resetHomeWidgets() {
+        if store.settings.homeWidgets != HomeWidget.defaultWidgets { FernletFeedback.system.play(.moved) }
+        store.setHomeWidgets(HomeWidget.defaultWidgets)
     }
 
     private var memoriesTab: some View {

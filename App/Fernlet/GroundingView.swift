@@ -260,6 +260,9 @@ struct GroundingView: View {
 
     private func advance() {
         guard !isComplete else { return }
+        // B4: felt at the tap, as the next sense washes in or the affirmation arrives. Grounding has
+        // no switch of its own, so the app-wide level alone decides.
+        FernletFeedback.system.play(Self.advanceEvent(from: stepIndex, of: Self.steps.count))
         withAnimation(.easeInOut(duration: 0.35)) {
             if stepIndex < Self.steps.count - 1 {
                 stepIndex += 1
@@ -267,6 +270,12 @@ struct GroundingView: View {
                 isComplete = true
             }
         }
+    }
+
+    /// What moving on from `stepIndex` feels like (report B4): `pace` into the next sense, `done` on
+    /// leaving the last one, which completes the exercise. Back and Begin again play nothing.
+    static func advanceEvent(from stepIndex: Int, of stepCount: Int) -> FernletFeedbackEvent {
+        stepIndex < stepCount - 1 ? .pace : .done
     }
 
     /// Steps back one sense. Nothing is recorded, so an accidental skip should cost a tap to undo,

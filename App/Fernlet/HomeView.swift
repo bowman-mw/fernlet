@@ -547,6 +547,8 @@ struct HomeView: View {
             interactWithCompanion()
         }
         .onLongPressGesture(minimumDuration: 0.45) {
+            // B12: a custom long press gets no press feel from the system, so say it was caught.
+            FernletFeedback.system.play(.held)
             isCompanionSheetPresented = true
         }
         // The app's one INTERACTIVE companion, and the only render that names itself (T1-10).
@@ -935,7 +937,9 @@ struct HomeView: View {
     private func interactWithCompanion() {
         guard !isCompanionJumping else { return }
         playfulUntil = Date().addingTimeInterval(Self.playfulBeat)
-        switch petGovernor.registerPet() {
+        let response = petGovernor.registerPet()
+        if let cue = Self.petFeedbackEvent(for: response) { FernletFeedback.system.play(cue) }
+        switch response {
         case .bounce:
             performPetBounce(settling: false)
         case .settling:
@@ -944,6 +948,18 @@ struct HomeView: View {
             performCalmIdle(showsSettledLine: showsSettledLine)
         }
         syncCompanionSettled()
+    }
+
+    /// What one pet feels like (report B5), felt with the bounce it answers: `logged` on a playful
+    /// bounce, one `pace` as the companion settles, and NOTHING while it is settled. The governor
+    /// exists to slow compulsive petting, so its settled period is never rewarded with a tap
+    /// (report §3.8, rule 9).
+    static func petFeedbackEvent(for response: PetInteractionGovernor.Response) -> FernletFeedbackEvent? {
+        switch response {
+        case .bounce: .logged
+        case .settling: .pace
+        case .calmIdle: nil
+        }
     }
 
     /// Mirrors the governor's time-based cooldown into the observable `isCompanionSettled` flag so
@@ -1170,6 +1186,8 @@ struct HomeView: View {
     private var unwellRow: some View {
         let isUnwell = store.isSick(on: store.todayKey)
         return Button {
+            // A choice on a custom control: the tick says it took; the check and the wash show it.
+            FernletFeedback.system.play(.tick)
             withAnimation(.easeInOut(duration: 0.18)) {
                 store.setSick(!isUnwell, on: store.todayKey)
             }
@@ -2104,6 +2122,9 @@ private struct CompanionCustomizationSheet: View {
     private func customItemButton(_ item: CustomizationItem) -> some View {
         let isEquipped = store.equippedCustomItems.contains { $0.id == item.id }
         return Button {
+            // A choice in the customize sheet: the tick says it took; the preview and the
+            // "Equipped" pill show it.
+            FernletFeedback.system.play(.tick)
             if isEquipped {
                 store.unequipCustomSlot(item.slot)
             } else {
@@ -2267,6 +2288,8 @@ private struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelCo
                     ForEach(items) { item in
                         let isSelected = selection.id == item.id
                         Button {
+                            // Re-tapping the current pick changes nothing, so it says nothing.
+                            if !isSelected { FernletFeedback.system.play(.tick) }
                             selection = item
                         } label: {
                             label(item)
@@ -2308,6 +2331,7 @@ private struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelCo
     private func colorButton(for color: CompanionAssetColor) -> some View {
         let isSelected = customColorHex == nil && colorSelection == color
         Button {
+            if !isSelected { FernletFeedback.system.play(.tick) }
             colorSelection = color
         } label: {
             HStack(spacing: 6) {
@@ -3090,7 +3114,11 @@ struct HygieneCard: View {
     /// is done rather than reading identically in both states.
     private func taskToggle(_ task: PersonalCareTask) -> some View {
         let isDone = store.isPersonalCareTaskCompleted(task)
-        return Button { store.togglePersonalCareTask(task) } label: {
+        return Button {
+            // B11: a check-off landed in place (`logged`); taking one back is just a changed choice.
+            FernletFeedback.system.play(isDone ? .tick : .logged)
+            store.togglePersonalCareTask(task)
+        } label: {
             Label(task.displayLabel, systemImage: task.systemImage)
                 .font(.fernlet(.label))
                 .lineLimit(1)
