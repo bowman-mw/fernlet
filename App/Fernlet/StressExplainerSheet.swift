@@ -128,7 +128,10 @@ struct StressExplainerSheet: View {
         }
     }
 
-    private var currentReadingTitle: String {
+    // The four reading lines below are `LocalizedStringKey`, not `String`: each returns a literal,
+    // and as `String` every one reached `Text`'s verbatim initializer and was never harvested.
+
+    private var currentReadingTitle: LocalizedStringKey {
         guard let assessment else { return "Still getting to know you" }
         switch assessment.state {
         case .calm: return "Settled"
@@ -138,7 +141,7 @@ struct StressExplainerSheet: View {
         }
     }
 
-    private var currentReadingBody: String {
+    private var currentReadingBody: LocalizedStringKey {
         guard let assessment else {
             return "Fernlet needs about a week of body signals before it can tell what \"usual\" looks like for you. Nothing to do — it will quietly settle in."
         }
@@ -154,7 +157,7 @@ struct StressExplainerSheet: View {
         }
     }
 
-    private var annotationLine: String? {
+    private var annotationLine: LocalizedStringKey? {
         switch assessment?.annotation {
         case .workedOut:
             return "You've moved a lot recently, so this may just be that good kind of tired."
@@ -165,7 +168,7 @@ struct StressExplainerSheet: View {
         }
     }
 
-    private var confidenceLine: String? {
+    private var confidenceLine: LocalizedStringKey? {
         switch assessment?.confidence {
         case .building: return "Fernlet's sense of your usual is still quite new."
         case .settling: return "Fernlet's sense of your usual is still settling in."

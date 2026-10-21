@@ -22,12 +22,14 @@ struct GroundingView: View {
     /// per-sense color trio (wash tint, deep ink, mid-tone).
     ///
     /// The five instances live in the static `steps` table; the view renders whichever one
-    /// `stepIndex` points at.
+    /// `stepIndex` points at. `prompt` and `hint` are `LocalizedStringKey`, so the table's literals
+    /// are catalog keys: as `String` they reached `Text`'s verbatim initializer and never left
+    /// English.
     private struct GroundingStep {
         let count: Int
         let icon: String
-        let prompt: String
-        let hint: String
+        let prompt: LocalizedStringKey
+        let hint: LocalizedStringKey
         /// The calm colour that washes the whole screen for this sense.
         let tint: Color
         /// A deeper ink drawn from the same hue, for the big numeral + icon.

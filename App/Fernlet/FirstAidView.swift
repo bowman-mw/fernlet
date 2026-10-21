@@ -137,7 +137,9 @@ struct FirstAidView: View {
         }
     }
 
-    private func toolCard(_ tool: FirstAidTool, icon: String, tileFill: Color, iconColor: Color, title: String, caption: String) -> some View {
+    /// One tool card. `title` and `caption` are `LocalizedStringKey` so the three cards' literals reach
+    /// the catalog; as `String` they bound `Text`'s verbatim initializer and were never harvested.
+    private func toolCard(_ tool: FirstAidTool, icon: String, tileFill: Color, iconColor: Color, title: LocalizedStringKey, caption: LocalizedStringKey) -> some View {
         Button {
             path.append(tool)
         } label: {
@@ -172,7 +174,7 @@ struct FirstAidView: View {
         // Voice Control: the card is named by its title and caption together; the title is what a
         // user says. "5·4·3·2·1 grounding" also answers to the plain word, since a run of spoken
         // digits is not something dictation reliably turns back into that title.
-        .accessibilityInputLabels(tool == .grounding ? [Text(verbatim: title), Text("Grounding")] : [Text(verbatim: title)])
+        .accessibilityInputLabels(tool == .grounding ? [Text(title), Text("Grounding")] : [Text(title)])
     }
 
     /// A finished breathing session: quietly offer it to Apple Health as a mindful session.
