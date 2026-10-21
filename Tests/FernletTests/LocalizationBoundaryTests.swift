@@ -1390,6 +1390,47 @@ struct LocalizationBoundaryTests {
         return strings
     }
 
+    /// Keys the food lane's conversions put into the app catalog (Spanish round step 2, 2026-10-20),
+    /// every one measured absent before: the `String(localized:)` lines (each revertible to a bare
+    /// literal on its own) and one or more keys behind each member forked off `String`, so a revert
+    /// of the member drops its keys here even though it compiles and reads the same in English.
+    static let foodCopyKeys: [String] = [
+        // String(localized:) lines.
+        "food.ingredientRow.summary", "food.ingredientRow.summary.calories", "food.ingredientRow.summary.unconverted",
+        "recipeImport.notice.alreadyImported", "recipeImport.notice.fetching", "recipeImport.notice.added",
+        "mealComposer.notice.productSaved", "mealComposer.notice.photoNotSaved", "mealComposer.notice.photoNotRecognized",
+        "mealComposer.capture.noBarcode", "mealComposer.capture.labelUnreadable",
+        "productImport.notice.lookupOff", "productImport.notice.lookupOffWithAI",
+        "recipeDetail.reimport.refreshing", "recipeDetail.reimport.refreshing.noHost", "recipeDetail.reimport.refreshed",
+        "recipeDetail.reimport.refreshed.noHost", "recipeDetail.reimport.deleted", "recipeDetail.photo.notSaved",
+        "recipeBook.notice.added", "recipeEditor.scannedIngredient.defaultName", "scan.itemName.default",
+        "scan.itemName.withServing", "recipe.ingredient.unresolvedName", "recipe.substitution.unresolvedOriginal",
+        "barcode.notice.cameraOff", "barcode.notice.noBarcodeInPhoto", "barcode.rememberFood.saveFailed",
+        "grocery.shareText.title",
+        // Behind the forked members and the split sentences.
+        "Find product page", "Source URL", "Vitamins & minerals", "Saturated fat", "Look up the barcode",
+        "photo recognition is off in Settings — barcode and label still work", "On your other device",
+        "This photo lives on the device you took it on. Its details are here; the picture stays where it was snapped.",
+        "Start cooking", "Step %lld of %lld", "Was", "cal", "Double-check the items below before logging.",
+        "From your recipe.", "Matched from your foods.", "Last week", "In ^[%lld week](inflect: true)", "%@ total",
+        "Saved web product", "Remove ingredient", "Swap ingredient", "Re-import from the source page?",
+        "Replace this ingredient in %@.", "^[%lld serving](inflect: true)",
+        "Makes ^[%lld serving](inflect: true): P %lldg · C %lldg · F %lldg · %lld cal",
+        "Your protein and fat leave less room than the carb minimum, so the totals come out a little above your calories.",
+    ]
+
+    /// The food lane's keys reached the app catalog. A miss means a conversion was reverted (the
+    /// string is English-only again, with a clean build) or the catalogs were not re-synced.
+    @Test func everyFoodCopyKeyReachedTheAppCatalog() throws {
+        let strings = try Self.foodCatalogStrings("App/Fernlet/Localizable.xcstrings")
+        let missing = Self.foodCopyKeys.filter { strings[$0] == nil }
+        #expect(missing.isEmpty, """
+            \(missing.count) food key(s) are not in App/Fernlet/Localizable.xcstrings: \(missing). Either the \
+            string went back to a bare literal or a `String` parameter, or Scripts/sync-string-catalogs.sh was \
+            not re-run and committed with the code change.
+            """)
+    }
+
     /// A key's English `stringUnit` value in a catalog's `strings` table, or nil when it has none.
     static func englishCatalogValue(_ strings: [String: Any], key: String) -> String? {
         let localizations = (strings[key] as? [String: Any])?["localizations"] as? [String: Any]
@@ -2761,6 +2802,55 @@ struct LocalizationBoundaryTests {
         ForkedMember(path: "App/Fernlet/NutritionTargetsEditor.swift",
                      declaration: "let label: LocalizedStringKey",
                      role: "the macro row's drawn word, which is also the field's accessibility name"),
+        // The food lane (Spanish round step 2, 2026-10-20): food-surface helpers and members that took
+        // their display text as `String`, so every literal behind them was drawn verbatim.
+        ForkedMember(path: "App/Fernlet/NutritionTargetsEditor.swift", declaration: "let unit: LocalizedStringKey",
+                     role: "the target row's unit ('cal', 'g')"),
+        ForkedMember(path: "App/Fernlet/NutritionTargetsEditor.swift", declaration: "private var footerText: LocalizedStringKey {",
+                     role: "the targets card's footnote, all four variants"),
+        ForkedMember(path: "App/Fernlet/NutritionTargetsEditor.swift", declaration: "private var lowTargetNote: LocalizedStringKey? {",
+                     role: "the low-target heads-up"),
+        ForkedMember(path: "App/Fernlet/FoodView.swift", declaration: "var value: LocalizedStringKey",
+                     role: "NutritionPill's value (its title is forked beside it)"),
+        ForkedMember(path: "App/Fernlet/FoodView.swift",
+                     declaration: "private func actionButton(label: LocalizedStringKey, systemImage: String, action: @escaping () -> Void) -> some View {",
+                     role: "the Import product screen's Find product page button"),
+        ForkedMember(path: "App/Fernlet/FoodView.swift", declaration: "private func detail(label: LocalizedStringKey, value: String) -> some View {",
+                     role: "the product review's Product / Website / Source URL captions"),
+        ForkedMember(path: "App/Fernlet/FoodView.swift", declaration: "private func secondaryActionLabel(_ title: LocalizedStringKey, icon: String) -> some View {",
+                     role: "the recipe page's Edit and Share buttons"),
+        ForkedMember(path: "App/Fernlet/FoodView.swift", declaration: "private var reviewMessage: LocalizedStringKey {",
+                     role: "the pre-log review sheet's line under its title"),
+        ForkedMember(path: "App/Fernlet/FoodView.swift", declaration: "private var displayNote: Text {",
+                     role: "the meal row's note line, and its From your recipe / Matched from your foods variants"),
+        ForkedMember(path: "App/Fernlet/NutritionLabelCameraSheet.swift",
+                     declaration: "private func detectedGroup<Content: View>(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {",
+                     role: "the label scan's Macros / Label details / Vitamins & minerals headings"),
+        ForkedMember(path: "App/Fernlet/NutritionLabelCameraSheet.swift",
+                     declaration: "private func detectedRow(_ label: LocalizedStringKey, _ value: String) -> some View {",
+                     role: "each detected value's name"),
+        ForkedMember(path: "App/Fernlet/NutritionLabelCameraSheet.swift", declaration: "let label: LocalizedStringKey",
+                     role: "the twenty-three label-detail and vitamin rows' names"),
+        ForkedMember(path: "App/Fernlet/FoodCaptureRouter.swift",
+                     declaration: "private func chooserRow( title: LocalizedStringKey, subtitle: LocalizedStringKey,",
+                     role: "the capture chooser's three targets and the AI-off explanation"),
+        ForkedMember(path: "App/Fernlet/MealPhotoPolaroid.swift", declaration: "let text: LocalizedStringKey",
+                     role: "the polaroid's on-your-other-device / couldn't-open placeholder line"),
+        ForkedMember(path: "App/Fernlet/MealPhotoPolaroid.swift", declaration: "let detail: LocalizedStringKey",
+                     role: "the meal photo detail's unavailable card"),
+        ForkedMember(path: "App/Fernlet/CookingMode.swift", declaration: "private func primaryButtonLabel(_ title: LocalizedStringKey) -> some View {",
+                     role: "cooking mode's Start cooking / I'm ready / Log this meal"),
+        ForkedMember(path: "App/Fernlet/CookingMode.swift", declaration: "private func secondaryLabel(_ title: LocalizedStringKey, icon: String) -> some View {",
+                     role: "cooking mode's Back"),
+        ForkedMember(path: "App/Fernlet/CookingMode.swift", declaration: "private var stageTitle: Text {",
+                     role: "cooking mode's Step N of M header"),
+        ForkedMember(path: "App/Fernlet/BarcodeScanView.swift", declaration: "var label: LocalizedStringKey",
+                     role: "the barcode screen's macro ring names, drawn and spoken"),
+        ForkedMember(path: "App/Fernlet/IngredientSubstitutionSheet.swift",
+                     declaration: "private func changeLine(label: LocalizedStringKey, text: String) -> some View {",
+                     role: "the swap preview's Was / Now captions"),
+        ForkedMember(path: "App/Fernlet/GroceryPlannerView.swift", declaration: "private var weekLabel: Text {",
+                     role: "the meal planner's week heading"),
         ForkedMember(path: "App/Fernlet/DestructiveConfirmation.swift",
                      declaration: "let title: LocalizedStringKey",
                      role: "every irreversible dialog's title"),

@@ -740,11 +740,13 @@ private struct NutritionTargetsSheet: View {
 
 /// A small labeled stat tile (title over value) for macro and calorie figures.
 ///
-/// Shared by the recipe detail's per-serving card and the web-product review sheet so nutrition
-/// numbers render identically wherever they appear.
+/// Shared by the recipe detail's per-serving card, the web-product review sheet and the nearby-share
+/// review so nutrition numbers render identically wherever they appear. Both halves are
+/// `LocalizedStringKey`: every caller passes a literal ("Protein", "\(grams)g"), and as `String` they
+/// were drawn verbatim and never reached the catalog.
 struct NutritionPill: View {
-    var title: String
-    var value: String
+    var title: LocalizedStringKey
+    var value: LocalizedStringKey
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -987,13 +989,17 @@ private struct RecipeImportSheet: View {
         // page's explicit "Re-import from source" affordance.
         if let existing = store.savedRecipe(matchingSourceURL: url) {
             existingRecipe = existing
-            notice = "\u{201C}\(existing.name)\u{201D} was already imported from this page."
+            let name = existing.name
+            notice = String(localized: "recipeImport.notice.alreadyImported",
+                            defaultValue: "\u{201C}\(name)\u{201D} was already imported from this page.",
+                            comment: "Import recipe screen: the pasted link is a recipe already in the book. The argument is that recipe's name.")
             return
         }
         existingRecipe = nil
 
         isImportingURL = true
-        notice = "Fetching recipe..."
+        notice = String(localized: "recipeImport.notice.fetching", defaultValue: "Fetching recipe...",
+                        comment: "Import recipe screen: shown while a pasted recipe link is being fetched")
 
         Task {
             do {
@@ -1005,7 +1011,9 @@ private struct RecipeImportSheet: View {
                 // a slow image host never delays the import feedback — and an image failure never
                 // fails the import (the store marks the one attempt either way).
                 Task { await store.fetchRecipeWebImageIfNeeded(for: recipe) }
-                notice = "\(importedRecipe.name) added to your recipes."
+                let name = importedRecipe.name
+                notice = String(localized: "recipeImport.notice.added", defaultValue: "\(name) added to your recipes.",
+                                comment: "Import recipe screen: a pasted recipe link was imported. The argument is the recipe's name.")
                 isImportingURL = false
                 do {
                     // A beat so the "added to your recipes" line can be read before the sheet goes.
@@ -1983,7 +1991,11 @@ struct RecipeSheet: View {
 
         var ingredient = ingredients[0]
         if ingredient.trimmedName.isEmpty {
-            ingredient.name = result.servingSize ?? "Scanned serving"
+            // A pre-fill the person sees in the field and saves as their own words, so it is written
+            // in their language; nothing reads it back as a token.
+            ingredient.name = result.servingSize
+                ?? String(localized: "recipeEditor.scannedIngredient.defaultName", defaultValue: "Scanned serving",
+                          comment: "Pre-filled name of a recipe ingredient read from a nutrition label that printed no serving size. The person can edit it.")
         }
         ingredient.quantity = 1
         ingredient.unit = RecipeUnit.serving.rawValue
@@ -1997,10 +2009,7 @@ struct RecipeSheet: View {
     }
 
     private func scannedRecipeName(from result: NutritionLabelResult) -> String {
-        if let servingSize = result.servingSize, servingSize.isEmpty == false {
-            return "Scanned item (\(servingSize))"
-        }
-        return "Scanned item"
+        ScannedItemName.prefill(servingSize: result.servingSize)
     }
 
     private static func inputs(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> [ManualRecipeIngredientInput] {
@@ -2843,7 +2852,7 @@ struct MealSheet: View {
         case .productPageImport:
             FoodProductPageImportView(store: store) { product in
                 description = product.name
-                notice = "\(product.name) was saved. Review the meal description, then save your meal."
+                notice = Self.productSavedNotice(product.name)
                 path.removeLast()
             }
         case .productSearch(let query):
@@ -2858,10 +2867,17 @@ struct MealSheet: View {
                 }
             ) { product in
                 description = product.name
-                notice = "\(product.name) was saved. Review the meal description, then save your meal."
+                notice = Self.productSavedNotice(product.name)
                 path.removeLast()
             }
         }
+    }
+
+    /// The composer's notice after a web product was saved from the Import screen.
+    private static func productSavedNotice(_ name: String) -> String {
+        String(localized: "mealComposer.notice.productSaved",
+               defaultValue: "\(name) was saved. Review the meal description, then save your meal.",
+               comment: "Log meal sheet: a packaged product was saved from the web and put in the description field. The argument is the product's name.")
     }
 
     /// The three sheets layered over the composer — pre-log review, the capture chooser, and the
@@ -3532,7 +3548,9 @@ struct MealSheet: View {
             return
         }
         didLogMeal = true
-        notice = "Your meal is logged, but its photo couldn't be saved to your private store."
+        notice = String(localized: "mealComposer.notice.photoNotSaved",
+                        defaultValue: "Your meal is logged, but its photo couldn't be saved to your private store.",
+                        comment: "Log meal sheet: the meal was logged but its photo failed to save on the device")
         FernletFeedback.system.play(.caveat)
     }
 
@@ -3617,7 +3635,9 @@ struct MealSheet: View {
             case .aiOff:
                 break
             case .nothingRecognized:
-                notice = "Fernlet couldn't quite tell what's in this photo — want to type what you ate instead?"
+                notice = String(localized: "mealComposer.notice.photoNotRecognized",
+                                defaultValue: "Fernlet couldn't quite tell what's in this photo — want to type what you ate instead?",
+                                comment: "Log meal sheet: Identify from photo found no food it could name")
                 FernletFeedback.system.play(.caveat)
             case .resolved(let described, let resolution):
                 description = described
@@ -3688,7 +3708,9 @@ struct MealSheet: View {
             if let payload, payload.isEmpty == false {
                 path.append(.captureBarcode(payload))
             } else {
-                captureError = "Fernlet couldn't spot a barcode in that photo. Steady hands and a little more light usually does it — or type it instead."
+                captureError = String(localized: "mealComposer.capture.noBarcode",
+                                      defaultValue: "Fernlet couldn't spot a barcode in that photo. Steady hands and a little more light usually does it — or type it instead.",
+                                      comment: "Log meal sheet: a captured photo, sent to barcode lookup, showed no readable barcode")
                 // B9: the photo is kept and the banner offers a way on — a caveat, never an error.
                 FernletFeedback.system.play(.caveat)
             }
@@ -3710,7 +3732,9 @@ struct MealSheet: View {
             if let parsed {
                 path.append(.captureLabel(parsed))
             } else {
-                captureError = "Fernlet couldn't read that label. Steady hands and a little more light usually does it — or type it instead."
+                captureError = String(localized: "mealComposer.capture.labelUnreadable",
+                                      defaultValue: "Fernlet couldn't read that label. Steady hands and a little more light usually does it — or type it instead.",
+                                      comment: "Log meal sheet: a captured photo, sent to the nutrition-label reader, gave no values")
                 // B9: as for the barcode — a calm way on, felt as a caveat, never an error.
                 FernletFeedback.system.play(.caveat)
             }
@@ -4059,8 +4083,12 @@ private struct FoodProductPageImportView: View {
     /// mode…") was a double negative naming a mode by a label the user may never have seen.
     private var webNutritionLookupDisabledMessage: String {
         store.settings.aiStatus == .off
-            ? "Web nutrition lookup is off. Turn on AI features and Web nutrition lookup in Settings to search the web."
-            : "Web nutrition lookup is off. Turn on Web nutrition lookup in Settings to search the web."
+            ? String(localized: "productImport.notice.lookupOffWithAI",
+                     defaultValue: "Web nutrition lookup is off. Turn on AI features and Web nutrition lookup in Settings to search the web.",
+                     comment: "Import product screen: web nutrition lookup is off and AI features are off too. Names the two Settings switches.")
+            : String(localized: "productImport.notice.lookupOff",
+                     defaultValue: "Web nutrition lookup is off. Turn on Web nutrition lookup in Settings to search the web.",
+                     comment: "Import product screen: web nutrition lookup is off. Names the Settings switch that turns it on.")
     }
 
     /// Records the web-nutrition lookup at DISPATCH with a provisional `.fellBack` outcome and returns the
@@ -4077,7 +4105,9 @@ private struct FoodProductPageImportView: View {
         )
     }
 
-    private func actionButton(label: String, systemImage: String, action: @escaping () -> Void) -> some View {
+    /// The screen's moss action. `LocalizedStringKey`: as a `String` its "Find product page" label was
+    /// drawn verbatim and never reached the catalog.
+    private func actionButton(label: LocalizedStringKey, systemImage: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(label, systemImage: systemImage)
                 .font(.fernlet(.label))
@@ -4230,9 +4260,12 @@ struct FoodProductReviewSheet: View {
         #endif
     }
 
-    private func detail(label: String, value: String) -> some View {
+    /// One caption-over-value row. The caption is a `LocalizedStringKey` uppercased by
+    /// `.textCase(.uppercase)` after the lookup; `String.uppercased()` on it drew English verbatim.
+    private func detail(label: LocalizedStringKey, value: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(label.uppercased())
+            Text(label)
+                .textCase(.uppercase)
                 .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
                 .tracking(0.8)
@@ -5509,7 +5542,8 @@ private struct MealReviewSheet: View {
         }
     }
 
-    private var reviewMessage: String {
+    /// The line under the title. `LocalizedStringKey`: as a `String` it was drawn verbatim.
+    private var reviewMessage: LocalizedStringKey {
         switch confidence {
         case .low:
             return "Fernlet wasn't sure this matched what you ate, so it's a rough estimate. Adjust anything that looks off, then log it."
@@ -6006,7 +6040,7 @@ struct RecipeDetailView: View {
                     PhotoCaptureControl(
                         onCameraCapture: { save($0) },
                         onLibraryPickData: { data, _ in saveLibraryData(data) },
-                        onLibraryPickFailed: { photoNotice = "Couldn't save this photo to your private store. Please try again." },
+                        onLibraryPickFailed: { photoNotice = Self.photoNotSavedNotice },
                         allowsLibraryChoice: true
                     ) {
                         photoIconChip("camera.fill")
@@ -6022,7 +6056,7 @@ struct RecipeDetailView: View {
             PhotoCaptureControl(
                 onCameraCapture: { save($0) },
                 onLibraryPickData: { data, _ in saveLibraryData(data) },
-                onLibraryPickFailed: { photoNotice = "Couldn't save this photo to your private store. Please try again." },
+                onLibraryPickFailed: { photoNotice = Self.photoNotSavedNotice },
                 allowsLibraryChoice: true
             ) {
                 HStack(spacing: 10) {
@@ -6396,7 +6430,8 @@ struct RecipeDetailView: View {
         }
     }
 
-    private func secondaryActionLabel(_ title: String, icon: String) -> some View {
+    /// The Edit / Share secondaries. `LocalizedStringKey`: as a `String` both labels were verbatim.
+    private func secondaryActionLabel(_ title: LocalizedStringKey, icon: String) -> some View {
         Label(title, systemImage: icon)
             .font(.fernlet(.label))
             .foregroundStyle(Color.moss)
@@ -6406,10 +6441,16 @@ struct RecipeDetailView: View {
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
     }
 
+    /// The inline line when a recipe photo couldn't be sealed (camera, library pick or its failure).
+    private static var photoNotSavedNotice: String {
+        String(localized: "recipeDetail.photo.notSaved",
+               defaultValue: "Couldn't save this photo to your private store. Please try again.",
+               comment: "Recipe page: the photo the person took or picked could not be saved on the device")
+    }
+
     /// "118 g · Bananas, raw", or "1 medium (118 g) · Bananas, raw" for a household choice (F4a).
     private func ingredientLine(_ ingredient: RecipeIngredient) -> String {
-        let name = resolvedItems[ingredient.foodItemId]?.name ?? "Ingredient"
-        return "\(ingredient.amountText) · \(name)"
+        RecipeIngredientLine.text(ingredient, name: resolvedItems[ingredient.foodItemId]?.name)
     }
 
     /// Whether the line's household amount is a USDA typical size rather than the food's own portion.
@@ -6422,7 +6463,7 @@ struct RecipeDetailView: View {
         // when it actually sealed to disk — otherwise a false success would show it, then it would vanish
         // on next open when the store read finds nothing.
         guard store.saveRecipePhoto(image, for: recipe.id) else {
-            photoNotice = "Couldn't save this photo to your private store. Please try again."
+            photoNotice = Self.photoNotSavedNotice
             return
         }
         photo = image
@@ -6433,7 +6474,7 @@ struct RecipeDetailView: View {
     /// then show the just-sealed (≤1600px) bytes rather than re-decoding the full-resolution original.
     private func saveLibraryData(_ data: Data) {
         guard store.saveRecipePhoto(data: data, for: recipe.id) else {
-            photoNotice = "Couldn't save this photo to your private store. Please try again."
+            photoNotice = Self.photoNotSavedNotice
             return
         }
         photoNotice = nil
@@ -6893,7 +6934,7 @@ private struct WebImportedFoodRow: View {
                         .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
                         .fernletWrappingText()
-                    Text(foodItem.brandSource ?? foodItem.sourceURL?.host() ?? "Saved web product")
+                    sourceLine
                         .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                         .lineLimit(1)
@@ -6915,6 +6956,12 @@ private struct WebImportedFoodRow: View {
         .padding(.vertical, 6)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Saved product \(foodItem.name)")
+    }
+
+    /// The brand or source host as data, else a localized stand-in (it used to fall back to English).
+    private var sourceLine: Text {
+        if let source = foodItem.brandSource ?? foodItem.sourceURL?.host() { return Text(verbatim: source) }
+        return Text("Saved web product")
     }
 }
 
@@ -7080,7 +7127,8 @@ struct RecipeBookSheet: View {
     /// same update but driving nothing but text.
     private func finishCreation(named recipeName: String) {
         isCreatingRecipe = false
-        createdNotice = "\u{201C}\(recipeName)\u{201D} added to your recipes."
+        createdNotice = String(localized: "recipeBook.notice.added", defaultValue: "\u{201C}\(recipeName)\u{201D} added to your recipes.",
+                               comment: "Recipe book: a recipe was just created or imported. The argument is its name, in quotation marks.")
         // "Log & save": the meal toast's sentence (with its Undo) is the one spoken.
         guard !createdRecipeWasLogged else {
             createdRecipeWasLogged = false

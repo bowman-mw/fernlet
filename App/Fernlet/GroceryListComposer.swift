@@ -33,9 +33,13 @@ extension FernletStore {
     }
 
     /// The share-sheet text for a set of selected recipes (Notes is the primary target — the share
-    /// sheet IS the push-to-Notes mechanism; there is no public Notes-write API, §11.3).
-    func groceryListText(for selections: [GrocerySelection], title: String = "Shopping list") -> String {
-        GroceryAggregation.plainText(groceryList(for: selections), title: title)
+    /// sheet IS the push-to-Notes mechanism; there is no public Notes-write API, §11.3). The heading
+    /// defaults to "Shopping list" in the person's language: the list is shared text for people, and
+    /// nothing parses it back.
+    func groceryListText(for selections: [GrocerySelection], title: String? = nil) -> String {
+        let heading = title ?? String(localized: "grocery.shareText.title", defaultValue: "Shopping list",
+                                      comment: "First line of the shopping list Fernlet shares to Notes or another app")
+        return GroceryAggregation.plainText(groceryList(for: selections), title: heading)
     }
 
     /// Resolves the recipe ids planned across a set of day rows into `GrocerySelection`s, unioning both

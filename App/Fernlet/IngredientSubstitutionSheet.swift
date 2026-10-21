@@ -293,7 +293,8 @@ struct IngredientSubstitutionSheet: View {
         }
     }
 
-    private func changeLine(label: String, text: String) -> some View {
+    /// One "Was" / "Now" line: the localized caption, then the ingredient line as data.
+    private func changeLine(label: LocalizedStringKey, text: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Text(label)
                 .font(.fernlet(.labelSmall))
