@@ -865,6 +865,138 @@
         }
       }
     },
+    "companionAccessory.flower" : {
+      "comment" : "Wardrobe: head accessory, a flower",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Flower"
+          }
+        }
+      }
+    },
+    "companionAccessory.glasses" : {
+      "comment" : "Wardrobe: face accessory, a pair of glasses",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Glasses"
+          }
+        }
+      }
+    },
+    "companionAccessory.none" : {
+      "comment" : "Wardrobe: no head accessory on the companion",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "None"
+          }
+        }
+      }
+    },
+    "companionAccessory.sprout" : {
+      "comment" : "Wardrobe: head accessory, a small leaf sprout",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sprout"
+          }
+        }
+      }
+    },
+    "companionBodyStyle.circle" : {
+      "comment" : "Wardrobe: companion body shape, a round circle",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Circle"
+          }
+        }
+      }
+    },
+    "companionBodyStyle.pear" : {
+      "comment" : "Wardrobe: companion body shape, pear-shaped",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pear"
+          }
+        }
+      }
+    },
+    "companionBodyStyle.puddle" : {
+      "comment" : "Wardrobe: companion body shape, low and spread out like a puddle",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Puddle"
+          }
+        }
+      }
+    },
+    "companionBodyStyle.softBlob" : {
+      "comment" : "Wardrobe: companion body shape, a soft rounded blob",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Soft"
+          }
+        }
+      }
+    },
+    "companionClothing.none" : {
+      "comment" : "Wardrobe: no clothing on the companion",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "None"
+          }
+        }
+      }
+    },
+    "companionClothing.scarf" : {
+      "comment" : "Wardrobe: clothing, a scarf",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Scarf"
+          }
+        }
+      }
+    },
+    "companionClothing.sleepCap" : {
+      "comment" : "Wardrobe: clothing, a nightcap for sleeping",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sleep cap"
+          }
+        }
+      }
+    },
     "companionColor.bark" : {
       "comment" : "Companion colour: dark brown",
       "extractionState" : "extracted_with_value",
@@ -1245,6 +1377,126 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Tired"
+          }
+        }
+      }
+    },
+    "companionPalette.fern" : {
+      "comment" : "Companion palette: light green",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fern"
+          }
+        }
+      }
+    },
+    "companionPalette.rose" : {
+      "comment" : "Companion palette: pink",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rose"
+          }
+        }
+      }
+    },
+    "companionPalette.slate" : {
+      "comment" : "Companion palette: blue-grey",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Slate"
+          }
+        }
+      }
+    },
+    "companionPalette.state" : {
+      "comment" : "Companion palette that follows the day's mood instead of a fixed colour",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mood"
+          }
+        }
+      }
+    },
+    "companionPalette.sun" : {
+      "comment" : "Companion palette: yellow",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sun"
+          }
+        }
+      }
+    },
+    "companionSideItem.book" : {
+      "comment" : "Wardrobe: item beside the companion, a book",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Book"
+          }
+        }
+      }
+    },
+    "companionSideItem.dumbbell" : {
+      "comment" : "Wardrobe: item beside the companion, a small dumbbell",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Weight"
+          }
+        }
+      }
+    },
+    "companionSideItem.mug" : {
+      "comment" : "Wardrobe: item beside the companion, a mug",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mug"
+          }
+        }
+      }
+    },
+    "companionSideItem.none" : {
+      "comment" : "Wardrobe: nothing held beside the companion",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "None"
+          }
+        }
+      }
+    },
+    "companionSideItem.waterBottle" : {
+      "comment" : "Wardrobe: item beside the companion, a water bottle",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bottle"
           }
         }
       }
@@ -28591,6 +28843,246 @@
         }
       }
     },
+    "goal.balanced.nutrition" : {
+      "comment" : "Goal card: how the Wellness, Mental Health and Exploring goals set daily nutrition",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Balanced maintenance · steady protein"
+          }
+        }
+      }
+    },
+    "goal.exploring.name" : {
+      "comment" : "Goal preset name: trying things out to learn what helps",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Exploring"
+          }
+        }
+      }
+    },
+    "goal.exploring.tagline" : {
+      "comment" : "Goal preset card: one-line description of the Exploring goal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Learn what feels useful."
+          }
+        }
+      }
+    },
+    "goal.exploring.training" : {
+      "comment" : "Goal card and Move tab: the training split the Exploring goal recommends",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Flexible splits based on what feels useful."
+          }
+        }
+      }
+    },
+    "goal.mentalHealth.name" : {
+      "comment" : "Goal preset name: mood and steadiness first",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mental Health"
+          }
+        }
+      }
+    },
+    "goal.mentalHealth.tagline" : {
+      "comment" : "Goal preset card: one-line description of the Mental Health goal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mood and steadiness first."
+          }
+        }
+      }
+    },
+    "goal.mentalHealth.training" : {
+      "comment" : "Goal card and Move tab: the training split the Mental Health goal recommends",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Gentle movement, cardio, and recovery anchors."
+          }
+        }
+      }
+    },
+    "goal.recovery.name" : {
+      "comment" : "Goal preset name: resting and recovering",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Recovery"
+          }
+        }
+      }
+    },
+    "goal.recovery.nutrition" : {
+      "comment" : "Goal card: how the Recovery goal sets daily nutrition",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Maintenance calories · easy on the body"
+          }
+        }
+      }
+    },
+    "goal.recovery.tagline" : {
+      "comment" : "Goal preset card: one-line description of the Recovery goal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rest, hydration, and gentle care."
+          }
+        }
+      }
+    },
+    "goal.recovery.training" : {
+      "comment" : "Goal card and Move tab: the training split the Recovery goal recommends",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Recovery-first movement with optional light strength."
+          }
+        }
+      }
+    },
+    "goal.sportsPrep.name" : {
+      "comment" : "Goal preset name: training for a sport",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sports Prep"
+          }
+        }
+      }
+    },
+    "goal.sportsPrep.nutrition" : {
+      "comment" : "Goal card: how the Sports Prep goal sets daily nutrition (grams of protein per kilogram of body weight)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fuelled for training · high protein (~1.6 g/kg)"
+          }
+        }
+      }
+    },
+    "goal.sportsPrep.tagline" : {
+      "comment" : "Goal preset card: one-line description of the Sports Prep goal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Train for your sport."
+          }
+        }
+      }
+    },
+    "goal.sportsPrep.training" : {
+      "comment" : "Goal card and Move tab: the training split the Sports Prep goal recommends",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sport-specific training with strength and conditioning."
+          }
+        }
+      }
+    },
+    "goal.strength.name" : {
+      "comment" : "Goal preset name: getting stronger",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Strength"
+          }
+        }
+      }
+    },
+    "goal.strength.nutrition" : {
+      "comment" : "Goal card: how the Strength goal sets daily nutrition (grams of protein per kilogram of body weight)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A little more to grow on · high protein (~1.7 g/kg)"
+          }
+        }
+      }
+    },
+    "goal.strength.tagline" : {
+      "comment" : "Goal preset card: one-line description of the Strength goal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fuel, train, and recover."
+          }
+        }
+      }
+    },
+    "goal.strength.training" : {
+      "comment" : "Goal card and Move tab: the training split the Strength goal recommends",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Upper, lower, and full-body days across the week."
+          }
+        }
+      }
+    },
+    "goal.weightManagement.name" : {
+      "comment" : "Goal preset name: managing body weight gently",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Weight Management"
+          }
+        }
+      }
+    },
     "goal.weightManagement.nutrition.default" : {
       "comment" : "Goal card: Weight Management at the default deficit. The argument is a percentage such as 10%",
       "extractionState" : "extracted_with_value",
@@ -28635,6 +29127,66 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "A gentle calorie deficit (up to %@, your choice) · higher protein"
+          }
+        }
+      }
+    },
+    "goal.weightManagement.tagline" : {
+      "comment" : "Goal preset card: one-line description of the Weight Management goal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Steady habits without pressure."
+          }
+        }
+      }
+    },
+    "goal.weightManagement.training" : {
+      "comment" : "Goal card and Move tab: the training split the Weight Management goal recommends",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Strength days mixed with cardio and recovery."
+          }
+        }
+      }
+    },
+    "goal.wellness.name" : {
+      "comment" : "Goal preset name: balanced everyday care",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Wellness"
+          }
+        }
+      }
+    },
+    "goal.wellness.tagline" : {
+      "comment" : "Goal preset card: one-line description of the Wellness goal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Balanced daily care."
+          }
+        }
+      }
+    },
+    "goal.wellness.training" : {
+      "comment" : "Goal card and Move tab: the training split the Wellness goal recommends",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Balanced strength, cardio, and rest days."
           }
         }
       }

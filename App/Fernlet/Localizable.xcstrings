@@ -160,9 +160,6 @@
         }
       }
     },
-    "%@ on this device, behind your app lock." : {
-
-    },
     "%@ plates" : {
       "comment" : "Location editor, Weights I have: a plate size's pair counter; the argument is the plate weight, e.g. 45 lb"
     },
@@ -486,16 +483,6 @@
     "%lld" : {
 
     },
-    "%lld %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld %2$@"
-          }
-        }
-      }
-    },
     "%lld / %lld" : {
       "localizations" : {
         "en" : {
@@ -639,9 +626,6 @@
 
     },
     "%lld envelopes" : {
-
-    },
-    "%lld events logged in Apple Health" : {
 
     },
     "%lld exercises · ~%lld min" : {
@@ -1104,9 +1088,6 @@
 
     },
     "1 entry" : {
-
-    },
-    "1 event logged in Apple Health" : {
 
     },
     "1 exercise · ~%lld min" : {
@@ -1759,6 +1740,15 @@
     "Ask your friend to show their code again — codes expire after a few minutes — and make sure you're scanning the person shown in this row." : {
 
     },
+    "Asked only if you turn on weather-aware recovery prompts." : {
+
+    },
+    "Asked the first time you log a workout or open a health feature." : {
+
+    },
+    "Asked when you first scan a nutrition label." : {
+
+    },
     "Asking phone" : {
 
     },
@@ -2193,6 +2183,9 @@
       "extractionState" : "manual"
     },
     "Cloud records" : {
+
+    },
+    "Coarse location" : {
 
     },
     "Code captured" : {
@@ -3413,6 +3406,9 @@
     "Fernlet asks for Health access only when a feature needs it." : {
 
     },
+    "Fernlet avoids streaks, ranking, and body-goal pressure." : {
+
+    },
     "Fernlet can also delete the entries it wrote to Apple Health — that's the second button below. It can only ever delete its own; everything else in Apple Health is yours to delete in the Health app." : {
 
     },
@@ -3436,16 +3432,6 @@
     },
     "Fernlet companion" : {
 
-    },
-    "Fernlet couldn't check your age with Apple, so this is your word for it. Only confirm if you really are %lld or older — %@ is meant for people that age and up." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Fernlet couldn't check your age with Apple, so this is your word for it. Only confirm if you really are %1$lld or older — %2$@ is meant for people that age and up."
-          }
-        }
-      }
     },
     "Fernlet couldn't confirm who it was sending to, so no heart was sent." : {
 
@@ -3808,6 +3794,9 @@
 
     },
     "Friends and blocks" : {
+
+    },
+    "Friends and helpers only see data you explicitly share." : {
 
     },
     "Friends can browse what you've designed." : {
@@ -4578,6 +4567,9 @@
           }
         }
       }
+    },
+    "Just on this device" : {
+
     },
     "Just the bar" : {
       "comment" : "Guided workout, Plates: the weight is the empty bar, with no plates on it.",
@@ -5499,6 +5491,9 @@
     "No score — nothing was logged" : {
 
     },
+    "No shame loops" : {
+
+    },
     "No shops right now. Spend time with a friend and their shop opens here for an hour after you part." : {
 
     },
@@ -5631,6 +5626,12 @@
     },
     "Nothing is hidden. In a plan's Edit sheet, tap Don't suggest on an exercise to keep it out of your plans." : {
       "comment" : "Your exercises: the empty hidden list"
+    },
+    "Nothing leaves this phone — logs here won't sync to your other devices. You can turn on iCloud later in Settings." : {
+
+    },
+    "Nothing leaves this phone. The data already in this iCloud account won't be merged in, and logs here won't sync to your other devices. You can turn on iCloud later in Settings." : {
+
     },
     "Nothing planned yet — I can put something together." : {
 
@@ -6351,6 +6352,9 @@
     "Privacy Policy" : {
 
     },
+    "Private by default" : {
+
+    },
     "Private database sync for daily logs across your Fernlet devices." : {
 
     },
@@ -6966,6 +6970,20 @@
     "Restore anyway" : {
       "comment" : "Privacy & Data: restore an older Sealed backup (journal or intimate logs) anyway."
     },
+    "Restore from iCloud" : {
+
+    },
+    "Restore from iCloud — we found ^[%lld meal log](inflect: true), ^[%lld journal entry](inflect: true), ^[%lld workout](inflect: true) from a previous device." : {
+      "comment" : "Onboarding storage card when this iCloud account already holds Fernlet data. Arguments: the meal-log, journal-entry and workout counts found.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Restore from iCloud — we found ^[%1$lld meal log](inflect: true), ^[%2$lld journal entry](inflect: true), ^[%3$lld workout](inflect: true) from a previous device."
+          }
+        }
+      }
+    },
     "Restore it here" : {
       "comment" : "Privacy & Data: add another iPhone's Sealed backup (journal or intimate logs) to this iPhone."
     },
@@ -7536,6 +7554,9 @@
     },
     "Severe" : {
       "comment" : "Injury picker option: leave this body area's exercises out"
+    },
+    "Sex" : {
+
     },
     "Shakespeare Steps" : {
       "comment" : "Silly stat title: steps compared with words Shakespeare wrote"
@@ -8602,6 +8623,9 @@
     "Today key: %@" : {
 
     },
+    "Today so far" : {
+
+    },
     "Today · %@" : {
 
     },
@@ -8819,6 +8843,9 @@
 
     },
     "Type to find a replacement food." : {
+
+    },
+    "Typical activity" : {
 
     },
     "USDA macros" : {
@@ -9377,6 +9404,9 @@
         }
       }
     },
+    "Yesterday" : {
+
+    },
     "Yesterday %@" : {
 
     },
@@ -9408,6 +9438,9 @@
 
     },
     "You can skip this. Without a passcode, Private opens with a tap." : {
+
+    },
+    "You choose what to share" : {
 
     },
     "You did “%@” before — it might feel good again." : {
@@ -9549,6 +9582,9 @@
     "You: %@" : {
 
     },
+    "Your %@" : {
+      "comment" : "Day review heading for a past day, e.g. 'Your Tuesday'. The argument is the weekday's name."
+    },
     "Your CPD is %@. Scientists (me) are thrilled." : {
       "comment" : "Companion line about cookies per day"
     },
@@ -9600,7 +9636,10 @@
     "Your cycle, at a glance." : {
 
     },
-    "Your cycles vary by about ±%lld days." : {
+    "Your cycles vary by about ±^[%lld day](inflect: true)." : {
+
+    },
+    "Your daily logs are saved to iCloud and appear on your other Fernlet devices." : {
 
     },
     "Your data" : {
@@ -9643,6 +9682,9 @@
 
     },
     "Your iCloud copy" : {
+
+    },
+    "Your intimacy data stays on this device, behind your app lock." : {
 
     },
     "Your intimate log backup didn't finish. It will try again when you next open Private." : {
@@ -9742,6 +9784,15 @@
 
     },
     "Your own provider endpoint" : {
+
+    },
+    "Your period and intimacy data stay on this device, behind your app lock." : {
+
+    },
+    "Your period data stays on this device, behind your app lock." : {
+
+    },
+    "Your personal logs stay in your own storage unless you choose iCloud sync." : {
 
     },
     "Your photo shelf is nearly full" : {
@@ -9940,6 +9991,9 @@
     "^[%lld concert](inflect: true)" : {
       "comment" : "Silly stat headline: showers, as concerts"
     },
+    "^[%lld event](inflect: true) logged in Apple Health" : {
+      "comment" : "Cycle day detail: intimacy events Apple Health holds for the day with no note in Fernlet, e.g. '2 events logged in Apple Health'"
+    },
     "^[%lld ingredient](inflect: true) not counted in this estimate" : {
 
     },
@@ -9987,6 +10041,174 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "a little low"
+          }
+        }
+      }
+    },
+    "ageGate.chat.available" : {
+      "comment" : "Settings: messaging friends nearby is unlocked (not normally shown).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Messaging friends nearby is available."
+          }
+        }
+      }
+    },
+    "ageGate.chat.below" : {
+      "comment" : "Settings: messaging friends nearby is locked because Apple placed the user below the minimum age. The argument is the age (13).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Messaging friends nearby is available at %lld and older."
+          }
+        }
+      }
+    },
+    "ageGate.chat.communicationLimits" : {
+      "comment" : "Settings: messaging friends nearby is locked by a guardian's communication limits (Screen Time).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Messaging friends nearby is turned off because communication limits are set for this Apple Account. Whoever manages it can change that in Screen Time."
+          }
+        }
+      }
+    },
+    "ageGate.chat.confirmWarning" : {
+      "comment" : "Alert body before a user confirms their own age to message friends nearby (not normally shown: this feature offers no manual confirmation). The argument is the minimum age (13).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet couldn't check your age with Apple, so this is your word for it. Only confirm if you really are %lld or older — messaging friends nearby is meant for people that age and up."
+          }
+        }
+      }
+    },
+    "ageGate.chat.needsSystemCheck" : {
+      "comment" : "Settings: messaging friends nearby needs Apple's age check; there is no manual confirmation. The argument is the age (13).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Messaging friends nearby is for people %lld and older, and Fernlet needs Apple to confirm your age range before turning it on. Your birthday is never shared."
+          }
+        }
+      }
+    },
+    "ageGate.chat.unclearAnswer" : {
+      "comment" : "Settings: Apple's age answer was too vague to unlock messaging friends nearby (not normally shown: this gate takes the needs-system-check wording). The argument is the age (13).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Messaging friends nearby needs an age check, and Apple's answer wasn't specific enough to confirm you're %lld or older."
+          }
+        }
+      }
+    },
+    "ageGate.chat.unknownAge" : {
+      "comment" : "Settings: messaging friends nearby is locked until the user's age is checked (not normally shown: this gate takes the needs-system-check wording). The argument is the age (13).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Messaging friends nearby is for people %lld and older. Fernlet doesn't know your age yet — Apple can confirm your age range without sharing your birthday."
+          }
+        }
+      }
+    },
+    "ageGate.intimacy.available" : {
+      "comment" : "Settings: intimacy tracking is unlocked (not normally shown).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intimacy tracking is available."
+          }
+        }
+      }
+    },
+    "ageGate.intimacy.below" : {
+      "comment" : "Settings: intimacy tracking is locked because Apple placed the user below the minimum age. The argument is the age (16).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intimacy tracking is available at %lld and older."
+          }
+        }
+      }
+    },
+    "ageGate.intimacy.communicationLimits" : {
+      "comment" : "Settings: intimacy tracking is locked by a guardian's communication limits (not normally shown).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intimacy tracking is turned off because communication limits are set for this Apple Account. Whoever manages it can change that in Screen Time."
+          }
+        }
+      }
+    },
+    "ageGate.intimacy.confirmWarning" : {
+      "comment" : "Alert body before a user confirms their own age to turn on intimacy tracking. The argument is the minimum age (16).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet couldn't check your age with Apple, so this is your word for it. Only confirm if you really are %lld or older — intimacy tracking is meant for people that age and up."
+          }
+        }
+      }
+    },
+    "ageGate.intimacy.needsSystemCheck" : {
+      "comment" : "Settings: intimacy tracking needs Apple's age check (not normally shown). The argument is the age (16).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intimacy tracking is for people %lld and older, and Fernlet needs Apple to confirm your age range before turning it on. Your birthday is never shared."
+          }
+        }
+      }
+    },
+    "ageGate.intimacy.unclearAnswer" : {
+      "comment" : "Settings: Apple's age answer was too vague to unlock intimacy tracking. The argument is the age (16).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intimacy tracking needs an age check, and Apple's answer wasn't specific enough to confirm you're %lld or older."
+          }
+        }
+      }
+    },
+    "ageGate.intimacy.unknownAge" : {
+      "comment" : "Settings: intimacy tracking is locked until the user's age is checked. The argument is the age (16).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intimacy tracking is for people %lld and older. Fernlet doesn't know your age yet — Apple can confirm your age range without sharing your birthday."
           }
         }
       }
@@ -10041,6 +10263,90 @@
     },
     "cm" : {
 
+    },
+    "companion.thought.eatingLight" : {
+      "comment" : "Companion thought bubble (no on-device AI): the user has been eating less recently",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nutrition has been lighter lately. One nourishing meal is enough."
+          }
+        }
+      }
+    },
+    "companion.thought.energyLow" : {
+      "comment" : "Companion thought bubble (no on-device AI): the user's energy has been low recently",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Energy has been low lately. Rest counts as care."
+          }
+        }
+      }
+    },
+    "companion.thought.energyRising" : {
+      "comment" : "Companion thought bubble (no on-device AI): the user's energy has been rising",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Something has been building. Notice the upward pull."
+          }
+        }
+      }
+    },
+    "companion.thought.moodImproving" : {
+      "comment" : "Companion thought bubble (no on-device AI): the user's mood has been improving",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The mood trend has been moving upward. Quiet progress."
+          }
+        }
+      }
+    },
+    "companion.thought.moodNeedsGentleness" : {
+      "comment" : "Companion thought bubble (no on-device AI): the recent days held some harder moods",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Some harder days in the window. Notice what is still steady."
+          }
+        }
+      }
+    },
+    "companion.thought.ordinary" : {
+      "comment" : "Companion thought bubble (no on-device AI): nothing stands out in the recent signals",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A few ordinary care notes are here. Keep the day simple."
+          }
+        }
+      }
+    },
+    "companion.thought.readyForLight" : {
+      "comment" : "Companion thought bubble (no on-device AI): today suits light movement",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Today looks like a day to move gently and restore."
+          }
+        }
+      }
     },
     "completed" : {
 
@@ -10411,6 +10717,174 @@
         }
       }
     },
+    "cycle.phase.follicular" : {
+      "comment" : "Menstrual-cycle phase name, shown alone: after the period, before ovulation",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Follicular"
+          }
+        }
+      }
+    },
+    "cycle.phase.inSentence.follicular" : {
+      "comment" : "Cycle phase word inside 'during your %@ phase' (follicular), lower-case mid-sentence",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "follicular"
+          }
+        }
+      }
+    },
+    "cycle.phase.inSentence.luteal" : {
+      "comment" : "Cycle phase word inside 'during your %@ phase' (luteal), lower-case mid-sentence",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "luteal"
+          }
+        }
+      }
+    },
+    "cycle.phase.inSentence.menstrual" : {
+      "comment" : "Cycle phase word inside 'during your %@ phase' (menstrual), lower-case mid-sentence",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "menstrual"
+          }
+        }
+      }
+    },
+    "cycle.phase.inSentence.ovulatory" : {
+      "comment" : "Cycle phase word inside 'during your %@ phase' (ovulatory), lower-case mid-sentence",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "ovulatory"
+          }
+        }
+      }
+    },
+    "cycle.phase.inSentence.unknown" : {
+      "comment" : "Cycle phase word inside 'during your %@ phase' when the phase is not known (not normally shown)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "unknown"
+          }
+        }
+      }
+    },
+    "cycle.phase.luteal" : {
+      "comment" : "Menstrual-cycle phase name, shown alone: after ovulation, before the next period",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Luteal"
+          }
+        }
+      }
+    },
+    "cycle.phase.menstrual" : {
+      "comment" : "Menstrual-cycle phase name, shown alone: the period itself",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Menstrual"
+          }
+        }
+      }
+    },
+    "cycle.phase.ovulatory" : {
+      "comment" : "Menstrual-cycle phase name, shown alone: around ovulation",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ovulatory"
+          }
+        }
+      }
+    },
+    "cycle.phase.unknown" : {
+      "comment" : "Shown in place of a cycle phase when Fernlet cannot place the day in the cycle",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unknown"
+          }
+        }
+      }
+    },
+    "cycle.prediction.confidence.building" : {
+      "comment" : "Predictions card chip: the prediction is getting more reliable as cycles are logged",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Building confidence"
+          }
+        }
+      }
+    },
+    "cycle.prediction.confidence.high" : {
+      "comment" : "Predictions card chip: the next-period prediction is reliable",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "High confidence"
+          }
+        }
+      }
+    },
+    "cycle.prediction.confidence.low" : {
+      "comment" : "Predictions card chip: the next-period prediction is uncertain",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Low confidence"
+          }
+        }
+      }
+    },
+    "cycle.prediction.range" : {
+      "comment" : "Predictions card: the likely window for the next period, e.g. 'Oct 3 – Oct 7'. Arguments: the first and last day.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ – %2$@"
+          }
+        }
+      }
+    },
     "cycle.sample.unknownValue" : {
       "comment" : "Shown in place of a cycle sample's value when the recorded value is one Fernlet has no wording for.",
       "extractionState" : "extracted_with_value",
@@ -10419,6 +10893,246 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Unknown"
+          }
+        }
+      }
+    },
+    "cycle.symptom.acne" : {
+      "comment" : "Period symptom: acne breakouts",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Acne"
+          }
+        }
+      }
+    },
+    "cycle.symptom.backPain" : {
+      "comment" : "Period symptom: lower back pain",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Back pain"
+          }
+        }
+      }
+    },
+    "cycle.symptom.bloating" : {
+      "comment" : "Period symptom: bloating",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bloating"
+          }
+        }
+      }
+    },
+    "cycle.symptom.breastTenderness" : {
+      "comment" : "Period symptom: sore or tender breasts",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Breast tenderness"
+          }
+        }
+      }
+    },
+    "cycle.symptom.cramps" : {
+      "comment" : "Period symptom: menstrual cramps",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cramps"
+          }
+        }
+      }
+    },
+    "cycle.symptom.fatigue" : {
+      "comment" : "Period symptom: tiredness, low energy",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fatigue"
+          }
+        }
+      }
+    },
+    "cycle.symptom.foodCravings" : {
+      "comment" : "Period symptom: food cravings",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Food cravings"
+          }
+        }
+      }
+    },
+    "cycle.symptom.headache" : {
+      "comment" : "Period symptom: headache",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Headache"
+          }
+        }
+      }
+    },
+    "cycle.symptom.moodSwings" : {
+      "comment" : "Period symptom: mood swings",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mood swings"
+          }
+        }
+      }
+    },
+    "cycle.symptom.withIntensity" : {
+      "comment" : "Cycle day detail: a symptom chip with the 1–10 intensity the user gave it, e.g. 'Cramps · 6'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$lld"
+          }
+        }
+      }
+    },
+    "cycle.trend.exercise.better" : {
+      "comment" : "Cycle page trend: the user usually moves more in this phase. The argument is the phase word, e.g. 'follicular'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Movement tends to pick up during your %@ phase."
+          }
+        }
+      }
+    },
+    "cycle.trend.exercise.worse" : {
+      "comment" : "Cycle page trend: the user usually moves less in this phase. The argument is the phase word, e.g. 'menstrual'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Movement tends to ease off during your %@ phase."
+          }
+        }
+      }
+    },
+    "cycle.trend.mood.better" : {
+      "comment" : "Cycle page trend: mood is usually brighter in this phase. The argument is the phase word, e.g. 'follicular'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mood tends to lift during your %@ phase."
+          }
+        }
+      }
+    },
+    "cycle.trend.mood.worse" : {
+      "comment" : "Cycle page trend: mood is usually lower in this phase. The argument is the phase word, e.g. 'luteal'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mood tends to be tender during your %@ phase."
+          }
+        }
+      }
+    },
+    "cycle.trend.nutrition.better" : {
+      "comment" : "Cycle page trend: the user usually eats more steadily in this phase. The argument is the phase word, e.g. 'follicular'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Eating tends to feel steadier during your %@ phase."
+          }
+        }
+      }
+    },
+    "cycle.trend.nutrition.worse" : {
+      "comment" : "Cycle page trend: the user usually eats less in this phase. The argument is the phase word, e.g. 'menstrual'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Eating tends to get lighter during your %@ phase."
+          }
+        }
+      }
+    },
+    "cycle.trend.sleep.better" : {
+      "comment" : "Cycle page trend: sleep is usually better in this phase. The argument is the phase word, e.g. 'luteal'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sleep tends to be steadier during your %@ phase."
+          }
+        }
+      }
+    },
+    "cycle.trend.sleep.worse" : {
+      "comment" : "Cycle page trend: sleep is usually worse in this phase. The argument is the phase word, e.g. 'luteal'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sleep tends to dip during your %@ phase."
+          }
+        }
+      }
+    },
+    "cycle.trend.symptoms.better" : {
+      "comment" : "Cycle page trend: fewer symptoms are usually logged in this phase. The argument is the phase word, e.g. 'follicular'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Symptoms tend to settle during your %@ phase."
+          }
+        }
+      }
+    },
+    "cycle.trend.symptoms.worse" : {
+      "comment" : "Cycle page trend: more symptoms are usually logged in this phase. The argument is the phase word, e.g. 'luteal'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Symptoms tend to gather during your %@ phase."
           }
         }
       }
@@ -10983,6 +11697,747 @@
         }
       }
     },
+    "journal.dailyPrompt.body.1" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (a body check-in), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Where in your body do you feel today the most?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.body.2" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (a body check-in), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What did your body do for you today that deserves a thank-you?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.body.3" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (a body check-in), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "How tired are you, honestly? What kind of tired is it?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.body.4" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (a body check-in), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What would feel kind to your body right now?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.body.5" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (a body check-in), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "When did you feel most at ease in your body today?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.body.6" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (a body check-in), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's one thing your body has been quietly asking for?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.emotions.1" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (naming a feeling), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "If today had a weather report, what would it say?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.emotions.2" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (naming a feeling), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What feeling visited you most today? No need to explain it."
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.emotions.3" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (naming a feeling), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Was there a moment today when your mood shifted? What was nearby?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.emotions.4" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (naming a feeling), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's one word for how you feel right now — and one for how you'd like to feel tomorrow?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.emotions.5" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (naming a feeling), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Is anything sitting a little heavy tonight? You can just name it and stop there."
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.emotions.6" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (naming a feeling), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What did you feel today that you didn't say out loud?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.gratitude.1" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (gratitude), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's one small thing today that you'd quietly like to keep?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.gratitude.2" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (gratitude), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Who made your day a little lighter — even in a tiny way?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.gratitude.3" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (gratitude), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Name something ordinary that worked today. The kettle counts."
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.gratitude.4" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (gratitude), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's something your past self set up that today-you got to enjoy?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.gratitude.5" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (gratitude), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What made you smile today, even for a second?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.gratitude.6" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (gratitude), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's one comfort you usually overlook?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.kindness.1" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (self-kindness), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What would you say to a friend who had your day?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.kindness.10" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (self-kindness), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's something kind you hope tomorrow brings you?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.kindness.2" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (self-kindness), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What are you allowed to stop carrying tonight?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.kindness.3" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (self-kindness), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's one gentle thing you could forgive yourself for today?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.kindness.4" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (self-kindness), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "If today was a lot, what's one soft thing you can give yourself this evening?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.kindness.5" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (self-kindness), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What do you need more of tomorrow — rest, quiet, company, or something else?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.kindness.6" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (self-kindness), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's something you did today that was enough, exactly as it was?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.kindness.7" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (self-kindness), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's one expectation you could set down for a while?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.kindness.8" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (self-kindness), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "How did you take care of yourself today, even accidentally?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.kindness.9" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (self-kindness), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What would 'being on your own side' look like tonight?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.pleasures.1" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (small pleasures), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What tasted, sounded, or smelled good today?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.pleasures.2" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (small pleasures), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's the coziest moment you had today?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.pleasures.3" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (small pleasures), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Did anything today feel like a small gift you didn't ask for?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.pleasures.4" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (small pleasures), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's something you saw today that you'd point out to a friend?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.pleasures.5" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (small pleasures), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What little routine felt good today?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.pleasures.6" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (small pleasures), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "If you could bottle one minute from today, which one?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.wins.1" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (tiny wins), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's something small you handled today that no one saw?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.wins.2" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (tiny wins), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What did you do today that was slightly hard — and you did it anyway?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.wins.3" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (tiny wins), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Name one thing you finished today, however small."
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.wins.4" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (tiny wins), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What went a little better today than it did last time?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.wins.5" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (tiny wins), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's a tiny choice you made today that you're glad about?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.wins.6" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (tiny wins), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What did you show up for today, even without feeling like it?"
+          }
+        }
+      }
+    },
+    "journal.day.blurb.empty" : {
+      "comment" : "Day review line for a day with nothing logged. 'Edit day' is the button at the top right of the screen.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nothing logged yet. Tap \"Edit day\" to add missed details."
+          }
+        }
+      }
+    },
+    "journal.day.blurb.feeling.bright" : {
+      "comment" : "Day review line item: the day's journal feeling was Bright",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Feeling bright"
+          }
+        }
+      }
+    },
+    "journal.day.blurb.feeling.good" : {
+      "comment" : "Day review line item: the day's journal feeling was Good",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Feeling good"
+          }
+        }
+      }
+    },
+    "journal.day.blurb.feeling.hard" : {
+      "comment" : "Day review line item: the day's journal feeling was Hard (a hard day)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Feeling hard"
+          }
+        }
+      }
+    },
+    "journal.day.blurb.feeling.neutral" : {
+      "comment" : "Day review line item: the day's journal feeling was Neutral",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Feeling neutral"
+          }
+        }
+      }
+    },
+    "journal.day.blurb.feeling.quiet" : {
+      "comment" : "Day review line item: the day's journal feeling was Quiet",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Feeling quiet"
+          }
+        }
+      }
+    },
+    "journal.day.blurb.feeling.tired" : {
+      "comment" : "Day review line item: the day's journal feeling was Tired",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Feeling tired"
+          }
+        }
+      }
+    },
+    "journal.day.blurb.meals" : {
+      "comment" : "Day review: how many meals were logged that day, e.g. '2 meals'. Plural-ruled in the catalog.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld meal"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld meals"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "journal.day.blurb.sleep.good" : {
+      "comment" : "Day review line item: the night's sleep was logged as Good",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "good sleep"
+          }
+        }
+      }
+    },
+    "journal.day.blurb.sleep.great" : {
+      "comment" : "Day review line item: the night's sleep was logged as Great",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "great sleep"
+          }
+        }
+      }
+    },
+    "journal.day.blurb.sleep.ok" : {
+      "comment" : "Day review line item: the night's sleep was logged as Ok",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "ok sleep"
+          }
+        }
+      }
+    },
+    "journal.day.blurb.sleep.poor" : {
+      "comment" : "Day review line item: the night's sleep was logged as Poor",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "poor sleep"
+          }
+        }
+      }
+    },
+    "journal.day.blurb.workouts" : {
+      "comment" : "Day review: how many workouts were logged, e.g. 'a workout', '2 workouts'. Plural-ruled in the catalog; the English one-form reads 'a workout'.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "a workout"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld workouts"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "journal.day.bottleCount" : {
+      "comment" : "How many bottles of water were logged that day, e.g. '3 bottles'. Plural-ruled in the catalog.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld bottle"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld bottles"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "journal.day.micronutrient.limit" : {
+      "comment" : "Day review micronutrient row: the daily ceiling, e.g. 'limit 2300mg'. The argument is the amount with its unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "limit %@"
+          }
+        }
+      }
+    },
+    "journal.day.micronutrient.saturatedFat" : {
+      "comment" : "Day review micronutrient row: saturated fat, shown against its daily limit",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Saturated fat"
+          }
+        }
+      }
+    },
+    "journal.day.micronutrient.sodium" : {
+      "comment" : "Day review micronutrient row: sodium, shown against its daily limit",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sodium"
+          }
+        }
+      }
+    },
+    "journal.day.micronutrient.sugar" : {
+      "comment" : "Day review micronutrient row: total sugar, shown against a daily limit",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sugar"
+          }
+        }
+      }
+    },
+    "journal.day.micronutrient.target" : {
+      "comment" : "Day review micronutrient row: the daily goal, e.g. 'target 28g'. The argument is the amount with its unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "target %@"
+          }
+        }
+      }
+    },
     "journal.prompt.limitReached.message" : {
       "comment" : "Banner over the journal editor when the entry reaches its 800-character limit; Moments is Apple's journaling app.",
       "extractionState" : "extracted_with_value",
@@ -11084,6 +12539,54 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "last time %1$lld by %2$@ at %3$@"
+          }
+        }
+      }
+    },
+    "launch.status.checkingIn" : {
+      "comment" : "Launch screen status line while Fernlet opens (the first one shown)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Checking in with your body..."
+          }
+        }
+      }
+    },
+    "launch.status.gettingReady" : {
+      "comment" : "Launch screen status line while Fernlet opens (the last one shown)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Getting Fernlet ready..."
+          }
+        }
+      }
+    },
+    "launch.status.preparingSummary" : {
+      "comment" : "Launch screen status line while Fernlet opens (third)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Preparing your day summary..."
+          }
+        }
+      }
+    },
+    "launch.status.readingPatterns" : {
+      "comment" : "Launch screen status line while Fernlet opens (second)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Reading your recent patterns..."
           }
         }
       }
@@ -11282,6 +12785,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Choose a flow level to mark the first day of your cycle."
+          }
+        }
+      }
+    },
+    "logPeriod.validation.temperatureRange" : {
+      "comment" : "Shown above Save on the period log sheet when the basal body temperature is outside the plausible range. Arguments: the lowest and highest accepted values, then the unit letter (F or C).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Enter a temperature between %1$lld and %2$lld %3$@, or leave it blank."
           }
         }
       }
@@ -11546,6 +13061,18 @@
     "of %lldg" : {
 
     },
+    "onboarding.step.index" : {
+      "comment" : "Onboarding progress caption, e.g. '3 of 8'. Arguments: this step's number, then the number of steps.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld"
+          }
+        }
+      }
+    },
     "optional — we'll read the macros for you" : {
 
     },
@@ -11737,6 +13264,54 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "White"
+          }
+        }
+      }
+    },
+    "photowall.caption.meal" : {
+      "comment" : "Home photo wall: a polaroid's handwritten caption when no memory names it. Lower-case, like a scribbled label.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "meal"
+          }
+        }
+      }
+    },
+    "photowall.caption.moment" : {
+      "comment" : "Home photo wall: a polaroid's handwritten caption when no memory names it. Lower-case, like a scribbled label.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "moment"
+          }
+        }
+      }
+    },
+    "photowall.caption.morning" : {
+      "comment" : "Home photo wall: a polaroid's handwritten caption when no memory names it. Lower-case, like a scribbled label.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "morning"
+          }
+        }
+      }
+    },
+    "photowall.caption.movement" : {
+      "comment" : "Home photo wall: a polaroid's handwritten caption when no memory names it. Lower-case, like a scribbled label.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "movement"
           }
         }
       }
@@ -12484,6 +14059,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "That one didn't quite lift just now — try again in a moment."
+          }
+        }
+      }
+    },
+    "worryBox.undo.keep" : {
+      "comment" : "Worry Box undo strip: keeps a worry the user just released, before it is deleted for good",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Keep it"
           }
         }
       }

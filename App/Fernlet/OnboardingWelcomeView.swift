@@ -37,7 +37,10 @@ struct OnboardingWelcomeView: View {
         .accessibilityIdentifier("onboarding.welcome")
     }
 
-    private func privacyRow(_ systemImage: String, title: String, body: String) -> some View {
+    /// One privacy pillar. `LocalizedStringKey`, not `String`: every caller passes authored literals,
+    /// and the `String` this took sent all six through `Text`'s verbatim overload, so the first
+    /// screen of the app was English in every language.
+    private func privacyRow(_ systemImage: String, title: LocalizedStringKey, body: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: 12) {
             // Decorative next to a title and body that already say what the row means — without
             // this the row announces the raw SF Symbol name ("heart text square fill", "lock

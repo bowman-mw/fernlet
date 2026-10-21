@@ -119,11 +119,13 @@
 //     (7), the settings-row name and the sentence describing what each capability reads and writes.
 //     The module's four `HealthKitServiceError` sentences were localized by the sweep and are the
 //     worked example for the rest; these are straightforward forks with a catalog now waiting.
-//   * `PrivateHealthStore`-adjacent copy — `PeriodFlowLevel.title` (`rawValue.capitalized`),
-//     `CycleDayEntry.flowLabel`, and the Tier-2 memory CATEGORY rendered by `SettingsSheet`. These
-//     are sealed modules and deliberately have NO catalog: the fork belongs at the app-target
-//     caller, as `PeriodFlowLevel.displayName` in `CycleTrackerView.swift` now demonstrates for the
-//     two cycle sites. The memory category is the remaining one.
+//   * `PrivateHealthStore`-adjacent copy — the Tier-2 memory CATEGORY rendered by `SettingsSheet`.
+//     These are sealed modules and deliberately have NO catalog: the fork belongs at the app-target
+//     caller. Every drawn word of the sealed cycle vocabulary now has one in `CycleTrackerView.swift`
+//     — `PeriodFlowLevel`, `CervicalMucusQuality` and `OvulationTestResult`, then (Spanish round,
+//     2026-10-20) `PeriodSymptom.displayName` and `CyclePhase.displayName` / `inSentenceName` — and
+//     the sealed `title`s are left in place with no on-screen reader
+//     (`theCycleSurfacesNeverDrawTheSealedTitles`). The memory category is the remaining one.
 //
 // Part G's allowlist is now EMPTY, and that is the finished state. It held `MessageTransportProbe`'s
 // three sentences on the argument that their target owned no catalog; rule H2 gave the Messages
@@ -3184,6 +3186,274 @@ struct LocalizationBoundaryTests {
                 """
             )
         }
+    }
+
+    // MARK: - F3. Spanish round, journal lane (2026-10-20)
+
+    /// Keys the Spanish round's journal lane put into a catalog: journal, cycle, onboarding and
+    /// companion copy that was a bare English literal (a `String` helper parameter, a `String`
+    /// display property, or an English plural spliced in code) before this round.
+    ///
+    /// Kept apart from ``harvestedForkKeys`` so the lanes of one round do not all append to the
+    /// same list. Each key was measured absent from its catalog before the lane's change, so a
+    /// failure here means a conversion was reverted or the catalogs were not re-synced.
+    static let journalLaneKeys: [HarvestedKey] = {
+        let domain = "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings"
+        var keys: [HarvestedKey] = []
+        let cosmetics: [(prefix: String, tokens: [String])] = [
+            ("companionBodyStyle", CompanionBodyStyle.allCases.map(\.rawValue)),
+            ("companionPalette", CompanionPalette.allCases.map(\.rawValue)),
+            ("companionAccessory", CompanionAccessory.allCases.map(\.rawValue)),
+            ("companionClothing", CompanionClothing.allCases.map(\.rawValue)),
+            ("companionSideItem", CompanionSideItem.allCases.map(\.rawValue)),
+        ]
+        for slot in cosmetics {
+            for token in slot.tokens {
+                keys.append(HarvestedKey(catalog: domain, key: "\(slot.prefix).\(token)",
+                                         source: "the wardrobe's \(slot.prefix) label, literal → String(localized:bundle: .module)"))
+            }
+        }
+        for goal in GoalType.allCases {
+            for member in ["name", "tagline", "training"] {
+                keys.append(HarvestedKey(catalog: domain, key: "goal.\(goal.rawValue).\(member)",
+                                         source: "GoalType's \(member) on the preset cards, literal → String(localized:bundle: .module)"))
+            }
+        }
+        for stem in ["strength", "sportsPrep", "recovery", "balanced"] {
+            keys.append(HarvestedKey(catalog: domain, key: "goal.\(stem).nutrition",
+                                     source: "GoalType.nutritionSummary, literal → String(localized:bundle: .module)"))
+        }
+        return keys + journalLaneAppKeys + journalLaneCycleKeys + journalLaneOnboardingKeys + journalLaneLaunchKeys
+    }()
+
+    /// The journal lane's launch and companion keys: `LaunchPreparationService`'s status lines,
+    /// fallback photowall captions and deterministic companion thoughts (every prompt sent to the
+    /// on-device model is untouched), and the Worry Box's own undo word.
+    static let journalLaneLaunchKeys: [HarvestedKey] = {
+        let app = "App/Fernlet/Localizable.xcstrings"
+        var names: [String] = ["launch.status.checkingIn", "launch.status.readingPatterns",
+                               "launch.status.preparingSummary", "launch.status.gettingReady", "worryBox.undo.keep"]
+        names += ["morning", "meal", "movement", "moment"].map { "photowall.caption.\($0)" }
+        names += ["energyLow", "energyRising", "moodNeedsGentleness", "moodImproving", "readyForLight", "eatingLight", "ordinary"]
+            .map { "companion.thought.\($0)" }
+        return names.map {
+            HarvestedKey(catalog: app, key: $0,
+                         source: "launch status lines, fallback captions and thoughts, and the Worry Box undo, literal → String(localized:)")
+        }
+    }()
+
+    /// The journal lane's onboarding and age-gate keys: copy that reached `Text` as a `String`
+    /// helper parameter, and the age-gate sentences that spliced a feature name.
+    static let journalLaneOnboardingKeys: [HarvestedKey] = {
+        let app = "App/Fernlet/Localizable.xcstrings"
+        var names: [String] = [
+            "onboarding.step.index", "Private by default", "No shame loops", "You choose what to share",
+            "Coarse location", "Asked when you first scan a nutrition label.", "Restore from iCloud",
+            "Just on this device", "Sex", "Typical activity",
+        ]
+        for feature in ["intimacy", "chat"] {
+            names.append("ageGate.\(feature).confirmWarning")
+            for state in ["communicationLimits", "below", "needsSystemCheck", "unclearAnswer", "unknownAge", "available"] {
+                names.append("ageGate.\(feature).\(state)")
+            }
+        }
+        return names.map {
+            HarvestedKey(catalog: app, key: $0,
+                         source: "onboarding helpers typed String, and AgeGateNotice's spliced feature name")
+        }
+    }()
+
+    /// The journal lane's cycle keys: the app-target forks over the sealed vocabulary
+    /// (`PeriodSymptom`, `CyclePhase`) and the cycle page's assembled or `String`-typed copy.
+    static let journalLaneCycleKeys: [HarvestedKey] = {
+        let app = "App/Fernlet/Localizable.xcstrings"
+        var names: [String] = PeriodSymptom.allCases.map { "cycle.symptom.\($0.rawValue)" }
+        names += CyclePhase.allCases.map { "cycle.phase.\($0.rawValue)" }
+        names += CyclePhase.allCases.map { "cycle.phase.inSentence.\($0.rawValue)" }
+        for metric in ["sleep", "mood", "exercise", "nutrition", "symptoms"] {
+            names += ["cycle.trend.\(metric).worse", "cycle.trend.\(metric).better"]
+        }
+        names += [
+            "cycle.prediction.range", "cycle.prediction.confidence.low", "cycle.prediction.confidence.building",
+            "cycle.prediction.confidence.high", "cycle.symptom.withIntensity", "logPeriod.validation.temperatureRange",
+            "Your period and intimacy data stay on this device, behind your app lock.",
+            "Your intimacy data stays on this device, behind your app lock.",
+            "Your period data stays on this device, behind your app lock.",
+            "^[%lld event](inflect: true) logged in Apple Health",
+            "Your cycles vary by about ±^[%lld day](inflect: true).",
+        ]
+        return names.map {
+            HarvestedKey(catalog: app, key: $0,
+                         source: "the cycle page, day detail and log sheet: sealed-title reads, assembled sentences and String-typed copy")
+        }
+    }()
+
+    /// Members the journal lane forked off `String` (the ``forkedMembers`` shape, kept apart for the
+    /// same reason as ``journalLaneKeys``).
+    static let journalLaneForkedMembers: [ForkedMember] = [
+        ForkedMember(path: "App/Fernlet/LogPeriodSheet.swift",
+                     declaration: "private func periodToggle(_ title: LocalizedStringKey, isOn: Binding<Bool>) -> some View {",
+                     role: "the period log sheet's 'First day of cycle' and 'Intermenstrual bleeding' switches"),
+        ForkedMember(path: "App/Fernlet/OnboardingWelcomeView.swift",
+                     declaration: "private func privacyRow(_ systemImage: String, title: LocalizedStringKey, body: LocalizedStringKey) -> some View {",
+                     role: "the welcome screen's three privacy pillars"),
+        ForkedMember(path: "App/Fernlet/OnboardingPermissionsView.swift",
+                     declaration: "private func permissionRow(_ systemImage: String, title: LocalizedStringKey, body: LocalizedStringKey) -> some View {",
+                     role: "the permissions step's Health, Camera and Coarse location cards"),
+        ForkedMember(path: "App/Fernlet/OnboardingStorageChoiceView.swift",
+                     declaration: "private func storageCard(choice: OnboardingStorageChoice, title: LocalizedStringKey, copy: Text, systemImage: String) -> some View {",
+                     role: "the storage step's two cards and their explanations"),
+        ForkedMember(path: "App/Fernlet/OnboardingView.swift",
+                     declaration: "init(_ label: LocalizedStringKey, @ViewBuilder content: () -> Content) {",
+                     role: "LabeledProfilePicker's caption (Sex, Typical activity, Eating pattern, Guidance style)"),
+        ForkedMember(path: "App/Fernlet/OnboardingView.swift",
+                     declaration: "static let sex: LocalizedStringKey = \"Sex\"",
+                     role: "the body-profile Sex picker's name, shared by Settings and onboarding"),
+        ForkedMember(path: "App/Fernlet/OnboardingView.swift",
+                     declaration: "static let activity: LocalizedStringKey = \"Typical activity\"",
+                     role: "the body-profile activity picker's name, shared by Settings and onboarding"),
+        ForkedMember(path: "App/Fernlet/AgeGateNotice.swift",
+                     declaration: "let feature: AgeGatedFeature",
+                     role: "the age-gate notice's feature, whose sentences are whole per feature (was a spliced `featureName: String`)"),
+    ]
+
+    /// The journal lane's forked members still carry their localized types.
+    @Test func theJournalLanesForkedMembersStillCarryLocalizedTypes() throws {
+        var missing: [String] = []
+        for entry in Self.journalLaneForkedMembers {
+            let source = try String(contentsOf: RepoRoot.url(entry.path), encoding: .utf8)
+            let present = Self.logicalLines(in: source).contains { $0.text.contains(entry.declaration) }
+            if !present { missing.append("\(entry.path): \(entry.declaration)  ← \(entry.role)") }
+        }
+        #expect(
+            missing.isEmpty,
+            """
+            \(missing.count) member(s) the journal lane forked off `String` no longer carry their \
+            localized type — a revert compiles, reads correctly in English, and silently leaves \
+            the catalog. If a member was deliberately renamed, update its pin:
+            \(missing.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// The cycle surfaces draw the app-target forks, never the sealed module's `title`s.
+    ///
+    /// `PeriodSymptom.title` is English literals and the other four sealed `title`s are
+    /// `rawValue.capitalized`; every one compiles beside its fork and reads correctly in English, so a
+    /// draw that drifts back to `title` is invisible to everything but a scan.
+    @Test func theCycleSurfacesNeverDrawTheSealedTitles() throws {
+        let files = ["App/Fernlet/CycleTrackerView.swift", "App/Fernlet/CycleDayDetailView.swift", "App/Fernlet/LogPeriodSheet.swift"]
+        let pattern = try NSRegularExpression(pattern: #"(?i:symptom|phase|level|quality|result)\??\.title\b"#)
+        let fires = { (line: String) in pattern.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil }
+        // Planted fixtures: the matcher must fire on the shapes it guards, and not on the forks.
+        #expect(fires("Text(verbatim: periodStore.currentPhase.title)"))
+        #expect(fires("periodToggle(symptom.title, isOn: binding)"))
+        #expect(fires("mucusQuality?.title ?? none"))
+        #expect(!fires("Text(verbatim: periodStore.currentPhase.displayName)"))
+        #expect(!fires("Text(notification.reason.title)"))
+        var offenders: [String] = []
+        for path in files {
+            let source = try String(contentsOf: RepoRoot.url(path), encoding: .utf8)
+            for (number, raw) in source.components(separatedBy: "\n").enumerated() {
+                let line = raw.trimmingCharacters(in: .whitespaces)
+                guard !line.hasPrefix("//") else { continue }
+                let range = NSRange(line.startIndex..., in: line)
+                if pattern.firstMatch(in: line, range: range) != nil { offenders.append("\(path):\(number + 1): \(line)") }
+            }
+        }
+        #expect(
+            offenders.isEmpty,
+            """
+            \(offenders.count) cycle draw(s) read a sealed `title` (English literals or \
+            `rawValue.capitalized`) instead of the app-target `displayName` fork beside it:
+            \(offenders.joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// The journal lane's app-catalog keys (see ``journalLaneKeys``).
+    static let journalLaneAppKeys: [HarvestedKey] = {
+        let app = "App/Fernlet/Localizable.xcstrings"
+        var keys: [HarvestedKey] = []
+        let promptThemes = [("gratitude", 6), ("emotions", 6), ("body", 6), ("wins", 6), ("pleasures", 6), ("kindness", 10)]
+        for (theme, count) in promptThemes {
+            for index in 1...count {
+                keys.append(HarvestedKey(catalog: app, key: "journal.dailyPrompt.\(theme).\(index)",
+                                         source: "JournalPromptLibrary.prompts, a [String] of literals drawn with Text(String)"))
+            }
+        }
+        var day: [String] = [
+            "journal.day.blurb.empty", "journal.day.micronutrient.sodium", "journal.day.micronutrient.saturatedFat",
+            "journal.day.micronutrient.sugar", "journal.day.micronutrient.limit", "journal.day.micronutrient.target",
+            "Today so far", "Yesterday", "Your %@",
+        ]
+        day += FeelingTag.allCases.map { "journal.day.blurb.feeling.\($0.rawValue)" }
+        day += SleepQuality.allCases.map { "journal.day.blurb.sleep.\($0.rawValue)" }
+        for key in day {
+            keys.append(HarvestedKey(catalog: app, key: key,
+                                     source: "DayDetailView's review card and micronutrient rows, String → catalog key"))
+        }
+        return keys
+    }()
+
+    /// The journal lane's count-bearing keys: each was an English plural spliced in code
+    /// ("\(n) \(n == 1 ? "meal" : "meals")"), so its `one`/`other` block is hand-authored.
+    static let journalLanePluralKeys: [HarvestedKey] = [
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "journal.day.blurb.meals",
+                     source: "the day review's meal count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "journal.day.blurb.workouts",
+                     source: "the day review's workout count ('a workout' / '2 workouts')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "journal.day.bottleCount",
+                     source: "the day review's and Water card's bottle count"),
+    ]
+
+    /// Every journal-lane count key carries real plural variations (see ``journalLanePluralKeys``).
+    @Test func theJournalLanesCountKeysCarryPluralVariations() throws {
+        var missing: [String] = []
+        for entry in Self.journalLanePluralKeys {
+            let data = try Data(contentsOf: RepoRoot.url(entry.catalog))
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let strings = json?["strings"] as? [String: Any] ?? [:]
+            if !Self.carriesEnglishOneAndOtherPlural(strings, key: entry.key) {
+                missing.append("\(entry.catalog): \(entry.key)  ← \(entry.source)")
+            }
+        }
+        #expect(
+            missing.isEmpty,
+            """
+            \(missing.count) count-bearing key(s) have no `one`/`other` plural variation, and \
+            `xcstringstool sync` will never add the block back:
+            \(missing.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// The journal lane's conversions reached their catalogs (see ``journalLaneKeys``).
+    @Test func theJournalLanesStringsReachedTheirCatalogs() throws {
+        var missing: [String] = []
+        var parsed: [String: [String: Any]] = [:]
+        for entry in Self.journalLaneKeys {
+            if parsed[entry.catalog] == nil {
+                let data = try Data(contentsOf: RepoRoot.url(entry.catalog))
+                let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+                parsed[entry.catalog] = json?["strings"] as? [String: Any] ?? [:]
+            }
+            let strings = parsed[entry.catalog] ?? [:]
+            #expect(!strings.isEmpty, "\(entry.catalog) parsed to zero keys — the catalog moved or broke")
+            if strings[entry.key] == nil {
+                missing.append("\(entry.catalog): \(entry.key)  ← \(entry.source)")
+            }
+        }
+        #expect(
+            missing.isEmpty,
+            """
+            \(missing.count) key(s) the Spanish round's journal lane put into a string catalog are \
+            gone. Either the conversion was reverted — the string is frozen English again, with a \
+            clean build — or the catalogs were not re-synced. Run Scripts/sync-string-catalogs.sh \
+            and commit the diff with the code change:
+            \(missing.sorted().joined(separator: "\n"))
+            """
+        )
     }
 
     // MARK: - F. Accessibility copy may not be typed `String`

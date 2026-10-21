@@ -601,7 +601,12 @@ struct WorryBoxView: View {
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                 Spacer(minLength: 8)
-                Button("Keep it") { keepPendingRelease() }
+                // Its own semantic key: the bare "Keep it" literal was one catalog entry shared with
+                // Move's "Remove workout?" alert, and the two may need different words in Spanish.
+                Button(String(localized: "worryBox.undo.keep", defaultValue: "Keep it",
+                              comment: "Worry Box undo strip: keeps a worry the user just released, before it is deleted for good")) {
+                    keepPendingRelease()
+                }
                     .font(.fernlet(.label))
                     // T1-3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text) — this
                     // is the one control that undoes an otherwise-permanent deletion (T0-5).
