@@ -236,7 +236,8 @@ struct ProximityRecipeShareReviewSheet: View {
         "\(String(format: "%g", ingredient.quantity)) \(ingredient.unit) \(ingredient.name)"
     }
 
-    private var recipeKindLabel: String {
+    /// A key, not a `String`: `Label(String, systemImage:)` draws its title verbatim.
+    private var recipeKindLabel: LocalizedStringKey {
         switch share.payload.recipe.kind {
         case .local: "Fernlet recipe"
         case .saved: "Saved web recipe"
@@ -292,15 +293,22 @@ struct ProximityRecipeShareReviewSheet: View {
             let carbs = Self.boundedMacroSum(ingredients, \.carbs)
             let fat = Self.boundedMacroSum(ingredients, \.fat)
             guard protein > 0 || carbs > 0 || fat > 0 else { return nil }
-            return "Macros: P \(protein)g · C \(carbs)g · F \(fat)g"
+            return Self.macrosLine(protein: protein, carbs: carbs, fat: fat)
         case .saved:
             guard let saved = share.payload.recipe.saved else { return nil }
             let protein = Self.boundedMacro(saved.protein)
             let carbs = Self.boundedMacro(saved.carbs)
             let fat = Self.boundedMacro(saved.fat)
             guard protein > 0 || carbs > 0 || fat > 0 else { return nil }
-            return "Macros: P \(protein)g · C \(carbs)g · F \(fat)g"
+            return Self.macrosLine(protein: protein, carbs: carbs, fat: fat)
         }
+    }
+
+    /// "Macros: P 12g · C 30g · F 8g" as ONE key, so a translator can rename the letters and
+    /// reorder the three grams.
+    private static func macrosLine(protein: Int, carbs: Int, fat: Int) -> String {
+        String(localized: "recipeShare.review.macros", defaultValue: "Macros: P \(protein)g · C \(carbs)g · F \(fat)g",
+               comment: "A shared recipe's total macros on the import review. P, C and F abbreviate protein, carbohydrate and fat; each number is grams.")
     }
 
     /// Sums a peer's per-ingredient macros without trusting them: every term is clamped into
@@ -325,7 +333,8 @@ struct ProximityRecipeShareReviewSheet: View {
         switch share.payload.recipe.kind {
         case .local:
             guard store.recipes.contains(where: { $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == title }) else { return nil }
-            return "You already have a recipe with this name."
+            return String(localized: "recipeShare.review.duplicateName", defaultValue: "You already have a recipe with this name.",
+                          comment: "Warning on the shared-recipe import review when one of your recipes has the same name")
         case .saved:
             guard let saved = share.payload.recipe.saved else { return nil }
             // NORMALIZED source match — must agree with the store's duplicate decision, or a URL
@@ -334,10 +343,14 @@ struct ProximityRecipeShareReviewSheet: View {
             if store.savedRecipes.contains(where: {
                 RecipeSourceURLMatcher.urlsMatch($0.webImport?.sourceURLString ?? "", saved.sourceURLString)
             }) {
-                return "You already saved this recipe from the same page — importing keeps your saved copy, photo, and notes."
+                return String(localized: "recipeShare.review.duplicateSource",
+                              defaultValue: "You already saved this recipe from the same page — importing keeps your saved copy, photo, and notes.",
+                              comment: "Warning on the shared-recipe import review when you already saved a recipe from the same web page")
             }
             if store.savedRecipes.contains(where: { $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == title }) {
-                return "You already have a saved recipe with this name."
+                return String(localized: "recipeShare.review.duplicateSavedName",
+                              defaultValue: "You already have a saved recipe with this name.",
+                              comment: "Warning on the shared-recipe import review when one of your saved web recipes has the same name")
             }
             return nil
         }

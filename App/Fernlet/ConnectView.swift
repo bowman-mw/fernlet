@@ -459,7 +459,7 @@ struct FriendsView: View {
     /// `NavigationLink`s, not button actions. They are deliberately **titled**: the old icon-only pair
     /// made the user tap to discover what `figure.2.arms.open` and `person.2` did, and `person.2` was
     /// already doing duty as the searching-pulse glyph and the selected tab icon on the same screen.
-    private func headerButtonLabel(_ title: String) -> some View {
+    private func headerButtonLabel(_ title: LocalizedStringKey) -> some View {
         Text(title)
             .font(.fernlet(.label))
             .lineLimit(1)
@@ -1612,7 +1612,7 @@ private struct NearbySlotRow: View {
                     .font(.fernlet(.label))
                     .accessibilityIdentifier("friends.forceConnect.\(slot.id)")
             } else if let d = distanceMeters {
-                Text(String(format: "%.0f cm", d * 100))
+                Text("\(Self.wholeCentimeters(d)) cm")
                     .font(.fernlet(.stat))
                     .foregroundStyle(Color.slate)
             }
@@ -1684,19 +1684,38 @@ private struct NearbySlotRow: View {
 
     private var stateLabel: String {
         switch slot.coordinator.state {
-        case .awaitingIdentityIntroduction: return "Exchanging identity…"
+        case .awaitingIdentityIntroduction:
+            return String(localized: "friends.nearby.exchangingIdentity", defaultValue: "Exchanging identity…",
+                          comment: "A nearby-friend row's status while the two phones confirm who each other is")
         case .awaitingProximityCommit:
             if let d = distanceMeters, ProximityApproachCue.isWithinCommitDistance(d) {
                 return String(localized: "friends.nearby.holdStill",
                               defaultValue: "Close enough — hold still…",
                               comment: "A nearby-friend row's status once the two phones are within the 15 cm connect distance, while the connection settles (under a second). Pairs with a light haptic tick.")
             }
-            if let d = distanceMeters { return String(format: "Move closer — %.0f cm away", d * 100) }
-            return "Tap phones together to connect"
-        case .awaitingManualCommit: return "Tap to confirm connection"
-        case .connected, .transferring: return "Connected"
-        default: return "Connecting…"
+            if let d = distanceMeters {
+                let centimeters = Self.wholeCentimeters(d)
+                return String(localized: "friends.nearby.moveCloser", defaultValue: "Move closer — \(centimeters) cm away",
+                              comment: "A nearby-friend row's status while the phones are too far apart to connect. %lld is the distance in centimetres.")
+            }
+            return String(localized: "friends.nearby.tapPhones", defaultValue: "Tap phones together to connect",
+                          comment: "A nearby-friend row's status before the phones are close: bring them together to connect")
+        case .awaitingManualCommit:
+            return String(localized: "friends.nearby.tapToConfirm", defaultValue: "Tap to confirm connection",
+                          comment: "A nearby-friend row's status when a tap on this phone completes the connection")
+        case .connected, .transferring:
+            return String(localized: "friends.nearby.connected", defaultValue: "Connected",
+                          comment: "A nearby-friend row's status once the two phones are connected")
+        default:
+            return String(localized: "friends.nearby.connecting", defaultValue: "Connecting…",
+                          comment: "A nearby-friend row's status while the connection is being set up")
         }
+    }
+
+    /// A ranging distance in whole centimetres, rounded exactly as `String(format: "%.0f")` rounds
+    /// (to nearest, ties to even), so the drawn number is the one the row always showed.
+    static func wholeCentimeters(_ meters: Double) -> Int {
+        Int((meters * 100).rounded(.toNearestOrEven))
     }
 
     private var stateIcon: String {

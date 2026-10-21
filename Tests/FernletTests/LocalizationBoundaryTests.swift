@@ -2763,6 +2763,15 @@ struct LocalizationBoundaryTests {
         ForkedMember(path: "App/Fernlet/DisposableCameraView.swift",
                      declaration: "private func shutterCaption(canShoot: Bool) -> LocalizedStringKey {",
                      role: "the caption under the camera's shutter"),
+        ForkedMember(path: "App/Fernlet/ConnectView.swift",
+                     declaration: "private func headerButtonLabel(_ title: LocalizedStringKey) -> some View {",
+                     role: "the Friends header's Activities and Friends pills"),
+        ForkedMember(path: "App/Fernlet/Proximity/UI/ProximityRecipeShareReviewSheet.swift",
+                     declaration: "private var recipeKindLabel: LocalizedStringKey {",
+                     role: "the shared-recipe review's Fernlet recipe / Saved web recipe label"),
+        ForkedMember(path: "FernletKit/Sources/FernletProximityUI/FriendPhotoReviewSheet.swift",
+                     declaration: "_ title: LocalizedStringKey,",
+                     role: "photoSaveFailureAlert's caller-supplied title (Couldn't Save Photo / Photos)"),
     ]
 
     /// The members this round forked are still forked.
@@ -2916,10 +2925,17 @@ struct LocalizationBoundaryTests {
                      source: "DisposableCameraView.shutterCaption, forked String → LocalizedStringKey"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Saying hello to %@…",
                      source: "DisposableCameraView.presenceHeartStatusText, forked String → Text"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Fernlet recipe",
+                     source: "ProximityRecipeShareReviewSheet.recipeKindLabel, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Couldn't Save Photo",
+                     source: "photoSaveFailureAlert's title, forked String → LocalizedStringKey"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Expires in %lld min",
                      source: "ActivitiesView's ExpiryLabel, \"Expires \" + a separately built phrase → one key"),
         HarvestedKey(catalog: "FernletKit/Sources/FernletSocial/Localizable.xcstrings", key: "presence.heart.cooldown",
                      source: "PresenceManager's heart sentences, English literal → FernletSocialCopy.Presence"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletProximityUI/Localizable.xcstrings",
+                     key: "proximity.review.deleteConfirm.message",
+                     source: "the photo review's Delete all confirmation, English literal → FernletProximityUICopy"),
     ] + ["sedentary", "light", "moderate", "active", "veryActive"].map {
         HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings", key: "activityLevel.\($0)",
                      source: "ActivityLevel.label, literal → String(localized:bundle: .module) (2026-10-19)")
@@ -3136,6 +3152,9 @@ struct LocalizationBoundaryTests {
                      key: "activities.error.hostLimit", source: "Group Activities' host-cap error"),
         HarvestedKey(catalog: "FernletKit/Sources/FernletSocial/Localizable.xcstrings",
                      key: "proximity.camera.photoLimitReached", source: "the in-person camera's photo-cap alert"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletProximityUI/Localizable.xcstrings",
+                     key: "proximity.review.deleteConfirm.title",
+                     source: "the photo review's delete confirmation title (two or more pictures)"),
     ]
 
     /// Every count-bearing key carries real plural variations.

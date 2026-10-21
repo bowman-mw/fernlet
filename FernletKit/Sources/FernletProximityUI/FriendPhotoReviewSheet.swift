@@ -400,9 +400,11 @@ public struct FriendPhotoReviewSheet: View {
             FernletAnnouncer.system.announce(.status, resolved: line)
         }
         .confirmDestructive(
-            photos.count == 1 ? "Delete this shared picture?" : "Delete \(photos.count) shared pictures?",
+            photos.count == 1
+                ? FernletProximityUICopy.Review.deleteConfirmOneTitle
+                : FernletProximityUICopy.Review.deleteConfirmTitle(photos.count),
             isPresented: $askingToDeleteAll,
-            message: "They'll be removed from this phone. Friends keep their own copies.",
+            message: FernletProximityUICopy.Review.deleteConfirmMessage,
             confirmLabel: deleteAllLabel
         ) {
             // Wrapped rather than passed directly: `discardAll` is explicitly `@MainActor`-typed and
@@ -621,13 +623,16 @@ extension View {
     /// "Open Settings" button (deep-linking to the app's Settings page) only when the failure
     /// offers it, and an OK cancel button; every button clears the binding. The title stays a
     /// parameter because the carousel's single-photo alert is deliberately titled in the
-    /// singular ("Couldn't Save Photo") while the review sheets use the plural.
+    /// singular ("Couldn't Save Photo") while the review sheets use the plural. It is the CALLER's
+    /// `LocalizedStringKey`, harvested into the calling app target's catalog and resolved against
+    /// `Bundle.main`, which is that catalog's bundle (the FernletUI component shape); as a `String`
+    /// it was drawn verbatim and never reached any catalog.
     ///
     /// Every surface's failure is felt as well as shown (sounds-and-haptics pass A6): the error
     /// haptic plays as a failure arrives, here once for all three save surfaces, matching the
     /// "saved" cue their successes already play.
     public func photoSaveFailureAlert(
-        _ title: String,
+        _ title: LocalizedStringKey,
         failure: Binding<PhotoSaveFailure?>
     ) -> some View {
         fernletFeedback(.failed, trigger: failure.wrappedValue) { _, arrived in arrived != nil }

@@ -582,6 +582,9 @@
         }
       }
     },
+    "%lld cm" : {
+
+    },
     "%lld coins" : {
 
     },
@@ -2473,6 +2476,12 @@
     "Could not send that heart just now." : {
 
     },
+    "Couldn't Save Photo" : {
+
+    },
+    "Couldn't Save Photos" : {
+
+    },
     "Couldn't add this plan" : {
 
     },
@@ -3647,6 +3656,9 @@
 
     },
     "Fernlet quietly compares your recent heart rate variability and resting heart rate with your own usual range from the last several weeks — never anyone else's numbers. Days you moved a lot, marked yourself sick, or showed signs of coming down with something are taken into account so a hard workout doesn't read as a hard week." : {
+
+    },
+    "Fernlet recipe" : {
 
     },
     "Fernlet records metadata only: which feature asked, where the call went, when, how it turned out, and the names of the fields that were sent — never your words, your entries, or the model's reply." : {
@@ -6976,6 +6988,9 @@
     "Reporting %@ for this photo blocks them and deletes the photo from this phone." : {
 
     },
+    "Reporting hides this item and blocks the sender on your device. Your report is also signed by your device and shared with friends you meet in person — including the person reported — so several reports of the same item can be counted together." : {
+
+    },
     "Reports are handled on your device — there is no server that sees your data. A report of a person, a message or a photo stays on your phone. Reports of shop items also travel to friends you meet in person, signed by your device, so several people reporting the same item can be counted together; the person you reported is one of the friends who may receive it. They are never uploaded anywhere. When the same item is reported enough, it can no longer be sold; a maker whose items are repeatedly reported loses their shop for a while." : {
 
     },
@@ -7248,6 +7263,9 @@
 
     },
     "Saved to Photos" : {
+
+    },
+    "Saved web recipe" : {
 
     },
     "Saving" : {
@@ -11251,6 +11269,42 @@
         }
       }
     },
+    "friends.nearby.connected" : {
+      "comment" : "A nearby-friend row's status once the two phones are connected",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Connected"
+          }
+        }
+      }
+    },
+    "friends.nearby.connecting" : {
+      "comment" : "A nearby-friend row's status while the connection is being set up",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Connecting…"
+          }
+        }
+      }
+    },
+    "friends.nearby.exchangingIdentity" : {
+      "comment" : "A nearby-friend row's status while the two phones confirm who each other is",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Exchanging identity…"
+          }
+        }
+      }
+    },
     "friends.nearby.holdStill" : {
       "comment" : "A nearby-friend row's status once the two phones are within the 15 cm connect distance, while the connection settles (under a second). Pairs with a light haptic tick.",
       "extractionState" : "extracted_with_value",
@@ -11259,6 +11313,42 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Close enough — hold still…"
+          }
+        }
+      }
+    },
+    "friends.nearby.moveCloser" : {
+      "comment" : "A nearby-friend row's status while the phones are too far apart to connect. %lld is the distance in centimetres.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Move closer — %lld cm away"
+          }
+        }
+      }
+    },
+    "friends.nearby.tapPhones" : {
+      "comment" : "A nearby-friend row's status before the phones are close: bring them together to connect",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tap phones together to connect"
+          }
+        }
+      }
+    },
+    "friends.nearby.tapToConfirm" : {
+      "comment" : "A nearby-friend row's status when a tap on this phone completes the connection",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tap to confirm connection"
           }
         }
       }
@@ -12368,6 +12458,54 @@
         }
       }
     },
+    "recipeShare.review.duplicateName" : {
+      "comment" : "Warning on the shared-recipe import review when one of your recipes has the same name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You already have a recipe with this name."
+          }
+        }
+      }
+    },
+    "recipeShare.review.duplicateSavedName" : {
+      "comment" : "Warning on the shared-recipe import review when one of your saved web recipes has the same name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You already have a saved recipe with this name."
+          }
+        }
+      }
+    },
+    "recipeShare.review.duplicateSource" : {
+      "comment" : "Warning on the shared-recipe import review when you already saved a recipe from the same web page",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You already saved this recipe from the same page — importing keeps your saved copy, photo, and notes."
+          }
+        }
+      }
+    },
+    "recipeShare.review.macros" : {
+      "comment" : "A shared recipe's total macros on the import review. P, C and F abbreviate protein, carbohydrate and fat; each number is grams.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Macros: P %1$lldg · C %2$lldg · F %3$lldg"
+          }
+        }
+      }
+    },
     "recipeShareText.ingredients" : {
       "comment" : "Heading above the ingredient list in a recipe shared as text.",
       "extractionState" : "extracted_with_value",
@@ -12558,6 +12696,66 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "shop.purchase.alreadyOwned" : {
+      "comment" : "Alert when trying to buy an item from a friend's shop that is already in your closet. %@ is the item's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You already own “%@”."
+          }
+        }
+      }
+    },
+    "shop.purchase.bought" : {
+      "comment" : "Alert after buying an item in a friend's shop. %@ is the item's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Added “%@” to your closet."
+          }
+        }
+      }
+    },
+    "shop.purchase.insufficientCoins" : {
+      "comment" : "Alert when there are not enough coins to buy an item in a friend's shop. %@ is the item's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Not enough coins for “%@” yet — keep showing up!"
+          }
+        }
+      }
+    },
+    "shop.purchase.unavailable" : {
+      "comment" : "Alert when an item in a friend's shop can no longer be bought. %@ is the item's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "“%@” is no longer available."
+          }
+        }
+      }
+    },
+    "shop.report.thanks" : {
+      "comment" : "Alert after reporting an item in a friend's shop: what happened, and who the signed report is shared with",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Thanks for letting us know. We've hidden this item and blocked its sender on your device. Your report is signed by your device and travels to friends you meet in person, including the person you reported."
           }
         }
       }
