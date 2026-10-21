@@ -530,7 +530,9 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     ///   sets (`sets - 1` rests per exercise); an in-flight rest counts as one whole rest of its own
     ///   window's length, so a "+15 s" or "−15 s" moves the estimate with it;
     /// - a descriptor line (`sets == 0` — cardio/mobility walked as one step) costs the minutes it
-    ///   names ("Conditioning intervals - 12 min"), else `descriptorSeconds` (default 5 min);
+    ///   names ("Gentle mobility + walk - 12 min"), else `descriptorSeconds` (default 5 min). A line
+    ///   the app times as cardio never arrives as one: it is expanded into countdown segments when the
+    ///   run is built, so an interval line costs its rounds here and on the plan card alike;
     /// - the working phase counts the current set as still ahead; the resting phase counts the
     ///   upcoming set (the counter already advanced when the rest began);
     /// - each exercise still ahead after the run's first adds a ``changeoverSeconds`` changeover

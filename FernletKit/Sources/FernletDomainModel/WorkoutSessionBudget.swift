@@ -30,8 +30,9 @@ import Foundation
 /// Per step: a rep-counted set takes ``workSecondsPerSet``, a timed set its hold plus the
 /// ``holdLeadInSeconds`` get-into-position lead-in, with the step's rest between its own sets (the
 /// step's override, else ``WorkoutRestGuidance``'s default for the goal — the same rest the runner
-/// bakes in). A descriptor line (no sets: a conditioning finisher, the fallback circuit) takes the
-/// minutes it names ("Conditioning intervals - 12 min"), else ``descriptorFallbackSeconds``. Each
+/// bakes in). A descriptor line (no sets: a conditioning finisher, the fallback circuit) takes its
+/// timed segments when the runner times it as cardio — an interval line its rounds — else the minutes
+/// it names ("Steady cardio - 20 min"), else ``descriptorFallbackSeconds``. Each
 /// exercise after the session's first adds ``changeoverSeconds`` (``changeovers(in:)``). The plan
 /// card shows ``minutes(of:goal:)``, and a run started from the same steps begins its header countdown
 /// (`GuidedWorkoutRunState.estimatedSecondsRemaining`) at the same total. Pure and deterministic.
@@ -111,11 +112,18 @@ public nonisolated enum WorkoutSessionTime {
         max(1, (max(0, seconds) + 59) / 60)
     }
 
-    /// A descriptor step's time: the minutes its line names, else ``descriptorFallbackSeconds``. A timed
-    /// cardio part's get-ready lead-in is not counted here or in the runner's countdown, so a budget's capped
-    /// minutes stay whole and the plan card and a started run agree.
+    /// A descriptor step's time: a timed cardio line's countdown segments, summed as the runner walks
+    /// them (``WorkoutTimedSessions/segments(for:descriptor:)``) — so "Intervals - 8 × 1 min hard / 1 min
+    /// easy", which names no minutes, costs its eight rounds (16 min) rather than the fallback — else the
+    /// minutes its line names, else ``descriptorFallbackSeconds``. A timed cardio part's get-ready
+    /// lead-in is not counted here or in the runner's countdown, so a budget's capped minutes stay whole
+    /// and the plan card and a started run agree.
     public static func descriptorSeconds(_ descriptor: String) -> Int {
-        WorkoutProgram.descriptorMinutes(in: descriptor).map { $0 * 60 } ?? descriptorFallbackSeconds
+        if let timed = WorkoutTimedSessions.classify(descriptor) {
+            let segments = WorkoutTimedSessions.segments(for: timed, descriptor: descriptor)
+            if !segments.isEmpty { return segments.reduce(0) { $0 + $1.seconds } }
+        }
+        return WorkoutProgram.descriptorMinutes(in: descriptor).map { $0 * 60 } ?? descriptorFallbackSeconds
     }
 }
 
