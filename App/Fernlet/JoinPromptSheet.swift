@@ -28,7 +28,10 @@ import ProximityKit
 /// and ``ActivitiesView`` for `ProximityActivityManager.pendingJoinRequests`.
 struct JoinPromptSheet<Request>: View {
     let requests: [Request]
-    let targetName: String
+    /// What the requester wants to join: the mesh's name, or the activity's title. Nil only from
+    /// ``ActivitiesView``, for a request whose activity it can no longer find, and drawn as
+    /// "wants to join an activity".
+    let targetName: String?
     let displayName: (Request) -> String
     let accessibilityPrefix: String
     /// An admit-time error (e.g. "This activity is full.") to show INLINE here. A root-level `.alert`
@@ -116,10 +119,20 @@ struct JoinPromptSheet<Request>: View {
         .accessibilityIdentifier("\(accessibilityPrefix).error")
     }
 
+    /// "<name> wants to join <target>", both names bold — or, with no target name, the whole
+    /// sentence for an activity whose title could not be found. A whole sentence rather than an
+    /// English "an activity" spliced in as the target: a translator has to see the article and the
+    /// preposition together.
+    private func requestLine(_ request: Request) -> Text {
+        let requester = Text(displayName(request)).bold()
+        guard let targetName else { return Text("\(requester) wants to join an activity") }
+        return Text("\(requester) wants to join \(Text(targetName).bold())")
+    }
+
     /// The first pending request: who is asking, the "N more waiting" pill, and Allow/Decline.
     private func requestCard(_ request: Request) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("\(Text(displayName(request)).bold()) wants to join \(Text(targetName).bold())")
+            requestLine(request)
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.bark)
                 .fernletWrappingText()

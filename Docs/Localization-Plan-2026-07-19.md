@@ -363,6 +363,21 @@ sentences (idea 16).
   "Location N" a blank rename is repaired to, and an activity plan's `exercises` default name.
   Pinned by `WorkoutCopyLocalizationTests`.
 
+**Addendum (2026-10-20, Group Activities type token, Spanish round friends lane):** an activity's
+type chip drew its own raw value ("Walk"), and the token a host's phone SENDS was that label
+lowercased, so the chip could not localize and the receiving phone drew the sender's token
+`.capitalized` — English on every phone. `ActivityTypeOption` (app target, `ActivitiesView.swift`)
+is forked: its raw value is the wire token (`walk`, `coffee`, `meal`, `study`, `workout`, `hangout`,
+`other`, byte for byte what every build since 2026-07-12 sent; it rides the descriptor's canonical
+bytes and the hosted/joined sidecars), pinned by `LocalizationBoundaryTests.frozenActivityTypeTokens`;
+`displayName` is the localized chip word; and `displayName(forToken:)` draws a received token as this
+device's word, or — the token is forward-tolerant, so a newer build or any peer may send one this
+build does not know — as received, sanitized and no longer re-cased
+(`receivedActivityTypeTokensDrawThroughTheDisplayName`). Also on that lane: presence's heart
+sentences (P9's `heartSendState.failed(message:)` hole, which `SessionHeartStatusCopy` left open on
+purpose) are closed at their source, resolved in `FernletSocialCopy.Presence` under
+`bundle: .module`, so the `String` type stays and the surfaces draw it verbatim.
+
 ---
 
 ## 4. Phase 2 — Translation pass (es / fr / de)

@@ -182,6 +182,9 @@
         }
       }
     },
+    "%@ wants to join an activity" : {
+
+    },
     "%@ · %@" : {
       "localizations" : {
         "en" : {
@@ -3353,7 +3356,32 @@
     "Expired" : {
 
     },
-    "Expires %@" : {
+    "Expires in %lld days" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Expires in %lld day"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Expires in %lld days"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Expires in %lld h" : {
+
+    },
+    "Expires in %lld min" : {
 
     },
     "Explains how body signals are estimated" : {
@@ -9478,7 +9506,26 @@
 
     },
     "You're hosting the maximum of %lld activities. End one to start another." : {
-
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You're hosting the maximum of %lld activity. End it to start another."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You're hosting the maximum of %lld activities. End one to start another."
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "You're keeping %lld of %lld shared photos. Once it's full, the oldest quietly make room for new ones — save any you'd like to keep." : {
       "localizations" : {
@@ -9987,6 +10034,174 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "a little low"
+          }
+        }
+      }
+    },
+    "activities.duration.oneDay" : {
+      "comment" : "Activity length chip on the Start an activity form: the activity ends one day from now",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "1 day"
+          }
+        }
+      }
+    },
+    "activities.duration.sevenDays" : {
+      "comment" : "Activity length chip on the Start an activity form: the activity ends seven days from now",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "7 days"
+          }
+        }
+      }
+    },
+    "activities.duration.threeDays" : {
+      "comment" : "Activity length chip on the Start an activity form: the activity ends three days from now",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "3 days"
+          }
+        }
+      }
+    },
+    "activities.duration.twoHours" : {
+      "comment" : "Activity length chip on the Start an activity form: the activity ends two hours from now",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "2 hours"
+          }
+        }
+      }
+    },
+    "activities.host.nameRefused" : {
+      "comment" : "Under the activity name field when the typed name is not allowed to be shared with people nearby",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That name can't be shared — try another."
+          }
+        }
+      }
+    },
+    "activities.joined.hostedBy" : {
+      "comment" : "A joined activity's subtitle. %@ is the host's name. May be followed by ' · ' and the activity type and place.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hosted by %@"
+          }
+        }
+      }
+    },
+    "activities.joined.noHostName" : {
+      "comment" : "A joined activity's subtitle when the host's name is not known. May be followed by ' · ' and the activity type and place.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Joined"
+          }
+        }
+      }
+    },
+    "activities.type.coffee" : {
+      "comment" : "Activity type chip and label: meeting for coffee",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Coffee"
+          }
+        }
+      }
+    },
+    "activities.type.hangout" : {
+      "comment" : "Activity type chip and label: spending time together, no set plan",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hangout"
+          }
+        }
+      }
+    },
+    "activities.type.meal" : {
+      "comment" : "Activity type chip and label: sharing a meal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Meal"
+          }
+        }
+      }
+    },
+    "activities.type.other" : {
+      "comment" : "Activity type chip and label: any other kind of activity",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Other"
+          }
+        }
+      }
+    },
+    "activities.type.study" : {
+      "comment" : "Activity type chip and label: studying together",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Study"
+          }
+        }
+      }
+    },
+    "activities.type.walk" : {
+      "comment" : "Activity type chip and label: going for a walk together",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Walk"
+          }
+        }
+      }
+    },
+    "activities.type.workout" : {
+      "comment" : "Activity type chip and label: exercising together",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Workout"
           }
         }
       }

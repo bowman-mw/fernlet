@@ -1369,6 +1369,50 @@ struct LocalizationBoundaryTests {
         )
     }
 
+    /// The Group Activities type tokens a host's phone SENDS (Spanish round, 2026-10-20).
+    ///
+    /// `ActivityTypeOption`'s chip label used to be its raw value ("Walk") and the token the
+    /// lowercased label, so the chip could not localize, and the RECEIVING phone drew the sender's
+    /// token capitalized — a Spanish phone read "Walk". It is forked: the raw value is the token,
+    /// these exact spellings, which every build since Group Activities (2026-07-12) has written into
+    /// `ActivityDescriptor.activityTypeToken`. That field rides the descriptor's canonical bytes, so
+    /// the signed join tokens and roster snapshots bind it through the `activityParamsHash`, and it is
+    /// kept in the hosted and joined sidecars. A respelled token is a word an older phone no longer
+    /// recognizes (it would draw the raw English as an unknown type) and a descriptor whose hash no
+    /// longer matches what was pinned at join. Localize `displayName`, never the token.
+    @MainActor @Test func frozenActivityTypeTokens() {
+        let tokens = ActivityTypeOption.allCases.map(\.token)
+        #expect(
+            tokens == ["walk", "coffee", "meal", "study", "workout", "hangout", "other"],
+            """
+            ActivityTypeOption tokens changed (now \(tokens)). They are the wire word every activity \
+            descriptor carries, inside its canonical bytes and the device-local sidecars. Localize \
+            `displayName`; never the token.
+            """
+        )
+        #expect(ActivityTypeOption.allCases.map(\.rawValue) == tokens, "the raw value IS the token")
+    }
+
+    /// The receiving side of the activity-type fork: a known token draws this device's word, and an
+    /// unknown one (a newer build's type, or any word a peer sends) draws as received, sanitized and
+    /// not re-cased — never dropped, never matched loosely.
+    @MainActor @Test func receivedActivityTypeTokensDrawThroughTheDisplayName() throws {
+        for option in ActivityTypeOption.allCases {
+            #expect(ActivityTypeOption.displayName(forToken: option.token) == option.displayName)
+        }
+        #expect(ActivityTypeOption.displayName(forToken: "boardGames") == "boardGames",
+                "an unknown token is drawn as sent")
+        #expect(ActivityTypeOption.displayName(forToken: "Walk") == "Walk",
+                "matching is exact: the token is the sender's frozen spelling")
+        #expect(ActivityTypeOption.displayName(forToken: "bad\u{200B}word") == "badword",
+                "an unknown token is still sanitized before it is drawn")
+        let source = try RepoRoot.source("App/Fernlet/ActivitiesView.swift")
+        #expect(source.contains("ActivityTypeOption.displayName(forToken: type)"),
+                "the activity subtitle draws the received type through the fork")
+        #expect(!source.contains(".capitalized"),
+                "nothing in ActivitiesView re-cases a received word for display")
+    }
+
     // MARK: - C. The widget cross-process contract
 
     /// The app-side companion-state raw values, frozen here once and reused by parts B and C so the
@@ -2846,6 +2890,11 @@ struct LocalizationBoundaryTests {
                      source: "CeremonyButton.title in both flows, forked String → LocalizedStringKey"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Return the key",
                      source: "CeremonyButton.title in the custodian flow, forked String → LocalizedStringKey"),
+        // Friends lane, Spanish round (2026-10-20): each measured absent before its fork.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Expires in %lld min",
+                     source: "ActivitiesView's ExpiryLabel, \"Expires \" + a separately built phrase → one key"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletSocial/Localizable.xcstrings", key: "presence.heart.cooldown",
+                     source: "PresenceManager's heart sentences, English literal → FernletSocialCopy.Presence"),
     ] + ["sedentary", "light", "moderate", "active", "veryActive"].map {
         HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings", key: "activityLevel.\($0)",
                      source: "ActivityLevel.label, literal → String(localized:bundle: .module) (2026-10-19)")
@@ -3036,6 +3085,17 @@ struct LocalizationBoundaryTests {
         // Workout setup's Days-per-week stepper, which spliced an English "s" into its key.
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
                      key: "%lld days a week", source: "Workout setup's days-per-week stepper"),
+        // Friends lane, Spanish round (2026-10-20): bare `%lld`s, each now carrying its hand-authored
+        // English `one`/`other` block.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "Expires in %lld days", source: "an activity card's expiry label"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "You're hosting the maximum of %lld activities. End one to start another.",
+                     source: "the Start an activity form at the host cap"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletSocial/Localizable.xcstrings",
+                     key: "activities.error.hostLimit", source: "Group Activities' host-cap error"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletSocial/Localizable.xcstrings",
+                     key: "proximity.camera.photoLimitReached", source: "the in-person camera's photo-cap alert"),
     ]
 
     /// Every count-bearing key carries real plural variations.
