@@ -199,7 +199,13 @@ final class OnboardingCoordinatorModel {
         case permissions
 
         /// The "3 of 8" progress caption shown at the top of every onboarding screen.
-        var indexText: String { "\(rawValue + 1) of \(Self.allCases.count)" }
+        ///
+        /// Resolved here because ``OnboardingScreenContainer`` draws it with `Text(String)`, which never
+        /// looks a `String` up — it read "3 of 8" in every language.
+        var indexText: String {
+            String(localized: "onboarding.step.index", defaultValue: "\(rawValue + 1) of \(Self.allCases.count)",
+                   comment: "Onboarding progress caption, e.g. '3 of 8'. Arguments: this step's number, then the number of steps.")
+        }
     }
 
     /// The page currently on screen. Moved only by ``advance()`` and ``back()``.
@@ -596,9 +602,13 @@ private struct OnboardingGoalScreen: View {
 
                     SheetField("Current level") {
                         FlowLayout(spacing: 8) {
-                            ForEach(["beginner", "intermediate", "advanced"], id: \.self) { option in
-                                Button(option.capitalized) { FernletFeedback.system.select(option, in: &level) }
-                                    .buttonStyle(ChipButtonStyle(selected: level == option))
+                            // `level` holds the frozen token (`WorkoutPlanner.defaultGoals` and
+                            // `WorkoutProfile.fromOnboarding` parse it); the chip draws
+                            // `ExperienceLevel.displayName`. It drew `option.capitalized` — the
+                            // English token itself, case-folded in code.
+                            ForEach(ExperienceLevel.allCases) { option in
+                                Button(option.displayName) { FernletFeedback.system.select(option.rawValue, in: &level) }
+                                    .buttonStyle(ChipButtonStyle(selected: level == option.rawValue))
                             }
                         }
                     }

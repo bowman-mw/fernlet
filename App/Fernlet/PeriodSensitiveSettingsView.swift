@@ -108,7 +108,7 @@ struct PeriodSensitiveSettingsView: View {
                 // for someone who installed before this gate existed, or who has had a birthday.
                 AgeGateNotice(
                     gate: .intimacy,
-                    featureName: "Intimacy tracking",
+                    feature: .intimacyTracking,
                     ageAssurance: store.ageAssurance
                 )
             }

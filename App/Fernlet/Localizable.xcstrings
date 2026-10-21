@@ -1740,6 +1740,15 @@
     "Ask your friend to show their code again — codes expire after a few minutes — and make sure you're scanning the person shown in this row." : {
 
     },
+    "Asked only if you turn on weather-aware recovery prompts." : {
+
+    },
+    "Asked the first time you log a workout or open a health feature." : {
+
+    },
+    "Asked when you first scan a nutrition label." : {
+
+    },
     "Asking phone" : {
 
     },
@@ -2174,6 +2183,9 @@
       "extractionState" : "manual"
     },
     "Cloud records" : {
+
+    },
+    "Coarse location" : {
 
     },
     "Code captured" : {
@@ -3394,6 +3406,9 @@
     "Fernlet asks for Health access only when a feature needs it." : {
 
     },
+    "Fernlet avoids streaks, ranking, and body-goal pressure." : {
+
+    },
     "Fernlet can also delete the entries it wrote to Apple Health — that's the second button below. It can only ever delete its own; everything else in Apple Health is yours to delete in the Health app." : {
 
     },
@@ -3417,16 +3432,6 @@
     },
     "Fernlet companion" : {
 
-    },
-    "Fernlet couldn't check your age with Apple, so this is your word for it. Only confirm if you really are %lld or older — %@ is meant for people that age and up." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Fernlet couldn't check your age with Apple, so this is your word for it. Only confirm if you really are %1$lld or older — %2$@ is meant for people that age and up."
-          }
-        }
-      }
     },
     "Fernlet couldn't confirm who it was sending to, so no heart was sent." : {
 
@@ -3789,6 +3794,9 @@
 
     },
     "Friends and blocks" : {
+
+    },
+    "Friends and helpers only see data you explicitly share." : {
 
     },
     "Friends can browse what you've designed." : {
@@ -4559,6 +4567,9 @@
           }
         }
       }
+    },
+    "Just on this device" : {
+
     },
     "Just the bar" : {
       "comment" : "Guided workout, Plates: the weight is the empty bar, with no plates on it.",
@@ -5480,6 +5491,9 @@
     "No score — nothing was logged" : {
 
     },
+    "No shame loops" : {
+
+    },
     "No shops right now. Spend time with a friend and their shop opens here for an hour after you part." : {
 
     },
@@ -5612,6 +5626,12 @@
     },
     "Nothing is hidden. In a plan's Edit sheet, tap Don't suggest on an exercise to keep it out of your plans." : {
       "comment" : "Your exercises: the empty hidden list"
+    },
+    "Nothing leaves this phone — logs here won't sync to your other devices. You can turn on iCloud later in Settings." : {
+
+    },
+    "Nothing leaves this phone. The data already in this iCloud account won't be merged in, and logs here won't sync to your other devices. You can turn on iCloud later in Settings." : {
+
     },
     "Nothing planned yet — I can put something together." : {
 
@@ -6332,6 +6352,9 @@
     "Privacy Policy" : {
 
     },
+    "Private by default" : {
+
+    },
     "Private database sync for daily logs across your Fernlet devices." : {
 
     },
@@ -6947,6 +6970,20 @@
     "Restore anyway" : {
       "comment" : "Privacy & Data: restore an older Sealed backup (journal or intimate logs) anyway."
     },
+    "Restore from iCloud" : {
+
+    },
+    "Restore from iCloud — we found ^[%lld meal log](inflect: true), ^[%lld journal entry](inflect: true), ^[%lld workout](inflect: true) from a previous device." : {
+      "comment" : "Onboarding storage card when this iCloud account already holds Fernlet data. Arguments: the meal-log, journal-entry and workout counts found.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Restore from iCloud — we found ^[%1$lld meal log](inflect: true), ^[%2$lld journal entry](inflect: true), ^[%3$lld workout](inflect: true) from a previous device."
+          }
+        }
+      }
+    },
     "Restore it here" : {
       "comment" : "Privacy & Data: add another iPhone's Sealed backup (journal or intimate logs) to this iPhone."
     },
@@ -7517,6 +7554,9 @@
     },
     "Severe" : {
       "comment" : "Injury picker option: leave this body area's exercises out"
+    },
+    "Sex" : {
+
     },
     "Shakespeare Steps" : {
       "comment" : "Silly stat title: steps compared with words Shakespeare wrote"
@@ -8805,6 +8845,9 @@
     "Type to find a replacement food." : {
 
     },
+    "Typical activity" : {
+
+    },
     "USDA macros" : {
 
     },
@@ -9397,6 +9440,9 @@
     "You can skip this. Without a passcode, Private opens with a tap." : {
 
     },
+    "You choose what to share" : {
+
+    },
     "You did “%@” before — it might feel good again." : {
 
     },
@@ -9593,6 +9639,9 @@
     "Your cycles vary by about ±^[%lld day](inflect: true)." : {
 
     },
+    "Your daily logs are saved to iCloud and appear on your other Fernlet devices." : {
+
+    },
     "Your data" : {
 
     },
@@ -9741,6 +9790,9 @@
 
     },
     "Your period data stays on this device, behind your app lock." : {
+
+    },
+    "Your personal logs stay in your own storage unless you choose iCloud sync." : {
 
     },
     "Your photo shelf is nearly full" : {
@@ -9989,6 +10041,174 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "a little low"
+          }
+        }
+      }
+    },
+    "ageGate.chat.available" : {
+      "comment" : "Settings: messaging friends nearby is unlocked (not normally shown).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Messaging friends nearby is available."
+          }
+        }
+      }
+    },
+    "ageGate.chat.below" : {
+      "comment" : "Settings: messaging friends nearby is locked because Apple placed the user below the minimum age. The argument is the age (13).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Messaging friends nearby is available at %lld and older."
+          }
+        }
+      }
+    },
+    "ageGate.chat.communicationLimits" : {
+      "comment" : "Settings: messaging friends nearby is locked by a guardian's communication limits (Screen Time).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Messaging friends nearby is turned off because communication limits are set for this Apple Account. Whoever manages it can change that in Screen Time."
+          }
+        }
+      }
+    },
+    "ageGate.chat.confirmWarning" : {
+      "comment" : "Alert body before a user confirms their own age to message friends nearby (not normally shown: this feature offers no manual confirmation). The argument is the minimum age (13).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet couldn't check your age with Apple, so this is your word for it. Only confirm if you really are %lld or older — messaging friends nearby is meant for people that age and up."
+          }
+        }
+      }
+    },
+    "ageGate.chat.needsSystemCheck" : {
+      "comment" : "Settings: messaging friends nearby needs Apple's age check; there is no manual confirmation. The argument is the age (13).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Messaging friends nearby is for people %lld and older, and Fernlet needs Apple to confirm your age range before turning it on. Your birthday is never shared."
+          }
+        }
+      }
+    },
+    "ageGate.chat.unclearAnswer" : {
+      "comment" : "Settings: Apple's age answer was too vague to unlock messaging friends nearby (not normally shown: this gate takes the needs-system-check wording). The argument is the age (13).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Messaging friends nearby needs an age check, and Apple's answer wasn't specific enough to confirm you're %lld or older."
+          }
+        }
+      }
+    },
+    "ageGate.chat.unknownAge" : {
+      "comment" : "Settings: messaging friends nearby is locked until the user's age is checked (not normally shown: this gate takes the needs-system-check wording). The argument is the age (13).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Messaging friends nearby is for people %lld and older. Fernlet doesn't know your age yet — Apple can confirm your age range without sharing your birthday."
+          }
+        }
+      }
+    },
+    "ageGate.intimacy.available" : {
+      "comment" : "Settings: intimacy tracking is unlocked (not normally shown).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intimacy tracking is available."
+          }
+        }
+      }
+    },
+    "ageGate.intimacy.below" : {
+      "comment" : "Settings: intimacy tracking is locked because Apple placed the user below the minimum age. The argument is the age (16).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intimacy tracking is available at %lld and older."
+          }
+        }
+      }
+    },
+    "ageGate.intimacy.communicationLimits" : {
+      "comment" : "Settings: intimacy tracking is locked by a guardian's communication limits (not normally shown).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intimacy tracking is turned off because communication limits are set for this Apple Account. Whoever manages it can change that in Screen Time."
+          }
+        }
+      }
+    },
+    "ageGate.intimacy.confirmWarning" : {
+      "comment" : "Alert body before a user confirms their own age to turn on intimacy tracking. The argument is the minimum age (16).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet couldn't check your age with Apple, so this is your word for it. Only confirm if you really are %lld or older — intimacy tracking is meant for people that age and up."
+          }
+        }
+      }
+    },
+    "ageGate.intimacy.needsSystemCheck" : {
+      "comment" : "Settings: intimacy tracking needs Apple's age check (not normally shown). The argument is the age (16).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intimacy tracking is for people %lld and older, and Fernlet needs Apple to confirm your age range before turning it on. Your birthday is never shared."
+          }
+        }
+      }
+    },
+    "ageGate.intimacy.unclearAnswer" : {
+      "comment" : "Settings: Apple's age answer was too vague to unlock intimacy tracking. The argument is the age (16).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intimacy tracking needs an age check, and Apple's answer wasn't specific enough to confirm you're %lld or older."
+          }
+        }
+      }
+    },
+    "ageGate.intimacy.unknownAge" : {
+      "comment" : "Settings: intimacy tracking is locked until the user's age is checked. The argument is the age (16).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intimacy tracking is for people %lld and older. Fernlet doesn't know your age yet — Apple can confirm your age range without sharing your birthday."
           }
         }
       }
@@ -12576,6 +12796,18 @@
     },
     "of %lldg" : {
 
+    },
+    "onboarding.step.index" : {
+      "comment" : "Onboarding progress caption, e.g. '3 of 8'. Arguments: this step's number, then the number of steps.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld"
+          }
+        }
+      }
     },
     "optional — we'll read the macros for you" : {
 

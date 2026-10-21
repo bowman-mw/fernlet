@@ -3216,7 +3216,28 @@ struct LocalizationBoundaryTests {
             keys.append(HarvestedKey(catalog: domain, key: "goal.\(stem).nutrition",
                                      source: "GoalType.nutritionSummary, literal → String(localized:bundle: .module)"))
         }
-        return keys + journalLaneAppKeys + journalLaneCycleKeys
+        return keys + journalLaneAppKeys + journalLaneCycleKeys + journalLaneOnboardingKeys
+    }()
+
+    /// The journal lane's onboarding and age-gate keys: copy that reached `Text` as a `String`
+    /// helper parameter, and the age-gate sentences that spliced a feature name.
+    static let journalLaneOnboardingKeys: [HarvestedKey] = {
+        let app = "App/Fernlet/Localizable.xcstrings"
+        var names: [String] = [
+            "onboarding.step.index", "Private by default", "No shame loops", "You choose what to share",
+            "Coarse location", "Asked when you first scan a nutrition label.", "Restore from iCloud",
+            "Just on this device", "Sex", "Typical activity",
+        ]
+        for feature in ["intimacy", "chat"] {
+            names.append("ageGate.\(feature).confirmWarning")
+            for state in ["communicationLimits", "below", "needsSystemCheck", "unclearAnswer", "unknownAge", "available"] {
+                names.append("ageGate.\(feature).\(state)")
+            }
+        }
+        return names.map {
+            HarvestedKey(catalog: app, key: $0,
+                         source: "onboarding helpers typed String, and AgeGateNotice's spliced feature name")
+        }
     }()
 
     /// The journal lane's cycle keys: the app-target forks over the sealed vocabulary
@@ -3250,6 +3271,27 @@ struct LocalizationBoundaryTests {
         ForkedMember(path: "App/Fernlet/LogPeriodSheet.swift",
                      declaration: "private func periodToggle(_ title: LocalizedStringKey, isOn: Binding<Bool>) -> some View {",
                      role: "the period log sheet's 'First day of cycle' and 'Intermenstrual bleeding' switches"),
+        ForkedMember(path: "App/Fernlet/OnboardingWelcomeView.swift",
+                     declaration: "private func privacyRow(_ systemImage: String, title: LocalizedStringKey, body: LocalizedStringKey) -> some View {",
+                     role: "the welcome screen's three privacy pillars"),
+        ForkedMember(path: "App/Fernlet/OnboardingPermissionsView.swift",
+                     declaration: "private func permissionRow(_ systemImage: String, title: LocalizedStringKey, body: LocalizedStringKey) -> some View {",
+                     role: "the permissions step's Health, Camera and Coarse location cards"),
+        ForkedMember(path: "App/Fernlet/OnboardingStorageChoiceView.swift",
+                     declaration: "private func storageCard(choice: OnboardingStorageChoice, title: LocalizedStringKey, copy: Text, systemImage: String) -> some View {",
+                     role: "the storage step's two cards and their explanations"),
+        ForkedMember(path: "App/Fernlet/OnboardingView.swift",
+                     declaration: "init(_ label: LocalizedStringKey, @ViewBuilder content: () -> Content) {",
+                     role: "LabeledProfilePicker's caption (Sex, Typical activity, Eating pattern, Guidance style)"),
+        ForkedMember(path: "App/Fernlet/OnboardingView.swift",
+                     declaration: "static let sex: LocalizedStringKey = \"Sex\"",
+                     role: "the body-profile Sex picker's name, shared by Settings and onboarding"),
+        ForkedMember(path: "App/Fernlet/OnboardingView.swift",
+                     declaration: "static let activity: LocalizedStringKey = \"Typical activity\"",
+                     role: "the body-profile activity picker's name, shared by Settings and onboarding"),
+        ForkedMember(path: "App/Fernlet/AgeGateNotice.swift",
+                     declaration: "let feature: AgeGatedFeature",
+                     role: "the age-gate notice's feature, whose sentences are whole per feature (was a spliced `featureName: String`)"),
     ]
 
     /// The journal lane's forked members still carry their localized types.
