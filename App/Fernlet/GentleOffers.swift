@@ -20,14 +20,23 @@ enum GentleOfferKind: String, CaseIterable, Equatable {
     case shortWalk
 
     /// Invitation copy — offered, never prescribed. No pressure words, no "you should".
+    ///
+    /// Display only (its one reader is the Home card), so it localizes in place; the `rawValue` is the
+    /// token and is untouched.
     var invitation: String {
         switch self {
         case .breathing:
-            "Would a minute of slow breathing feel nice? No pressure at all."
+            String(localized: "home.gentleOffer.breathing",
+                   defaultValue: "Would a minute of slow breathing feel nice? No pressure at all.",
+                   comment: "Home gentle-offer card on a heavier day, inviting a breathing exercise. An offer, never an instruction: no 'you should'.")
         case .worryBox:
-            "Carrying something around? You could write it down and let the worry box hold it for a while."
+            String(localized: "home.gentleOffer.worryBox",
+                   defaultValue: "Carrying something around? You could write it down and let the worry box hold it for a while.",
+                   comment: "Home gentle-offer card on a heavier day, inviting the Worry Box (write a worry down and set it aside). An offer, never an instruction.")
         case .shortWalk:
-            "It's gentle outside right now — a short stroll might feel nice, only if you want to."
+            String(localized: "home.gentleOffer.shortWalk",
+                   defaultValue: "It's gentle outside right now — a short stroll might feel nice, only if you want to.",
+                   comment: "Home gentle-offer card when the weather is pleasant and it is daytime, inviting a short walk. An offer, never an instruction.")
         }
     }
 

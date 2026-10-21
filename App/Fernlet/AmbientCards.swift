@@ -238,7 +238,14 @@ struct AmbientCardsView: View {
     }
 
     private func computeLookBack() -> LookBack? {
-        let windows: [(Int, String)] = [(365, "A year ago today"), (180, "Six months ago"), (90, "Three months ago")]
+        let windows: [(Int, String)] = [
+            (365, String(localized: "home.lookBack.yearAgo", defaultValue: "A year ago today",
+                         comment: "Home looking-back card: the label over a journal entry written exactly a year ago.")),
+            (180, String(localized: "home.lookBack.sixMonthsAgo", defaultValue: "Six months ago",
+                         comment: "Home looking-back card: the label over a journal entry written six months ago.")),
+            (90, String(localized: "home.lookBack.threeMonthsAgo", defaultValue: "Three months ago",
+                        comment: "Home looking-back card: the label over a journal entry written three months ago.")),
+        ]
         for (days, label) in windows {
             guard let date = Calendar.current.date(byAdding: .day, value: -days, to: Date()) else { continue }
             let day = store.loadDayWithDecryptedJournals(for: FernletDate.dayKey(for: date))
@@ -279,7 +286,9 @@ struct AmbientCardsView: View {
         guard !store.day.meals.isEmpty else { return nil }
         let proteinGap = store.nutritionTargets.protein - store.macroTotals.protein
         guard proteinGap >= 20 else { return nil }
-        return "About \(proteinGap)g protein left today — yogurt, eggs, or chicken would help close it."
+        return String(localized: "home.macroGap.protein",
+                      defaultValue: "About \(proteinGap)g protein left today — yogurt, eggs, or chicken would help close it.",
+                      comment: "Home 'Room for a little more' card: grams of protein still under today's target (always 20 or more), with a gentle suggestion. Never a scold.")
     }
 
     // MARK: - Forgotten favorites (food)
@@ -429,15 +438,27 @@ struct AmbientCardsView: View {
         }
     }
 
+    /// The outlook sentence: one whole sentence per confidence tier, never a qualifier fragment
+    /// spliced into an English sentence, with the date window as its one placeholder.
     private func periodOutlookText(_ prediction: CyclePrediction) -> String {
         let start = FernletDate.shortDate(for: prediction.likelyStartRange.lowerBound)
         let end = FernletDate.shortDate(for: prediction.likelyStartRange.upperBound)
-        let window = start == end ? start : "\(start)–\(end)"
-        let qualifier: String
-        if prediction.confidence >= 0.7 { qualifier = "" }
-        else if prediction.confidence >= 0.4 { qualifier = ", still settling" }
-        else { qualifier = ", an early estimate" }
-        return "Your next period is likely around \(window)\(qualifier). Gentle planning, no pressure."
+        let window = start == end ? start : String(
+            localized: "home.cycleOutlook.window", defaultValue: "\(start)–\(end)",
+            comment: "Home cycle outlook: the range of days the next period is likely to start, e.g. 'Mar 3–Mar 6'. Both are short dates.")
+        if prediction.confidence >= 0.7 {
+            return String(localized: "home.cycleOutlook.likely",
+                          defaultValue: "Your next period is likely around \(window). Gentle planning, no pressure.",
+                          comment: "Home cycle outlook card. The placeholder is a short date or a date range. Calm, never a countdown.")
+        }
+        if prediction.confidence >= 0.4 {
+            return String(localized: "home.cycleOutlook.settling",
+                          defaultValue: "Your next period is likely around \(window), still settling. Gentle planning, no pressure.",
+                          comment: "Home cycle outlook card while the prediction is still settling (moderate confidence). The placeholder is a short date or a date range.")
+        }
+        return String(localized: "home.cycleOutlook.early",
+                      defaultValue: "Your next period is likely around \(window), an early estimate. Gentle planning, no pressure.",
+                      comment: "Home cycle outlook card while the prediction is only an early estimate (low confidence). The placeholder is a short date or a date range.")
     }
 
     // MARK: - Preventive-care micronutrient bubble

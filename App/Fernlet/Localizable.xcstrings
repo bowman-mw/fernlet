@@ -680,12 +680,6 @@
         }
       }
     },
-    "%lld gifts" : {
-
-    },
-    "%lld gifts on the shelf" : {
-
-    },
     "%lld hearts are tucked away for %@ — delivered when they next open Fernlet." : {
       "localizations" : {
         "en" : {
@@ -1107,12 +1101,6 @@
 
     },
     "1 exercise · ~%lld min" : {
-
-    },
-    "1 gift" : {
-
-    },
-    "1 gift on the shelf" : {
 
     },
     "1 logged" : {
@@ -5128,9 +5116,6 @@
     },
     "Mild: Fernlet trains around it, lighter and with supported moves. Severe: those moves are left out." : {
       "comment" : "Explains the two severities in the workout injury picker"
-    },
-    "Milestone gifts have added %lld coins to your pouch." : {
-
     },
     "Milestones" : {
 
@@ -10828,6 +10813,138 @@
         }
       }
     },
+    "home.cycleOutlook.early" : {
+      "comment" : "Home cycle outlook card while the prediction is only an early estimate (low confidence). The placeholder is a short date or a date range.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your next period is likely around %@, an early estimate. Gentle planning, no pressure."
+          }
+        }
+      }
+    },
+    "home.cycleOutlook.likely" : {
+      "comment" : "Home cycle outlook card. The placeholder is a short date or a date range. Calm, never a countdown.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your next period is likely around %@. Gentle planning, no pressure."
+          }
+        }
+      }
+    },
+    "home.cycleOutlook.settling" : {
+      "comment" : "Home cycle outlook card while the prediction is still settling (moderate confidence). The placeholder is a short date or a date range.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your next period is likely around %@, still settling. Gentle planning, no pressure."
+          }
+        }
+      }
+    },
+    "home.cycleOutlook.window" : {
+      "comment" : "Home cycle outlook: the range of days the next period is likely to start, e.g. 'Mar 3–Mar 6'. Both are short dates.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@–%2$@"
+          }
+        }
+      }
+    },
+    "home.gentleOffer.breathing" : {
+      "comment" : "Home gentle-offer card on a heavier day, inviting a breathing exercise. An offer, never an instruction: no 'you should'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Would a minute of slow breathing feel nice? No pressure at all."
+          }
+        }
+      }
+    },
+    "home.gentleOffer.shortWalk" : {
+      "comment" : "Home gentle-offer card when the weather is pleasant and it is daytime, inviting a short walk. An offer, never an instruction.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "It's gentle outside right now — a short stroll might feel nice, only if you want to."
+          }
+        }
+      }
+    },
+    "home.gentleOffer.worryBox" : {
+      "comment" : "Home gentle-offer card on a heavier day, inviting the Worry Box (write a worry down and set it aside). An offer, never an instruction.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Carrying something around? You could write it down and let the worry box hold it for a while."
+          }
+        }
+      }
+    },
+    "home.lookBack.sixMonthsAgo" : {
+      "comment" : "Home looking-back card: the label over a journal entry written six months ago.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Six months ago"
+          }
+        }
+      }
+    },
+    "home.lookBack.threeMonthsAgo" : {
+      "comment" : "Home looking-back card: the label over a journal entry written three months ago.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Three months ago"
+          }
+        }
+      }
+    },
+    "home.lookBack.yearAgo" : {
+      "comment" : "Home looking-back card: the label over a journal entry written exactly a year ago.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A year ago today"
+          }
+        }
+      }
+    },
+    "home.macroGap.protein" : {
+      "comment" : "Home 'Room for a little more' card: grams of protein still under today's target (always 20 or more), with a gentle suggestion. Never a scold.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "About %lldg protein left today — yogurt, eggs, or chicken would help close it."
+          }
+        }
+      }
+    },
     "home.milestones.coinsGifted.pill" : {
       "comment" : "Home milestones card: the small pill beside the title counting coins gifted by milestones, beside a star glyph. The noun (coins) is implied. Needs a plural variation per language.",
       "localizations" : {
@@ -11993,6 +12110,501 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Saved the plan, but Fernlet couldn't clear this review. Try adding it again."
+          }
+        }
+      }
+    },
+    "milestones.coins.added" : {
+      "comment" : "Milestones screen and keepsake shelf footer: the coins milestone gifts have added to the user's coin pouch. Needs a plural variation per language.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Milestone gifts have added %lld coin to your pouch."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Milestone gifts have added %lld coins to your pouch."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "milestones.empty.breathing" : {
+      "comment" : "Milestones screen: a quiet placeholder row before the first finished breathing exercise. Never a to-do.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your first slow-breathing break will land here."
+          }
+        }
+      }
+    },
+    "milestones.empty.journal" : {
+      "comment" : "Milestones screen: a quiet placeholder row before the first journal entry. Never a to-do.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your first journal moment will land here."
+          }
+        }
+      }
+    },
+    "milestones.empty.meal" : {
+      "comment" : "Milestones screen: a quiet placeholder row before the first logged meal. Never a to-do.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your first noticed meal will land here."
+          }
+        }
+      }
+    },
+    "milestones.empty.water" : {
+      "comment" : "Milestones screen: a quiet placeholder row before the first day the water target was met. Never a to-do.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your first well-watered day will land here."
+          }
+        }
+      }
+    },
+    "milestones.empty.workout" : {
+      "comment" : "Milestones screen: a quiet placeholder row before the first logged workout. Never a to-do.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your first time moving will land here."
+          }
+        }
+      }
+    },
+    "milestones.empty.worry" : {
+      "comment" : "Milestones screen: a quiet placeholder row before the first worry released from the Worry Box. Never a to-do.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your first worry let go will land here."
+          }
+        }
+      }
+    },
+    "milestones.headline.breathing.count" : {
+      "comment" : "Milestones: the breathing row's lifetime count (2 or more). Needs a plural variation per language.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've taken %lld slow-breathing break."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've taken %lld slow-breathing breaks."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "milestones.headline.breathing.first" : {
+      "comment" : "Milestones: the breathing row after exactly one finished breathing exercise.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You've taken one slow-breathing break."
+          }
+        }
+      }
+    },
+    "milestones.headline.breathing.none" : {
+      "comment" : "Milestones: the breathing row's sentence before any breathing break.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Breathing breaks will gather here."
+          }
+        }
+      }
+    },
+    "milestones.headline.journal.count" : {
+      "comment" : "Milestones: the journal row's lifetime count (2 or more; exactly one has its own sentence). Needs a plural variation per language.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've written %lld journal moment."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've written %lld journal moments."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "milestones.headline.journal.first" : {
+      "comment" : "Milestones: the journal row after exactly one entry. Warm, a memory not a metric.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You've written your first journal moment."
+          }
+        }
+      }
+    },
+    "milestones.headline.journal.none" : {
+      "comment" : "Milestones: the journal row's sentence before any entry.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your journal moments will gather here."
+          }
+        }
+      }
+    },
+    "milestones.headline.meal.count" : {
+      "comment" : "Milestones: the meals row's lifetime count (2 or more). Needs a plural variation per language.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've noted %lld meal."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've noted %lld meals."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "milestones.headline.meal.first" : {
+      "comment" : "Milestones: the meals row after exactly one logged meal.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You've noted your first meal."
+          }
+        }
+      }
+    },
+    "milestones.headline.meal.none" : {
+      "comment" : "Milestones: the meals row's sentence before any logged meal.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Meals you notice will gather here."
+          }
+        }
+      }
+    },
+    "milestones.headline.water.count" : {
+      "comment" : "Milestones: the water row's lifetime count of days the water target was met (2 or more). Needs a plural variation per language.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've had %lld well-watered day."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've had %lld well-watered days."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "milestones.headline.water.first" : {
+      "comment" : "Milestones: the water row after exactly one day the water target was met.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You've had one well-watered day."
+          }
+        }
+      }
+    },
+    "milestones.headline.water.none" : {
+      "comment" : "Milestones: the water row's sentence before any well-watered day.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Days you drink enough water will gather here."
+          }
+        }
+      }
+    },
+    "milestones.headline.workout.count" : {
+      "comment" : "Milestones: the movement row's lifetime count of workouts (2 or more). Needs a plural variation per language.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've moved your body %lld time."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've moved your body %lld times."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "milestones.headline.workout.first" : {
+      "comment" : "Milestones: the movement row after exactly one logged workout.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You've moved your body once, on purpose."
+          }
+        }
+      }
+    },
+    "milestones.headline.workout.none" : {
+      "comment" : "Milestones: the movement row's sentence before any logged workout.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Times you move will gather here."
+          }
+        }
+      }
+    },
+    "milestones.headline.worry.count" : {
+      "comment" : "Milestones: the worries row's lifetime count of worries let go (2 or more). Needs a plural variation per language.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've let %lld worry go."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've let %lld worries go."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "milestones.headline.worry.first" : {
+      "comment" : "Milestones: the worries row after exactly one worry released from the Worry Box.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You've let one worry go."
+          }
+        }
+      }
+    },
+    "milestones.headline.worry.none" : {
+      "comment" : "Milestones: the worries row's sentence before any worry let go.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Worries you let go will gather here."
+          }
+        }
+      }
+    },
+    "milestones.row.giftsOnShelf" : {
+      "comment" : "Milestones screen, under a kind of care: how many milestone gifts it has put on the keepsake shelf. Needs a plural variation per language; English says '1 gift on the shelf'.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld gift on the shelf"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld gifts on the shelf"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "milestones.shelf.breathing" : {
+      "comment" : "Keepsake shelf: lowercase label under the breathing medallion, below its count of breathing breaks.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "breathing"
+          }
+        }
+      }
+    },
+    "milestones.shelf.journal" : {
+      "comment" : "Keepsake shelf: lowercase label under the journal medallion, below its count.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "journal"
+          }
+        }
+      }
+    },
+    "milestones.shelf.meals" : {
+      "comment" : "Keepsake shelf: lowercase label under the meals medallion, below its count.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "meals"
+          }
+        }
+      }
+    },
+    "milestones.shelf.water" : {
+      "comment" : "Keepsake shelf: lowercase label under the water medallion, below its count of well-watered days.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "water"
+          }
+        }
+      }
+    },
+    "milestones.shelf.workouts" : {
+      "comment" : "Keepsake shelf: lowercase label under the workouts medallion, below its count.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "workouts"
+          }
+        }
+      }
+    },
+    "milestones.shelf.worries" : {
+      "comment" : "Keepsake shelf: lowercase label under the worry medallion, below its count of worries let go.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "worries let go"
+          }
+        }
+      }
+    },
+    "milestones.shelfLink.giftCount" : {
+      "comment" : "Milestones screen: the Keepsake shelf link's count of milestone gifts. Needs a plural variation per language; English says '1 gift'.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld gift"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld gifts"
+                }
+              }
+            }
           }
         }
       }
