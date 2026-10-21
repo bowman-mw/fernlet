@@ -319,12 +319,16 @@ enum FernletLockCopy {
                    comment: "The only mitigation offered, plus its exception. 'Sealed backup' and 'Privacy & Data' are names of a setting and a settings screen in this app — translate them the same way they are translated there. The last sentence is an absolute: Worry Box notes have no backup at all.")
         }
 
-        /// The ask.
-        static var onlyIfConfident: String {
-            String(localized: "lock.disclosure.onlyIfConfident",
-                   defaultValue: "Only set a passcode if you're confident you'll remember it.",
-                   bundle: .module,
-                   comment: "Closing line of the no-recovery disclosure, asking the user to opt out if unsure.")
+        /// The ask. "If you're confident" describes the user, which Spanish agrees with them
+        /// (*segura*), so it resolves through `AddressedCopy` for `address`, the setup view's
+        /// `fernletTermOfAddress`.
+        static func onlyIfConfident(addressing address: TermOfAddress) -> String {
+            AddressedCopy.string(
+                LocalizedStringResource("lock.disclosure.onlyIfConfident",
+                                        defaultValue: "Only set a passcode if you're confident you'll remember it.",
+                                        bundle: .module,
+                                        comment: "Closing line of the no-recovery disclosure, asking the user to opt out if unsure."),
+                addressing: address)
         }
 
         /// The acknowledgement that actually creates the lock.
@@ -370,6 +374,9 @@ public struct FernletLockSetupView: View {
     /// The app's open coordinator — asked before a setup mints a fresh key over sealed entries.
     @Environment(\.fernletPrivateHubOpener) private var privateHubOpener
     @Environment(\.dismiss) private var dismiss
+    /// The user's term of address (the app root sets it from the body profile), for the
+    /// disclosure's closing line, which describes the user.
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
 
     @State private var step: SetupStep = .kindPicker
     @State private var selectedKind: FernletLockCredentialKind = .pin6
@@ -749,7 +756,7 @@ public struct FernletLockSetupView: View {
                             .fernletWrappingText()
                     }
 
-                    Text(FernletLockCopy.Disclosure.onlyIfConfident)
+                    Text(FernletLockCopy.Disclosure.onlyIfConfident(addressing: termOfAddress))
                         .font(.fernlet(.bubble))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()

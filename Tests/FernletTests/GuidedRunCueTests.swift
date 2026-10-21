@@ -459,8 +459,8 @@ private final class BackgroundRecorder {
     /// A workout cue says only that a timer ended, at the default interruption level, carrying the
     /// sound it was given; its identifiers are frozen and recognisable, and nothing else matches them.
     @Test func cueNotificationShape() {
-        let rest = NotificationService.workoutCueContent(for: .restEnded, soundFileName: FernletSound.chime.fileName)
-        let hold = NotificationService.workoutCueContent(for: .holdEnded, soundFileName: nil)
+        let rest = NotificationService.workoutCueContent(for: .restEnded, soundFileName: FernletSound.chime.fileName, addressing: .masculine)
+        let hold = NotificationService.workoutCueContent(for: .holdEnded, soundFileName: nil, addressing: .masculine)
         #expect(!rest.title.isEmpty && !rest.body.isEmpty && !hold.title.isEmpty && !hold.body.isEmpty)
         #expect(rest.title != hold.title)
         #expect(rest.sound != nil && hold.sound == nil)

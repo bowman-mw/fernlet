@@ -227,13 +227,17 @@ final class GuidedRunCueDirector {
     /// cue adds nothing at those moments; with the sheet closed, the announcer says the spoken line.
     var runnerOnScreen = false
 
-    /// Creates a director. Every dependency is injectable; the defaults are production.
+    /// Creates a director. Every dependency is injectable; the defaults are production, except the
+    /// background scheduler, which has none.
     ///
     /// - Parameters:
     ///   - feedback: The haptic and sound player; nil means the production player.
     ///   - preferences: The person's switches, read at every play.
     ///   - isAppActive: Whether the app is in front, read at every play.
-    ///   - scheduleBackground: Replaces the pending background cue.
+    ///   - scheduleBackground: Replaces the pending background cue. Required: the cue's body
+    ///     describes the user and is resolved for their term of address, which only the owner of
+    ///     the profile has (`FernletStore` passes `NotificationService.replaceWorkoutCues` with the
+    ///     effective profile's), so a default here could only have guessed masculine.
     ///   - speaker: The spoken-cue player; nil means `FernletSpeaker.system`.
     ///   - spokenCuesOn: Whether "Spoken cues" is on, read at every spoken moment; nil reads
     ///     ``WorkoutCuePreferences/spokenEnabled(in:)``.
@@ -241,9 +245,7 @@ final class GuidedRunCueDirector {
         feedback: FernletFeedback? = nil,
         preferences: @escaping @MainActor () -> FernletFeedbackPreferences = { WorkoutCuePreferences.current() },
         isAppActive: @escaping @MainActor () -> Bool = { UIApplication.shared.applicationState == .active },
-        scheduleBackground: @escaping BackgroundScheduler = { cues, sound in
-            await NotificationService.replaceWorkoutCues(cues, soundFileName: sound)
-        },
+        scheduleBackground: @escaping BackgroundScheduler,
         speaker: FernletSpeaker? = nil,
         spokenCuesOn: (@MainActor () -> Bool)? = nil
     ) {

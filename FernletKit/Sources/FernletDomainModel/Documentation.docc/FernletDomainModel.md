@@ -100,9 +100,13 @@ marks each such word `^[listo](inflect: true)`, and the helper resolves the key 
 and inflects it for the term it is handed, never the system's Form of Address. It lives here
 (since 2026-10-21; FernletUI keeps only the view half, `AddressedText` and the
 `fernletTermOfAddress` environment value) because several of its callers are not views: the
-planner's session notes are composed at plan time and stored on the logged row, and the scoring
-lines and a notification's body are written by modules with no SwiftUI. A key built in a package
-names its own bundle, `LocalizedStringResource("key", defaultValue: …, bundle: .module, …)`,
+planner's session notes are composed at plan time and stored on the logged row, so
+``WorkoutLoadContext/address`` carries the user's term into the load pass ("welcome back" and the
+max test's safety line agree with it), and the scoring lines and a notification's body are written
+by modules with no SwiftUI. Display members here take the term from whoever draws them:
+``FeelingTag/label(addressing:)`` (Quiet and Tired describe the person who logged them) and
+``TrainingSplit/summary(addressing:)`` (Recovery Flow's says how the user should feel). A key built
+in a package names its own bundle, `LocalizedStringResource("key", defaultValue: …, bundle: .module, …)`,
 because a resource made here defaults to `Bundle.main`.
 
 > Warning: This page named only two rules, and none of the forked types, until 2026-08-20 — the

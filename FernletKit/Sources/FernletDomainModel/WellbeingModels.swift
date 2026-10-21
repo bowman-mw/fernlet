@@ -505,9 +505,16 @@ public nonisolated enum FeelingTag: String, Codable, CaseIterable, Identifiable,
     /// Was `rawValue.capitalized`, which cannot be localized at all — it is the token wearing a
     /// coat of paint. `rawValue` is FROZEN: it is the value stored in the sealed journal column,
     /// the ``MemoryNote`` category, the parked-token side channel's vocabulary, AND the
-    /// accessibility identifier the UI-test suite selects mood chips by. Only this property is
-    /// text a person reads.
-    public var label: String {
+    /// accessibility identifier the UI-test suite selects mood chips by. Only this is text a
+    /// person reads.
+    ///
+    /// A mood describes the person who logged it, so Spanish agrees "Quiet" and "Tired" with them
+    /// (*Tranquila*, *Cansada*): those two resolve through ``AddressedCopy`` for `address`, the
+    /// effective profile's ``BiologicalSex/termOfAddress`` (a view's `fernletTermOfAddress`). The
+    /// other four read the same for everyone and stay plain keys. A label spliced into a longer
+    /// sentence (the journal calendar cell's spoken line) is this inflected `String`, so the word
+    /// agrees there too.
+    public func label(addressing address: TermOfAddress) -> String {
         switch self {
         case .bright:
             String(localized: "feeling.bright", defaultValue: "Bright", bundle: .module,
@@ -519,11 +526,13 @@ public nonisolated enum FeelingTag: String, Codable, CaseIterable, Identifiable,
             String(localized: "feeling.neutral", defaultValue: "Neutral", bundle: .module,
                    comment: "Journal mood tag: neither good nor bad")
         case .quiet:
-            String(localized: "feeling.quiet", defaultValue: "Quiet", bundle: .module,
-                   comment: "Journal mood tag: a subdued, low-key day")
+            AddressedCopy.string(LocalizedStringResource("feeling.quiet", defaultValue: "Quiet", bundle: .module,
+                                                         comment: "Journal mood tag: a subdued, low-key day"),
+                                 addressing: address)
         case .tired:
-            String(localized: "feeling.tired", defaultValue: "Tired", bundle: .module,
-                   comment: "Journal mood tag: a tired day")
+            AddressedCopy.string(LocalizedStringResource("feeling.tired", defaultValue: "Tired", bundle: .module,
+                                                         comment: "Journal mood tag: a tired day"),
+                                 addressing: address)
         case .hard:
             String(localized: "feeling.hard", defaultValue: "Hard", bundle: .module,
                    comment: "Journal mood tag: the hardest of the six moods")

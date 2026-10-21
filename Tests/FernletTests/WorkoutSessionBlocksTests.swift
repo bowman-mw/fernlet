@@ -24,7 +24,7 @@ struct WorkoutSessionBlocksTests {
         goal: GoalType = .strength,
         intensity: WorkoutIntensity = .moderate
     ) -> WorkoutProgram.SessionSuggestion? {
-        let split = TrainingSplit(id: "probe", name: "Probe", summary: "", specificity: .balanced,
+        let split = TrainingSplit(id: "probe", name: "Probe", specificity: .balanced,
                                   goalFit: [goal], days: [WorkoutSplitDay(title: "Day", sessions: [template])])
         return WorkoutProgram.dayPlan(
             goal: goal, intensity: intensity, profile: profile, location: location,

@@ -108,7 +108,11 @@ The behavior is pinned by `FernletTests` — notably `PeriodAwareScoringTests`,
 every lookup passes `bundle: .module`. ``FernletVoice``'s lines are display copy (`fernletVoice.*`).
 The workout fallbacks' notes and the starter goals are composed in the device's language
 (`workoutFallback.*`), as the planner's own notes are: they are stored on the row or the goal and
-drawn as stored, and nothing compares them. The fallback workouts' NAMES are tokens: a taken
+drawn as stored, and nothing compares them. A line that describes the user agrees with them
+(gendered-address lane, 2026-10-21): ``FernletVoice/message(for:addressing:)`` and
+``WorkoutSuggestionLibrary/suggestions(for:intensity:addressing:)`` take the user's term of address,
+and the retry banner's "when you are ready" and Balanced Strength Circuit's "feel grounded" resolve
+through FernletDomainModel's `AddressedCopy` with a resource built against this module's bundle. The fallback workouts' NAMES are tokens: a taken
 suggestion is saved under its frozen `WorkoutFallbackName` (FernletDomainModel, where the draw-time
 mapping lives), and screens draw it through `Workout.displayedName`. Their exercise lines are plan
 text and stay English. ``MealParser``'s "Meal" default name and "Estimated locally…" note are stored

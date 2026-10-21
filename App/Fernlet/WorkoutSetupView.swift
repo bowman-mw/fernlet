@@ -18,6 +18,8 @@ import FernletUI
 /// guards its draft like the other entry sheets instead.
 struct WorkoutSetupSheet: View {
     @Environment(\.dismiss) private var dismiss
+    /// The user's term of address, which a split summary may agree with (Recovery Flow's does).
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
     var store: FernletStore
 
     @State private var profile: WorkoutProfile
@@ -192,7 +194,7 @@ struct WorkoutSetupSheet: View {
                 ForEach(recommendedSplits) { split in
                     splitOption(
                         title: Text(verbatim: split.displayName),
-                        subtitle: Text(verbatim: split.summary),
+                        subtitle: Text(verbatim: split.summary(addressing: termOfAddress)),
                         tag: Text(verbatim: "\(split.specificity.label) · \(split.frequencySummary)"),
                         selected: selectedSplitID == split.id,
                         badge: split.id == recommendedSplits.first?.id ? Text("Recommended") : nil

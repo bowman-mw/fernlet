@@ -18,7 +18,7 @@ struct WorkoutLoadPlanningTests {
     func day(_ offset: Int) -> Date { Self.base.addingTimeInterval(Double(offset) * 86_400) }
 
     static let pushSplit = TrainingSplit(
-        id: "probe", name: "Probe", summary: "", specificity: .balanced, goalFit: [.wellness],
+        id: "probe", name: "Probe", specificity: .balanced, goalFit: [.wellness],
         days: [WorkoutSplitDay(title: "Push", sessions: [WorkoutSessions.push])]
     )
 

@@ -5,7 +5,7 @@ import FernletDomainModel
 /// The companion's gentle first-person copy for AI-degraded moments.
 ///
 /// Each case names a situation where the on-device AI could not (or should not) run — a failed meal
-/// analysis, a spent daily budget, AI switched off — and `message(for:)` returns the matching
+/// analysis, a spent daily budget, AI switched off — and `message(for:addressing:)` returns the matching
 /// reassuring line, so every fallback surface speaks with one voice. Consumed by
 /// `AIRetryQueueService` (StoreCore) when it saves a local meal estimate, by the food log's
 /// retry banner, and by the AI section of Settings.
@@ -24,7 +24,12 @@ public enum FernletVoice: CaseIterable, Sendable {
     case aiResting
 
     /// The user-facing line for a fallback situation, in the companion's gentle voice.
-    public static func message(for voice: FernletVoice) -> String {
+    ///
+    /// `address` is the user's term of address (the effective profile's
+    /// `BiologicalSex.termOfAddress`; a view's `fernletTermOfAddress`): ``retryAvailable``'s line
+    /// says "when you are ready", which Spanish agrees with the user (*lista*), so it resolves
+    /// through `AddressedCopy`. The others read the same for everyone and stay plain keys.
+    public static func message(for voice: FernletVoice, addressing address: TermOfAddress) -> String {
         switch voice {
         case .mealAnalysisFailed:
             String(localized: "fernletVoice.mealAnalysisFailed",
@@ -39,9 +44,11 @@ public enum FernletVoice: CaseIterable, Sendable {
                    defaultValue: "Your journal is saved. I will look for patterns when the helper is awake again.",
                    bundle: .module, comment: "The companion speaking, when a journal entry is saved but the on-device AI ('the helper') is unavailable")
         case .retryAvailable:
-            String(localized: "fernletVoice.retryAvailable",
-                   defaultValue: "A few saved notes can be revisited when you are ready.",
-                   bundle: .module, comment: "Food log banner: some meals were saved with a local estimate and can be looked at again")
+            AddressedCopy.string(
+                LocalizedStringResource("fernletVoice.retryAvailable",
+                                        defaultValue: "A few saved notes can be revisited when you are ready.",
+                                        bundle: .module, comment: "Food log banner: some meals were saved with a local estimate and can be looked at again"),
+                addressing: address)
         case .aiUnavailable:
             String(localized: "fernletVoice.aiUnavailable",
                    defaultValue: "The quiet helper is off right now, so Fernlet will use local fallbacks.",
@@ -759,10 +766,17 @@ enum WorkoutFallbackCopy {
     }
 
     /// The note on one of ``WorkoutSuggestionLibrary``'s templates, by its frozen name.
-    static func templateNote(_ name: WorkoutFallbackName) -> String {
+    ///
+    /// Balanced Strength Circuit's note says how the user will feel (*centrado*, *centrada*), so it
+    /// resolves through `AddressedCopy` for `address`, the user's term of address.
+    static func templateNote(_ name: WorkoutFallbackName, addressing address: TermOfAddress) -> String {
         switch name {
         case .steadyCareWalk: String(localized: "workoutFallback.note.steadyCareWalk", defaultValue: "A simple local fallback for a balanced day.", bundle: .module, comment: "Note on the suggested workout 'Steady Care Walk'")
-        case .balancedStrengthCircuit: String(localized: "workoutFallback.note.balancedStrengthCircuit", defaultValue: "Enough movement to feel grounded.", bundle: .module, comment: "Note on the suggested workout 'Balanced Strength Circuit'")
+        case .balancedStrengthCircuit:
+            AddressedCopy.string(
+                LocalizedStringResource("workoutFallback.note.balancedStrengthCircuit", defaultValue: "Enough movement to feel grounded.",
+                                        bundle: .module, comment: "Note on the suggested workout 'Balanced Strength Circuit'"),
+                addressing: address)
         case .strengthBase: String(localized: "workoutFallback.note.strengthBase", defaultValue: "A repeatable strength template.", bundle: .module, comment: "Note on the suggested workout 'Strength Base'")
         case .hardStrengthDay: String(localized: "workoutFallback.note.hardStrengthDay", defaultValue: "Use only if energy is genuinely there.", bundle: .module, comment: "Note on the suggested workout 'Hard Strength Day'")
         case .lowFrictionWalk: String(localized: "workoutFallback.note.lowFrictionWalk", defaultValue: "Steady movement without optimization pressure.", bundle: .module, comment: "Note on the suggested workout 'Low Friction Walk'")
@@ -787,9 +801,12 @@ enum WorkoutFallbackCopy {
 /// consumes it.
 public struct WorkoutSuggestionLibrary {
     /// Templates matching the goal and intensity; falls back to all of the goal's templates, and
-    /// to the `.wellness` set for goals without any.
-    public static func suggestions(for goal: GoalType, intensity: WorkoutIntensity) -> [WorkoutSuggestion] {
-        let table = templates
+    /// to the `.wellness` set for goals without any. `address` is the user's term of address, which
+    /// a template's note agrees with.
+    public static func suggestions(
+        for goal: GoalType, intensity: WorkoutIntensity, addressing address: TermOfAddress
+    ) -> [WorkoutSuggestion] {
+        let table = templates(addressing: address)
         let base = table[goal] ?? table[.wellness] ?? []
         let matching = base.filter { $0.intensity == intensity }.map(\.suggestion)
         if matching.isEmpty {
@@ -800,46 +817,52 @@ public struct WorkoutSuggestionLibrary {
 
     /// The hand-written template table.
     ///
-    /// R9: a COMPUTED property, not a stored `static let`. Its element type (`WorkoutSuggestion`,
+    /// R9: BUILT per call, not a stored `static let`. Its element type (`WorkoutSuggestion`,
     /// from FernletDomainModel) is not `Sendable`, so as shared storage under this target's
     /// nonisolated default it required a `nonisolated(unsafe)` opt-out — an unsafe seam bought
-    /// purely by a missing conformance in another module. A computed property is not shared mutable
-    /// state at all: each caller gets its own freshly built literal, so no opt-out is needed and the
-    /// values are identical. The one caller binds it once (`let table = templates`), and the library
-    /// is a small AI-free fallback table read on a suggestion miss, so rebuilding costs nothing.
+    /// purely by a missing conformance in another module. A function is not shared mutable state at
+    /// all: each caller gets its own freshly built literal, so no opt-out is needed and the values
+    /// are identical. The one caller binds it once (`let table = templates(addressing:)`), and the
+    /// library is a small AI-free fallback table read on a suggestion miss, so rebuilding costs
+    /// nothing. (It was a computed property until the notes took the user's term of address.)
     ///
     /// Localization (2026-10-20): each template's name is its frozen ``WorkoutFallbackName`` (a taken
     /// template is saved under it and drawn through `Workout.displayedName`), its exercise lines are
-    /// plan text and stay English, and its note is composed in the device's language.
-    private static var templates: [GoalType: [(intensity: WorkoutIntensity, suggestion: WorkoutSuggestion)]] { [
-        .wellness: [
-            (.light, template(.steadyCareWalk, "Easy walk - 20 min\nGentle stretch - 5 min")),
-            (.moderate, template(.balancedStrengthCircuit, "Goblet squat - 3 x 8\nDB row - 3 x 10\nIncline push-up - 3 x 8"))
-        ],
-        .strength: [
-            (.moderate, template(.strengthBase, "Squat or leg press - 4 x 6\nBench or push-up - 4 x 8\nRow - 4 x 10")),
-            (.hard, template(.hardStrengthDay, "Main lift - 5 x 5\nAccessory pull - 4 x 8\nCarry - 4 rounds"))
-        ],
-        .weightManagement: [
-            (.light, template(.lowFrictionWalk, "Brisk walk - 25 min\nMobility - 5 min")),
-            (.moderate, template(.moveAndStrength, "Step-up - 3 x 10\nDB row - 3 x 10\nWalk - 12 min"))
-        ],
-        .mentalHealth: [
-            (.light, template(.moodReset, "Outdoor walk - 15 min\nBreathing reset - 3 min\nNeck and shoulders - 5 min")),
-            (.moderate, template(.steadyMindCircuit, "Bike or walk - 10 min\nBodyweight circuit - 3 rounds\nCooldown - 5 min"))
-        ],
-        .recovery: [
-            (.light, template(.recoveryFlow, "Gentle mobility - 12 min\nEasy walk - 10 min\nBreathing - 3 min")),
-            (.moderate, template(.softRebuild, "Light row - 3 x 12\nGlute bridge - 3 x 10\nWalk - 10 min"))
-        ],
-        .exploring: [
-            (.light, template(.trySomethingSmall, "Walk a new route - 15 min\nPick one mobility drill - 5 min")),
-            (.hard, template(.curiousChallenge, "Choose one main lift - 4 x 6\nChoose one carry - 4 rounds\nCooldown - 5 min"))
+    /// plan text and stay English, and its note is composed in the device's language, agreed with
+    /// `address`.
+    private static func templates(
+        addressing address: TermOfAddress
+    ) -> [GoalType: [(intensity: WorkoutIntensity, suggestion: WorkoutSuggestion)]] {
+        // One template: saved under `name`'s frozen spelling, with its localized note.
+        let template = { (name: WorkoutFallbackName, exercises: String) in
+            WorkoutSuggestion(name: name.rawValue, exercises: exercises,
+                              notes: WorkoutFallbackCopy.templateNote(name, addressing: address))
+        }
+        return [
+            .wellness: [
+                (.light, template(.steadyCareWalk, "Easy walk - 20 min\nGentle stretch - 5 min")),
+                (.moderate, template(.balancedStrengthCircuit, "Goblet squat - 3 x 8\nDB row - 3 x 10\nIncline push-up - 3 x 8"))
+            ],
+            .strength: [
+                (.moderate, template(.strengthBase, "Squat or leg press - 4 x 6\nBench or push-up - 4 x 8\nRow - 4 x 10")),
+                (.hard, template(.hardStrengthDay, "Main lift - 5 x 5\nAccessory pull - 4 x 8\nCarry - 4 rounds"))
+            ],
+            .weightManagement: [
+                (.light, template(.lowFrictionWalk, "Brisk walk - 25 min\nMobility - 5 min")),
+                (.moderate, template(.moveAndStrength, "Step-up - 3 x 10\nDB row - 3 x 10\nWalk - 12 min"))
+            ],
+            .mentalHealth: [
+                (.light, template(.moodReset, "Outdoor walk - 15 min\nBreathing reset - 3 min\nNeck and shoulders - 5 min")),
+                (.moderate, template(.steadyMindCircuit, "Bike or walk - 10 min\nBodyweight circuit - 3 rounds\nCooldown - 5 min"))
+            ],
+            .recovery: [
+                (.light, template(.recoveryFlow, "Gentle mobility - 12 min\nEasy walk - 10 min\nBreathing - 3 min")),
+                (.moderate, template(.softRebuild, "Light row - 3 x 12\nGlute bridge - 3 x 10\nWalk - 10 min"))
+            ],
+            .exploring: [
+                (.light, template(.trySomethingSmall, "Walk a new route - 15 min\nPick one mobility drill - 5 min")),
+                (.hard, template(.curiousChallenge, "Choose one main lift - 4 x 6\nChoose one carry - 4 rounds\nCooldown - 5 min"))
+            ]
         ]
-    ] }
-
-    /// One template: saved under `name`'s frozen spelling, with its localized note.
-    private static func template(_ name: WorkoutFallbackName, _ exercises: String) -> WorkoutSuggestion {
-        WorkoutSuggestion(name: name.rawValue, exercises: exercises, notes: WorkoutFallbackCopy.templateNote(name))
     }
 }

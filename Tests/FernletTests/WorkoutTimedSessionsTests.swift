@@ -398,8 +398,8 @@ import FernletUI
     }
 
     @Test func theSegmentCueNotificationSaysAPartEnded() {
-        let segment = NotificationService.workoutCueContent(for: .segmentEnded, soundFileName: nil)
-        let hold = NotificationService.workoutCueContent(for: .holdEnded, soundFileName: nil)
+        let segment = NotificationService.workoutCueContent(for: .segmentEnded, soundFileName: nil, addressing: .masculine)
+        let hold = NotificationService.workoutCueContent(for: .holdEnded, soundFileName: nil, addressing: .masculine)
         #expect(!segment.title.isEmpty && !segment.body.isEmpty)
         #expect(segment.title != hold.title)
         #expect(NotificationService.workoutCueID(for: .segmentEnded) == "fernlet.workoutCue.segmentEnded")

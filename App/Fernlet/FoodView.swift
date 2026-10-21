@@ -57,6 +57,9 @@ struct FoodView: View {
     /// The root page's own scroll-to-top token; `tabReselect` bumps it only when nothing is pushed.
     @State private var scrollToTopToken = 0
     @Environment(\.scenePhase) private var scenePhase
+    /// The user's term of address (the app root sets it from the body profile), for the root page's
+    /// copy that describes them: the retry banner's companion line and the empty-day prompt.
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
 
     var body: some View {
         foodLifecycle(foodSheets(foodRoot))
@@ -306,7 +309,7 @@ struct FoodView: View {
                             .foregroundStyle(Color.bark)
                         Spacer()
                     }
-                    Text(FernletVoice.message(for: .retryAvailable))
+                    Text(FernletVoice.message(for: .retryAvailable, addressing: termOfAddress))
                         .font(.fernlet(.bubble))
                         .foregroundStyle(Color.slate)
                     Button("Retry oldest") {

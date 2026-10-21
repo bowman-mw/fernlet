@@ -62,7 +62,7 @@ struct WorkoutWeightInventoryTests {
     }
 
     static let pushSplit = TrainingSplit(
-        id: "probe", name: "Probe", summary: "", specificity: .balanced, goalFit: [.wellness],
+        id: "probe", name: "Probe", specificity: .balanced, goalFit: [.wellness],
         days: [WorkoutSplitDay(title: "Push", sessions: [WorkoutSessions.push])]
     )
 
@@ -236,7 +236,7 @@ struct WorkoutWeightInventoryTests {
     /// Weights change loads only: the same exercises are picked, the injury limits, the time budget
     /// and the hidden list still shape the session.
     @Test func weightsChangeTheLoadsNotWhatIsPlanned() {
-        let split = TrainingSplit(id: "probe", name: "Probe", summary: "", specificity: .balanced, goalFit: [.wellness],
+        let split = TrainingSplit(id: "probe", name: "Probe", specificity: .balanced, goalFit: [.wellness],
                                   days: [WorkoutSplitDay(title: "Day", sessions: [WorkoutSessions.fullBodyA])])
         func names(_ location: WorkoutLocation) -> [String] {
             WorkoutProgram.dayPlan(

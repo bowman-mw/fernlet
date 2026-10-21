@@ -206,7 +206,11 @@ extension WorkoutPlannerCopy {
     }
 
     /// The note for a calibration session, by kind. `weight` is the key set's load with its unit.
-    static func calibration(_ kind: CalibrationKind, lift: String, weight: String) -> String {
+    ///
+    /// The max test's safety line describes the user ("if you're sore, sick"), which Spanish agrees
+    /// with them (*adolorido*, *enfermo*), so it resolves through ``AddressedCopy`` for `address`,
+    /// the load context's term, with its data arguments escaped (``AddressedCopy/argument(_:)``).
+    static func calibration(_ kind: CalibrationKind, lift: String, weight: String, addressing address: TermOfAddress) -> String {
         switch kind {
         case .submaximal:
             String(localized: "workoutNote.calibration.submaximal",
@@ -219,10 +223,13 @@ extension WorkoutPlannerCopy {
                    bundle: .module,
                    comment: "Workout session note for the quick monthly strength check. Arguments: the exercise name, then the set's weight with its unit.")
         case .oneRepMax:
-            String(localized: "workoutNote.calibration.oneRepMax",
-                   defaultValue: "Max test today: \(lift) builds up to three single attempts, starting at \(weight). Use a spotter or safety arms, stop if your form breaks, and skip it if you're sore, sick or short on sleep. Miss one and the rest are skipped.",
-                   bundle: .module,
-                   comment: "Workout session note for an opt-in one-rep-max test. Arguments: the exercise name, then the first attempt's weight with its unit.")
+            AddressedCopy.string(
+                LocalizedStringResource(
+                    "workoutNote.calibration.oneRepMax",
+                    defaultValue: "Max test today: \(AddressedCopy.argument(lift)) builds up to three single attempts, starting at \(AddressedCopy.argument(weight)). Use a spotter or safety arms, stop if your form breaks, and skip it if you're sore, sick or short on sleep. Miss one and the rest are skipped.",
+                    bundle: .module,
+                    comment: "Workout session note for an opt-in one-rep-max test. Arguments: the exercise name, then the first attempt's weight with its unit."),
+                addressing: address)
         }
     }
 }

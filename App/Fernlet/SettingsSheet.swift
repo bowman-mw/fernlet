@@ -59,6 +59,9 @@ import FernletLockUI
 struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    /// The user's term of address (the app root sets it from the body profile), for copy that
+    /// describes them: the memory headings' feeling names and the AI section's companion line.
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
     @Bindable var store: FernletStore
     @Environment(FernletLockService.self) private var lockService
     @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
@@ -1017,7 +1020,7 @@ struct SettingsSheet: View {
                     // The heading draws it through `MemoryCategoryName`, which names the categories
                     // Fernlet itself writes (a journal feeling, "other") in the reader's language and
                     // leaves any other token as it was stored.
-                    SectionLabel(verbatim: MemoryCategoryName.heading(forGroup: key))
+                    SectionLabel(verbatim: MemoryCategoryName.heading(forGroup: key, addressing: termOfAddress))
                     ForEach(groups[key] ?? []) { memory in
                         memoryRow(memory)
                     }
@@ -1383,7 +1386,7 @@ struct SettingsSheet: View {
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
-            Text(FernletVoice.message(for: store.aiStatusPresentation.voiceLine))
+            Text(FernletVoice.message(for: store.aiStatusPresentation.voiceLine, addressing: termOfAddress))
                 .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
@@ -2168,6 +2171,8 @@ struct SettingsSheet: View {
 /// `FernletStore.deleteMemory`, so the sheet itself persists nothing.
 private struct MemoryEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
+    /// The user's term of address, which a feeling category's chip agrees with.
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
     @Bindable var store: FernletStore
     let memory: MemoryNote
     @State private var category: String
@@ -2196,7 +2201,7 @@ private struct MemoryEditorSheet: View {
                         // The chip SHOWS a name but STORES the token: `choice` is what the list
                         // groups by, so only the drawn half goes through `MemoryCategoryName`.
                         Button { category = choice } label: {
-                            Text(verbatim: MemoryCategoryName.chipLabel(for: choice))
+                            Text(verbatim: MemoryCategoryName.chipLabel(for: choice, addressing: termOfAddress))
                         }
                         .buttonStyle(ChipButtonStyle(selected: category.lowercased() == choice))
                     }
@@ -3168,11 +3173,12 @@ enum AwayDeliveryConsentCopy {
 /// chips store — so it never localizes. The categories Fernlet itself writes are a journal entry's
 /// ``FeelingTag`` raw value and the editor's "other"; those draw localized names here. Any other token
 /// (one an older build or the user wrote) draws exactly as before: capitalized on a chip, upper-cased
-/// in the root locale on a heading.
+/// in the root locale on a heading. A feeling's name is the mood chip's own label, agreed with the
+/// user's term of address (`address`, the page's `fernletTermOfAddress`), since it names how they felt.
 nonisolated enum MemoryCategoryName {
     /// The localized name for a category token Fernlet writes, or nil for any other token.
-    static func knownName(for token: String) -> String? {
-        if let feeling = FeelingTag(rawValue: token) { return feeling.label }
+    static func knownName(for token: String, addressing address: TermOfAddress) -> String? {
+        if let feeling = FeelingTag(rawValue: token) { return feeling.label(addressing: address) }
         guard token == "other" else { return nil }
         return String(localized: "settings.memory.category.other", defaultValue: "Other",
                       comment: "Core memory: the category for a memory that fits no other group. A chip in the memory editor, and a group heading (drawn in capitals).")
@@ -3181,13 +3187,13 @@ nonisolated enum MemoryCategoryName {
     /// A group heading for `groupKey`, the upper-cased token the page groups by. A known category
     /// draws its localized name (the heading's `.textCase(.uppercase)` capitalizes it after the
     /// lookup); any other token draws as it always has.
-    static func heading(forGroup groupKey: String) -> String {
-        knownName(for: groupKey.lowercased()) ?? groupKey
+    static func heading(forGroup groupKey: String, addressing address: TermOfAddress) -> String {
+        knownName(for: groupKey.lowercased(), addressing: address) ?? groupKey
     }
 
     /// An editor chip's label for `token` (stored lower-cased).
-    static func chipLabel(for token: String) -> String {
-        knownName(for: token) ?? token.capitalized
+    static func chipLabel(for token: String, addressing address: TermOfAddress) -> String {
+        knownName(for: token, addressing: address) ?? token.capitalized
     }
 }
 

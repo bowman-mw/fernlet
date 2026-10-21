@@ -969,7 +969,7 @@ struct LocalizationBoundaryTests {
                     "a name left as drawn saves back as the stored English")
         }
         let library = GoalType.allCases.flatMap { goal in
-            WorkoutIntensity.allCases.flatMap { WorkoutSuggestionLibrary.suggestions(for: goal, intensity: $0) }
+            WorkoutIntensity.allCases.flatMap { WorkoutSuggestionLibrary.suggestions(for: goal, intensity: $0, addressing: .masculine) }
         }
         for suggestion in library {
             let logged = suggestion.workout(intensity: .moderate)
@@ -3077,8 +3077,8 @@ struct LocalizationBoundaryTests {
                      declaration: "private var accessibilityText: Text {",
                      role: "the meal photo's spoken description, including its unavailable states"),
         ForkedMember(path: "App/Fernlet/JournalView.swift",
-                     declaration: "var accessibilityLabel: Text {",
-                     role: "the journal calendar cell, including the feeling tag"),
+                     declaration: "func accessibilityLabel(addressing address: TermOfAddress) -> Text {",
+                     role: "the journal calendar cell, including the feeling tag (agreed with the user since the gendered-address lane)"),
         ForkedMember(path: "App/Fernlet/CycleTrackerView.swift",
                      declaration: "var accessibilityLabel: Text {",
                      role: "the cycle calendar cell, including flow and intimacy"),

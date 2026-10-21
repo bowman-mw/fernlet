@@ -753,10 +753,9 @@ public nonisolated enum SplitSpecificity: Int, CaseIterable, Sendable {
 /// stable token stored in `WorkoutProfile.selectedSplitID`.
 public nonisolated struct TrainingSplit: Identifiable, Sendable {
 
-    public init(id: String, name: String, summary: String, specificity: SplitSpecificity, goalFit: Set<GoalType>, days: [WorkoutSplitDay]) {
+    public init(id: String, name: String, specificity: SplitSpecificity, goalFit: Set<GoalType>, days: [WorkoutSplitDay]) {
         self.id = id
         self.name = name
-        self.summary = summary
         self.specificity = specificity
         self.goalFit = goalFit
         self.days = days
@@ -765,15 +764,23 @@ public nonisolated struct TrainingSplit: Identifiable, Sendable {
     /// The FROZEN English name: the trainer export's `splitName` and the day plan's `splitName`.
     /// Screens read ``displayName`` (2026-10-20, idea 16).
     public var name: String
-    /// The one-line description on screen. Display only, so the catalog's summaries are localized
-    /// where they are written (``WorkoutSplitCatalog``).
-    public var summary: String
     public var specificity: SplitSpecificity
     public var goalFit: Set<GoalType>
     public var days: [WorkoutSplitDay]
 
     public var daysPerWeek: Int { days.count }
     public var sessionsPerWeek: Int { days.reduce(0) { $0 + $1.sessions.count } }
+
+    /// The one-line description on screen, by the split's stable id (``TrainingSplitSummaries``);
+    /// empty for a split the catalog does not have. Display only.
+    ///
+    /// A method taking the user's term of address rather than a stored `String`: Recovery Flow's
+    /// Spanish says how the user should feel afterwards (*no molido*), so it agrees with the profile's
+    /// Sex, and a summary resolved once into a `static let` could never do that. `address` is the
+    /// drawing view's `fernletTermOfAddress`.
+    public func summary(addressing address: TermOfAddress) -> String {
+        TrainingSplitSummaries.displayed(id: id, addressing: address) ?? ""
+    }
 
     /// "3 days/week", or "4 days · 8 sessions/week" when some days hold two sessions. Localized, with a
     /// plural rule for each count (2026-10-20, idea 16).
@@ -945,25 +952,16 @@ public nonisolated enum WorkoutSplitCatalog {
     // --- Minimal / very broad ---
     public static let dailyMove = TrainingSplit(
         id: "daily-move", name: "Daily Movement",
-        summary: String(localized: "trainingSplit.dailyMove.summary",
-                        defaultValue: "Easy full-body days and walks — just keep moving.", bundle: .module,
-                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .minimal, goalFit: [.wellness, .mentalHealth, .recovery, .exploring],
         days: [day("Day 1", [WorkoutSessions.fullBodyA]), day("Day 2", [WorkoutSessions.easyCardio]), day("Day 3", [WorkoutSessions.fullBodyB])]
     )
     public static let fullBody2 = TrainingSplit(
         id: "full-body-2", name: "Full Body ×2",
-        summary: String(localized: "trainingSplit.fullBody2.summary",
-                        defaultValue: "Two full-body sessions a week. Simple and forgiving.", bundle: .module,
-                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .minimal, goalFit: Set(GoalType.allCases),
         days: [day("Day 1", [WorkoutSessions.fullBodyA]), day("Day 2", [WorkoutSessions.fullBodyB])]
     )
     public static let recoveryFlow = TrainingSplit(
         id: "recovery-flow", name: "Recovery Flow",
-        summary: String(localized: "trainingSplit.recoveryFlow.summary",
-                        defaultValue: "Mobility and easy movement to feel better, not beat up.", bundle: .module,
-                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .minimal, goalFit: [.recovery, .mentalHealth, .wellness],
         days: [day("Day 1", [WorkoutSessions.mobility]), day("Day 2", [WorkoutSessions.easyCardio]), day("Day 3", [WorkoutSessions.fullBodyA])]
     )
@@ -971,25 +969,16 @@ public nonisolated enum WorkoutSplitCatalog {
     // --- Balanced ---
     public static let fullBody3 = TrainingSplit(
         id: "full-body-3", name: "Full Body ×3",
-        summary: String(localized: "trainingSplit.fullBody3.summary",
-                        defaultValue: "Three full-body sessions — the most efficient way to cover everything.", bundle: .module,
-                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .balanced, goalFit: Set(GoalType.allCases),
         days: [day("Day 1", [WorkoutSessions.fullBodyA]), day("Day 2", [WorkoutSessions.fullBodyB]), day("Day 3", [WorkoutSessions.fullBodyC])]
     )
     public static let upperLowerFull3 = TrainingSplit(
         id: "upper-lower-full-3", name: "Upper / Lower / Full",
-        summary: String(localized: "trainingSplit.upperLowerFull3.summary",
-                        defaultValue: "A bit more focus than full-body, still only three days.", bundle: .module,
-                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .balanced, goalFit: [.strength, .weightManagement, .wellness, .sportsPrep, .exploring],
         days: [day("Day 1", [WorkoutSessions.upper]), day("Day 2", [WorkoutSessions.lower]), day("Day 3", [WorkoutSessions.fullBodyC])]
     )
     public static let upperLower4 = TrainingSplit(
         id: "upper-lower-4", name: "Upper / Lower",
-        summary: String(localized: "trainingSplit.upperLower4.summary",
-                        defaultValue: "Four days alternating upper and lower body.", bundle: .module,
-                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .balanced, goalFit: [.strength, .weightManagement, .wellness, .sportsPrep],
         days: [day("Day 1", [WorkoutSessions.upper]), day("Day 2", [WorkoutSessions.lower]), day("Day 3", [WorkoutSessions.upper]), day("Day 4", [WorkoutSessions.lower])]
     )
@@ -997,17 +986,11 @@ public nonisolated enum WorkoutSplitCatalog {
     // --- Focused ---
     public static let ppl3 = TrainingSplit(
         id: "ppl-3", name: "Push / Pull / Legs",
-        summary: String(localized: "trainingSplit.ppl3.summary",
-                        defaultValue: "Classic three-day split organised by movement.", bundle: .module,
-                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .focused, goalFit: [.strength, .sportsPrep, .weightManagement],
         days: [day("Push", [WorkoutSessions.push]), day("Pull", [WorkoutSessions.pull]), day("Legs", [WorkoutSessions.legs])]
     )
     public static let cardioStrength4 = TrainingSplit(
         id: "cardio-strength-4", name: "Cardio + Strength",
-        summary: String(localized: "trainingSplit.cardioStrength4.summary",
-                        defaultValue: "Morning cardio, evening lifting — for fat loss and conditioning.", bundle: .module,
-                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .focused, goalFit: [.weightManagement, .wellness, .sportsPrep],
         days: [
             day("Day 1", [WorkoutSessions.easyCardio.at(.morning), WorkoutSessions.upper.at(.evening)]),
@@ -1018,9 +1001,6 @@ public nonisolated enum WorkoutSplitCatalog {
     )
     public static let sportPrep = TrainingSplit(
         id: "sport-prep", name: "Sport Prep",
-        summary: String(localized: "trainingSplit.sportPrep.summary",
-                        defaultValue: "Sport-specific conditioning paired with strength work.", bundle: .module,
-                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .focused, goalFit: [.sportsPrep],
         days: [
             day("Day 1", [WorkoutSessions.sportConditioning.at(.morning), WorkoutSessions.lower.at(.evening)]),
@@ -1031,17 +1011,11 @@ public nonisolated enum WorkoutSplitCatalog {
     )
     public static let pplUL5 = TrainingSplit(
         id: "ppl-ul-5", name: "PPL + Upper / Lower",
-        summary: String(localized: "trainingSplit.pplUL5.summary",
-                        defaultValue: "Five days mixing push/pull/legs with upper/lower.", bundle: .module,
-                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .focused, goalFit: [.strength, .sportsPrep],
         days: [day("Push", [WorkoutSessions.push]), day("Pull", [WorkoutSessions.pull]), day("Legs", [WorkoutSessions.legs]), day("Upper", [WorkoutSessions.upper]), day("Lower", [WorkoutSessions.lower])]
     )
     public static let ppl6 = TrainingSplit(
         id: "ppl-6", name: "Push / Pull / Legs ×2",
-        summary: String(localized: "trainingSplit.ppl6.summary",
-                        defaultValue: "Six high-frequency days for serious volume.", bundle: .module,
-                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .focused, goalFit: [.strength, .sportsPrep],
         days: [day("Push A", [WorkoutSessions.push]), day("Pull A", [WorkoutSessions.pull]), day("Legs A", [WorkoutSessions.legs]), day("Push B", [WorkoutSessions.push]), day("Pull B", [WorkoutSessions.pull]), day("Legs B", [WorkoutSessions.legs])]
     )
@@ -1049,25 +1023,16 @@ public nonisolated enum WorkoutSplitCatalog {
     // --- Specialized / very specific ---
     public static let broSplit5 = TrainingSplit(
         id: "bro-5", name: "Bro Split",
-        summary: String(localized: "trainingSplit.bro5.summary",
-                        defaultValue: "One body part per day for maximum focus.", bundle: .module,
-                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .specialized, goalFit: [.strength],
         days: [day("Chest", [WorkoutSessions.chest]), day("Back", [WorkoutSessions.back]), day("Shoulders", [WorkoutSessions.shoulders]), day("Arms", [WorkoutSessions.arms]), day("Legs", [WorkoutSessions.legs])]
     )
     public static let arnold6 = TrainingSplit(
         id: "arnold-6", name: "Arnold Split",
-        summary: String(localized: "trainingSplit.arnold6.summary",
-                        defaultValue: "Chest+back, shoulders+arms, legs — twice over, six days.", bundle: .module,
-                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .specialized, goalFit: [.strength],
         days: [day("Chest & Back", [WorkoutSessions.arnoldChestBack]), day("Shoulders & Arms", [WorkoutSessions.arnoldShouldersArms]), day("Legs", [WorkoutSessions.legs]), day("Chest & Back", [WorkoutSessions.arnoldChestBack]), day("Shoulders & Arms", [WorkoutSessions.arnoldShouldersArms]), day("Legs", [WorkoutSessions.legs])]
     )
     public static let twoADay = TrainingSplit(
         id: "two-a-day", name: "Two-a-Day Strength",
-        summary: String(localized: "trainingSplit.twoADay.summary",
-                        defaultValue: "Two strength sessions a day — advanced, high volume.", bundle: .module,
-                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .specialized, goalFit: [.strength, .sportsPrep],
         days: [
             day("Day 1", [WorkoutSessions.push.at(.morning), WorkoutSessions.pull.at(.evening)]),
@@ -1075,6 +1040,51 @@ public nonisolated enum WorkoutSplitCatalog {
             day("Day 3", [WorkoutSessions.lower.at(.morning), WorkoutSessions.arms.at(.evening)]),
         ]
     )
+}
+
+/// The split summaries Workout setup draws, by the split's stable id (see
+/// ``TrainingSplit/summary(addressing:)``).
+///
+/// A switch rather than a stored string on each catalog split, so one summary can agree with the
+/// user: Recovery Flow's resolves through ``AddressedCopy`` for the term the drawing view passes.
+/// The keys, English and comments are the ones the catalog splits used to carry.
+nonisolated enum TrainingSplitSummaries {
+    /// The summary for a catalog split id, or nil for an id the catalog does not have.
+    static func displayed(id: String, addressing address: TermOfAddress) -> String? {
+        switch id {
+        case "daily-move": String(localized: "trainingSplit.dailyMove.summary", defaultValue: "Easy full-body days and walks — just keep moving.", bundle: .module,
+                             comment: "One-line description of a workout split in Workout setup")
+        case "full-body-2": String(localized: "trainingSplit.fullBody2.summary", defaultValue: "Two full-body sessions a week. Simple and forgiving.", bundle: .module,
+                             comment: "One-line description of a workout split in Workout setup")
+        // Recovery Flow says how the user should feel afterwards, which Spanish agrees with them.
+        case "recovery-flow": AddressedCopy.string(LocalizedStringResource("trainingSplit.recoveryFlow.summary", defaultValue: "Mobility and easy movement to feel better, not beat up.", bundle: .module,
+                                                                 comment: "One-line description of a workout split in Workout setup"),
+                                         addressing: address)
+        case "full-body-3": String(localized: "trainingSplit.fullBody3.summary", defaultValue: "Three full-body sessions — the most efficient way to cover everything.", bundle: .module,
+                             comment: "One-line description of a workout split in Workout setup")
+        case "upper-lower-full-3": String(localized: "trainingSplit.upperLowerFull3.summary", defaultValue: "A bit more focus than full-body, still only three days.", bundle: .module,
+                             comment: "One-line description of a workout split in Workout setup")
+        case "upper-lower-4": String(localized: "trainingSplit.upperLower4.summary", defaultValue: "Four days alternating upper and lower body.", bundle: .module,
+                             comment: "One-line description of a workout split in Workout setup")
+        case "ppl-3": String(localized: "trainingSplit.ppl3.summary", defaultValue: "Classic three-day split organised by movement.", bundle: .module,
+                             comment: "One-line description of a workout split in Workout setup")
+        case "cardio-strength-4": String(localized: "trainingSplit.cardioStrength4.summary", defaultValue: "Morning cardio, evening lifting — for fat loss and conditioning.", bundle: .module,
+                             comment: "One-line description of a workout split in Workout setup")
+        case "sport-prep": String(localized: "trainingSplit.sportPrep.summary", defaultValue: "Sport-specific conditioning paired with strength work.", bundle: .module,
+                             comment: "One-line description of a workout split in Workout setup")
+        case "ppl-ul-5": String(localized: "trainingSplit.pplUL5.summary", defaultValue: "Five days mixing push/pull/legs with upper/lower.", bundle: .module,
+                             comment: "One-line description of a workout split in Workout setup")
+        case "ppl-6": String(localized: "trainingSplit.ppl6.summary", defaultValue: "Six high-frequency days for serious volume.", bundle: .module,
+                             comment: "One-line description of a workout split in Workout setup")
+        case "bro-5": String(localized: "trainingSplit.bro5.summary", defaultValue: "One body part per day for maximum focus.", bundle: .module,
+                             comment: "One-line description of a workout split in Workout setup")
+        case "arnold-6": String(localized: "trainingSplit.arnold6.summary", defaultValue: "Chest+back, shoulders+arms, legs — twice over, six days.", bundle: .module,
+                             comment: "One-line description of a workout split in Workout setup")
+        case "two-a-day": String(localized: "trainingSplit.twoADay.summary", defaultValue: "Two strength sessions a day — advanced, high volume.", bundle: .module,
+                             comment: "One-line description of a workout split in Workout setup")
+        default: nil
+        }
+    }
 }
 
 // MARK: - Consistency + recommendation

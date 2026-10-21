@@ -260,6 +260,8 @@ struct JournalView: View {
 struct JournalSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    /// The user's term of address, which the Quiet and Tired chips agree with.
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
     var store: FernletStore
     @State private var text = ""
     @State private var tag: FeelingTag
@@ -301,7 +303,7 @@ struct JournalSheet: View {
                     SheetField("Feeling") {
                         FlowLayout(spacing: 8) {
                             ForEach(FeelingTag.allCases) { option in
-                                Button(option.label) { FernletFeedback.system.select(option, in: &tag) }
+                                Button(option.label(addressing: termOfAddress)) { FernletFeedback.system.select(option, in: &tag) }
                                     .buttonStyle(ChipButtonStyle(selected: tag == option))
                             }
                         }
@@ -653,6 +655,8 @@ struct JournalEntryEditTarget: Identifiable {
 struct JournalEntryEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    /// The user's term of address, which the Quiet and Tired chips agree with.
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
     var store: FernletStore
     var dateKey: String
     var entry: JournalEntry
@@ -692,7 +696,7 @@ struct JournalEntryEditorSheet: View {
             SheetField("Feeling") {
                 FlowLayout(spacing: 8) {
                     ForEach(FeelingTag.allCases) { option in
-                        Button(option.label) { FernletFeedback.system.select(option, in: &tag) }
+                        Button(option.label(addressing: termOfAddress)) { FernletFeedback.system.select(option, in: &tag) }
                             .buttonStyle(ChipButtonStyle(selected: tag == option))
                     }
                 }
@@ -842,6 +846,8 @@ struct JournalEntryEditorSheet: View {
 /// ``MonthCalendarCard``.
 struct JournalCalendarCard: View {
     @Binding var displayedMonth: Date
+    /// The user's term of address, which the legend's Quiet and Tired agree with.
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
     var allDays: [String: FernletDay]
     var todayKey: String
     var onDayTapped: (String) -> Void
@@ -884,7 +890,7 @@ struct JournalCalendarCard: View {
                     } else {
                         Circle().fill(tag.color).frame(width: 8, height: 8)
                     }
-                    Text(tag.label).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
+                    Text(tag.label(addressing: termOfAddress)).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
                 }
                 .fixedSize(horizontal: true, vertical: false)
             }
@@ -975,6 +981,8 @@ struct JournalCalendarCell: View {
     /// Read ONCE per cell and consumed only by ``feelingMark`` — never re-read per mark. See
     /// ``FeelingTag/differentiatingSymbol``.
     @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
+    /// The user's term of address, for the spoken feeling (``JournalMonthCell/accessibilityLabel(addressing:)``).
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
 
     var body: some View {
         Button(action: onTap) {
@@ -1015,7 +1023,7 @@ struct JournalCalendarCell: View {
         .buttonStyle(.plain)
         .aspectRatio(1, contentMode: .fit)
         .disabled(cell.day == nil || cell.isFuture)
-        .accessibilityLabel(cell.accessibilityLabel)
+        .accessibilityLabel(cell.accessibilityLabel(addressing: termOfAddress))
     }
 
     /// The feeling's shape mark, drawn ONLY under **Differentiate Without Color**.
@@ -1065,8 +1073,8 @@ struct JournalMonthCell: Identifiable {
     var isFuture: Bool = false
     var hasData: Bool = false
     /// The already-localized ABBREVIATED weekday NAME for this day ("Wed"), spoken but never drawn
-    /// — see ``accessibilityLabel``. Empty for a blank pad cell, and for the (unreachable in
-    /// practice) day whose `Date` the layout calendar could not resolve; ``weekdaylessLabel`` is
+    /// — see ``accessibilityLabel(addressing:)``. Empty for a blank pad cell, and for the (unreachable in
+    /// practice) day whose `Date` the layout calendar could not resolve; ``weekdaylessLabel(addressing:)`` is
     /// the honest fallback for that case rather than a sentence with a hole in it.
     var weekdayName: String = ""
 
@@ -1084,8 +1092,10 @@ struct JournalMonthCell: Identifiable {
     /// `Text` rather than `String`, and built by CHOOSING a whole sentence rather than appending
     /// clauses (review T2-1): a `String` reaches `.accessibilityLabel(_:)` through the verbatim
     /// overload, and a clause appended with `+=` can never be a catalog key at all. The feeling
-    /// name is no longer lower-cased on the way in — `tag.label` is already localized, and
-    /// case-folding a translated word is wrong in every language that capitalizes nouns.
+    /// name is no longer lower-cased on the way in — `tag.label(addressing:)` is already localized,
+    /// and case-folding a translated word is wrong in every language that capitalizes nouns. It is
+    /// spliced in already agreed with `address`, the user's term of address (*cansada*), so the
+    /// spoken word matches the chip.
     ///
     /// Every sentence now opens with the WEEKDAY (review T2-17). The drawn weekday initials came
     /// off the cells in that same review, which left "Day 14" as the entire utterance: a month
@@ -1094,11 +1104,11 @@ struct JournalMonthCell: Identifiable {
     /// ("Wed"), deliberately NOT the narrow symbol the header row draws, which VoiceOver reads out
     /// as the single letter "W". Same idiom, and the same reason, as ``WorkoutWeekCell``'s
     /// `longWeekdayText`. Today keeps saying "Today" in that slot, which is the more useful fact.
-    var accessibilityLabel: Text {
-        guard let day, !weekdayName.isEmpty else { return weekdaylessLabel }
+    func accessibilityLabel(addressing address: TermOfAddress) -> Text {
+        guard let day, !weekdayName.isEmpty else { return weekdaylessLabel(addressing: address) }
         let dayName = isToday ? Text("Today") : Text(verbatim: weekdayName)
         if isFuture { return Text("\(dayName), day \(day)") }
-        if let tag { return Text("\(dayName), day \(day), feeling \(tag.label)") }
+        if let tag { return Text("\(dayName), day \(day), feeling \(tag.label(addressing: address))") }
         if hasData { return Text("\(dayName), day \(day), has data") }
         return Text("\(dayName), day \(day)")
     }
@@ -1107,16 +1117,15 @@ struct JournalMonthCell: Identifiable {
     /// whose `Date` the layout calendar could not resolve.
     ///
     /// Kept as whole sentences rather than degrading to `Text("\(Text(verbatim: "")), day 5")`,
-    /// which would put a leading comma into a translated string and into speech. A computed
-    /// property rather than a `func` taking the day, so the `guard` that unwraps it lives here
-    /// once.
-    private var weekdaylessLabel: Text {
+    /// which would put a leading comma into a translated string and into speech. It unwraps the
+    /// day itself, so the `guard` lives here once; `address` agrees the spoken feeling.
+    private func weekdaylessLabel(addressing address: TermOfAddress) -> Text {
         guard let day else { return Text("Empty calendar cell") }
         if isFuture { return Text("Day \(day)") }
         if let tag {
             return isToday
-                ? Text("Today, day \(day), feeling \(tag.label)")
-                : Text("Day \(day), feeling \(tag.label)")
+                ? Text("Today, day \(day), feeling \(tag.label(addressing: address))")
+                : Text("Day \(day), feeling \(tag.label(addressing: address))")
         }
         if hasData {
             return isToday ? Text("Today, day \(day), has data") : Text("Day \(day), has data")
@@ -1198,12 +1207,14 @@ struct JournalMonthModel {
 struct JournalRow: View {
     var entry: JournalEntry
     var compact = false
+    /// The user's term of address, which the Quiet and Tired labels agree with.
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Circle().fill(entry.tag.color).frame(width: 10, height: 10)
-                Text(entry.tag.label).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
+                Text(entry.tag.label(addressing: termOfAddress)).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
                 if compact {
                     Text(FernletDate.shortDate(for: entry.date)).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
                 }
@@ -1860,6 +1871,8 @@ struct DayMicronutrientRow: View {
 struct DayEditSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    /// The user's term of address, which the Quiet and Tired chips agree with.
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
     var store: FernletStore
     var dateKey: String
     let initialDay: FernletDay
@@ -2004,7 +2017,7 @@ struct DayEditSheet: View {
             VStack(alignment: .leading, spacing: 10) {
                 FlowLayout(spacing: 8) {
                     ForEach(FeelingTag.allCases) { option in
-                        Button(option.label) { FernletFeedback.system.select(option, in: &journalTag) }
+                        Button(option.label(addressing: termOfAddress)) { FernletFeedback.system.select(option, in: &journalTag) }
                             .buttonStyle(ChipButtonStyle(selected: journalTag == option))
                     }
                 }

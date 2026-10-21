@@ -26,6 +26,9 @@ struct QuickMoodRow: View {
     /// Optional header (Home shows one inside the quick-log card; the Journal screen provides its
     /// own section styling).
     var showsLabel = true
+    /// The user's term of address, which the Quiet and Tired chips agree with (in what they draw,
+    /// what VoiceOver says and what Voice Control answers to).
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
 
     private var currentTag: FeelingTag? {
         store.day.journals.last?.tag
@@ -66,13 +69,13 @@ struct QuickMoodRow: View {
                     // same fill/ink pair as every other chip, and the `.isSelected` trait now comes
                     // from the style itself rather than a second, easy-to-drift call-site line.
                     .buttonStyle(ChipButtonStyle(selected: isCurrent))
-                    .accessibilityLabel("Mood: \(tag.label)")
+                    .accessibilityLabel("Mood: \(tag.label(addressing: termOfAddress))")
                     // On each chip, not the row: a hint on a `.contain` container is attached to
                     // no element VoiceOver lands on, so it was never spoken.
                     .accessibilityHint("One tap notes how today feels. No writing needed.")
                     // Voice Control: the chip draws only the feeling's name, so "Tap Bright" has to
                     // work on its own; "Mood Bright" keeps the label's own form sayable too.
-                    .accessibilityInputLabels([Text(verbatim: tag.label), Text("Mood \(tag.label)")])
+                    .accessibilityInputLabels([Text(verbatim: tag.label(addressing: termOfAddress)), Text("Mood \(tag.label(addressing: termOfAddress))")])
                     .accessibilityIdentifier("quickMood.\(tag.rawValue)")
                 }
             }
@@ -89,7 +92,7 @@ struct QuickMoodRow: View {
             Circle()
                 .fill(tag.color)
                 .frame(width: 8, height: 8)
-            Text(tag.label)
+            Text(tag.label(addressing: termOfAddress))
                 .font(.fernlet(.label))
                 .lineLimit(1)
         }

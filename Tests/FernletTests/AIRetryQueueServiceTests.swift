@@ -30,7 +30,7 @@ struct AIRetryQueueServiceTests {
     @Test func queueMealRetryAppendsRecord() {
         let service = AIRetryQueueService()
         let meal = makeMeal(name: "Test", mealType: .lunch)
-        service.queueMealRetry(meal)
+        service.queueMealRetry(meal, addressing: .masculine)
 
         #expect(service.retryQueue.count == 1)
         #expect(service.retryQueue[0].payloadType == "meal")
@@ -44,7 +44,7 @@ struct AIRetryQueueServiceTests {
     @Test func queueMealRetryRecordsDayKey() {
         let service = AIRetryQueueService()
         let meal = makeMeal()
-        service.queueMealRetry(meal, dayKey: "2026-05-20")
+        service.queueMealRetry(meal, dayKey: "2026-05-20", addressing: .masculine)
 
         #expect(service.retryQueue.first?.dayKey == "2026-05-20")
     }
@@ -56,8 +56,8 @@ struct AIRetryQueueServiceTests {
         let service = AIRetryQueueService(now: { Date().addingTimeInterval(20 * 24 * 60 * 60) })
         let stale = makeMeal(name: "Stale")
         let fresh = makeMeal(name: "Fresh")
-        service.queueMealRetry(stale)
-        service.queueMealRetry(fresh)
+        service.queueMealRetry(stale, addressing: .masculine)
+        service.queueMealRetry(fresh, addressing: .masculine)
 
         #expect(service.retryQueue.count == 1)
         #expect(service.retryQueue.first?.sourceId == fresh.id)
@@ -70,7 +70,7 @@ struct AIRetryQueueServiceTests {
         for i in 0..<21 {
             let meal = makeMeal(name: "m\(i)")
             meals.append(meal)
-            service.queueMealRetry(meal)
+            service.queueMealRetry(meal, addressing: .masculine)
         }
 
         #expect(service.retryQueue.count == 20)
@@ -84,7 +84,7 @@ struct AIRetryQueueServiceTests {
         let nonMeal = makeRecord(payloadType: "workout")
         let service = AIRetryQueueService(initial: [nonMeal])
         for i in 0..<20 {
-            service.queueMealRetry(makeMeal(name: "m\(i)"))
+            service.queueMealRetry(makeMeal(name: "m\(i)"), addressing: .masculine)
         }
 
         #expect(service.retryQueue.count == 20)
@@ -109,7 +109,7 @@ struct AIRetryQueueServiceTests {
     @Test func clearByIdRemovesMatchingRecord() {
         let service = AIRetryQueueService()
         let meal = makeMeal(name: "Lunch", mealType: .lunch)
-        service.queueMealRetry(meal)
+        service.queueMealRetry(meal, addressing: .masculine)
         let id = service.retryQueue[0].id
 
         service.clear(id: id)
@@ -119,7 +119,7 @@ struct AIRetryQueueServiceTests {
     @Test func clearWithUnknownIdIsNoOp() {
         let service = AIRetryQueueService()
         let meal = makeMeal(name: "Dinner", mealType: .dinner)
-        service.queueMealRetry(meal)
+        service.queueMealRetry(meal, addressing: .masculine)
 
         service.clear(id: UUID())
         #expect(service.retryQueue.count == 1)
@@ -130,7 +130,7 @@ struct AIRetryQueueServiceTests {
         let service = AIRetryQueueService(onChange: { callCount += 1 })
         let meal = makeMeal(name: "Snack", mealType: .snack)
 
-        service.queueMealRetry(meal)
+        service.queueMealRetry(meal, addressing: .masculine)
         #expect(callCount == 1)
 
         let id = service.retryQueue[0].id
@@ -141,7 +141,7 @@ struct AIRetryQueueServiceTests {
     @Test func applyReplacesQueueAtomically() {
         let service = AIRetryQueueService()
         let meal = makeMeal(name: "Breakfast", mealType: .breakfast)
-        service.queueMealRetry(meal)
+        service.queueMealRetry(meal, addressing: .masculine)
 
         let newRecords = [makeRecord(), makeRecord()]
         service.apply(newRecords)
@@ -153,7 +153,7 @@ struct AIRetryQueueServiceTests {
     @Test func resetClearsQueue() {
         let service = AIRetryQueueService()
         let meal = makeMeal(name: "Snack", mealType: .snack)
-        service.queueMealRetry(meal)
+        service.queueMealRetry(meal, addressing: .masculine)
         service.reset()
         #expect(service.retryQueue.isEmpty)
     }
@@ -203,7 +203,7 @@ struct AIRetryQueueServiceTests {
     /// The tag written by `queueMealRetry` matches the constant the meal path dispatches on.
     @Test func queueMealRetryUsesMealPayloadTypeConstant() {
         let service = AIRetryQueueService()
-        service.queueMealRetry(makeMeal())
+        service.queueMealRetry(makeMeal(), addressing: .masculine)
 
         #expect(service.retryQueue.first?.payloadType == AIRetryQueueService.mealPayloadType)
         #expect(service.oldestMealRetry != nil)

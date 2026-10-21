@@ -40,8 +40,12 @@ enum WorkoutLoadContextBuilder {
         body: UserNutritionProfile? = nil, locale: Locale = .current
     ) -> WorkoutLoadContext {
         let unit = defaultUnit(for: locale)
+        let profile = body ?? settings.userProfile
+        // The notes the plan stores agree with the user ("welcome back"), so the context carries
+        // the effective profile's term of address on every path, this unreadable-day one included.
+        let address = profile.sex.termOfAddress
         guard let todayDate = FernletDate.date(fromDayKey: todayKey) else {
-            return WorkoutLoadContext(exposures: [:], today: Date(), defaultUnit: unit)
+            return WorkoutLoadContext(exposures: [:], today: Date(), defaultUnit: unit, address: address)
         }
         var merged = days
         merged[todayKey] = today
@@ -53,7 +57,6 @@ enum WorkoutLoadContextBuilder {
             }
             .sorted { $0.1 < $1.1 }
         let sessions = exposures(window, nights: sleepByDay(merged))
-        let profile = body ?? settings.userProfile
         return WorkoutLoadContext(
             exposures: sessions.byLift, today: todayDate, defaultUnit: unit,
             recovery: recovery(window, todayDate: todayDate, bodyKilograms: profile.weightKilograms),
@@ -68,7 +71,8 @@ enum WorkoutLoadContextBuilder {
             foodAware: settings.workoutUsesFoodLogs,
             // G13 reads logged weigh-ins only; Fernlet keeps no body-weight log yet (the profile holds
             // one current weight, and Health's is read as the latest only), so the trend stays silent.
-            bodyWeights: []
+            bodyWeights: [],
+            address: address
         )
     }
 
