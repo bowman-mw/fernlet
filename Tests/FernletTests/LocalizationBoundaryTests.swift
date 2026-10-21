@@ -2816,6 +2816,9 @@ struct LocalizationBoundaryTests {
         ForkedMember(path: "App/Fernlet/CoachPlanReviewView.swift",
                      declaration: "private func changeLine(_ text: LocalizedStringKey) -> some View {",
                      role: "the coach-plan diff's Renamed / Note / Same exercises lines"),
+        ForkedMember(path: "App/Fernlet/TrainerExportView.swift",
+                     declaration: "private func bullet(_ text: LocalizedStringKey, tint: Color = Color.moss) -> some View {",
+                     role: "the Ask an AI card's two bullets"),
     ]
 
     /// The members this round forked are still forked.
@@ -3160,6 +3163,8 @@ struct LocalizationBoundaryTests {
                      source: "the coach-plan review subtitle's session count"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.changes",
                      source: "the coach-plan review subtitle's change count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.workouts",
+                     source: "the Plan added alert's workout count"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.replaced",
                      source: "the coach-plan changes card's replaced count"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.adjusted",
@@ -3170,6 +3175,16 @@ struct LocalizationBoundaryTests {
                      source: "the coach-plan collision card ('1 day … already has')"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.review.newExercisesBody",
                      source: "the coach-plan new-exercises card ('check it' / 'check them')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.imported.changed",
+                     source: "the Plan added alert's changed count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.imported.removed",
+                     source: "the Plan added alert's removed count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.imported.newExercises",
+                     source: "the Plan added alert's new-exercise count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.imported.struck",
+                     source: "the Plan added alert's struck-exercise count ('was' / 'were')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "trainerExport.preview.dayCount",
+                     source: "the trainer summary's day count, which passed the English 's' as an argument"),
         HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings", key: "coachPlan.count.sets",
                      source: "a coach-plan review note's set count ('0 sets')"),
     ]

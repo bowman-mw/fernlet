@@ -592,16 +592,6 @@
         }
       }
     },
-    "%lld day%@ of training will be included." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld day%2$@ of training will be included."
-          }
-        }
-      }
-    },
     "%lld days a week" : {
       "comment" : "Workout setup: how many days a week the person trains, e.g. '3 days a week'.",
       "localizations" : {
@@ -2399,6 +2389,9 @@
 
     },
     "Copy training summary and prompt" : {
+
+    },
+    "Copy your training summary along with instructions, paste it into an AI assistant, and paste the plan it writes back into Fernlet below." : {
 
     },
     "Copy your training summary?" : {
@@ -4478,6 +4471,9 @@
     "Include picture" : {
 
     },
+    "Includes the last 8 weeks of workouts, 2 weeks of meals, and how each exercise has progressed — plus your targets, equipment and weights, session length, and the muscles, movements and areas you avoid or train around." : {
+
+    },
     "Info" : {
 
     },
@@ -6031,6 +6027,9 @@
     "Paste a recipe link or Fernlet recipe data." : {
 
     },
+    "Paste a workout plan and Fernlet will show it to you day by day — checked against the muscles and movements you avoid and the equipment you have — before anything is added." : {
+
+    },
     "Paste the reply" : {
 
     },
@@ -6322,6 +6321,9 @@
 
     },
     "Preferences" : {
+
+    },
+    "Prepare a summary of your workouts and nutrition to give to a trainer or nutritionist. You control exactly what goes in it, and nothing is shared until you choose to." : {
 
     },
     "Prepare summary" : {
@@ -8472,6 +8474,9 @@
     "This cannot be undone." : {
 
     },
+    "This copies your training data as plain text so you can paste it somewhere else. Once you paste it into another app, that app has it — Fernlet can't take it back. The copy stays on this iPhone — it isn't shared to your other Apple devices. To get it onto another device, use Prepare summary instead." : {
+
+    },
     "This deletes" : {
 
     },
@@ -8512,6 +8517,9 @@
 
     },
     "This is a wellbeing reflection, not medical advice. If you're worried about how you feel, please talk to a health professional." : {
+
+    },
+    "This is plain text on your clipboard. Whatever app you paste it into will have it." : {
 
     },
     "This is the phone I'm protecting" : {
@@ -10248,6 +10256,133 @@
         }
       }
     },
+    "coachPlan.count.workouts" : {
+      "comment" : "A number of workouts, e.g. '3 workouts', placed inside 'Added … across …'. Needs a plural variation.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld workout"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld workouts"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "coachPlan.imported.added" : {
+      "comment" : "Coach plan added. Arguments: a count of workouts ('3 workouts'), then a count of days ('2 days').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Added %1$@ across %2$@."
+          }
+        }
+      }
+    },
+    "coachPlan.imported.changed" : {
+      "comment" : "Coach plan added: how many already-planned workouts it changed. Needs a plural variation.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "Changed %lld workout you'd already planned."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "Changed %lld workouts you'd already planned."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "coachPlan.imported.newExercises" : {
+      "comment" : "Coach plan added: how many new exercises joined the person's list. Needs a plural variation.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld new exercise added to your list."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld new exercises added to your list."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "coachPlan.imported.removed" : {
+      "comment" : "Coach plan added: how many planned workouts it removed. Needs a plural variation.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "Removed %lld planned workout."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "Removed %lld planned workouts."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "coachPlan.imported.struck" : {
+      "comment" : "Coach plan added: how many exercises the person switched off in the review were left out. Needs a plural variation (English: '1 exercise … was left out').",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld exercise you turned off was left out."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld exercises you turned off were left out."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "coachPlan.paste.detail.missingKey" : {
       "comment" : "Coach plan paste sheet, what went wrong. Arguments: the JSON key that is missing, then where it should be, as JSON keys joined by arrows, e.g. 'days → 2' (neither is translated).",
       "extractionState" : "extracted_with_value",
@@ -11007,6 +11142,102 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Unknown"
+          }
+        }
+      }
+    },
+    "dataExport.about.excludes.cycle" : {
+      "comment" : "Data export file readme, what it leaves out",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Period / cycle data and intimate-activity data"
+          }
+        }
+      }
+    },
+    "dataExport.about.excludes.keys" : {
+      "comment" : "Data export file readme, what it leaves out",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Photo image data and your private cryptographic keys"
+          }
+        }
+      }
+    },
+    "dataExport.about.excludes.memories" : {
+      "comment" : "Data export file readme, what it leaves out. 'Worry Box' is the app's place for worries, keep its translated name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sensitive (Tier-2) memories and Worry Box notes"
+          }
+        }
+      }
+    },
+    "dataExport.about.includes.health" : {
+      "comment" : "Data export file readme, what it includes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Non-sensitive Apple Health context (steps, energy, sleep hours, heart rate)"
+          }
+        }
+      }
+    },
+    "dataExport.about.includes.logs" : {
+      "comment" : "Data export file readme, what it includes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Daily logs (meals, workouts, sleep, water, hygiene, journal, planned meals) grouped by day"
+          }
+        }
+      }
+    },
+    "dataExport.about.includes.rest" : {
+      "comment" : "Data export file readme, what it includes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your wellbeing scores, core memories, goals, recipes, wardrobe, coins, and friends"
+          }
+        }
+      }
+    },
+    "dataExport.about.note" : {
+      "comment" : "Data export file, a readme line at its top",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your own Fernlet data, exported for you. Fernlet keeps this on your device — we never receive it. Logs are grouped by day."
+          }
+        }
+      }
+    },
+    "dataExport.recipeStep.withTimer" : {
+      "comment" : "A recipe step in the data export file, with its timer. Arguments: the step as the person wrote it, then the timer in minutes ('min' is the abbreviation).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ (%2$lld min timer)"
           }
         }
       }
@@ -12866,6 +13097,341 @@
     },
     "tempo, form note" : {
 
+    },
+    "trainerExport.about.includes.goal" : {
+      "comment" : "Trainer summary file readme, what it includes: optional",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your goal type"
+          }
+        }
+      }
+    },
+    "trainerExport.about.includes.hydration" : {
+      "comment" : "Trainer summary file readme, what it includes: optional",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Daily hydration"
+          }
+        }
+      }
+    },
+    "trainerExport.about.includes.nutrition" : {
+      "comment" : "Trainer summary file readme, what it includes: always",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Per-day nutrition summaries (calorie + macro + micronutrient totals, meal names)"
+          }
+        }
+      }
+    },
+    "trainerExport.about.includes.planned" : {
+      "comment" : "Trainer summary file readme, what it includes: always",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Workouts you've already planned for the coming weeks, so they can be adjusted"
+          }
+        }
+      }
+    },
+    "trainerExport.about.includes.progression" : {
+      "comment" : "Trainer summary file readme, what it includes: always",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "How each exercise has progressed (frequency, recent and best sets)"
+          }
+        }
+      }
+    },
+    "trainerExport.about.includes.safety" : {
+      "comment" : "Trainer summary file readme, what it includes: always",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Training-safety context (injury notes, avoided muscles and movements, areas you train around)"
+          }
+        }
+      }
+    },
+    "trainerExport.about.includes.setup" : {
+      "comment" : "Trainer summary file readme, what it includes: always",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Where you train, the equipment and weights you have, your session length, and the split you follow"
+          }
+        }
+      }
+    },
+    "trainerExport.about.includes.sickness" : {
+      "comment" : "Trainer summary file readme, what it includes: optional",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Days you were unwell"
+          }
+        }
+      }
+    },
+    "trainerExport.about.includes.sleep" : {
+      "comment" : "Trainer summary file readme, what it includes: optional",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sleep summaries"
+          }
+        }
+      }
+    },
+    "trainerExport.about.includes.targets" : {
+      "comment" : "Trainer summary file readme, what it includes: always",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your daily calorie and macro targets"
+          }
+        }
+      }
+    },
+    "trainerExport.about.includes.wellbeing" : {
+      "comment" : "Trainer summary file readme, what it includes: optional",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your wellbeing score for each day"
+          }
+        }
+      }
+    },
+    "trainerExport.about.includes.workouts" : {
+      "comment" : "Trainer summary file readme, what it includes: always",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your workouts over time (names, sets/reps/weights as logged, duration, effort)"
+          }
+        }
+      }
+    },
+    "trainerExport.about.never.cycle" : {
+      "comment" : "Trainer summary file readme, what it never includes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Period / cycle data and intimate-activity data"
+          }
+        }
+      }
+    },
+    "trainerExport.about.never.journal" : {
+      "comment" : "Trainer summary file readme, what it never includes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Journal entries and private notes"
+          }
+        }
+      }
+    },
+    "trainerExport.about.never.keys" : {
+      "comment" : "Trainer summary file readme, what it never includes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Recipe ingredient lists and your private cryptographic keys"
+          }
+        }
+      }
+    },
+    "trainerExport.about.never.social" : {
+      "comment" : "Trainer summary file readme, what it never includes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Photos, friends, and location"
+          }
+        }
+      }
+    },
+    "trainerExport.about.note" : {
+      "comment" : "Trainer summary file, a readme line at its top",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A summary of your workouts and nutrition, prepared for you to review before you share it in person. Fernlet keeps everything on your device."
+          }
+        }
+      }
+    },
+    "trainerExport.about.preparedFor" : {
+      "comment" : "Trainer summary file, a readme line at its top: who the summary is for",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your trainer or nutritionist"
+          }
+        }
+      }
+    },
+    "trainerExport.included.goal" : {
+      "comment" : "Trainer summary screen, What's included: optional, switched on in Settings",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your goal"
+          }
+        }
+      }
+    },
+    "trainerExport.included.hydration" : {
+      "comment" : "Trainer summary screen, What's included: optional, switched on in Settings",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hydration"
+          }
+        }
+      }
+    },
+    "trainerExport.included.nutrition" : {
+      "comment" : "Trainer summary screen, What's included: always included",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What you've eaten, and the targets you're aiming at"
+          }
+        }
+      }
+    },
+    "trainerExport.included.setup" : {
+      "comment" : "Trainer summary screen, What's included: always included",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your equipment and weights, your session length, and the muscles, movements and areas you avoid or train around"
+          }
+        }
+      }
+    },
+    "trainerExport.included.sickness" : {
+      "comment" : "Trainer summary screen, What's included: optional, switched on in Settings",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Days you were unwell"
+          }
+        }
+      }
+    },
+    "trainerExport.included.sleep" : {
+      "comment" : "Trainer summary screen, What's included: optional, switched on in Settings",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sleep"
+          }
+        }
+      }
+    },
+    "trainerExport.included.wellbeing" : {
+      "comment" : "Trainer summary screen, What's included: optional, switched on in Settings",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "How you've been feeling"
+          }
+        }
+      }
+    },
+    "trainerExport.included.workouts" : {
+      "comment" : "Trainer summary screen, What's included: always included",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your workouts, and how each exercise has progressed"
+          }
+        }
+      }
+    },
+    "trainerExport.preview.dayCount" : {
+      "comment" : "Trainer summary screen: how many days of training the summary will carry. Needs a plural variation.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld day of training will be included."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld days of training will be included."
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "weekly.aerobic.line" : {
       "comment" : "Weekly totals screen: aerobic minutes logged this week out of the 150-minute guideline, e.g. '95 of 150 minutes'. The first number is what was logged; the second is always 150.",
