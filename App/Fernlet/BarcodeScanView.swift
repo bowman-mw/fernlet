@@ -340,10 +340,13 @@ struct BarcodeScanView: View {
             let payload = try? await detector.payload(in: image)
             guard !Task.isCancelled else { return }
             isDetecting = false
+            // A found code is felt by `deliver` (`captured`), so only the miss plays here: B9, a
+            // caveat beside the line that says how to try again — never an error.
             if let payload {
                 deliver(payload)
             } else {
                 detectionNotice = "Fernlet couldn't spot a barcode in that photo — try moving closer so the code fills the frame."
+                FernletFeedback.system.play(.caveat)
             }
         }
     }
@@ -1054,8 +1057,7 @@ struct BarcodeNotFoundView: View {
             )
             return
         }
-        saveNotice = nil
-        rememberedItem = item
+        reportRemembered(item)
     }
 
     // MARK: Optional online lookup (tracker §3.3)
@@ -1087,8 +1089,15 @@ struct BarcodeNotFoundView: View {
             )
             return
         }
+        reportRemembered(item)
+    }
+
+    /// A remembered food hands off to the "Remembered" confirmation, felt as `done` (§7): a save the
+    /// person asked for that nothing else confirms in place.
+    private func reportRemembered(_ item: FoodItem) {
         saveNotice = nil
         rememberedItem = item
+        FernletFeedback.system.play(.done)
     }
 
     /// A failed "Remember this food" says so three ways (A6): the line under the field, the error

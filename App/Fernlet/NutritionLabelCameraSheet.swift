@@ -175,7 +175,9 @@ struct NutritionLabelCameraSheet: View {
                     let label = index == 0 ? dual.col1Header : dual.col2Header
                     let isSelected = selectedDualColumn == index
                     Button {
-                        selectedDualColumn = index
+                        // B6: switching columns is a choice made, felt as a tick; re-tapping the
+                        // column already chosen changes nothing and plays nothing.
+                        FernletFeedback.system.select(index, in: &selectedDualColumn)
                         scanResult = index == 0 ? dual.col1 : dual.col2
                     } label: {
                         Text(label)
@@ -231,7 +233,19 @@ struct NutritionLabelCameraSheet: View {
     }
 
     private var shouldShowScanTips: Bool {
-        scanError != nil || scanResult.map { $0.recognizedFieldCount < 3 } == true
+        scanError != nil || scanResult.map { $0.recognizedFieldCount < Self.confidentFieldCount } == true
+    }
+
+    /// Fewer recognized fields than this and the scan tips show beside the values: a reading, but a
+    /// thin one.
+    static let confidentFieldCount = 3
+
+    /// What a finished label scan feels like (§7): the person waited on it, so a confident reading is
+    /// `done`, a thin one — values shown, with the retake tips beside them — is `caveat`, and a scan
+    /// that read nothing (`nil`, it threw) is `failed` beside its error line.
+    static func scanEvent(recognizedFieldCount: Int?) -> FernletFeedbackEvent {
+        guard let recognizedFieldCount else { return .failed }
+        return recognizedFieldCount < confidentFieldCount ? .caveat : .done
     }
 
     private var scanTips: some View {
@@ -409,12 +423,14 @@ struct NutritionLabelCameraSheet: View {
                 guard !Task.isCancelled else { return }
                 dualColumnResult = dual
                 scanResult = primary
+                FernletFeedback.system.play(Self.scanEvent(recognizedFieldCount: primary.recognizedFieldCount))
             } catch {
                 guard !Task.isCancelled else { return }
                 scanError = (error as? LocalizedError)?.errorDescription
                     ?? String(localized: "labelScan.error.fallback",
                               defaultValue: "Could not read that label.",
                               comment: "Shown in the nutrition-label camera sheet when the scan fails and the thrown error carries no description of its own.")
+                FernletFeedback.system.play(Self.scanEvent(recognizedFieldCount: nil))
             }
             isScanning = false
         }

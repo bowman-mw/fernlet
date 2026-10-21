@@ -23,7 +23,8 @@ struct GoalPresetCards: View {
                 GoalPresetCard(goal: goal, isSelected: goal == selectedGoal,
                                nutritionSummary: goal.nutritionSummary(
                                    weightManagementDeficitPercent: weightManagementDeficitPercent)) {
-                    selectedGoal = goal
+                    // B6: picking another goal ticks, in onboarding and in Settings alike.
+                    FernletFeedback.system.select(goal, in: &selectedGoal)
                 }
             }
         }

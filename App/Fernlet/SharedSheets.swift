@@ -121,8 +121,8 @@ struct WaterSheet: View {
         .accessibilityValue(countText)
         .accessibilityAdjustableAction { direction in
             switch direction {
-            case .increment: draftCount = min(draft + 1, Self.maximumBottles)
-            case .decrement: draftCount = max(draft - 1, 0)
+            case .increment: step(by: 1)
+            case .decrement: step(by: -1)
             @unknown default: break
             }
         }
@@ -139,6 +139,22 @@ struct WaterSheet: View {
 
     /// The day's bottle cap, the same one `DiaryStore.addBottle` clamps to.
     static let maximumBottles = 30
+
+    /// Moves the draft one bottle, inside `0...maximumBottles`, and plays how that step feels
+    /// (``stepEvent(after:)``). The −/+ buttons and VoiceOver's adjustable action share it, so a
+    /// swipe feels like a tap.
+    private func step(by delta: Int) {
+        let after = min(max(draft + delta, 0), Self.maximumBottles)
+        draftCount = after
+        FernletFeedback.system.play(Self.stepEvent(after: after))
+    }
+
+    /// What one −/+ step feels like: a `tick` per bottle, and `limit` at either end — on the step
+    /// that reaches 0 or the cap (the button that would go further disables there), and on an
+    /// adjust that can't move. Reaching the day's target is an ordinary tick: no goal is ever felt.
+    static func stepEvent(after: Int) -> FernletFeedbackEvent {
+        after <= 0 || after >= maximumBottles ? .limit : .tick
+    }
 
     /// Bottles as a row of glyphs with a goldenrod tick after the target position — the target is
     /// a marker, never a second number masquerading as intake (2c).
@@ -186,12 +202,12 @@ struct WaterSheet: View {
             stepButton(
                 systemImage: "minus", accessibilityLabel: "Remove a bottle",
                 fill: Color.cream, ink: Color.bark, stroke: 0.12, disabled: draft <= 0
-            ) { draftCount = max(draft - 1, 0) }
+            ) { step(by: -1) }
             .accessibilityValue(countText)
             stepButton(
                 systemImage: "plus", accessibilityLabel: "Add a bottle",
                 fill: Color.mossFill, ink: Color.onMoss, stroke: 0, disabled: draft >= Self.maximumBottles
-            ) { draftCount = min(draft + 1, Self.maximumBottles) }
+            ) { step(by: 1) }
             .accessibilityValue(countText)
         }
         .frame(maxWidth: .infinity)
@@ -318,7 +334,7 @@ struct SleepSheet: View {
             VStack(alignment: .leading, spacing: 8) {
                 FlowLayout(spacing: 8) {
                     ForEach(SleepQuality.allCases) { option in
-                        Button(option.label) { quality = option }
+                        Button(option.label) { FernletFeedback.system.select(option, in: &quality) }
                             .buttonStyle(ChipButtonStyle(selected: quality == option))
                     }
                 }
@@ -382,7 +398,7 @@ struct GoalsSheet: View {
                         SheetField("Current level") {
                             FlowLayout(spacing: 8) {
                                 ForEach(["beginner", "intermediate", "advanced"], id: \.self) { l in
-                                    Button(l.capitalized) { level = l }
+                                    Button(l.capitalized) { FernletFeedback.system.select(l, in: &level) }
                                         .buttonStyle(ChipButtonStyle(selected: level == l))
                                 }
                             }
