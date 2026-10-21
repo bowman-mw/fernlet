@@ -25,8 +25,8 @@ struct ComposedRecipeCard: Identifiable {
 ///   No JSON, no Fernlet data. The text is built when the row is tapped, not on every render.
 ///
 /// Both follow the Share screen's "Include notes" switch, passed in as `includesNotes`. After a
-/// draft closes, one line says "Sent in Messages." or that sending failed, and VoiceOver hears it; a
-/// cancelled draft says nothing. "Sent" is all it may claim — Messages reports handing the message
+/// draft closes, one line says "Sent in Messages." or that sending failed, VoiceOver hears it, and
+/// it is felt — `done` or `failed` (report §7, 2026-10-20); a cancelled draft says and plays nothing. "Sent" is all it may claim — Messages reports handing the message
 /// over, never delivery.
 struct RecipeShareElsewhereCard: View {
     var recipe: RecipeDefinition
@@ -126,11 +126,22 @@ struct RecipeShareElsewhereCard: View {
         report(result)
     }
 
-    /// Shows the outcome line and speaks it; a cancelled draft has neither.
+    /// Shows the outcome line, speaks it and plays its haptic; a cancelled draft has none of them.
     private func report(_ result: RecipeMessagesSendOutcome) {
         outcome = result
         guard let status = Status(result) else { return }
         FernletAnnouncer.system.announce(status.announcementKind, status.message)
+        if let event = Self.feedbackEvent(for: result) { FernletFeedback.system.play(event) }
+    }
+
+    /// The haptic a closed draft plays: `done` once Messages took the card, `failed` when it could
+    /// not, and nothing for a draft the person cancelled — the cancel is its own answer.
+    static func feedbackEvent(for outcome: RecipeMessagesSendOutcome) -> FernletFeedbackEvent? {
+        switch outcome {
+        case .sent: .done
+        case .failed: .failed
+        case .cancelled: nil
+        }
     }
 
     // MARK: - Share as text

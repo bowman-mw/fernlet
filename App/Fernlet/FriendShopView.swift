@@ -291,6 +291,8 @@ struct FriendShopView: View {
             sellerFingerprint: catalog.senderFingerprint
         )
         let label = item.name.isEmpty ? item.slot.label : item.name
+        // B25: the alert below is the result, and this is its feel.
+        FernletFeedback.system.play(Self.purchaseEvent(for: result))
         switch result {
         case .bought:
             feedback = "Added “\(label)” to your closet."
@@ -300,6 +302,16 @@ struct FriendShopView: View {
             feedback = "Not enough coins for “\(label)” yet — keep showing up!"
         case .unavailable:
             feedback = "“\(label)” is no longer available."
+        }
+    }
+
+    /// What a purchase's result feels like (report B25): `done` when the item is in the closet, and
+    /// `caveat` for a purchase that did not go through but is no error — not enough coins yet,
+    /// already owned, or gone from the shop. Each one's alert says which.
+    static func purchaseEvent(for result: FernletStore.ClothingPurchaseResult) -> FernletFeedbackEvent {
+        switch result {
+        case .bought: .done
+        case .alreadyOwned, .insufficientCoins, .unavailable: .caveat
         }
     }
 

@@ -18,6 +18,12 @@ import FernletUI
 /// `FernletStore.importProximityRecipeShare` (which sanitizes and records provenance by sender
 /// fingerprint); both outcomes consume the pending share via `dismissRecipeShare`, and an import
 /// failure keeps the sheet up with an inline notice.
+///
+/// **Import confirms itself** (report B22, 2026-10-20). A landed import swaps the Import bar for the
+/// "added" line and plays `done`, holds for a beat, then consumes the share — which is what closes
+/// the sheet, since ContentView presents it off the pending queue — and VoiceOver hears the line once
+/// the close has settled (``ImportReviewLanding``). A failure plays `failed` and is spoken beside the
+/// inline notice. Decline plays nothing.
 struct ProximityRecipeShareReviewSheet: View {
     var share: PendingProximityRecipeShare
     var store: FernletStore
@@ -25,6 +31,8 @@ struct ProximityRecipeShareReviewSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var notice: String?
+    /// The "added" line, set when the import landed; the sheet holds it for a beat, then closes.
+    @State private var landedLine: String?
 
     var body: some View {
         NavigationStack {
@@ -48,7 +56,9 @@ struct ProximityRecipeShareReviewSheet: View {
 
                         summaryCard
 
-                        if let duplicateWarning {
+                        // Hidden once the import landed: the recipe it just added would otherwise
+                        // read as a duplicate of itself for the beat the "added" line holds.
+                        if landedLine == nil, let duplicateWarning {
                             Text(duplicateWarning)
                                 .font(.fernlet(.bubble))
                                 .foregroundStyle(Color.slate)
@@ -74,9 +84,7 @@ struct ProximityRecipeShareReviewSheet: View {
                     .padding(.bottom, 10)
                 }
 
-                SheetSaveBar(label: duplicateWarning == nil ? "Import" : "Import anyway") {
-                    importShare()
-                }
+                importBar
             }
             .background(Color.parchment)
             .toolbar {
@@ -85,7 +93,27 @@ struct ProximityRecipeShareReviewSheet: View {
                         manager.dismissRecipeShare(share)
                         dismiss()
                     }
+                    .disabled(landedLine != nil)
                 }
+            }
+        }
+        // A landed import whose sheet goes away early — swiped down, or covered by another root
+        // sheet, which would re-queue it — is consumed here, so an imported share never comes back.
+        .onDisappear { if landedLine != nil { manager.dismissRecipeShare(share) } }
+    }
+
+    /// The Import bar, or — once the import landed — the "added" line in its place.
+    @ViewBuilder
+    private var importBar: some View {
+        if let landedLine {
+            ImportLandedLine(text: landedLine)
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.bark)
+                .padding(20)
+                .background(Color.parchment)
+        } else {
+            SheetSaveBar(label: duplicateWarning == nil ? "Import" : "Import anyway") {
+                importShare()
             }
         }
     }
@@ -315,21 +343,50 @@ struct ProximityRecipeShareReviewSheet: View {
         }
     }
 
+    /// Imports the share and hands the outcome to ``ImportReviewLanding``, which plays it, closes a
+    /// landed import after its beat (consuming the share is the close) and speaks the line.
     private func importShare() {
-        do {
-            let outcome = try store.importProximityRecipeShare(share.payload, fromFingerprint: share.senderFingerprint)
-            manager.dismissRecipeShare(share)
-            switch outcome {
-            case .imported(let name):
-                notice = "\(name) imported."
-            case .alreadySaved(let name):
-                notice = "\(name) is already in your recipe book — your saved copy was kept."
+        guard landedLine == nil else { return }
+        let outcome = Self.outcome {
+            try store.importProximityRecipeShare(share.payload, fromFingerprint: share.senderFingerprint)
+        }
+        switch outcome {
+        case .added(let line):
+            notice = nil
+            landedLine = line
+        case .caveat(let line), .failed(let line):
+            notice = line
+        }
+        Task { @MainActor in
+            await ImportReviewLanding().answer(outcome) {
+                manager.dismissRecipeShare(share)
+                dismiss()
             }
-            dismiss()
+        }
+    }
+
+    /// What one Import came to: `run` is the store's import, so the outcome — and every cue it
+    /// plays — is decided from what the import actually did, after it returned.
+    static func outcome(
+        of run: () throws -> FernletStore.ProximityRecipeImportOutcome
+    ) -> ImportReviewOutcome {
+        do {
+            switch try run() {
+            case .imported(let name):
+                return .added(String(
+                    localized: "proximityRecipeImport.added",
+                    defaultValue: "\u{201C}\(name)\u{201D} added to your recipe book.",
+                    comment: "Shown on the nearby recipe review sheet for a moment after Import, before it closes, and spoken once it has. The name is the recipe's, as the friend shared it."))
+            case .alreadySaved(let name):
+                return .added(String(
+                    localized: "proximityRecipeImport.alreadySaved",
+                    defaultValue: "\u{201C}\(name)\u{201D} was already in your recipe book. Your saved copy was kept.",
+                    comment: "Shown on the nearby recipe review sheet after Import when the same web recipe was already saved, so the existing copy (its photo and notes) was kept; then the sheet closes and the line is spoken."))
+            }
         } catch let error as RecipeImportError {
-            notice = error.message
+            return .failed(error.message)
         } catch {
-            notice = RecipeImportError.invalidPayload.message
+            return .failed(RecipeImportError.invalidPayload.message)
         }
     }
 }

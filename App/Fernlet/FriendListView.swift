@@ -608,6 +608,9 @@ struct FriendListView: View {
         Button {
             awayStatus = nil
             if reachable {
+                // B21: the in-session heart's soft tap, at the same moment — the tap that sends.
+                // The status line below ("Connecting to…", then "Sent…") is its visual twin.
+                FernletFeedback.system.play(.logged)
                 store.presenceManager.sendHeart(to: peer)
             } else if awayEnabled {
                 recordAwayOutcome(store.heartDropService.queueHeart(to: peer), firstName: firstName)
@@ -727,6 +730,8 @@ struct FriendListView: View {
     }
 
     private func recordAwayOutcome(_ outcome: HeartDropService.QueueOutcome, firstName: String) {
+        // The away line set below is this haptic's visual twin, whichever way the queue answered.
+        FernletFeedback.system.play(Self.awayHeartEvent(for: outcome))
         switch outcome {
         case .queued:
             // The heart IS saved, so say so — but never alongside a delivery promise the service is
@@ -749,6 +754,17 @@ struct FriendListView: View {
             awayStatus = "Fernlet couldn't reach its own notes just now — unlock and reopen to send hearts."
         case .disabled, .failed:
             awayStatus = "Couldn't tuck that heart away just now."
+        }
+    }
+
+    /// What a tap that tucks a heart away feels like (report B21): the in-session heart's soft
+    /// `logged` when the heart was saved, `limit` when a limit turned it away (the line says which
+    /// and until when), and `failed` when it was refused outright.
+    static func awayHeartEvent(for outcome: HeartDropService.QueueOutcome) -> FernletFeedbackEvent {
+        switch outcome {
+        case .queued: .logged
+        case .rateLimited, .dailyLimitReached, .backlogFull: .limit
+        case .storageUnavailable, .disabled, .failed: .failed
         }
     }
 

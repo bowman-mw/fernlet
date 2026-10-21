@@ -10710,6 +10710,18 @@
         }
       }
     },
+    "friends.nearby.holdStill" : {
+      "comment" : "A nearby-friend row's status once the two phones are within the 15 cm connect distance, while the connection settles (under a second). Pairs with a light haptic tick.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Close enough — hold still…"
+          }
+        }
+      }
+    },
     "friends.pendingReview.body" : {
       "comment" : "Body of the Friends tab card for photos waiting to be chosen. The count is how many photos. Must keep saying that nothing is saved (not in Fernlet, not in the camera roll) until the person chooses.",
       "localizations" : {
@@ -11235,6 +11247,18 @@
         }
       }
     },
+    "messagesRecipeImport.added" : {
+      "comment" : "Shown in the Messages recipe review sheet for a moment after Save recipe, before it closes, and spoken once it has. The name is the recipe's; if the same recipe was already in Fernlet, it stays a single copy, so the line says it is there rather than that it was added.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "“%@” is in your recipe book."
+          }
+        }
+      }
+    },
     "messagesRecipeImport.error.saveFallback" : {
       "comment" : "Shown in the Messages recipe review sheet when saving fails and the thrown error carries no description of its own.",
       "extractionState" : "extracted_with_value",
@@ -11243,6 +11267,66 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Fernlet couldn't save this recipe."
+          }
+        }
+      }
+    },
+    "messagesRecipeImport.savedNotCleared" : {
+      "comment" : "Shown in the Messages recipe review sheet when the recipe was saved but the review it came from could not be cleared. 'Save recipe' is the exact label of the sheet's button.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Saved the recipe, but Fernlet couldn't clear this review. Please try Save recipe again."
+          }
+        }
+      }
+    },
+    "messagesWorkoutPlanImport.added" : {
+      "comment" : "Shown in the Messages workout plan review sheet for a moment after Add workout plan, before it closes, and spoken once it has. The title is the plan's, as the sender named it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "“%@” is on your workout calendar."
+          }
+        }
+      }
+    },
+    "messagesWorkoutPlanImport.calendarChanged" : {
+      "comment" : "Shown in the Messages workout plan review sheet when the workout calendar changed between the review and Add, so nothing was added and the updated plan is now on screen.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your calendar changed. Review the updated plan, then add it again."
+          }
+        }
+      }
+    },
+    "messagesWorkoutPlanImport.failed" : {
+      "comment" : "Shown in the Messages workout plan review sheet when adding the plan failed for any reason other than the calendar changing.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet couldn't add this workout plan."
+          }
+        }
+      }
+    },
+    "messagesWorkoutPlanImport.savedNotCleared" : {
+      "comment" : "Shown in the Messages workout plan review sheet when the plan was saved but the review it came from could not be cleared.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Saved the plan, but Fernlet couldn't clear this review. Try adding it again."
           }
         }
       }
@@ -11668,6 +11752,30 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Fernlet could not identify a product on that page."
+          }
+        }
+      }
+    },
+    "proximityRecipeImport.added" : {
+      "comment" : "Shown on the nearby recipe review sheet for a moment after Import, before it closes, and spoken once it has. The name is the recipe's, as the friend shared it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "“%@” added to your recipe book."
+          }
+        }
+      }
+    },
+    "proximityRecipeImport.alreadySaved" : {
+      "comment" : "Shown on the nearby recipe review sheet after Import when the same web recipe was already saved, so the existing copy (its photo and notes) was kept; then the sheet closes and the line is spoken.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "“%@” was already in your recipe book. Your saved copy was kept."
           }
         }
       }

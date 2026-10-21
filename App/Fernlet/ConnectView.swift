@@ -84,6 +84,9 @@ struct FriendsView: View {
     /// Nil shows "Connected" alone, never an identifier in its place.
     @State private var connectionPeerName: String?
     @State private var sessionReady = false
+    /// "Your friend's here" is felt on a session's first commit only; a link that blips and heals
+    /// replays the overlay in silence (report B20, ``SessionConnectCue``).
+    @State private var connectCue = SessionConnectCue()
     // Phase 2 friend minting: the promoted batch this instance is presenting (consumed via
     // completeFriendReview on finalize), candidates snapshotted at presentation time, and keeps.
     @State private var reviewBatch: MeshFriendReviewBatch?
@@ -164,8 +167,9 @@ struct FriendsView: View {
             .presentationBackground(.clear)
         }
         .onAppear {
-            // Already in session when returning to the tab — skip animation.
+            // Already in session when returning to the tab — skip animation, and its haptic.
             if manager.isInSession { sessionReady = true }
+            connectCue.surfaceAppeared(inSession: manager.isInSession)
             // A freshly created FriendsView instance must present a review that predates it:
             // ContentView's Social-tab layout swap destroys the previous instance in the same
             // transaction as the isInSession flip, so its onChange never fires. The review is
@@ -177,7 +181,11 @@ struct FriendsView: View {
         // is answered on return, after ContentView's own activation routing), and whatever covered
         // the surface — the camera's own sheets, the root sheet — going away.
         .onChange(of: features.photos.pendingFriendReview) { _, _ in scheduleReviewCheck() }
-        .onChange(of: manager.isSessionLive) { _, live in if !live { scheduleReviewCheck() } }
+        .onChange(of: manager.isSessionLive) { _, live in
+            guard !live else { return }
+            connectCue.sessionEnded()
+            scheduleReviewCheck()
+        }
         .onChange(of: scenePhase) { _, phase in if phase == .active { scheduleReviewCheck() } }
         .onChange(of: cameraPresentsOwnSheet) { _, up in if !up { scheduleReviewCheck() } }
         .onChange(of: activeSheet == nil) { _, clear in if clear { scheduleReviewCheck() } }
@@ -253,6 +261,7 @@ struct FriendsView: View {
     /// fires no other edge once the session is over, and the camera leaving takes its sheets with it.
     private func handleSessionSurfaceChange(wasInSession: Bool, nowInSession: Bool) {
         guard wasInSession, !nowInSession else { return }
+        connectCue.sessionEnded()
         // The camera swap destroyed the album's stack; the path outlives it here, so clear it or the
         // album would come back with the page it had pushed before the session.
         if sessionReady { path.removeAll() }
@@ -287,6 +296,10 @@ struct FriendsView: View {
     /// of the whole Friends surface for the rest of the session.
     private func handleCommittedPeerChange(hadPeer: Bool, hasPeer: Bool) {
         if !hadPeer && hasPeer {
+            // B20: the session's first commit is felt; a heal is not. Either arm below may be the
+            // first: a wall photo or a session-end sheet that is up when a session's first commit
+            // lands takes the presentation arm, with no overlay — the haptic still answers it.
+            if let cue = connectCue.committed() { FernletFeedback.system.play(cue) }
             if aPresentationIsUp {
                 // A session became live again while a session-end sheet was up: dismiss WITHOUT
                 // consuming — the batch persists and re-presents (merged) at the next real teardown.
@@ -302,7 +315,6 @@ struct FriendsView: View {
                 sessionReady = true
             } else {
                 connectionPeerName = connectedPeerName()
-                FernletFeedback.system.play(.friendHere)
                 withAnimation { showConnectionAnimation = true }
             }
         } else if hadPeer && !hasPeer {
@@ -1332,7 +1344,12 @@ private struct FriendPhotoCarouselPostView: View {
                             tint: isFavorite ? Color.dustyRose : .white,
                             accessibilityLabel: "Favorite this photo",
                             selected: isFavorite
-                        ) { photos.toggleFavorite(photoID: photo.id, in: post) }
+                        ) {
+                            photos.toggleFavorite(photoID: photo.id, in: post)
+                            // The heart filling (or emptying) is the visual; the button only shows
+                            // on a session's post, where a toggle always changes the favorite.
+                            FernletFeedback.system.play(.tick)
+                        }
                     }
 
                     circleActionButton(
@@ -1534,6 +1551,21 @@ private struct NearbySlotRow: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.bark.opacity(0.08), lineWidth: 1)
         )
+        .onChange(of: approachMeters) { _, meters in
+            if let cue = approachCue.observe(meters) { FernletFeedback.system.play(cue) }
+        }
+    }
+
+    /// B19: one `tick` as the phones come inside the commit distance, re-armed only past 30 cm
+    /// (``ProximityApproachCue``). The "Hold still…" line in ``stateLabel`` is its visual twin.
+    @State private var approachCue = ProximityApproachCue()
+
+    /// The distance the approach cue reads: the live reading while this row waits for the phones
+    /// to come together, and nothing in any other state, so a connected pair that touches again
+    /// never ticks.
+    private var approachMeters: Double? {
+        guard case .awaitingProximityCommit = slot.coordinator.state else { return nil }
+        return distanceMeters
     }
 
     // QR verification ceremony (bitchat adoptions Increment 4): row-local sheet state; the
@@ -1654,6 +1686,11 @@ private struct NearbySlotRow: View {
         switch slot.coordinator.state {
         case .awaitingIdentityIntroduction: return "Exchanging identity…"
         case .awaitingProximityCommit:
+            if let d = distanceMeters, ProximityApproachCue.isWithinCommitDistance(d) {
+                return String(localized: "friends.nearby.holdStill",
+                              defaultValue: "Close enough — hold still…",
+                              comment: "A nearby-friend row's status once the two phones are within the 15 cm connect distance, while the connection settles (under a second). Pairs with a light haptic tick.")
+            }
             if let d = distanceMeters { return String(format: "Move closer — %.0f cm away", d * 100) }
             return "Tap phones together to connect"
         case .awaitingManualCommit: return "Tap to confirm connection"

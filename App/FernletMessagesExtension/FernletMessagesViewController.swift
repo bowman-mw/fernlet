@@ -139,7 +139,7 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         } else if let receivedWorkout {
             openWorkoutInFernlet(receivedWorkout)
         } else {
-            statusLabel.text = FernletMessagesCopy.prepareItemFailed
+            showReviewFailure(FernletMessagesCopy.prepareItemFailed)
         }
     }
 
@@ -495,11 +495,13 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
     }
 
     private func selectRecipe(_ id: UUID) {
+        if selectedRecipeID != id { FernletMessagesHaptic.picked.play() }
         selectedRecipeID = id
         renderComposer()
     }
 
     private func selectWorkout(_ id: UUID) {
+        if selectedWorkoutID != id { FernletMessagesHaptic.picked.play() }
         selectedWorkoutID = id
         renderComposer()
     }
@@ -575,7 +577,7 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
 
     private func insertSelectedRecipe() {
         guard let conversation = activeConversation, let entry = selectedRecipeEntry() else {
-            showComposerStatus(FernletMessagesCopy.chooseRecipe)
+            showComposerFailure(FernletMessagesCopy.chooseRecipe)
             return
         }
         do {
@@ -583,16 +585,16 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
             insert(message: try FernletMessagesCard.recipeMessage(for: entry.packet),
                    into: conversation, success: FernletMessagesCopy.recipeInserted)
         } catch ExchangePacketError.tooLarge {
-            showComposerStatus(FernletMessagesCopy.recipeTooLarge)
+            showComposerFailure(FernletMessagesCopy.recipeTooLarge)
         } catch {
             // Only a size refusal means "use a file instead"; anything else is a failure to say so.
-            showComposerStatus(FernletMessagesCopy.insertFailed)
+            showComposerFailure(FernletMessagesCopy.insertFailed)
         }
     }
 
     private func insertSelectedWorkout() {
         guard let conversation = activeConversation, let entry = selectedWorkoutEntry() else {
-            showComposerStatus(FernletMessagesCopy.chooseWorkout)
+            showComposerFailure(FernletMessagesCopy.chooseWorkout)
             return
         }
         do {
@@ -600,9 +602,9 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
             insert(message: try FernletMessagesCard.message(for: envelope, layout: workoutLayout(for: entry)),
                    into: conversation, success: FernletMessagesCopy.workoutInserted)
         } catch ExchangePacketError.tooLarge {
-            showComposerStatus(FernletMessagesCopy.workoutTooLarge)
+            showComposerFailure(FernletMessagesCopy.workoutTooLarge)
         } catch {
-            showComposerStatus(FernletMessagesCopy.insertFailed)
+            showComposerFailure(FernletMessagesCopy.insertFailed)
         }
     }
 
@@ -615,7 +617,13 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         conversation.insert(message) { @Sendable [weak self] error in
             let succeeded = error == nil
             DispatchQueue.main.async {
-                self?.showComposerStatus(succeeded ? success : FernletMessagesCopy.insertFailed)
+                guard let self else { return }
+                if succeeded {
+                    self.showComposerStatus(success)
+                    FernletMessagesHaptic.inserted.play()
+                } else {
+                    self.showComposerFailure(FernletMessagesCopy.insertFailed)
+                }
             }
         }
     }
@@ -623,6 +631,19 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
     private func showComposerStatus(_ text: String) {
         statusLabel.text = text
         statusLabel.isHidden = false
+    }
+
+    /// A share that didn't happen: the status line says why, and the error haptic is its feel (B23).
+    private func showComposerFailure(_ text: String) {
+        showComposerStatus(text)
+        FernletMessagesHaptic.failed.play()
+    }
+
+    /// A received card that could not be handed to Fernlet: the status line says so, with the error
+    /// haptic. The tap that asked was the person's own, so the failure answers it.
+    private func showReviewFailure(_ text: String) {
+        statusLabel.text = text
+        FernletMessagesHaptic.failed.play()
     }
 
     /// The workout card's artwork, drawn by the shared builder like the recipe card's.
@@ -700,7 +721,7 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
 
     private func openRecipeInFernlet(_ packet: RecipeExchangePacket) {
         guard let directory = FernletMessagesInboxStore.productionDirectory() else {
-            statusLabel.text = FernletMessagesCopy.prepareRecipeFailed
+            showReviewFailure(FernletMessagesCopy.prepareRecipeFailed)
             return
         }
         do {
@@ -708,13 +729,13 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
             let target = FernletMessagesInboxTarget(destination: .recipe, inboxID: record.id)
             openFernletReview(target, failure: FernletMessagesCopy.openRecipeFailed)
         } catch {
-            statusLabel.text = FernletMessagesCopy.prepareRecipeFailed
+            showReviewFailure(FernletMessagesCopy.prepareRecipeFailed)
         }
     }
 
     private func openWorkoutInFernlet(_ record: FernletMessagesWorkoutInboxRecord) {
         guard let directory = FernletMessagesWorkoutInboxStore.productionDirectory() else {
-            statusLabel.text = FernletMessagesCopy.prepareWorkoutFailed
+            showReviewFailure(FernletMessagesCopy.prepareWorkoutFailed)
             return
         }
         do {
@@ -724,13 +745,13 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
             let target = FernletMessagesInboxTarget(destination: .workoutPlan, inboxID: saved.id)
             openFernletReview(target, failure: FernletMessagesCopy.openWorkoutFailed)
         } catch {
-            statusLabel.text = FernletMessagesCopy.prepareWorkoutFailed
+            showReviewFailure(FernletMessagesCopy.prepareWorkoutFailed)
         }
     }
 
     private func openFernletReview(_ target: FernletMessagesInboxTarget, failure: String) {
         guard let url = FernletMessagesInboxLink.url(for: target) else {
-            statusLabel.text = failure
+            showReviewFailure(failure)
             return
         }
         // `open(_:completionHandler:)`'s block is `@Sendable` and runs on no documented queue, so the
