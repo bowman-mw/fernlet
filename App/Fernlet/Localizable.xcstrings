@@ -1231,6 +1231,12 @@
     "A quiet chime that follows your ring/silent switch." : {
 
     },
+    "A quiet chime when a step's timer runs out. It follows your ring/silent switch." : {
+
+    },
+    "A quiet chime when the timer runs out. It follows your ring/silent switch." : {
+
+    },
     "A quiet minute, whenever" : {
 
     },
@@ -1258,9 +1264,6 @@
 
     },
     "A small record of being." : {
-
-    },
-    "A soft tap on each turn of the breath, in First aid › Slow breathing." : {
 
     },
     "A soft tap when a log lands, and a firmer one for results and timers." : {
@@ -2324,10 +2327,16 @@
     "Cookies per day, over every day you've had Fernlet. Homemade is always a whole cookie; everything else follows the cookie table." : {
       "comment" : "Silly stat: how cookies per day is counted"
     },
+    "Cooking" : {
+
+    },
     "Cooking action" : {
 
     },
     "Cooking in progress" : {
+
+    },
+    "Cooking timer sound" : {
 
     },
     "Cool-down %lld of %lld · %lld min left" : {
@@ -4011,6 +4020,9 @@
 
     },
     "Haptics are off for all of Fernlet, so breathing's taps won't play either." : {
+
+    },
+    "Haptics are off for all of Fernlet, so the cooking timer's tap won't play. Its sound keeps its own switch." : {
 
     },
     "Haptics, workout sounds, spoken cues" : {
@@ -7749,6 +7761,9 @@
     "Snap a photo when you log a meal and it'll show up here as a polaroid." : {
 
     },
+    "Soft taps as you breathe in and one as you breathe out, in First aid › Slow breathing." : {
+
+    },
     "Some cycle entries on this iPhone can't be opened, so your cycle backup is paused. Nothing in iCloud was changed." : {
 
     },
@@ -7791,7 +7806,7 @@
     "Sounds & haptics" : {
 
     },
-    "Sounds play only in a workout you started, and only if you turn them on. Your phone's own sound and haptics settings still apply." : {
+    "Sounds play only in a workout or a cook you started, and only if you turn them on. Your phone's own sound and haptics settings still apply." : {
 
     },
     "Source" : {
@@ -8337,6 +8352,9 @@
     "The recovery lock needs a second phone of your own, enrolled in person. It holds the only copy of the key that can open this phone again — Fernlet never puts that key in the cloud, and there is no way to enrol a device remotely." : {
 
     },
+    "The same switch as on a step's timer while you cook." : {
+
+    },
     "The same switches as Move › Workout setup." : {
 
     },
@@ -8571,6 +8589,9 @@
           }
         }
       }
+    },
+    "Timer sound" : {
+
     },
     "Timer's up — tap Next when you're ready. Nothing advances on its own." : {
 
@@ -9970,9 +9991,6 @@
         }
       }
     },
-    "a soft tap on each turn" : {
-
-    },
     "as of %@" : {
 
     },
@@ -10692,6 +10710,18 @@
         }
       }
     },
+    "friends.nearby.holdStill" : {
+      "comment" : "A nearby-friend row's status once the two phones are within the 15 cm connect distance, while the connection settles (under a second). Pairs with a light haptic tick.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Close enough — hold still…"
+          }
+        }
+      }
+    },
     "friends.pendingReview.body" : {
       "comment" : "Body of the Friends tab card for photos waiting to be chosen. The count is how many photos. Must keep saying that nothing is saved (not in Fernlet, not in the camera roll) until the person chooses.",
       "localizations" : {
@@ -10817,6 +10847,66 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Private note saved and sent to Apple Health. Fernlet couldn't record that link, so this entry won't show “Saved to Apple Health”."
+          }
+        }
+      }
+    },
+    "journal.prompt.limitReached.message" : {
+      "comment" : "Banner over the journal editor when the entry reaches its 800-character limit; Moments is Apple's journaling app.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet saved the short version here. Moments is better for the rest."
+          }
+        }
+      }
+    },
+    "journal.prompt.limitReached.title" : {
+      "comment" : "Title of the banner over the journal editor when the entry reaches its 800-character limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Journal limit reached"
+          }
+        }
+      }
+    },
+    "journal.prompt.longReflection.message" : {
+      "comment" : "Banner over the journal editor suggesting a long entry continue in the Moments app.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This is getting long enough for a dedicated journal entry."
+          }
+        }
+      }
+    },
+    "journal.prompt.longReflection.title" : {
+      "comment" : "Title of the banner over the journal editor suggesting a long entry continue in the Moments app.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Keep going in Moments"
+          }
+        }
+      }
+    },
+    "journal.prompt.spoken" : {
+      "comment" : "Spoken when a journal banner appears: its title, then its sentence.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@. %2$@"
           }
         }
       }
@@ -11157,6 +11247,18 @@
         }
       }
     },
+    "messagesRecipeImport.added" : {
+      "comment" : "Shown in the Messages recipe review sheet for a moment after Save recipe, before it closes, and spoken once it has. The name is the recipe's; if the same recipe was already in Fernlet, it stays a single copy, so the line says it is there rather than that it was added.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "“%@” is in your recipe book."
+          }
+        }
+      }
+    },
     "messagesRecipeImport.error.saveFallback" : {
       "comment" : "Shown in the Messages recipe review sheet when saving fails and the thrown error carries no description of its own.",
       "extractionState" : "extracted_with_value",
@@ -11165,6 +11267,66 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Fernlet couldn't save this recipe."
+          }
+        }
+      }
+    },
+    "messagesRecipeImport.savedNotCleared" : {
+      "comment" : "Shown in the Messages recipe review sheet when the recipe was saved but the review it came from could not be cleared. 'Save recipe' is the exact label of the sheet's button.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Saved the recipe, but Fernlet couldn't clear this review. Please try Save recipe again."
+          }
+        }
+      }
+    },
+    "messagesWorkoutPlanImport.added" : {
+      "comment" : "Shown in the Messages workout plan review sheet for a moment after Add workout plan, before it closes, and spoken once it has. The title is the plan's, as the sender named it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "“%@” is on your workout calendar."
+          }
+        }
+      }
+    },
+    "messagesWorkoutPlanImport.calendarChanged" : {
+      "comment" : "Shown in the Messages workout plan review sheet when the workout calendar changed between the review and Add, so nothing was added and the updated plan is now on screen.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your calendar changed. Review the updated plan, then add it again."
+          }
+        }
+      }
+    },
+    "messagesWorkoutPlanImport.failed" : {
+      "comment" : "Shown in the Messages workout plan review sheet when adding the plan failed for any reason other than the calendar changing.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet couldn't add this workout plan."
+          }
+        }
+      }
+    },
+    "messagesWorkoutPlanImport.savedNotCleared" : {
+      "comment" : "Shown in the Messages workout plan review sheet when the plan was saved but the review it came from could not be cleared.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Saved the plan, but Fernlet couldn't clear this review. Try adding it again."
           }
         }
       }
@@ -11498,6 +11660,18 @@
         }
       }
     },
+    "privacy.icloud.deleted.spoken" : {
+      "comment" : "Spoken after Delete iCloud data finishes and its sheet closes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your iCloud data was deleted."
+          }
+        }
+      }
+    },
     "productImport.error.emptyHTML" : {
       "comment" : "Inline notice when a product page loaded but its body decoded to empty or whitespace-only text.",
       "extractionState" : "extracted_with_value",
@@ -11578,6 +11752,30 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Fernlet could not identify a product on that page."
+          }
+        }
+      }
+    },
+    "proximityRecipeImport.added" : {
+      "comment" : "Shown on the nearby recipe review sheet for a moment after Import, before it closes, and spoken once it has. The name is the recipe's, as the friend shared it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "“%@” added to your recipe book."
+          }
+        }
+      }
+    },
+    "proximityRecipeImport.alreadySaved" : {
+      "comment" : "Shown on the nearby recipe review sheet after Import when the same web recipe was already saved, so the existing copy (its photo and notes) was kept; then the sheet closes and the line is spoken.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "“%@” was already in your recipe book. Your saved copy was kept."
           }
         }
       }
@@ -11873,6 +12071,9 @@
           }
         }
       }
+    },
+    "soft taps in, one tap out" : {
+      "comment" : "Under the breathing screen's Haptics switch: what the haptics feel like. Several soft taps while breathing in, a single tap as the breath goes out, nothing while holding."
     },
     "sourdough toast" : {
 

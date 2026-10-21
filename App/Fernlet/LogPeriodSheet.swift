@@ -323,8 +323,13 @@ struct LogPeriodSheet: View {
                     // `.isSelected` trait, so VoiceOver says which one is on). Without that a flow
                     // chip, once touched, could not be taken back, so a user refused for sharing
                     // had no way to keep just the note and symptoms short of starting over.
-                    Button(level.displayName) { flowLevel = flowLevel == level ? nil : level }
-                        .buttonStyle(ChipButtonStyle(selected: flowLevel == level))
+                    //
+                    // B6: either way the choice changed, so either way it ticks (haptics only: a
+                    // private surface never makes a sound).
+                    Button(level.displayName) {
+                        FernletFeedback.system.select(flowLevel == level ? nil : level, in: &flowLevel)
+                    }
+                    .buttonStyle(ChipButtonStyle(selected: flowLevel == level))
                 }
             }
         }
@@ -702,8 +707,7 @@ struct LogPeriodSheet: View {
             dismiss()
             return
         }
-        savedWithCaveat = true
-        report(sentence.text, kind: sentence.kind)
+        reportCaveat(sentence.text, kind: sentence.kind)
     }
 
     /// Maps an emptied edit's delete: gone from Fernlet and Apple Health (or never in Health) dismisses;
@@ -713,8 +717,16 @@ struct LogPeriodSheet: View {
             dismiss()
             return
         }
+        reportCaveat(Self.stillInHealthSentence, kind: .status)
+    }
+
+    /// A save (or an emptied edit's delete) that LANDED, with a sentence the person still has to
+    /// read: freezes the sheet (see ``savedWithCaveat``), plays `caveat` (B9) and says it. The
+    /// haptic carries no content, and a private surface never makes a sound.
+    private func reportCaveat(_ sentence: String, kind: FernletAnnouncementKind) {
         savedWithCaveat = true
-        report(Self.stillInHealthSentence, kind: .status)
+        FernletFeedback.system.play(.caveat)
+        report(sentence, kind: kind)
     }
 
     /// The sentence a landed save shows, and how it is announced — or `nil` when there is nothing to

@@ -1491,6 +1491,32 @@ public struct SheetGrowingTextField: View {
     }
 }
 
+// MARK: - Choice feedback
+
+public extension FernletFeedback {
+    /// Sets `selection` to `choice`, and plays ``FernletFeedbackEvent/tick`` when that really changed
+    /// it: the feel of one of Fernlet's own pickers or chips (report B6), since the system's pickers
+    /// tick by themselves and these didn't.
+    ///
+    /// Call it from the control's action, never from inside ``ChipButtonStyle``: a style draws both
+    /// the chip being chosen and the chip being let go, so a tick there would play twice. A tap on
+    /// the choice already made changes nothing and plays nothing.
+    ///
+    /// - Parameters:
+    ///   - choice: What the person just picked.
+    ///   - selection: The value the control edits.
+    ///   - preferences: The person's switches; `nil` (production) reads the app-wide level now.
+    func select<Value: Equatable>(
+        _ choice: Value,
+        in selection: inout Value,
+        preferences: FernletFeedbackPreferences? = nil
+    ) {
+        guard selection != choice else { return }
+        selection = choice
+        play(.tick, preferences: preferences ?? .resolved())
+    }
+}
+
 /// A horizontal section switcher: a row of pill buttons where the selected section is highlighted
 /// on a cream capsule.
 ///
@@ -1502,7 +1528,8 @@ public struct SheetGrowingTextField: View {
 /// mid-word at accessibility sizes ("Journ/al", "Worry/Box"). Each pill keeps its label on one line,
 /// carries the `.isSelected` trait so VoiceOver announces which section is showing, and takes a 44pt
 /// tap target (the visible capsule stays its original height — the extra target is transparent).
-/// Selection motion is skipped under Reduce Motion.
+/// Selection motion is skipped under Reduce Motion. Moving to another section ticks
+/// (``FernletFeedback/select(_:in:preferences:)``); a tap on the section already showing doesn't.
 public struct HubSectionPicker<Section: Hashable>: View {
     var sections: [Section]
     @Binding var selection: Section
@@ -1527,7 +1554,7 @@ public struct HubSectionPicker<Section: Hashable>: View {
                     let isSelected = selection == section
                     Button {
                         withAnimation(selectionAnimation) {
-                            selection = section
+                            FernletFeedback.system.select(section, in: &selection)
                         }
                     } label: {
                         Text(label(section))

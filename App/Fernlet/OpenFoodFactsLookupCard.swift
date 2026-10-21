@@ -281,6 +281,7 @@ struct OpenFoodFactsLookupCard: View {
 
     /// Moves the card to the outcome's phase and hands a found product to the screen.
     private func apply(_ outcome: OpenFoodFactsLookupOutcome) {
+        if let event = Self.feedbackEvent(for: outcome) { FernletFeedback.system.play(event) }
         switch outcome {
         case .found(let product):
             phase = .found(hasNutrition: product.hasNutrition)
@@ -291,6 +292,17 @@ struct OpenFoodFactsLookupCard: View {
             phase = .idle
         case .failed(let failure):
             phase = .failed(rateLimited: failure == .rateLimited)
+        }
+    }
+
+    /// What a finished lookup feels like (§7): the person tapped and waited, so a product found is
+    /// `done` and a lookup that couldn't reach Open Food Facts is `failed`. "Not found" is an answer,
+    /// not an error, and plays nothing — nor does a lookup the consent never let start.
+    static func feedbackEvent(for outcome: OpenFoodFactsLookupOutcome) -> FernletFeedbackEvent? {
+        switch outcome {
+        case .found: .done
+        case .failed: .failed
+        case .notFound, .notPermitted: nil
         }
     }
 }

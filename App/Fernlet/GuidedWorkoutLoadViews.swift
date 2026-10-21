@@ -26,6 +26,36 @@ extension FernletStore {
     }
 }
 
+// MARK: - Touch cues
+
+/// The runner's touch cues (report B7): a weight step, an effort chip, a rest chip. One detent per
+/// step under the thumb, played from the tap — never from the run changing, which a Live Activity
+/// button also does — under the person's Workout haptics switch and the app-wide level
+/// (``WorkoutCuePreferences/current(in:)``). They are `touch` events, so the "Fewer" level drops them.
+enum GuidedTouchCue {
+    /// Plays `event` under the runner's switches, read now.
+    static func play(_ event: FernletFeedbackEvent) {
+        FernletFeedback.system.play(event, preferences: WorkoutCuePreferences.current())
+    }
+
+    /// `tick` when a −/+ tap really changed the weight; `limit` when it couldn't — "Lighter" at the
+    /// one-step floor, "Heavier" past the location's heaviest owned load — so a tap that changes
+    /// nothing never feels like one that did.
+    static func weightStep(before: Double?, after: Double?) -> FernletFeedbackEvent {
+        switch (before, after) {
+        case let (before?, after?): abs(after - before) > 0.001 ? .tick : .limit
+        case (nil, nil): .limit
+        case (nil, _?), (_?, nil): .tick
+        }
+    }
+
+    /// `tick` when a "−15 s" / "+15 s" moved the rest's end; `limit` at its bounds (five seconds
+    /// left, ten minutes long), where nothing on screen moves.
+    static func restAdjust(moved: Bool) -> FernletFeedbackEvent {
+        moved ? .tick : .limit
+    }
+}
+
 // MARK: - Formatting
 
 /// Weights as the runner shows them: the locale's number format and unit abbreviation ("62,5 kg").
@@ -175,11 +205,20 @@ struct GuidedWeightPicker: View {
         return Text(verbatim: GuidedLoadFormat.weight(selected, unit: GuidedLoadFormat.unit(tracking)))
     }
 
+    /// The weight the run holds for this lift right now.
+    private func runWeight() -> Double? {
+        store.guidedRunState?.exercises.first { $0.id == exerciseID }?.tracking?.selected
+    }
+
     private func stepButton(systemImage: String, label: Text, identifier: String, direction: Double) -> some View {
         Button {
             // R6: through the weights this location owns when the run knows them, else by the step.
             let next = tracking.steppedWeight(direction: Int(direction), start: GuidedLoadFormat.startWeight(tracking))
+            // B7: "changed" is read off the run on both sides — the store snaps the pick to an owned
+            // load or the step, and a quick second tap can land before this view redraws.
+            let before = runWeight()
             store.guidedSelectWeight(next, exerciseID: exerciseID)
+            GuidedTouchCue.play(GuidedTouchCue.weightStep(before: before, after: runWeight()))
         } label: {
             Image(systemName: systemImage)
                 .font(.fernlet(.label))
@@ -250,7 +289,11 @@ struct GuidedEffortPicker: View {
                 .foregroundStyle(Color.slate)
             FlowLayout(spacing: 8) {
                 ForEach(ExerciseEffort.allCases, id: \.self) { effort in
-                    Button { store.guidedSetEffort(selected == effort ? nil : effort, exerciseID: exerciseID) } label: {
+                    Button {
+                        store.guidedSetEffort(selected == effort ? nil : effort, exerciseID: exerciseID)
+                        // B7: every tap picks or clears a chip, so every tap is one detent.
+                        GuidedTouchCue.play(.tick)
+                    } label: {
                         Self.label(effort)
                     }
                     .buttonStyle(ChipButtonStyle(selected: selected == effort))

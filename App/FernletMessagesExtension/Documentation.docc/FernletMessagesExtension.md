@@ -153,6 +153,23 @@ of them. Either way a card reads in the sender's language, because the lookup ru
 process. Labels scale with Dynamic Type, each catalog card is one accessibility element whose
 label is the item's title, and the target is inside the accessibility wall's scan.
 
+### Haptics
+
+Three, each answering the person's own tap, each beside words the panel already shows
+(sounds-and-haptics Tier B, 2026-10-20, report B23): picking a different recipe or workout card plays
+a selection tick (the card's moss outline is its visual twin); a card Messages took into the message
+field plays a soft impact at half strength, as a heart sent in the app does; and every refusal or
+failure — nothing picked, too large for a card, Messages would not take it, or a received card that
+could not be handed to Fernlet — plays the error notification beside its status line. Never a sound.
+
+The feels are ``FernletMessagesHaptic``'s, copied from FernletUI's `FernletFeedback` table (`tick`,
+`logged`, `failed`), because this target cannot link FernletUI. That one file is the only place in the
+target allowed a UIKit feedback generator: `Scripts/feedback-allowlist.json` names it, token by token,
+with the invariant, and `FeedbackBoundaryTests` fails on any other. `MeshAndImportFeedbackTests` pins
+the copy to FernletUI's events and the composer's three call sites by source. The system's Sounds &
+Haptics switch governs them, as it governs every UIKit generator; Fernlet's own All / Fewer / Off level
+lives in the app's defaults, which this process cannot read, so it does not reach the extension.
+
 ### Concurrency
 
 The target builds in the Swift 5 language mode with `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, so
@@ -198,6 +215,10 @@ It has no call site, in shipping code or tests.
 ### Copy
 
 - ``FernletMessagesCopy``
+
+### Haptics
+
+- ``FernletMessagesHaptic``
 
 ### Phase-0 transport probe
 

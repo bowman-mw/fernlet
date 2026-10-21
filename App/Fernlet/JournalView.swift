@@ -301,7 +301,7 @@ struct JournalSheet: View {
                     SheetField("Feeling") {
                         FlowLayout(spacing: 8) {
                             ForEach(FeelingTag.allCases) { option in
-                                Button(option.label) { tag = option }
+                                Button(option.label) { FernletFeedback.system.select(option, in: &tag) }
                                     .buttonStyle(ChipButtonStyle(selected: tag == option))
                             }
                         }
@@ -426,6 +426,7 @@ struct JournalSheet: View {
         guard promptedReasons.contains(reason) == false else { return }
         promptedReasons.insert(reason)
         showJournalPromptNotification(reason)
+        reason.signalArrival()
     }
 
     private func showJournalPromptNotification(_ reason: JournalPromptReason) {
@@ -507,19 +508,29 @@ enum JournalPromptReason: Hashable {
     case longReflection
     case limitReached
 
+    /// The banner's title, resolved: it is drawn and, since B14, spoken too.
     var title: String {
         switch self {
-        case .longReflection: "Keep going in Moments"
-        case .limitReached: "Journal limit reached"
+        case .longReflection:
+            String(localized: "journal.prompt.longReflection.title", defaultValue: "Keep going in Moments",
+                   comment: "Title of the banner over the journal editor suggesting a long entry continue in the Moments app.")
+        case .limitReached:
+            String(localized: "journal.prompt.limitReached.title", defaultValue: "Journal limit reached",
+                   comment: "Title of the banner over the journal editor when the entry reaches its 800-character limit.")
         }
     }
 
+    /// The banner's sentence, resolved: drawn under the title and spoken after it.
     var message: String {
         switch self {
         case .longReflection:
-            "This is getting long enough for a dedicated journal entry."
+            String(localized: "journal.prompt.longReflection.message",
+                   defaultValue: "This is getting long enough for a dedicated journal entry.",
+                   comment: "Banner over the journal editor suggesting a long entry continue in the Moments app.")
         case .limitReached:
-            "Fernlet saved the short version here. Moments is better for the rest."
+            String(localized: "journal.prompt.limitReached.message",
+                   defaultValue: "Fernlet saved the short version here. Moments is better for the rest.",
+                   comment: "Banner over the journal editor when the entry reaches its 800-character limit; Moments is Apple's journaling app.")
         }
     }
 
@@ -528,6 +539,33 @@ enum JournalPromptReason: Hashable {
         case .longReflection: "book.pages"
         case .limitReached: "text.badge.plus"
         }
+    }
+}
+
+extension JournalPromptReason {
+    /// What the banner's arrival feels like: the 800-character cap is a small "can't go further"
+    /// (`limit`, report B14) — typing just stops there — and a long reflection is a suggestion, felt
+    /// as nothing.
+    var feedbackEvent: FernletFeedbackEvent? {
+        switch self {
+        case .limitReached: .limit
+        case .longReflection: nil
+        }
+    }
+
+    /// Signals the banner beyond the eye, once per reason per sheet (the editors' `promptedReasons`
+    /// gate calls this only on a reason's first showing): its haptic at once, and its words to
+    /// VoiceOver, which nothing moved focus to. Haptics only — the journal never makes a sound.
+    ///
+    /// - Parameters:
+    ///   - feedback: The player; tests pass a recording one. `nil` (production) is resolved
+    ///     in the body, not as a default value, as ``TaskConfirmation/announce(using:)`` does.
+    ///   - announcer: The announcer, resolved the same way; tests pass a recording one.
+    func signalArrival(feedback: FernletFeedback? = nil, announcer: FernletAnnouncer? = nil) {
+        if let feedbackEvent { (feedback ?? .system).play(feedbackEvent) }
+        (announcer ?? .system).announce(.status, resolved: String(
+            localized: "journal.prompt.spoken", defaultValue: "\(title). \(message)",
+            comment: "Spoken when a journal banner appears: its title, then its sentence."))
     }
 }
 
@@ -654,7 +692,7 @@ struct JournalEntryEditorSheet: View {
             SheetField("Feeling") {
                 FlowLayout(spacing: 8) {
                     ForEach(FeelingTag.allCases) { option in
-                        Button(option.label) { tag = option }
+                        Button(option.label) { FernletFeedback.system.select(option, in: &tag) }
                             .buttonStyle(ChipButtonStyle(selected: tag == option))
                     }
                 }
@@ -761,6 +799,7 @@ struct JournalEntryEditorSheet: View {
         guard promptedReasons.contains(reason) == false else { return }
         promptedReasons.insert(reason)
         showJournalPromptNotification(reason)
+        reason.signalArrival()
     }
 
     private func showJournalPromptNotification(_ reason: JournalPromptReason) {
@@ -1878,7 +1917,7 @@ struct DayEditSheet: View {
             VStack(alignment: .leading, spacing: 10) {
                 FlowLayout(spacing: 8) {
                     ForEach(FeelingTag.allCases) { option in
-                        Button(option.label) { journalTag = option }
+                        Button(option.label) { FernletFeedback.system.select(option, in: &journalTag) }
                             .buttonStyle(ChipButtonStyle(selected: journalTag == option))
                     }
                 }
@@ -1971,7 +2010,7 @@ struct DayEditSheet: View {
             VStack(spacing: 10) {
                 FlowLayout(spacing: 8) {
                     ForEach(SleepQuality.allCases) { option in
-                        Button(option.label) { sleepQuality = option }
+                        Button(option.label) { FernletFeedback.system.select(option, in: &sleepQuality) }
                             .buttonStyle(ChipButtonStyle(selected: sleepQuality == option))
                     }
                 }
@@ -2039,6 +2078,7 @@ struct DayEditSheet: View {
         guard promptedReasons.contains(reason) == false else { return }
         promptedReasons.insert(reason)
         showJournalPromptNotification(reason)
+        reason.signalArrival()
     }
 
     private func showJournalPromptNotification(_ reason: JournalPromptReason) {

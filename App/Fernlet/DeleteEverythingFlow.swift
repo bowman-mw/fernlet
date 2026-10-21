@@ -31,6 +31,16 @@ final class DeleteEverythingFlow {
     /// owning screen decides what its success alert's button does (dismiss the sheet, or just clear this).
     var showSuccess = false
 
+    /// Plays the outcome's cue as its alert goes up (``land(_:)``). Injectable for tests.
+    @ObservationIgnored private let feedback: FernletFeedback
+
+    /// Creates a screen's flow.
+    ///
+    /// - Parameter feedback: Test seam. `nil` (production) resolves in the body to the shared player.
+    init(feedback: FernletFeedback? = nil) {
+        self.feedback = feedback ?? .system
+    }
+
     /// Builds the shared confirm dialog (``DeleteAllDataConfirmation``) wired to this flow's state.
     ///
     /// Since the 2026-08-21 redesign the shipping entry points present the typed-gate
@@ -73,14 +83,7 @@ final class DeleteEverythingFlow {
             onFinished: { outcome in
                 self.isDeleting = false
                 onWipeFinished?()
-                // Affirm success only on a clean wipe. On failure the screen stays put behind the
-                // failure alert so the user can read which store survived and retry — dismissing
-                // regardless would hide the failure behind an app that merely looks empty.
-                if outcome.isComplete {
-                    self.showSuccess = true
-                } else {
-                    self.failure = outcome
-                }
+                self.land(outcome)
             }
         )
     }
@@ -106,12 +109,32 @@ final class DeleteEverythingFlow {
             let outcome = await store.deleteAllData(includingHealthKitSamples: includingHealthSamples)
             self.isDeleting = false
             onWipeFinished?()
-            if outcome.isComplete {
-                self.showSuccess = true
-            } else {
-                self.failure = outcome
-            }
+            self.land(outcome)
         }
+    }
+
+    /// Raises the wipe's outcome alert and plays its cue, for both entry shapes.
+    ///
+    /// Affirm success only on a clean wipe. On failure the screen stays put behind the failure alert
+    /// so the user can read which store survived and retry — dismissing regardless would hide the
+    /// failure behind an app that merely looks empty.
+    ///
+    /// B10: a multi-second wipe the person started and waited for, so its end is felt — `done` with
+    /// "Everything deleted", `failed` with "Couldn't delete everything". HERE and only here: the
+    /// silent duress wipe reaches `FernletStore.deleteAllData` through `duressPurgeHook`, never
+    /// through this flow, and must stay silent, so no cue may ever move into the store's funnel.
+    func land(_ outcome: FernletStore.DeleteAllOutcome) {
+        if outcome.isComplete {
+            showSuccess = true
+        } else {
+            failure = outcome
+        }
+        feedback.play(Self.outcomeEvent(outcome))
+    }
+
+    /// The cue a finished wipe plays: `done` for a clean wipe, `failed` when a store survived.
+    static func outcomeEvent(_ outcome: FernletStore.DeleteAllOutcome) -> FernletFeedbackEvent {
+        outcome.isComplete ? .done : .failed
     }
 
     /// Drops the DEBUG Phase 3 gate readout's in-memory readings before a wipe starts.

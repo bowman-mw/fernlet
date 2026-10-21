@@ -1,10 +1,17 @@
 import FernletDomainModel
 import FernletExchange
 import FernletFoundation
+import FernletUI
 import SwiftUI
 
 /// Fernlet-owned review for a workout plan received in Messages. It deliberately uses the same
 /// canonical exchange service as file imports, so the visible message card never controls a write.
+///
+/// Add confirms itself (report §7, 2026-10-20): an added plan swaps the button for the "added" line
+/// and plays `done`, holds for a beat, closes, and VoiceOver hears the line once the close has
+/// settled. "Your calendar changed" — a refusal with the updated plan on screen to review — plays
+/// `caveat`, as does a plan that saved but whose review could not be cleared; any other error plays
+/// `failed`. Each is spoken beside its line (``ImportReviewLanding``). Cancel plays nothing.
 struct MessagesWorkoutPlanImportReviewSheet: View {
     let record: FernletMessagesWorkoutInboxRecord
     let inbox: FernletMessagesRecipeInboxCoordinator
@@ -18,6 +25,8 @@ struct MessagesWorkoutPlanImportReviewSheet: View {
     @State private var isImporting = false
     @State private var errorMessage: String?
     @State private var previewRequest = 0
+    /// The "added" line, set when the plan landed; the sheet holds it for a beat, then closes.
+    @State private var landedLine: String?
 
     init(
         record: FernletMessagesWorkoutInboxRecord,
@@ -111,13 +120,20 @@ struct MessagesWorkoutPlanImportReviewSheet: View {
         }
     }
 
+    /// Add workout plan, or — once the plan landed — the "added" line in its place.
+    @ViewBuilder
     private var importButton: some View {
-        Button(action: beginImport) {
-            Text(isImporting ? "Adding workout plan…" : "Add workout plan")
-                .frame(maxWidth: .infinity)
+        if let landedLine {
+            ImportLandedLine(text: landedLine)
+                .font(.headline)
+        } else {
+            Button(action: beginImport) {
+                Text(isImporting ? "Adding workout plan…" : "Add workout plan")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(isLoadingPreview || preview == nil || isImporting)
         }
-        .buttonStyle(.borderedProminent)
-        .disabled(isLoadingPreview || preview == nil || isImporting)
     }
 
     @ToolbarContentBuilder
@@ -168,41 +184,69 @@ struct MessagesWorkoutPlanImportReviewSheet: View {
         isLoadingPreview = false
     }
 
+    /// Re-checks the calendar, adds the plan, and hands the outcome to ``ImportReviewLanding``.
+    /// `isImporting` stays set through a landed plan's beat, so Cancel and the swipe stay off until
+    /// the sheet closes itself.
     private func beginImport() {
         guard let preview, !isImporting else { return }
         isImporting = true
         errorMessage = nil
         Task { @MainActor in
-            do {
-                let current = try await ExchangeIntentService.shared.workoutPreview(
-                    packet: record.packet, startDate: startDate, policy: collisionPolicy
-                )
-                guard current.matches(preview) else {
-                    self.preview = current
-                    isImporting = false
-                    errorMessage = "Your calendar changed. Review the updated plan, then add it again."
-                    return
-                }
-                let result = try await ExchangeIntentService.shared.importWorkoutPlan(current)
-                guard !result.id.isEmpty else { throw ExchangeIntentServiceError.invalidPacket }
-                guard inbox.consumeWorkout(id: record.id) else {
-                    isImporting = false
-                    errorMessage = "Saved the plan, but Fernlet couldn't clear this review. Try adding it again."
-                    return
-                }
+            let outcome = await addPlan(reviewed: preview)
+            switch outcome {
+            case .added(let line):
+                landedLine = line
+            case .caveat(let line), .failed(let line):
+                isImporting = false
+                errorMessage = line
+            }
+            await ImportReviewLanding().answer(outcome) {
                 onCompleted()
                 dismiss()
-            } catch {
-                isImporting = false
-                errorMessage = workoutImportError(error)
             }
         }
     }
 
-    private func workoutImportError(_ error: Error) -> String {
-        if case ExchangeIntentServiceError.reviewChanged = error {
-            return "Your calendar changed. Review the updated plan, then add it again."
+    /// The import itself: what one Add came to, decided only after the writes returned.
+    @MainActor
+    private func addPlan(reviewed: WorkoutPlanImportPreview) async -> ImportReviewOutcome {
+        do {
+            let current = try await ExchangeIntentService.shared.workoutPreview(
+                packet: record.packet, startDate: startDate, policy: collisionPolicy
+            )
+            guard current.matches(reviewed) else {
+                self.preview = current
+                return Self.outcome(for: ExchangeIntentServiceError.reviewChanged)
+            }
+            let result = try await ExchangeIntentService.shared.importWorkoutPlan(current)
+            guard !result.id.isEmpty else { throw ExchangeIntentServiceError.invalidPacket }
+            guard inbox.consumeWorkout(id: record.id) else {
+                return .caveat(String(
+                    localized: "messagesWorkoutPlanImport.savedNotCleared",
+                    defaultValue: "Saved the plan, but Fernlet couldn't clear this review. Try adding it again.",
+                    comment: "Shown in the Messages workout plan review sheet when the plan was saved but the review it came from could not be cleared."))
+            }
+            return .added(String(
+                localized: "messagesWorkoutPlanImport.added",
+                defaultValue: "\u{201C}\(record.packet.plan.title)\u{201D} is on your workout calendar.",
+                comment: "Shown in the Messages workout plan review sheet for a moment after Add workout plan, before it closes, and spoken once it has. The title is the plan's, as the sender named it."))
+        } catch {
+            return Self.outcome(for: error)
         }
-        return "Fernlet couldn't add this workout plan."
+    }
+
+    /// What an Add that threw came to: the calendar changing under the review is a `caveat` — the
+    /// updated plan is on screen to look over and add again — and anything else is `failed`.
+    static func outcome(for error: Error) -> ImportReviewOutcome {
+        if case ExchangeIntentServiceError.reviewChanged = error {
+            return .caveat(String(
+                localized: "messagesWorkoutPlanImport.calendarChanged",
+                defaultValue: "Your calendar changed. Review the updated plan, then add it again.",
+                comment: "Shown in the Messages workout plan review sheet when the workout calendar changed between the review and Add, so nothing was added and the updated plan is now on screen."))
+        }
+        return .failed(String(
+            localized: "messagesWorkoutPlanImport.failed",
+            defaultValue: "Fernlet couldn't add this workout plan.",
+            comment: "Shown in the Messages workout plan review sheet when adding the plan failed for any reason other than the calendar changing."))
     }
 }

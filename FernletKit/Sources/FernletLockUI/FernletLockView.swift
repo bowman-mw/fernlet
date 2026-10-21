@@ -1884,6 +1884,9 @@ private func pinDotsRow(current: String, total: Int) -> some View {
 /// auto-advance when the PIN reaches its full length). Used by ``FernletLockSetupView`` and
 /// ``FernletLockView`` here, and by the app's passcode-change flows in `SettingsSheet`, in
 /// place of the system keyboard so PIN entry stays visually consistent with the lock screens.
+///
+/// Every key press ticks (report B24), the same on every key of every pad — see
+/// ``press(_:into:maxLength:feedback:preferences:)``.
 public struct FernletNumericPad: View {
     /// The PIN accumulated so far; owned by the caller, mutated one digit at a time.
     @Binding var value: String
@@ -1892,7 +1895,7 @@ public struct FernletNumericPad: View {
 
     /// The delete key's own token. Internal vocabulary, never spoken and never persisted — the glyph
     /// is what `padKey` draws for it and ``FernletLockCopy/Pad/backspace`` is what VoiceOver says.
-    private static let backspaceKey = "⌫"
+    static let backspaceKey = "⌫"
     /// The bottom-left hole in the 3×4 grid. Named so the empty-string check reads as "the gap",
     /// and so nothing mistakes it for a key that lost its label.
     private static let gapKey = ""
@@ -1979,9 +1982,35 @@ public struct FernletNumericPad: View {
     }
 
     private func handleKey(_ key: String) {
-        if key == Self.backspaceKey {
+        Self.press(key, into: &value, maxLength: maxLength)
+    }
+
+    /// One key press, on whichever pad: unlock, passcode setup, change-passcode, duress-code setup.
+    ///
+    /// B24: the tick plays FIRST and UNCONDITIONALLY — the same `tick` for every digit and for the
+    /// backspace, on every pad, whether or not the press changed the value (a digit past
+    /// `maxLength`, a backspace on an empty field). Nothing about it reads the value, the key, the
+    /// scope or the lock: it sounds before the code goes anywhere, so it cannot depend on which code
+    /// will match, and a duress code feels exactly like the real one, key for key
+    /// (`FernletLockService`'s duress-indistinguishability rule). Haptics only; never a sound.
+    ///
+    /// - Parameters:
+    ///   - key: The pressed key's token: a digit, or ``backspaceKey``.
+    ///   - value: The PIN accumulated so far.
+    ///   - maxLength: The pad's digit count; digits past it are ignored.
+    ///   - feedback: Test seam. `nil` (production) resolves in the body to the shared player.
+    ///   - preferences: Test seam. `nil` (production) reads the app-wide Haptics level now.
+    static func press(
+        _ key: String,
+        into value: inout String,
+        maxLength: Int,
+        feedback: FernletFeedback? = nil,
+        preferences: FernletFeedbackPreferences? = nil
+    ) {
+        (feedback ?? .system).play(.tick, preferences: preferences ?? .resolved())
+        if key == backspaceKey {
             if !value.isEmpty { value.removeLast() }
-        } else if key != Self.gapKey, value.count < maxLength {
+        } else if key != gapKey, value.count < maxLength {
             value.append(key)
         }
     }

@@ -14,6 +14,11 @@ system Photos library, and ``PhotoSaveFailure`` with the `photoSaveFailureAlert(
 modifier gives every save surface the same failure wording. ``FingerprintText`` is the one view
 that shows a peer's identity fingerprint.
 
+Feedback goes through FernletUI's `FernletFeedback`, never a generator of its own
+(`FeedbackBoundaryTests`): a Keep / Keeping chip plays `tick` as it flips, in either host
+(sounds-and-haptics Tier B, 2026-10-20), and the shared save-failure alert plays `failed` as a failure
+arrives. Nothing here ever sounds.
+
 All of it lived in ProximityKit's `UI/` folder until step A0.1 of
 `Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md` moved it here, unchanged apart from what the
 module boundary required (imports, and the copy vault's name). The move is what lets ProximityKit

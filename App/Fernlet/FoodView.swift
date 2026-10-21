@@ -2384,6 +2384,8 @@ struct RecipeIngredientEditor: View {
                 ForEach(visibleMatches) { foodItem in
                     CatalogSuggestionRow(foodItem: foodItem) {
                         guard let current = typeaheadResults.selectable(foodItem, for: ingredient.name) else { return }
+                        // B6: a typeahead row picked is a choice made, felt like a chip.
+                        FernletFeedback.system.play(.tick)
                         pick(current, among: visibleMatches)
                     }
                 }
@@ -2970,13 +2972,7 @@ struct MealSheet: View {
         #endif
         reviewContext = nil
         onLogged(committed)
-        if photoAttached {
-            dismiss()
-        } else {
-            // Same disarm as the direct resolve path: the meal is in, only the photo failed.
-            didLogMeal = true
-            notice = "Your meal is logged, but its photo couldn't be saved to your private store."
-        }
+        closeAfterLogging(photoAttached: photoAttached)
     }
 
     #if canImport(UIKit)
@@ -3161,6 +3157,8 @@ struct MealSheet: View {
                 ForEach(visibleMealCatalogMatches) { foodItem in
                     CatalogSuggestionRow(foodItem: foodItem) {
                         guard let current = catalogResults.selectable(foodItem, for: description) else { return }
+                        // B6: a typeahead row picked is a choice made, felt like a chip.
+                        FernletFeedback.system.play(.tick)
                         selectCatalogFood(current)
                     }
                 }
@@ -3340,7 +3338,7 @@ struct MealSheet: View {
     @ViewBuilder private var mealTypeChipButtons: some View {
         autoMealTypeChip
         ForEach(MealType.allCases) { type in
-            Button { mealType = type } label: { Text(verbatim: type.displayName) }
+            Button { FernletFeedback.system.select(type, in: &mealType) } label: { Text(verbatim: type.displayName) }
                 .buttonStyle(ChipButtonStyle(selected: mealType == type))
         }
     }
@@ -3349,7 +3347,7 @@ struct MealSheet: View {
     /// rather than guess. The inferred value scales down slightly before wrapping (4a·AX3) and is
     /// dropped entirely at the AX5 floor.
     private var autoMealTypeChip: some View {
-        Button { mealType = nil } label: {
+        Button { FernletFeedback.system.select(nil, in: &mealType) } label: {
             if dynamicTypeSize >= .accessibility5 {
                 Text("Auto")
             } else {
@@ -3447,12 +3445,7 @@ struct MealSheet: View {
         let photoAttached = true
         #endif
         onLogged([meal])
-        if photoAttached {
-            dismiss()
-        } else {
-            didLogMeal = true
-            notice = "Your meal is logged, but its photo couldn't be saved to your private store."
-        }
+        closeAfterLogging(photoAttached: photoAttached)
     }
 
     /// Logs the exact typeahead row the user picked, preserving its catalog identity and reference
@@ -3465,12 +3458,7 @@ struct MealSheet: View {
         let photoAttached = true
         #endif
         onLogged([meal])
-        if photoAttached {
-            dismiss()
-        } else {
-            didLogMeal = true
-            notice = "Your meal is logged, but its photo couldn't be saved to your private store."
-        }
+        closeAfterLogging(photoAttached: photoAttached)
     }
 
     /// Runs the normal free-text resolve cascade for a typed description: a low-confidence result
@@ -3512,16 +3500,26 @@ struct MealSheet: View {
             let photoAttached = true
             #endif
             onLogged(meals)
-            if photoAttached {
-                dismiss()
-            } else {
-                // The meal logged; only its photo couldn't be sealed. Keep the sheet open so the
-                // notice is seen rather than the photo silently vanishing — but disarm Save so the
-                // notice can't be answered with a second tap that logs the meal again.
-                didLogMeal = true
-                notice = "Your meal is logged, but its photo couldn't be saved to your private store."
-            }
+            closeAfterLogging(photoAttached: photoAttached)
         }
+    }
+
+    /// Closes the sheet once a log has gone to the toast (`onLogged`, beside each logging call) — or,
+    /// when the meal's photo couldn't be sealed, keeps the sheet open on the notice so the photo
+    /// never vanishes silently, with Save disarmed so the notice can't be answered with a second tap
+    /// that logs the meal again. Shared by every commit path here (typed resolve, review, by-hand
+    /// macros, a picked catalog row).
+    ///
+    /// B9: the second case is a meal that landed with something to read, so it is felt as one
+    /// (`caveat`) beside the notice — right after the toast's own `done`, which the log earned.
+    private func closeAfterLogging(photoAttached: Bool) {
+        guard !photoAttached else {
+            dismiss()
+            return
+        }
+        didLogMeal = true
+        notice = "Your meal is logged, but its photo couldn't be saved to your private store."
+        FernletFeedback.system.play(.caveat)
     }
 
     /// The payload for the pre-log review sheet: the resolution under review plus any captured photo
@@ -3599,14 +3597,18 @@ struct MealSheet: View {
         Task {
             let outcome = await MealPhotoRecognizer().identify(photo: photo, type: mealType, host: store)
             isIdentifyingPhoto = false
+            // B15: the guess was waited for ("Identifying…"), so its arrival is felt — `done` as the
+            // review sheet comes up with it, `caveat` beside the "couldn't quite tell" line.
             switch outcome {
             case .aiOff:
                 break
             case .nothingRecognized:
                 notice = "Fernlet couldn't quite tell what's in this photo — want to type what you ate instead?"
+                FernletFeedback.system.play(.caveat)
             case .resolved(let described, let resolution):
                 description = described
                 reviewContext = MealReviewContext(resolution: resolution, photo: photo, photoData: capturedPhotoData)
+                FernletFeedback.system.play(.done)
             }
         }
     }
@@ -3673,6 +3675,8 @@ struct MealSheet: View {
                 path.append(.captureBarcode(payload))
             } else {
                 captureError = "Fernlet couldn't spot a barcode in that photo. Steady hands and a little more light usually does it — or type it instead."
+                // B9: the photo is kept and the banner offers a way on — a caveat, never an error.
+                FernletFeedback.system.play(.caveat)
             }
         }
     }
@@ -3693,6 +3697,8 @@ struct MealSheet: View {
                 path.append(.captureLabel(parsed))
             } else {
                 captureError = "Fernlet couldn't read that label. Steady hands and a little more light usually does it — or type it instead."
+                // B9: as for the barcode — a calm way on, felt as a caveat, never an error.
+                FernletFeedback.system.play(.caveat)
             }
         }
     }
@@ -4620,7 +4626,7 @@ struct MealCorrectionSheet: View {
                     SheetField("Meal type") {
                         FlowLayout(spacing: 8) {
                             ForEach(MealType.allCases) { type in
-                                Button { mealType = type } label: { Text(verbatim: type.displayName) }
+                                Button { FernletFeedback.system.select(type, in: &mealType) } label: { Text(verbatim: type.displayName) }
                                     .buttonStyle(ChipButtonStyle(selected: mealType == type))
                             }
                         }
@@ -4965,6 +4971,8 @@ private struct MealItemSearchField: View {
                     ForEach(visibleMatches) { foodItem in
                         CatalogSuggestionRow(foodItem: foodItem) {
                             guard let current = typeaheadResults.selectable(foodItem, for: searchText) else { return }
+                            // B6: a typeahead row picked is a choice made, felt like a chip.
+                            FernletFeedback.system.play(.tick)
                             onPick(current, searchText)
                         }
                     }
@@ -5359,7 +5367,7 @@ private struct MealReviewSheet: View {
                             SheetField("Meal type") {
                                 FlowLayout(spacing: 8) {
                                     ForEach(MealType.allCases) { type in
-                                        Button { $meal.mealType.wrappedValue = type } label: { Text(verbatim: type.displayName) }
+                                        Button { FernletFeedback.system.select(type, in: &$meal.mealType.wrappedValue) } label: { Text(verbatim: type.displayName) }
                                             .buttonStyle(ChipButtonStyle(selected: meal.mealType == type))
                                     }
                                 }

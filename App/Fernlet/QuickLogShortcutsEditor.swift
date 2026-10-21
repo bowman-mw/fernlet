@@ -137,11 +137,19 @@ struct QuickLogShortcutsEditor: View {
             updated[existingIndex] = updated[index]
         }
         updated[index] = item
+        // B13: the tiles changed (one replaced, or two swapped) — `moved`, with the row's new
+        // title and the palette folding away as its twin. Re-picking the current chip says nothing.
+        if updated != items { FernletFeedback.system.play(.moved) }
         store.setQuickLogItems(updated)
         editingSlot = nil
     }
 
     /// Applies a drag reorder to the STORED array.
+    ///
+    /// No Fernlet cue here (report B13, "check the system's `.onMove` feel first"): the drag is the
+    /// system list's own reorder, and a system control gets nothing extra (§3.8). Whether that
+    /// reorder carries a feel of its own on iOS 26 is a device check; if it is silent, `moved` here
+    /// is the one-line answer.
     private func moveItems(from source: IndexSet, to destination: Int) {
         var updated = items
         updated.move(fromOffsets: source, toOffset: destination)

@@ -38,12 +38,15 @@ struct KeepFriendsSection: View {
         }
     }
 
+    /// Flips one person's Keep chip, with the chip's tick under the thumb (report §7, "Keep-as-friends
+    /// prompt chips → tick"). The chip turning to Keeping, and the row's moss outline, are the visual.
     private func toggle(_ fingerprint: String) {
         if keptFingerprints.contains(fingerprint) {
             keptFingerprints.remove(fingerprint)
         } else {
             keptFingerprints.insert(fingerprint)
         }
+        FernletFeedback.system.play(.tick)
     }
 }
 

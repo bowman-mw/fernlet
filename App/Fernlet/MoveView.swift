@@ -270,23 +270,26 @@ struct MoveView: View {
             records: progressPhotos,
             loadData: { store.progressPhotoData(for: $0) },
             onCapture: { image in
-                if store.addProgressPhoto(image) == nil {
-                    showPhotoSaveFailedAlert = true
-                }
-                progressPhotos = store.progressPhotoRecords()
+                finishProgressPhoto(sealed: store.addProgressPhoto(image) != nil)
             },
             onCaptureData: { data, capturedAt in
                 // Library pick: seal the raw bytes (bounded ImageIO decode) and stamp the
                 // photo's own date when EXIF carried one (clamped to now at the EXIF read —
                 // a wrong camera clock must not outrun the editor's today cap), else now.
-                if store.addProgressPhoto(data: data, capturedAt: capturedAt ?? Date()) == nil {
-                    showPhotoSaveFailedAlert = true
-                }
-                progressPhotos = store.progressPhotoRecords()
+                finishProgressPhoto(sealed: store.addProgressPhoto(data: data, capturedAt: capturedAt ?? Date()) != nil)
             },
-            onCaptureFailed: { showPhotoSaveFailedAlert = true },
+            onCaptureFailed: { finishProgressPhoto(sealed: false) },
             onOpen: { record in path.append(record) }
         )
+    }
+
+    /// Lands one progress-photo attempt: the timeline re-reads, and the outcome is felt (B15) — `done`
+    /// as a sealed photo joins the timeline, `failed` beside the "Couldn't save this photo" alert, so
+    /// a photo that couldn't be sealed never vanishes silently.
+    private func finishProgressPhoto(sealed: Bool) {
+        FernletFeedback.system.play(sealed ? .done : .failed)
+        if !sealed { showPhotoSaveFailedAlert = true }
+        progressPhotos = store.progressPhotoRecords()
     }
     #endif
 

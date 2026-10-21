@@ -332,6 +332,11 @@ struct PersistedSurfaceWipeBoundaryTests {
         "fernlet.feedback.haptics": .kept(
             reason: "How the phone should feel, not a record: all, fewer or off. The breathing and workout switches' class — no content, nothing about any day — and clearing it would turn haptics back on for someone who turned them off."
         ),
+        // The cooking timer's "Timer sound" switch (2026-10-20, report C1, CookingCuePreferences):
+        // device-local, on Settings › Sounds & haptics and on a cooking step's timer card.
+        "fernlet.cookingCues.sounds": .kept(
+            reason: "Cooking-timer configuration, not a record: whether a step's timer chimes when it runs out. The workout sounds switch's class — no content, nothing about any day — and clearing it would only hand back the default (off)."
+        ),
         // Guided cardio's heart-rate switches (2026-10-20, idea 9, WorkoutZonePreferences): device-local,
         // beside the cue switches. The heart rate itself is never persisted anywhere.
         "fernlet.workoutCues.liveHeartRate": .kept(

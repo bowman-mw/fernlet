@@ -3,7 +3,7 @@
 //  Fernlet
 //
 //  A calm animated breathing circle: box breathing (4-4-4-4) or relax (4-7-8), 1–3 minutes,
-//  optional soft haptics on phase changes. Completing a session (never abandoning one)
+//  optional soft haptics that follow the breath. Completing a session (never abandoning one)
 //  reports the interval to the caller, which quietly offers it to Apple Health.
 //
 
@@ -18,6 +18,23 @@ import FernletUI
 /// The building block of a ``BreathingPreset``; ``BreathingExerciseView``'s session loop shows
 /// `label`, animates the circle toward `targetScale` over `seconds`, then sleeps out the phase.
 struct BreathPhase: Equatable {
+    /// Which part of the breath a phase is.
+    enum Kind: Equatable {
+        /// Breathing in: the circle swells.
+        case inhale
+        /// A held breath: the circle rests where it is.
+        case hold
+        /// Breathing out: the circle settles.
+        case exhale
+    }
+
+    /// Which part of the breath this is. It decides the phase's words and how the pacer's taps feel
+    /// (``BreathingPacerHaptics``), so the two can never disagree.
+    let kind: Kind
+    let seconds: Double
+    /// Target circle scale at the END of the phase (holds keep the previous target).
+    let targetScale: CGFloat
+
     /// The phase's words — the running screen's only text, and the value VoiceOver speaks each time
     /// the pacer turns.
     ///
@@ -27,10 +44,13 @@ struct BreathPhase: Equatable {
     /// to be English forever with a clean build. It is display copy, never a token: nothing persists
     /// it (``BreathingPreset/id`` is the stored key) and nothing matches on it, so translating it is
     /// safe.
-    let label: LocalizedStringResource
-    let seconds: Double
-    /// Target circle scale at the END of the phase (holds keep the previous target).
-    let targetScale: CGFloat
+    var label: LocalizedStringResource {
+        switch kind {
+        case .inhale: BreathingCopy.breatheIn
+        case .hold: BreathingCopy.hold
+        case .exhale: BreathingCopy.breatheOut
+        }
+    }
 }
 
 /// A named breathing pattern: an ordered list of ``BreathPhase``s plus display copy for the
@@ -51,10 +71,10 @@ struct BreathingPreset: Identifiable, Equatable {
         name: "Box",
         caption: "In 4 · hold 4 · out 4 · hold 4",
         phases: [
-            BreathPhase(label: BreathingCopy.breatheIn, seconds: 4, targetScale: 1.0),
-            BreathPhase(label: BreathingCopy.hold, seconds: 4, targetScale: 1.0),
-            BreathPhase(label: BreathingCopy.breatheOut, seconds: 4, targetScale: 0.55),
-            BreathPhase(label: BreathingCopy.hold, seconds: 4, targetScale: 0.55)
+            BreathPhase(kind: .inhale, seconds: 4, targetScale: 1.0),
+            BreathPhase(kind: .hold, seconds: 4, targetScale: 1.0),
+            BreathPhase(kind: .exhale, seconds: 4, targetScale: 0.55),
+            BreathPhase(kind: .hold, seconds: 4, targetScale: 0.55)
         ]
     )
 
@@ -64,9 +84,9 @@ struct BreathingPreset: Identifiable, Equatable {
         name: "Relax",
         caption: "In 4 · hold 7 · out 8",
         phases: [
-            BreathPhase(label: BreathingCopy.breatheIn, seconds: 4, targetScale: 1.0),
-            BreathPhase(label: BreathingCopy.hold, seconds: 7, targetScale: 1.0),
-            BreathPhase(label: BreathingCopy.breatheOut, seconds: 8, targetScale: 0.55)
+            BreathPhase(kind: .inhale, seconds: 4, targetScale: 1.0),
+            BreathPhase(kind: .hold, seconds: 7, targetScale: 1.0),
+            BreathPhase(kind: .exhale, seconds: 8, targetScale: 0.55)
         ]
     )
 
@@ -113,7 +133,8 @@ enum BreathingCopy {
 }
 
 /// The slow-breathing exercise: a softly swelling circle guided through a chosen
-/// ``BreathingPreset`` for 1–3 minutes, with optional soft haptics on phase changes.
+/// ``BreathingPreset`` for 1–3 minutes, with optional soft haptics that follow the breath
+/// (``BreathingPacerHaptics``).
 ///
 /// Pushed from ``FirstAidView``. Runs a setup → running → finished state machine driven by one
 /// wall-clock session task; the cycle in progress when the timer crosses the line finishes gently
@@ -290,7 +311,7 @@ struct BreathingExerciseView: View {
     /// Why a value and not a label: VoiceOver re-speaks the focused element's value when it changes,
     /// and does not re-read a `Text` that merely swapped its contents. So a session that was
     /// entirely visual (both circles are `accessibilityHidden`, the word never announced, and the
-    /// one `.soft` haptic is identical for inhale, hold and exhale — and switchable off) now paces
+    /// haptic was then one tap identical for inhale, hold and exhale — and is switchable off) now paces
     /// out loud, in step with the animation, for as long as the pacer holds focus.
     ///
     /// Deliberately NOT the whole running screen, which is what the 2026-08-22 audit's prose
@@ -485,9 +506,11 @@ struct BreathingExerciseView: View {
                     Text("Haptics")
                         .font(.fernlet(.label))
                         .foregroundStyle(Color.bark)
-                    Text("a soft tap on each turn")
+                    Text("soft taps in, one tap out",
+                         comment: "Under the breathing screen's Haptics switch: what the haptics feel like. Several soft taps while breathing in, a single tap as the breath goes out, nothing while holding.")
                         .font(.fernlet(.bubble))
                         .foregroundStyle(Color.slate)
+                        .fernletWrappingText()
                     // Owner's decision 5: this switch stays, under the app-wide level. When that
                     // level is Off, an "on" switch here plays nothing, so say why.
                     if appHapticsLevel == .off {
@@ -607,12 +630,11 @@ struct BreathingExerciseView: View {
                 for phase in phases {
                     guard !Task.isCancelled else { return }
                     phaseLabel = phase.label
-                    tickHaptic()
                     withAnimation(.easeInOut(duration: phase.seconds)) {
                         circleScale = phase.targetScale
                     }
                     do {
-                        try await Task.sleep(for: .seconds(phase.seconds))
+                        try await pace(phase)
                     } catch {
                         // A cancelled sleep IS the abandon signal (End early / background /
                         // onDisappear): leave at the sleep rather than one phase later.
@@ -625,7 +647,25 @@ struct BreathingExerciseView: View {
         }
     }
 
+    /// Sleeps out one phase, tapping at each of its offsets (``BreathingPacerHaptics``) in step with
+    /// the circle. Throws when the session is cancelled, at whichever sleep it was in.
+    ///
+    /// R2: bounded by the phase's offsets, at most ``BreathingPacerHaptics/inhaleTaps``.
+    private func pace(_ phase: BreathPhase) async throws {
+        var elapsed = 0.0
+        for offset in BreathingPacerHaptics.tapOffsets(for: phase) {
+            // The phase's first tap is at its start: played at once, with the words and the circle.
+            if offset > elapsed { try await Task.sleep(for: .seconds(offset - elapsed)) }
+            elapsed = offset
+            BreathingPacerHaptics.tap(hapticsEnabled: hapticsEnabled)
+        }
+        try await Task.sleep(for: .seconds(phase.seconds - elapsed))
+    }
+
     private func completeSession(start: Date) {
+        // B3: the session reached its full length — the same quiet success every time, behind the
+        // same two switches as the pacer's taps. "All done" and the finish screen are its twin.
+        BreathingPacerHaptics.finish(hapticsEnabled: hapticsEnabled)
         phaseLabel = BreathingCopy.allDone
         withAnimation(.easeInOut(duration: 1.2)) { circleScale = restingScale }
         // Cross-fade into the finished screen (matching the mockup's fade-and-rise) rather than snapping.
@@ -646,16 +686,59 @@ struct BreathingExerciseView: View {
         withAnimation(.easeInOut(duration: 0.8)) { circleScale = restingScale }
     }
 
-    /// The pacer's tap: FernletFeedback's `pace`, which plays only when both this screen's Haptics
-    /// switch and the app-wide level allow it (owner's decision 5, "Keep it").
-    private func tickHaptic() {
-        #if canImport(UIKit)
-        FernletFeedback.system.play(.pace, preferences: .resolved(haptics: hapticsEnabled))
-        #endif
+}
+
+/// The pacer's felt rhythm (report C3, answering accessibility finding T0-4's "one undifferentiated
+/// haptic"): each part of the breath feels different, so someone with their eyes closed can tell
+/// where they are without the words.
+///
+/// - **Breathe in:** ``inhaleTaps`` taps, evenly spaced across the inhale as the circle swells.
+/// - **Hold:** nothing. The stillness is the hold.
+/// - **Breathe out:** one tap as the exhale begins.
+///
+/// Every tap is FernletUI's one breathing feel, `pace`: a short soft tap, never a continuous buzz,
+/// so the inhale is told apart by count and rhythm, not strength. Every cue here — the taps and the
+/// finish — plays only when both this screen's Haptics switch and the app-wide level allow it
+/// (owner's decision 5, "Keep it"), and none ever carries a sound.
+///
+/// Main-actor, like the player it drives.
+@MainActor
+enum BreathingPacerHaptics {
+    /// How many taps carry an inhale.
+    static let inhaleTaps = 3
+
+    /// When each of `phase`'s taps falls, in seconds from the phase's start, earliest first.
+    static func tapOffsets(for phase: BreathPhase) -> [Double] {
+        switch phase.kind {
+        case .inhale: (0..<inhaleTaps).map { phase.seconds * Double($0) / Double(inhaleTaps) }
+        case .hold: []
+        case .exhale: [0]
+        }
+    }
+
+    /// One pacer tap.
+    ///
+    /// - Parameters:
+    ///   - hapticsEnabled: The screen's own Haptics switch.
+    ///   - feedback: Test seam: the player. `nil` (production) is ``FernletFeedback/system``.
+    ///   - defaults: Where the app-wide level is read; tests pass a private suite.
+    static func tap(hapticsEnabled: Bool, feedback: FernletFeedback? = nil, defaults: UserDefaults = .standard) {
+        (feedback ?? .system).play(.pace, preferences: .resolved(haptics: hapticsEnabled, in: defaults))
+    }
+
+    /// A session that ran to its full length (report B3): `done`, never on an early end, which is
+    /// "never judged" and so says nothing.
+    ///
+    /// - Parameters:
+    ///   - hapticsEnabled: The screen's own Haptics switch.
+    ///   - feedback: Test seam: the player. `nil` (production) is ``FernletFeedback/system``.
+    ///   - defaults: Where the app-wide level is read; tests pass a private suite.
+    static func finish(hapticsEnabled: Bool, feedback: FernletFeedback? = nil, defaults: UserDefaults = .standard) {
+        (feedback ?? .system).play(.done, preferences: .resolved(haptics: hapticsEnabled, in: defaults))
     }
 }
 
-/// The breathing timer's device-local switch: whether its pacer taps on each turn (on until the person
+/// The breathing timer's device-local switch: whether its pacer taps with the breath (on until the person
 /// turns it off). The key is a FROZEN persisted token, spelled once here; every access stays in this
 /// file, where the wipe wall resolves it to its literal. "Delete everything" keeps it
 /// (`Docs/PrivacyWipeCoverage.md`): a preference, not a record.
@@ -674,7 +757,7 @@ struct BreathingHapticsSwitch: View {
     var body: some View {
         SoundsHapticsSwitchRow(
             title: "Breathing haptics",
-            footnote: "A soft tap on each turn of the breath, in First aid › Slow breathing.",
+            footnote: "Soft taps as you breathe in and one as you breathe out, in First aid › Slow breathing.",
             isOn: $haptics,
             identifier: "settings.soundsHaptics.breathingHaptics"
         )

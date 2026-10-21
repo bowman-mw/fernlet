@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "path": "App/FernletMessagesExtension/FernletMessagesHaptic.swift",
+    "token": "UISelectionFeedbackGenerator",
+    "reason": "Report B23. The Messages extension links FernletExchange alone (MessagesExtensionBoundaryTests), so FernletFeedback is out of reach; this one file holds the extension's three feels, each copied from FernletFeedback's table. This one is `tick`'s selection tick, played only when the person picks a different recipe or workout card, whose moss outline is its visual twin. UIKit's generator plays nothing when the system Sounds & Haptics switch is off; the app-wide All / Fewer / Off level lives in the app's own defaults, which this process cannot read. Haptic only, never a sound."
+  },
+  {
+    "path": "App/FernletMessagesExtension/FernletMessagesHaptic.swift",
+    "token": "UIImpactFeedbackGenerator",
+    "reason": "Report B23. The Messages extension links FernletExchange alone (MessagesExtensionBoundaryTests), so FernletFeedback is out of reach; this one file holds the extension's three feels, each copied from FernletFeedback's table. This one is `logged`'s soft impact at 0.5, played only when Messages has taken the card into the message field, which the status line also says. UIKit's generator plays nothing when the system Sounds & Haptics switch is off; the app-wide All / Fewer / Off level lives in the app's own defaults, which this process cannot read. Haptic only, never a sound."
+  },
+  {
+    "path": "App/FernletMessagesExtension/FernletMessagesHaptic.swift",
+    "token": "UINotificationFeedbackGenerator",
+    "reason": "Report B23. The Messages extension links FernletExchange alone (MessagesExtensionBoundaryTests), so FernletFeedback is out of reach; this one file holds the extension's three feels, each copied from FernletFeedback's table. This one is `failed`'s error notification, played only beside a status line saying why the person's own tap didn't land (nothing picked, too large for a card, Messages refused the card, or a received card couldn't be handed to Fernlet). UIKit's generator plays nothing when the system Sounds & Haptics switch is off; the app-wide All / Fewer / Off level lives in the app's own defaults, which this process cannot read. Haptic only, never a sound."
+  }
+]
