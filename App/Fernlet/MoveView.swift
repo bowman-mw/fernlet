@@ -2676,9 +2676,9 @@ struct WorkoutRow: View {
 
     /// The logged exercise lines, the target summary, and any note.
     @ViewBuilder private var detailLines: some View {
-        if !workout.exerciseLines.isEmpty {
+        if !workout.displayedExerciseLines.isEmpty {
             VStack(spacing: 8) {
-                ForEach(Array(workout.exerciseLines.enumerated()), id: \.offset) { _, exercise in
+                ForEach(Array(workout.displayedExerciseLines.enumerated()), id: \.offset) { _, exercise in
                     WorkoutExerciseRow(exercise: exercise)
                 }
             }
@@ -4592,11 +4592,10 @@ struct PlannedWorkoutRow: View {
     /// Held here rather than at each call site so both the Move root and the day detail inherit it.
     @State private var pendingDestructiveAction: DestructiveConfirmation?
 
+    /// The plan's lines as drawn: an activity plan's one step reads in the user's language
+    /// (``PlannedWorkout/displayedExerciseLines``), never as its stored English default.
     private var stepLines: [String] {
-        plannedWorkout.exercises
-            .components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+        plannedWorkout.displayedExerciseLines
     }
 
     /// The complete button, or the faded dot a future day shows in its place.
