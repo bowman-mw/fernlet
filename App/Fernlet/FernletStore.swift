@@ -4887,7 +4887,16 @@ final class FernletStore {
     /// The guided runner's cue director: rest-end and hold-end haptics and sounds in the app, and the
     /// pending cue notification for a phone in the background. Internal and settable so the runner
     /// sheet can report its taps and a test can inject a recording director.
-    @ObservationIgnored lazy var guidedRunCues = GuidedRunCueDirector()
+    ///
+    /// The background cue's body describes the user ("when you're ready"), so it is scheduled with
+    /// the effective profile's term of address, read at each schedule so a Sex answer changed
+    /// mid-run reaches the next cue.
+    @ObservationIgnored lazy var guidedRunCues = GuidedRunCueDirector(scheduleBackground: { [weak self] cues, sound in
+        // The store owns this director, so it outlives every schedule; the fallback is unreachable
+        // and reads as an unanswered profile would.
+        let address = self?.effectiveUserProfile.sex.termOfAddress ?? .masculine
+        await NotificationService.replaceWorkoutCues(cues, soundFileName: sound, addressing: address)
+    })
     /// Guided cardio's heart-rate cue (`GuidedZones.swift`): the live session on a cardio segment, the
     /// reading the runner card draws, the opt-in zone nudge, and the Live Activity's reading. Internal and
     /// settable so a test can inject a director over a fake heart-rate source.
@@ -6123,8 +6132,10 @@ final class FernletStore {
         diary.updateMemory(memory, category: category, text: text)
     }
 
+    /// Queues a meal-analysis retry; its note is a companion line, resolved for the user's term of
+    /// address (the effective body profile's Sex).
     func queueMealRetry(_ meal: Meal, dayKey: String? = nil) {
-        aiRetryQueueService.queueMealRetry(meal, dayKey: dayKey)
+        aiRetryQueueService.queueMealRetry(meal, dayKey: dayKey, addressing: effectiveUserProfile.sex.termOfAddress)
     }
 
     func clearRetryItem(_ id: UUID) {

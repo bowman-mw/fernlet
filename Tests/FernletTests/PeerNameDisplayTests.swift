@@ -160,8 +160,8 @@ import FernletSocial
     /// passes the manager's sentence, which `thePresenceFirstNameNeverAnswersAnIdentifier` covers.
     @Test func presenceHeartStatusBuildersNameNoRawRecipient() throws {
         let sites = [
-            ("App/Fernlet/DisposableCameraView.swift", "private var presenceHeartStatusText: String? {"),
-            ("App/Fernlet/FriendListView.swift", "private var heartStatusText: String? {")
+            ("App/Fernlet/DisposableCameraView.swift", "private var presenceHeartStatusText: Text? {"),
+            ("App/Fernlet/FriendListView.swift", "private var heartStatusText: Text? {")
         ]
         // R2: bounded by the literal site list.
         for (path, signature) in sites {

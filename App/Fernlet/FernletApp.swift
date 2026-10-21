@@ -483,6 +483,10 @@ struct FernletApp: App {
                     .transition(.opacity)
             case .ready(let store):
                 readyContent(store: store)
+                    // Copy that describes the user agrees with the profile's Sex (AddressedCopy),
+                    // above onboarding and ContentView alike; onboarding overrides it with the
+                    // profile it is editing.
+                    .environment(\.fernletTermOfAddress, store.effectiveUserProfile.sex.termOfAddress)
                     .transition(.opacity)
                     // P2 rejection-matrix lane (runbook Lane C). Absent FERNLET_MESH_MATRIX=1 this
                     // does nothing — the mesh manager is not even built — and in release it is a

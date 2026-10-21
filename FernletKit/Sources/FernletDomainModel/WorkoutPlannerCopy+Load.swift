@@ -137,15 +137,27 @@ extension WorkoutPlannerCopy {
     }
 
     /// "Bench press: welcome back — a little lighter to start (95 lb)."
-    static func afterBreak(_ name: String, weight: String?) -> String {
+    ///
+    /// "Welcome back" greets the user, and Spanish agrees it with them (*bienvenida*), so the line
+    /// resolves through ``AddressedCopy`` for `address`, the term the load context carries
+    /// (``WorkoutLoadContext/address``). The note is stored on the logged row, so it is agreed once,
+    /// at plan time. Its arguments are data and go in through ``AddressedCopy/argument(_:)``, which
+    /// keeps them byte-identical through the Markdown parse.
+    static func afterBreak(_ name: String, weight: String?, addressing address: TermOfAddress) -> String {
+        let lift = AddressedCopy.argument(name)
         guard let weight else {
-            return String(localized: "workoutNote.load.afterBreak",
-                          defaultValue: "\(name): welcome back — a little lighter to start.", bundle: .module,
-                          comment: "Workout session note about one lift after a break from training: start a little lighter. The argument is the exercise name.")
+            return AddressedCopy.string(
+                LocalizedStringResource("workoutNote.load.afterBreak",
+                                        defaultValue: "\(lift): welcome back — a little lighter to start.", bundle: .module,
+                                        comment: "Workout session note about one lift after a break from training: start a little lighter. The argument is the exercise name."),
+                addressing: address)
         }
-        return String(localized: "workoutNote.load.afterBreakAt",
-                      defaultValue: "\(name): welcome back — a little lighter to start (\(weight)).", bundle: .module,
-                      comment: "Workout session note about one lift after a break from training: start a little lighter. Arguments: the exercise name, then the weight with its unit.")
+        let load = AddressedCopy.argument(weight)
+        return AddressedCopy.string(
+            LocalizedStringResource("workoutNote.load.afterBreakAt",
+                                    defaultValue: "\(lift): welcome back — a little lighter to start (\(load)).", bundle: .module,
+                                    comment: "Workout session note about one lift after a break from training: start a little lighter. Arguments: the exercise name, then the weight with its unit."),
+            addressing: address)
     }
 
     /// "Bench press: starting from a fresh estimate (100 lb)."

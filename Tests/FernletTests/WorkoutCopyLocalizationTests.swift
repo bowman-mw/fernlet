@@ -162,7 +162,7 @@ struct WorkoutCopyLocalizationTests {
         #expect(budget == "left out \(squat); fewer sets of \(bench)")
         let lightened = WorkoutRecoveryGuard.lightenedNote(lifts: ["Back squat", "Bench press"])
         #expect(lightened.hasPrefix("One set fewer on \(squat), \(bench) — "))
-        let calibration = WorkoutProgram.calibrationNote(kind: .submaximal, lift: "Bench press", sets: [], unit: .lb)
+        let calibration = WorkoutProgram.calibrationNote(kind: .submaximal, lift: "Bench press", sets: [], unit: .lb, addressing: .masculine)
         #expect(calibration.contains(bench))
     }
 
@@ -470,9 +470,10 @@ struct WorkoutCopyLocalizationTests {
         return LocalizationBoundaryTests.carriesEnglishOneAndOtherPlural(strings, key: key)
     }
 
-    /// The keys of every `String(localized: "<key>"` in `source`.
+    /// The keys of every `String(localized: "<key>"` and `LocalizedStringResource("<key>"` in `source`
+    /// (the second is how a line that describes the user is built for `AddressedCopy`).
     static func localizedKeys(in source: String) -> [String] {
-        let pattern = #"String\(localized:\s*"([^"]+)""#
+        let pattern = #"(?:String\(localized:|LocalizedStringResource\()\s*"([^"]+)""#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
         let range = NSRange(source.startIndex..., in: source)
         return regex.matches(in: source, range: range).compactMap { match in
@@ -488,16 +489,23 @@ struct WorkoutCopyLocalizationTests {
     }
 
     /// The string literals of `source` outside whole-line comments and outside `String(localized:)`
-    /// calls, each interpolation replaced by "1".
+    /// and `LocalizedStringResource(…)` calls (each a catalog entry: the second is how a line that
+    /// describes the user is built for `AddressedCopy`), each interpolation replaced by "1".
     static func bareLiterals(in source: String) -> [String] {
         let chars = Array(withoutCommentLines(source))
         let call = Array("String(localized:")
+        let resource = Array("LocalizedStringResource(")
         var literals: [String] = []
         var index = 0
         while index < chars.count {
             if chars[index] == "S", index + call.count <= chars.count, Array(chars[index..<(index + call.count)]) == call {
                 // `String(` is six characters, so the call's `(` sits at index + 6.
                 index = endOfCall(chars, from: index + 6)
+                continue
+            }
+            if chars[index] == "L", index + resource.count <= chars.count,
+               Array(chars[index..<(index + resource.count)]) == resource {
+                index = endOfCall(chars, from: index + resource.count - 1)
                 continue
             }
             if chars[index] == "\"" {

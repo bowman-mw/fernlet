@@ -47,17 +47,14 @@ struct CycleDayDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                // Both halves go through `Text(verbatim:)`, for two very different reasons.
-                // `Date.formatted` has already localized itself and must not be re-looked-up. The
-                // phase title has NOT: `CyclePhase.title` is `rawValue.capitalized` — a storage
-                // token wearing paint — so this subtitle reads "Follicular" in every language.
-                // `verbatim:` is honest about that but does not fix it; the phase belongs to the
-                // deferred `.capitalized`-on-rawValue class in `PeriodTrackerStore`, and still
-                // needs the `displayName` fork the flow, mucus, and ovulation words have.
+                // Both halves go through `Text(verbatim:)`: each is already resolved. `Date.formatted`
+                // localizes itself, and the phase is the app-target ``CyclePhase/displayName`` fork
+                // (Spanish round, 2026-10-20) — the sealed `title` is `rawValue.capitalized`, a
+                // storage token wearing paint, and read "Follicular" in every language.
                 ScreenHeader(
                     title: Text(verbatim: entry.date.formatted(.dateTime.month(.wide).day())),
                     subtitle: Text(verbatim: showsPeriodHalf
-                                   ? entry.phase.title
+                                   ? entry.phase.displayName
                                    : entry.date.formatted(.dateTime.weekday(.wide)))
                 )
 
@@ -288,10 +285,14 @@ struct CycleDayDetailView: View {
                     }
                     if intimacyEventCount > intimacyLogs.count {
                         let healthOnly = intimacyEventCount - intimacyLogs.count
-                        Label(
-                            healthOnly == 1 ? "1 event logged in Apple Health" : "\(healthOnly) events logged in Apple Health",
-                            systemImage: "heart.text.square"
-                        )
+                        // Automatic grammar agreement, not a count == 1 branch between two English
+                        // sentences (which offered a translator two forms for a language with more).
+                        Label {
+                            Text("^[\(healthOnly) event](inflect: true) logged in Apple Health",
+                                 comment: "Cycle day detail: intimacy events Apple Health holds for the day with no note in Fernlet, e.g. '2 events logged in Apple Health'")
+                        } icon: {
+                            Image(systemName: "heart.text.square")
+                        }
                         .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.moss)
                     }
@@ -302,9 +303,13 @@ struct CycleDayDetailView: View {
 
     // MARK: - Sample labels
 
+    /// A symptom chip: the app-target ``PeriodSymptom/displayName`` fork, with the 1–10 intensity the
+    /// user gave it as a whole phrase a translator can reorder. `scales` is keyed by the FROZEN raw
+    /// value (the sealed record's custom-scale keys), never by the drawn name.
     private func symptomLabel(_ symptom: PeriodSymptom, scales: [String: Int]) -> String {
-        guard let rating = scales[symptom.rawValue] else { return symptom.title }
-        return "\(symptom.title) · \(rating)"
+        guard let rating = scales[symptom.rawValue] else { return symptom.displayName }
+        return String(localized: "cycle.symptom.withIntensity", defaultValue: "\(symptom.displayName) · \(rating)",
+                      comment: "Cycle day detail: a symptom chip with the 1–10 intensity the user gave it, e.g. 'Cramps · 6'")
     }
 
     /// The drawn and spoken row for one HealthKit cycle sample.

@@ -21,9 +21,11 @@
 // `SessionHeartFailure` case is a build error here until it has a sentence.
 //
 // NOT here: the presence path's copy. `PresenceManager.heartSendState` has its own
-// `failed(message: String)` — the same hole, in P9's scope — and this file must not be widened into
-// it, because forking half of a seam is how the other half acquires a `LocalizedStringKey(runtime)`
-// conversion and the hole moves rather than closing.
+// `failed(message: String)`, and this file must not be widened into it, because forking half of a
+// seam is how the other half acquires a `LocalizedStringKey(runtime)` conversion and the hole moves
+// rather than closing. That hole (P9's) is closed at its source instead (Spanish round,
+// 2026-10-20): FernletSocial resolves each presence sentence through `FernletSocialCopy.Presence`
+// under `bundle: .module`, and the two surfaces draw the `String` verbatim.
 
 import SwiftUI
 import ProximityKit
@@ -113,11 +115,12 @@ enum SessionHeartStatusCopy {
     ///
     /// **Two properties rather than one, and that is the fix for a hazard this commit created.**
     /// `DisposableCameraView` holds both transports in one status line, and the presence arm still
-    /// carries a `String` (`PresenceManager.heartSendState.failed(message:)`, P9's). Typing the
-    /// whole line `LocalizedStringKey?` would force `LocalizedStringKey(runtimeString)` on that arm
-    /// — the same defect, newly created, and invisible to the app-target scanners too. So the mesh
-    /// path answers a `LocalizedStringKey?` here, the presence path keeps its `String?`, and the
-    /// view renders whichever is present.
+    /// carries a `String` (`PresenceManager.heartSendState.failed(message:)`, resolved by
+    /// FernletSocial). Typing the whole line `LocalizedStringKey?` would force
+    /// `LocalizedStringKey(runtimeString)` on that arm — the same defect, newly created, and
+    /// invisible to the app-target scanners too. So the mesh path answers a `LocalizedStringKey?`
+    /// here, the presence path's resolved sentence is drawn verbatim, and the view renders whichever
+    /// is present.
     ///
     /// - Parameter state: The session hearts' published state.
     /// - Returns: a `LocalizedStringKey`, or nil for `.idle`.

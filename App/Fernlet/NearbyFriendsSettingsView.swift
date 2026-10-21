@@ -45,7 +45,7 @@ struct NearbyFriendsSettingsView: View {
                     // so its 13+ age floor is surfaced here, beside the sharing consents.
                     AgeGateNotice(
                         gate: .chat,
-                        featureName: "Messaging friends nearby",
+                        feature: .messagingFriendsNearby,
                         ageAssurance: store.ageAssurance
                     )
                 }

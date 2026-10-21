@@ -32,7 +32,7 @@ struct WorkoutProgressionTests {
     }
 
     static func split(_ template: WorkoutSessionTemplate) -> TrainingSplit {
-        TrainingSplit(id: "probe", name: "Probe", summary: "", specificity: .balanced, goalFit: [.wellness],
+        TrainingSplit(id: "probe", name: "Probe", specificity: .balanced, goalFit: [.wellness],
                       days: [WorkoutSplitDay(title: "Day", sessions: [template])])
     }
 

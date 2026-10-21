@@ -189,10 +189,10 @@ struct SickReadinessTests {
     // MARK: - Trends
 
     @Test func theTokenHasItsOwnDisplayLabel() {
-        let label = SignalPresentation.valueLabel(for: "needs rest")
+        let label = SignalPresentation.valueLabel(for: "needs rest", addressing: .masculine)
         #expect(!label.isEmpty)
         #expect(label != "needs rest", "the display label must be its own string, not the frozen token")
-        #expect(SignalPresentation.valueLabel(for: "ready for hard") == "Ready For Hard", "other tokens keep their rendering")
+        #expect(SignalPresentation.valueLabel(for: "ready for hard", addressing: .masculine) == "Ready For Hard", "other tokens keep their rendering")
         #expect(SignalPresentation.strength(for: "needs rest") == 1)
         #expect(SignalPresentation.sourceLabel(for: "sickness") != "sickness")
         let explanation = SignalPresentation.explanation(for: signal("intensityReadiness", "needs rest"))

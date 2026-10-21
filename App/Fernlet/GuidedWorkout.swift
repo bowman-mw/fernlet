@@ -28,6 +28,9 @@ struct GuidedWorkoutSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// The user's term of address (the app root sets it from the body profile), for the runner's
+    /// lines that describe them: the rest-over announcement and the gentle-stretch intro.
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
 
     var store: FernletStore
     let session: WorkoutProgram.SessionSuggestion
@@ -276,7 +279,7 @@ struct GuidedWorkoutSheet: View {
             Text("Ready when you are")
                 .font(.fernlet(.displayMedium))
                 .foregroundStyle(Color.bark)
-            GuidedReadyIntro.text(for: session)
+            GuidedReadyIntro.text(for: session, addressing: termOfAddress)
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
@@ -757,7 +760,8 @@ struct GuidedWorkoutSheet: View {
             return
         }
         let addition = store.guidedRunCues.voiceOverAddition(from: before, to: after)
-        let line = GuidedRunSpokenCue.sentences(String(localized: spoken.sentence), addition)
+        let address = store.effectiveUserProfile.sex.termOfAddress
+        let line = GuidedRunSpokenCue.sentences(AddressedCopy.string(spoken.sentence, addressing: address), addition)
         FernletAnnouncer.system.announce(spoken.kind, resolved: line)
     }
 
@@ -773,7 +777,7 @@ struct GuidedWorkoutSheet: View {
         } catch {
             return
         }
-        FernletAnnouncer.system.announce(.status, GuidedRunAnnouncement.restOver)
+        FernletAnnouncer.system.announce(.status, resolved: GuidedRunAnnouncement.restOver(addressing: termOfAddress))
     }
 
     // MARK: Pieces

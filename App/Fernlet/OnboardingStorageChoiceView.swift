@@ -89,11 +89,18 @@ struct OnboardingStorageChoiceView: View {
         .task { await detectExistingCloudData() }
     }
 
-    private var iCloudCopy: String {
+    /// `Text`, not `String`: `storageCard` draws its copy, and a `String` reached `Text` through the
+    /// verbatim overload. The three counts use automatic grammar agreement, so one restored meal no
+    /// longer reads "1 meal logs".
+    private var iCloudCopy: Text {
         guard let existingDataSummary, existingDataSummary.hasData else {
-            return "Your daily logs are saved to iCloud and appear on your other Fernlet devices."
+            return Text("Your daily logs are saved to iCloud and appear on your other Fernlet devices.")
         }
-        return "Restore from iCloud — we found \(existingDataSummary.mealLogCount) meal logs, \(existingDataSummary.journalEntryCount) journal entries, \(existingDataSummary.workoutCount) workouts from a previous device."
+        let meals = existingDataSummary.mealLogCount
+        let entries = existingDataSummary.journalEntryCount
+        let workouts = existingDataSummary.workoutCount
+        return Text("Restore from iCloud — we found ^[\(meals) meal log](inflect: true), ^[\(entries) journal entry](inflect: true), ^[\(workouts) workout](inflect: true) from a previous device.",
+                    comment: "Onboarding storage card when this iCloud account already holds Fernlet data. Arguments: the meal-log, journal-entry and workout counts found.")
     }
 
     /// Emphasized when the user picks local-only but iCloud already holds their Fernlet data — that data
@@ -139,14 +146,18 @@ struct OnboardingStorageChoiceView: View {
             .accessibilityIdentifier("onboarding.storage.detectFailed")
     }
 
-    private var localOnlyCopy: String {
+    /// `Text` for the same reason as ``iCloudCopy``.
+    private var localOnlyCopy: Text {
         if existingDataSummary?.hasData == true {
-            return "Nothing leaves this phone. The data already in this iCloud account won't be merged in, and logs here won't sync to your other devices. You can turn on iCloud later in Settings."
+            return Text("Nothing leaves this phone. The data already in this iCloud account won't be merged in, and logs here won't sync to your other devices. You can turn on iCloud later in Settings.")
         }
-        return "Nothing leaves this phone — logs here won't sync to your other devices. You can turn on iCloud later in Settings."
+        return Text("Nothing leaves this phone — logs here won't sync to your other devices. You can turn on iCloud later in Settings.")
     }
 
-    private func storageCard(choice: OnboardingStorageChoice, title: String, copy: String, systemImage: String) -> some View {
+    /// One storage choice. `title` is a `LocalizedStringKey` and `copy` a `Text`: both were `String`,
+    /// so "Restore from iCloud", "Just on this device" and every explanation under them rendered in
+    /// English in every language.
+    private func storageCard(choice: OnboardingStorageChoice, title: LocalizedStringKey, copy: Text, systemImage: String) -> some View {
         Button {
             // B6: a real change of card ticks; the write below still runs on every tap.
             FernletFeedback.system.select(choice, in: &selectedStorage)
@@ -173,7 +184,7 @@ struct OnboardingStorageChoiceView: View {
                     Text(title)
                         .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
-                    Text(copy)
+                    copy
                         .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
@@ -189,8 +200,8 @@ struct OnboardingStorageChoiceView: View {
         }
         .buttonStyle(.plain)
         // Voice Control: the card is named by its title and its whole explanation; the title alone
-        // is the name a user says. `verbatim:` because `title` is drawn by `Text(_: String)` above.
-        .accessibilityInputLabels([Text(verbatim: title)])
+        // is the name a user says — the same localized key the card draws.
+        .accessibilityInputLabels([Text(title)])
         // T1-5: a hand-rolled selection card — the glyph swap and tint are otherwise the only
         // signal, on the choice that decides where the user's data lives.
         .accessibilityAddTraits(selectedStorage == choice ? .isSelected : [])

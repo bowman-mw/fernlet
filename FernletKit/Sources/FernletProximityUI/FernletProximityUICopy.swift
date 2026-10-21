@@ -164,6 +164,34 @@ enum FernletProximityUICopy {
             String(localized: "proximity.review.deleteAll", defaultValue: "Delete all \(count)", bundle: .module,
                    comment: "Destructive button of the photo review sheet. The count is deliberate: it turns a mis-tap into a visible amount of loss.")
         }
+
+        /// The delete confirmation's title when exactly one picture is under review (the
+        /// ``deleteOne`` counterpart).
+        static var deleteConfirmOneTitle: String {
+            String(localized: "proximity.review.deleteConfirm.oneTitle", defaultValue: "Delete this shared picture?",
+                   bundle: .module,
+                   comment: "Title of the confirmation before deleting the one picture under review.")
+        }
+
+        /// The delete confirmation's title, naming the count (the ``deleteAll(_:)`` counterpart).
+        ///
+        /// The key carries `one`/`other` plural variations in the catalog; as with ``deleteAll(_:)``,
+        /// English reaches it only for two or more.
+        ///
+        /// - Parameter count: How many shared pictures are under review.
+        static func deleteConfirmTitle(_ count: Int) -> String {
+            String(localized: "proximity.review.deleteConfirm.title", defaultValue: "Delete \(count) shared pictures?",
+                   bundle: .module,
+                   comment: "Title of the confirmation before deleting every picture under review. %lld is how many.")
+        }
+
+        /// The delete confirmation's body.
+        static var deleteConfirmMessage: String {
+            String(localized: "proximity.review.deleteConfirm.message",
+                   defaultValue: "They'll be removed from this phone. Friends keep their own copies.",
+                   bundle: .module,
+                   comment: "Body of the confirmation before deleting the pictures under review: only this phone's copies go.")
+        }
     }
 
     /// Copy on the keep-as-friends prompt (its own sheet, or the section inside the review sheet).

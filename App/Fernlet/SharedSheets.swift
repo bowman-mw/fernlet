@@ -397,9 +397,11 @@ struct GoalsSheet: View {
                     if proposed.isEmpty {
                         SheetField("Current level") {
                             FlowLayout(spacing: 8) {
-                                ForEach(["beginner", "intermediate", "advanced"], id: \.self) { l in
-                                    Button(l.capitalized) { FernletFeedback.system.select(l, in: &level) }
-                                        .buttonStyle(ChipButtonStyle(selected: level == l))
+                                // `level` holds the frozen token WorkoutPlanner.defaultGoals parses; the
+                                // chip draws the level's localized name (it drew `rawValue.capitalized`).
+                                ForEach(ExperienceLevel.allCases) { option in
+                                    Button(option.displayName) { FernletFeedback.system.select(option.rawValue, in: &level) }
+                                        .buttonStyle(ChipButtonStyle(selected: level == option.rawValue))
                                 }
                             }
                         }

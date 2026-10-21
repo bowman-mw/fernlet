@@ -60,7 +60,7 @@ public final class FernletVouchList {
         let now = Date()
         return vouchCache.values
             .first { $0.expiresAt > now && $0.trustedFingerprints.contains(fingerprint) }
-            .map { "Friend of \($0.voucherDisplayName)" }
+            .map { FernletSocialCopy.Session.friendOf($0.voucherDisplayName) }
     }
 
     /// The payload the mesh's vouch-list send would broadcast, or nil while the broadcast is disabled.

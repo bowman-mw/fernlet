@@ -13,8 +13,11 @@ import FernletUI
 /// they answered and has since had a birthday.
 struct AgeGateNotice: View {
     let gate: AgeGate
-    /// Sentence-case feature name, used mid-sentence ("Intimacy tracking is available at…").
-    let featureName: String
+    /// The feature this notice stands in for. Its sentences are whole per feature
+    /// (``AgeGatedFeature``) rather than a name spliced into shared sentences: the name opens most of
+    /// them, and in Spanish the article and the participle agree with it ("El seguimiento … está
+    /// desactivado", "La mensajería … está desactivada").
+    let feature: AgeGatedFeature
     var ageAssurance: AgeAssuranceStore
 
     @State private var isRequestingAgeRange = false
@@ -57,32 +60,147 @@ struct AgeGateNotice: View {
             Button("Cancel", role: .cancel) { }
             Button("I'm \(gate.minimumAge) or older") { ageAssurance.selfAttest(gate) }
         } message: {
-            Text("Fernlet couldn't check your age with Apple, so this is your word for it. Only confirm if you really are \(gate.minimumAge) or older — \(featureName.lowercased()) is meant for people that age and up.")
+            Text(verbatim: feature.selfAttestationWarning(minimumAge: gate.minimumAge))
         }
     }
 
+    /// The notice's sentence, already resolved, for the state the gate is in.
     private var message: String {
+        feature.sentence(for: lockedState, minimumAge: gate.minimumAge)
+    }
+
+    /// Which locked-state sentence applies.
+    private var lockedState: AgeGatedFeature.LockedState {
         // Checked before the age verdict, mirroring `AgeAssuranceRecord.allows`: a restricted account
         // may well pass the age check, and saying "you're too young" there would be simply untrue.
         if gate.isInterpersonalCommunication, ageAssurance.record.hasCommunicationLimits {
-            return "\(featureName) is turned off because communication limits are set for this Apple Account. Whoever manages it can change that in Screen Time."
+            return .communicationLimits
         }
         switch verdict {
         case .below:
-            return "\(featureName) is available at \(gate.minimumAge) and older."
+            return .below
         case .undetermined where !gate.allowsSelfAttestation:
             // `.chat`: no manual route exists, so the copy must not imply one.
-            return "\(featureName) is for people \(gate.minimumAge) and older, and Fernlet needs Apple to confirm your age range before turning it on. Your birthday is never shared."
+            return .needsSystemCheck
         case .undetermined where ageAssurance.isDetermined:
             // The system returned a bracket, but without provenance Fernlet can't treat it as a claim of
             // being old enough. Rare; worth its own wording so the next step isn't a mystery.
-            return "\(featureName) needs an age check, and Apple's answer wasn't specific enough to confirm you're \(gate.minimumAge) or older."
+            return .unclearAnswer
         case .undetermined:
-            return "\(featureName) is for people \(gate.minimumAge) and older. Fernlet doesn't know your age yet — Apple can confirm your age range without sharing your birthday."
+            return .unknownAge
         case .meets:
             // Unreachable: the caller shows the feature's real control instead. Kept honest rather than
             // fatalError'd so a wiring slip degrades to a harmless line.
-            return "\(featureName) is available."
+            return .available
+        }
+    }
+}
+
+/// A feature behind an age gate, and every sentence its locked-state notice can say.
+///
+/// Whole sentences per feature, each with the age as its only placeholder (Spanish round,
+/// 2026-10-20). They used to be one family of sentences with the feature's English name spliced in
+/// (and lower-cased in code for the confirmation alert), which no catalog could translate: the name
+/// opens most of them, and its article and the participles around it agree with it in Spanish. Some
+/// combinations cannot be reached today (intimacy is not interpersonal, so it never meets
+/// communication limits, and it offers self-attestation, so it never needs the system-only
+/// wording; messaging takes that wording for every undetermined answer and offers no
+/// self-attestation); they are worded anyway so a gate change never draws a blank.
+enum AgeGatedFeature {
+    /// Intimacy tracking (the 16+ gate).
+    case intimacyTracking
+    /// Messaging friends nearby (the 13+ gate).
+    case messagingFriendsNearby
+
+    /// The states ``AgeGateNotice`` words differently.
+    enum LockedState {
+        /// A guardian's communication limits are set on the Apple Account.
+        case communicationLimits
+        /// Apple placed the user below the line.
+        case below
+        /// Undetermined, and the gate offers no manual confirmation.
+        case needsSystemCheck
+        /// Apple answered, but not specifically enough to confirm the age.
+        case unclearAnswer
+        /// Undetermined; the age has not been checked yet.
+        case unknownAge
+        /// The gate is open (not normally shown: the caller draws the real control).
+        case available
+    }
+
+    /// The notice's sentence for `state`. `minimumAge` is the gate's line.
+    func sentence(for state: LockedState, minimumAge: Int) -> String {
+        switch self {
+        case .intimacyTracking: Self.intimacySentence(for: state, minimumAge: minimumAge)
+        case .messagingFriendsNearby: Self.messagingSentence(for: state, minimumAge: minimumAge)
+        }
+    }
+
+    /// The "Confirm your age" alert's warning, naming this feature.
+    func selfAttestationWarning(minimumAge: Int) -> String {
+        switch self {
+        case .intimacyTracking:
+            String(localized: "ageGate.intimacy.confirmWarning",
+                   defaultValue: "Fernlet couldn't check your age with Apple, so this is your word for it. Only confirm if you really are \(minimumAge) or older — intimacy tracking is meant for people that age and up.",
+                   comment: "Alert body before a user confirms their own age to turn on intimacy tracking. The argument is the minimum age (16).")
+        case .messagingFriendsNearby:
+            String(localized: "ageGate.chat.confirmWarning",
+                   defaultValue: "Fernlet couldn't check your age with Apple, so this is your word for it. Only confirm if you really are \(minimumAge) or older — messaging friends nearby is meant for people that age and up.",
+                   comment: "Alert body before a user confirms their own age to message friends nearby (not normally shown: this feature offers no manual confirmation). The argument is the minimum age (13).")
+        }
+    }
+
+    private static func intimacySentence(for state: LockedState, minimumAge: Int) -> String {
+        switch state {
+        case .communicationLimits:
+            String(localized: "ageGate.intimacy.communicationLimits",
+                   defaultValue: "Intimacy tracking is turned off because communication limits are set for this Apple Account. Whoever manages it can change that in Screen Time.",
+                   comment: "Settings: intimacy tracking is locked by a guardian's communication limits (not normally shown).")
+        case .below:
+            String(localized: "ageGate.intimacy.below", defaultValue: "Intimacy tracking is available at \(minimumAge) and older.",
+                   comment: "Settings: intimacy tracking is locked because Apple placed the user below the minimum age. The argument is the age (16).")
+        case .needsSystemCheck:
+            String(localized: "ageGate.intimacy.needsSystemCheck",
+                   defaultValue: "Intimacy tracking is for people \(minimumAge) and older, and Fernlet needs Apple to confirm your age range before turning it on. Your birthday is never shared.",
+                   comment: "Settings: intimacy tracking needs Apple's age check (not normally shown). The argument is the age (16).")
+        case .unclearAnswer:
+            String(localized: "ageGate.intimacy.unclearAnswer",
+                   defaultValue: "Intimacy tracking needs an age check, and Apple's answer wasn't specific enough to confirm you're \(minimumAge) or older.",
+                   comment: "Settings: Apple's age answer was too vague to unlock intimacy tracking. The argument is the age (16).")
+        case .unknownAge:
+            String(localized: "ageGate.intimacy.unknownAge",
+                   defaultValue: "Intimacy tracking is for people \(minimumAge) and older. Fernlet doesn't know your age yet — Apple can confirm your age range without sharing your birthday.",
+                   comment: "Settings: intimacy tracking is locked until the user's age is checked. The argument is the age (16).")
+        case .available:
+            String(localized: "ageGate.intimacy.available", defaultValue: "Intimacy tracking is available.",
+                   comment: "Settings: intimacy tracking is unlocked (not normally shown).")
+        }
+    }
+
+    private static func messagingSentence(for state: LockedState, minimumAge: Int) -> String {
+        switch state {
+        case .communicationLimits:
+            String(localized: "ageGate.chat.communicationLimits",
+                   defaultValue: "Messaging friends nearby is turned off because communication limits are set for this Apple Account. Whoever manages it can change that in Screen Time.",
+                   comment: "Settings: messaging friends nearby is locked by a guardian's communication limits (Screen Time).")
+        case .below:
+            String(localized: "ageGate.chat.below", defaultValue: "Messaging friends nearby is available at \(minimumAge) and older.",
+                   comment: "Settings: messaging friends nearby is locked because Apple placed the user below the minimum age. The argument is the age (13).")
+        case .needsSystemCheck:
+            String(localized: "ageGate.chat.needsSystemCheck",
+                   defaultValue: "Messaging friends nearby is for people \(minimumAge) and older, and Fernlet needs Apple to confirm your age range before turning it on. Your birthday is never shared.",
+                   comment: "Settings: messaging friends nearby needs Apple's age check; there is no manual confirmation. The argument is the age (13).")
+        case .unclearAnswer:
+            String(localized: "ageGate.chat.unclearAnswer",
+                   defaultValue: "Messaging friends nearby needs an age check, and Apple's answer wasn't specific enough to confirm you're \(minimumAge) or older.",
+                   comment: "Settings: Apple's age answer was too vague to unlock messaging friends nearby (not normally shown: this gate takes the needs-system-check wording). The argument is the age (13).")
+        case .unknownAge:
+            String(localized: "ageGate.chat.unknownAge",
+                   defaultValue: "Messaging friends nearby is for people \(minimumAge) and older. Fernlet doesn't know your age yet — Apple can confirm your age range without sharing your birthday.",
+                   comment: "Settings: messaging friends nearby is locked until the user's age is checked (not normally shown: this gate takes the needs-system-check wording). The argument is the age (13).")
+        case .available:
+            String(localized: "ageGate.chat.available", defaultValue: "Messaging friends nearby is available.",
+                   comment: "Settings: messaging friends nearby is unlocked (not normally shown).")
         }
     }
 }

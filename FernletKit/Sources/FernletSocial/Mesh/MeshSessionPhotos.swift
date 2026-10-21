@@ -1307,7 +1307,7 @@ public final class MeshSessionPhotos {
             photosKeptOnThisPhone = 0
         }
         guard photosAddedThisSession < Self.maxPhotosPerSenderPerSession else {
-            mesh.meshError = "You've shared the maximum of \(Self.maxPhotosPerSenderPerSession) photos in this mesh session."
+            mesh.meshError = FernletSocialCopy.Camera.photoLimitReached(Self.maxPhotosPerSenderPerSession)
             return
         }
         guard let image = UIImage(data: data),

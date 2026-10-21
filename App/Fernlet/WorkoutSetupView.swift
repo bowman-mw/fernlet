@@ -18,6 +18,8 @@ import FernletUI
 /// guards its draft like the other entry sheets instead.
 struct WorkoutSetupSheet: View {
     @Environment(\.dismiss) private var dismiss
+    /// The user's term of address, which a split summary may agree with (Recovery Flow's does).
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
     var store: FernletStore
 
     @State private var profile: WorkoutProfile
@@ -192,7 +194,7 @@ struct WorkoutSetupSheet: View {
                 ForEach(recommendedSplits) { split in
                     splitOption(
                         title: Text(verbatim: split.displayName),
-                        subtitle: Text(verbatim: split.summary),
+                        subtitle: Text(verbatim: split.summary(addressing: termOfAddress)),
                         tag: Text(verbatim: "\(split.specificity.label) · \(split.frequencySummary)"),
                         selected: selectedSplitID == split.id,
                         badge: split.id == recommendedSplits.first?.id ? Text("Recommended") : nil
@@ -402,6 +404,8 @@ struct WorkoutSetupSheet: View {
 private struct OneRepMaxOptIn: View {
     @Binding var isOn: Bool
     @State private var confirming = false
+    /// The user's term of address, which the confirmation's safety line agrees with (*adolorido*).
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -421,7 +425,8 @@ private struct OneRepMaxOptIn: View {
             Button("Turn on") { isOn = true }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Only with a spotter or safety arms. Stop if your form breaks, and skip it when you're sore, sick or short on sleep.")
+            // An alert's message takes a `Text`, not a view, so this is AddressedCopy rather than AddressedText.
+            Text(AddressedCopy.attributed("Only with a spotter or safety arms. Stop if your form breaks, and skip it when you're sore, sick or short on sleep.", addressing: termOfAddress))
         }
     }
 }

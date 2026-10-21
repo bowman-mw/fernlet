@@ -124,12 +124,19 @@ struct TrainerExportBundle: Codable, Equatable {
     ///
     /// Rendered at the top of the JSON so the person receiving the file (and the user reviewing it)
     /// can see exactly what was and wasn't shared without reading the data itself.
+    ///
+    /// Localization (2026-10-20): the KEYS are schema and stay English, and so does `app` (a product
+    /// name) and `exportedOn` (a day key). The VALUES of `preparedFor`, `note`, `includes` and
+    /// `neverIncludes` are a readme a person reads, so they are written in the exporting device's
+    /// language; nothing parses them (the paste sheet recognises a pasted summary by its keys).
     struct About: Codable, Equatable {
         var app = "Fernlet"
         var exportedOn: String
-        var preparedFor = "Your trainer or nutritionist"
-        var note = "A summary of your workouts and nutrition, prepared for you to review before you share "
-            + "it in person. Fernlet keeps everything on your device."
+        var preparedFor = String(localized: "trainerExport.about.preparedFor", defaultValue: "Your trainer or nutritionist",
+                                 comment: "Trainer summary file, a readme line at its top: who the summary is for")
+        var note = String(localized: "trainerExport.about.note",
+                          defaultValue: "A summary of your workouts and nutrition, prepared for you to review before you share it in person. Fernlet keeps everything on your device.",
+                          comment: "Trainer summary file, a readme line at its top")
         var includes: [String]
         var neverIncludes: [String]
     }
@@ -414,12 +421,7 @@ extension FernletStore {
         let about = TrainerExportBundle.About(
             exportedOn: todayKey,
             includes: Self.exportIncludes(options: options),
-            neverIncludes: [
-                "Journal entries and private notes",
-                "Period / cycle data and intimate-activity data",
-                "Photos, friends, and location",
-                "Recipe ingredient lists and your private cryptographic keys",
-            ])
+            neverIncludes: Self.exportNeverIncludes)
 
         return TrainerExportBundle(
             about: about,
@@ -432,23 +434,49 @@ extension FernletStore {
     }
 
     /// The about block's "includes" list: the always-included core, then each opt-in category that is
-    /// on. Frozen English export text, like the rest of the bundle.
+    /// on. A readme a person reads, so it is written in the exporting device's language (2026-10-20);
+    /// every data field below it stays a frozen token.
     static func exportIncludes(options: TrainerExportOptions) -> [String] {
-        var includes = ["Your workouts over time (names, sets/reps/weights as logged, duration, effort)",
-                        "Per-day nutrition summaries (calorie + macro + micronutrient totals, meal names)",
-                        "Your daily calorie and macro targets",
-                        "Where you train, the equipment and weights you have, your session length, "
-                            + "and the split you follow",
-                        "How each exercise has progressed (frequency, recent and best sets)",
-                        "Workouts you've already planned for the coming weeks, so they can be adjusted",
-                        "Training-safety context (injury notes, avoided muscles and movements, "
-                            + "areas you train around)"]
-        if options.includeGoal { includes.append("Your goal type") }
-        if options.includeHydration { includes.append("Daily hydration") }
-        if options.includeSleep { includes.append("Sleep summaries") }
-        if options.includeSickness { includes.append("Days you were unwell") }
-        if options.includeWellbeing { includes.append("Your wellbeing score for each day") }
+        var includes = exportCoreIncludes
+        if options.includeGoal {
+            includes.append(String(localized: "trainerExport.about.includes.goal", defaultValue: "Your goal type", comment: "Trainer summary file readme, what it includes: optional"))
+        }
+        if options.includeHydration {
+            includes.append(String(localized: "trainerExport.about.includes.hydration", defaultValue: "Daily hydration", comment: "Trainer summary file readme, what it includes: optional"))
+        }
+        if options.includeSleep {
+            includes.append(String(localized: "trainerExport.about.includes.sleep", defaultValue: "Sleep summaries", comment: "Trainer summary file readme, what it includes: optional"))
+        }
+        if options.includeSickness {
+            includes.append(String(localized: "trainerExport.about.includes.sickness", defaultValue: "Days you were unwell", comment: "Trainer summary file readme, what it includes: optional"))
+        }
+        if options.includeWellbeing {
+            includes.append(String(localized: "trainerExport.about.includes.wellbeing", defaultValue: "Your wellbeing score for each day", comment: "Trainer summary file readme, what it includes: optional"))
+        }
         return includes
+    }
+
+    /// The always-included half of ``exportIncludes(options:)``.
+    private static var exportCoreIncludes: [String] {
+        [
+            String(localized: "trainerExport.about.includes.workouts", defaultValue: "Your workouts over time (names, sets/reps/weights as logged, duration, effort)", comment: "Trainer summary file readme, what it includes: always"),
+            String(localized: "trainerExport.about.includes.nutrition", defaultValue: "Per-day nutrition summaries (calorie + macro + micronutrient totals, meal names)", comment: "Trainer summary file readme, what it includes: always"),
+            String(localized: "trainerExport.about.includes.targets", defaultValue: "Your daily calorie and macro targets", comment: "Trainer summary file readme, what it includes: always"),
+            String(localized: "trainerExport.about.includes.setup", defaultValue: "Where you train, the equipment and weights you have, your session length, and the split you follow", comment: "Trainer summary file readme, what it includes: always"),
+            String(localized: "trainerExport.about.includes.progression", defaultValue: "How each exercise has progressed (frequency, recent and best sets)", comment: "Trainer summary file readme, what it includes: always"),
+            String(localized: "trainerExport.about.includes.planned", defaultValue: "Workouts you've already planned for the coming weeks, so they can be adjusted", comment: "Trainer summary file readme, what it includes: always"),
+            String(localized: "trainerExport.about.includes.safety", defaultValue: "Training-safety context (injury notes, avoided muscles and movements, areas you train around)", comment: "Trainer summary file readme, what it includes: always"),
+        ]
+    }
+
+    /// The about block's "never includes" list, in the exporting device's language.
+    static var exportNeverIncludes: [String] {
+        [
+            String(localized: "trainerExport.about.never.journal", defaultValue: "Journal entries and private notes", comment: "Trainer summary file readme, what it never includes"),
+            String(localized: "trainerExport.about.never.cycle", defaultValue: "Period / cycle data and intimate-activity data", comment: "Trainer summary file readme, what it never includes"),
+            String(localized: "trainerExport.about.never.social", defaultValue: "Photos, friends, and location", comment: "Trainer summary file readme, what it never includes"),
+            String(localized: "trainerExport.about.never.keys", defaultValue: "Recipe ingredient lists and your private cryptographic keys", comment: "Trainer summary file readme, what it never includes"),
+        ]
     }
 
     /// The macro targets in effect, flagged user-set or derived.

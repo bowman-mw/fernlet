@@ -7,7 +7,7 @@ import FernletScoring
 /// Holds the pending AI-analysis retry queue and enforces its dedupe, TTL, and eviction policy.
 ///
 /// When on-device meal analysis fails, `FernletStore` queues the meal here via
-/// ``queueMealRetry(_:dayKey:)``; the Food page surfaces ``mealPendingCount`` as its badge and its
+/// ``queueMealRetry(_:dayKey:addressing:)``; the Food page surfaces ``mealPendingCount`` as its badge and its
 /// "Retry oldest" button drains the queue through ``oldestMealRetry``. Unlike the per-row ledger
 /// services in this module, the queue has no repository of its own — it is persisted inside the
 /// snapshot blob (`FernletSnapshot.retryQueue`), so every user-visible mutation fires ``onChange``
@@ -77,7 +77,10 @@ public final class AIRetryQueueService {
 
     /// Queue a meal-analysis retry. Future retry kinds (workout, recipe, daily-summary)
     /// should be added as new methods, not by overloading this one.
-    public func queueMealRetry(_ meal: Meal, dayKey: String? = nil) {
+    ///
+    /// `address` is the user's term of address (`FernletStore` passes the effective profile's): the
+    /// record's `note` is a `FernletVoice` line, and those lines resolve for the user they speak to.
+    public func queueMealRetry(_ meal: Meal, dayKey: String? = nil, addressing address: TermOfAddress) {
         // Dedupe only against meal records: this method never re-enqueues a meal already pending.
         // Scoping to the meal kind keeps enqueue symmetric with the meal-scoped dispatch/eviction
         // so a future non-meal record sharing (impossibly) the same UUID can't suppress a meal.
@@ -98,7 +101,7 @@ public final class AIRetryQueueService {
             payloadType: Self.mealPayloadType,
             sourceId: meal.id,
             dayKey: dayKey,
-            note: FernletVoice.message(for: .mealAnalysisFailed)
+            note: FernletVoice.message(for: .mealAnalysisFailed, addressing: address)
         ))
         onChange()
     }
@@ -119,7 +122,7 @@ public final class AIRetryQueueService {
     /// Replaces the whole queue from a loaded snapshot WITHOUT firing ``onChange`` — the restore
     /// path must not schedule a save of the very state it just loaded.
     ///
-    /// The restore boundary enforces the SAME two policies as ``queueMealRetry(_:dayKey:)`` (R3):
+    /// The restore boundary enforces the SAME two policies as ``queueMealRetry(_:dayKey:addressing:)`` (R3):
     /// TTL age-out then the ``maxQueueSize`` cap. The blob this reads is written by another device
     /// and synced, so without them a corrupt or hostile snapshot reinstates an unbounded queue that
     /// `pendingCount`, `mealPendingCount` and the dispatcher then walk on the main actor.

@@ -16,7 +16,7 @@ struct WorkoutSessionBudgetTests {
     // MARK: - Fixtures
 
     func probe(_ template: WorkoutSessionTemplate, goal: GoalType) -> TrainingSplit {
-        TrainingSplit(id: "probe", name: "Probe", summary: "", specificity: .balanced, goalFit: [goal],
+        TrainingSplit(id: "probe", name: "Probe", specificity: .balanced, goalFit: [goal],
                       days: [WorkoutSplitDay(title: "Day", sessions: [template])])
     }
 

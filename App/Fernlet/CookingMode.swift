@@ -40,6 +40,19 @@ enum CookingModeAvailability {
     }
 }
 
+/// One structured ingredient line as the recipe page and mise en place draw it: "118 g · Bananas,
+/// raw". The amount and the food's name are data (the unit stays its token, as the recipe page shows
+/// it); only the stand-in for a food the catalog can no longer resolve is copy, and it used to be an
+/// English "Ingredient" in both screens.
+enum RecipeIngredientLine {
+    /// The line for `ingredient`, naming it `name`, or the localized stand-in when `name` is nil.
+    static func text(_ ingredient: RecipeIngredient, name: String?) -> String {
+        let shown = name ?? String(localized: "recipe.ingredient.unresolvedName", defaultValue: "Ingredient",
+                                   comment: "Stands in for the name of a recipe ingredient whose food can't be found, on the recipe page and in cooking mode")
+        return "\(ingredient.amountText) · \(shown)"
+    }
+}
+
 #if canImport(UIKit)
 
 // MARK: - Keep-screen-awake modifier (first use of isIdleTimerDisabled in the app)
@@ -142,6 +155,9 @@ struct CookingModeView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    /// The user's term of address (the app root sets it from the body profile): "I'm ready" and the
+    /// timer's "when you're ready" describe the cook, and Spanish agrees them (*lista*).
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
 
     /// The cover's three screens: mise en place, the step walker, and the finish/log screen.
     ///
@@ -291,7 +307,7 @@ struct CookingModeView: View {
             }
             .accessibilityIdentifier("cookingMode.close")
             Spacer()
-            Text(stageTitle)
+            stageTitle
                 .font(.fernlet(.label))
                 .foregroundStyle(Color.bark)
             Spacer()
@@ -302,11 +318,12 @@ struct CookingModeView: View {
         .padding(.vertical, 14)
     }
 
-    private var stageTitle: String {
+    /// The header's title: the recipe's name, or the step position while walking. `Text`: as a
+    /// `String` "Step 3 of 8" was drawn verbatim.
+    private var stageTitle: Text {
         switch stage {
-        case .mise: return recipe.name
-        case .cooking: return "Step \(stepIndex + 1) of \(steps.count)"
-        case .finished: return recipe.name
+        case .mise, .finished: return Text(verbatim: recipe.name)
+        case .cooking: return Text("Step \(stepIndex + 1) of \(steps.count)")
         }
     }
 
@@ -345,14 +362,14 @@ struct CookingModeView: View {
                     FernletCard {
                         VStack(alignment: .leading, spacing: 8) {
                             SectionLabel("Cook for")
-                            Stepper(
-                                "\(cookYield) serving\(cookYield == 1 ? "" : "s")",
-                                value: Binding(get: { cookYield }, set: { cookYield = RecipeScaling.clampedYield($0) }),
-                                in: RecipeScaling.yieldRange
-                            )
+                            // Grammar agreement, never an English "s" picked by count.
+                            Stepper(value: Binding(get: { cookYield }, set: { cookYield = RecipeScaling.clampedYield($0) }),
+                                    in: RecipeScaling.yieldRange) {
+                                Text("^[\(cookYield) serving](inflect: true)")
+                            }
                             .accessibilityIdentifier("cookingMode.cookForYield")
                             if cookYield != recipe.servings {
-                                Text("Scaled from \(recipe.servings) serving\(recipe.servings == 1 ? "" : "s") — amounts below adjust to match. Logging still records one serving.")
+                                Text("Scaled from ^[\(recipe.servings) serving](inflect: true) — amounts below adjust to match. Logging still records one serving.")
                                     .font(.fernlet(.bodySmall))
                                     .foregroundStyle(Color.slate)
                                     .fernletWrappingText()
@@ -379,7 +396,7 @@ struct CookingModeView: View {
                 Button {
                     beginCooking()
                 } label: {
-                    primaryButtonLabel(hasSteps ? "Start cooking" : "I'm ready")
+                    primaryButtonLabel(hasSteps ? Text("Start cooking") : Text(AddressedCopy.attributed("I'm ready", addressing: termOfAddress)))
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("cookingMode.start")
@@ -428,8 +445,7 @@ struct CookingModeView: View {
 
     /// "118 g · Bananas, raw", or "1 medium (118 g) · Bananas, raw" for a household choice (F4a).
     private func ingredientLine(_ ingredient: RecipeIngredient) -> String {
-        let name = resolvedItems[ingredient.foodItemId]?.name ?? "Ingredient"
-        return "\(ingredient.amountText) · \(name)"
+        RecipeIngredientLine.text(ingredient, name: resolvedItems[ingredient.foodItemId]?.name)
     }
 
     /// Whether the line's household amount is a USDA typical size rather than the food's own portion.
@@ -522,7 +538,7 @@ struct CookingModeView: View {
                         .foregroundStyle(timerFired ? Color.goldenrod : Color.bark)
                         .accessibilityIdentifier("cookingMode.stepTimer")
                     if timerFired {
-                        Text("Timer's up — tap Next when you're ready. Nothing advances on its own.")
+                        AddressedText("Timer's up — tap Next when you're ready. Nothing advances on its own.")
                             .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
                             .multilineTextAlignment(.center)
@@ -657,7 +673,7 @@ struct CookingModeView: View {
                             Button { logMeal(mealType) } label: { Text(verbatim: mealType.displayName) }
                         }
                     } label: {
-                        primaryButtonLabel("Log this meal")
+                        primaryButtonLabel(Text("Log this meal"))
                     }
                     .accessibilityIdentifier("cookingMode.logMeal")
                     Button { closeCooking() } label: {
@@ -681,8 +697,11 @@ struct CookingModeView: View {
             .background(Color.parchment)
     }
 
-    private func primaryButtonLabel(_ title: String) -> some View {
-        Text(title)
+    /// The moss primary. A `Text` the caller builds, never `String` (as `String` the "Start cooking",
+    /// "Log this meal" and "Back" labels were drawn verbatim): `Text("…")` extracts like any literal,
+    /// and "I'm ready", which describes the cook, arrives agreed with them through `AddressedCopy`.
+    private func primaryButtonLabel(_ title: Text) -> some View {
+        title
             .font(.fernlet(.label))
             .foregroundStyle(Color.onMoss)
             .frame(maxWidth: .infinity)
@@ -690,7 +709,7 @@ struct CookingModeView: View {
             .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
     }
 
-    private func secondaryLabel(_ title: String, icon: String) -> some View {
+    private func secondaryLabel(_ title: LocalizedStringKey, icon: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
             Text(title)
@@ -872,7 +891,8 @@ struct CookingModeView: View {
         FernletFeedback.system.play(.timerEnded, preferences: CookingCuePreferences.current())
         FernletAnnouncer.system.announce(
             .status,
-            LocalizedStringResource("Timer's up — tap Next when you're ready. Nothing advances on its own.")
+            LocalizedStringResource("Timer's up — tap Next when you're ready. Nothing advances on its own."),
+            addressing: termOfAddress
         )
     }
 

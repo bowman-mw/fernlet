@@ -35,11 +35,19 @@ enum FernletAppearanceMode: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// The Appearance chip's name. Display only — the choice persists `rawValue` — so it localizes
+    /// in place; as bare literals returned as `String` it never reached the catalog.
     var label: String {
         switch self {
-        case .system: "System"
-        case .light: "Light"
-        case .dark: "Dark"
+        case .system:
+            String(localized: "appearanceMode.system", defaultValue: "System",
+                   comment: "Settings › Appearance chip: follow the phone's own Light/Dark setting.")
+        case .light:
+            String(localized: "appearanceMode.light", defaultValue: "Light",
+                   comment: "Settings › Appearance chip: always use the light appearance.")
+        case .dark:
+            String(localized: "appearanceMode.dark", defaultValue: "Dark",
+                   comment: "Settings › Appearance chip: always use the dark appearance.")
         }
     }
 

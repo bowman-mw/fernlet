@@ -199,7 +199,13 @@ final class OnboardingCoordinatorModel {
         case permissions
 
         /// The "3 of 8" progress caption shown at the top of every onboarding screen.
-        var indexText: String { "\(rawValue + 1) of \(Self.allCases.count)" }
+        ///
+        /// Resolved here because ``OnboardingScreenContainer`` draws it with `Text(String)`, which never
+        /// looks a `String` up — it read "3 of 8" in every language.
+        var indexText: String {
+            String(localized: "onboarding.step.index", defaultValue: "\(rawValue + 1) of \(Self.allCases.count)",
+                   comment: "Onboarding progress caption, e.g. '3 of 8'. Arguments: this step's number, then the number of steps.")
+        }
     }
 
     /// The page currently on screen. Moved only by ``advance()`` and ``back()``.
@@ -415,6 +421,9 @@ struct OnboardingCoordinator: View {
         .animation(.spring(response: 0.34, dampingFraction: 0.88), value: model.step)
         // The personal-details step's second page swaps in with the same spring as a step change.
         .animation(.spring(response: 0.34, dampingFraction: 0.88), value: model.isShowingIntimacyChoice)
+        // Copy that describes the user follows the Sex picker as it changes, before the profile is
+        // saved (AddressedCopy); masculine until it is answered, like the profile's own default.
+        .environment(\.fernletTermOfAddress, model.profile.sex.termOfAddress)
         // One keyboard "Done" for every step's fields (the age is a number pad with no return key).
         // The coordinator is the window's root view, with no stack and no sheet chrome around it, and
         // the steps it swaps in all share its host, so they must not declare a second one.
@@ -514,10 +523,12 @@ struct OnboardingCoordinator: View {
 /// accessibility identifier stay identical across the flow; the save/continue bar sits outside it.
 struct OnboardingScreenContainer<Content: View>: View {
     var stepText: String
-    /// Authored copy, so `LocalizedStringKey` rather than `String`: every caller passes a literal,
-    /// which is what lets the header text extract into the string catalog (a `String` here would
-    /// silently opt the whole onboarding flow out of localization).
-    var title: LocalizedStringKey
+    /// The header's title. Callers pass an authored literal through the `LocalizedStringKey`
+    /// initializer, which is what lets it extract into the string catalog (a `String` here would
+    /// silently opt the whole onboarding flow out of localization); Welcome passes a `Text` it
+    /// resolved for the user, since "Welcome" agrees with them in Spanish (*Bienvenida*).
+    var title: Text
+    /// Authored copy, so `LocalizedStringKey` rather than `String`, for the same reason.
     var subtitle: LocalizedStringKey
     /// The step's way back. Every step past Welcome passes ``OnboardingCoordinatorModel/back()``;
     /// `nil` (the first step) draws no button, since there is nowhere to go. Without this the flow
@@ -530,6 +541,28 @@ struct OnboardingScreenContainer<Content: View>: View {
     /// skipping a whole screen unheard. Every step builds a fresh container, so `onAppear` fires
     /// once per step and the new title is the first thing spoken.
     @AccessibilityFocusState private var isHeaderFocused: Bool
+
+    /// The localizing initializer, for an authored title: every step but Welcome.
+    init(
+        stepText: String, title: LocalizedStringKey, subtitle: LocalizedStringKey,
+        backAction: (() -> Void)? = nil, @ViewBuilder content: () -> Content
+    ) {
+        self.init(stepText: stepText, title: Text(title), subtitle: subtitle, backAction: backAction, content: content)
+    }
+
+    /// The `Text`-taking initializer, for a title the caller resolved (Welcome's, agreed with the
+    /// profile being edited through `AddressedCopy`). `Text` is not expressible by a literal, so this
+    /// can never take a call site that meant to localize.
+    init(
+        stepText: String, title: Text, subtitle: LocalizedStringKey,
+        backAction: (() -> Void)? = nil, @ViewBuilder content: () -> Content
+    ) {
+        self.stepText = stepText
+        self.title = title
+        self.subtitle = subtitle
+        self.backAction = backAction
+        self.content = content()
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -553,7 +586,7 @@ struct OnboardingScreenContainer<Content: View>: View {
                             .accessibilityIdentifier("onboarding.step")
                         Spacer(minLength: 0)
                     }
-                    ScreenHeader(title: title, subtitle: subtitle)
+                    ScreenHeader(title: title, subtitle: Text(subtitle))
                         .accessibilityFocused($isHeaderFocused)
                     content
                 }
@@ -596,9 +629,13 @@ private struct OnboardingGoalScreen: View {
 
                     SheetField("Current level") {
                         FlowLayout(spacing: 8) {
-                            ForEach(["beginner", "intermediate", "advanced"], id: \.self) { option in
-                                Button(option.capitalized) { FernletFeedback.system.select(option, in: &level) }
-                                    .buttonStyle(ChipButtonStyle(selected: level == option))
+                            // `level` holds the frozen token (`WorkoutPlanner.defaultGoals` and
+                            // `WorkoutProfile.fromOnboarding` parse it); the chip draws
+                            // `ExperienceLevel.displayName`. It drew `option.capitalized` — the
+                            // English token itself, case-folded in code.
+                            ForEach(ExperienceLevel.allCases) { option in
+                                Button(option.displayName) { FernletFeedback.system.select(option.rawValue, in: &level) }
+                                    .buttonStyle(ChipButtonStyle(selected: level == option.rawValue))
                             }
                         }
                     }
