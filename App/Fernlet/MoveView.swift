@@ -1479,26 +1479,30 @@ enum WorkoutSheetRules {
     ///
     /// A treadmill line stores its speed in mph; its Speed field reads in the device's units
     /// (`imperial` nil reads this device), so a metric reopen shows km/h and re-saves the same mph.
+    ///
+    /// A guided or set-by-set line (`ExerciseResult.loggedLine`, "Bench press - 3 x 8 @ 105 lb (did 8,
+    /// 8, 6)") reopens as its prescription: 3 × 8 at 105 lb. Its "(did …)" outcome is what happened
+    /// that day, not what to do again, so it is dropped (``withoutLoggedOutcome(_:)``); the weight
+    /// ends where a parenthetical starts; and the " - " after the name is not kept as a detail. Any
+    /// other parenthetical — a calibration tag ("(ramp-up)"), a coach's cue ("(RPE 7)") — stays in
+    /// the details, so a copied ramp set is still told apart from working sets.
     static func exerciseEntries(from text: String, imperial: Bool? = nil) -> [WorkoutExerciseEntry] {
         text.components(separatedBy: .newlines).compactMap { line in
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmed = withoutLoggedOutcome(line).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty, let exercise = catalogExercise(namedBy: trimmed) else {
                 return nil
             }
 
             let setRep = firstMatch(in: trimmed, pattern: #"(\d+)\s*x\s*(\d+)"#)
-            let weight = trimmed
-                .split(separator: "@", maxSplits: 1)
-                .dropFirst()
-                .first
-                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) } ?? ""
+            let load = loadSegment(in: trimmed)
+            let weight = load?.value ?? ""
             let treadmill = exercise.inputKind == .treadmill ? treadmillFields(in: trimmed) : nil
             var details = trimmed.replacingOccurrences(of: exercise.name, with: "")
-            let consumed = [setRep.fullMatch, weight.isEmpty ? nil : "@\(weight)"] + (treadmill?.consumed ?? [])
+            let consumed = [setRep.fullMatch, load?.text] + (treadmill?.consumed ?? [])
             for match in consumed.compactMap({ $0 }) {
                 details = details.replacingOccurrences(of: match, with: "")
             }
-            details = details.trimmingCharacters(in: .whitespacesAndNewlines)
+            details = detailsWithoutLeadingSeparator(details)
 
             return WorkoutExerciseEntry(
                 exercise: exercise,
@@ -1513,6 +1517,32 @@ enum WorkoutSheetRules {
                 details: details
             )
         }
+    }
+
+    /// `line` without the "(did 8, 8, 6)" / "(did 8 @ 100, 6 @ 95)" outcome a guided or set-by-set
+    /// line carries (`ExerciseResult.loggedLine`, a FROZEN log token). Strict — "(did " then a digit —
+    /// so a typed note such as "(did it slowly)" is left alone. The outcome is removed before the
+    /// weight is read, because its own "@ 100" would otherwise read as the load.
+    static func withoutLoggedOutcome(_ line: String) -> String {
+        line.replacing(/\s*\(did \d[^)]*\)/, with: "")
+    }
+
+    /// The load a line states after its "@" — the text from the "@" up to the first parenthetical
+    /// (or the line's end), and that text's value without the "@" ("@ 105 lb " → "105 lb"). Nil when
+    /// the line has no "@". A parenthetical is a tag or a cue, never part of a weight.
+    static func loadSegment(in line: String) -> (text: String, value: String)? {
+        guard let at = line.firstIndex(of: "@") else { return nil }
+        let end = line[at...].firstIndex(of: "(") ?? line.endIndex
+        let text = String(line[at..<end])
+        return (text, text.dropFirst().trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    /// What is left of a line once its name, sets × reps and load are taken out, without the
+    /// separator that stood between the name and the numbers ("Bench press - 3 x 8" leaves "-").
+    static func detailsWithoutLeadingSeparator(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let separators: Set<Character> = ["-", "–", "—", ":"]
+        return trimmed.drop(while: { separators.contains($0) }).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// The catalog exercise a written line names: the longest catalog name the line starts with

@@ -600,5 +600,49 @@ struct MoveRefactorTests {
         #expect(rows.last?.exercise.name == "Incline bench press")
         #expect(rows.last?.sets == "4" && rows.last?.reps == "10")
     }
+
+    /// "Log it again" on a guided or set-by-set row repeats the line's prescription — 3 × 8 at the
+    /// working weight. Its "(did …)" outcome used to be read as free text: the weight field took
+    /// "105 lb (did 8, 8, 6)" and the details "- @ 105 lb (did 8, 8, 6)".
+    @Test func aGuidedLineReopensAsItsPrescription() throws {
+        let missed = ExerciseResult(name: "Bench press", prescribedSets: 3, targetReps: 8, selectedWeight: 105,
+                                    unit: .lb, actualReps: [8, 8, 6])
+        let corrected = ExerciseResult(name: "Bench press", prescribedSets: 3, targetReps: 8, selectedWeight: 100,
+                                       unit: .lb, actualReps: [8, 8, 6], setWeights: [100, 100, 95])
+        let asPrescribed = ExerciseResult(name: "Bench press", prescribedSets: 3, targetReps: 8, selectedWeight: 110, unit: .lb)
+        let cases = [(missed, "105 lb"), (corrected, "100 lb"), (asPrescribed, "110 lb")]
+        for (result, weight) in cases {
+            let line = result.loggedLine
+            let row = try #require(WorkoutSheetRules.exerciseEntries(from: line).first, "\(line)")
+            #expect(row.exercise.name == "Bench press")
+            #expect(row.sets == "3" && row.reps == "8", "\(line)")
+            #expect(row.weight == weight, "\(line) reopened at \(row.weight)")
+            #expect(row.details.isEmpty, "\(line) left \(row.details) in details")
+            #expect(row.summary == "Bench press 3x8 @\(weight)")
+            let reread = try #require(ExerciseLineParser.parse(row.summary))
+            #expect(reread.sets == 3 && reread.repsCount == 8 && reread.weightUnit == "lb")
+        }
+        #expect(missed.loggedLine.contains("(did 8, 8, 6)"), "the fixture is a guided line with an outcome")
+        #expect(corrected.loggedLine.contains("(did 8 @ 100"), "the outcome's own weights are not the load")
+    }
+
+    /// Only the outcome goes: a calibration tag still marks a copied ramp set (the weekly summary
+    /// counts no ramp set as a hard set), a coach's cue stays with its lift, and a typed note that
+    /// merely starts "(did" is not an outcome.
+    @Test func aReopenedLineKeepsItsTagsAndCues() throws {
+        let ramp = ExerciseResult(name: "Back squat", prescribedSets: 1, targetReps: 5, selectedWeight: 95, unit: .lb,
+                                  actualReps: [4], calibration: .ramp)
+        let rampRow = try #require(WorkoutSheetRules.exerciseEntries(from: ramp.loggedLine).first)
+        #expect(rampRow.weight == "95 lb" && rampRow.details == "(ramp-up)", "\(rampRow.weight) / \(rampRow.details)")
+        #expect(rampRow.summary.hasSuffix(WeeklyTrainingSummaryBuilder.rampTag))
+
+        let cued = try #require(WorkoutSheetRules.exerciseEntries(from: "Bench press - 3 x 8 @ 60 kg (RPE 7)").first)
+        #expect(cued.sets == "3" && cued.reps == "8" && cued.weight == "60 kg")
+        #expect(cued.details == "(RPE 7)")
+
+        let noted = try #require(WorkoutSheetRules.exerciseEntries(from: "Bench press 3x8 @95 lb (did it slowly)").first)
+        #expect(noted.weight == "95 lb" && noted.details == "(did it slowly)")
+        #expect(WorkoutSheetRules.withoutLoggedOutcome("Bench press - 3 x 8 (did 8, 6, 6)") == "Bench press - 3 x 8")
+    }
 }
 
