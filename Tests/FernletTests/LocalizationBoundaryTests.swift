@@ -6511,6 +6511,10 @@ struct LocalizationBoundaryTests {
         MasculineDefault(
             path: "App/Fernlet/FernletStore.swift", line: "let address = self?.effectiveUserProfile.sex.termOfAddress ?? .masculine",
             reason: "The store owns the cue director, so it outlives every schedule; the fallback cannot run, and reads as an unanswered profile."),
+        MasculineDefault(
+            path: "FernletKit/Sources/AIContext/AIPromptLanguage.swift",
+            line: "if address == .masculine { return \"When a word describes the person, use its masculine form.\" }",
+            reason: "A comparison, not a default: the prompt line spells out the term the caller passed, which every prose call site reads from effectiveUserProfile.sex."),
     ]
 
     /// No `.masculine` in shipping code but the pinned ones, each with its reason.

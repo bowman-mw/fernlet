@@ -1026,6 +1026,15 @@ separator (up to two decimal places), so an es/fr/de row never mixes "1.5" with 
 - ``MacroGramEntry``
 - ``RecipeQuantityDisplay``
 
+### Languages (localization Phase 3)
+
+``FernletLanguage`` names the languages the language-sensitive engines know by their frozen ISO
+codes, and ``FernletLanguage/app`` is the one the app's interface resolved — app-supported by
+construction, since a bundle resolves only a language it ships. The on-device model's prompts read
+it (AIContext's `AIPromptLanguage`).
+
+- ``FernletLanguage``
+
 ### Addressing the user
 
 ``AddressedCopy`` resolves catalog copy whose translation marks the words that describe the user,

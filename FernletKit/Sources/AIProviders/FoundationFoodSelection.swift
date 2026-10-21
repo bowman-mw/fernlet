@@ -44,6 +44,25 @@ public enum FoodSelectionAvailability {
 /// AI-free tier of the same contract. MainActor by the module's default isolation; the helpers are
 /// pure functions. Errors thrown by the model session are audited and rethrown.
 public enum FoundationFoodSelectionModel {
+    /// The selection instructions — then, outside English, the line saying the description may be in
+    /// the app's language: item names and units stay English, because code scores each item name
+    /// against the English catalog (`bestSubPhraseScores`) and reads the unit with
+    /// `RecipeUnit.normalized`; the meal name, which the person reads, is written in their language.
+    nonisolated static func instructions(for payload: FoodSelectionPayload) -> String {
+        AIPromptLanguage.joined(
+            """
+            First split a meal description into meal items, like "grilled cheese" and "tomato soup".
+            Then turn each meal item into food selections from the numbered candidate list only.
+            Use candidateNumber values from the list. Use quantity and unit from the person's text when clear.
+            If an item is built from parts, include the parts. Example: grilled cheese on sourdough should include cheese and sourdough bread.
+            If quantity is unclear, use 1 serving, except sandwiches usually use 2 bread slices and 2 cheese slices. Keep names short.
+            """,
+            payload.promptLanguage.inputInstruction(
+                keepingEnglish: "item names, units and the meal type", writingInLanguage: "the meal name"
+            )
+        )
+    }
+
     /// Meal food-selection (`standard` tier, user-invoked). Routes through `gate` right before the
     /// model dispatch: the gate caps by device capability, applies the sleepy/resting budget, and
     /// charges exactly one call. A `nil` gate result (resting / incapable / off) returns `nil` so the
@@ -58,13 +77,7 @@ public enum FoundationFoodSelectionModel {
         if #available(iOS 26.0, *) {
             guard let destination = gate.dispatch(tier: .standard, userInvoked: true) else { return nil }
             let auditKind = payload.payloadKind; let auditFields = payload.includedFieldNames
-            let instructions = """
-            First split a meal description into meal items, like "grilled cheese" and "tomato soup".
-            Then turn each meal item into food selections from the numbered candidate list only.
-            Use candidateNumber values from the list. Use quantity and unit from the person's text when clear.
-            If an item is built from parts, include the parts. Example: grilled cheese on sourdough should include cheese and sourdough bread.
-            If quantity is unclear, use 1 serving, except sandwiches usually use 2 bread slices and 2 cheese slices. Keep names short.
-            """
+            let instructions = Self.instructions(for: payload)
             let prompt = """
             Meal: \(description)
             Preferred meal type: \(fallbackType?.rawValue ?? "Auto")

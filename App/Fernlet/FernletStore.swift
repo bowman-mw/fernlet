@@ -4473,7 +4473,12 @@ final class FernletStore {
     /// text crosses as a typed `JournalSummaryPayload` value, never a store handle (the S3 wall).
     private func requestJournalMemorySummary(memoryID: UUID, entryText: String) {
         guard settings.aiStatus != .off else { return }
-        let payload = JournalSummaryPayload(entryText: entryText)
+        // The memory line is read by the person: written in the app's language, with their term of
+        // address for a language that genders words about them (localization plan §5.1).
+        let payload = JournalSummaryPayload(
+            entryText: entryText,
+            promptLanguage: AIPromptLanguage.forApp(addressing: effectiveUserProfile.sex.termOfAddress)
+        )
         guard !payload.entryText.isEmpty else { return }
         let gate = aiGate
         let summarizer = journalMemorySummarizer
@@ -5570,7 +5575,8 @@ final class FernletStore {
     ) async -> [IngredientSubstitutionSuggestion]? {
         let payload = IngredientSubstitutionPayload(
             recipeName: recipeName,
-            ingredientToReplace: ingredientName
+            ingredientToReplace: ingredientName,
+            promptLanguage: AIPromptLanguage.forApp()
         )
         let catalog = foodCatalog
         return (try? await FoundationIngredientSubstitutionModel.suggest(

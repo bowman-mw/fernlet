@@ -80,6 +80,10 @@ public enum OnDeviceModelAvailability: Sendable, Equatable {
     case appleIntelligenceNotEnabled
     /// Apple Intelligence is on, but the model is still downloading or otherwise not ready.
     case modelNotReady
+    /// The model is ready, but it does not support the language the app is running in, so every AI
+    /// call site takes its deterministic path (localization plan §5.1; decided by `AIProviders`'
+    /// `OnDeviceModelLanguage`).
+    case languageNotSupported
     /// Unavailable for a reason the provider does not name (a capability-only provider, or a reason
     /// newer than this build).
     case unavailable

@@ -20,22 +20,15 @@ import FernletScoring
 /// candidate-selection and deterministic tiers. Every dispatch routes through `FernletAIGate` and is
 /// recorded in `AIAuditLog` with its real outcome.
 enum FoundationDishDecompositionModel {
-    /// Decomposes `payload.mealDescription` into primary components using on-device Foundation Models,
-    /// resolves each component against the food catalog `index`, and returns a fully scaled `Meal`
-    /// together with a confidence in how well it matches what was eaten.
-    /// Returns `nil` when the model is unavailable, the result fails plausibility checks, or
-    /// no components can be resolved to catalog entries.
-    /// Meal dish decomposition (`standard` tier, user-invoked — part of the quick-log resolve the user
-    /// initiated). Routes through `gate` at the model-dispatch point: capability cap + sleepy/resting
-    /// budget + one-call charge. `nil` (resting / incapable / off) falls through to the cascade's
-    /// deterministic tiers, exactly as the old availability guard did.
-    static func decompose(_ payload: MealDecompositionPayload, catalog: FoodCatalog, gate: FernletAIGate) async throws -> ResolvedMeal? {
-        #if canImport(FoundationModels)
-        if #available(iOS 26.0, *) {
-            guard let destination = gate.dispatch(tier: .standard, userInvoked: true) else { return nil }
-            let auditKind = payload.payloadKind
-            let auditFields = payload.includedFieldNames
-            let instructions = """
+    /// The decomposition instructions — then, outside English, the line saying the description may
+    /// be in the app's language: ingredient names, preparations, meal types and confidence words
+    /// stay English, because `MealDecompositionResolver` binds each ingredient against the English
+    /// catalog and reads the rest as frozen tokens (this is how a Spanish dish reaches the English
+    /// catalog before regional food data exists); the dish name, which the person reads, is written
+    /// in their language.
+    nonisolated static func instructions(for payload: MealDecompositionPayload) -> String {
+        AIPromptLanguage.joined(
+            """
             You are a nutrition assistant. Break a meal description into the foods that were actually eaten.
             Return each food as ONE component with: the ingredient (a simple, common name, e.g. "egg", \
             "sushi rice", "avocado"), the preparation state (raw, grilled, baked, fried, steamed, canned, \
@@ -51,7 +44,30 @@ enum FoundationDishDecompositionModel {
             "lunch", "leftovers"), return few low-confidence components or none rather than guessing a detailed recipe.
             For each component set confidence (high/medium/low) and whether the person explicitly stated it. \
             Set overallConfidence for how well the whole breakdown matches what was eaten.
-            """
+            """,
+            payload.promptLanguage.inputInstruction(
+                keepingEnglish: "ingredient names, preparations, meal types and confidence words",
+                writingInLanguage: "the dish name"
+            )
+        )
+    }
+
+    /// Decomposes `payload.mealDescription` into primary components using on-device Foundation Models,
+    /// resolves each component against the food catalog `index`, and returns a fully scaled `Meal`
+    /// together with a confidence in how well it matches what was eaten.
+    /// Returns `nil` when the model is unavailable, the result fails plausibility checks, or
+    /// no components can be resolved to catalog entries.
+    /// Meal dish decomposition (`standard` tier, user-invoked — part of the quick-log resolve the user
+    /// initiated). Routes through `gate` at the model-dispatch point: capability cap + sleepy/resting
+    /// budget + one-call charge. `nil` (resting / incapable / off) falls through to the cascade's
+    /// deterministic tiers, exactly as the old availability guard did.
+    static func decompose(_ payload: MealDecompositionPayload, catalog: FoodCatalog, gate: FernletAIGate) async throws -> ResolvedMeal? {
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            guard let destination = gate.dispatch(tier: .standard, userInvoked: true) else { return nil }
+            let auditKind = payload.payloadKind
+            let auditFields = payload.includedFieldNames
+            let instructions = Self.instructions(for: payload)
             let prompt = """
             Dish: \(payload.mealDescription)
             Preferred meal type: \(payload.fallbackMealType?.rawValue ?? "Auto")

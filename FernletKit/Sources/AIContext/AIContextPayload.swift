@@ -48,13 +48,22 @@ public struct FoodSelectionPayload: AIContextPayload {
     public let candidates: [FoodSelectionCandidate]
     /// Meal slot to assume when the description does not imply one.
     public let fallbackMealType: MealType?
+    /// The language the person may write in and the display fields are written in (catalog prompt:
+    /// no term of address). English by default, which adds nothing to the prompt or the audit row.
+    public let promptLanguage: AIPromptLanguage
 
-    public var includedFieldNames: [String] { ["mealDescription", "candidates", "fallbackMealType"] }
+    public var includedFieldNames: [String] {
+        ["mealDescription", "candidates", "fallbackMealType"] + promptLanguage.includedFieldNames
+    }
 
-    public init(mealDescription: String, candidates: [FoodSelectionCandidate], fallbackMealType: MealType?) {
+    public init(
+        mealDescription: String, candidates: [FoodSelectionCandidate], fallbackMealType: MealType?,
+        promptLanguage: AIPromptLanguage = .english
+    ) {
         self.mealDescription = mealDescription
         self.candidates = candidates
         self.fallbackMealType = fallbackMealType
+        self.promptLanguage = promptLanguage
     }
 }
 
@@ -71,12 +80,18 @@ public struct MealDecompositionPayload: AIContextPayload {
     public let payloadKind = "meal-decomposition"
     public let mealDescription: String
     public let fallbackMealType: MealType?
+    /// The language the person may write in and the display fields are written in (catalog prompt:
+    /// no term of address). English by default, which adds nothing to the prompt or the audit row.
+    public let promptLanguage: AIPromptLanguage
 
-    public var includedFieldNames: [String] { ["mealDescription", "fallbackMealType"] }
+    public var includedFieldNames: [String] {
+        ["mealDescription", "fallbackMealType"] + promptLanguage.includedFieldNames
+    }
 
-    public init(mealDescription: String, fallbackMealType: MealType?) {
+    public init(mealDescription: String, fallbackMealType: MealType?, promptLanguage: AIPromptLanguage = .english) {
         self.mealDescription = mealDescription
         self.fallbackMealType = fallbackMealType
+        self.promptLanguage = promptLanguage
     }
 }
 
@@ -146,9 +161,14 @@ public struct DaySummaryPayload: AIContextPayload {
     public let sleepHours: Double?
     /// Tag label only (e.g. "Good", "Hard") — never the journal entry text.
     public let journalTagLabel: String?
+    /// The language the reply is written in and, for a gendered language, the person's term of
+    /// address (``AIPromptLanguage``). English by default, which adds nothing to the prompt or the
+    /// audit row.
+    public let promptLanguage: AIPromptLanguage
 
     public var includedFieldNames: [String] {
         ["mealNames", "workoutNames", "sleepQualityLabel", "sleepHours", "journalTagLabel"]
+            + promptLanguage.includedFieldNames
     }
 
 
@@ -157,7 +177,8 @@ public struct DaySummaryPayload: AIContextPayload {
         workoutNames: [String],
         sleepQualityLabel: String?,
         sleepHours: Double?,
-        journalTagLabel: String?
+        journalTagLabel: String?,
+        promptLanguage: AIPromptLanguage = .english
     ) {
         // Sleep/journal labels are app-generated enum labels and stay verbatim; only these two
         // lists carry externally authored text.
@@ -178,6 +199,7 @@ public struct DaySummaryPayload: AIContextPayload {
         self.sleepQualityLabel = sleepQualityLabel
         self.sleepHours = sleepHours
         self.journalTagLabel = journalTagLabel
+        self.promptLanguage = promptLanguage
     }
 }
 
@@ -218,15 +240,23 @@ public struct CompanionThoughtPayload: AIContextPayload {
     public let journalTagLabel: String?
     /// Pre-filtered, character-capped context produced by MemoryAgent.
     public let filteredMemorySummary: String
+    /// The language the reply is written in and, for a gendered language, the person's term of
+    /// address (``AIPromptLanguage``). English by default, which adds nothing to the prompt or the
+    /// audit row.
+    public let promptLanguage: AIPromptLanguage
 
     public var includedFieldNames: [String] {
-        ["signalSummaries", "journalTagLabel", "filteredMemorySummary"]
+        ["signalSummaries", "journalTagLabel", "filteredMemorySummary"] + promptLanguage.includedFieldNames
     }
 
-    public init(signalSummaries: [AISignalSummary], journalTagLabel: String?, filteredMemorySummary: String) {
+    public init(
+        signalSummaries: [AISignalSummary], journalTagLabel: String?, filteredMemorySummary: String,
+        promptLanguage: AIPromptLanguage = .english
+    ) {
         self.signalSummaries = signalSummaries
         self.journalTagLabel = journalTagLabel
         self.filteredMemorySummary = filteredMemorySummary
+        self.promptLanguage = promptLanguage
     }
 }
 
@@ -245,13 +275,21 @@ public struct WorkoutAdjustmentPayload: AIContextPayload {
     public let request: String
     public let currentExercises: [String]
     public let candidateCount: Int
+    /// The language the person may write in and the display fields are written in (catalog prompt:
+    /// no term of address). English by default, which adds nothing to the prompt or the audit row.
+    public let promptLanguage: AIPromptLanguage
 
-    public var includedFieldNames: [String] { ["request", "currentExercises", "candidateCount"] }
+    public var includedFieldNames: [String] {
+        ["request", "currentExercises", "candidateCount"] + promptLanguage.includedFieldNames
+    }
 
-    public init(request: String, currentExercises: [String], candidateCount: Int) {
+    public init(
+        request: String, currentExercises: [String], candidateCount: Int, promptLanguage: AIPromptLanguage = .english
+    ) {
         self.request = request
         self.currentExercises = currentExercises
         self.candidateCount = candidateCount
+        self.promptLanguage = promptLanguage
     }
 }
 
@@ -282,18 +320,22 @@ public struct IngredientSubstitutionPayload: AIContextPayload {
     public let payloadKind = "ingredient-substitution"
     public let recipeName: String
     public let ingredientToReplace: String
+    /// The language the person may write in and the display fields are written in (catalog prompt:
+    /// no term of address). English by default, which adds nothing to the prompt or the audit row.
+    public let promptLanguage: AIPromptLanguage
 
-    public var includedFieldNames: [String] { ["recipeName", "ingredientToReplace"] }
+    public var includedFieldNames: [String] { ["recipeName", "ingredientToReplace"] + promptLanguage.includedFieldNames }
 
     /// Both fields are EXTERNALLY AUTHORED — they come from an imported recipe, which may have been
     /// scraped from a web page or shared by a mesh peer — and each is interpolated onto its own line
     /// of a labelled prompt (`Recipe:` / `Replace this ingredient:`). Sanitizing in `init` is what
     /// stops a newline inside a name from forging the other line, and is unbypassable at the call site.
-    public init(recipeName: String, ingredientToReplace: String) {
+    public init(recipeName: String, ingredientToReplace: String, promptLanguage: AIPromptLanguage = .english) {
         self.recipeName = ItemNameModeration.sanitizedName(
             recipeName, maxLength: AIPromptTextLimits.maxNameCharacters)
         self.ingredientToReplace = ItemNameModeration.sanitizedName(
             ingredientToReplace, maxLength: AIPromptTextLimits.maxNameCharacters)
+        self.promptLanguage = promptLanguage
     }
 }
 
@@ -335,14 +377,20 @@ public struct JournalSummaryPayload: AIContextPayload {
     /// acceptance policy still checks the reply against the FULL entry.
     public static let maxEntryCharacters = 2_000
 
-    public var includedFieldNames: [String] { ["entryText"] }
+    /// The language the memory line is written in and, for a gendered language, the person's term
+    /// of address (``AIPromptLanguage``). English by default, which adds nothing to the prompt or the
+    /// audit row.
+    public let promptLanguage: AIPromptLanguage
+
+    public var includedFieldNames: [String] { ["entryText"] + promptLanguage.includedFieldNames }
 
     /// Trims and caps the entry at ``maxEntryCharacters``. Line breaks are kept — they are the
     /// user's own paragraphs, and the entry is the last block of its prompt, so nothing follows
     /// it for a line break to forge.
-    public init(entryText: String) {
+    public init(entryText: String, promptLanguage: AIPromptLanguage = .english) {
         let trimmed = entryText.trimmingCharacters(in: .whitespacesAndNewlines)
         self.entryText = String(trimmed.prefix(Self.maxEntryCharacters))
+        self.promptLanguage = promptLanguage
     }
 }
 

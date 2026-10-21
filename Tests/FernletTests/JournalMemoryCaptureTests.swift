@@ -354,7 +354,11 @@ struct JournalMemoryCaptureTests {
         #expect(payload.payloadKind == "journal-memory-summary")
         #expect(payload.includedFieldNames == ["entryText"])
         let fields = Mirror(reflecting: payload).children.compactMap(\.label)
-        #expect(Set(fields) == ["payloadKind", "entryText"])
+        // `promptLanguage` (localization plan §5.1) is the language the memory line is written in and,
+        // for Spanish, the grammatical form of the words describing the person — never anything from
+        // the entry or a store. In English it is empty, so the audit row above is unchanged.
+        #expect(Set(fields) == ["payloadKind", "entryText", "promptLanguage"])
+        #expect(payload.promptLanguage == .english)
         for forbidden in ["periodData", "tierTwoMemories", "narrative", "symptoms", "healthMetrics",
                           "memories", "journalTagLabel", "filteredMemorySummary", "cycle"] {
             #expect(!fields.contains(forbidden))
