@@ -3214,8 +3214,65 @@ struct LocalizationBoundaryTests {
             keys.append(HarvestedKey(catalog: domain, key: "goal.\(stem).nutrition",
                                      source: "GoalType.nutritionSummary, literal → String(localized:bundle: .module)"))
         }
+        return keys + journalLaneAppKeys
+    }()
+
+    /// The journal lane's app-catalog keys (see ``journalLaneKeys``).
+    static let journalLaneAppKeys: [HarvestedKey] = {
+        let app = "App/Fernlet/Localizable.xcstrings"
+        var keys: [HarvestedKey] = []
+        let promptThemes = [("gratitude", 6), ("emotions", 6), ("body", 6), ("wins", 6), ("pleasures", 6), ("kindness", 10)]
+        for (theme, count) in promptThemes {
+            for index in 1...count {
+                keys.append(HarvestedKey(catalog: app, key: "journal.dailyPrompt.\(theme).\(index)",
+                                         source: "JournalPromptLibrary.prompts, a [String] of literals drawn with Text(String)"))
+            }
+        }
+        var day: [String] = [
+            "journal.day.blurb.empty", "journal.day.micronutrient.sodium", "journal.day.micronutrient.saturatedFat",
+            "journal.day.micronutrient.sugar", "journal.day.micronutrient.limit", "journal.day.micronutrient.target",
+            "Today so far", "Yesterday", "Your %@",
+        ]
+        day += FeelingTag.allCases.map { "journal.day.blurb.feeling.\($0.rawValue)" }
+        day += SleepQuality.allCases.map { "journal.day.blurb.sleep.\($0.rawValue)" }
+        for key in day {
+            keys.append(HarvestedKey(catalog: app, key: key,
+                                     source: "DayDetailView's review card and micronutrient rows, String → catalog key"))
+        }
         return keys
     }()
+
+    /// The journal lane's count-bearing keys: each was an English plural spliced in code
+    /// ("\(n) \(n == 1 ? "meal" : "meals")"), so its `one`/`other` block is hand-authored.
+    static let journalLanePluralKeys: [HarvestedKey] = [
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "journal.day.blurb.meals",
+                     source: "the day review's meal count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "journal.day.blurb.workouts",
+                     source: "the day review's workout count ('a workout' / '2 workouts')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "journal.day.bottleCount",
+                     source: "the day review's and Water card's bottle count"),
+    ]
+
+    /// Every journal-lane count key carries real plural variations (see ``journalLanePluralKeys``).
+    @Test func theJournalLanesCountKeysCarryPluralVariations() throws {
+        var missing: [String] = []
+        for entry in Self.journalLanePluralKeys {
+            let data = try Data(contentsOf: RepoRoot.url(entry.catalog))
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let strings = json?["strings"] as? [String: Any] ?? [:]
+            if !Self.carriesEnglishOneAndOtherPlural(strings, key: entry.key) {
+                missing.append("\(entry.catalog): \(entry.key)  ← \(entry.source)")
+            }
+        }
+        #expect(
+            missing.isEmpty,
+            """
+            \(missing.count) count-bearing key(s) have no `one`/`other` plural variation, and \
+            `xcstringstool sync` will never add the block back:
+            \(missing.sorted().joined(separator: "\n"))
+            """
+        )
+    }
 
     /// The journal lane's conversions reached their catalogs (see ``journalLaneKeys``).
     @Test func theJournalLanesStringsReachedTheirCatalogs() throws {

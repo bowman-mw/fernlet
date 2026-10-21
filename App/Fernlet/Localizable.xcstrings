@@ -486,16 +486,6 @@
     "%lld" : {
 
     },
-    "%lld %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld %2$@"
-          }
-        }
-      }
-    },
     "%lld / %lld" : {
       "localizations" : {
         "en" : {
@@ -8602,6 +8592,9 @@
     "Today key: %@" : {
 
     },
+    "Today so far" : {
+
+    },
     "Today · %@" : {
 
     },
@@ -9377,6 +9370,9 @@
         }
       }
     },
+    "Yesterday" : {
+
+    },
     "Yesterday %@" : {
 
     },
@@ -9548,6 +9544,9 @@
     },
     "You: %@" : {
 
+    },
+    "Your %@" : {
+      "comment" : "Day review heading for a past day, e.g. 'Your Tuesday'. The argument is the weekday's name."
     },
     "Your CPD is %@. Scientists (me) are thrilled." : {
       "comment" : "Companion line about cookies per day"
@@ -10847,6 +10846,750 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Private note saved and sent to Apple Health. Fernlet couldn't record that link, so this entry won't show “Saved to Apple Health”."
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.body.1" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (a body check-in), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Where in your body do you feel today the most?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.body.2" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (a body check-in), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What did your body do for you today that deserves a thank-you?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.body.3" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (a body check-in), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "How tired are you, honestly? What kind of tired is it?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.body.4" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (a body check-in), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What would feel kind to your body right now?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.body.5" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (a body check-in), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "When did you feel most at ease in your body today?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.body.6" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (a body check-in), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's one thing your body has been quietly asking for?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.emotions.1" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (naming a feeling), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "If today had a weather report, what would it say?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.emotions.2" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (naming a feeling), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What feeling visited you most today? No need to explain it."
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.emotions.3" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (naming a feeling), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Was there a moment today when your mood shifted? What was nearby?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.emotions.4" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (naming a feeling), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's one word for how you feel right now — and one for how you'd like to feel tomorrow?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.emotions.5" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (naming a feeling), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Is anything sitting a little heavy tonight? You can just name it and stop there."
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.emotions.6" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (naming a feeling), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What did you feel today that you didn't say out loud?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.gratitude.1" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (gratitude), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's one small thing today that you'd quietly like to keep?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.gratitude.2" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (gratitude), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Who made your day a little lighter — even in a tiny way?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.gratitude.3" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (gratitude), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Name something ordinary that worked today. The kettle counts."
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.gratitude.4" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (gratitude), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's something your past self set up that today-you got to enjoy?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.gratitude.5" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (gratitude), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What made you smile today, even for a second?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.gratitude.6" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (gratitude), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's one comfort you usually overlook?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.kindness.1" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (self-kindness), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What would you say to a friend who had your day?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.kindness.10" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (self-kindness), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's something kind you hope tomorrow brings you?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.kindness.2" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (self-kindness), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What are you allowed to stop carrying tonight?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.kindness.3" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (self-kindness), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's one gentle thing you could forgive yourself for today?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.kindness.4" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (self-kindness), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "If today was a lot, what's one soft thing you can give yourself this evening?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.kindness.5" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (self-kindness), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What do you need more of tomorrow — rest, quiet, company, or something else?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.kindness.6" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (self-kindness), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's something you did today that was enough, exactly as it was?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.kindness.7" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (self-kindness), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's one expectation you could set down for a while?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.kindness.8" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (self-kindness), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "How did you take care of yourself today, even accidentally?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.kindness.9" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (self-kindness), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What would 'being on your own side' look like tonight?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.pleasures.1" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (small pleasures), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What tasted, sounded, or smelled good today?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.pleasures.2" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (small pleasures), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's the coziest moment you had today?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.pleasures.3" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (small pleasures), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Did anything today feel like a small gift you didn't ask for?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.pleasures.4" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (small pleasures), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's something you saw today that you'd point out to a friend?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.pleasures.5" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (small pleasures), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What little routine felt good today?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.pleasures.6" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (small pleasures), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "If you could bottle one minute from today, which one?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.wins.1" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (tiny wins), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's something small you handled today that no one saw?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.wins.2" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (tiny wins), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What did you do today that was slightly hard — and you did it anyway?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.wins.3" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (tiny wins), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Name one thing you finished today, however small."
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.wins.4" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (tiny wins), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What went a little better today than it did last time?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.wins.5" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (tiny wins), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What's a tiny choice you made today that you're glad about?"
+          }
+        }
+      }
+    },
+    "journal.dailyPrompt.wins.6" : {
+      "comment" : "Journal sheet: the daily inspiration prompt (tiny wins), a gentle question the user may start an entry from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "What did you show up for today, even without feeling like it?"
+          }
+        }
+      }
+    },
+    "journal.day.blurb.empty" : {
+      "comment" : "Day review line for a day with nothing logged. 'Edit day' is the button at the top right of the screen.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nothing logged yet. Tap \"Edit day\" to add missed details."
+          }
+        }
+      }
+    },
+    "journal.day.blurb.feeling.bright" : {
+      "comment" : "Day review line item: the day's journal feeling was Bright",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Feeling bright"
+          }
+        }
+      }
+    },
+    "journal.day.blurb.feeling.good" : {
+      "comment" : "Day review line item: the day's journal feeling was Good",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Feeling good"
+          }
+        }
+      }
+    },
+    "journal.day.blurb.feeling.hard" : {
+      "comment" : "Day review line item: the day's journal feeling was Hard (a hard day)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Feeling hard"
+          }
+        }
+      }
+    },
+    "journal.day.blurb.feeling.neutral" : {
+      "comment" : "Day review line item: the day's journal feeling was Neutral",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Feeling neutral"
+          }
+        }
+      }
+    },
+    "journal.day.blurb.feeling.quiet" : {
+      "comment" : "Day review line item: the day's journal feeling was Quiet",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Feeling quiet"
+          }
+        }
+      }
+    },
+    "journal.day.blurb.feeling.tired" : {
+      "comment" : "Day review line item: the day's journal feeling was Tired",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Feeling tired"
+          }
+        }
+      }
+    },
+    "journal.day.blurb.meals" : {
+      "comment" : "Day review: how many meals were logged that day, e.g. '2 meals'. Plural-ruled in the catalog.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld meal"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld meals"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "journal.day.blurb.sleep.good" : {
+      "comment" : "Day review line item: the night's sleep was logged as Good",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "good sleep"
+          }
+        }
+      }
+    },
+    "journal.day.blurb.sleep.great" : {
+      "comment" : "Day review line item: the night's sleep was logged as Great",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "great sleep"
+          }
+        }
+      }
+    },
+    "journal.day.blurb.sleep.ok" : {
+      "comment" : "Day review line item: the night's sleep was logged as Ok",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "ok sleep"
+          }
+        }
+      }
+    },
+    "journal.day.blurb.sleep.poor" : {
+      "comment" : "Day review line item: the night's sleep was logged as Poor",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "poor sleep"
+          }
+        }
+      }
+    },
+    "journal.day.blurb.workouts" : {
+      "comment" : "Day review: how many workouts were logged, e.g. 'a workout', '2 workouts'. Plural-ruled in the catalog; the English one-form reads 'a workout'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "a workout"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld workouts"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "journal.day.bottleCount" : {
+      "comment" : "How many bottles of water were logged that day, e.g. '3 bottles'. Plural-ruled in the catalog.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld bottle"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld bottles"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "journal.day.micronutrient.limit" : {
+      "comment" : "Day review micronutrient row: the daily ceiling, e.g. 'limit 2300mg'. The argument is the amount with its unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "limit %@"
+          }
+        }
+      }
+    },
+    "journal.day.micronutrient.saturatedFat" : {
+      "comment" : "Day review micronutrient row: saturated fat, shown against its daily limit",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Saturated fat"
+          }
+        }
+      }
+    },
+    "journal.day.micronutrient.sodium" : {
+      "comment" : "Day review micronutrient row: sodium, shown against its daily limit",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sodium"
+          }
+        }
+      }
+    },
+    "journal.day.micronutrient.sugar" : {
+      "comment" : "Day review micronutrient row: total sugar, shown against a daily limit",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sugar"
+          }
+        }
+      }
+    },
+    "journal.day.micronutrient.target" : {
+      "comment" : "Day review micronutrient row: the daily goal, e.g. 'target 28g'. The argument is the amount with its unit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "target %@"
           }
         }
       }

@@ -922,6 +922,45 @@ private extension FeelingTag {
         case .hard: "triangle.fill"
         }
     }
+
+    /// The day review's feeling phrase ("Feeling bright"), one whole phrase per case.
+    ///
+    /// It was `"Feeling \(label.lowercased())"`: an English word spliced around a localized one and
+    /// case-folded in code, which is wrong in every language that capitalizes nouns or agrees an
+    /// adjective with its subject. Switching on the case keeps a seventh feeling a compile error.
+    var dayBlurbPhrase: String {
+        switch self {
+        case .bright: String(localized: "journal.day.blurb.feeling.bright", defaultValue: "Feeling bright",
+                             comment: "Day review line item: the day's journal feeling was Bright")
+        case .good: String(localized: "journal.day.blurb.feeling.good", defaultValue: "Feeling good",
+                           comment: "Day review line item: the day's journal feeling was Good")
+        case .neutral: String(localized: "journal.day.blurb.feeling.neutral", defaultValue: "Feeling neutral",
+                              comment: "Day review line item: the day's journal feeling was Neutral")
+        case .quiet: String(localized: "journal.day.blurb.feeling.quiet", defaultValue: "Feeling quiet",
+                            comment: "Day review line item: the day's journal feeling was Quiet")
+        case .tired: String(localized: "journal.day.blurb.feeling.tired", defaultValue: "Feeling tired",
+                            comment: "Day review line item: the day's journal feeling was Tired")
+        case .hard: String(localized: "journal.day.blurb.feeling.hard", defaultValue: "Feeling hard",
+                           comment: "Day review line item: the day's journal feeling was Hard (a hard day)")
+        }
+    }
+}
+
+private extension SleepQuality {
+    /// The day review's sleep phrase ("good sleep"), one whole phrase per case — the same fix as
+    /// ``FeelingTag/dayBlurbPhrase``: it was `"\(label.lowercased()) sleep"`.
+    var dayBlurbPhrase: String {
+        switch self {
+        case .poor: String(localized: "journal.day.blurb.sleep.poor", defaultValue: "poor sleep",
+                           comment: "Day review line item: the night's sleep was logged as Poor")
+        case .ok: String(localized: "journal.day.blurb.sleep.ok", defaultValue: "ok sleep",
+                         comment: "Day review line item: the night's sleep was logged as Ok")
+        case .good: String(localized: "journal.day.blurb.sleep.good", defaultValue: "good sleep",
+                           comment: "Day review line item: the night's sleep was logged as Good")
+        case .great: String(localized: "journal.day.blurb.sleep.great", defaultValue: "great sleep",
+                            comment: "Day review line item: the night's sleep was logged as Great")
+        }
+    }
 }
 
 // MARK: - Calendar Cell
@@ -1234,33 +1273,62 @@ struct DayDetailView: View {
         FernletDate.date(fromDayKey: dateKey) ?? .now
     }
 
-    private var navigationTitle: String {
-        if dateKey == store.todayKey { return "Today" }
-        return date.formatted(.dateTime.month(.abbreviated).day())
+    /// `Text`, not `String`: `.navigationTitle(_:)` takes a `String` through its verbatim overload,
+    /// so "Today" rendered in English in every language.
+    private var navigationTitle: Text {
+        if dateKey == store.todayKey { return Text("Today") }
+        return Text(verbatim: date.formatted(.dateTime.month(.abbreviated).day()))
     }
 
-    private var reviewTitle: String {
-        if dateKey == store.todayKey { return "Today so far" }
+    /// The review card's heading. `Text` for the same reason as ``navigationTitle``; the weekday is
+    /// already localized by `formatted`, so it fills the `%@` of a whole sentence a translator can
+    /// reorder.
+    private var reviewTitle: Text {
+        if dateKey == store.todayKey { return Text("Today so far") }
         let cal = Calendar.current
         if let yesterday = cal.date(byAdding: .day, value: -1, to: .now),
-           FernletDate.dayKey(for: yesterday) == dateKey { return "Yesterday" }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE"
-        return "Your \(formatter.string(from: date))"
+           FernletDate.dayKey(for: yesterday) == dateKey { return Text("Yesterday") }
+        let weekday = date.formatted(.dateTime.weekday(.wide))
+        return Text("Your \(weekday)", comment: "Day review heading for a past day, e.g. 'Your Tuesday'. The argument is the weekday's name.")
     }
 
+    /// The review card's line: the on-device day summary when one exists, else a short list of
+    /// what the day holds.
+    ///
+    /// Each list item is a WHOLE phrase from the catalog — the feeling and sleep phrases per case,
+    /// the three counts plural-ruled in the catalog — and only the " · " separator joins them, the
+    /// shape the Messages recipe card's subtitle uses for independent counts. It used to splice
+    /// English plurals ("meal"/"meals") and lowercase a localized word in code, which no catalog
+    /// could translate.
     private var reviewBlurb: String {
         if let summary = dailyHealthScore.daySummaryText?.trimmingCharacters(in: .whitespacesAndNewlines), summary.isEmpty == false {
             return summary
         }
         var parts: [String] = []
-        if let tag = day.journals.last?.tag { parts.append("Feeling \(tag.label.lowercased())") }
-        if day.meals.count > 0 { parts.append("\(day.meals.count) \(day.meals.count == 1 ? "meal" : "meals")") }
-        if day.workouts.count > 0 { parts.append(day.workouts.count == 1 ? "a workout" : "\(day.workouts.count) workouts") }
-        if let sleep = day.sleep { parts.append("\(sleep.quality.label.lowercased()) sleep") }
-        if day.bottleCount > 0 { parts.append("\(day.bottleCount) \(day.bottleCount == 1 ? "bottle" : "bottles")") }
-        if parts.isEmpty { return "Nothing logged yet. Tap \"Edit day\" to add missed details." }
+        if let tag = day.journals.last?.tag { parts.append(tag.dayBlurbPhrase) }
+        if day.meals.count > 0 {
+            parts.append(String(localized: "journal.day.blurb.meals", defaultValue: "\(day.meals.count) meals",
+                                comment: "Day review: how many meals were logged that day, e.g. '2 meals'. Plural-ruled in the catalog."))
+        }
+        if day.workouts.count > 0 {
+            parts.append(String(localized: "journal.day.blurb.workouts", defaultValue: "\(day.workouts.count) workouts",
+                                comment: "Day review: how many workouts were logged, e.g. 'a workout', '2 workouts'. Plural-ruled in the catalog; the English one-form reads 'a workout'."))
+        }
+        if let sleep = day.sleep { parts.append(sleep.quality.dayBlurbPhrase) }
+        if day.bottleCount > 0 { parts.append(Self.bottleCountText(day.bottleCount)) }
+        if parts.isEmpty {
+            return String(localized: "journal.day.blurb.empty",
+                          defaultValue: "Nothing logged yet. Tap \"Edit day\" to add missed details.",
+                          comment: "Day review line for a day with nothing logged. 'Edit day' is the button at the top right of the screen.")
+        }
         return parts.joined(separator: " · ")
+    }
+
+    /// "3 bottles" — the water count drawn in the review line and on the Water card, plural-ruled
+    /// in the catalog so English never reads "1 bottles" and a translator gets every form.
+    static func bottleCountText(_ count: Int) -> String {
+        String(localized: "journal.day.bottleCount", defaultValue: "\(count) bottles",
+               comment: "How many bottles of water were logged that day, e.g. '3 bottles'. Plural-ruled in the catalog.")
     }
 
     private var dailyHealthScore: DailyHealthScore {
@@ -1305,10 +1373,16 @@ struct DayDetailView: View {
         }
         let limitRows: [DayMicronutrientBreakdownRow] = [
             dayMicronutrients.sodium.map {
-                DayMicronutrientBreakdownRow(name: "Sodium", value: $0, target: Double(store.nutritionTargets.sodiumLimit), unit: "mg", isLimit: true)
+                DayMicronutrientBreakdownRow(
+                    name: String(localized: "journal.day.micronutrient.sodium", defaultValue: "Sodium",
+                                 comment: "Day review micronutrient row: sodium, shown against its daily limit"),
+                    value: $0, target: Double(store.nutritionTargets.sodiumLimit), unit: "mg", isLimit: true)
             },
             dayMicronutrients.saturatedFat.map {
-                DayMicronutrientBreakdownRow(name: "Saturated fat", value: $0, target: Double(store.nutritionTargets.saturatedFatLimit), unit: "g", isLimit: true)
+                DayMicronutrientBreakdownRow(
+                    name: String(localized: "journal.day.micronutrient.saturatedFat", defaultValue: "Saturated fat",
+                                 comment: "Day review micronutrient row: saturated fat, shown against its daily limit"),
+                    value: $0, target: Double(store.nutritionTargets.saturatedFatLimit), unit: "g", isLimit: true)
             },
             dayMicronutrients.sugar.map {
                 // The 50 g reference is the FDA **added-sugars** DRV
@@ -1317,7 +1391,10 @@ struct DayDetailView: View {
                 // an intentional over-strict approximation — the catalog does not separate
                 // added from total sugar per food. Kept as-is (not redesigned); the label
                 // stays "Sugar" because the value is total sugar, not added sugar.
-                DayMicronutrientBreakdownRow(name: "Sugar", value: $0, target: FDADailyValues.addedSugarsLimitGrams, unit: "g", isLimit: true)
+                DayMicronutrientBreakdownRow(
+                    name: String(localized: "journal.day.micronutrient.sugar", defaultValue: "Sugar",
+                                 comment: "Day review micronutrient row: total sugar, shown against a daily limit"),
+                    value: $0, target: FDADailyValues.addedSugarsLimitGrams, unit: "g", isLimit: true)
             }
         ].compactMap { $0 }
         return Array((tracked + limitRows).prefix(12))
@@ -1429,7 +1506,7 @@ struct DayDetailView: View {
     private var reviewCard: some View {
         FernletCard {
             VStack(alignment: .leading, spacing: 10) {
-                Text(reviewTitle)
+                reviewTitle
                     .font(.fernlet(.header))
                     .foregroundStyle(Color.bark)
                 Text(reviewBlurb)
@@ -1538,7 +1615,7 @@ struct DayDetailView: View {
                         .font(.caption)
                         .foregroundStyle(Color.slate)
                 }
-                Text(day.bottleCount == 0 ? "None logged" : "\(day.bottleCount) \(day.bottleCount == 1 ? "bottle" : "bottles")")
+                (day.bottleCount == 0 ? Text("None logged") : Text(verbatim: Self.bottleCountText(day.bottleCount)))
                     .font(.fernlet(.stat))
                     .foregroundStyle(day.bottleCount == 0 ? Color.slate : Color.bark)
                 if day.bottleCount > 0 {
@@ -1616,7 +1693,10 @@ struct DayDetailView: View {
                 }
                 PersonalCareTaskGrid {
                     ForEach(store.personalCareTasks) { task in
-                        Label(task.label, systemImage: task.systemImage)
+                        // `displayLabel`, not the stored `label`: a built-in task's stored label is
+                        // the English baked in at first launch, and only `displayLabel` resolves it
+                        // in the current language (a user's own task draws its own words either way).
+                        Label(task.displayLabel, systemImage: task.systemImage)
                             .font(.fernlet(.labelSmall))
                             .lineLimit(1)
                             .padding(.horizontal, 8)
@@ -1691,8 +1771,15 @@ struct DayMicronutrientBreakdownRow: Identifiable {
         "\(Self.formatted(value))\(unit)"
     }
 
+    /// "limit 2300mg" / "target 28g": one whole phrase per kind, so the word and the amount can be
+    /// reordered by a translator. It used to splice an English "limit"/"target" into the string.
     var targetText: String {
-        "\(isLimit ? "limit" : "target") \(Self.formatted(target))\(unit)"
+        let amount = "\(Self.formatted(target))\(unit)"
+        return isLimit
+            ? String(localized: "journal.day.micronutrient.limit", defaultValue: "limit \(amount)",
+                     comment: "Day review micronutrient row: the daily ceiling, e.g. 'limit 2300mg'. The argument is the amount with its unit.")
+            : String(localized: "journal.day.micronutrient.target", defaultValue: "target \(amount)",
+                     comment: "Day review micronutrient row: the daily goal, e.g. 'target 28g'. The argument is the amount with its unit.")
     }
 
     var statusColor: Color {
@@ -2032,7 +2119,8 @@ struct DayEditSheet: View {
             PersonalCareTaskGrid {
                 ForEach(store.personalCareTasks) { task in
                     Button { togglePersonalCareTask(task) } label: {
-                        Label(task.label, systemImage: task.systemImage)
+                        // `displayLabel`: see the same chip on ``DayDetailView``'s care card.
+                        Label(task.displayLabel, systemImage: task.systemImage)
                             .font(.fernlet(.labelSmall))
                             .lineLimit(1)
                             .padding(.horizontal, 8)
