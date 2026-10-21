@@ -6,10 +6,11 @@
 //  "Cook" action. It opens on a MISE EN PLACE screen (every ingredient + amount, scaled by the F4
 //  engine when the cook picks a different yield), then walks one step per screen with an explicit
 //  Next/Back pair and a per-step crossfade + progress dots (the GroundingView idiom). A step carrying
-//  `durationSeconds` shows a PASSIVE countdown that, on expiry, highlights Next and fires a haptic —
-//  it NEVER auto-advances the step. The finish screen offers to log the meal, anchored to the day the
-//  cook BEGAN (a long session crossing midnight logs to the start day). No Live Activity / Siri here —
-//  that is the next phase.
+//  `durationSeconds` shows a PASSIVE countdown that, on expiry, highlights Next and fires a haptic
+//  (plus a quiet chime when the cook turned "Timer sound" on) — it NEVER auto-advances the step. Next
+//  and Back tick under the thumb, and finishing the cook plays one `done`. The finish screen offers
+//  to log the meal, anchored to the day the cook BEGAN (a long session crossing midnight logs to the
+//  start day). No Live Activity / Siri here — that is the next phase.
 //
 
 import SwiftUI
@@ -546,6 +547,8 @@ struct CookingModeView: View {
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("cookingMode.startStepTimer")
                 }
+                // The shortcut to Settings › Sounds & haptics' cooking switch, on the card it changes.
+                CookingTimerSoundToggle()
             }
             .frame(maxWidth: .infinity)
         }
@@ -710,18 +713,23 @@ struct CookingModeView: View {
             withAnimation(.easeInOut(duration: 0.3)) { stage = .cooking }
         } else {
             // Mise-only recipe (ingredients but no steps): a single done screen, per §6.4. No run, no
-            // Live Activity — there is nothing to walk.
+            // Live Activity — there is nothing to walk. "I'm ready" is this cook's whole walk, so the
+            // "All done." screen gets the same one `done` as a walked cook's Finish.
             withAnimation(.easeInOut(duration: 0.3)) { stage = .finished }
+            FernletFeedback.system.play(.done)
         }
     }
 
     private func goNext() {
         // Advance the shared run (clears its timer, advances the cursor, or finishes on the last step).
         // A finish flips `stage` via `syncStageWithRun` on the resulting run change.
+        let before = store.cookingRunState
         withAnimation(.easeInOut(duration: 0.3)) { store.cookingAdvanceStep() }
+        playWalkerCue(from: before)
     }
 
     private func goBack() {
+        let before = store.cookingRunState
         if stepIndex > 0 {
             withAnimation(.easeInOut(duration: 0.3)) { store.cookingGoBack() }
         } else {
@@ -731,6 +739,29 @@ struct CookingModeView: View {
             withAnimation(.easeInOut(duration: 0.3)) { stage = .mise }
             store.endCookingRun()
         }
+        playWalkerCue(from: before)
+    }
+
+    /// The walker's touch cue for the tap that just moved the run from `before`
+    /// (``walkerCue(before:after:)``). Played from the tap, never from the run changing: a Live
+    /// Activity or Siri "Next" moves the same run from the background, and a Lock Screen finish is
+    /// reconciled later — neither is a tap under the cook's thumb, and a `done` at that reconcile
+    /// would arrive minutes late.
+    private func playWalkerCue(from before: CookingRunState?) {
+        guard let event = Self.walkerCue(before: before, after: store.cookingRunState) else { return }
+        FernletFeedback.system.play(event)
+    }
+
+    /// What one Next or Back tap plays (sounds-and-haptics Tier B, 2026-10-20): `tick` when the step
+    /// moved — a cook with wet hands and their eyes on the bowl feels the page turn — `done` once when
+    /// the tap finished the cook, as "All done." appears, and nothing when the tap changed nothing (a
+    /// second tap on Finish while the screen crossfades finds the run already finished).
+    ///
+    /// Leaving the walk for mise en place (Back on the first step ends the run) counts as a move.
+    static func walkerCue(before: CookingRunState?, after: CookingRunState?) -> FernletFeedbackEvent? {
+        guard let before, !before.isFinished else { return nil }
+        if after?.isFinished == true { return .done }
+        return after?.stepIndex == before.stepIndex ? nil : .tick
     }
 
     private func logMeal(_ mealType: MealType) {
@@ -826,17 +857,19 @@ struct CookingModeView: View {
     /// state so an absurd `timerEndsAt` can't schedule an unbounded sleep.
     private static let maxTimerWindowSeconds: TimeInterval = 240 * 60
 
-    /// The timer's expiry, in the two channels a cook with their hands in a bowl can receive: the
-    /// "time's up" haptic, and one spoken sentence.
+    /// The timer's expiry, in the channels a cook with their hands in a bowl can receive: the "time's
+    /// up" haptic, the quiet chime when "Timer sound" is on, and one spoken sentence — with Next
+    /// turning goldenrod and the card's "Timer's up" line as the visual twin.
     ///
-    /// The haptic is FernletFeedback's `timerEnded` — the same two firm knocks as a rest or a hold
-    /// running out (A15), no longer the success pattern, which means "a task you started succeeded".
-    /// Sounds stay off: there is no cooking sound switch yet (report C1). The words are the SAME
-    /// catalog key the card above already renders — one sentence, one key, translated once: a
-    /// near-duplicate written for the announcement could drift from the one on screen and leave a
-    /// translator guessing which is authoritative.
+    /// The haptic is FernletFeedback's `timerEnded` — the same "time's up" as a rest or a hold running
+    /// out (A15), no longer the success pattern, which means "a task you started succeeded". The chime
+    /// is the runner's own, behind cooking's own switch (``CookingCuePreferences``, report C1), read
+    /// now so a change made mid-cook reaches this timer. The words are the SAME catalog key the card
+    /// above already renders — one sentence, one key, translated once: a near-duplicate written for
+    /// the announcement could drift from the one on screen and leave a translator guessing which is
+    /// authoritative.
     private func signalTimerExpiry() {
-        FernletFeedback.system.play(.timerEnded, preferences: .resolved(haptics: true, sounds: false))
+        FernletFeedback.system.play(.timerEnded, preferences: CookingCuePreferences.current())
         FernletAnnouncer.system.announce(
             .status,
             LocalizedStringResource("Timer's up — tap Next when you're ready. Nothing advances on its own.")

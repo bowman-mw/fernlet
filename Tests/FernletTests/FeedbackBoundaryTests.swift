@@ -64,6 +64,8 @@ struct FeedbackBoundaryTests {
         "FernletKit/Sources/FernletUI/FernletFeedback.swift": [
             "UIImpactFeedbackGenerator", "UINotificationFeedbackGenerator", "UISelectionFeedbackGenerator",
             "AudioServicesPlaySystemSound",
+            // Report C4: "time's up" as a Core Haptics pattern, the one engine in the app.
+            "CHHapticEngine",
         ],
         "FernletKit/Sources/FernletUI/FernletSpeech.swift": ["AVSpeechSynthesizer"],
     ]

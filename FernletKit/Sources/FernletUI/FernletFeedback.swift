@@ -26,12 +26,15 @@
 //     from ONE resolver, ``FernletFeedbackPreferences/resolved(haptics:sounds:in:)``, which ANDs the
 //     calling surface's own switch (Workout haptics, breathing's Haptics) with the app-wide level. The
 //     system's own Settings › Sounds & Haptics switch is honoured underneath that by
-//     `UIFeedbackGenerator` itself.
+//     `UIFeedbackGenerator` itself. The one Core Haptics pattern ("time's up", report C4) has no such
+//     promise from Apple, so its renderer reads the app-wide level again at the moment it plays: Off
+//     silences it whatever the cue says.
 //
 //  3. NEVER TAKE THE AUDIO. Sounds play through AudioServices system sounds: they follow the ring/silent
 //     switch (silent means no sound), play at the ringer volume, and mix with whatever is playing — no
 //     `AVAudioSession` category is set, so the person's music is never paused, ducked or interrupted.
-//     The files are short and authored quiet (see ``FernletSound``).
+//     The files are short and authored quiet (see ``FernletSound``). The Core Haptics engine plays
+//     haptics only (`playsHapticsOnly`), so it never touches the audio session either.
 //
 //  4. NO COPY. Nothing here is ever spoken or shown, so this file holds no user-visible string. Spoken
 //     equivalents stay with ``FernletAnnouncer``; the opt-in spoken cues (``FernletSpeaker``,
@@ -39,6 +42,7 @@
 //
 
 import AudioToolbox
+import CoreHaptics
 import os
 import SwiftUI
 import UIKit
@@ -154,8 +158,8 @@ public nonisolated enum FernletFeedbackEvent: String, CaseIterable, Sendable {
     /// surface's errors), the in-person session and the camera stay silent whatever a caller passes.
     /// A logged set is silent: the person just tapped, so a sound would only echo the tap. A zone
     /// nudge is silent too: a heart rate drifting a little is never worth a sound over someone's music.
-    /// The cooking timer's chime waits for a cooking sound switch (report C1); until then its caller
-    /// passes sounds off.
+    /// The cooking timer's chime plays only when the cook turned its "Timer sound" switch on (report
+    /// C1, the app's `CookingCuePreferences`).
     public var sound: FernletSound? {
         switch self {
         case .restEnded, .holdEnded, .blockChanged, .workoutFinished, .timerEnded: .chime
@@ -253,7 +257,8 @@ public nonisolated enum FernletHapticsLevel: String, CaseIterable, Sendable {
 ///
 /// Each case is played by a `UIFeedbackGenerator` (``FernletFeedback`` renders them, and its renderer
 /// holds every intensity), which plays nothing when the system haptics setting is off or the app is
-/// not in the foreground. Only patterns that play on iPhone exist here: SwiftUI's `.increase`,
+/// not in the foreground — all but ``attention``, which is Fernlet's one Core Haptics pattern and
+/// falls back to generator impacts. Only patterns that play on iPhone exist here: SwiftUI's `.increase`,
 /// `.decrease`, `.start`, `.stop` and `.levelChange` play only on other platforms, so none of them is
 /// ever a feel.
 public nonisolated enum FernletHaptic: String, CaseIterable, Sendable {
@@ -263,12 +268,18 @@ public nonisolated enum FernletHaptic: String, CaseIterable, Sendable {
     case firm
     /// A heavy impact: the session moved on to something new, or a friend is here.
     case heavy
-    /// "Time's up" for a timer that ran out: two heavy impacts at 0.8 intensity, 150 ms apart
-    /// (``FernletFeedback/attentionIntensity``, ``FernletFeedback/attentionGap``).
+    /// "Time's up" for a timer that ran out: three transient taps rising from soft to firm in about a
+    /// quarter of a second (``FernletFeedback/attentionPattern``), played through Core Haptics (report
+    /// C4) — never a continuous buzz.
+    ///
+    /// Where Core Haptics can't play it — hardware without haptics, an app extension, or an engine
+    /// that fails to start or play — the same moment falls back to the pair it replaced: two heavy
+    /// impacts at 0.8 intensity, 150 ms apart (``FernletFeedback/attentionIntensity``,
+    /// ``FernletFeedback/attentionGap``). Either way it is ONE cue: callers name the case and never
+    /// learn which renderer played it.
     ///
     /// Deliberately NOT `UINotificationFeedbackGenerator`'s `.warning` pattern: app-wide, `.warning`
-    /// is reserved for "it worked, with a caveat", and a rest running out is not a caveat. A Core
-    /// Haptics pattern may replace this pair later; callers name the case, so nothing else changes.
+    /// is reserved for "it worked, with a caveat", and a rest running out is not a caveat.
     case attention
     /// The success notification pattern: a result that landed.
     case success
@@ -294,6 +305,45 @@ public nonisolated enum FernletHaptic: String, CaseIterable, Sendable {
     case detent
     /// A full-strength rigid impact: the camera armed, the shutter.
     case rigid
+}
+
+/// One transient tap in a Core Haptics pattern: when it lands, how strong it is and how crisp.
+///
+/// Transient only, by construction — there is no duration to give — so no pattern built from these
+/// can ever become the continuous buzz the HIG warns against.
+public nonisolated struct FernletHapticTap: Equatable, Sendable {
+    /// Seconds from the pattern's start.
+    public let time: TimeInterval
+    /// Strength, 0 (nothing) to 1 (full).
+    public let intensity: Float
+    /// Crispness, 0 (round and soft) to 1 (sharp and firm).
+    public let sharpness: Float
+
+    /// Creates a tap.
+    public init(time: TimeInterval, intensity: Float, sharpness: Float) {
+        self.time = time
+        self.intensity = intensity
+        self.sharpness = sharpness
+    }
+}
+
+/// Which renderer plays ``FernletHaptic/attention``.
+public nonisolated enum FernletAttentionRenderer: String, Sendable {
+    /// The Core Haptics pattern, ``FernletFeedback/attentionPattern``.
+    case coreHaptics
+    /// The two heavy impacts it replaced: the fallback wherever Core Haptics can't play.
+    case impacts
+
+    /// The renderer for a process: Core Haptics only on hardware that supports it, and never in an
+    /// app extension — a widget or the Messages extension never plays a cue, so it must never pay for
+    /// an engine either. A failure at play time falls back as well; that is decided where it happens.
+    ///
+    /// - Parameters:
+    ///   - supportsHaptics: `CHHapticEngine.capabilitiesForHardware().supportsHaptics`.
+    ///   - inAppExtension: Whether this process is an app extension (its bundle is an `.appex`).
+    public static func choose(supportsHaptics: Bool, inAppExtension: Bool) -> FernletAttentionRenderer {
+        supportsHaptics && !inAppExtension ? .coreHaptics : .impacts
+    }
 }
 
 /// The cue sounds, each a short, quiet file bundled with the app.
@@ -412,6 +462,10 @@ public nonisolated struct FernletFeedbackCue: Equatable, Sendable {
 /// - *Never the audio session.* Sounds go through `AudioServicesPlaySystemSoundWithCompletion`, which
 ///   honours the ring/silent switch and mixes with other audio; each play creates its system sound and
 ///   disposes of it on completion, so nothing accumulates however long a workout runs.
+/// - *One cue, one renderer.* ``FernletHaptic/attention`` is a Core Haptics pattern where the hardware
+///   plays one (``FernletAttentionEngine``) and two generator impacts everywhere else; either way the
+///   closure sees one ``FernletFeedbackCue``, so a test counts "time's up" the same on a simulator
+///   (which has no haptics) as a device would play it.
 /// - *No copy* (see the file header).
 ///
 /// **Concurrency:** main-actor, like the UIKit generators it drives; `FernletUI` builds with
@@ -473,9 +527,19 @@ public struct FernletFeedback {
         if let sound = cue.sound { playSound(sound) }
     }
 
-    /// The strength of each of ``FernletHaptic/attention``'s two heavy impacts.
+    /// ``FernletHaptic/attention`` through Core Haptics: three transient taps, soft to firm, the last
+    /// at 260 ms — under the report's 400 ms, so "time's up" is a knock, never a buzz. Rising, so it
+    /// reads as "now" from across a bench and can't be mistaken for the two even knocks of a fallback
+    /// or a firm `holdStarted`. Tuned on a device here and nowhere else (report §8).
+    public static let attentionPattern: [FernletHapticTap] = [
+        FernletHapticTap(time: 0, intensity: 0.45, sharpness: 0.25),
+        FernletHapticTap(time: 0.13, intensity: 0.7, sharpness: 0.45),
+        FernletHapticTap(time: 0.26, intensity: 1, sharpness: 0.65),
+    ]
+    /// The fallback's strength: each of ``FernletHaptic/attention``'s two heavy impacts where Core
+    /// Haptics can't play.
     public static let attentionIntensity: CGFloat = 0.8
-    /// The pause between ``FernletHaptic/attention``'s two impacts.
+    /// The pause between the fallback's two impacts.
     public static let attentionGap: Duration = .milliseconds(150)
 
     /// Plays one haptic through UIKit. The generators respect the system haptics setting themselves.
@@ -522,10 +586,21 @@ public struct FernletFeedback {
         }
     }
 
-    /// "Time's up": a heavy impact, a short pause, and a second one (see ``FernletHaptic/attention``).
-    /// The second tap is a main-actor task of its own, so the caller never waits on the pause; a
-    /// cancelled pause simply skips it.
+    /// "Time's up" (see ``FernletHaptic/attention``): the Core Haptics pattern, or the two impacts
+    /// wherever it can't play.
+    ///
+    /// The app-wide level is read again here, at the moment of playing. A cue that reached the
+    /// renderer already passed it, but Apple documents nothing about Core Haptics and the system's own
+    /// haptics switch, so Fernlet's Off is this pattern's last word and is never left to a caller.
     private static func playAttention() {
+        guard FernletHapticsLevel.current() != .off else { return }
+        if FernletAttentionEngine.shared.play(attentionPattern) { return }
+        playAttentionImpacts()
+    }
+
+    /// The fallback: a heavy impact, a short pause, and a second one. The second tap is a main-actor
+    /// task of its own, so the caller never waits on the pause; a cancelled pause simply skips it.
+    private static func playAttentionImpacts() {
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred(intensity: attentionIntensity)
         Task { @MainActor in
             do {
@@ -561,6 +636,122 @@ public struct FernletFeedback {
         AudioServicesPlaySystemSoundWithCompletion(created) { @Sendable in
             AudioServicesDisposeSystemSoundID(created)
         }
+    }
+}
+
+// MARK: - Core Haptics
+
+/// The one `CHHapticEngine` in Fernlet, behind ``FernletHaptic/attention`` (report C4).
+///
+/// - *Lazy.* Nothing is made until the first "time's up" reaches the renderer, so someone who never
+///   runs a timer never starts an engine — and never in an app extension
+///   (``FernletAttentionRenderer/choose(supportsHaptics:inAppExtension:)``).
+/// - *Restarts itself.* The system stops the engine when the app goes to the background, after an
+///   idle spell (auto-shutdown is on, so an engine between rests costs no power), on an interruption
+///   or a system error, and resets it when the haptic server restarts. Both handlers mark it stopped,
+///   and the next play starts it again — not the handler itself: a stop arrives while backgrounding,
+///   where a start would fail, or at an idle timeout, where it would undo the power auto-shutdown saved.
+/// - *Never loses a cue.* A failed engine, start, pattern or player is logged and answered with
+///   ``FernletFeedback``'s two-impact fallback.
+/// - *Haptics only.* `playsHapticsOnly` keeps it off the audio session (the file header's rule 3).
+///
+/// **Concurrency:** main-actor like the rest of the player. The engine calls its handlers on a queue
+/// of its own; each hops back to the main actor before touching anything here.
+final class FernletAttentionEngine {
+    /// The process's one engine holder.
+    static let shared = FernletAttentionEngine()
+
+    /// The unified-log sink for an engine that won't make, start or play: never fatal, never silent.
+    private static let logger = Logger(subsystem: "com.fernlet", category: "feedback")
+
+    /// The engine, once made.
+    private var engine: CHHapticEngine?
+    /// Whether the engine is known to be running: false until started, and again once it stops or resets.
+    private var isRunning = false
+    /// This process can never use Core Haptics (no haptic hardware, or an app extension). Both facts
+    /// hold for the process's life, so they are asked once.
+    private var isUnavailable = false
+
+    /// Plays `taps` now. Returns false when the caller must fall back: this process has no engine, or
+    /// it failed to start or to play.
+    func play(_ taps: [FernletHapticTap]) -> Bool {
+        guard let engine = startedEngine() else { return false }
+        do {
+            let player = try engine.makePlayer(with: Self.pattern(taps))
+            try player.start(atTime: CHHapticTimeImmediate)
+            return true
+        } catch {
+            Self.logger.error("feedback.attention.playFailed: \(error.localizedDescription, privacy: .public)")
+            isRunning = false
+            return false
+        }
+    }
+
+    /// The engine, made on first use and started when it isn't running; nil when this process has
+    /// none, or it would not start.
+    private func startedEngine() -> CHHapticEngine? {
+        guard let engine = engine ?? makeEngine() else { return nil }
+        guard !isRunning else { return engine }
+        do {
+            try engine.start()
+            isRunning = true
+            return engine
+        } catch {
+            Self.logger.error("feedback.attention.startFailed: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
+    /// Makes the engine where Core Haptics plays, with both handlers set; nil anywhere else, or when
+    /// the system refuses one (the next "time's up" asks again).
+    private func makeEngine() -> CHHapticEngine? {
+        guard !isUnavailable else { return nil }
+        let renderer = FernletAttentionRenderer.choose(
+            supportsHaptics: CHHapticEngine.capabilitiesForHardware().supportsHaptics,
+            inAppExtension: Bundle.main.bundleURL.pathExtension == "appex"
+        )
+        guard renderer == .coreHaptics else {
+            isUnavailable = true
+            return nil
+        }
+        do {
+            let made = try CHHapticEngine()
+            made.playsHapticsOnly = true
+            made.isAutoShutdownEnabled = true
+            made.stoppedHandler = { @Sendable [weak self] reason in
+                let code = reason.rawValue
+                Task { @MainActor in self?.markStopped("stopped", reason: code) }
+            }
+            made.resetHandler = { @Sendable [weak self] in
+                Task { @MainActor in self?.markStopped("reset", reason: 0) }
+            }
+            engine = made
+            return made
+        } catch {
+            Self.logger.error("feedback.attention.makeFailed: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
+    /// The engine stopped or was reset: the next play starts it again.
+    private func markStopped(_ how: String, reason: Int) {
+        isRunning = false
+        Self.logger.info("feedback.attention.\(how, privacy: .public) reason=\(reason, privacy: .public)")
+    }
+
+    /// `taps` as a pattern of transient events — never a continuous one.
+    private static func pattern(_ taps: [FernletHapticTap]) throws -> CHHapticPattern {
+        let events = taps.map { tap in
+            CHHapticEvent(
+                eventType: .hapticTransient,
+                parameters: [
+                    CHHapticEventParameter(parameterID: .hapticIntensity, value: tap.intensity),
+                    CHHapticEventParameter(parameterID: .hapticSharpness, value: tap.sharpness),
+                ],
+                relativeTime: tap.time
+            )
+        }
+        return try CHHapticPattern(events: events, parameters: [])
     }
 }
 

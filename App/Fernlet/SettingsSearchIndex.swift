@@ -324,6 +324,12 @@ nonisolated enum SettingsSearchIndex {
             route: .soundsHaptics
         ),
         SettingsSearchEntry(
+            title: "Cooking timer sound",
+            keywords: ["cooking timer sound", "cooking", "cook", "kitchen timer", "timer sound", "chime", "sound"],
+            breadcrumb: "Sounds & haptics › Cooking",
+            route: .soundsHaptics
+        ),
+        SettingsSearchEntry(
             title: "Breathing haptics",
             keywords: ["breathing haptics", "breathing", "pacer", "vibration", "haptics", "taps"],
             breadcrumb: "Sounds & haptics › Breathing",

@@ -921,11 +921,13 @@ private struct GuidedRestAdjustRow: View {
         }
     }
 
-    /// Moves the rest's end and says what happened.
+    /// Moves the rest's end, says what happened, and — under the thumb — ticks, or bumps at a limit
+    /// (B7, `GuidedTouchCue`).
     private func adjust(by seconds: Int) {
         let moved = store.guidedAdjustRest(by: seconds)
         let spoken = GuidedRunAnnouncement.restAdjusted(adding: seconds > 0, moved: moved)
         FernletAnnouncer.system.announce(.status, spoken)
+        GuidedTouchCue.play(GuidedTouchCue.restAdjust(moved: moved))
     }
 }
 
