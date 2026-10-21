@@ -68,7 +68,8 @@ struct GuidedFuelQuestion: View {
 
     private func chip(_ value: Bool) -> some View {
         Button {
-            answer = answer == value ? nil : value
+            // B6: a tap always changes the answer (a second tap clears it), so every tap ticks.
+            FernletFeedback.system.select(answer == value ? nil : value, in: &answer)
         } label: {
             if value {
                 Text("Yes", comment: "Guided workout ready screen: the answer that food was eaten in the last few hours.")

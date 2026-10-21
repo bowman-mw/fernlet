@@ -313,7 +313,7 @@ struct WorkoutSetupSheet: View {
                 VStack(alignment: .leading, spacing: 8) {
                     FlowLayout(spacing: 8) {
                         ForEach(ExperienceLevel.allCases) { level in
-                            Button(level.trainingAgeLabel) { profile.experience = level }
+                            Button(level.trainingAgeLabel) { FernletFeedback.system.select(level, in: &profile.experience) }
                                 .buttonStyle(ChipButtonStyle(selected: profile.experience == level))
                         }
                     }
@@ -342,7 +342,7 @@ struct WorkoutSetupSheet: View {
             VStack(alignment: .leading, spacing: 8) {
                 FlowLayout(spacing: 8) {
                     ForEach(WorkoutStrengthFocus.allCases) { focus in
-                        Button(focus.displayName) { strengthFocus = focus }
+                        Button(focus.displayName) { FernletFeedback.system.select(focus, in: &strengthFocus) }
                             .buttonStyle(ChipButtonStyle(selected: strengthFocus == focus))
                     }
                 }

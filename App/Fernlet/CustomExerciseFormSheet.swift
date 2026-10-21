@@ -136,7 +136,18 @@ private struct CustomExerciseIssueLine: View {
     }
 }
 
-/// A wrapping row of chips, one per option, each a button named by its visible word.
+/// A chip's edit to the draft, made on a copy and chosen in through
+/// ``FernletFeedback/select(_:in:preferences:)``: a chip that really changes the draft ticks (report
+/// B6), and a tap that changes nothing plays nothing. For the chips whose edit is more than one
+/// assignment; a single choice calls `select` itself.
+private func choose(in draft: Binding<CustomExerciseDraft>, _ edit: (inout CustomExerciseDraft) -> Void) {
+    var next = draft.wrappedValue
+    edit(&next)
+    FernletFeedback.system.select(next, in: &draft.wrappedValue)
+}
+
+/// A wrapping row of chips, one per option, each a button named by its visible word. The tick is the
+/// caller's (`toggle`), never the style's: a style draws both the chip chosen and the one let go.
 private struct CustomExerciseChips<Option: Hashable>: View {
     let options: [Option]
     let name: (Option) -> String
@@ -179,7 +190,7 @@ private struct CustomExerciseMuscleFields: View {
                     isSelected: { draft.secondaryMuscles.contains($0) },
                     identifier: "workout.customExercise.secondary",
                     toggle: { muscle in
-                        if draft.secondaryMuscles.remove(muscle) == nil { draft.secondaryMuscles.insert(muscle) }
+                        choose(in: $draft) { if $0.secondaryMuscles.remove(muscle) == nil { $0.secondaryMuscles.insert(muscle) } }
                     }
                 )
             }
@@ -187,9 +198,11 @@ private struct CustomExerciseMuscleFields: View {
     }
 
     private func togglePrimary(_ muscle: MuscleGroup) {
-        if draft.primaryMuscles.remove(muscle) == nil {
-            draft.primaryMuscles.insert(muscle)
-            draft.secondaryMuscles.remove(muscle)
+        choose(in: $draft) { next in
+            if next.primaryMuscles.remove(muscle) == nil {
+                next.primaryMuscles.insert(muscle)
+                next.secondaryMuscles.remove(muscle)
+            }
         }
     }
 }
@@ -205,20 +218,20 @@ private struct CustomExerciseMovementFields: View {
                     options: MovementPattern.allCases, name: \.displayName,
                     isSelected: { draft.movementPattern == $0 },
                     identifier: "workout.customExercise.pattern",
-                    toggle: { draft.movementPattern = $0 }
+                    toggle: { FernletFeedback.system.select($0, in: &draft.movementPattern) }
                 )
             }
             if draft.patternHasPlane {
                 SheetField("Direction") {
                     VStack(alignment: .leading, spacing: 6) {
                         FlowLayout(spacing: 8) {
-                            Button { draft.plane = nil } label: {
+                            Button { FernletFeedback.system.select(nil, in: &draft.plane) } label: {
                                 Text("Either", comment: "Custom exercise form: the push or pull has no set direction")
                             }
                             .buttonStyle(ChipButtonStyle(selected: draft.plane == nil))
                             .accessibilityIdentifier("workout.customExercise.plane")
                             ForEach(MovementPlane.allCases, id: \.self) { plane in
-                                Button(plane.displayName) { draft.plane = plane }
+                                Button(plane.displayName) { FernletFeedback.system.select(plane, in: &draft.plane) }
                                     .buttonStyle(ChipButtonStyle(selected: draft.plane == plane))
                                     .accessibilityIdentifier("workout.customExercise.plane")
                             }
@@ -234,7 +247,7 @@ private struct CustomExerciseMovementFields: View {
                         options: ExerciseModality.allCases, name: \.displayName,
                         isSelected: { draft.modality == $0 },
                         identifier: "workout.customExercise.modality",
-                        toggle: { draft.modality = $0 }
+                        toggle: { FernletFeedback.system.select($0, in: &draft.modality) }
                     )
                     caption(Text("Only strength exercises fill a session's lifting, and a mobility stretch can join the cool-down. Power, balance and cardio moves are there to log.",
                                  comment: "Custom exercise form: how the kind of training decides where the exercise is planned"))
@@ -263,8 +276,10 @@ private struct CustomExerciseEquipmentFields: View {
                     isSelected: { draft.equipment == $0 },
                     identifier: "workout.customExercise.equipment",
                     toggle: { tool in
-                        draft.equipment = tool
-                        draft.alternativeEquipment.remove(tool)
+                        choose(in: $draft) { next in
+                            next.equipment = tool
+                            next.alternativeEquipment.remove(tool)
+                        }
                     }
                 )
             }
@@ -274,7 +289,7 @@ private struct CustomExerciseEquipmentFields: View {
                     isSelected: { draft.alternativeEquipment.contains($0) },
                     identifier: "workout.customExercise.alternative",
                     toggle: { tool in
-                        if draft.alternativeEquipment.remove(tool) == nil { draft.alternativeEquipment.insert(tool) }
+                        choose(in: $draft) { if $0.alternativeEquipment.remove(tool) == nil { $0.alternativeEquipment.insert(tool) } }
                     }
                 )
             }
@@ -285,7 +300,7 @@ private struct CustomExerciseEquipmentFields: View {
                         isSelected: { draft.requiredGear.contains($0) },
                         identifier: "workout.customExercise.gear",
                         toggle: { gear in
-                            if draft.requiredGear.remove(gear) == nil { draft.requiredGear.insert(gear) }
+                            choose(in: $draft) { if $0.requiredGear.remove(gear) == nil { $0.requiredGear.insert(gear) } }
                         }
                     )
                     Text("Fernlet only plans it where you have one of its tools and every piece of gear picked here.",
@@ -310,7 +325,7 @@ private struct CustomExerciseSetFields: View {
                     options: CustomExerciseDraft.measures, name: \.displayName,
                     isSelected: { draft.measure == $0 },
                     identifier: "workout.customExercise.measure",
-                    toggle: { draft.measure = $0 }
+                    toggle: { FernletFeedback.system.select($0, in: &draft.measure) }
                 )
             }
             Toggle(isOn: $draft.unilateral) {
@@ -324,7 +339,7 @@ private struct CustomExerciseSetFields: View {
                     options: ExerciseDifficulty.allCases, name: \.displayName,
                     isSelected: { draft.difficulty == $0 },
                     identifier: "workout.customExercise.difficulty",
-                    toggle: { draft.difficulty = $0 }
+                    toggle: { FernletFeedback.system.select($0, in: &draft.difficulty) }
                 )
             }
         }

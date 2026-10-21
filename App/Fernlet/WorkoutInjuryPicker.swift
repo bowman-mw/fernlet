@@ -125,12 +125,12 @@ struct WorkoutInjurySection: View {
         Binding(get: { draft.areas[area] }, set: { draft.areas[area] = $0 })
     }
 
+    /// Flips one muscle's chip through ``FernletFeedback/select(_:in:preferences:)`` (report B6): a
+    /// flip always changes the set, so every tap ticks.
     private func toggle(_ muscle: MuscleGroup) {
-        if draft.restedMuscles.contains(muscle) {
-            draft.restedMuscles.remove(muscle)
-        } else {
-            draft.restedMuscles.insert(muscle)
-        }
+        var rested = draft.restedMuscles
+        if rested.remove(muscle) == nil { rested.insert(muscle) }
+        FernletFeedback.system.select(rested, in: &draft.restedMuscles)
     }
 }
 

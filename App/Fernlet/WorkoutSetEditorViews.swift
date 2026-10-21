@@ -212,7 +212,7 @@ struct SetEffortChips: View {
                 .fernletWrappingText()
             FlowLayout(spacing: 8) {
                 ForEach(ExerciseEffort.allCases, id: \.self) { effort in
-                    Button { selected = selected == effort ? nil : effort } label: {
+                    Button { FernletFeedback.system.select(selected == effort ? nil : effort, in: &selected) } label: {
                         GuidedEffortPicker.label(effort)
                     }
                     .buttonStyle(ChipButtonStyle(selected: selected == effort))
@@ -237,7 +237,7 @@ struct SetOverrideReasonChips: View {
                 .fernletWrappingText()
             FlowLayout(spacing: 8) {
                 ForEach(OverrideReason.allCases, id: \.self) { reason in
-                    Button { selected = selected == reason ? nil : reason } label: {
+                    Button { FernletFeedback.system.select(selected == reason ? nil : reason, in: &selected) } label: {
                         GuidedOverrideReasonPicker.label(reason)
                     }
                     .buttonStyle(ChipButtonStyle(selected: selected == reason))

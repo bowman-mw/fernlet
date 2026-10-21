@@ -26,7 +26,7 @@ struct WorkoutSessionSection: View {
             VStack(alignment: .leading, spacing: 8) {
                 FlowLayout(spacing: 8) {
                     ForEach(WorkoutSessionLength.allCases) { length in
-                        Button(length.displayName) { options.length = length }
+                        Button(length.displayName) { FernletFeedback.system.select(length, in: &options.length) }
                             .buttonStyle(ChipButtonStyle(selected: options.length == length))
                             .accessibilityIdentifier("workout.setup.length.\(length.rawValue)")
                     }
@@ -45,7 +45,7 @@ struct WorkoutSessionSection: View {
             VStack(alignment: .leading, spacing: 8) {
                 FlowLayout(spacing: 8) {
                     ForEach(WorkoutWarmUpMode.allCases) { mode in
-                        Button(mode.displayName) { options.warmUp = mode }
+                        Button(mode.displayName) { FernletFeedback.system.select(mode, in: &options.warmUp) }
                             .buttonStyle(ChipButtonStyle(selected: options.warmUp == mode))
                             .accessibilityIdentifier("workout.setup.warmUp.\(mode.rawValue)")
                     }
