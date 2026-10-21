@@ -45,6 +45,8 @@ The remaining services are independent of one another. ``NotificationService`` i
 
 The module owns a `Localizable.xcstrings` (added by the 2026-08-22 accessibility review, T2-19). It exists for exactly one reason: ``NotificationService`` is the only place in `AppServices` that produces a sentence a **person** reads, and a notification body is read in the hardest place to catch a mistake — on a Lock Screen, or spoken by Announce Notifications and a Braille display, with the app not even running. Its nine strings resolve through `String(localized:…, bundle: .module)`; without the `bundle:` the lookup goes to `Bundle.main` (the app's), misses this module's catalog, and returns English forever with a clean build and no failing test. `LocalizationBoundaryTests` enforces both halves — the `bundle:` rule and the catalog file's continued existence.
 
+Two of those bodies describe the user — the rest-ended and cardio segment-ended cues' "when you're ready" — and Spanish agrees that word with them (*lista*). They resolve through FernletDomainModel's `AddressedCopy`, with a `LocalizedStringResource` built against `bundle: .module`, for the term of address `replaceWorkoutCues(_:soundFileName:addressing:now:)` is handed: the app passes the effective body profile's `BiologicalSex.termOfAddress` at each schedule (gendered-address lane, 2026-10-21).
+
 Nothing else in this module localizes, and that is correct rather than an omission: `WeatherComfort`/`WeatherAmbient` expose *typed* values for the app target to render, `SharedRecipeImportQueue` moves URLs between processes, and `NutritionLabelScanner`'s vocabulary is matching input — tokens, all of it. Add a key here only when a person reads the string.
 
 ### Notifications

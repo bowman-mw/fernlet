@@ -138,6 +138,9 @@ enum CoachPlanImportFailure: Error, Equatable {
     case tooLarge(bytes: Int)
     case noJSONFound
     case bounded(CoachPlanDecodeError)
+    /// The plan's JSON didn't decode; the payload is what went wrong as one whole, already-localized
+    /// clause ("\"days\" is missing from the plan."), which the paste sheet shows as its secondary
+    /// line and ``message`` puts after "That plan couldn't be read:".
     case malformed(String)
 
     /// User-facing copy. Every case says what to do next, because "invalid" alone leaves someone
@@ -145,15 +148,22 @@ enum CoachPlanImportFailure: Error, Equatable {
     var message: String {
         switch self {
         case .empty:
-            "There's nothing to import. Copy the plan your assistant replied with, then paste it here."
+            String(localized: "coachPlan.paste.error.empty",
+                   defaultValue: "There's nothing to import. Copy the plan your assistant replied with, then paste it here.",
+                   comment: "Coach plan paste sheet: the person tapped import with nothing pasted")
         case .tooLarge(let bytes):
-            "That's \(bytes / 1024) KB of text — larger than a workout plan should be. Paste just the JSON block from the reply."
+            String(localized: "coachPlan.paste.error.tooLarge",
+                   defaultValue: "That's \(bytes / 1024) KB of text — larger than a workout plan should be. Paste just the JSON block from the reply.",
+                   comment: "Coach plan paste sheet: the pasted text is too big. Argument: its size in kilobytes, always over 500.")
         case .noJSONFound:
-            "Fernlet couldn't find a plan in what you pasted. Copy the whole JSON block from the reply, including its braces."
+            String(localized: "coachPlan.paste.error.noJSON",
+                   defaultValue: "Fernlet couldn't find a plan in what you pasted. Copy the whole JSON block from the reply, including its braces.",
+                   comment: "Coach plan paste sheet: the pasted text holds no JSON plan. 'JSON block' is the code block an AI assistant replies with.")
         case .bounded(let error):
             error.message
         case .malformed(let detail):
-            "That plan couldn't be read: \(detail)"
+            String(localized: "coachPlan.paste.error.unreadable", defaultValue: "That plan couldn't be read: \(detail)",
+                   comment: "Coach plan paste sheet: the plan failed to decode. Argument: what went wrong, a whole clause, e.g. '\"days\" is missing from the plan.'")
         }
     }
 }
@@ -262,23 +272,60 @@ enum CoachPlanImporter {
 
     /// Turns a `DecodingError` into something a person can act on — which key, and what was wrong
     /// with it. The default `localizedDescription` names neither.
+    ///
+    /// Returns one whole clause per shape, the paste sheet's secondary line: "the plan" (no key path)
+    /// is its own clause rather than a fragment spliced into the others. A key path is the plan's JSON
+    /// keys joined with " → ", which are wire tokens and stay as written.
     private static func describe(_ error: DecodingError) -> String {
-        func path(_ context: DecodingError.Context) -> String {
+        func path(_ context: DecodingError.Context) -> String? {
             let keys = context.codingPath.map(\.stringValue).filter { !$0.isEmpty }
-            return keys.isEmpty ? "the plan" : keys.joined(separator: " → ")
+            return keys.isEmpty ? nil : keys.joined(separator: " → ")
         }
         switch error {
         case .keyNotFound(let key, let context):
-            return "\"\(key.stringValue)\" is missing from \(path(context))."
+            return missingKey(key.stringValue, from: path(context))
         case .typeMismatch(_, let context), .valueNotFound(_, let context):
-            return "\(path(context)) has the wrong kind of value."
+            return wrongKind(at: path(context))
         case .dataCorrupted(let context):
-            return context.codingPath.isEmpty
-                ? "it isn't valid JSON."
-                : "\(path(context)) couldn't be read."
+            guard !context.codingPath.isEmpty else {
+                return String(localized: "coachPlan.paste.detail.notJSON", defaultValue: "it isn't valid JSON.",
+                              comment: "Coach plan paste sheet, what went wrong (shown alone, and after 'That plan couldn't be read:'): the pasted plan is not valid JSON")
+            }
+            return unreadable(at: path(context))
         @unknown default:
-            return "it couldn't be read."
+            return String(localized: "coachPlan.paste.detail.unknown", defaultValue: "it couldn't be read.",
+                          comment: "Coach plan paste sheet, what went wrong (shown alone, and after 'That plan couldn't be read:'), for a reason Fernlet can't name")
         }
+    }
+
+    /// "\"title\" is missing from days → 2." — `path` nil means the plan itself.
+    private static func missingKey(_ key: String, from path: String?) -> String {
+        guard let path else {
+            return String(localized: "coachPlan.paste.detail.missingKeyInPlan", defaultValue: "\"\(key)\" is missing from the plan.",
+                          comment: "Coach plan paste sheet, what went wrong. Argument: the JSON key that is missing (not translated).")
+        }
+        return String(localized: "coachPlan.paste.detail.missingKey", defaultValue: "\"\(key)\" is missing from \(path).",
+                      comment: "Coach plan paste sheet, what went wrong. Arguments: the JSON key that is missing, then where it should be, as JSON keys joined by arrows, e.g. 'days → 2' (neither is translated).")
+    }
+
+    /// "days → 2 has the wrong kind of value."
+    private static func wrongKind(at path: String?) -> String {
+        guard let path else {
+            return String(localized: "coachPlan.paste.detail.wrongKindInPlan", defaultValue: "the plan has the wrong kind of value.",
+                          comment: "Coach plan paste sheet, what went wrong (shown alone, and after 'That plan couldn't be read:'): a value has the wrong type")
+        }
+        return String(localized: "coachPlan.paste.detail.wrongKind", defaultValue: "\(path) has the wrong kind of value.",
+                      comment: "Coach plan paste sheet, what went wrong. Argument: where the bad value is, as JSON keys joined by arrows, e.g. 'days → 2 → sets' (not translated).")
+    }
+
+    /// "days → 2 couldn't be read."
+    private static func unreadable(at path: String?) -> String {
+        guard let path else {
+            return String(localized: "coachPlan.paste.detail.unreadablePlan", defaultValue: "the plan couldn't be read.",
+                          comment: "Coach plan paste sheet, what went wrong (shown alone, and after 'That plan couldn't be read:'): part of the plan could not be read")
+        }
+        return String(localized: "coachPlan.paste.detail.unreadableAt", defaultValue: "\(path) couldn't be read.",
+                      comment: "Coach plan paste sheet, what went wrong. Argument: where the unreadable value is, as JSON keys joined by arrows (not translated).")
     }
 }
 
@@ -320,8 +367,7 @@ extension FernletStore {
         let headroom = max(0, WorkoutExerciseCatalog.maxCustomExercises - settings.customExercises.count)
         if newExercises.count > headroom {
             issues.append(.init(kind: .blocking, subject: "New exercises",
-                                detail: "This plan adds \(newExercises.count) exercises but your list can hold "
-                                + "only \(headroom) more. Remove some custom exercises, then import again."))
+                                detail: Self.customExerciseHeadroomDetail(adding: newExercises.count, headroom: headroom)))
         }
 
         let (resolvedEdits, editIssues) = resolveEdits(plan.edits)
@@ -370,15 +416,16 @@ extension FernletStore {
 
             guard let found = locations[edit.targetID] else {
                 issues.append(.init(kind: .unresolvableEdit, subject: label,
-                                    detail: "A change points at a planned workout that isn't there any more — "
-                                    + "it may have been done, edited, or deleted since you copied your summary. "
-                                    + "Copy a fresh summary and ask again."))
+                                    detail: String(localized: "coachPlan.review.edit.targetGone",
+                                                   defaultValue: "A change points at a planned workout that isn't there any more — it may have been done, edited, or deleted since you copied your summary. Copy a fresh summary and ask again.",
+                                                   comment: "Coach plan review, a change Fernlet can't apply: the planned workout it targets no longer exists")))
                 continue
             }
             guard found.dayKey >= today else {
                 issues.append(.init(kind: .unresolvableEdit, subject: found.workout.name,
-                                    detail: "\"\(found.workout.displayedName)\" was planned for \(found.dayKey), which has "
-                                    + "already passed. Fernlet only changes workouts still ahead of you."))
+                                    detail: String(localized: "coachPlan.review.edit.targetPast",
+                                                   defaultValue: "\"\(found.workout.displayedName)\" was planned for \(found.dayKey), which has already passed. Fernlet only changes workouts still ahead of you.",
+                                                   comment: "Coach plan review, a change Fernlet can't apply. Arguments: the planned workout's name, then its date as year-month-day.")))
                 continue
             }
 
@@ -391,11 +438,27 @@ extension FernletStore {
                 resolved.append(resolvedEdit)
             } else {
                 issues.append(.init(kind: .clamped, subject: found.workout.name,
-                                    detail: "\"\(found.workout.displayedName)\" is already exactly what the change asks for; "
-                                    + "nothing to do."))
+                                    detail: String(localized: "coachPlan.review.edit.noChange",
+                                                   defaultValue: "\"\(found.workout.displayedName)\" is already exactly what the change asks for; nothing to do.",
+                                                   comment: "Coach plan review, a change that would alter nothing. Argument: the planned workout's name.")))
             }
         }
         return (resolved.sorted { $0.dayKey < $1.dayKey }, issues)
+    }
+
+    /// The blocker for a plan whose new exercises overflow the custom-exercise list. The exercise
+    /// count is a plural-ruled count phrase (``exerciseCount(_:)``), so "1 exercises" can't be
+    /// spliced; `headroom` is a bare number after "only", which needs no plural form.
+    static func customExerciseHeadroomDetail(adding count: Int, headroom: Int) -> String {
+        String(localized: "coachPlan.review.customExercisesFull",
+               defaultValue: "This plan adds \(Self.exerciseCount(count)) but your list can hold only \(headroom) more. Remove some custom exercises, then import again.",
+               comment: "Coach plan review blocker. Arguments: a count of exercises ('5 exercises'), then how many more the person's custom exercise list can hold (0 or more).")
+    }
+
+    /// "5 exercises" — a plural-ruled count phrase placed inside coach-plan sentences.
+    static func exerciseCount(_ count: Int) -> String {
+        String(localized: "coachPlan.count.exercises", defaultValue: "\(count) exercises",
+               comment: "A number of exercises, e.g. '5 exercises', placed inside other coach plan sentences. Needs a plural variation.")
     }
 
     /// The clamped prescription line one coach-proposed exercise becomes. The single renderer
@@ -446,24 +509,59 @@ extension FernletStore {
     /// movement, avoided muscles, a body area kept out of training (severe), or the heavy end of an
     /// area being trained around (mild). The same limits ``WorkoutSafetyFilter`` applies to the
     /// app's own plans — the picker, the note read by whole words, and the older avoided sets.
+    ///
+    /// Each reason is one whole localized clause (2026-10-20): the avoided movement is a clause per
+    /// pattern rather than its `rawValue` token spliced into English, and the name lists are drawn
+    /// names joined with ", " (the house list separator, right in en/es/fr/de).
     static func injuryReasons(for target: ExerciseTarget, limits: InjuryLimits) -> [String] {
         var reasons: [String] = []
         if limits.avoidedMovements.contains(target.movementPattern) {
-            reasons.append("you avoid \(target.movementPattern.rawValue) movements")
+            reasons.append(Self.avoidedMovementReason(target.movementPattern))
         }
         let conflicting = target.primaryMuscles.union(target.secondaryMuscles).intersection(limits.avoidedMuscles)
         if !conflicting.isEmpty {
-            reasons.append("it works \(conflicting.map(\.displayName).sorted().joined(separator: ", ")), which you avoid")
+            let muscles = conflicting.map(\.displayName).sorted().joined(separator: ", ")
+            reasons.append(String(localized: "coachPlan.safety.avoidedMuscles", defaultValue: "it works \(muscles), which you avoid",
+                                  comment: "Coach plan review, why an exercise is flagged, shown under its name. Argument: the muscles it works that the person avoids, e.g. 'Chest, Triceps'."))
         }
         let severe = limits.severeAreas.filter { $0.isLoaded(by: target, primaryOnly: false) }
         if !severe.isEmpty {
-            reasons.append("it loads your \(severe.map(\.displayName).sorted().joined(separator: ", ")), which you're resting")
+            let areas = severe.map(\.displayName).sorted().joined(separator: ", ")
+            reasons.append(String(localized: "coachPlan.safety.restingArea", defaultValue: "it loads your \(areas), which you're resting",
+                                  comment: "Coach plan review, why an exercise is flagged. Argument: the body areas the person is keeping out of training, e.g. 'Knee'."))
         }
         let mild = limits.mildAreas.filter { $0.isLoaded(by: target, primaryOnly: true) }
         if InjuryLimits.isHeavyLoading(target), !mild.isEmpty {
-            reasons.append("it loads your \(mild.map(\.displayName).sorted().joined(separator: ", ")) heavily, which you're easing")
+            let areas = mild.map(\.displayName).sorted().joined(separator: ", ")
+            reasons.append(String(localized: "coachPlan.safety.easingArea", defaultValue: "it loads your \(areas) heavily, which you're easing",
+                                  comment: "Coach plan review, why a heavy exercise is flagged. Argument: the body areas the person is training around, e.g. 'Lower back'."))
         }
         return reasons
+    }
+
+    /// "you avoid squat movements": one whole clause per movement pattern, so no `rawValue` token is
+    /// shown and a translator never inflects an English word.
+    static func avoidedMovementReason(_ pattern: MovementPattern) -> String {
+        switch pattern {
+        case .push: String(localized: "coachPlan.safety.avoidedMovement.push", defaultValue: "you avoid push movements", comment: "Coach plan review, why an exercise is flagged: the person avoids pushing movements")
+        case .pull: String(localized: "coachPlan.safety.avoidedMovement.pull", defaultValue: "you avoid pull movements", comment: "Coach plan review, why an exercise is flagged: the person avoids pulling movements")
+        case .hinge: String(localized: "coachPlan.safety.avoidedMovement.hinge", defaultValue: "you avoid hinge movements", comment: "Coach plan review, why an exercise is flagged: the person avoids hip-hinge movements (deadlifts, swings)")
+        case .squat: String(localized: "coachPlan.safety.avoidedMovement.squat", defaultValue: "you avoid squat movements", comment: "Coach plan review, why an exercise is flagged: the person avoids squatting movements")
+        case .lunge: String(localized: "coachPlan.safety.avoidedMovement.lunge", defaultValue: "you avoid lunge movements", comment: "Coach plan review, why an exercise is flagged: the person avoids lunges")
+        case .carry: String(localized: "coachPlan.safety.avoidedMovement.carry", defaultValue: "you avoid carry movements", comment: "Coach plan review, why an exercise is flagged: the person avoids loaded carries")
+        case .twist: String(localized: "coachPlan.safety.avoidedMovement.twist", defaultValue: "you avoid twist movements", comment: "Coach plan review, why an exercise is flagged: the person avoids twisting movements")
+        case .isolation: String(localized: "coachPlan.safety.avoidedMovement.isolation", defaultValue: "you avoid isolation movements", comment: "Coach plan review, why an exercise is flagged: the person avoids single-joint isolation movements")
+        case .locomotion: String(localized: "coachPlan.safety.avoidedMovement.locomotion", defaultValue: "you avoid locomotion movements", comment: "Coach plan review, why an exercise is flagged: the person avoids locomotion (running, jumping, crawling)")
+        }
+    }
+
+    /// "Home has no Barbell or Dumbbell": the location's drawn name and the missing equipment's drawn
+    /// names as a localized "or" list. The names are NOT lowercased (they were, in English only):
+    /// lowercasing a localized word breaks German nouns, so English now keeps the names' own case.
+    static func missingEquipmentReason(_ missing: [String], at location: WorkoutLocation) -> String {
+        let list = missing.formatted(.list(type: .or))
+        return String(localized: "coachPlan.safety.missingEquipment", defaultValue: "\(location.displayedName) has no \(list)",
+                      comment: "Coach plan review, why an exercise is flagged. Arguments: where the person trains (e.g. 'Home'), then the equipment it lacks, e.g. 'Barbell or Weight bench'.")
     }
 
     /// The safety pass over an edit's proposed exercises.
@@ -480,7 +578,7 @@ extension FernletStore {
                 var reasons = injuryReasons(for: target, limits: limits)
                 let missing = WorkoutSafetyFilter.missingEquipment(for: target, at: location)
                 if !missing.isEmpty {
-                    reasons.append("\(location.name) has no \(missing.joined(separator: " or ").lowercased())")
+                    reasons.append(Self.missingEquipmentReason(missing, at: location))
                 }
                 guard !reasons.isEmpty else { continue }
                 flags.append(CoachPlanSafetyFlag(
@@ -513,7 +611,7 @@ extension FernletStore {
                     var reasons = injuryReasons(for: target, limits: limits)
                     let missing = WorkoutSafetyFilter.missingEquipment(for: target, at: location)
                     if !missing.isEmpty {
-                        reasons.append("\(location.name) has no \(missing.joined(separator: " or ").lowercased())")
+                        reasons.append(Self.missingEquipmentReason(missing, at: location))
                     }
                     guard !reasons.isEmpty else { continue }
 
@@ -804,12 +902,16 @@ extension FernletStore {
     ///
     /// Replaces any previous import stamp rather than stacking them — a workout adjusted three times
     /// should read as "changed by X", not carry three generations of provenance.
-    private static func editedNote(_ existing: String, plan: CoachPlan) -> String {
-        let author = plan.coachDisplayName.isEmpty ? "an assistant" : plan.coachDisplayName
-        let stamp = "Changed by \(author) from \"\(plan.title)\"."
+    ///
+    /// The stamp is frozen English on every device (``CoachPlanNoteStamp``; screens draw it localized),
+    /// and the previous one is recognised by its exact shape. The strip used to drop every line
+    /// starting "Day ", so a user's own "Day off, knees sore" vanished from the row on the first edit.
+    static func editedNote(_ existing: String, plan: CoachPlan) -> String {
+        let stamp = CoachPlanNoteStamp.changed(author: CoachPlanNoteStamp.author(named: plan.coachDisplayName),
+                                               planTitle: plan.title)
         let kept = existing
             .components(separatedBy: .newlines)
-            .filter { !$0.hasPrefix("Changed by ") && !$0.hasPrefix("Day ") }
+            .filter { !CoachPlanNoteStamp.isStamp($0) }
             .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         return (kept + [stamp]).joined(separator: "\n")
     }
@@ -849,8 +951,8 @@ extension FernletStore {
         // The provenance line is part of the row's text, not just the `.coach` tag, so it survives
         // into the trainer export and into anything that reads the note — an imported plan should
         // never be mistaken later for something Fernlet programmed.
-        let author = plan.coachDisplayName.isEmpty ? "an assistant" : plan.coachDisplayName
-        noteParts.append("Day \(day.dayIndex) of \"\(plan.title)\", imported from \(author).")
+        noteParts.append(CoachPlanNoteStamp.imported(dayIndex: day.dayIndex, planTitle: plan.title,
+                                                     author: CoachPlanNoteStamp.author(named: plan.coachDisplayName)))
 
         return PlannedWorkout(
             name: session.title.isEmpty ? day.title : session.title,

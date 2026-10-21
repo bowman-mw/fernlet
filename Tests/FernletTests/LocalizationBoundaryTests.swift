@@ -71,7 +71,9 @@
 //     bodies. A conformance whose `errorDescription` returns `Self.copy(for: self)`, or an
 //     associated value that arrived as an English literal from its thrower, is the same data-flow
 //     question — and `FernletLockError.invalidCredential` is a live example of the second, exempt
-//     by design because the pass-through IS its contract.
+//     by design because the pass-through IS its contract. Its throwers in `FernletLock` pass
+//     catalog sentences since the Spanish round (pinned in ``settingsLaneForkKeys``), which this
+//     rule could not have told you.
 //   * WHETHER A KEY IS ANY GOOD. A key can be present, bundled, harvested — and still be spliced
 //     into a sentence a translator cannot reorder, or carry an English plural rule. Reviews find
 //     those; this file cannot.
@@ -110,20 +112,31 @@
 // now owns a catalog and a `TARGETS` line in `Scripts/sync-string-catalogs.sh`, so what is left in
 // them is an ordinary `String(localized:bundle:.module)` sweep rather than a blocked one:
 //
-//   * `FernletScoring` (~24 strings) — the derived-signal and readiness phrasing. STILL HAS NO
-//     CATALOG. The hard part is not the count: several of these strings are ALSO logic tokens that
-//     six call sites compare with `==` (see part D below), so localizing them requires the
-//     token/display FORK, not a `String(localized:)` sweep. Part D is what stops a sweep from
-//     silently breaking those gates.
-//   * `HealthKitGateway` (14 strings) — `HealthCapability.title` (7) and `HealthCapability.summary`
-//     (7), the settings-row name and the sentence describing what each capability reads and writes.
-//     The module's four `HealthKitServiceError` sentences were localized by the sweep and are the
-//     worked example for the rest; these are straightforward forks with a catalog now waiting.
-//   * `PrivateHealthStore`-adjacent copy — `PeriodFlowLevel.title` (`rawValue.capitalized`),
-//     `CycleDayEntry.flowLabel`, and the Tier-2 memory CATEGORY rendered by `SettingsSheet`. These
-//     are sealed modules and deliberately have NO catalog: the fork belongs at the app-target
-//     caller, as `PeriodFlowLevel.displayName` in `CycleTrackerView.swift` now demonstrates for the
-//     two cycle sites. The memory category is the remaining one.
+//   * `FernletScoring` — HAS A CATALOG since the Spanish round's step 2 (2026-10-20): the
+//     companion's AI-fallback lines (`FernletVoice`), the AI-free workout suggestion's note and the
+//     starter goals (`WorkoutFallbackCopy`) are keys under `fernletVoice.*` / `workoutFallback.*`.
+//     The fallback workouts' NAMES are not: they are stored `Workout.name`s, frozen as
+//     `WorkoutFallbackName` (FernletDomainModel) and drawn through `Workout.displayedName`
+//     (``frozenFallbackWorkoutNames()``). `MealParser`'s "Meal" default name and its
+//     "Estimated locally…" note are stored meal text drawn verbatim by the food log, so they stay
+//     English until the food side gives them a draw-time mapping. The derived-signal and readiness
+//     phrasing once listed here lives in `LocalPersistence`'s `DerivedSignalFactory`, not in this
+//     module: several of those strings are ALSO logic tokens that six call sites compare with `==`
+//     (see part D below), so localizing them requires the token/display FORK, not a
+//     `String(localized:)` sweep. Part D is what stops a sweep from silently breaking those gates.
+//   * `HealthKitGateway` — CLOSED in the Spanish round (2026-10-20). `HealthCapability.title` and
+//     `.summary` (the 14 strings this entry listed) are catalog keys, and so is every status line of
+//     `HealthKitAuthorizationViewModel`, the readers that used to `.lowercased()` a title mid-sentence
+//     (they read `HealthCapability.inSentenceName` now). Left: `HKAuthorizationStatus.fernletLabel`,
+//     which nothing reads.
+//   * `PrivateHealthStore`-adjacent copy — the Tier-2 memory CATEGORY rendered by `SettingsSheet`.
+//     These are sealed modules and deliberately have NO catalog: the fork belongs at the app-target
+//     caller. Every drawn word of the sealed cycle vocabulary now has one in `CycleTrackerView.swift`
+//     — `PeriodFlowLevel`, `CervicalMucusQuality` and `OvulationTestResult`, then (Spanish round,
+//     2026-10-20) `PeriodSymptom.displayName` and `CyclePhase.displayName` / `inSentenceName` — and
+//     the sealed `title`s are left in place with no on-screen reader
+//     (`theCycleSurfacesNeverDrawTheSealedTitles`). Settings' Core memory categories draw through
+//     `MemoryCategoryName`; the Debug page's Tier-2 category is the remaining one.
 //
 // Part G's allowlist is now EMPTY, and that is the finished state. It held `MessageTransportProbe`'s
 // three sentences on the argument that their target owned no catalog; rule H2 gave the Messages
@@ -144,6 +157,8 @@ import Testing
 import CloudKitSync
 @testable import FernletDomainModel
 import FernletFoundation
+import FernletUI
+import FernletScoring
 import LocalPersistence
 import PrivateHealthStore
 import PrivateMemoryStore
@@ -168,6 +183,14 @@ import PrivateMemoryStore
 ///   ``everyMessagesExtensionLiteralIsCataloguedOrAnArguedToken()`` — the UIKit surface, which
 ///   ASSIGNS its copy rather than declaring it and so is invisible to F, and the one UIKit target,
 ///   held shut whole because an assignment rule reaches only a fifth of it (H).
+/// - ``inflectionMarkedKeysNeverReachABareString()`` — a key whose text carries `^[…](inflect:)`
+///   grammar-agreement markup is never read by `String(localized:)`, which keeps the markup, and
+///   ``addressedCopyInflectsForTheProfilesSex()`` — the profile's Sex, not the system setting,
+///   decides the user's grammatical gender (I).
+/// - ``userGenderedKeysAreReadOnlyThroughAnAddressedReader()`` — copy that describes the user is
+///   read only inside an addressed call that names a term, with every literal `.masculine` pinned
+///   (``everyMasculineDefaultIsPinnedWithItsReason()``) and every package-built resource on
+///   `bundle: .module` (``packageBuiltResourcesNameTheModuleBundle()``) (I2).
 ///
 /// Concurrency: the scans are pure functions over `String`s read off disk; the two tests that touch
 /// app-target types are `@MainActor` because the app target builds with
@@ -217,15 +240,20 @@ struct LocalizationBoundaryTests {
     /// Every allowlisted bundle-free resolution. Keep this list at one or two entries; a third
     /// should prompt the question of whether the rule, not the list, needs to change.
     static let bundleFreeResolutions: [BundleFreeResolution] = [
+        // FernletAnnouncer's `String(localized: text)` held the first entry until the Spanish round
+        // (2026-10-20) routed it through AddressedCopy, so a marked translation is inflected rather
+        // than read aloud as raw markup; the resolution it needed now lives in the entry below. The
+        // helper's core moved from FernletUI to FernletDomainModel in the gendered-address lane
+        // (2026-10-21), so the planner, scoring and notification copy can reach it without SwiftUI.
         BundleFreeResolution(
-            path: "FernletKit/Sources/FernletUI/FernletAnnouncer.swift",
-            call: "String(localized: text)",
+            path: "FernletKit/Sources/FernletDomainModel/AddressedCopy.swift",
+            call: "String(localized: resource, options: options)",
             reason: """
-                `text` is a caller-supplied `LocalizedStringResource`, which carries its own bundle; \
-                the resource-taking overload has no `bundle:` parameter at all. FernletAnnouncer is \
-                the app's single VoiceOver-announcement seam and holds ZERO copy by design — \
-                FernletAnnouncerTests scans its source for string literals to keep it that way, \
-                which is the other half of this entry's invariant.
+                The head of `AttributedString(localized: resource, options: options)`: `resource` is \
+                a caller-supplied `LocalizedStringResource`, which carries its own bundle (a package \
+                caller builds it with `bundle: .module`), and the resource-taking overload has no \
+                `bundle:` parameter. AddressedCopy holds no key of its own; it only inflects what \
+                callers resolve (part I).
                 """
         )
     ]
@@ -915,6 +943,63 @@ struct LocalizationBoundaryTests {
         )
     }
 
+    /// The names FernletScoring's AI-free fallback workouts are SAVED under (2026-10-20, Spanish
+    /// round step 2).
+    ///
+    /// `WorkoutPlanner.suggestion` wrote `"Suggested \(energy.rawValue.capitalized)"` inline and
+    /// `WorkoutSuggestionLibrary` twelve literal names; a taken suggestion stores its name as the
+    /// row's `Workout.name`, which is synced, written to Health and keyword-matched by the category
+    /// inference. So the spellings are frozen as `WorkoutFallbackName` raw values, byte-identical to
+    /// what the literals wrote, and a screen draws them through `Workout.displayedName`.
+    @Test func frozenFallbackWorkoutNames() {
+        #expect(
+            WorkoutFallbackName.allCases.map(\.rawValue) == [
+                "Suggested Light", "Suggested Moderate", "Suggested Hard",
+                "Steady Care Walk", "Balanced Strength Circuit", "Strength Base", "Hard Strength Day",
+                "Low Friction Walk", "Move And Strength", "Mood Reset", "Steady Mind Circuit",
+                "Recovery Flow", "Soft Rebuild", "Try Something Small", "Curious Challenge",
+            ],
+            """
+            WorkoutFallbackName raw values changed. They are the names a taken fallback suggestion is \
+            PERSISTED under. Localize `displayName`, never these.
+            """
+        )
+        for energy in WorkoutIntensity.allCases {
+            let workout = WorkoutPlanner.suggestion(energy: energy, goal: "Feel strong", context: "", goals: [])
+            #expect(workout.name == "Suggested \(energy.rawValue.capitalized)",
+                    "the \(energy) suggestion saves the name the inline literal wrote")
+            #expect(workout.displayedName == WorkoutFallbackName.suggested(energy).displayName)
+            #expect(workout.savedName(editing: workout.displayedName) == workout.name,
+                    "a name left as drawn saves back as the stored English")
+        }
+        let library = GoalType.allCases.flatMap { goal in
+            WorkoutIntensity.allCases.flatMap { WorkoutSuggestionLibrary.suggestions(for: goal, intensity: $0, addressing: .masculine) }
+        }
+        for suggestion in library {
+            let logged = suggestion.workout(intensity: .moderate)
+            let frozen = WorkoutFallbackName(rawValue: logged.name)
+            #expect(frozen != nil, "\(logged.name) is a library name with no frozen spelling")
+            #expect(logged.displayedName == frozen?.displayName)
+        }
+        // A PLAN the user named like a template stays theirs: only a logged row can carry one.
+        let plan = PlannedWorkout(name: WorkoutFallbackName.moodReset.rawValue, split: .workout, source: .user,
+                                  notes: "", duration: nil)
+        #expect(plan.displayedName == WorkoutFallbackName.moodReset.rawValue)
+        #expect(WorkoutFallbackName(rawValue: "mood reset") == nil, "the frozen spelling is matched exactly")
+    }
+
+    /// FernletScoring's catalog, added in the Spanish round's step 2, keeps existing and stays wired
+    /// into the sync script. Either half missing is silent: `String(localized:…, bundle: .module)`
+    /// keeps returning its English `defaultValue` and the catalog stops learning new keys.
+    @Test func theFernletScoringCatalogExistsAndIsSynced() throws {
+        let catalog = RepoRoot.url("FernletKit/Sources/FernletScoring/Localizable.xcstrings")
+        #expect(FileManager.default.fileExists(atPath: catalog.path),
+                "FernletKit/Sources/FernletScoring/Localizable.xcstrings is gone; restore it rather than deleting this pin.")
+        let script = try RepoRoot.source("Scripts/sync-string-catalogs.sh")
+        #expect(script.contains("\"FernletScoring:FernletKit/Sources/FernletScoring/Localizable.xcstrings\""),
+                "Scripts/sync-string-catalogs.sh no longer syncs FernletScoring's catalog; add it back to TARGETS.")
+    }
+
     /// A row whose stored name is a frozen default DRAWS it in the user's language, and saves it back
     /// untouched (2026-10-19).
     ///
@@ -1270,6 +1355,216 @@ struct LocalizationBoundaryTests {
                 "plural abbreviations read out of English recipe lines — matching inputs, never display text")
     }
 
+    /// The notes Fernlet itself writes onto a meal or a recipe (Spanish round step 2, 2026-10-20).
+    ///
+    /// They are stored text — synced, exported and read back — and two are matched as well: `MealRow`
+    /// hides a demo meal's provenance tag by its exact note, and reads a legacy row's breakdown out of
+    /// the "Matched locally…" prefix. So they keep these English spellings and draw localized through
+    /// `StoredFoodNote`. A note localized where it is WRITTEN would sync one device's language into
+    /// another's history, and the demo match would stop matching on any device not set to English.
+    @Test func frozenStoredFoodNotes() throws {
+        #expect(StoredFoodNote.frozenMealNotes == [
+            "Logged from saved recipe.", "Logged as one meal from your description.", "Entered by hand.",
+            "Corrected manually after quick logging.", "Seeded demo meal.", "Logged from saved product.",
+            "Selected from the food catalog.", "Logged from a barcode scan.", "Logged from a nutrition label scan.",
+            "Added from a gentle nutrient nudge.", "Logged from URL recipe.", "Logged from URL recipe. Macros not available.",
+            "Estimated locally from the description. Add API lookup later for branded meals.",
+        ], "a stored meal note changed spelling: the rows already holding the old one no longer draw localized")
+        #expect(StoredFoodNote.frozenRecipeNotes == ["Created from meal logging."])
+        #expect(StoredFoodNote.seededDemoMeal == "Seeded demo meal.", "MealRow matches the demo seed's note by this")
+        #expect(StoredFoodNote.matchedFromFoodSelectionPrefix == "Matched locally from food selection: ",
+                "MealRow reads a legacy row's breakdown after this prefix")
+        for site in Self.storedFoodNoteWriters {
+            let found = try RepoRoot.source(site.path).components(separatedBy: site.needle).count - 1
+            #expect(found == site.count, """
+                \(site.path) writes `\(site.needle)` \(found) time(s), expected \(site.count). A stored note is \
+                written in English and drawn through StoredFoodNote; localizing it here stores a translation. \
+                If the writer moved, re-point this pin at it.
+                """)
+        }
+        let strings = try Self.foodCatalogStrings("App/Fernlet/Localizable.xcstrings")
+        for note in StoredFoodNote.frozenMealNotes + StoredFoodNote.frozenRecipeNotes {
+            let key = try #require(StoredFoodNote.displayKey(forStoredNote: note), "\(note) has no display line")
+            #expect(Self.englishCatalogValue(strings, key: key) == note,
+                    "\(key) must be in the app catalog with the stored note's exact English")
+        }
+    }
+
+    /// Every site that WRITES a stored food note, so a localized write cannot slip in at one of them.
+    static let storedFoodNoteWriters: [(path: String, needle: String, count: Int)] = [
+        ("App/Fernlet/MealBuilder.swift", "note: \"Logged from saved recipe.\"", 1),
+        ("App/Fernlet/MealBuilder.swift", "note: \"Matched locally from food selection: \\(ingredientText).\"", 1),
+        ("App/Fernlet/MealBuilder.swift", "notes: \"Created from meal logging.\"", 1),
+        ("App/Fernlet/MealResolutionService.swift", "note: \"Logged as one meal from your description.\"", 1),
+        ("App/Fernlet/FoodPlanning.swift", "note: \"Entered by hand.\"", 1),
+        ("App/Fernlet/FernletStore.swift", "\"Corrected manually after quick logging.\"", 2),
+        ("App/Fernlet/FernletStore.swift", "\"Corrected components: \\(componentText).\"", 1),
+        ("App/Fernlet/FernletStore+DemoSeed.swift", "note: \"Seeded demo meal.\"", 3),
+        ("FernletKit/Sources/DiaryStore/DiaryStore.swift", "note: \"Logged from saved product.\"", 1),
+        ("FernletKit/Sources/DiaryStore/DiaryStore.swift", "note: \"Selected from the food catalog.\"", 1),
+        ("FernletKit/Sources/DiaryStore/DiaryStore.swift", "note: \"Logged from a barcode scan.\"", 1),
+        ("FernletKit/Sources/DiaryStore/DiaryStore.swift", "note: \"Logged from a nutrition label scan.\"", 1),
+        ("FernletKit/Sources/DiaryStore/DiaryStore.swift", "note: \"Added from a gentle nutrient nudge.\"", 1),
+        ("FernletKit/Sources/StoreCore/SavedRecipeService.swift",
+         "\"Logged from URL recipe.\" : \"Logged from URL recipe. Macros not available.\"", 1),
+        ("FernletKit/Sources/FernletScoring/Scoring.swift",
+         "note: \"Estimated locally from the description. Add API lookup later for branded meals.\"", 1),
+    ]
+
+    /// A stored food note draws localized and saves back untouched; anything else draws as stored.
+    @Test func storedFoodNotesDrawThroughTheDisplayHelper() throws {
+        for note in StoredFoodNote.frozenMealNotes {
+            #expect(StoredFoodNote.displayKey(forStoredNote: note)?.hasPrefix("food.mealNote.") == true)
+        }
+        // The person's own words, and the component-list notes that are never drawn as stored, pass through.
+        for typed in ["Leftovers from Sunday", "logged from saved recipe.", "Matched locally from food selection: 2 g salt."] {
+            #expect(StoredFoodNote.displayedMealNote(typed) == typed)
+            #expect(StoredFoodNote.displayedRecipeNotes(typed) == typed)
+        }
+        let stored = "Created from meal logging."
+        let drawn = StoredFoodNote.displayedRecipeNotes(stored)
+        #expect(StoredFoodNote.savedRecipeNotes(editing: drawn, stored: stored) == stored,
+                "a recipe's notes left as drawn save back as the stored English")
+        #expect(StoredFoodNote.savedRecipeNotes(editing: "Add more lime", stored: stored) == "Add more lime")
+        let sites: [(path: String, needle: String, count: Int, what: String)] = [
+            ("App/Fernlet/FoodView.swift", "Text(verbatim: StoredFoodNote.displayedMealNote(meal.note))", 1, "MealRow's note line"),
+            ("App/Fernlet/FoodView.swift", "meal.note == StoredFoodNote.seededDemoMeal", 1, "MealRow's demo match, on the frozen note"),
+            ("App/Fernlet/FoodView.swift", "let prefix = StoredFoodNote.matchedFromFoodSelectionPrefix", 1, "MealRow's legacy breakdown"),
+            ("App/Fernlet/FoodView.swift", "Text(verbatim: StoredFoodNote.displayedRecipeNotes(recipe.notes))", 3,
+             "the saved-recipe row, the recipe row and the recipe page's Notes card"),
+            ("App/Fernlet/FoodView.swift", "let drawnNotes = StoredFoodNote.displayedRecipeNotes(recipe.notes)", 1, "the recipe editor's notes field"),
+            ("App/Fernlet/FoodView.swift", "StoredFoodNote.savedRecipeNotes(editing: notes, stored: editingRecipe.notes)", 1,
+             "...and the notes it saves"),
+            ("App/Fernlet/RecipeShareText.swift", "StoredFoodNote.displayedRecipeNotes(notes)", 1, "a recipe shared as text"),
+        ]
+        for site in sites {
+            let found = try RepoRoot.source(site.path).components(separatedBy: site.needle).count - 1
+            #expect(found == site.count, """
+                \(site.path) contains `\(site.needle)` \(found) time(s), expected \(site.count): \(site.what). A drawn \
+                note goes through StoredFoodNote and a field seeded from it saves through savedRecipeNotes; a match \
+                reads the frozen note. If the site moved, re-point this pin at it.
+                """)
+        }
+    }
+
+    /// The food lane's files pick no English plural by count (Spanish round step 2, 2026-10-20).
+    ///
+    /// `"\(n) serving\(n == 1 ? "" : "s")"` renders correctly in English, harvests a key, and then
+    /// cannot be translated: the "s" is outside the key and the rule is English's. Every one of these is
+    /// now `^[\(n) serving](inflect: true)` in a `Text`. The scan reads the files the round converted.
+    @Test func theFoodSurfacesSpliceNoEnglishPlural() throws {
+        let files = [
+            "FoodView", "CookingMode", "GroceryPlannerView", "IngredientSubstitutionSheet", "RecipePortionMenu",
+            "NutritionLabelCameraSheet", "BarcodeScanView", "BarcodeServingStepView", "RecipePartsEditor",
+        ]
+        let splice = try NSRegularExpression(pattern: #"== 1 \? "" : "s"|== 1 \? "s" : ""|!= 1 \? "s" : """#)
+        for file in files {
+            let path = "App/Fernlet/\(file).swift"
+            let source = try RepoRoot.source(path)
+            let hits = splice.numberOfMatches(in: source, range: NSRange(source.startIndex..., in: source))
+            #expect(hits == 0, "\(path) splices an English plural \(hits) time(s); use `^[\\(n) noun](inflect: true)` in a Text")
+        }
+    }
+
+    /// One catalog's `strings` table.
+    static func foodCatalogStrings(_ path: String) throws -> [String: Any] {
+        let data = try Data(contentsOf: RepoRoot.url(path))
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let strings = json?["strings"] as? [String: Any] ?? [:]
+        #expect(!strings.isEmpty, "\(path) parsed to zero keys — the catalog moved or broke")
+        return strings
+    }
+
+    /// Keys the food lane's conversions put into the app catalog (Spanish round step 2, 2026-10-20),
+    /// every one measured absent before: the `String(localized:)` lines (each revertible to a bare
+    /// literal on its own) and one or more keys behind each member forked off `String`, so a revert
+    /// of the member drops its keys here even though it compiles and reads the same in English.
+    static let foodCopyKeys: [String] = [
+        // String(localized:) lines.
+        "food.ingredientRow.summary", "food.ingredientRow.summary.calories", "food.ingredientRow.summary.unconverted",
+        "recipeImport.notice.alreadyImported", "recipeImport.notice.fetching", "recipeImport.notice.added",
+        "mealComposer.notice.productSaved", "mealComposer.notice.photoNotSaved", "mealComposer.notice.photoNotRecognized",
+        "mealComposer.capture.noBarcode", "mealComposer.capture.labelUnreadable",
+        "productImport.notice.lookupOff", "productImport.notice.lookupOffWithAI",
+        "recipeDetail.reimport.refreshing", "recipeDetail.reimport.refreshing.noHost", "recipeDetail.reimport.refreshed",
+        "recipeDetail.reimport.refreshed.noHost", "recipeDetail.reimport.deleted", "recipeDetail.photo.notSaved",
+        "recipeBook.notice.added", "recipeEditor.scannedIngredient.defaultName", "scan.itemName.default",
+        "scan.itemName.withServing", "recipe.ingredient.unresolvedName", "recipe.substitution.unresolvedOriginal",
+        "barcode.notice.cameraOff", "barcode.notice.noBarcodeInPhoto", "barcode.rememberFood.saveFailed",
+        "grocery.shareText.title",
+        // Behind the forked members and the split sentences.
+        "Find product page", "Source URL", "Vitamins & minerals", "Saturated fat", "Look up the barcode",
+        "photo recognition is off in Settings — barcode and label still work", "On your other device",
+        "This photo lives on the device you took it on. Its details are here; the picture stays where it was snapped.",
+        "Start cooking", "Step %lld of %lld", "Was", "cal", "Double-check the items below before logging.",
+        "From your recipe.", "Matched from your foods.", "Last week", "In ^[%lld week](inflect: true)", "%@ total",
+        "Saved web product", "Remove ingredient", "Swap ingredient", "Re-import from the source page?",
+        "Replace this ingredient in %@.", "^[%lld serving](inflect: true)",
+        "Makes ^[%lld serving](inflect: true): P %lldg · C %lldg · F %lldg · %lld cal",
+        "Your protein and fat leave less room than the carb minimum, so the totals come out a little above your calories.",
+    ]
+
+    /// The food lane's keys reached the app catalog. A miss means a conversion was reverted (the
+    /// string is English-only again, with a clean build) or the catalogs were not re-synced.
+    @Test func everyFoodCopyKeyReachedTheAppCatalog() throws {
+        let strings = try Self.foodCatalogStrings("App/Fernlet/Localizable.xcstrings")
+        let missing = Self.foodCopyKeys.filter { strings[$0] == nil }
+        #expect(missing.isEmpty, """
+            \(missing.count) food key(s) are not in App/Fernlet/Localizable.xcstrings: \(missing). Either the \
+            string went back to a bare literal or a `String` parameter, or Scripts/sync-string-catalogs.sh was \
+            not re-run and committed with the code change.
+            """)
+    }
+
+    /// The tracked nutrients' names stay English; screens draw them by key (Spanish round step 2, 2026-10-20).
+    ///
+    /// `NutrientReference.name` is copied into every `NutrientGap.nutrientName`, which is persisted with
+    /// the derived signals. A localized name would put one device's language into a stored record, so it
+    /// is frozen, and `NutrientReference.displayName` / `NutrientGap.displayedName` localize from the key.
+    @Test func frozenTrackedNutrientNamesDrawLocalizedByKey() throws {
+        let tracked = MicronutrientGapAnalyzer.trackedNutrients
+        #expect(tracked.map(\.name) == [
+            "Fiber", "Vitamin C", "Vitamin D", "Vitamin B12", "Folate", "Calcium", "Iron", "Magnesium", "Potassium",
+            "Zinc", "Omega-3",
+        ], "a tracked nutrient's stored name changed: it is persisted in every derived signal's nutrient gaps")
+        let strings = try Self.foodCatalogStrings("FernletKit/Sources/FernletDomainModel/Localizable.xcstrings")
+        for nutrient in tracked {
+            #expect(NutrientReference.displayName(forKey: nutrient.key) != nil, "\(nutrient.key) has no display name")
+            #expect(Self.englishCatalogValue(strings, key: "nutrient.\(nutrient.key)") == nutrient.name,
+                    "nutrient.\(nutrient.key) must reach the domain catalog with the frozen name as its English")
+            let gap = NutrientGap(nutrientKey: nutrient.key, nutrientName: nutrient.name, unit: nutrient.unit, windowDays: 7,
+                                  coverageRatio: 0.1, dataCoverageRatio: 1, status: .gap)
+            #expect(gap.displayedName == nutrient.displayName)
+        }
+        let unknown = NutrientGap(nutrientKey: "boron", nutrientName: "Boron", unit: "mg", windowDays: 7,
+                                  coverageRatio: 0.1, dataCoverageRatio: 1, status: .gap)
+        #expect(unknown.displayedName == "Boron", "a key this build does not track draws its stored name")
+    }
+
+    /// The nutrition display labels localized in place reached the domain catalog (2026-10-20). Each
+    /// was traced to display readers only: `RecipeUnit.label` (the unit menu), `BiologicalSex.label`
+    /// (the Sex pickers) and `FoodItem.dataSourceLabel` (search rows; the swap sheet's per-screen
+    /// de-duplication key). Each is a `String(localized:)` line revertible to a bare literal on its own.
+    @Test func nutritionDisplayLabelsReachedTheDomainCatalog() throws {
+        let strings = try Self.foodCatalogStrings("FernletKit/Sources/FernletDomainModel/Localizable.xcstrings")
+        var keys = RecipeUnit.allCases.map { "recipeUnit.\(String(describing: $0))" }
+        keys += BiologicalSex.allCases.map { "biologicalSex.\($0.rawValue)" }
+        keys += ["manual", "aiEstimate", "branded", "restaurant", "usda"].map { "foodItem.dataSource.\($0)" }
+        let missing = keys.filter { strings[$0] == nil }
+        #expect(missing.isEmpty, """
+            \(missing.count) nutrition label key(s) are not in the FernletDomainModel catalog: \(missing). A label went \
+            back to a bare literal, or the catalogs were not re-synced and committed.
+            """)
+        #expect(Self.englishCatalogValue(strings, key: "recipeUnit.glass") == RecipeUnit.glass.label)
+    }
+
+    /// A key's English `stringUnit` value in a catalog's `strings` table, or nil when it has none.
+    static func englishCatalogValue(_ strings: [String: Any], key: String) -> String? {
+        let localizations = (strings[key] as? [String: Any])?["localizations"] as? [String: Any]
+        let unit = (localizations?["en"] as? [String: Any])?["stringUnit"] as? [String: Any]
+        return unit?["value"] as? String
+    }
+
     /// Coach-plan wire tokens.
     ///
     /// `MuscleGroup` and `Equipment` raw values are persisted in day rows, persisted in the
@@ -1304,6 +1599,71 @@ struct LocalizationBoundaryTests {
             things are. Localize `displayName`, never `rawValue`.
             """
         )
+    }
+
+    /// The coach-plan importer's provenance stamps (2026-10-20, Spanish round step 2).
+    ///
+    /// The two lines are written into `PlannedWorkout.notes` (synced, exported, carried onto a guided
+    /// run's logged row) and read back by the importer, which strips the previous stamp before it
+    /// writes a new one. So they are frozen English, written through `CoachPlanNoteStamp` alone, and
+    /// recognised by their exact shape: the bare `hasPrefix("Day ")` the strip used to be also ate a
+    /// user's own "Day off, knees sore". A screen draws them through `displayedNotes`.
+    @Test func frozenCoachPlanNoteStamps() throws {
+        #expect(CoachPlanNoteStamp.imported(dayIndex: 2, planTitle: "Block A", author: "Sam")
+                == "Day 2 of \"Block A\", imported from Sam.")
+        #expect(CoachPlanNoteStamp.changed(author: "Sam", planTitle: "Block A") == "Changed by Sam from \"Block A\".")
+        #expect(CoachPlanNoteStamp.author(named: "") == "an assistant", "the unnamed author is part of the stored stamp")
+        #expect(CoachPlanDecodeError.unnamedEditTitle == "an edit")
+
+        let stamps = [CoachPlanNoteStamp.imported(dayIndex: 12, planTitle: "My \"best\" plan", author: "an assistant"),
+                      CoachPlanNoteStamp.changed(author: "Coach Kim", planTitle: "Block A")]
+        for stamp in stamps {
+            #expect(CoachPlanNoteStamp.isStamp(stamp), "\(stamp) is recognised by its exact shape")
+            #expect(CoachPlanNoteStamp.displayed(stamp) == stamp, "in English a stamp draws as stored")
+        }
+        for note in ["Day off, knees sore", "Day 2 felt heavy", "Changed by me: lighter", "Day 3 of \"X\""] {
+            #expect(!CoachPlanNoteStamp.isStamp(note), "\(note) is the user's own note, not a stamp")
+            #expect(CoachPlanNoteStamp.displayed(note) == nil)
+        }
+        let notes = "Day off, knees sore\n" + stamps[0]
+        #expect(CoachPlanNoteStamp.displayedNotes(notes) == notes)
+
+        let importer = try RepoRoot.source("App/Fernlet/CoachPlanImporter.swift")
+        let review = try RepoRoot.source("App/Fernlet/CoachPlanReviewView.swift")
+        for (needle, count) in [("CoachPlanNoteStamp.changed(", 1), ("CoachPlanNoteStamp.imported(", 1),
+                                ("CoachPlanNoteStamp.isStamp(", 1)] {
+            #expect(importer.components(separatedBy: needle).count - 1 == count,
+                    "CoachPlanImporter.swift must write and strip stamps through `\(needle)` (\(count)×)")
+        }
+        #expect(review.contains("CoachPlanNoteStamp.isStamp("), "the review's note preview strips stamps by shape")
+        for source in [importer, review] {
+            #expect(!source.contains("hasPrefix(\"Day \")"),
+                    "a bare \"Day \" prefix match drops the user's own notes; match the stamp's exact shape")
+        }
+    }
+
+    /// The Move lane's "wrong, not missing" sites stay whole keys (2026-10-20, Spanish round step 2).
+    ///
+    /// Each of these rendered correct English while being untranslatable: an English plural "s" (or
+    /// "it"/"them", "was"/"were") picked by count and spliced into the line, a display name lowercased
+    /// and spliced mid-sentence (which also breaks German nouns), and a token's `rawValue` shown in
+    /// a sentence. A revert compiles and reads the same in English, so only a source pin notices.
+    @Test func theMoveLaneSplicedCopyStaysWholeKeys() throws {
+        let sites: [(path: String, needle: String, what: String)] = [
+            ("App/Fernlet/CoachPlanReviewView.swift", "== 1 ? \"\" : \"s\"", "an English plural spliced into a review line"),
+            ("App/Fernlet/CoachPlanReviewView.swift", "\"it\" : \"them\"", "the new-exercises card's pronoun picked by count"),
+            ("App/Fernlet/TrainerExportView.swift", "== 1 ? \"\" : \"s\"", "an English plural spliced into the summary copy"),
+            ("App/Fernlet/TrainerExportView.swift", "\"was\" : \"were\"", "the Plan added alert's verb picked by count"),
+            ("App/Fernlet/GuidedWorkoutEditorSheet.swift", "displayName.lowercased()", "the goal's name lowercased into the rest note"),
+            ("App/Fernlet/CoachPlanImporter.swift", "movementPattern.rawValue) movements", "a movement token shown in a safety reason"),
+            ("App/Fernlet/CoachPlanImporter.swift", ".lowercased())\")", "equipment names lowercased into a safety reason"),
+            ("App/Fernlet/MoveView.swift", "== 1 ? \"1 plan\"", "the week tile's count picked between two English strings"),
+        ]
+        for site in sites {
+            let source = try RepoRoot.source(site.path)
+            #expect(!source.contains(site.needle),
+                    "\(site.path) contains `\(site.needle)` again: \(site.what). Use one plural-ruled key (or one whole sentence per case).")
+        }
     }
 
     /// `GoalType`'s legacy persisted-display aliases.
@@ -1367,6 +1727,50 @@ struct LocalizationBoundaryTests {
             `tagline`, `nutritionSummary`, and `trainingSummary` — never `rawValue`.
             """
         )
+    }
+
+    /// The Group Activities type tokens a host's phone SENDS (Spanish round, 2026-10-20).
+    ///
+    /// `ActivityTypeOption`'s chip label used to be its raw value ("Walk") and the token the
+    /// lowercased label, so the chip could not localize, and the RECEIVING phone drew the sender's
+    /// token capitalized — a Spanish phone read "Walk". It is forked: the raw value is the token,
+    /// these exact spellings, which every build since Group Activities (2026-07-12) has written into
+    /// `ActivityDescriptor.activityTypeToken`. That field rides the descriptor's canonical bytes, so
+    /// the signed join tokens and roster snapshots bind it through the `activityParamsHash`, and it is
+    /// kept in the hosted and joined sidecars. A respelled token is a word an older phone no longer
+    /// recognizes (it would draw the raw English as an unknown type) and a descriptor whose hash no
+    /// longer matches what was pinned at join. Localize `displayName`, never the token.
+    @MainActor @Test func frozenActivityTypeTokens() {
+        let tokens = ActivityTypeOption.allCases.map(\.token)
+        #expect(
+            tokens == ["walk", "coffee", "meal", "study", "workout", "hangout", "other"],
+            """
+            ActivityTypeOption tokens changed (now \(tokens)). They are the wire word every activity \
+            descriptor carries, inside its canonical bytes and the device-local sidecars. Localize \
+            `displayName`; never the token.
+            """
+        )
+        #expect(ActivityTypeOption.allCases.map(\.rawValue) == tokens, "the raw value IS the token")
+    }
+
+    /// The receiving side of the activity-type fork: a known token draws this device's word, and an
+    /// unknown one (a newer build's type, or any word a peer sends) draws as received, sanitized and
+    /// not re-cased — never dropped, never matched loosely.
+    @MainActor @Test func receivedActivityTypeTokensDrawThroughTheDisplayName() throws {
+        for option in ActivityTypeOption.allCases {
+            #expect(ActivityTypeOption.displayName(forToken: option.token) == option.displayName)
+        }
+        #expect(ActivityTypeOption.displayName(forToken: "boardGames") == "boardGames",
+                "an unknown token is drawn as sent")
+        #expect(ActivityTypeOption.displayName(forToken: "Walk") == "Walk",
+                "matching is exact: the token is the sender's frozen spelling")
+        #expect(ActivityTypeOption.displayName(forToken: "bad\u{200B}word") == "badword",
+                "an unknown token is still sanitized before it is drawn")
+        let source = try RepoRoot.source("App/Fernlet/ActivitiesView.swift")
+        #expect(source.contains("ActivityTypeOption.displayName(forToken: type)"),
+                "the activity subtitle draws the received type through the fork")
+        #expect(!source.contains(".capitalized"),
+                "nothing in ActivitiesView re-cases a received word for display")
     }
 
     // MARK: - C. The widget cross-process contract
@@ -1800,6 +2204,66 @@ struct LocalizationBoundaryTests {
         // A literal that is not assigned to `value` must not enter the vocabulary — otherwise the
         // frozen set would churn with every unrelated string in the file.
         #expect(!values.contains("not a signal value"))
+    }
+
+    // MARK: - D2. The display half of the derived-signal fork, and Home's other draw-time mappings
+
+    /// Every value `DerivedSignalFactory` can mint draws through its own catalog key.
+    ///
+    /// Part D freezes the tokens; this is the other half of the fork (Spanish round step 2, Home
+    /// lane, 2026-10-20). The Trends card used to draw a value with `.capitalized` on the raw token,
+    /// which no translation can survive; ``SignalPresentation/valueLabel(for:addressing:)`` is now an exact-match
+    /// table from token to key. The vocabulary is expanded from ``frozenSignalValueVocabulary`` (the
+    /// two counted shapes at one and at many, since the factory splices an English plural into the
+    /// gap token), and each label is checked in English against the capitalized rendering it
+    /// replaced: byte-identical on screen today, and red for a token the table forgot, which falls
+    /// through to the raw lowercase token.
+    @Test @MainActor func everyFrozenSignalValueDrawsThroughItsDisplayKey() throws {
+        let counted = ["1 possible gap", "3 possible gaps", "1 covered", "5 covered"]
+        let values = Self.frozenSignalValueVocabulary.filter { !$0.contains("{}") }.sorted() + counted
+        #expect(values.count == 22, "the frozen vocabulary changed size; extend this expansion with it")
+        for value in values {
+            #expect(SignalPresentation.valueLabel(for: value, addressing: .masculine) == value.capitalized,
+                    "Trends draws \"\(value)\" as \"\(SignalPresentation.valueLabel(for: value, addressing: .masculine))\" — the value has no display key")
+        }
+        let unknown = "a token from a newer build"
+        #expect(SignalPresentation.valueLabel(for: unknown, addressing: .masculine) == unknown, "an unknown token is drawn as it is")
+        for name in Self.frozenSignalNames {
+            #expect(SignalPresentation.title(for: name) != name, "the \(name) signal has no display title")
+        }
+        let home = try RepoRoot.source("App/Fernlet/HomeView.swift")
+        #expect(!home.contains("value.capitalized"),
+                "HomeView capitalizes a signal token in code again — that rendering cannot be translated")
+    }
+
+    /// Home's mood thought is one whole sentence per `FeelingTag`.
+    ///
+    /// It used to lowercase the mood chip's localized label and splice it into an English sentence.
+    /// Each sentence must read exactly as the spliced one did in English, and the splice must not
+    /// come back.
+    @Test @MainActor func homeMoodThoughtIsOneSentencePerFeelingTag() throws {
+        for tag in FeelingTag.allCases {
+            #expect(HomeCopy.journalMoodThought(tag, addressing: .masculine)
+                    == "You marked today as \(tag.rawValue). Let that be enough information for now.")
+        }
+        let home = try RepoRoot.source("App/Fernlet/HomeView.swift")
+        #expect(!home.contains("label.lowercased()"),
+                "Home lowercases a localized label into a sentence again; give each case its own key")
+    }
+
+    /// The photowall's seeded default captions are resolved where the seeds are built, once.
+    ///
+    /// Two lanes of the Spanish round fixed them from opposite ends (resolved in
+    /// `LaunchPreparationService`; mapped by exact match at draw time in HomeView). Seeds live in
+    /// memory only and are rebuilt every launch, so resolving at build time is correct and the draw-
+    /// time mapping was retired at integration. This pins that a second mapping does not come back.
+    @Test func photowallDefaultCaptionsAreResolvedOnceWhereTheSeedsAreBuilt() throws {
+        let producer = try RepoRoot.source("App/Fernlet/LaunchPreparationService.swift")
+        for word in ["morning", "meal", "movement", "moment"] {
+            #expect(producer.contains("\"photowall.caption.\(word)\""), "LaunchPreparationService no longer resolves the \(word) caption")
+        }
+        let home = try RepoRoot.source("App/Fernlet/HomeView.swift") + RepoRoot.source("App/Fernlet/HomeCopy.swift")
+        #expect(!home.contains("photowallCaption("), "a draw-time caption mapping is back; the seeds already arrive resolved")
     }
 
     // MARK: - E. The SwiftUI display-literal wall
@@ -2617,8 +3081,8 @@ struct LocalizationBoundaryTests {
                      declaration: "private var accessibilityText: Text {",
                      role: "the meal photo's spoken description, including its unavailable states"),
         ForkedMember(path: "App/Fernlet/JournalView.swift",
-                     declaration: "var accessibilityLabel: Text {",
-                     role: "the journal calendar cell, including the feeling tag"),
+                     declaration: "func accessibilityLabel(addressing address: TermOfAddress) -> Text {",
+                     role: "the journal calendar cell, including the feeling tag (agreed with the user since the gendered-address lane)"),
         ForkedMember(path: "App/Fernlet/CycleTrackerView.swift",
                      declaration: "var accessibilityLabel: Text {",
                      role: "the cycle calendar cell, including flow and intimacy"),
@@ -2634,6 +3098,55 @@ struct LocalizationBoundaryTests {
         ForkedMember(path: "App/Fernlet/NutritionTargetsEditor.swift",
                      declaration: "let label: LocalizedStringKey",
                      role: "the macro row's drawn word, which is also the field's accessibility name"),
+        // The food lane (Spanish round step 2, 2026-10-20): food-surface helpers and members that took
+        // their display text as `String`, so every literal behind them was drawn verbatim.
+        ForkedMember(path: "App/Fernlet/NutritionTargetsEditor.swift", declaration: "let unit: LocalizedStringKey",
+                     role: "the target row's unit ('cal', 'g')"),
+        ForkedMember(path: "App/Fernlet/NutritionTargetsEditor.swift", declaration: "private var footerText: LocalizedStringKey {",
+                     role: "the targets card's footnote, all four variants"),
+        ForkedMember(path: "App/Fernlet/NutritionTargetsEditor.swift", declaration: "private var lowTargetNote: LocalizedStringKey? {",
+                     role: "the low-target heads-up"),
+        ForkedMember(path: "App/Fernlet/FoodView.swift", declaration: "var value: LocalizedStringKey",
+                     role: "NutritionPill's value (its title is forked beside it)"),
+        ForkedMember(path: "App/Fernlet/FoodView.swift",
+                     declaration: "private func actionButton(label: LocalizedStringKey, systemImage: String, action: @escaping () -> Void) -> some View {",
+                     role: "the Import product screen's Find product page button"),
+        ForkedMember(path: "App/Fernlet/FoodView.swift", declaration: "private func detail(label: LocalizedStringKey, value: String) -> some View {",
+                     role: "the product review's Product / Website / Source URL captions"),
+        ForkedMember(path: "App/Fernlet/FoodView.swift", declaration: "private func secondaryActionLabel(_ title: LocalizedStringKey, icon: String) -> some View {",
+                     role: "the recipe page's Edit and Share buttons"),
+        ForkedMember(path: "App/Fernlet/FoodView.swift", declaration: "private var reviewMessage: LocalizedStringKey {",
+                     role: "the pre-log review sheet's line under its title"),
+        ForkedMember(path: "App/Fernlet/FoodView.swift", declaration: "private var displayNote: Text {",
+                     role: "the meal row's note line, and its From your recipe / Matched from your foods variants"),
+        ForkedMember(path: "App/Fernlet/NutritionLabelCameraSheet.swift",
+                     declaration: "private func detectedGroup<Content: View>(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {",
+                     role: "the label scan's Macros / Label details / Vitamins & minerals headings"),
+        ForkedMember(path: "App/Fernlet/NutritionLabelCameraSheet.swift",
+                     declaration: "private func detectedRow(_ label: LocalizedStringKey, _ value: String) -> some View {",
+                     role: "each detected value's name"),
+        ForkedMember(path: "App/Fernlet/NutritionLabelCameraSheet.swift", declaration: "let label: LocalizedStringKey",
+                     role: "the twenty-three label-detail and vitamin rows' names"),
+        ForkedMember(path: "App/Fernlet/FoodCaptureRouter.swift",
+                     declaration: "private func chooserRow( title: LocalizedStringKey, subtitle: LocalizedStringKey,",
+                     role: "the capture chooser's three targets and the AI-off explanation"),
+        ForkedMember(path: "App/Fernlet/MealPhotoPolaroid.swift", declaration: "let text: LocalizedStringKey",
+                     role: "the polaroid's on-your-other-device / couldn't-open placeholder line"),
+        ForkedMember(path: "App/Fernlet/MealPhotoPolaroid.swift", declaration: "let detail: LocalizedStringKey",
+                     role: "the meal photo detail's unavailable card"),
+        ForkedMember(path: "App/Fernlet/CookingMode.swift", declaration: "private func primaryButtonLabel(_ title: Text) -> some View {",
+                     role: "cooking mode's Start cooking / I'm ready / Log this meal"),
+        ForkedMember(path: "App/Fernlet/CookingMode.swift", declaration: "private func secondaryLabel(_ title: LocalizedStringKey, icon: String) -> some View {",
+                     role: "cooking mode's Back"),
+        ForkedMember(path: "App/Fernlet/CookingMode.swift", declaration: "private var stageTitle: Text {",
+                     role: "cooking mode's Step N of M header"),
+        ForkedMember(path: "App/Fernlet/BarcodeScanView.swift", declaration: "var label: LocalizedStringKey",
+                     role: "the barcode screen's macro ring names, drawn and spoken"),
+        ForkedMember(path: "App/Fernlet/IngredientSubstitutionSheet.swift",
+                     declaration: "private func changeLine(label: LocalizedStringKey, text: String) -> some View {",
+                     role: "the swap preview's Was / Now captions"),
+        ForkedMember(path: "App/Fernlet/GroceryPlannerView.swift", declaration: "private var weekLabel: Text {",
+                     role: "the meal planner's week heading"),
         ForkedMember(path: "App/Fernlet/DestructiveConfirmation.swift",
                      declaration: "let title: LocalizedStringKey",
                      role: "every irreversible dialog's title"),
@@ -2649,6 +3162,35 @@ struct LocalizationBoundaryTests {
         ForkedMember(path: "App/Fernlet/HomeView.swift",
                      declaration: "slot: LocalizedStringKey,",
                      role: "the wardrobe selector row's uppercase slot caption"),
+        // Spanish round step 2, Home lane (2026-10-20): the same T2-1 class on Home and the calm
+        // tools — `String` members drawn with `Text(x)`, so none of their literals reached a catalog.
+        ForkedMember(path: "App/Fernlet/HomeView.swift",
+                     declaration: "private var actionSubtitle: Text {",
+                     role: "the Home action rows' one-line subtitles (Add food to today., …)"),
+        ForkedMember(path: "App/Fernlet/FirstAidView.swift",
+                     declaration: "title: LocalizedStringKey, caption: LocalizedStringKey) -> some View {",
+                     role: "the First Aid menu's three tool cards, title and caption"),
+        ForkedMember(path: "App/Fernlet/GroundingView.swift",
+                     declaration: "let prompt: LocalizedStringKey",
+                     role: "each grounding sense's prompt (Notice five things you can see, …)"),
+        ForkedMember(path: "App/Fernlet/GroundingView.swift",
+                     declaration: "let hint: LocalizedStringKey",
+                     role: "each grounding sense's hint line"),
+        ForkedMember(path: "App/Fernlet/BreathingExerciseView.swift",
+                     declaration: "let name: LocalizedStringResource",
+                     role: "a breathing pattern tile's name (Box, Relax); `id` stays the stored token"),
+        ForkedMember(path: "App/Fernlet/BreathingExerciseView.swift",
+                     declaration: "let caption: LocalizedStringResource",
+                     role: "a breathing pattern tile's rhythm line"),
+        ForkedMember(path: "App/Fernlet/StressExplainerSheet.swift",
+                     declaration: "private var currentReadingTitle: Text {",
+                     role: "the body-signals explainer's reading title"),
+        ForkedMember(path: "App/Fernlet/StressExplainerSheet.swift",
+                     declaration: "private var currentReadingBody: LocalizedStringKey {",
+                     role: "the body-signals explainer's reading sentence"),
+        ForkedMember(path: "FernletKit/Sources/FernletUI/FernletUIComponents.swift",
+                     declaration: "public init( color: Color, caption: LocalizedStringKey,",
+                     role: "PolaroidTile's caption; runtime captions take `verbatimCaption:`"),
         ForkedMember(path: "App/Fernlet/WardrobeView.swift",
                      declaration: "private func sectionLabel(_ text: LocalizedStringKey) -> some View {",
                      role: "the wardrobe's uppercase section caption"),
@@ -2702,6 +3244,72 @@ struct LocalizationBoundaryTests {
         ForkedMember(path: "App/Fernlet/DuressRecoveryCeremonyViews.swift",
                      declaration: "let title: LocalizedStringKey",
                      role: "CeremonyButton, every step's advance button"),
+        // Friends lane, Spanish round (2026-10-20): `String` members drawn with `Text(_:)`, the
+        // verbatim overload, so none of their literals reached the catalog.
+        ForkedMember(path: "App/Fernlet/FriendListView.swift",
+                     declaration: "private var label: LocalizedStringKey {",
+                     role: "SendGoodVibesLabel's Send good vibes / Sending... / Sent just now"),
+        ForkedMember(path: "App/Fernlet/FriendListView.swift",
+                     declaration: "private func detailRow(_ label: LocalizedStringKey, value: String) -> some View {",
+                     role: "the friend detail card's Friends since / Last seen / Revoked / Blocked since / Reported"),
+        ForkedMember(path: "App/Fernlet/FriendListView.swift",
+                     declaration: "private var heartStatusText: Text? {",
+                     role: "the Friends list's presence heart status line"),
+        ForkedMember(path: "App/Fernlet/DisposableCameraView.swift",
+                     declaration: "private var presenceHeartStatusText: Text? {",
+                     role: "the in-person camera's presence heart status line"),
+        ForkedMember(path: "App/Fernlet/DisposableCameraView.swift",
+                     declaration: "private func shutterCaption(canShoot: Bool) -> LocalizedStringKey {",
+                     role: "the caption under the camera's shutter"),
+        ForkedMember(path: "App/Fernlet/ConnectView.swift",
+                     declaration: "private func headerButtonLabel(_ title: LocalizedStringKey) -> some View {",
+                     role: "the Friends header's Activities and Friends pills"),
+        ForkedMember(path: "App/Fernlet/Proximity/UI/ProximityRecipeShareReviewSheet.swift",
+                     declaration: "private var recipeKindLabel: LocalizedStringKey {",
+                     role: "the shared-recipe review's Fernlet recipe / Saved web recipe label"),
+        ForkedMember(path: "FernletKit/Sources/FernletProximityUI/FriendPhotoReviewSheet.swift",
+                     declaration: "_ title: LocalizedStringKey,",
+                     role: "photoSaveFailureAlert's caller-supplied title (Couldn't Save Photo / Photos)"),
+        // Spanish round step 2, move lane (2026-10-20): Move and coach-plan helpers that took their
+        // literal copy as `String`, so it never reached the catalog.
+        ForkedMember(path: "App/Fernlet/MoveView.swift",
+                     declaration: "var label: LocalizedStringKey",
+                     role: "MoveContextSegment's uppercase Goal / Space caption"),
+        ForkedMember(path: "App/Fernlet/MoveView.swift",
+                     declaration: "var emptyPrompt: LocalizedStringKey",
+                     role: "MoveContextSegment's Tap to plan / Set up your space invitation"),
+        ForkedMember(path: "App/Fernlet/MoveView.swift",
+                     declaration: "private func toolbarCapsule(_ title: LocalizedStringKey, systemImage: String, action: @escaping () -> Void) -> some View {",
+                     role: "the Move day's Plan and Log toolbar capsules"),
+        ForkedMember(path: "App/Fernlet/MoveView.swift",
+                     declaration: "private func entryCard(icon: String, title: LocalizedStringKey, subtitle: String, action: @escaping () -> Void) -> some View {",
+                     role: "the plan sheet's Copy previous week and Suggest a workout cards"),
+        ForkedMember(path: "App/Fernlet/CoachPlanReviewView.swift",
+                     declaration: "private func cardTitle(_ text: LocalizedStringKey) -> some View {",
+                     role: "every coach-plan review card's caption"),
+        ForkedMember(path: "App/Fernlet/CoachPlanReviewView.swift",
+                     declaration: "private func changeLine(_ text: LocalizedStringKey) -> some View {",
+                     role: "the coach-plan diff's Renamed / Note / Same exercises lines"),
+        ForkedMember(path: "App/Fernlet/TrainerExportView.swift",
+                     declaration: "private func bullet(_ text: LocalizedStringKey, tint: Color = Color.moss) -> some View {",
+                     role: "the Ask an AI card's two bullets"),
+        // Spanish round, settings lane (2026-10-20): `String` helpers on the Settings pages whose
+        // literal callers never reached the catalog.
+        ForkedMember(path: "App/Fernlet/SettingsSheet.swift",
+                     declaration: "private func themeColorRow(title: LocalizedStringKey, color: Binding<Color>, hex: String, defaultHex: String, isDarkRow: Bool, reset: @escaping () -> Void) -> some View {",
+                     role: "Appearance's background rows: the colour picker's name and the row's Reset Voice Control label"),
+        ForkedMember(path: "App/Fernlet/SettingsSheet.swift",
+                     declaration: "private var connectionInspectorModeDescription: LocalizedStringKey {",
+                     role: "the Connection Inspector mode picker's explanation line"),
+        ForkedMember(path: "App/Fernlet/SettingsSheet.swift",
+                     declaration: "private func kindLabel(_ kind: FernletLockCredentialKind) -> LocalizedStringKey {",
+                     role: "the App lock status card's passcode-type line"),
+        ForkedMember(path: "App/Fernlet/SettingsSheet.swift",
+                     declaration: "private func changeKindCard(_ kind: FernletLockCredentialKind, title: LocalizedStringKey) -> some View {",
+                     role: "Change passcode's lock-type rows"),
+        ForkedMember(path: "App/Fernlet/DeleteEverythingFlow.swift",
+                     declaration: "successButtonTitle: LocalizedStringKey,",
+                     role: "the Everything deleted alert's button on both delete screens"),
     ]
 
     /// The members this round forked are still forked.
@@ -2759,6 +3367,25 @@ struct LocalizationBoundaryTests {
                      source: "DisposableCameraView.shutterAccessibilityLabel, forked String → Text"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Opens %@ straight away",
                      source: "HomeView.firstAidChip hint, label forked String → LocalizedStringKey"),
+        // Spanish round step 2, Home lane (2026-10-20): one key per fork above.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Add food to today.",
+                     source: "HomeActionWidget.actionSubtitle, forked String → Text"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "A quiet minute or three with a slowly swelling circle.",
+                     source: "FirstAidView.toolCard caption, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Notice five things you can see",
+                     source: "GroundingView.GroundingStep.prompt, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "Anything at all — a corner of the ceiling, the light on your hand.",
+                     source: "GroundingView.GroundingStep.hint, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "breathing.preset.box.name",
+                     source: "BreathingPreset.name, forked String → LocalizedStringResource"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "breathing.phase.hold",
+                     source: "BreathingCopy.hold — its own key, apart from the workout runner's \"Hold\" (a held position)"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Still getting to know you",
+                     source: "StressExplainerSheet.currentReadingTitle, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "%@, not equipped",
+                     source: "the Customize sheet's custom-item row, whose state word was spliced in as an English String"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "tab.home",
                      source: "FernletTab.title, forked literal → String(localized:)"),
         HarvestedKey(catalog: "FernletKit/Sources/FernletUI/Localizable.xcstrings", key: "ui.action.save",
@@ -2846,6 +3473,26 @@ struct LocalizationBoundaryTests {
                      source: "CeremonyButton.title in both flows, forked String → LocalizedStringKey"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Return the key",
                      source: "CeremonyButton.title in the custodian flow, forked String → LocalizedStringKey"),
+        // Friends lane, Spanish round (2026-10-20): each measured absent before its fork.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Send good vibes",
+                     source: "SendGoodVibesLabel.label, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Friends since",
+                     source: "FriendListView.detailRow's label, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Tap to shoot",
+                     source: "DisposableCameraView.shutterCaption, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Saying hello to %@…",
+                     source: "DisposableCameraView.presenceHeartStatusText, forked String → Text"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Fernlet recipe",
+                     source: "ProximityRecipeShareReviewSheet.recipeKindLabel, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Couldn't Save Photo",
+                     source: "photoSaveFailureAlert's title, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Expires in %lld min",
+                     source: "ActivitiesView's ExpiryLabel, \"Expires \" + a separately built phrase → one key"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletSocial/Localizable.xcstrings", key: "presence.heart.cooldown",
+                     source: "PresenceManager's heart sentences, English literal → FernletSocialCopy.Presence"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletProximityUI/Localizable.xcstrings",
+                     key: "proximity.review.deleteConfirm.message",
+                     source: "the photo review's Delete all confirmation, English literal → FernletProximityUICopy"),
     ] + ["sedentary", "light", "moderate", "active", "veryActive"].map {
         HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings", key: "activityLevel.\($0)",
                      source: "ActivityLevel.label, literal → String(localized:bundle: .module) (2026-10-19)")
@@ -2884,6 +3531,81 @@ struct LocalizationBoundaryTests {
         return keys
     }()
 
+    /// The Spanish round's settings-lane forks (2026-10-20), kept apart from the other lists for the
+    /// same type-checker reason as ``workoutCopyForkKeys``. Every key was measured absent from its
+    /// catalog before the fork: a `String` helper, a `String`-returning switch, a `+`-assembled or
+    /// English-spliced sentence, or a frozen token drawn raw.
+    static let settingsLaneForkKeys: [HarvestedKey] = {
+        let app = "App/Fernlet/Localizable.xcstrings"
+        let appKeys: [(key: String, source: String)] = [
+            ("Light mode", "SettingsSheet.themeColorRow, forked String → LocalizedStringKey"),
+            ("Dark mode", "SettingsSheet.themeColorRow, forked String → LocalizedStringKey"),
+            ("No overlay and no saved history.", "SettingsSheet.connectionInspectorModeDescription"),
+            ("Records session history without showing the live overlay.", "SettingsSheet.connectionInspectorModeDescription"),
+            ("Records session history and shows the live inspector when you open it manually.",
+             "SettingsSheet.connectionInspectorModeDescription"),
+            ("Alphanumeric password", "AppLockSettingsView.kindLabel"),
+            ("Forget ^[%lld memory](inflect: true) matching \"%@\"?", "Core memory's forget prompt, once an English y/ies splice"),
+            ("Daily target: ^[%lld bottle](inflect: true)", "the hydration stepper, once a fixed 'bottles'"),
+            ("Enter your current passcode to enable %@.", "the biometric verify prompt, once an English enable/disable splice"),
+            ("Enter your current passcode to disable %@.", "the biometric verify prompt, once an English enable/disable splice"),
+            ("settings.goal.overrideFootnote.targetsAndSplit", "the goal override footnote, once assembled from fragments"),
+            ("settings.goal.overrideFootnote.targets", "the goal override footnote, once assembled from fragments"),
+            ("settings.goal.overrideFootnote.split", "the goal override footnote, once assembled from fragments"),
+            ("settings.changePasscode.mismatch", "Change passcode's mismatch line, once a bare String"),
+            ("settings.memory.category.other", "MemoryCategoryName, the Core memory category drawn raw"),
+            ("appearanceMode.system", "FernletAppearanceMode.label, once bare literals"),
+            ("appearanceMode.light", "FernletAppearanceMode.label, once bare literals"),
+            ("appearanceMode.dark", "FernletAppearanceMode.label, once bare literals"),
+            ("settings.haptics.level.off", "the haptics segmented control's own Off, apart from the status 'Off'"),
+            ("Verify to continue", "PrivacyDataSettingsView.verifyButtonTitle, forked String → LocalizedStringKey"),
+            ("Verifying", "PrivacyDataSettingsView.verifyButtonTitle, forked String → LocalizedStringKey"),
+            ("privacy.verify.reason", "the Privacy & Data Face ID / passcode prompt's reason line"),
+            ("privacy.ownPhotos.sizeDisclosure", "the photo backup's size disclosure, once a `+`-built String"),
+            ("privacy.ownPhotos.bindingDisclosure", "the photo backup's binding disclosure, once a `+`-built String"),
+            ("privacy.sealedBackup.disclosure.encryptedOnly", "the encrypted-backup consent alert, once bare String lines"),
+            ("privacy.sealedBackup.disclosure.journal", "the encrypted-backup consent alert, once bare String lines"),
+            ("sealedBackup.noun.ownPhotos", "the photo route's restore lines, once the bare English noun 'photo'"),
+            ("sealedBackup.restore.deferredKeyNotSynced", "restoreStatusMessage, once English sentences returned as String"),
+            ("sealedBackup.restore.rolledBack", "restoreStatusMessage, once English sentences returned as String"),
+            ("privacy.sealedBackup.journal.removeThem", "the journal backup's Remove them, apart from the intimate logs' (gender)"),
+            ("privacy.sealedBackup.intimacy.removeThem", "the intimate-log backup's Remove them, apart from the journal's (gender)"),
+            ("Found ^[%lld meal log](inflect: true), ^[%lld journal entry](inflect: true), ^[%lld workout](inflect: true) in this iCloud account.",
+             "the multiple-devices banner's counts, once fixed English plurals"),
+        ]
+        // The Debug page's derived-signal names (once drawn raw) share Home's `signal.title.*` keys
+        // through SignalPresentation.title(for:); the duplicate `signal.name.*` family was retired
+        // when the home and settings lanes were integrated (2026-10-21).
+        let lock = "FernletKit/Sources/FernletLock/Localizable.xcstrings"
+        let lockKeys: [HarvestedKey] = [
+            "lock.credential.invalid.pin4", "lock.credential.invalid.pin6", "lock.credential.invalid.password",
+            "lock.duress.matchesPasscode", "lock.duress.custodianRequired", "lock.recovery.custodianInUse",
+            "lock.recovery.invalidKey", "lock.recovery.keyMismatch", "lock.recovery.notAvailable",
+            "lock.duress.sessionRefusal", "lock.duress.unenterable", "lock.duress.custodianSuperseded",
+            "lock.biometric.prompt",
+        ].map { HarvestedKey(catalog: lock, key: $0, source: "FernletLockService, a refusal or prompt once a bare String") }
+        let duressKeys: [HarvestedKey] = [
+            "duress.mode.decoy.title", "duress.mode.silentWipe.title", "duress.mode.recoveryLock.title",
+            "duress.mode.decoy.detail", "duress.mode.silentWipe.armTitle", "duress.mode.recoveryLock.armTitle",
+            "duress.mode.unavailable.noCustodian", "duress.custodian.removalRefused", "duress.entry.mismatch",
+            "Your duress code is the same shape as your passcode — a password. If you change your passcode to a different type, set your duress code again so you can still type it.",
+        ].map { HarvestedKey(catalog: app, key: $0, source: "DuressPINSetupView, once a String return or a spliced English noun") }
+        let health = "FernletKit/Sources/HealthKitGateway/Localizable.xcstrings"
+        // The seven `HealthCapability` raw values, spelled out: this file does not import the gateway.
+        let capabilities = ["bodyProfile", "cycleTracking", "bodyContext", "workoutLogging",
+                            "activityContext", "mindfulness", "intimateLogging"]
+        let healthKeys: [HarvestedKey] = capabilities.flatMap { capability in
+            ["title", "summary", "inSentence"].map {
+                HarvestedKey(catalog: health, key: "healthCapability.\(capability).\($0)",
+                             source: "HealthCapability, once bare literals (the deferred 14) plus its mid-sentence name")
+            }
+        } + ["health.status.accessUpdated", "health.status.revokeInstructions", "health.status.contextUpdated",
+             "health.status.contextUnavailable", "health.status.bodyProfilePartial"].map {
+            HarvestedKey(catalog: health, key: $0, source: "a HealthKitAuthorizationViewModel status line that lower-cased a title")
+        }
+        return appKeys.map { HarvestedKey(catalog: app, key: $0.key, source: $0.source) } + lockKeys + duressKeys + healthKeys
+    }()
+
     /// The forks actually reached a catalog.
     ///
     /// This is the half the other tests cannot show. Parts A, E and F prove no *bad* shape is left
@@ -2897,7 +3619,7 @@ struct LocalizationBoundaryTests {
     /// committed), not that a string moved.
     @Test func everyForkedStringActuallyReachedItsCatalog() throws {
         var missing: [String] = []
-        for entry in Self.harvestedForkKeys + Self.workoutCopyForkKeys {
+        for entry in Self.harvestedForkKeys + Self.workoutCopyForkKeys + Self.settingsLaneForkKeys {
             let url = RepoRoot.url(entry.catalog)
             let data = try Data(contentsOf: url)
             let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -2960,6 +3682,50 @@ struct LocalizationBoundaryTests {
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
                      key: "move.goalCount",
                      source: "the Move header's goal count"),
+        // Spanish round step 2, Home lane (2026-10-20): every count Home and the milestones screen
+        // used to pick between two English literals by `count == 1`, or spliced into a bare `%lld`.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "home.milestones.summary.allTime",
+                     source: "the Home milestones card's summary (kinds of care, no coins)"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "home.milestones.summary.keptSoFar",
+                     source: "the Home milestones card's kinds-of-care clause"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "home.milestones.summary.coinsGifted",
+                     source: "the Home milestones card's coins clause"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "home.milestones.coinsGifted.pill",
+                     source: "the Home milestones card's coin pill"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "home.quickLog.meals.count",
+                     source: "the Meals quick-log tile's count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "home.quickLog.move.count",
+                     source: "the Move quick-log tile's count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "home.quickLog.water.count",
+                     source: "the Water quick-log tile's bottle count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "home.quickLog.journal.count",
+                     source: "the Journal quick-log tile's entry count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "home.customize.wardrobe.itemCount",
+                     source: "the Customize sheet's Wardrobe item count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "signal.value.possibleGaps",
+                     source: "Trends: a nutrients signal's gap count, drawn from the frozen '2 possible gaps' token"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "signal.value.covered",
+                     source: "Trends: a nutrients signal's covered count, drawn from the frozen '5 covered' token"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "milestones.shelfLink.giftCount",
+                     source: "the Milestones screen's keepsake-shelf gift count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "milestones.row.giftsOnShelf",
+                     source: "a milestone row's gifts-on-the-shelf line"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "milestones.coins.added",
+                     source: "the Milestones screen's coins footer"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "milestones.headline.journal.count",
+                     source: "the journal milestone row's lifetime count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "milestones.headline.meal.count",
+                     source: "the meals milestone row's lifetime count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "milestones.headline.workout.count",
+                     source: "the movement milestone row's lifetime count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "milestones.headline.water.count",
+                     source: "the water milestone row's lifetime count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "milestones.headline.breathing.count",
+                     source: "the breathing milestone row's lifetime count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "milestones.headline.worry.count",
+                     source: "the worries milestone row's lifetime count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "breathing.finished.minutes",
+                     source: "the breathing finish screen's session length"),
         // Weekly totals (idea 18, 2026-10-20): a whole set count, spoken after a muscle name.
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
                      key: "weekly.sets.spoken.whole",
@@ -3036,6 +3802,82 @@ struct LocalizationBoundaryTests {
         // Workout setup's Days-per-week stepper, which spliced an English "s" into its key.
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
                      key: "%lld days a week", source: "Workout setup's days-per-week stepper"),
+        // Friends lane, Spanish round (2026-10-20). The two hearts counts, the camera's two session
+        // counts and the photos-kept notice were `== 1` branches between two English sentences ("A
+        // heart is …" / "%lld hearts are …"); each is now ONE key whose English `one` form keeps the
+        // wording it had at one. The rest were bare `%lld`s.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "%lld hearts are tucked away for %@ — delivered when they next open Fernlet.",
+                     source: "a friend's heart row: hearts waiting at the drop-off"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "friends.awayHearts.undeliverable",
+                     source: "AwayHeartsCopy's undelivered-hearts line (friend row and Settings)"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "%lld people connected", source: "the in-person camera's session count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "%lld shots left", source: "the in-person camera's film count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "%lld photos stayed on this phone. No one else was in the session when you took them.",
+                     source: "RoutedShareRefusalCopy.photoKeptNotice, the camera's photos-kept notice"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "Expires in %lld days", source: "an activity card's expiry label"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "You're hosting the maximum of %lld activities. End one to start another.",
+                     source: "the Start an activity form at the host cap"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletSocial/Localizable.xcstrings",
+                     key: "activities.error.hostLimit", source: "Group Activities' host-cap error"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletSocial/Localizable.xcstrings",
+                     key: "proximity.camera.photoLimitReached", source: "the in-person camera's photo-cap alert"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletProximityUI/Localizable.xcstrings",
+                     key: "proximity.review.deleteConfirm.title",
+                     source: "the photo review's delete confirmation title (two or more pictures)"),
+        // Spanish round step 2, move lane (2026-10-20): the coach-plan, trainer-summary and Move
+        // counts that spliced an English "s" (or picked "it"/"them", "was"/"were") by count.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.exercises",
+                     source: "a coach plan's exercise count ('5 exercises')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.days",
+                     source: "a coach plan's day count, in the review subtitle and the Plan added alert"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.sessions",
+                     source: "the coach-plan review subtitle's session count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.changes",
+                     source: "the coach-plan review subtitle's change count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.workouts",
+                     source: "the Plan added alert's workout count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.replaced",
+                     source: "the coach-plan changes card's replaced count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.adjusted",
+                     source: "the coach-plan changes card's adjusted count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.removed",
+                     source: "the coach-plan changes card's removed count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.review.collisionBody",
+                     source: "the coach-plan collision card ('1 day … already has')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.review.newExercisesBody",
+                     source: "the coach-plan new-exercises card ('check it' / 'check them')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.imported.changed",
+                     source: "the Plan added alert's changed count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.imported.removed",
+                     source: "the Plan added alert's removed count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.imported.newExercises",
+                     source: "the Plan added alert's new-exercise count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.imported.struck",
+                     source: "the Plan added alert's struck-exercise count ('was' / 'were')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "trainerExport.preview.dayCount",
+                     source: "the trainer summary's day count, which passed the English 's' as an argument"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "move.week.cell.plans",
+                     source: "a Move week-strip tile's planned count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "move.week.cell.logs",
+                     source: "a Move week-strip tile's logged count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "move.week.cell.a11y.planned",
+                     source: "a Move week-strip tile's spoken planned count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "move.week.cell.a11y.logged",
+                     source: "a Move week-strip tile's spoken logged count"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings", key: "coachPlan.count.sets",
+                     source: "a coach-plan review note's set count ('0 sets')"),
+        // Spanish round, settings lane (2026-10-20): the photo-verification line, once two English
+        // sentences picked by `== 1`. Its one-photo English ("so it may be missing") is the `one` form.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "privacy.ownPhotos.verifiedUnreadable",
+                     source: "Privacy & Data's encrypted photo backup verification line"),
     ]
 
     /// Every count-bearing key carries real plural variations.
@@ -3177,6 +4019,274 @@ struct LocalizationBoundaryTests {
                 """
             )
         }
+    }
+
+    // MARK: - F3. Spanish round, journal lane (2026-10-20)
+
+    /// Keys the Spanish round's journal lane put into a catalog: journal, cycle, onboarding and
+    /// companion copy that was a bare English literal (a `String` helper parameter, a `String`
+    /// display property, or an English plural spliced in code) before this round.
+    ///
+    /// Kept apart from ``harvestedForkKeys`` so the lanes of one round do not all append to the
+    /// same list. Each key was measured absent from its catalog before the lane's change, so a
+    /// failure here means a conversion was reverted or the catalogs were not re-synced.
+    static let journalLaneKeys: [HarvestedKey] = {
+        let domain = "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings"
+        var keys: [HarvestedKey] = []
+        let cosmetics: [(prefix: String, tokens: [String])] = [
+            ("companionBodyStyle", CompanionBodyStyle.allCases.map(\.rawValue)),
+            ("companionPalette", CompanionPalette.allCases.map(\.rawValue)),
+            ("companionAccessory", CompanionAccessory.allCases.map(\.rawValue)),
+            ("companionClothing", CompanionClothing.allCases.map(\.rawValue)),
+            ("companionSideItem", CompanionSideItem.allCases.map(\.rawValue)),
+        ]
+        for slot in cosmetics {
+            for token in slot.tokens {
+                keys.append(HarvestedKey(catalog: domain, key: "\(slot.prefix).\(token)",
+                                         source: "the wardrobe's \(slot.prefix) label, literal → String(localized:bundle: .module)"))
+            }
+        }
+        for goal in GoalType.allCases {
+            for member in ["name", "tagline", "training"] {
+                keys.append(HarvestedKey(catalog: domain, key: "goal.\(goal.rawValue).\(member)",
+                                         source: "GoalType's \(member) on the preset cards, literal → String(localized:bundle: .module)"))
+            }
+        }
+        for stem in ["strength", "sportsPrep", "recovery", "balanced"] {
+            keys.append(HarvestedKey(catalog: domain, key: "goal.\(stem).nutrition",
+                                     source: "GoalType.nutritionSummary, literal → String(localized:bundle: .module)"))
+        }
+        return keys + journalLaneAppKeys + journalLaneCycleKeys + journalLaneOnboardingKeys + journalLaneLaunchKeys
+    }()
+
+    /// The journal lane's launch and companion keys: `LaunchPreparationService`'s status lines,
+    /// fallback photowall captions and deterministic companion thoughts (every prompt sent to the
+    /// on-device model is untouched), and the Worry Box's own undo word.
+    static let journalLaneLaunchKeys: [HarvestedKey] = {
+        let app = "App/Fernlet/Localizable.xcstrings"
+        var names: [String] = ["launch.status.checkingIn", "launch.status.readingPatterns",
+                               "launch.status.preparingSummary", "launch.status.gettingReady", "worryBox.undo.keep"]
+        names += ["morning", "meal", "movement", "moment"].map { "photowall.caption.\($0)" }
+        names += ["energyLow", "energyRising", "moodNeedsGentleness", "moodImproving", "readyForLight", "eatingLight", "ordinary"]
+            .map { "companion.thought.\($0)" }
+        return names.map {
+            HarvestedKey(catalog: app, key: $0,
+                         source: "launch status lines, fallback captions and thoughts, and the Worry Box undo, literal → String(localized:)")
+        }
+    }()
+
+    /// The journal lane's onboarding and age-gate keys: copy that reached `Text` as a `String`
+    /// helper parameter, and the age-gate sentences that spliced a feature name.
+    static let journalLaneOnboardingKeys: [HarvestedKey] = {
+        let app = "App/Fernlet/Localizable.xcstrings"
+        var names: [String] = [
+            "onboarding.step.index", "Private by default", "No shame loops", "You choose what to share",
+            "Coarse location", "Asked when you first scan a nutrition label.", "Restore from iCloud",
+            "Just on this device", "Sex", "Typical activity",
+        ]
+        for feature in ["intimacy", "chat"] {
+            names.append("ageGate.\(feature).confirmWarning")
+            for state in ["communicationLimits", "below", "needsSystemCheck", "unclearAnswer", "unknownAge", "available"] {
+                names.append("ageGate.\(feature).\(state)")
+            }
+        }
+        return names.map {
+            HarvestedKey(catalog: app, key: $0,
+                         source: "onboarding helpers typed String, and AgeGateNotice's spliced feature name")
+        }
+    }()
+
+    /// The journal lane's cycle keys: the app-target forks over the sealed vocabulary
+    /// (`PeriodSymptom`, `CyclePhase`) and the cycle page's assembled or `String`-typed copy.
+    static let journalLaneCycleKeys: [HarvestedKey] = {
+        let app = "App/Fernlet/Localizable.xcstrings"
+        var names: [String] = PeriodSymptom.allCases.map { "cycle.symptom.\($0.rawValue)" }
+        names += CyclePhase.allCases.map { "cycle.phase.\($0.rawValue)" }
+        names += CyclePhase.allCases.map { "cycle.phase.inSentence.\($0.rawValue)" }
+        for metric in ["sleep", "mood", "exercise", "nutrition", "symptoms"] {
+            names += ["cycle.trend.\(metric).worse", "cycle.trend.\(metric).better"]
+        }
+        names += [
+            "cycle.prediction.range", "cycle.prediction.confidence.low", "cycle.prediction.confidence.building",
+            "cycle.prediction.confidence.high", "cycle.symptom.withIntensity", "logPeriod.validation.temperatureRange",
+            "Your period and intimacy data stay on this device, behind your app lock.",
+            "Your intimacy data stays on this device, behind your app lock.",
+            "Your period data stays on this device, behind your app lock.",
+            "^[%lld event](inflect: true) logged in Apple Health",
+            "Your cycles vary by about ±^[%lld day](inflect: true).",
+        ]
+        return names.map {
+            HarvestedKey(catalog: app, key: $0,
+                         source: "the cycle page, day detail and log sheet: sealed-title reads, assembled sentences and String-typed copy")
+        }
+    }()
+
+    /// Members the journal lane forked off `String` (the ``forkedMembers`` shape, kept apart for the
+    /// same reason as ``journalLaneKeys``).
+    static let journalLaneForkedMembers: [ForkedMember] = [
+        ForkedMember(path: "App/Fernlet/LogPeriodSheet.swift",
+                     declaration: "private func periodToggle(_ title: LocalizedStringKey, isOn: Binding<Bool>) -> some View {",
+                     role: "the period log sheet's 'First day of cycle' and 'Intermenstrual bleeding' switches"),
+        ForkedMember(path: "App/Fernlet/OnboardingWelcomeView.swift",
+                     declaration: "private func privacyRow(_ systemImage: String, title: LocalizedStringKey, body: LocalizedStringKey) -> some View {",
+                     role: "the welcome screen's three privacy pillars"),
+        ForkedMember(path: "App/Fernlet/OnboardingPermissionsView.swift",
+                     declaration: "private func permissionRow(_ systemImage: String, title: LocalizedStringKey, body: LocalizedStringKey) -> some View {",
+                     role: "the permissions step's Health, Camera and Coarse location cards"),
+        ForkedMember(path: "App/Fernlet/OnboardingStorageChoiceView.swift",
+                     declaration: "private func storageCard(choice: OnboardingStorageChoice, title: LocalizedStringKey, copy: Text, systemImage: String) -> some View {",
+                     role: "the storage step's two cards and their explanations"),
+        ForkedMember(path: "App/Fernlet/OnboardingView.swift",
+                     declaration: "init(_ label: LocalizedStringKey, @ViewBuilder content: () -> Content) {",
+                     role: "LabeledProfilePicker's caption (Sex, Typical activity, Eating pattern, Guidance style)"),
+        ForkedMember(path: "App/Fernlet/OnboardingView.swift",
+                     declaration: "static let sex: LocalizedStringKey = \"Sex\"",
+                     role: "the body-profile Sex picker's name, shared by Settings and onboarding"),
+        ForkedMember(path: "App/Fernlet/OnboardingView.swift",
+                     declaration: "static let activity: LocalizedStringKey = \"Typical activity\"",
+                     role: "the body-profile activity picker's name, shared by Settings and onboarding"),
+        ForkedMember(path: "App/Fernlet/AgeGateNotice.swift",
+                     declaration: "let feature: AgeGatedFeature",
+                     role: "the age-gate notice's feature, whose sentences are whole per feature (was a spliced `featureName: String`)"),
+    ]
+
+    /// The journal lane's forked members still carry their localized types.
+    @Test func theJournalLanesForkedMembersStillCarryLocalizedTypes() throws {
+        var missing: [String] = []
+        for entry in Self.journalLaneForkedMembers {
+            let source = try String(contentsOf: RepoRoot.url(entry.path), encoding: .utf8)
+            let present = Self.logicalLines(in: source).contains { $0.text.contains(entry.declaration) }
+            if !present { missing.append("\(entry.path): \(entry.declaration)  ← \(entry.role)") }
+        }
+        #expect(
+            missing.isEmpty,
+            """
+            \(missing.count) member(s) the journal lane forked off `String` no longer carry their \
+            localized type — a revert compiles, reads correctly in English, and silently leaves \
+            the catalog. If a member was deliberately renamed, update its pin:
+            \(missing.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// The cycle surfaces draw the app-target forks, never the sealed module's `title`s.
+    ///
+    /// `PeriodSymptom.title` is English literals and the other four sealed `title`s are
+    /// `rawValue.capitalized`; every one compiles beside its fork and reads correctly in English, so a
+    /// draw that drifts back to `title` is invisible to everything but a scan.
+    @Test func theCycleSurfacesNeverDrawTheSealedTitles() throws {
+        let files = ["App/Fernlet/CycleTrackerView.swift", "App/Fernlet/CycleDayDetailView.swift", "App/Fernlet/LogPeriodSheet.swift"]
+        let pattern = try NSRegularExpression(pattern: #"(?i:symptom|phase|level|quality|result)\??\.title\b"#)
+        let fires = { (line: String) in pattern.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil }
+        // Planted fixtures: the matcher must fire on the shapes it guards, and not on the forks.
+        #expect(fires("Text(verbatim: periodStore.currentPhase.title)"))
+        #expect(fires("periodToggle(symptom.title, isOn: binding)"))
+        #expect(fires("mucusQuality?.title ?? none"))
+        #expect(!fires("Text(verbatim: periodStore.currentPhase.displayName)"))
+        #expect(!fires("Text(notification.reason.title)"))
+        var offenders: [String] = []
+        for path in files {
+            let source = try String(contentsOf: RepoRoot.url(path), encoding: .utf8)
+            for (number, raw) in source.components(separatedBy: "\n").enumerated() {
+                let line = raw.trimmingCharacters(in: .whitespaces)
+                guard !line.hasPrefix("//") else { continue }
+                let range = NSRange(line.startIndex..., in: line)
+                if pattern.firstMatch(in: line, range: range) != nil { offenders.append("\(path):\(number + 1): \(line)") }
+            }
+        }
+        #expect(
+            offenders.isEmpty,
+            """
+            \(offenders.count) cycle draw(s) read a sealed `title` (English literals or \
+            `rawValue.capitalized`) instead of the app-target `displayName` fork beside it:
+            \(offenders.joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// The journal lane's app-catalog keys (see ``journalLaneKeys``).
+    static let journalLaneAppKeys: [HarvestedKey] = {
+        let app = "App/Fernlet/Localizable.xcstrings"
+        var keys: [HarvestedKey] = []
+        let promptThemes = [("gratitude", 6), ("emotions", 6), ("body", 6), ("wins", 6), ("pleasures", 6), ("kindness", 10)]
+        for (theme, count) in promptThemes {
+            for index in 1...count {
+                keys.append(HarvestedKey(catalog: app, key: "journal.dailyPrompt.\(theme).\(index)",
+                                         source: "JournalPromptLibrary.prompts, a [String] of literals drawn with Text(String)"))
+            }
+        }
+        var day: [String] = [
+            "journal.day.blurb.empty", "journal.day.micronutrient.sodium", "journal.day.micronutrient.saturatedFat",
+            "journal.day.micronutrient.sugar", "journal.day.micronutrient.limit", "journal.day.micronutrient.target",
+            "Today so far", "Yesterday", "Your %@",
+        ]
+        day += FeelingTag.allCases.map { "journal.day.blurb.feeling.\($0.rawValue)" }
+        day += SleepQuality.allCases.map { "journal.day.blurb.sleep.\($0.rawValue)" }
+        for key in day {
+            keys.append(HarvestedKey(catalog: app, key: key,
+                                     source: "DayDetailView's review card and micronutrient rows, String → catalog key"))
+        }
+        return keys
+    }()
+
+    /// The journal lane's count-bearing keys: each was an English plural spliced in code
+    /// ("\(n) \(n == 1 ? "meal" : "meals")"), so its `one`/`other` block is hand-authored.
+    static let journalLanePluralKeys: [HarvestedKey] = [
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "journal.day.blurb.meals",
+                     source: "the day review's meal count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "journal.day.blurb.workouts",
+                     source: "the day review's workout count ('a workout' / '2 workouts')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "journal.day.bottleCount",
+                     source: "the day review's and Water card's bottle count"),
+    ]
+
+    /// Every journal-lane count key carries real plural variations (see ``journalLanePluralKeys``).
+    @Test func theJournalLanesCountKeysCarryPluralVariations() throws {
+        var missing: [String] = []
+        for entry in Self.journalLanePluralKeys {
+            let data = try Data(contentsOf: RepoRoot.url(entry.catalog))
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let strings = json?["strings"] as? [String: Any] ?? [:]
+            if !Self.carriesEnglishOneAndOtherPlural(strings, key: entry.key) {
+                missing.append("\(entry.catalog): \(entry.key)  ← \(entry.source)")
+            }
+        }
+        #expect(
+            missing.isEmpty,
+            """
+            \(missing.count) count-bearing key(s) have no `one`/`other` plural variation, and \
+            `xcstringstool sync` will never add the block back:
+            \(missing.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// The journal lane's conversions reached their catalogs (see ``journalLaneKeys``).
+    @Test func theJournalLanesStringsReachedTheirCatalogs() throws {
+        var missing: [String] = []
+        var parsed: [String: [String: Any]] = [:]
+        for entry in Self.journalLaneKeys {
+            if parsed[entry.catalog] == nil {
+                let data = try Data(contentsOf: RepoRoot.url(entry.catalog))
+                let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+                parsed[entry.catalog] = json?["strings"] as? [String: Any] ?? [:]
+            }
+            let strings = parsed[entry.catalog] ?? [:]
+            #expect(!strings.isEmpty, "\(entry.catalog) parsed to zero keys — the catalog moved or broke")
+            if strings[entry.key] == nil {
+                missing.append("\(entry.catalog): \(entry.key)  ← \(entry.source)")
+            }
+        }
+        #expect(
+            missing.isEmpty,
+            """
+            \(missing.count) key(s) the Spanish round's journal lane put into a string catalog are \
+            gone. Either the conversion was reverted — the string is frozen English again, with a \
+            clean build — or the catalogs were not re-synced. Run Scripts/sync-string-catalogs.sh \
+            and commit the diff with the code change:
+            \(missing.sorted().joined(separator: "\n"))
+            """
+        )
     }
 
     // MARK: - F. Accessibility copy may not be typed `String`
@@ -3766,9 +4876,11 @@ struct LocalizationBoundaryTests {
         }
     }
 
-    /// The modules that gained their first catalog in the `LocalizedError` sweep.
+    /// The modules that gained their first catalog in the `LocalizedError` sweep — plus `FernletLock`
+    /// (Spanish round, 2026-10-20), whose `invalidCredential` refusals are the thrower's half of the
+    /// `FernletLockError` copy that `FernletFoundation`'s catalog cannot hold.
     static let localizedErrorSweepCatalogModules = [
-        "AIProviders", "CloudKitSync", "FernletFoundation", "HealthKitGateway",
+        "AIProviders", "CloudKitSync", "FernletFoundation", "HealthKitGateway", "FernletLock",
     ]
 
     /// Every module with a catalog is also named in the sync script's `TARGETS` array.
@@ -4836,6 +5948,682 @@ struct LocalizationBoundaryTests {
         var cursor = index
         while cursor < chars.count, chars[cursor].isWhitespace { cursor += 1 }
         return cursor
+    }
+
+    // MARK: - I. Inflection markup never reaches a bare `String`
+
+    /// Every root whose Swift may read a catalog key: the app, its extensions, and the package.
+    static let inflectionScanRoots = ["App", "FernletKit/Sources"]
+
+    /// Floor for part I's scan (about 690 shipping `.swift` files when it was written), so a root
+    /// that stops resolving fails instead of passing over nothing.
+    static let minimumInflectionFilesScanned = 500
+
+    /// A `String(localized:)` call (never `AttributedString(localized:)`) whose key was a literal.
+    struct BareStringKeySite: Hashable, Sendable {
+        /// Repo-relative path, filled in by the discovery pass.
+        let path: String
+        /// 1-based line of the call's head.
+        let line: Int
+        /// The key literal's text with each `\(…)` collapsed to `{}`; for a resource resolution
+        /// (``isLiteral`` false), the argument's code as written.
+        let key: String
+        /// The whole call, from `String` to its matching `)`.
+        let call: String
+        /// Whether the first argument is a string literal (a key). False is a caller-built
+        /// `LocalizedStringResource` resolved straight to a `String`.
+        var isLiteral = true
+    }
+
+    /// A catalog key whose text carries automatic-grammar-agreement markup (`](inflect:`) in the
+    /// key itself or in any language's value: such a key must be drawn through `Text`,
+    /// `AttributedString(localized:)` or `AddressedCopy`, which consume the markup.
+    ///
+    /// `String(localized:)` does NOT consume it. Measured 2026-10-20 (macOS 26 Foundation, a bundle
+    /// holding only `es`): the call returned `^[Bienvenido](inflect: true) a Fernlet` verbatim, markup
+    /// and all. The day the Spanish translation marks "listo" for agreement with the user, every key
+    /// read that way would put the raw markup on screen in Spanish while English stays clean, and no
+    /// English run would ever show it. Plural agreement (`^[%lld pair](inflect: true)`) is the same
+    /// trap in English today. `AddressedCopy.string(_:addressing:)` is the safe `String` path.
+    @Test func inflectionMarkedKeysNeverReachABareString() throws {
+        let marked = try Self.inflectionMarkedCatalogKeys()
+        let (sites, filesScanned) = try Self.scanForBareStringKeys()
+        #expect(
+            filesScanned >= Self.minimumInflectionFilesScanned,
+            "Scanned only \(filesScanned) Swift files (floor \(Self.minimumInflectionFilesScanned)): part I is unenforced."
+        )
+        let offenders = sites.filter { site in
+            site.isLiteral
+                && (site.call.contains("](inflect:") || marked.contains { Self.literalKey(site.key, matches: $0) })
+        }
+        #expect(
+            offenders.isEmpty,
+            """
+            \(offenders.count) `String(localized:)` call(s) read a key whose text carries `^[…](inflect: \
+            true)` markup. A plain String keeps the markup, so it shows on screen. Draw the key with \
+            Text, AttributedString(localized:), or AddressedCopy.string(_:addressing:):
+            \(offenders.map { "\($0.path):\($0.line): \($0.key)" }.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// Fixture: part I's matchers fire on each shape they must catch and stay silent on the rest.
+    @Test func bareStringKeyScannerSeparatesStringFromAttributedString() {
+        let source = """
+        let a = String(localized: "Made ^[\\(n) time](inflect: true).")
+        let b = AttributedString(localized: "Made ^[\\(n) time](inflect: true).")
+        // String(localized: "commented out")
+        let c = String(
+            localized: "welcome.title", defaultValue: "^[Bienvenido](inflect: true)", comment: "x")
+        let d = String(localized: resource)
+        """
+        let all = Self.bareStringKeys(in: source)
+        let sites = all.filter(\.isLiteral)
+        #expect(sites.map(\.key) == ["Made ^[{} time](inflect: true).", "welcome.title"])
+        #expect(sites.map(\.line) == [1, 4])
+        #expect(sites.last?.call.contains("](inflect:") == true)
+        #expect(all.filter { !$0.isLiteral }.map(\.key) == ["resource"], "a resource resolution is recorded as one")
+        #expect(Self.literalKey("Made {} times", matches: "Made %lld times"))
+        #expect(Self.literalKey("{}, {} time", matches: "%1$@, %2$lld time"))
+        #expect(Self.literalKey("Made ^[{} time](inflect: true).", matches: "Made ^[%lld time](inflect: true)."))
+        #expect(!Self.literalKey("Made {} times", matches: "Made %lld times today"))
+        #expect(!Self.literalKey("Made it", matches: "Made %lld times"))
+    }
+
+    /// The runtime half: `AddressedCopy` inflects for the term of address it is handed, whatever
+    /// the system's own Form of Address says, and the body profile's Sex picks that term.
+    @Test func addressedCopyInflectsForTheProfilesSex() {
+        let resource = LocalizedStringResource(
+            "test.addressedCopy.ready", defaultValue: "¿Estás ^[listo](inflect: true)?",
+            locale: Locale(identifier: "es"), comment: "Test-only Spanish default value")
+        #expect(BiologicalSex.female.termOfAddress == .feminine)
+        #expect(BiologicalSex.male.termOfAddress == .masculine)
+        #expect(AddressedCopy.string(resource, addressing: BiologicalSex.female.termOfAddress) == "¿Estás lista?")
+        #expect(AddressedCopy.string(resource, addressing: BiologicalSex.male.termOfAddress) == "¿Estás listo?")
+        #expect(UserNutritionProfile().sex.termOfAddress == .masculine, "An unanswered profile must address the user in the masculine.")
+    }
+
+    /// An argument that is data comes back byte for byte through `AddressedCopy.argument(_:)`.
+    ///
+    /// `AttributedString(localized:)`, which `AddressedCopy` resolves through, parses the RESOLVED
+    /// text as Markdown, interpolated arguments included (measured 2026-10-21): a planner note naming
+    /// a lift someone typed as "*Row*" would store "Row". The unescaped line below proves the trap is
+    /// live, so the escape is not decoration.
+    @Test func addressedCopyArgumentsComeBackVerbatim() {
+        for name in ["*Row* _wide_", "Cable fly [high](x) `1`", "Farmer's carry 50%", #"a\b \"#, "Bench press", "22.5 kg"] {
+            let resource = LocalizedStringResource(
+                "test.addressedCopy.argument", defaultValue: "\(AddressedCopy.argument(name)): welcome back.",
+                comment: "Test-only: an escaped data argument")
+            #expect(AddressedCopy.string(resource, addressing: .feminine) == "\(name): welcome back.")
+        }
+        let raw = "*Row*"
+        let unescaped = LocalizedStringResource(
+            "test.addressedCopy.argumentRaw", defaultValue: "\(raw): welcome back.", comment: "Test-only: the trap")
+        #expect(AddressedCopy.string(unescaped, addressing: .masculine) == "Row: welcome back.",
+                "AttributedString(localized:) no longer parses arguments as Markdown; AddressedCopy.argument's doc is stale")
+    }
+
+    /// No shipping code resolves a `LocalizedStringResource` with `String(localized:)`.
+    ///
+    /// Part I's first rule can only see a key written as a literal. A resource built elsewhere and
+    /// resolved to a `String` (an announcement's line, a spoken cue, a background task's title) is
+    /// the same trap one step removed: the Spanish drafting pass found the guided run's "rest over"
+    /// line, whose translation marks "listo", on exactly that path, where VoiceOver would have read
+    /// the markup aloud. Every such site goes through `AddressedCopy.string(_:addressing:)` (with the
+    /// user's term of address) or `AddressedCopy.plain(_:)` (copy that never describes the user),
+    /// both of which consume the markup. Comments are skipped, so documentation may name the call.
+    @Test func noShippingCodeResolvesAResourceStraightToAString() throws {
+        let (sites, filesScanned) = try Self.scanForBareStringKeys()
+        #expect(filesScanned >= Self.minimumInflectionFilesScanned)
+        let offenders = sites.filter { !$0.isLiteral }
+        #expect(
+            offenders.isEmpty,
+            """
+            \(offenders.count) `String(localized:)` call(s) resolve a caller-built resource straight to \
+            a String, which keeps a translation's grammar-agreement markup verbatim. Use \
+            AddressedCopy.string(_:addressing:) or AddressedCopy.plain(_:):
+            \(offenders.map { "\($0.path):\($0.line): \($0.key)" }.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// Every catalog key in the scan roots whose key or any value carries `](inflect:`.
+    static func inflectionMarkedCatalogKeys() throws -> [String] {
+        var marked: [String] = []
+        for root in inflectionScanRoots {
+            guard let enumerator = FileManager.default.enumerator(at: RepoRoot.url(root), includingPropertiesForKeys: nil) else {
+                Issue.record("Could not enumerate \(root): part I is unenforced.")
+                continue
+            }
+            for case let url as URL in enumerator where url.pathExtension == "xcstrings" {
+                let object = try JSONSerialization.jsonObject(with: Data(contentsOf: url))
+                let strings = (object as? [String: Any])?["strings"] as? [String: Any] ?? [:]
+                for (key, entry) in strings {
+                    let body = try JSONSerialization.data(withJSONObject: entry)
+                    if key.contains("](inflect:") || String(decoding: body, as: UTF8.self).contains("](inflect:") {
+                        marked.append(key)
+                    }
+                }
+            }
+        }
+        return marked
+    }
+
+    /// Scans every shipping `.swift` file under ``inflectionScanRoots`` for literal-key
+    /// `String(localized:)` calls.
+    static func scanForBareStringKeys() throws -> (sites: [BareStringKeySite], filesScanned: Int) {
+        var sites: [BareStringKeySite] = []
+        var filesScanned = 0
+        for root in inflectionScanRoots {
+            guard let enumerator = FileManager.default.enumerator(at: RepoRoot.url(root), includingPropertiesForKeys: nil) else {
+                Issue.record("Could not enumerate \(root): part I is unenforced.")
+                continue
+            }
+            for case let url as URL in enumerator where url.pathExtension == "swift" {
+                let source = try String(contentsOf: url, encoding: .utf8)
+                filesScanned += 1
+                let path = url.path.replacingOccurrences(of: RepoRoot.url.path + "/", with: "")
+                sites += bareStringKeys(in: source).map {
+                    BareStringKeySite(path: path, line: $0.line, key: $0.key, call: $0.call)
+                }
+            }
+        }
+        return (sites, filesScanned)
+    }
+
+    /// Every `String(localized: "<literal>"…)` call in `source`, skipping comments, string contents
+    /// and `AttributedString(localized:)` (whose head contains `String(` but consumes the markup).
+    /// Pure + testable.
+    static func bareStringKeys(in source: String) -> [BareStringKeySite] {
+        let chars = Array(source)
+        var sites: [BareStringKeySite] = []
+        var index = 0
+        var line = 1
+        while index < chars.count {
+            if let skip = skipNonCode(chars, from: index) {
+                line += countNewlines(chars, from: index, to: skip)
+                index = max(skip, index + 1)
+                continue
+            }
+            if chars[index] == "\n" { line += 1 }
+            let preceded = index > 0 && (chars[index - 1].isLetter || chars[index - 1].isNumber || chars[index - 1] == "_")
+            guard chars[index] == "S", !preceded, let openParen = localizedCallHead(chars, at: index) else {
+                index += 1
+                continue
+            }
+            let end = endOfCall(chars, openParen: openParen)
+            let labelStart = skipWhitespace(chars, from: openParen + 1)
+            let keyStart = skipWhitespace(chars, from: labelStart + "localized:".count)
+            let call = String(chars[index..<min(end, chars.count)])
+            if keyStart < chars.count, chars[keyStart] == "\"" {
+                sites.append(BareStringKeySite(path: "", line: line, key: readStringLiteral(chars, from: keyStart).text, call: call))
+            } else if keyStart < chars.count {
+                let argument = String(chars[keyStart..<max(keyStart, min(end, chars.count) - 1)])
+                sites.append(BareStringKeySite(path: "", line: line, key: argument, call: call, isLiteral: false))
+            }
+            line += countNewlines(chars, from: index, to: end)
+            index = max(end, index + 1)
+        }
+        return sites
+    }
+
+    /// Whether a source key literal names `catalogKey`. ``readStringLiteral(_:from:)`` collapses each
+    /// `\(…)` interpolation to `{}`; extraction turned each into a format specifier (`%@`, `%lld`,
+    /// `%1$@`, …), so a `{}` matches exactly one specifier.
+    static func literalKey(_ literal: String, matches catalogKey: String) -> Bool {
+        guard literal.contains("{}") else { return literal == catalogKey }
+        let pieces = literal.components(separatedBy: "{}")
+        let specifier = "%(?:[0-9]+\\$)?[-#+ 0]*[0-9]*(?:\\.[0-9]+)?(?:hh|h|ll|l|q|z|t|j)?[@dDuUxXoOfFeEgGcCsSpaA]"
+        let pattern = "^" + pieces.map(NSRegularExpression.escapedPattern(for:)).joined(separator: specifier) + "$"
+        return catalogKey.range(of: pattern, options: .regularExpression) != nil
+    }
+
+    // MARK: - I2. Copy that describes the user is read only through an addressed reader
+
+    /// Every key whose Spanish draft (2026-10-20) marks a word that describes the user,
+    /// `^[listo](inflect: true)`: the owner's rule is that such a word agrees with the body profile's
+    /// Sex (`UserNutritionProfile.sex`), masculine when it was never answered.
+    ///
+    /// Pinned by hand because the drafts are not in the catalogs yet (a later step applies them), so
+    /// the catalogs alone cannot say today which keys describe the user. Once a translation carrying a
+    /// gender mark lands, ``catalogKeysByMark()`` finds its key on its own, and this list is the floor
+    /// that survives a draft being reworded. A key here that no catalog holds is a stale pin and
+    /// fails, so a renamed key cannot quietly drop out.
+    static let userGenderedKeys: [String] = [
+        // App catalog, literal keys.
+        "Tap anywhere when you're ready for the next one — take all the time you like.",
+        "Fernlet quietly compares your recent heart rate variability and resting heart rate with your own usual range from the last several weeks — never anyone else's numbers. Days you moved a lot, marked yourself sick, or showed signs of coming down with something are taken into account so a hard workout doesn't read as a hard week.",
+        "Timer's up — tap Next when you're ready. Nothing advances on its own.",
+        "Nothing yet. Describe a meal when you are ready.",
+        "Enter ingredients, macros, servings, and notes yourself.",
+        "Open Food Facts is busy right now. Give it a minute, or name it yourself below.",
+        "Couldn't reach Open Food Facts right now. You can try again, or name it yourself below.",
+        "When it's been a while since a meal or some water, your companion can look a little hungry or thirsty — only in waking hours, never when you're unwell. Turn this off and it never will.",
+        "Just a few easy stretches, kneeling, lying and sitting. Stop whenever you've had enough — resting counts just as much today.",
+        "Only with a spotter or safety arms. Stop if your form breaks, and skip it when you're sore, sick or short on sleep.",
+        "Welcome to Fernlet",
+        "Rest's over. Start your next set when you're ready.",
+        "A little tense",
+        "Extra tense lately",
+        "I'm ready",
+        // App catalog, semantic keys.
+        "home.thought.journalMood.tired",
+        "signal.value.readyForLight",
+        "signal.value.readyForModerate",
+        "signal.value.readyForHard",
+        "journal.dailyPrompt.body.3",
+        "journal.day.blurb.feeling.quiet",
+        "journal.day.blurb.feeling.tired",
+        "move.workout.remove.restoresPlan",
+        "move.workout.remove.restoresPlanAndHealth",
+        // Package catalogs: AppServices, FernletDomainModel, FernletLockUI, FernletScoring.
+        "notification.workoutCue.restEnded.body",
+        "notification.workoutCue.segmentEnded.body",
+        "workoutNote.load.afterBreak",
+        "workoutNote.load.afterBreakAt",
+        "workoutNote.calibration.oneRepMax",
+        "trainingSplit.recoveryFlow.summary",
+        "feeling.quiet",
+        "feeling.tired",
+        "lock.disclosure.onlyIfConfident",
+        "fernletVoice.retryAvailable",
+        "workoutFallback.note.balancedStrengthCircuit",
+    ]
+
+    /// The readers that resolve a key for an explicit term of address: FernletUI's `AddressedText`
+    /// (which reads the environment's), `AddressedCopy.string` / `.attributed`, and
+    /// `FernletAnnouncer`'s resource overload (which resolves through `AddressedCopy`). The last three
+    /// count only with an `addressing:` argument; the announcer's would otherwise default to masculine.
+    static let addressedReaders: [(name: String, needsTerm: Bool)] = [
+        ("AddressedText", false), ("AddressedCopy.string", true), ("AddressedCopy.attributed", true), ("announce", true),
+    ]
+
+    /// One read of a user-gendered key: where its literal sits, and the call that reads it.
+    struct GenderedKeySite: Hashable, Sendable {
+        /// Repo-relative path, filled in by the discovery pass.
+        var path = ""
+        /// 1-based line of the literal.
+        let line: Int
+        /// The key, as the catalog holds it.
+        let key: String
+        /// The call the literal is an argument of, looking through a `LocalizedStringResource(…)`
+        /// built around it; `[` or `{` when it is an element or a block's value, "no call" when it
+        /// is not inside any call at all.
+        let reader: String
+        /// Whether ``reader`` resolves the key for an explicit term of address.
+        let addressed: Bool
+    }
+
+    /// Copy that describes the user is read only through an addressed reader.
+    ///
+    /// Every key of ``userGenderedKeys``, and every catalog key whose value carries a gender mark,
+    /// must appear in shipping source only as an argument of `AddressedText(…)`, or of
+    /// `AddressedCopy.string(…, addressing:)` / `.attributed(…, addressing:)` / `announce(…,
+    /// addressing:)`, looking through a `LocalizedStringResource(…)` built around it.
+    ///
+    /// Why lexical, and not "the resource reaches an addressed reader eventually". Every one of the
+    /// 35 sites this list started with was a SILENT miss: `Text("…")` inflects for the system's Form
+    /// of Address, a component's `LocalizedStringKey` parameter does the same one call removed,
+    /// `String(localized:)` keeps the raw markup, and `AddressedCopy.plain(_:)` says masculine to
+    /// everyone — and all four read correctly in English, which is every build anyone runs. A literal
+    /// sitting inside the addressed call that reads it is the one shape a line scan can prove; a key
+    /// held in a property, returned from a `switch` or handed to a helper is the data-flow question
+    /// this file's header says it cannot answer. So those sites were rewritten to the lexical shape:
+    /// a helper takes the `Text` or `String` its caller resolved, and a switch returns
+    /// `AddressedCopy.string(…)` from the case that needs it.
+    ///
+    /// It does not check WHICH term a reader passes. The compiler makes every reader name one;
+    /// ``everyMasculineDefaultIsPinnedWithItsReason()`` holds the literal `.masculine`, and review
+    /// holds the rest (`fernletTermOfAddress` in a view, `effectiveUserProfile.sex.termOfAddress` in
+    /// the store, `WorkoutLoadContext.address` in the planner).
+    @Test func userGenderedKeysAreReadOnlyThroughAnAddressedReader() throws {
+        let catalogs = try Self.catalogKeysByMark()
+        let stale = Self.userGenderedKeys.filter { !catalogs.all.contains($0) }
+        #expect(stale.isEmpty, "Pinned user-gendered key(s) no catalog holds (renamed? re-pin them): \(stale)")
+        let keys = Set(Self.userGenderedKeys).union(catalogs.genderMarked)
+        let (sites, filesScanned) = try Self.scanForGenderedKeySites(keys: keys)
+        #expect(filesScanned >= Self.minimumInflectionFilesScanned, "Scanned only \(filesScanned) Swift files: part I2 is unenforced.")
+        let offenders = sites.filter { !$0.addressed }
+        #expect(
+            offenders.isEmpty,
+            """
+            \(offenders.count) read(s) of copy that describes the user are not addressed. Its translation \
+            agrees a word with the profile's Sex, which only AddressedText, AddressedCopy.string / \
+            .attributed(…, addressing:) and announce(…, addressing:) apply: Text("…") and a \
+            LocalizedStringKey parameter inflect for the system's setting, String(localized:) keeps the \
+            markup, and AddressedCopy.plain says masculine to everyone. Put the literal inside the \
+            addressed call that reads it:
+            \(offenders.map { "\($0.path):\($0.line): \($0.key.prefix(60)) (read by \($0.reader))" }.sorted().joined(separator: "\n"))
+            """
+        )
+        let unread = Self.userGenderedKeys.filter { key in !sites.contains { $0.key == key } }
+        #expect(unread.isEmpty, "Pinned user-gendered key(s) no shipping code reads (a stale pin, or a reader the scan cannot see): \(unread)")
+    }
+
+    /// Fixture: each reader shape part I2 must catch or pass, and the gender-mark detector.
+    @Test func genderedKeyScannerNamesTheReaderOfEachLiteral() {
+        let keys: Set<String> = ["I'm ready", "feeling.tired", "Day %lld, ready"]
+        let source = """
+        Text("I'm ready")
+        Text(AddressedCopy.attributed("I'm ready", addressing: address))
+        AddressedText("I'm ready")
+        let a = AddressedCopy.string(LocalizedStringResource("feeling.tired", defaultValue: "Tired", bundle: .module), addressing: term)
+        let b = String(localized: "feeling.tired", defaultValue: "Tired", bundle: .module)
+        let c = AddressedCopy.plain("I'm ready")
+        let d = AddressedCopy.string("I'm ready")
+        static let e: LocalizedStringResource = "I'm ready"
+        FernletAnnouncer.system.announce(.status, LocalizedStringResource("I'm ready"), addressing: termOfAddress)
+        FernletAnnouncer.system.announce(.status, "I'm ready")
+        EmptyState(text: "I'm ready")
+        let f = ["I'm ready"]
+        // Text("I'm ready")
+        Text("I'm ready, really")
+        AddressedText("Day \\(n), ready")
+        """
+        let sites = Self.genderedKeySites(in: source, keys: keys)
+        #expect(sites.map(\.line) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15], "the comment and the longer sentence are not reads")
+        #expect(sites.map(\.addressed) == [false, true, true, true, false, false, false, false, true, false, false, false, true])
+        #expect(sites.map(\.reader) == [
+            "Text", "AddressedCopy.attributed", "AddressedText", "AddressedCopy.string", "String", "AddressedCopy.plain",
+            "AddressedCopy.string", "no call", "FernletAnnouncer.system.announce", "FernletAnnouncer.system.announce",
+            "EmptyState", "[", "AddressedText",
+        ])
+        #expect(Self.genderMarks(in: "Estás ^[listo](inflect: true) y ^[%lld serie](inflect: true), ^[x](inflect:true)") == ["listo", "x"],
+                "a count's plural mark is not a gender mark")
+        #expect(Self.genderMarks(in: "^[listo](morphology: {})").isEmpty)
+    }
+
+    /// Every catalog key, and the ones whose value in any language carries a gender mark.
+    static func catalogKeysByMark() throws -> (all: Set<String>, genderMarked: Set<String>) {
+        var all: Set<String> = []
+        var marked: Set<String> = []
+        for root in inflectionScanRoots {
+            guard let enumerator = FileManager.default.enumerator(at: RepoRoot.url(root), includingPropertiesForKeys: nil) else {
+                Issue.record("Could not enumerate \(root): part I2 is unenforced.")
+                continue
+            }
+            for case let url as URL in enumerator where url.pathExtension == "xcstrings" {
+                let object = try JSONSerialization.jsonObject(with: Data(contentsOf: url))
+                let strings = (object as? [String: Any])?["strings"] as? [String: Any] ?? [:]
+                for (key, entry) in strings {
+                    all.insert(key)
+                    let body = String(decoding: try JSONSerialization.data(withJSONObject: entry), as: UTF8.self)
+                    if !genderMarks(in: key + body).isEmpty { marked.insert(key) }
+                }
+            }
+        }
+        return (all, marked)
+    }
+
+    /// The marked words of every gender mark in `text`: `^[…](inflect: true)` around words with no
+    /// format specifier (a count's plural mark, `^[%lld serving](inflect: true)`, always holds one).
+    /// Pure + testable.
+    static func genderMarks(in text: String) -> [String] {
+        var marks: [String] = []
+        var rest = Substring(text)
+        while let open = rest.range(of: "^[") {
+            let afterOpen = rest[open.upperBound...]
+            guard let close = afterOpen.range(of: "](") else { break }
+            let words = afterOpen[..<close.lowerBound]
+            let attribute = afterOpen[close.upperBound...].prefix { $0 != ")" }.filter { $0 != " " }
+            if attribute == "inflect:true", !words.contains("%") { marks.append(String(words)) }
+            rest = afterOpen[close.upperBound...]
+        }
+        return marks
+    }
+
+    /// Scans every shipping `.swift` file under ``inflectionScanRoots`` for reads of `keys`.
+    static func scanForGenderedKeySites(keys: Set<String>) throws -> (sites: [GenderedKeySite], filesScanned: Int) {
+        var sites: [GenderedKeySite] = []
+        var filesScanned = 0
+        for root in inflectionScanRoots {
+            guard let enumerator = FileManager.default.enumerator(at: RepoRoot.url(root), includingPropertiesForKeys: nil) else {
+                Issue.record("Could not enumerate \(root): part I2 is unenforced.")
+                continue
+            }
+            for case let url as URL in enumerator where url.pathExtension == "swift" {
+                let source = try String(contentsOf: url, encoding: .utf8)
+                filesScanned += 1
+                let path = url.path.replacingOccurrences(of: RepoRoot.url.path + "/", with: "")
+                sites += genderedKeySites(in: source, keys: keys).map { site in
+                    var located = site
+                    located.path = path
+                    return located
+                }
+            }
+        }
+        return (sites, filesScanned)
+    }
+
+    /// One open delimiter during ``genderedKeySites(in:keys:)``.
+    struct OpenDelimiter: Sendable {
+        /// `(`, `[` or `{`.
+        let character: Character
+        /// Its index in the source.
+        let index: Int
+        /// For `(`, the call's name as written before it (`AddressedCopy.string`, `Text`); else empty.
+        let head: String
+    }
+
+    /// Every string literal in `source` that names one of `keys`, with the call that reads it.
+    /// Comments are skipped, so documentation may quote a key. Pure + testable.
+    static func genderedKeySites(in source: String, keys: Set<String>) -> [GenderedKeySite] {
+        let chars = Array(source)
+        let formatKeys = keys.filter { $0.contains("%") }
+        var sites: [GenderedKeySite] = []
+        var stack: [OpenDelimiter] = []
+        var index = 0
+        var line = 1
+        while index < chars.count {
+            let character = chars[index]
+            if character == "\"" {
+                let literal = readStringLiteral(chars, from: index)
+                let key = literal.text.contains("{}")
+                    ? formatKeys.first(where: { literalKey(literal.text, matches: $0) })
+                    : (keys.contains(literal.text) ? literal.text : nil)
+                if let key {
+                    let reader = readerOfLiteral(chars, stack: stack)
+                    sites.append(GenderedKeySite(line: line, key: key, reader: reader.name, addressed: reader.addressed))
+                }
+                line += countNewlines(chars, from: index, to: literal.end)
+                index = max(literal.end, index + 1)
+                continue
+            }
+            if let skip = skipNonCode(chars, from: index) {
+                line += countNewlines(chars, from: index, to: skip)
+                index = max(skip, index + 1)
+                continue
+            }
+            if character == "\n" { line += 1 }
+            if character == "(" || character == "[" || character == "{" {
+                let head = character == "(" ? callHead(chars, before: index) : ""
+                stack.append(OpenDelimiter(character: character, index: index, head: head))
+            } else if character == ")" || character == "]" || character == "}" {
+                _ = stack.popLast()
+            }
+            index += 1
+        }
+        return sites
+    }
+
+    /// The call a literal is an argument of, walking out through any `LocalizedStringResource(…)`
+    /// built around it, and whether that call is an addressed reader. A `[` or `{` ends the walk:
+    /// the literal is an element or a block's value, not an argument.
+    static func readerOfLiteral(_ chars: [Character], stack: [OpenDelimiter]) -> (name: String, addressed: Bool) {
+        for open in stack.reversed() {
+            guard open.character == "(" else { return (String(open.character), false) }
+            let name = open.head.hasPrefix(".") ? String(open.head.dropFirst()) : open.head
+            if name == "LocalizedStringResource" { continue }
+            guard let reader = addressedReaders.first(where: { name == $0.name || name.hasSuffix("." + $0.name) }) else {
+                return (name, false)
+            }
+            guard reader.needsTerm else { return (name, true) }
+            let call = code(chars, from: open.index, to: endOfCall(chars, openParen: open.index))
+            return (name, call.contains("addressing:"))
+        }
+        return ("no call", false)
+    }
+
+    /// The name written immediately before the `(` at `openParen`: identifier characters and dots,
+    /// so `AddressedCopy.string`, `FernletAnnouncer.system.announce`, `.announce`, `Text`.
+    static func callHead(_ chars: [Character], before openParen: Int) -> String {
+        var cursor = openParen - 1
+        while cursor >= 0, chars[cursor] == " " { cursor -= 1 }
+        var head: [Character] = []
+        while cursor >= 0, chars[cursor].isLetter || chars[cursor].isNumber || chars[cursor] == "_" || chars[cursor] == "." {
+            head.append(chars[cursor])
+            cursor -= 1
+        }
+        return String(head.reversed())
+    }
+
+    /// One literal `.masculine` in shipping code, and why it is not standing in for a profile's term.
+    struct MasculineDefault: Sendable {
+        /// Repo-relative path of the file.
+        let path: String
+        /// The line's trimmed code, comments removed.
+        let line: String
+        /// Why no profile's term exists there.
+        let reason: String
+    }
+
+    /// Every `.masculine` shipping code may write. The owner's rule allows it only where no profile
+    /// can exist yet, or as an unanswered profile's own default; a `.masculine` that quieted the
+    /// compiler at a call site that knew the profile is exactly the bug part I2 cannot see, so a new
+    /// one argues its case here.
+    static let masculineDefaults: [MasculineDefault] = [
+        MasculineDefault(
+            path: "FernletKit/Sources/FernletDomainModel/AddressedCopy.swift", line: "case .male: .masculine",
+            reason: "BiologicalSex.termOfAddress itself: the male answer, which is also an unanswered profile's."),
+        MasculineDefault(
+            path: "FernletKit/Sources/FernletDomainModel/AddressedCopy.swift", line: "string(resource, addressing: .masculine)",
+            reason: "AddressedCopy.plain: copy that never describes the user; part I2 keeps every user-gendered key off it."),
+        MasculineDefault(
+            path: "FernletKit/Sources/FernletUI/AddressedText.swift", line: "@Entry var fernletTermOfAddress: TermOfAddress = .masculine",
+            reason: "The environment's value before the app root (or onboarding) sets it from the profile: the unanswered default."),
+        MasculineDefault(
+            path: "FernletKit/Sources/FernletUI/FernletAnnouncer.swift", line: "addressing address: TermOfAddress = .masculine",
+            reason: "The resource overload's default for its many callers whose copy never describes the user; part I2 makes every user-gendered key pass addressing:."),
+        MasculineDefault(
+            path: "FernletKit/Sources/FernletDomainModel/WorkoutProgram+Load.swift",
+            line: "bodyWeights: [BodyWeightSample] = [], address: TermOfAddress = .masculine",
+            reason: "A load context built without saying so (test fixtures) plans as an unanswered profile; WorkoutLoadContextBuilder always passes the effective profile's term."),
+        MasculineDefault(
+            path: "App/Fernlet/FernletStore.swift", line: "let address = self?.effectiveUserProfile.sex.termOfAddress ?? .masculine",
+            reason: "The store owns the cue director, so it outlives every schedule; the fallback cannot run, and reads as an unanswered profile."),
+    ]
+
+    /// No `.masculine` in shipping code but the pinned ones, each with its reason.
+    @Test func everyMasculineDefaultIsPinnedWithItsReason() throws {
+        var found: [(path: String, line: String)] = []
+        var filesScanned = 0
+        for root in Self.inflectionScanRoots {
+            guard let enumerator = FileManager.default.enumerator(at: RepoRoot.url(root), includingPropertiesForKeys: nil) else {
+                Issue.record("Could not enumerate \(root): the masculine audit is unenforced.")
+                continue
+            }
+            for case let url as URL in enumerator where url.pathExtension == "swift" {
+                let source = try String(contentsOf: url, encoding: .utf8)
+                filesScanned += 1
+                let path = url.path.replacingOccurrences(of: RepoRoot.url.path + "/", with: "")
+                found += Self.masculineLines(in: source).map { (path, $0) }
+            }
+        }
+        #expect(filesScanned >= Self.minimumInflectionFilesScanned)
+        let unlisted = found.filter { site in !Self.masculineDefaults.contains { $0.path == site.path && $0.line == site.line } }
+        #expect(
+            unlisted.isEmpty,
+            """
+            \(unlisted.count) `.masculine` in shipping code with no stated reason. Copy that describes the \
+            user takes the profile's term (fernletTermOfAddress in a view, \
+            effectiveUserProfile.sex.termOfAddress in the store); pin a real exception in masculineDefaults:
+            \(unlisted.map { "\($0.path): \($0.line)" }.sorted().joined(separator: "\n"))
+            """
+        )
+        let unused = Self.masculineDefaults.filter { entry in !found.contains { $0.path == entry.path && $0.line == entry.line } }
+        #expect(unused.isEmpty, "masculineDefaults entries matching nothing (moved or reworded? re-pin): \(unused.map { "\($0.path): \($0.line)" })")
+        #expect(Self.masculineLines(in: "// x = .masculine\n    let a = b ?? .masculine // why\n") == ["let a = b ?? .masculine"],
+                "the audit reads code lines, comments removed")
+    }
+
+    /// The trimmed code lines of `source` that write `.masculine`, comments removed. Pure + testable.
+    static func masculineLines(in source: String) -> [String] {
+        let chars = Array(source)
+        return code(chars, from: 0, to: chars.count)
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { $0.contains(".masculine") }
+    }
+
+    /// A `LocalizedStringResource` built in package source names the module's bundle.
+    ///
+    /// The resource initializer's `bundle:` defaults to `.main`, the APP's bundle, so a key built in
+    /// a package without one silently misses the module's catalog and renders its English default
+    /// forever (FernletAnnouncer's doc and `FernletAnnouncerTests` measured the same trap on the
+    /// announcer). Part A's rule reads `String(localized:)` only; this is its twin for the resources
+    /// the addressed paths build (`AddressedCopy.string(LocalizedStringResource(…, bundle: .module,
+    /// …), addressing:)`), which arrived with the gendered-address lane.
+    @Test func packageBuiltResourcesNameTheModuleBundle() throws {
+        let rootURL = RepoRoot.url(Self.packageSourceRoot)
+        guard let enumerator = FileManager.default.enumerator(at: rootURL, includingPropertiesForKeys: nil) else {
+            Issue.record("Could not enumerate \(Self.packageSourceRoot): the resource bundle rule is unenforced.")
+            return
+        }
+        var offenders: [String] = []
+        var resources = 0
+        var filesScanned = 0
+        for case let url as URL in enumerator where url.pathExtension == "swift" {
+            let source = try String(contentsOf: url, encoding: .utf8)
+            filesScanned += 1
+            let path = url.path.replacingOccurrences(of: RepoRoot.url.path + "/", with: "")
+            let calls = Self.resourceCalls(in: source)
+            resources += calls.count
+            offenders += calls.filter { !$0.call.contains("bundle: .module") }.map { "\(path):\($0.line): \($0.call)" }
+        }
+        #expect(filesScanned >= Self.minimumPackageFilesScanned)
+        #expect(resources >= 10, "found only \(resources) package-built resources: the scan broke or the addressed paths moved")
+        #expect(offenders.isEmpty, "Package `LocalizedStringResource(…)` built without `bundle: .module` (it resolves against the app's bundle):\n\(offenders.sorted().joined(separator: "\n"))")
+        let fixture = Self.resourceCalls(in: """
+            let a = LocalizedStringResource("k", defaultValue: "v", bundle: .module, comment: "c")
+            let b = LocalizedStringResource("k")
+            func f(_ r: LocalizedStringResource) {}
+            // LocalizedStringResource("commented")
+            """)
+        #expect(fixture.map(\.line) == [1, 2], "a constructor is found, the type in a signature and a comment are not")
+        #expect(fixture.map { $0.call.contains("bundle: .module") } == [true, false])
+    }
+
+    /// Every `LocalizedStringResource(` constructor call in `source` (not the type named in a
+    /// signature), with its comment-free text flattened to one line. Pure + testable.
+    static func resourceCalls(in source: String) -> [(line: Int, call: String)] {
+        let chars = Array(source)
+        let head = "LocalizedStringResource"
+        var found: [(line: Int, call: String)] = []
+        var index = 0
+        var line = 1
+        while index < chars.count {
+            if let skip = skipNonCode(chars, from: index) {
+                line += countNewlines(chars, from: index, to: skip)
+                index = max(skip, index + 1)
+                continue
+            }
+            if chars[index] == "\n" { line += 1 }
+            let preceded = index > 0 && (chars[index - 1].isLetter || chars[index - 1].isNumber || chars[index - 1] == "_")
+            let open = index + head.count
+            guard !preceded, matches(chars, at: index, head), open < chars.count, chars[open] == "(" else {
+                index += 1
+                continue
+            }
+            let end = endOfCall(chars, openParen: open)
+            let call = code(chars, from: index, to: end)
+                .components(separatedBy: .newlines)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .joined(separator: " ")
+            found.append((line, call))
+            line += countNewlines(chars, from: index, to: end)
+            index = max(end, index + 1)
+        }
+        return found
     }
 
     // MARK: - Discovery

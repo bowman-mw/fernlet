@@ -33,7 +33,7 @@ struct WorkoutWarmUpSetsTests {
     func key(_ name: String) -> String { WorkoutExerciseCatalog.normalizedName(name) }
 
     static let pushSplit = TrainingSplit(
-        id: "probe", name: "Probe", summary: "", specificity: .balanced, goalFit: [.wellness],
+        id: "probe", name: "Probe", specificity: .balanced, goalFit: [.wellness],
         days: [WorkoutSplitDay(title: "Push", sessions: [WorkoutSessions.push])]
     )
 

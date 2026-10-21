@@ -182,7 +182,7 @@ struct FernletTests {
 
     @Test func fernletVoiceMessagesAreNonEmpty() {
         for voice in FernletVoice.allCases {
-            #expect(FernletVoice.message(for: voice).isEmpty == false)
+            #expect(FernletVoice.message(for: voice, addressing: .masculine).isEmpty == false)
         }
     }
 
@@ -466,7 +466,7 @@ struct FernletTests {
     @MainActor
     @Test func workoutSuggestionLibraryReturnsSuggestionForEachGoal() {
         for goal in GoalType.allCases {
-            let suggestions = WorkoutSuggestionLibrary.suggestions(for: goal, intensity: .moderate)
+            let suggestions = WorkoutSuggestionLibrary.suggestions(for: goal, intensity: .moderate, addressing: .masculine)
 
             #expect(suggestions.isEmpty == false)
             #expect(suggestions.first?.workout(intensity: .moderate).mode == .strengthTraining)

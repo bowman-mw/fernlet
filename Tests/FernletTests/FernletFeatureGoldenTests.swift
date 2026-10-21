@@ -4358,7 +4358,9 @@ struct FernletFeatureGoldenTests {
 
     /// **31e.** The recipe copy is its frozen templates in its home: the code literals of
     /// ``recipeCopyHomes`` that hold a space (lexed as Swift reads them, comments out), each
-    /// interpolation read as `\(…)`, are ``frozenRecipeCopyTemplates`` as a set, forty distinct. That no
+    /// interpolation read as `\(…)`, together with the seven failure sentences localized in
+    /// ``recipeFailureCopyHome`` (Spanish round, 2026-10-20), are ``frozenRecipeCopyTemplates`` as a
+    /// set, forty distinct. That no
     /// ProximityKit file holds one of the forty as a literal, so none comes back to the pair session,
     /// reads ProximityKit's sources and is its package suite of this name. And the render row: every
     /// event and every status failure, each argument a distinct sentinel, renders to its frozen
@@ -4373,6 +4375,16 @@ struct FernletFeatureGoldenTests {
             found.formUnion(literals.map { Self.normalizingInterpolations($0.text) }.filter { $0.contains(" ") })
         }
         let frozen = Set(Self.frozenRecipeCopyTemplates)
+        // The failure sentences' localized home: only literals that are frozen templates count, and
+        // exactly the seven failures may live there.
+        let vault = Set(SwiftSourceLexer.lex(try RepoRoot.source(Self.recipeFailureCopyHome)).literals
+            .map { Self.normalizingInterpolations($0.text) })
+        let vaultTemplates = vault.intersection(frozen)
+        #expect(vaultTemplates.count == Self.recipeFailureTemplateCount,
+                "the copy vault holds \(vaultTemplates.count) recipe templates: \(vaultTemplates.sorted())")
+        #expect(found.intersection(vaultTemplates).isEmpty,
+                "a failure sentence is spelled in both homes: \(found.intersection(vaultTemplates).sorted())")
+        found.formUnion(vaultTemplates)
         #expect(Self.frozenRecipeCopyTemplates.count == 40 && frozen.count == 40, "the frozen list holds \(frozen.count) templates")
         #expect(found == frozen, """
             the copy's templates moved: missing \(frozen.subtracting(found).sorted()), \
@@ -5639,6 +5651,16 @@ extension FernletFeatureGoldenTests {
     /// FernletSocial, which renders the pair session's typed status and events; until then the manager
     /// in ProximityKit.
     static let recipeCopyHomes = ["FernletKit/Sources/FernletSocial/RecipeSharing/ProximityRecipeShareManager.swift"]
+
+    /// The file that holds the status line's seven failure sentences since the Spanish round
+    /// (2026-10-20): FernletSocial's copy vault, where each is the `defaultValue:` of a
+    /// `String(localized:…, bundle: .module)` key (`FernletSocialCopy.RecipeShare`), the manager's
+    /// `statusMessage(for:)` reading them there. The vault holds other modules' sentences and the keys'
+    /// translator comments, so only its literals that ARE frozen templates count toward the census.
+    static let recipeFailureCopyHome = "FernletKit/Sources/FernletSocial/FernletSocialCopy.swift"
+
+    /// How many of the forty templates live in ``recipeFailureCopyHome``: the status line's failures.
+    static let recipeFailureTemplateCount = 7
 
     /// The file that holds the recipe share's own constants (the inbound queue and rate limit, the
     /// signed summary and the payload's encoder): since plan step A0.7.3 FernletSocial's recipe-share

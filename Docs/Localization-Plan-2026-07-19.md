@@ -363,6 +363,51 @@ sentences (idea 16).
   "Location N" a blank rename is repaired to, and an activity plan's `exercises` default name.
   Pinned by `WorkoutCopyLocalizationTests`.
 
+**Addendum (2026-10-20, Group Activities type token, Spanish round friends lane):** an activity's
+type chip drew its own raw value ("Walk"), and the token a host's phone SENDS was that label
+lowercased, so the chip could not localize and the receiving phone drew the sender's token
+`.capitalized` — English on every phone. `ActivityTypeOption` (app target, `ActivitiesView.swift`)
+is forked: its raw value is the wire token (`walk`, `coffee`, `meal`, `study`, `workout`, `hangout`,
+`other`, byte for byte what every build since 2026-07-12 sent; it rides the descriptor's canonical
+bytes and the hosted/joined sidecars), pinned by `LocalizationBoundaryTests.frozenActivityTypeTokens`;
+`displayName` is the localized chip word; and `displayName(forToken:)` draws a received token as this
+device's word, or — the token is forward-tolerant, so a newer build or any peer may send one this
+build does not know — as received, sanitized and no longer re-cased
+(`receivedActivityTypeTokensDrawThroughTheDisplayName`). Also on that lane: presence's heart
+sentences (P9's `heartSendState.failed(message:)` hole, which `SessionHeartStatusCopy` left open on
+purpose) are closed at their source, resolved in `FernletSocialCopy.Presence` under
+`bundle: .module`, so the `String` type stays and the surfaces draw it verbatim.
+
+**Addendum (2026-10-20, Spanish round step 2, Move lane: extraction around the workout copy).**
+- **FernletScoring has a catalog.** `FernletVoice` and the AI-free workout fallbacks' notes and starter
+  goals (`WorkoutFallbackCopy`) are keys, composed in the device's language like the planner's notes.
+  The fallbacks' NAMES are stored `Workout.name`s, so they are frozen as `WorkoutFallbackName`
+  (FernletDomainModel) and `StoredWorkoutName` gained a fourth case that draws them for a logged row
+  (`frozenFallbackWorkoutNames`). `MealParser`'s "Meal" and its "Estimated locally…" note stay English:
+  stored meal text the food log draws verbatim.
+- **Coach-plan stamps are frozen with a draw-time mapping.** `CoachPlanNoteStamp` writes the importer's
+  two provenance lines in English, matches them back by their exact shape, and draws them localized
+  (`PlannedWorkout.displayedNotes`, `Workout.displayedNotes`). The strip had been `hasPrefix("Day ")`,
+  which silently dropped a user's own "Day off, knees sore" on the first coach edit
+  (`frozenCoachPlanNoteStamps`, `CoachPlanExchangeTests.testAUserNoteStartingWithDaySurvivesAnEditAndThePreview`).
+- **Coach-plan copy.** Every decode and validation sentence (`CoachPlanIssueCopy`), the paste errors,
+  the review screen and the Plan added alert are whole-sentence keys; the English fallback labels a
+  sentence used to splice in ("a planned workout", "Day 3 session", "an edit") are sentences of their
+  own, and `CoachPlanIssue.subject` (never drawn) stays English. The importer's safety reasons, listed
+  as still English above, now localize: a clause per movement pattern instead of its `rawValue`, and the
+  missing equipment as a localized "or" list of drawn names. Those names are no longer lowercased, the
+  one deliberate English change of the round ("Home has no Barbell"): lowercasing a localized word in
+  code breaks German nouns.
+- **Exports: readme localizes, data does not.** In the trainer summary and the data export, the JSON
+  keys, `app`, `exportedOn` and every data field stay English tokens (`sessionLength`'s "45 min" / "no
+  limit" included); the `about` readme a person reads (`preparedFor`, `note`, `includes`,
+  `neverIncludes` / `excludes`) and the data export's recipe-step timer suffix are written in the
+  exporting device's language. The coach prompt's instructions stay English.
+- **Plurals and splices.** Every count that spliced an English "s", or picked "it"/"them" or
+  "was"/"were" by count, is a plural-ruled key with English one/other authored in the catalog; the
+  guided editor's rest note is one sentence per goal instead of a lowercased goal name spliced in.
+  Pinned by `theMoveLaneSplicedCopyStaysWholeKeys`.
+
 ---
 
 ## 4. Phase 2 — Translation pass (es / fr / de)
@@ -410,6 +455,68 @@ sentences (idea 16).
 > `-AppleLanguages (es)`, a how-to sheet must read English. To see a module's French on purpose, give
 > the main bundle a French localization too (one `fr` entry in `App/Fernlet/Localizable.xcstrings`,
 > reverted afterwards).
+
+> **Spanish round started (2026-10-20).** The owner speaks Spanish and is the native reviewer.
+> Decided with the owner:
+> - **Variant:** one base `es`, neutral Spanish leaning Latin American where a word must be chosen
+>   (celular, jugo, agregar, Configuración). No `es-419` / `es-ES` split yet.
+> - **Glossary and style rules:** `Docs/Localization-es-Glossary.md`, approved line by line (129
+>   items). Every es string follows it; a new term is added there in the same commit.
+> - **The user's grammatical gender is the body profile's Sex answer** (`UserNutritionProfile.sex`),
+>   masculine when it was never answered (the profile's default). No separate "address me as"
+>   setting. Translators mark each word that describes the user, `^[listo](inflect: true)`, and the
+>   app inflects it through FernletUI's `AddressedCopy` / `AddressedText` with the term of address
+>   the app root puts in the environment (`fernletTermOfAddress`, from `BiologicalSex.termOfAddress`;
+>   onboarding sets it from the profile being edited). Measured on macOS 26 Foundation:
+>   `String(localized:)` keeps the markup verbatim, `AttributedString(localized:)` and `Text`
+>   inflect at creation against the SYSTEM Form of Address, and inflection follows each run's
+>   `languageIdentifier`, not the `locale:` argument; hence the helper (inflection off at creation,
+>   then `inflected(locale:userTermOfAddress:)` with the language set). `LocalizationBoundaryTests`
+>   part I fails any `String(localized:)` that reads a key carrying `](inflect:` in its key or in any
+>   language's value.
+> - **The companion is grammatically masculine** (*el compañero*; its name on Home is Fern).
+> - **Crisis copy:** the support card's blurb was one English sentence with the line's name spliced
+>   in ("— the 988 line is free, kind…"). Spanish has to make "free" agree with the line's gender
+>   (la línea … gratuita, el número … gratuito), so each listed line now has its own whole-sentence
+>   key (`crisis.blurb.*`), and the Call/Text titles are keys with the printed number as `%@`. Every
+>   key is marked SAFETY COPY in its translator comment. Still owed under D-L5: the table lists no
+>   Latin American line, so a phone set to Mexico or Argentina sees the no-number fallback in
+>   Spanish. Adding one means verifying the operator's own page first.
+> - **Extraction before drafting.** A read-only sweep of `origin/main` (2026-10-20) counted about
+>   1,300 display literals that never reach a catalog, about one display string in five; it is being
+>   closed area by area before any es drafts are written.
+
+> **Gendered address wired (2026-10-21, gendered-address lane).** The 35 keys whose Spanish draft
+> marks a word that describes the user are read only through an addressed reader with the user's
+> REAL term of address: a view reads `fernletTermOfAddress`; a helper that returns copy takes
+> `addressing:` from its caller; a package API takes one from the app (`replaceWorkoutCues`,
+> `FernletVoice.message`, `FeelingTag.label(addressing:)`, `TrainingSplit.summary(addressing:)`,
+> `AIRetryQueueService.queueMealRetry`). `AddressedCopy` moved to FernletDomainModel, so modules with
+> no SwiftUI can use it; FernletUI keeps `AddressedText` and the environment value. The planner
+> composes its session notes at plan time and STORES them, so `WorkoutLoadContext.address` carries
+> the term into the load pass ("welcome back", the max test's safety line). Package callers build
+> `LocalizedStringResource("key", defaultValue: …, bundle: .module, …)`; the keys stayed in the
+> same catalogs with the same English (a sync after each step changed no catalog).
+> - **Two more measured traps** (macOS 26 Foundation). `AttributedString(localized:)` parses the
+>   resolved text as Markdown, interpolated arguments included, so a data argument goes in through
+>   `AddressedCopy.argument(_:)`, which escapes it. And the second pass, `inflected(locale:
+>   userTermOfAddress:)` after creating with inflection off, agrees GENDER only: a count's plural
+>   mark comes out unagreed ("Made 3 time."), so count-marked copy stays on `Text` /
+>   `AttributedString(localized:)`. None of the 35 carries a count; a future string that needs both
+>   needs a different answer.
+> - **The wall** (`LocalizationBoundaryTests` part I2): every pinned key, plus any catalog key whose
+>   value in any language carries a gender mark (an `inflect` mark with no format specifier
+>   inside), must sit lexically inside `AddressedText(…)`, `AddressedCopy.string` / `.attributed(…,
+>   addressing:)` or `announce(…, addressing:)` — never `Text("…")`, a `LocalizedStringKey`
+>   parameter, `String(localized:)` or `AddressedCopy.plain`. Lexical on purpose: a key held in a
+>   property is the data-flow question a grep cannot answer, so those sites were rewritten to the
+>   lexical shape. Every literal `.masculine` in shipping code is pinned with its reason (six: the
+>   mapping itself, `plain`, the environment's and the announcer's defaults, the planner context's
+>   test default, and an unreachable store fallback), and a package-built `LocalizedStringResource`
+>   must name `bundle: .module`.
+> - **Owed:** a simulator or device pass in Spanish once the drafts are applied — in particular that
+>   sheets and full-screen covers inherit `fernletTermOfAddress` from the app root, which no
+>   English run can show.
 
 ---
 

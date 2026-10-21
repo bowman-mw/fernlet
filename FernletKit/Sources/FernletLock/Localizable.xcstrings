@@ -1,0 +1,162 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "lock.biometric.prompt" : {
+      "comment" : "Shown by iOS in the Touch ID prompt, and its passcode fallback, when biometrics unlock Fernlet's app lock.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unlock Fernlet"
+          }
+        }
+      }
+    },
+    "lock.credential.invalid.password" : {
+      "comment" : "App lock: a password was shorter than 8 or longer than 64 characters.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Password must be 8-64 characters"
+          }
+        }
+      }
+    },
+    "lock.credential.invalid.pin4" : {
+      "comment" : "App lock: a 4-digit PIN was entered with the wrong number of digits, or with something other than digits.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "PIN must be exactly 4 digits"
+          }
+        }
+      }
+    },
+    "lock.credential.invalid.pin6" : {
+      "comment" : "App lock: a 6-digit PIN was entered with the wrong number of digits, or with something other than digits.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "PIN must be exactly 6 digits"
+          }
+        }
+      }
+    },
+    "lock.duress.custodianRequired" : {
+      "comment" : "Duress code refused: the 'lock it away on your recovery device' response needs a recovery device (another phone) set up first.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set up a recovery device before choosing this response."
+          }
+        }
+      }
+    },
+    "lock.duress.custodianSuperseded" : {
+      "comment" : "Duress code refused: the recovery device was set up before the current app lock, so it holds an older key.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your recovery device holds the key from before this app lock. Set it up again before choosing this."
+          }
+        }
+      }
+    },
+    "lock.duress.matchesPasscode" : {
+      "comment" : "Duress code refused: it is the same as the real passcode (or the passcode is being changed to the duress code).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your duress code must be different from your passcode."
+          }
+        }
+      }
+    },
+    "lock.duress.sessionRefusal" : {
+      "comment" : "Shown when an app-lock setting is changed during a duress session. Deliberately generic: it must never mention a duress code, because whoever holds the phone may read it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Enter your passcode again to change this."
+          }
+        }
+      }
+    },
+    "lock.duress.unenterable" : {
+      "comment" : "Changing the passcode type refused: the configured duress code could not be typed on the new kind of lock.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your duress code can't be typed on that kind of lock. Remove or change your duress code first."
+          }
+        }
+      }
+    },
+    "lock.recovery.custodianInUse" : {
+      "comment" : "Removing the recovery device refused: the armed duress response depends on it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Change your duress response before removing your recovery device."
+          }
+        }
+      }
+    },
+    "lock.recovery.invalidKey" : {
+      "comment" : "Setting up a recovery device: the other phone's scanned code carried keys of the wrong shape.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That recovery device's code wasn't valid. Scan it again."
+          }
+        }
+      }
+    },
+    "lock.recovery.keyMismatch" : {
+      "comment" : "Recovering this phone: the key the recovery device sent back does not open this phone's sealed data, so it was refused.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That key doesn't match this phone's sealed data, so it wasn't installed."
+          }
+        }
+      }
+    },
+    "lock.recovery.notAvailable" : {
+      "comment" : "Recovering this phone refused: no recovery device was set up, or its material is gone.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This phone has no recovery device set up."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

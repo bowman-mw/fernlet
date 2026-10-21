@@ -165,8 +165,9 @@ enum GuidedSegmentWords {
 /// cardio, a stretch session, or the rest day's optional gentle stretch.
 enum GuidedReadyIntro {
 
-    /// The intro line for `session`.
-    static func text(for session: WorkoutProgram.SessionSuggestion) -> Text {
+    /// The intro line for `session`. `address` is the user's term of address: the rest day's gentle
+    /// stretch names positions the user takes (*acostada*, *sentada*), which Spanish agrees with them.
+    static func text(for session: WorkoutProgram.SessionSuggestion, addressing address: TermOfAddress) -> Text {
         if session.exercises.contains(where: { $0.fromCatalog && $0.sets >= 1 }) {
             return Text("We'll walk through it together — one set at a time, with a gentle rest timer between. Go at a pace that feels good.")
         }
@@ -177,7 +178,7 @@ enum GuidedReadyIntro {
         case .mobilityFlow:
             return Text("I'll time each stretch and move you on by myself. Ease in, and never bounce or push into pain.")
         case .gentleStretch:
-            return Text("Just a few easy stretches, kneeling, lying and sitting. Stop whenever you've had enough — resting counts just as much today.")
+            return Text(AddressedCopy.attributed("Just a few easy stretches, kneeling, lying and sitting. Stop whenever you've had enough — resting counts just as much today.", addressing: address))
         case nil:
             return Text("We'll walk through it together. Go at a pace that feels good.")
         }

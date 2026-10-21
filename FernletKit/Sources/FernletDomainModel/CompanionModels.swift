@@ -231,12 +231,20 @@ public nonisolated enum CompanionBodyStyle: String, Codable, CaseIterable, Ident
 
     public var id: String { rawValue }
 
+    /// The shape's name in the wardrobe's picker and on its equipped-item row.
+    ///
+    /// Localized in place (Spanish round, 2026-10-20): every reader draws it, and none compares it.
+    /// ``rawValue`` is the frozen token the synced appearance and the friend wire carry.
     public var label: String {
         switch self {
-        case .circle: "Circle"
-        case .softBlob: "Soft"
-        case .pear: "Pear"
-        case .puddle: "Puddle"
+        case .circle: String(localized: "companionBodyStyle.circle", defaultValue: "Circle", bundle: .module,
+                             comment: "Wardrobe: companion body shape, a round circle")
+        case .softBlob: String(localized: "companionBodyStyle.softBlob", defaultValue: "Soft", bundle: .module,
+                               comment: "Wardrobe: companion body shape, a soft rounded blob")
+        case .pear: String(localized: "companionBodyStyle.pear", defaultValue: "Pear", bundle: .module,
+                           comment: "Wardrobe: companion body shape, pear-shaped")
+        case .puddle: String(localized: "companionBodyStyle.puddle", defaultValue: "Puddle", bundle: .module,
+                             comment: "Wardrobe: companion body shape, low and spread out like a puddle")
         }
     }
 }
@@ -254,13 +262,20 @@ public nonisolated enum CompanionPalette: String, Codable, CaseIterable, Identif
 
     public var id: String { rawValue }
 
+    /// The palette's name. Localized in place (Spanish round, 2026-10-20); ``rawValue`` is the
+    /// frozen token.
     public var label: String {
         switch self {
-        case .state: "Mood"
-        case .fern: "Fern"
-        case .rose: "Rose"
-        case .sun: "Sun"
-        case .slate: "Slate"
+        case .state: String(localized: "companionPalette.state", defaultValue: "Mood", bundle: .module,
+                            comment: "Companion palette that follows the day's mood instead of a fixed colour")
+        case .fern: String(localized: "companionPalette.fern", defaultValue: "Fern", bundle: .module,
+                           comment: "Companion palette: light green")
+        case .rose: String(localized: "companionPalette.rose", defaultValue: "Rose", bundle: .module,
+                           comment: "Companion palette: pink")
+        case .sun: String(localized: "companionPalette.sun", defaultValue: "Sun", bundle: .module,
+                          comment: "Companion palette: yellow")
+        case .slate: String(localized: "companionPalette.slate", defaultValue: "Slate", bundle: .module,
+                            comment: "Companion palette: blue-grey")
         }
     }
 }
@@ -335,12 +350,18 @@ public nonisolated enum CompanionAccessory: String, Codable, CaseIterable, Ident
 
     public var id: String { rawValue }
 
+    /// The accessory's name in the wardrobe. Localized in place (Spanish round, 2026-10-20);
+    /// ``rawValue`` is the frozen token.
     public var label: String {
         switch self {
-        case .none: "None"
-        case .sprout: "Sprout"
-        case .flower: "Flower"
-        case .glasses: "Glasses"
+        case .none: String(localized: "companionAccessory.none", defaultValue: "None", bundle: .module,
+                           comment: "Wardrobe: no head accessory on the companion")
+        case .sprout: String(localized: "companionAccessory.sprout", defaultValue: "Sprout", bundle: .module,
+                             comment: "Wardrobe: head accessory, a small leaf sprout")
+        case .flower: String(localized: "companionAccessory.flower", defaultValue: "Flower", bundle: .module,
+                             comment: "Wardrobe: head accessory, a flower")
+        case .glasses: String(localized: "companionAccessory.glasses", defaultValue: "Glasses", bundle: .module,
+                              comment: "Wardrobe: face accessory, a pair of glasses")
         }
     }
 }
@@ -356,11 +377,16 @@ public nonisolated enum CompanionClothing: String, Codable, CaseIterable, Identi
 
     public var id: String { rawValue }
 
+    /// The clothing item's name in the wardrobe. Localized in place (Spanish round, 2026-10-20);
+    /// ``rawValue`` is the frozen token.
     public var label: String {
         switch self {
-        case .none: "None"
-        case .scarf: "Scarf"
-        case .sleepCap: "Sleep cap"
+        case .none: String(localized: "companionClothing.none", defaultValue: "None", bundle: .module,
+                           comment: "Wardrobe: no clothing on the companion")
+        case .scarf: String(localized: "companionClothing.scarf", defaultValue: "Scarf", bundle: .module,
+                            comment: "Wardrobe: clothing, a scarf")
+        case .sleepCap: String(localized: "companionClothing.sleepCap", defaultValue: "Sleep cap", bundle: .module,
+                               comment: "Wardrobe: clothing, a nightcap for sleeping")
         }
     }
 }
@@ -378,13 +404,20 @@ public nonisolated enum CompanionSideItem: String, Codable, CaseIterable, Identi
 
     public var id: String { rawValue }
 
+    /// The side item's name in the wardrobe. Localized in place (Spanish round, 2026-10-20);
+    /// ``rawValue`` is the frozen token.
     public var label: String {
         switch self {
-        case .none: "None"
-        case .mug: "Mug"
-        case .book: "Book"
-        case .dumbbell: "Weight"
-        case .waterBottle: "Bottle"
+        case .none: String(localized: "companionSideItem.none", defaultValue: "None", bundle: .module,
+                           comment: "Wardrobe: nothing held beside the companion")
+        case .mug: String(localized: "companionSideItem.mug", defaultValue: "Mug", bundle: .module,
+                          comment: "Wardrobe: item beside the companion, a mug")
+        case .book: String(localized: "companionSideItem.book", defaultValue: "Book", bundle: .module,
+                           comment: "Wardrobe: item beside the companion, a book")
+        case .dumbbell: String(localized: "companionSideItem.dumbbell", defaultValue: "Weight", bundle: .module,
+                               comment: "Wardrobe: item beside the companion, a small dumbbell")
+        case .waterBottle: String(localized: "companionSideItem.waterBottle", defaultValue: "Bottle", bundle: .module,
+                                  comment: "Wardrobe: item beside the companion, a water bottle")
         }
     }
 

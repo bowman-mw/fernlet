@@ -10,12 +10,16 @@ import FernletUI
 struct OnboardingWelcomeView: View {
     var stepText: String
     var continueAction: () -> Void
+    /// The term of address onboarding derives from the profile it is editing: masculine here, on the
+    /// first screen, because the Sex question has not been asked yet (an unanswered profile's own
+    /// default), and it follows the answer if the person comes back.
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
 
     var body: some View {
         VStack(spacing: 0) {
             OnboardingScreenContainer(
                 stepText: stepText,
-                title: "Welcome to Fernlet",
+                title: Text(AddressedCopy.attributed("Welcome to Fernlet", addressing: termOfAddress)),
                 subtitle: "A small daily care companion built around privacy, local control, and enoughness."
             ) {
                 VStack(spacing: 18) {
@@ -37,7 +41,10 @@ struct OnboardingWelcomeView: View {
         .accessibilityIdentifier("onboarding.welcome")
     }
 
-    private func privacyRow(_ systemImage: String, title: String, body: String) -> some View {
+    /// One privacy pillar. `LocalizedStringKey`, not `String`: every caller passes authored literals,
+    /// and the `String` this took sent all six through `Text`'s verbatim overload, so the first
+    /// screen of the app was English in every language.
+    private func privacyRow(_ systemImage: String, title: LocalizedStringKey, body: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: 12) {
             // Decorative next to a title and body that already say what the row means — without
             // this the row announces the raw SF Symbol name ("heart text square fill", "lock

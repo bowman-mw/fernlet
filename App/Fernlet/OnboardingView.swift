@@ -77,9 +77,13 @@ struct ProfileEditor: View {
 ///
 /// One home for the words so the same field can't be "Gender" in Settings and an unlabelled
 /// "Male ◇" menu in onboarding.
+///
+/// `LocalizedStringKey`, not `String`: as `String`s both reached `Picker` and the caption through
+/// their verbatim overloads and were never extracted, so every language read "Sex" and "Typical
+/// activity".
 enum BodyProfileFieldLabel {
-    static let sex = "Sex"
-    static let activity = "Typical activity"
+    static let sex: LocalizedStringKey = "Sex"
+    static let activity: LocalizedStringKey = "Typical activity"
 }
 
 /// A menu picker with a small slate caption above it.
@@ -87,11 +91,13 @@ enum BodyProfileFieldLabel {
 /// The house treatment for the body-profile / preference pickers on both Settings
 /// (``ProfileEditor``) and the onboarding personal-details step: `.menu` style outside a `Form`
 /// hides the picker's own label, so the value ("Moderate") renders with nothing saying what it is.
+/// The caption is a `LocalizedStringKey`: every caller passes authored copy, and the `String` this
+/// took silently opted all four captions out of localization.
 struct LabeledProfilePicker<Content: View>: View {
-    private let label: String
+    private let label: LocalizedStringKey
     private let content: Content
 
-    init(_ label: String, @ViewBuilder content: () -> Content) {
+    init(_ label: LocalizedStringKey, @ViewBuilder content: () -> Content) {
         self.label = label
         self.content = content()
     }

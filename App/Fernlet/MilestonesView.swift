@@ -147,7 +147,7 @@ struct MilestonesView: View {
                     .font(.fernlet(.label))
                 Spacer(minLength: 0)
                 if totalGifts > 0 {
-                    Text(totalGifts == 1 ? "1 gift" : "\(totalGifts) gifts")
+                    Text(verbatim: MilestonesCopy.giftCount(totalGifts))
                         .font(.fernlet(.labelSmall))
                         // T1-3: text ink, not the `goldenrod` accent (2.22:1).
                         .foregroundStyle(Color.goldenrodInk)
@@ -242,7 +242,7 @@ struct MilestonesView: View {
                             // is actually there, counted from the same award rows the footer sums
                             // — never a threshold count that can disagree with it after a reset.
                             // Wraps rather than truncates at accessibility sizes (3f·AX3).
-                            Text(row.giftCount == 1 ? "1 gift on the shelf" : "\(row.giftCount) gifts on the shelf")
+                            Text(verbatim: MilestonesCopy.giftsOnShelf(row.giftCount))
                                 .font(.fernlet(.labelSmall))
                                 // T1-3: text ink, not the `goldenrod` accent (2.22:1). The star
                                 // glyph beside it stays the decorative accent.
@@ -278,7 +278,7 @@ struct MilestonesView: View {
         if totalMilestoneCoins > 0 {
             HStack(spacing: 15) {
                 CoinGlyph(diameter: 46)
-                Text("Milestone gifts have added \(totalMilestoneCoins) coins to your pouch.")
+                Text(verbatim: MilestonesCopy.coinsAdded(totalMilestoneCoins))
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                     .fernletWrappingText()
@@ -367,7 +367,7 @@ private struct KeepsakeShelfView: View {
                     if totalMilestoneCoins > 0 {
                         HStack(spacing: 15) {
                             CoinGlyph(diameter: 46)
-                            Text("Milestone gifts have added \(totalMilestoneCoins) coins to your pouch.")
+                            Text(verbatim: MilestonesCopy.coinsAdded(totalMilestoneCoins))
                                 .font(.fernlet(.body))
                                 .foregroundStyle(Color.bark)
                                 .fernletWrappingText()
@@ -491,15 +491,8 @@ struct MilestoneRowModel {
         worriesLetGo: Int,
         giftCounts: [MilestoneEventKind: Int] = [:]
     ) -> [MilestoneRowModel] {
-        let order: [(MilestoneEventKind, String, String)] = [
-            (.journal, "journal", "Your first journal moment will land here."),
-            (.meal, "meals", "Your first noticed meal will land here."),
-            (.workout, "workouts", "Your first time moving will land here."),
-            (.water, "water", "Your first well-watered day will land here."),
-            (.breathing, "breathing", "Your first slow-breathing break will land here."),
-            (.worry, "worries let go", "Your first worry let go will land here.")
-        ]
-        return order.map { kind, shelfLabel, emptyPrompt in
+        let order: [MilestoneEventKind] = [.journal, .meal, .workout, .water, .breathing, .worry]
+        return order.map { kind in
             let (icon, tint) = style(for: kind)
             // Worry counts come from the device-local Worry Box (never the synced ledger), and worries
             // award no coins (a device-local coin award would desync the wallet), so their "gifts" is 0.
@@ -511,8 +504,8 @@ struct MilestoneRowModel {
                 headline: headline(kind: kind, count: count),
                 giftCount: kind == .worry ? 0 : (giftCounts[kind] ?? 0),
                 count: count,
-                shelfLabel: shelfLabel,
-                emptyPrompt: emptyPrompt
+                shelfLabel: MilestonesCopy.shelfLabel(for: kind),
+                emptyPrompt: MilestonesCopy.emptyPrompt(for: kind)
             )
         }
     }
@@ -541,30 +534,145 @@ struct MilestoneRowModel {
         return counts
     }
 
+    /// The row's warm sentence: a gathering line at zero, a "first" line at one, a counted line
+    /// after that. The three are separate catalog keys, because "your first journal moment" is a
+    /// different sentence from the count, not its singular; the counted key is plural-ruled for the
+    /// languages whose plural forms don't stop at one (``MilestonesCopy``).
     private static func headline(kind: MilestoneEventKind, count: Int) -> String {
-        switch kind {
-        case .journal:
-            count == 0 ? "Your journal moments will gather here."
-                : (count == 1 ? "You've written your first journal moment." : "You've written \(count) journal moments.")
-        case .meal:
-            count == 0 ? "Meals you notice will gather here."
-                : (count == 1 ? "You've noted your first meal." : "You've noted \(count) meals.")
-        case .workout:
-            count == 0 ? "Times you move will gather here."
-                : (count == 1 ? "You've moved your body once, on purpose." : "You've moved your body \(count) times.")
-        case .water:
-            count == 0 ? "Days you drink enough water will gather here."
-                : (count == 1 ? "You've had one well-watered day." : "You've had \(count) well-watered days.")
-        case .breathing:
-            count == 0 ? "Breathing breaks will gather here."
-                : (count == 1 ? "You've taken one slow-breathing break." : "You've taken \(count) slow-breathing breaks.")
-        case .worry:
-            count == 0 ? "Worries you let go will gather here."
-                : (count == 1 ? "You've let one worry go." : "You've let \(count) worries go.")
         // Unreachable by construction, like the `style(for:)` arm above: `rows(counts:worriesLetGo:)`
         // is this function's only caller and it never passes the marker kind. Empty rather than a
         // warm sentence, so a future caller that did reach it would render nothing at all rather
         // than a milestone celebrating a wipe.
+        guard kind != .resetBoundary else { return "" }
+        switch count {
+        case 0: return MilestonesCopy.gatheringHeadline(for: kind)
+        case 1: return MilestonesCopy.firstHeadline(for: kind)
+        default: return MilestonesCopy.countedHeadline(for: kind, count: count)
+        }
+    }
+}
+
+// MARK: - Milestone copy
+
+/// The milestones screen's `String`-typed copy, resolved through the app's string catalog.
+///
+/// Every count is a plural-ruled key (`%lld`, `one`/`other` authored in the catalog) rather than
+/// two English literals picked by `count == 1`, so a language with more plural forms than English
+/// gets them. ``MilestoneEventKind/resetBoundary`` reaches none of these: it is the wipe's
+/// bookkeeping row, never a keepsake, and each switch below gives it an empty string only to stay
+/// exhaustive.
+enum MilestonesCopy {
+
+    /// The keepsake-shelf link's gift count: "4 gifts".
+    static func giftCount(_ count: Int) -> String {
+        String(localized: "milestones.shelfLink.giftCount", defaultValue: "\(count) gifts",
+               comment: "Milestones screen: the Keepsake shelf link's count of milestone gifts. Needs a plural variation per language; English says '1 gift'.")
+    }
+
+    /// A row's gift line: "2 gifts on the shelf".
+    static func giftsOnShelf(_ count: Int) -> String {
+        String(localized: "milestones.row.giftsOnShelf", defaultValue: "\(count) gifts on the shelf",
+               comment: "Milestones screen, under a kind of care: how many milestone gifts it has put on the keepsake shelf. Needs a plural variation per language; English says '1 gift on the shelf'.")
+    }
+
+    /// The coins footer: "Milestone gifts have added 40 coins to your pouch."
+    static func coinsAdded(_ coins: Int) -> String {
+        String(localized: "milestones.coins.added",
+               defaultValue: "Milestone gifts have added \(coins) coins to your pouch.",
+               comment: "Milestones screen and keepsake shelf footer: the coins milestone gifts have added to the user's coin pouch. Needs a plural variation per language.")
+    }
+
+    /// The short lower-case label under a shelf medallion.
+    static func shelfLabel(for kind: MilestoneEventKind) -> String {
+        switch kind {
+        case .journal: String(localized: "milestones.shelf.journal", defaultValue: "journal",
+                              comment: "Keepsake shelf: lowercase label under the journal medallion, below its count.")
+        case .meal: String(localized: "milestones.shelf.meals", defaultValue: "meals",
+                           comment: "Keepsake shelf: lowercase label under the meals medallion, below its count.")
+        case .workout: String(localized: "milestones.shelf.workouts", defaultValue: "workouts",
+                              comment: "Keepsake shelf: lowercase label under the workouts medallion, below its count.")
+        case .water: String(localized: "milestones.shelf.water", defaultValue: "water",
+                            comment: "Keepsake shelf: lowercase label under the water medallion, below its count of well-watered days.")
+        case .breathing: String(localized: "milestones.shelf.breathing", defaultValue: "breathing",
+                                comment: "Keepsake shelf: lowercase label under the breathing medallion, below its count of breathing breaks.")
+        case .worry: String(localized: "milestones.shelf.worries", defaultValue: "worries let go",
+                            comment: "Keepsake shelf: lowercase label under the worry medallion, below its count of worries let go.")
+        case .resetBoundary: ""
+        }
+    }
+
+    /// The dashed "your first … will land here" line for a kind with nothing yet.
+    static func emptyPrompt(for kind: MilestoneEventKind) -> String {
+        switch kind {
+        case .journal: String(localized: "milestones.empty.journal", defaultValue: "Your first journal moment will land here.",
+                              comment: "Milestones screen: a quiet placeholder row before the first journal entry. Never a to-do.")
+        case .meal: String(localized: "milestones.empty.meal", defaultValue: "Your first noticed meal will land here.",
+                           comment: "Milestones screen: a quiet placeholder row before the first logged meal. Never a to-do.")
+        case .workout: String(localized: "milestones.empty.workout", defaultValue: "Your first time moving will land here.",
+                              comment: "Milestones screen: a quiet placeholder row before the first logged workout. Never a to-do.")
+        case .water: String(localized: "milestones.empty.water", defaultValue: "Your first well-watered day will land here.",
+                            comment: "Milestones screen: a quiet placeholder row before the first day the water target was met. Never a to-do.")
+        case .breathing: String(localized: "milestones.empty.breathing", defaultValue: "Your first slow-breathing break will land here.",
+                                comment: "Milestones screen: a quiet placeholder row before the first finished breathing exercise. Never a to-do.")
+        case .worry: String(localized: "milestones.empty.worry", defaultValue: "Your first worry let go will land here.",
+                            comment: "Milestones screen: a quiet placeholder row before the first worry released from the Worry Box. Never a to-do.")
+        case .resetBoundary: ""
+        }
+    }
+
+    /// A kind's sentence while its count is zero.
+    static func gatheringHeadline(for kind: MilestoneEventKind) -> String {
+        switch kind {
+        case .journal: String(localized: "milestones.headline.journal.none", defaultValue: "Your journal moments will gather here.",
+                              comment: "Milestones: the journal row's sentence before any entry.")
+        case .meal: String(localized: "milestones.headline.meal.none", defaultValue: "Meals you notice will gather here.",
+                           comment: "Milestones: the meals row's sentence before any logged meal.")
+        case .workout: String(localized: "milestones.headline.workout.none", defaultValue: "Times you move will gather here.",
+                              comment: "Milestones: the movement row's sentence before any logged workout.")
+        case .water: String(localized: "milestones.headline.water.none", defaultValue: "Days you drink enough water will gather here.",
+                            comment: "Milestones: the water row's sentence before any well-watered day.")
+        case .breathing: String(localized: "milestones.headline.breathing.none", defaultValue: "Breathing breaks will gather here.",
+                                comment: "Milestones: the breathing row's sentence before any breathing break.")
+        case .worry: String(localized: "milestones.headline.worry.none", defaultValue: "Worries you let go will gather here.",
+                            comment: "Milestones: the worries row's sentence before any worry let go.")
+        case .resetBoundary: ""
+        }
+    }
+
+    /// A kind's sentence at exactly one: a "first" line, not the count's singular.
+    static func firstHeadline(for kind: MilestoneEventKind) -> String {
+        switch kind {
+        case .journal: String(localized: "milestones.headline.journal.first", defaultValue: "You've written your first journal moment.",
+                              comment: "Milestones: the journal row after exactly one entry. Warm, a memory not a metric.")
+        case .meal: String(localized: "milestones.headline.meal.first", defaultValue: "You've noted your first meal.",
+                           comment: "Milestones: the meals row after exactly one logged meal.")
+        case .workout: String(localized: "milestones.headline.workout.first", defaultValue: "You've moved your body once, on purpose.",
+                              comment: "Milestones: the movement row after exactly one logged workout.")
+        case .water: String(localized: "milestones.headline.water.first", defaultValue: "You've had one well-watered day.",
+                            comment: "Milestones: the water row after exactly one day the water target was met.")
+        case .breathing: String(localized: "milestones.headline.breathing.first", defaultValue: "You've taken one slow-breathing break.",
+                                comment: "Milestones: the breathing row after exactly one finished breathing exercise.")
+        case .worry: String(localized: "milestones.headline.worry.first", defaultValue: "You've let one worry go.",
+                            comment: "Milestones: the worries row after exactly one worry released from the Worry Box.")
+        case .resetBoundary: ""
+        }
+    }
+
+    /// A kind's sentence from two up: "You've written 40 journal moments."
+    static func countedHeadline(for kind: MilestoneEventKind, count: Int) -> String {
+        switch kind {
+        case .journal: String(localized: "milestones.headline.journal.count", defaultValue: "You've written \(count) journal moments.",
+                              comment: "Milestones: the journal row's lifetime count (2 or more; exactly one has its own sentence). Needs a plural variation per language.")
+        case .meal: String(localized: "milestones.headline.meal.count", defaultValue: "You've noted \(count) meals.",
+                           comment: "Milestones: the meals row's lifetime count (2 or more). Needs a plural variation per language.")
+        case .workout: String(localized: "milestones.headline.workout.count", defaultValue: "You've moved your body \(count) times.",
+                              comment: "Milestones: the movement row's lifetime count of workouts (2 or more). Needs a plural variation per language.")
+        case .water: String(localized: "milestones.headline.water.count", defaultValue: "You've had \(count) well-watered days.",
+                            comment: "Milestones: the water row's lifetime count of days the water target was met (2 or more). Needs a plural variation per language.")
+        case .breathing: String(localized: "milestones.headline.breathing.count", defaultValue: "You've taken \(count) slow-breathing breaks.",
+                                comment: "Milestones: the breathing row's lifetime count (2 or more). Needs a plural variation per language.")
+        case .worry: String(localized: "milestones.headline.worry.count", defaultValue: "You've let \(count) worries go.",
+                            comment: "Milestones: the worries row's lifetime count of worries let go (2 or more). Needs a plural variation per language.")
         case .resetBoundary: ""
         }
     }

@@ -10,7 +10,7 @@ import FernletDomainModel
 /// authorization (`requestAuthorization()` / `isAuthorized()`), the repeating daily check-in
 /// (`scheduleDailyCheckIn(hour:minute:)` / `cancelDailyCheckIn()` / `scheduledDailyCheckIn()`),
 /// the best-effort mesh session-message ping (`postSessionMessage(from:)`), and the guided workout's
-/// in-session rest-end and hold-end cues for a phone in the background (`replaceWorkoutCues(_:soundFileName:now:)`).
+/// in-session rest-end and hold-end cues for a phone in the background (`replaceWorkoutCues(_:soundFileName:addressing:now:)`).
 /// Callers are the app's onboarding permissions screen, `SettingsSheet`, `FernletNotificationDelegate`
 /// (which matches ``dailyCheckInID`` to deep-link a tapped check-in, and ``isWorkoutCue(_:)`` to keep a
 /// cue quiet while the app is open), the mesh chat surface in `DisposableCameraView`, and the guided
@@ -246,8 +246,13 @@ extension NotificationService {
     ///   - cues: The cues to schedule; any whose time has passed is skipped.
     ///   - soundFileName: The bundled sound the cue plays (a quiet chime, or a silent file that still
     ///     lets the system's notification haptic fire), or nil for a silent banner.
+    ///   - address: The user's term of address (the effective profile's `BiologicalSex.termOfAddress`),
+    ///     which the rest-ended and segment-ended bodies agree with: "when you're ready" is gendered
+    ///     in Spanish (*lista*). The body is fixed when the cue is scheduled.
     ///   - now: The clock, injectable for tests.
-    public static func replaceWorkoutCues(_ cues: [WorkoutCue], soundFileName: String?, now: Date = Date()) async {
+    public static func replaceWorkoutCues(
+        _ cues: [WorkoutCue], soundFileName: String?, addressing address: TermOfAddress, now: Date = Date()
+    ) async {
         let center = UNUserNotificationCenter.current()
         let identifiers = WorkoutCueKind.allCases.map { workoutCueID(for: $0) }
         center.removePendingNotificationRequests(withIdentifiers: identifiers)
@@ -260,7 +265,7 @@ extension NotificationService {
                 timeInterval: max(1, cue.fireAt.timeIntervalSince(now)), repeats: false)
             let request = UNNotificationRequest(
                 identifier: workoutCueID(for: cue.kind),
-                content: workoutCueContent(for: cue.kind, soundFileName: soundFileName),
+                content: workoutCueContent(for: cue.kind, soundFileName: soundFileName, addressing: address),
                 trigger: trigger)
             do {
                 try await center.add(request)
@@ -274,16 +279,23 @@ extension NotificationService {
 
     /// The content of one workout cue: a short title and body naming the timer that ended — never an
     /// exercise, a weight or anything else from the person's log — and the bundled sound, if any.
-    static func workoutCueContent(for kind: WorkoutCueKind, soundFileName: String?) -> UNMutableNotificationContent {
+    ///
+    /// The rest-ended and segment-ended bodies describe the user ("when you're ready"), so they
+    /// resolve through `AddressedCopy` for `address`; the titles and the hold-ended body do not.
+    static func workoutCueContent(
+        for kind: WorkoutCueKind, soundFileName: String?, addressing address: TermOfAddress
+    ) -> UNMutableNotificationContent {
         let content = UNMutableNotificationContent()
         switch kind {
         case .restEnded:
             content.title = String(localized: "notification.workoutCue.restEnded.title",
                                    defaultValue: "Rest's over", bundle: .module,
                                    comment: "Title of the in-session cue delivered when a guided workout's rest timer reaches zero while Fernlet is in the background. Gentle: the rest waits for the person; this only says the timer ran out.")
-            content.body = String(localized: "notification.workoutCue.restEnded.body",
-                                  defaultValue: "Start your next set when you're ready.", bundle: .module,
-                                  comment: "Body of the rest-ended workout cue. An invitation, never a command or a hurry.")
+            content.body = AddressedCopy.string(
+                LocalizedStringResource("notification.workoutCue.restEnded.body",
+                                        defaultValue: "Start your next set when you're ready.", bundle: .module,
+                                        comment: "Body of the rest-ended workout cue. An invitation, never a command or a hurry."),
+                addressing: address)
         case .holdEnded:
             content.title = String(localized: "notification.workoutCue.holdEnded.title",
                                    defaultValue: "Hold's done", bundle: .module,
@@ -295,9 +307,11 @@ extension NotificationService {
             content.title = String(localized: "notification.workoutCue.segmentEnded.title",
                                    defaultValue: "Time's up on this part", bundle: .module,
                                    comment: "Title of the in-session cue delivered when one timed part of a guided cardio session (an interval's hard or easy part, or a steady stretch of cardio) runs out while Fernlet is in the background.")
-            content.body = String(localized: "notification.workoutCue.segmentEnded.body",
-                                  defaultValue: "Change your pace when you're ready. The next part starts when you open Fernlet.", bundle: .module,
-                                  comment: "Body of the cardio segment-ended workout cue. Calm, never a hurry; the guided run waits on that part until the person opens Fernlet.")
+            content.body = AddressedCopy.string(
+                LocalizedStringResource("notification.workoutCue.segmentEnded.body",
+                                        defaultValue: "Change your pace when you're ready. The next part starts when you open Fernlet.", bundle: .module,
+                                        comment: "Body of the cardio segment-ended workout cue. Calm, never a hurry; the guided run waits on that part until the person opens Fernlet."),
+                addressing: address)
         }
         content.sound = soundFileName.map { UNNotificationSound(named: UNNotificationSoundName(rawValue: $0)) }
         content.interruptionLevel = .active

@@ -132,6 +132,53 @@
         }
       }
     },
+    "proximity.review.deleteConfirm.message" : {
+      "comment" : "Body of the confirmation before deleting the pictures under review: only this phone's copies go.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "They'll be removed from this phone. Friends keep their own copies."
+          }
+        }
+      }
+    },
+    "proximity.review.deleteConfirm.oneTitle" : {
+      "comment" : "Title of the confirmation before deleting the one picture under review.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Delete this shared picture?"
+          }
+        }
+      }
+    },
+    "proximity.review.deleteConfirm.title" : {
+      "comment" : "Title of the confirmation before deleting every picture under review. %lld is how many.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Delete %lld shared picture?"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Delete %lld shared pictures?"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "proximity.review.deleteOne" : {
       "comment" : "Destructive button of the photo review sheet when there is exactly one picture.",
       "extractionState" : "extracted_with_value",

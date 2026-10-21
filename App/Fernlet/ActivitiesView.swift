@@ -76,7 +76,10 @@ struct ActivitiesView: View {
                 pendingRemoval = nil
             }
             Button("Cancel", role: .cancel) { pendingRemoval = nil }
-        } message: { Text(pendingRemoval.map { "Remove \($0.name) from this activity?" } ?? "") }
+        } message: {
+            // A `Text` key, not a mapped `String`: `Text(String)` is the verbatim overload.
+            if let target = pendingRemoval { Text("Remove \(target.name) from this activity?") }
+        }
     }
 
     // MARK: - Host form
@@ -105,8 +108,8 @@ struct ActivitiesView: View {
                     }
                     .accessibilityIdentifier("activities.titleField")
 
-                chipRow(ActivityTypeOption.allCases, selected: draftType) { draftType = $0 } label: { $0.rawValue }
-                chipRow(ActivityDurationOption.allCases, selected: draftDuration) { draftDuration = $0 } label: { $0.rawValue }
+                chipRow(ActivityTypeOption.allCases, selected: draftType) { draftType = $0 } label: { $0.displayName }
+                chipRow(ActivityDurationOption.allCases, selected: draftDuration) { draftDuration = $0 } label: { $0.displayName }
 
                 TextField("Where? (optional, e.g. \"the park\")", text: $draftLocation,
                           prompt: .fieldPrompt("Where? (optional, e.g. \"the park\")"))
@@ -149,7 +152,9 @@ struct ActivitiesView: View {
 
     private func startActivity() {
         guard ItemNameModeration.isAllowedForListing(draftTitle) else {
-            titleWarning = "That name can't be shared — try another."
+            titleWarning = String(localized: "activities.host.nameRefused",
+                                  defaultValue: "That name can't be shared — try another.",
+                                  comment: "Under the activity name field when the typed name is not allowed to be shared with people nearby")
             return
         }
         titleWarning = nil
@@ -334,7 +339,9 @@ struct ActivitiesView: View {
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(Color.moss)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title.isEmpty ? "Activity" : title)
+                // Two `Text`s, not one ternary: `title` is the host's own words (verbatim), and
+                // the fallback is copy (a key). A `String` ternary drew both verbatim.
+                (title.isEmpty ? Text("Activity") : Text(verbatim: title))
                     .font(.fernlet(.headerMedium))
                     .foregroundStyle(Color.bark)
                 if let subtitle, !subtitle.isEmpty {
@@ -396,12 +403,19 @@ struct ActivitiesView: View {
         $pendingRemoval.isPresent()
     }
 
-    private func titleForActivity(_ id: UUID) -> String {
-        manager.hostedActivities.first(where: { $0.descriptor.activityID == id })?.descriptor.sanitizedTitle ?? "an activity"
+    /// The hosted activity's title, or nil when the request names one this device no longer hosts
+    /// (the sheet then says "wants to join an activity" as a whole sentence).
+    private func titleForActivity(_ id: UUID) -> String? {
+        manager.hostedActivities.first(where: { $0.descriptor.activityID == id })?.descriptor.sanitizedTitle
     }
 
+    /// "Walk · the park": the type in this device's words, then the host's place text as sent.
+    ///
+    /// The type is drawn through ``ActivityTypeOption/displayName(forToken:)``, never from the
+    /// token's own spelling: the token is the sender's frozen English, so a capitalized token showed
+    /// "Walk" on a Spanish phone.
     private func subtitle(type: String, location: String?) -> String {
-        let t = type.isEmpty ? nil : ItemNameModeration.sanitizedName(type).capitalized
+        let t = type.isEmpty ? nil : ActivityTypeOption.displayName(forToken: type)
         // The descriptor is pinned as-received (to keep the paramsHash stable), so sanitize the coarse
         // location for display here.
         let loc = location.map { ItemNameModeration.sanitizedName($0) }.flatMap { $0.isEmpty ? nil : $0 }
@@ -412,7 +426,11 @@ struct ActivitiesView: View {
         let hostName = joined.lastSnapshot.participants
             .first(where: { $0.fingerprint == joined.descriptor.hostFingerprint })
             .flatMap { PeerNameDisplay.personName($0.displayName, fingerprint: $0.fingerprint, in: .fernlet) }
-        let base = hostName.map { "Hosted by \($0)" } ?? "Joined"
+        let base = hostName.map {
+            String(localized: "activities.joined.hostedBy", defaultValue: "Hosted by \($0)",
+                   comment: "A joined activity's subtitle. %@ is the host's name. May be followed by ' · ' and the activity type and place.")
+        } ?? String(localized: "activities.joined.noHostName", defaultValue: "Joined",
+                    comment: "A joined activity's subtitle when the host's name is not known. May be followed by ' · ' and the activity type and place.")
         let extra = subtitle(type: joined.descriptor.activityTypeToken, location: joined.descriptor.coarseLocation)
         return extra.isEmpty ? base : "\(base) · \(extra)"
     }
@@ -430,29 +448,38 @@ struct ActivitiesView: View {
     /// Cleared on both Remove and Cancel; `name` is pre-sanitized for the alert copy.
     private struct RemovalTarget: Equatable { let activityID: UUID; let fingerprint: String; let name: String }
 
-    /// The host form's activity-type chips (Walk, Coffee, …).
-    ///
-    /// The raw value is the visible chip label; `token` is the lowercase wire token pinned into
-    /// the activity descriptor (and re-sanitized for display on the receiving side).
-    private enum ActivityTypeOption: String, CaseIterable, Identifiable {
-        case walk = "Walk", coffee = "Coffee", meal = "Meal", study = "Study", workout = "Workout", hangout = "Hangout", other = "Other"
-        var id: String { rawValue }
-        var token: String { rawValue.lowercased() }
-    }
-
     /// The host form's duration chips, mapped to the activity's absolute expiry.
     ///
     /// `seconds` is added to "now" at start time to produce the descriptor's `expiresAt`; expiry
-    /// itself is then enforced by the manager (`gcExpired`) and rendered by ``ExpiryLabel``.
-    private enum ActivityDurationOption: String, CaseIterable, Identifiable {
-        case twoHours = "2 hours", oneDay = "1 day", threeDays = "3 days", sevenDays = "7 days"
-        var id: String { rawValue }
+    /// itself is then enforced by the manager (`gcExpired`) and rendered by ``ExpiryLabel``. Nothing
+    /// about a duration is sent or stored but that expiry, so the chip's words are display only.
+    private enum ActivityDurationOption: CaseIterable, Identifiable {
+        case twoHours, oneDay, threeDays, sevenDays
+        var id: Self { self }
         var seconds: TimeInterval {
             switch self {
             case .twoHours: return 2 * 3600
             case .oneDay: return 24 * 3600
             case .threeDays: return 3 * 24 * 3600
             case .sevenDays: return 7 * 24 * 3600
+            }
+        }
+
+        /// The chip's words. One key per chip: each is a fixed phrase, not a count a rule picks.
+        var displayName: String {
+            switch self {
+            case .twoHours:
+                String(localized: "activities.duration.twoHours", defaultValue: "2 hours",
+                       comment: "Activity length chip on the Start an activity form: the activity ends two hours from now")
+            case .oneDay:
+                String(localized: "activities.duration.oneDay", defaultValue: "1 day",
+                       comment: "Activity length chip on the Start an activity form: the activity ends one day from now")
+            case .threeDays:
+                String(localized: "activities.duration.threeDays", defaultValue: "3 days",
+                       comment: "Activity length chip on the Start an activity form: the activity ends three days from now")
+            case .sevenDays:
+                String(localized: "activities.duration.sevenDays", defaultValue: "7 days",
+                       comment: "Activity length chip on the Start an activity form: the activity ends seven days from now")
             }
         }
     }
@@ -471,11 +498,73 @@ struct ActivitiesView: View {
     }
 }
 
+/// An activity's type: the host form's chips (Walk, Coffee, …), and the one place a received type
+/// token is turned back into words.
+///
+/// **A fork (Spanish round, 2026-10-20).** The raw value is the WIRE token, the word a host's
+/// device writes into `ActivityDescriptor.activityTypeToken`. It rides the descriptor's canonical
+/// bytes (`FeatureCanonicalBytes`), so every signed token and roster snapshot binds it through the
+/// `activityParamsHash`, and it is kept in the device-local hosted and joined sidecars. It is frozen
+/// English, byte for byte what every build since Group Activities (2026-07-12) has sent (it was the
+/// chip's English label lowercased), and pinned by `LocalizationBoundaryTests.frozenActivityTypeTokens`.
+/// The chip used to draw that English label, and the receiving phone drew the sender's token
+/// capitalized, so a Spanish phone read "Walk" whatever its owner's language. ``displayName`` is the
+/// localized word both sides now draw.
+///
+/// The token is forward-tolerant (`ActivityDescriptor.activityTypeToken`: "an unknown token just
+/// renders generically"): a newer build may add a type, and any peer may send any word, so
+/// ``displayName(forToken:)`` draws a token it does not know as received (sanitized), never
+/// dropped and never re-cased.
+enum ActivityTypeOption: String, CaseIterable, Identifiable {
+    case walk, coffee, meal, study, workout, hangout, other
+    var id: String { rawValue }
+
+    /// The token this type is SENT as. Never localize: see the type's note.
+    var token: String { rawValue }
+
+    /// The chip's word, in this device's language.
+    var displayName: String {
+        switch self {
+        case .walk:
+            String(localized: "activities.type.walk", defaultValue: "Walk",
+                   comment: "Activity type chip and label: going for a walk together")
+        case .coffee:
+            String(localized: "activities.type.coffee", defaultValue: "Coffee",
+                   comment: "Activity type chip and label: meeting for coffee")
+        case .meal:
+            String(localized: "activities.type.meal", defaultValue: "Meal",
+                   comment: "Activity type chip and label: sharing a meal")
+        case .study:
+            String(localized: "activities.type.study", defaultValue: "Study",
+                   comment: "Activity type chip and label: studying together")
+        case .workout:
+            String(localized: "activities.type.workout", defaultValue: "Workout",
+                   comment: "Activity type chip and label: exercising together")
+        case .hangout:
+            String(localized: "activities.type.hangout", defaultValue: "Hangout",
+                   comment: "Activity type chip and label: spending time together, no set plan")
+        case .other:
+            String(localized: "activities.type.other", defaultValue: "Other",
+                   comment: "Activity type chip and label: any other kind of activity")
+        }
+    }
+
+    /// The words for a type token another device sent: this device's own word for a token it
+    /// knows, and the received text as sent (sanitized) for one it does not.
+    ///
+    /// - Parameter token: The descriptor's `activityTypeToken`, exactly as received.
+    /// - Returns: Display text.
+    static func displayName(forToken token: String) -> String {
+        ActivityTypeOption(rawValue: token)?.displayName ?? ItemNameModeration.sanitizedName(token)
+    }
+}
+
 /// A live "Expires in …" / "Expired" label that ticks each minute.
 ///
 /// A minute-period `TimelineView` is the only clock — no timers to invalidate — and the copy
 /// flips to a terracotta "Expired" the moment the descriptor's `expiresAt` passes. Used on every
-/// activity card in ``ActivitiesView``.
+/// activity card in ``ActivitiesView``. Each reading is one whole sentence key ("Expires in %lld
+/// min"), never "Expires " + a separately built phrase, so a translator can order it.
 private struct ExpiryLabel: View {
     let expiresAt: Date
 
@@ -484,18 +573,19 @@ private struct ExpiryLabel: View {
             let remaining = expiresAt.timeIntervalSince(context.date)
             HStack(spacing: 5) {
                 Image(systemName: "clock").font(.caption2)
-                Text(remaining <= 0 ? "Expired" : "Expires \(Self.relative(remaining))")
+                Self.text(remaining: remaining)
                     .font(.fernlet(.labelSmall))
             }
             .foregroundStyle(remaining <= 0 ? Color.terracotta : Color.slate)
         }
     }
 
-    private static func relative(_ seconds: TimeInterval) -> String {
+    private static func text(remaining seconds: TimeInterval) -> Text {
+        guard seconds > 0 else { return Text("Expired") }
         let minutes = Int(seconds / 60)
-        if minutes < 60 { return "in \(max(1, minutes)) min" }
+        if minutes < 60 { return Text("Expires in \(max(1, minutes)) min") }
         let hours = minutes / 60
-        if hours < 48 { return "in \(hours) h" }
-        return "in \(hours / 24) days"
+        if hours < 48 { return Text("Expires in \(hours) h") }
+        return Text("Expires in \(hours / 24) days")
     }
 }

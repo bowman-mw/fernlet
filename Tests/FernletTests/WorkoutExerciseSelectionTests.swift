@@ -26,7 +26,7 @@ struct WorkoutExerciseSelectionTests {
         experience: ExperienceLevel,
         goal: GoalType = .strength
     ) -> (picked: [String], activation: [String], dropped: [String]) {
-        let split = TrainingSplit(id: "probe", name: "Probe", summary: "", specificity: .balanced,
+        let split = TrainingSplit(id: "probe", name: "Probe", specificity: .balanced,
                                   goalFit: [goal], days: [WorkoutSplitDay(title: "Day", sessions: [session])])
         let plan = WorkoutProgram.dayPlan(
             goal: goal, intensity: .moderate, profile: WorkoutProfile(experience: experience),

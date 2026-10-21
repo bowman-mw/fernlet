@@ -1,6 +1,54 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "health.bodyField.age" : {
+      "comment" : "A body-profile field Apple Health did not supply, listed mid-sentence.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "age"
+          }
+        }
+      }
+    },
+    "health.bodyField.height" : {
+      "comment" : "A body-profile field Apple Health did not supply, listed mid-sentence.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "height"
+          }
+        }
+      }
+    },
+    "health.bodyField.sex" : {
+      "comment" : "A body-profile field Apple Health did not supply (biological sex), listed mid-sentence.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "sex"
+          }
+        }
+      }
+    },
+    "health.bodyField.weight" : {
+      "comment" : "A body-profile field Apple Health did not supply, listed mid-sentence.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "weight"
+          }
+        }
+      }
+    },
     "health.error.cacheClearerUnavailable" : {
       "comment" : "Shown when turning Health off failed. The causal 'so it did not disable' is load-bearing: disabling fails closed rather than leaving opted-out data behind, and the user needs to know it is still on.",
       "extractionState" : "extracted_with_value",
@@ -57,6 +105,402 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Sharing with Apple Health is turned off in Fernlet, so nothing was saved to Health. You can turn it on in Settings › Health."
+          }
+        }
+      }
+    },
+    "health.status.accessUpdated" : {
+      "comment" : "Settings › Health status line after the Health permission sheet closed. The placeholder is a permission kind read mid-sentence, e.g. 'body profile'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Updated Health access for %@."
+          }
+        }
+      }
+    },
+    "health.status.bodyProfileEmpty" : {
+      "comment" : "Settings › Health: Apple Health supplied no age, sex, height or weight.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No body profile data was available from Health. Manual settings will be used."
+          }
+        }
+      }
+    },
+    "health.status.bodyProfileFailed" : {
+      "comment" : "Settings › Health: reading the body profile from Apple Health failed. The placeholder is the system's own error sentence.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Health profile update was unavailable. Manual settings will be used. %@"
+          }
+        }
+      }
+    },
+    "health.status.bodyProfileImported" : {
+      "comment" : "Settings › Health: the first body-profile import from Apple Health supplied every field.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Imported body profile from Health."
+          }
+        }
+      }
+    },
+    "health.status.bodyProfilePartial" : {
+      "comment" : "Settings › Health: Apple Health supplied only some body-profile fields. The count agrees with 'field' automatically; the second placeholder lists the fields it did not supply, e.g. 'age, sex'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Updated ^[%1$lld field](inflect: true) from Health. Manual settings remain for %2$@."
+          }
+        }
+      }
+    },
+    "health.status.bodyProfileUpdated" : {
+      "comment" : "Settings › Health: a body-profile refresh from Apple Health supplied every field.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Updated body profile from Health."
+          }
+        }
+      }
+    },
+    "health.status.contextUnavailable" : {
+      "comment" : "Settings › Health: refreshing a permission kind from Apple Health failed. The first placeholder is the kind's name as a heading, the second the system's own error sentence.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ update was unavailable. Manual app entries remain available. %2$@"
+          }
+        }
+      }
+    },
+    "health.status.contextUpdated" : {
+      "comment" : "Settings › Health: a permission kind's data was refreshed from Apple Health. The placeholder is the kind read mid-sentence, e.g. 'activity context'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Updated %@ data from Health."
+          }
+        }
+      }
+    },
+    "health.status.deviceUnavailable" : {
+      "comment" : "Settings › Health status line on a device with no Apple Health (for example an iPad).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Health data is not available on this device."
+          }
+        }
+      }
+    },
+    "health.status.intimateAgeWall" : {
+      "comment" : "Settings › Health: shown instead of the intimate-logging Health permission for someone under 16.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intimate logging is available at 16 and older. Fernlet checks your age range with Apple — see Settings › Intimacy."
+          }
+        }
+      }
+    },
+    "health.status.measurementsFailed" : {
+      "comment" : "Settings › Health: writing height or weight to Apple Health failed. The placeholder is the system's own error sentence.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Could not update height or weight in Health. %@"
+          }
+        }
+      }
+    },
+    "health.status.revokeInstructions" : {
+      "comment" : "Settings › Health: how to take back a Health permission. The placeholder is a permission kind read mid-sentence. 'Settings > Privacy & Security > Health > Fernlet' is the iOS Settings path: use the names iOS shows in this language.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "To revoke %@ access, open Settings > Privacy & Security > Health > Fernlet. iOS does not allow apps to revoke Health permissions directly."
+          }
+        }
+      }
+    },
+    "healthCapability.activityContext.inSentence" : {
+      "comment" : "Name of an Apple Health permission kind (steps, active energy and exercise minutes) in the middle of a sentence, e.g. 'Updated Health access for activity context.'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "activity context"
+          }
+        }
+      }
+    },
+    "healthCapability.activityContext.summary" : {
+      "comment" : "The sentence beside an Apple Health permission kind's switch, saying exactly what it reads and writes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Read steps, active energy, and exercise minutes for daily activity context."
+          }
+        }
+      }
+    },
+    "healthCapability.activityContext.title" : {
+      "comment" : "Name of an Apple Health permission kind (steps, active energy and exercise minutes), as a heading or at the start of a sentence.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Activity context"
+          }
+        }
+      }
+    },
+    "healthCapability.bodyContext.inSentence" : {
+      "comment" : "Name of an Apple Health permission kind (sleep, heart and temperature signals for recovery) in the middle of a sentence, e.g. 'Updated Health access for body context.'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "body context"
+          }
+        }
+      }
+    },
+    "healthCapability.bodyContext.summary" : {
+      "comment" : "The sentence beside an Apple Health permission kind's switch, saying exactly what it reads and writes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Read sleep, resting heart rate, heart rate variability, respiratory rate, and sleeping wrist temperature for recovery-aware companion context."
+          }
+        }
+      }
+    },
+    "healthCapability.bodyContext.title" : {
+      "comment" : "Name of an Apple Health permission kind (sleep, heart and temperature signals for recovery), as a heading or at the start of a sentence.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Body context"
+          }
+        }
+      }
+    },
+    "healthCapability.bodyProfile.inSentence" : {
+      "comment" : "Name of an Apple Health permission kind (age, sex, height and weight) in the middle of a sentence, e.g. 'Updated Health access for body profile.'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "body profile"
+          }
+        }
+      }
+    },
+    "healthCapability.bodyProfile.summary" : {
+      "comment" : "The sentence beside an Apple Health permission kind's switch, saying exactly what it reads and writes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Read age, biological sex, height, and weight from Apple Health. Fernlet can write height and weight changes back when Health access allows it."
+          }
+        }
+      }
+    },
+    "healthCapability.bodyProfile.title" : {
+      "comment" : "Name of an Apple Health permission kind (age, sex, height and weight), as a heading or at the start of a sentence.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Body profile"
+          }
+        }
+      }
+    },
+    "healthCapability.cycleTracking.inSentence" : {
+      "comment" : "Name of an Apple Health permission kind (menstrual-cycle observations) in the middle of a sentence, e.g. 'Updated Health access for cycle tracking.'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "cycle tracking"
+          }
+        }
+      }
+    },
+    "healthCapability.cycleTracking.summary" : {
+      "comment" : "The sentence beside an Apple Health permission kind's switch, saying exactly what it reads and writes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Read and write cycle observations like menstrual flow, basal body temperature, cervical mucus, intermenstrual bleeding, and ovulation test results."
+          }
+        }
+      }
+    },
+    "healthCapability.cycleTracking.title" : {
+      "comment" : "Name of an Apple Health permission kind (menstrual-cycle observations), as a heading or at the start of a sentence.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cycle tracking"
+          }
+        }
+      }
+    },
+    "healthCapability.intimateLogging.inSentence" : {
+      "comment" : "Name of an Apple Health permission kind (sexual activity, only when the user turns it on) in the middle of a sentence, e.g. 'Updated Health access for intimate logging.'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "intimate logging"
+          }
+        }
+      }
+    },
+    "healthCapability.intimateLogging.summary" : {
+      "comment" : "The sentence beside an Apple Health permission kind's switch, saying exactly what it reads and writes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Read and write sexual activity only when explicitly enabled."
+          }
+        }
+      }
+    },
+    "healthCapability.intimateLogging.title" : {
+      "comment" : "Name of an Apple Health permission kind (sexual activity, only when the user turns it on), as a heading or at the start of a sentence.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intimate logging"
+          }
+        }
+      }
+    },
+    "healthCapability.mindfulness.inSentence" : {
+      "comment" : "Name of an Apple Health permission kind (mindful sessions written to Health) in the middle of a sentence, e.g. 'Updated Health access for mindfulness.'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "mindfulness"
+          }
+        }
+      }
+    },
+    "healthCapability.mindfulness.summary" : {
+      "comment" : "The sentence beside an Apple Health permission kind's switch, saying exactly what it reads and writes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Write mindful sessions completed in Fernlet to Apple Health."
+          }
+        }
+      }
+    },
+    "healthCapability.mindfulness.title" : {
+      "comment" : "Name of an Apple Health permission kind (mindful sessions written to Health), as a heading or at the start of a sentence.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mindfulness"
+          }
+        }
+      }
+    },
+    "healthCapability.workoutLogging.inSentence" : {
+      "comment" : "Name of an Apple Health permission kind (workouts, read and written) in the middle of a sentence, e.g. 'Updated Health access for workout logging.'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "workout logging"
+          }
+        }
+      }
+    },
+    "healthCapability.workoutLogging.summary" : {
+      "comment" : "The sentence beside an Apple Health permission kind's switch, saying exactly what it reads and writes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Read and write workouts in Apple Health so Fernlet and Apple Fitness stay in sync."
+          }
+        }
+      }
+    },
+    "healthCapability.workoutLogging.title" : {
+      "comment" : "Name of an Apple Health permission kind (workouts, read and written), as a heading or at the start of a sentence.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Workout logging"
           }
         }
       }

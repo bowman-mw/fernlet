@@ -33,7 +33,8 @@ struct OnboardingPermissionsView: View {
             ) {
                 VStack(spacing: 10) {
                     permissionRow("heart.text.square.fill", title: "Health", body: "Asked the first time you log a workout or open a health feature.")
-                    permissionRow("figure.run", title: HealthCapability.workoutLogging.title, body: HealthCapability.workoutLogging.summary)
+                    permissionRow("figure.run", verbatimTitle: HealthCapability.workoutLogging.title,
+                                  verbatimBody: HealthCapability.workoutLogging.summary)
                     permissionRow("camera.fill", title: "Camera", body: "Asked when you first scan a nutrition label.")
                     notificationsRow
                     permissionRow("location.fill", title: "Coarse location", body: "Asked only if you turn on weather-aware recovery prompts.")
@@ -125,14 +126,27 @@ struct OnboardingPermissionsView: View {
         }
     }
 
-    private func permissionRow(_ systemImage: String, title: String, body: String) -> some View {
+    /// One permission card named by authored copy. `LocalizedStringKey`, not `String`: the `String`
+    /// this took sent every literal row through `Text`'s verbatim overload, so none localized.
+    private func permissionRow(_ systemImage: String, title: LocalizedStringKey, body: LocalizedStringKey) -> some View {
+        permissionCard(systemImage, title: Text(title), body: Text(body))
+    }
+
+    /// The verbatim form, for copy another module already resolved (`HealthCapability`'s). A
+    /// distinct label, never a same-label `String` overload a literal would pick.
+    private func permissionRow(_ systemImage: String, verbatimTitle: String, verbatimBody: String) -> some View {
+        permissionCard(systemImage, title: Text(verbatim: verbatimTitle), body: Text(verbatim: verbatimBody))
+    }
+
+    /// The shared card chrome for both `permissionRow` forms.
+    private func permissionCard(_ systemImage: String, title: Text, body: Text) -> some View {
         HStack(alignment: .top, spacing: 12) {
             rowIcon(systemImage)
             VStack(alignment: .leading, spacing: 4) {
-                Text(title)
+                title
                     .font(.fernlet(.headerMedium))
                     .foregroundStyle(Color.bark)
-                Text(body)
+                body
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()

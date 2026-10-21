@@ -135,13 +135,13 @@ struct JournalQuickMoodTests {
     // MARK: - Prompt library
 
     @Test func promptRotationIsDeterministicPerDayKey() {
-        #expect(JournalPromptLibrary.prompts.count >= 40)
-        #expect(JournalPromptLibrary.prompts.allSatisfy { !$0.trimmingCharacters(in: .whitespaces).isEmpty })
+        #expect(JournalPromptLibrary.prompts(addressing: .masculine).count >= 40)
+        #expect(JournalPromptLibrary.prompts(addressing: .masculine).allSatisfy { !$0.trimmingCharacters(in: .whitespaces).isEmpty })
         // Same day → same prompt, every time (and on every device — pure function of the dateKey).
-        #expect(JournalPromptLibrary.prompt(for: "2026-07-05") == JournalPromptLibrary.prompt(for: "2026-07-05"))
+        #expect(JournalPromptLibrary.prompt(for: "2026-07-05", addressing: .masculine) == JournalPromptLibrary.prompt(for: "2026-07-05", addressing: .masculine))
         #expect(JournalPromptLibrary.stableSeed("2026-07-05") == JournalPromptLibrary.stableSeed("2026-07-05"))
         // The rotation actually rotates: a month of days reaches a healthy variety of prompts.
-        let july = (1...31).map { JournalPromptLibrary.prompt(for: String(format: "2026-07-%02d", $0)) }
+        let july = (1...31).map { JournalPromptLibrary.prompt(for: String(format: "2026-07-%02d", $0), addressing: .masculine) }
         #expect(Set(july).count > 5)
     }
 }

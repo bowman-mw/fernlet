@@ -85,7 +85,7 @@ struct GuidedWorkoutRunStoreTests {
         let store = makeStore()
         store.clearGuidedRun()
         let goal = store.settings.selectedGoal
-        let split = TrainingSplit(id: "probe", name: "Probe", summary: "", specificity: .balanced, goalFit: [goal],
+        let split = TrainingSplit(id: "probe", name: "Probe", specificity: .balanced, goalFit: [goal],
                                   days: [WorkoutSplitDay(title: "Day", sessions: [WorkoutSessions.sportConditioning])])
         let planned = WorkoutProgram.dayPlan(
             goal: goal, intensity: .moderate, profile: WorkoutProfile(experience: .intermediate),
@@ -107,7 +107,7 @@ struct GuidedWorkoutRunStoreTests {
         let store = makeStore()
         store.clearGuidedRun()
         let goal = store.settings.selectedGoal
-        let split = TrainingSplit(id: "probe", name: "Probe", summary: "", specificity: .balanced, goalFit: [goal],
+        let split = TrainingSplit(id: "probe", name: "Probe", specificity: .balanced, goalFit: [goal],
                                   days: [WorkoutSplitDay(title: "Day", sessions: [WorkoutSessions.intervals])])
         let planned = WorkoutProgram.dayPlan(
             goal: goal, intensity: .moderate, profile: WorkoutProfile(experience: .intermediate),
@@ -130,7 +130,7 @@ struct GuidedWorkoutRunStoreTests {
         let store = makeStore()
         store.clearGuidedRun()
         let goal = store.settings.selectedGoal
-        let split = TrainingSplit(id: "probe", name: "Probe", summary: "", specificity: .balanced, goalFit: [goal],
+        let split = TrainingSplit(id: "probe", name: "Probe", specificity: .balanced, goalFit: [goal],
                                   days: [WorkoutSplitDay(title: "Day", sessions: [WorkoutSessions.upper])])
         let planned = WorkoutProgram.dayPlan(
             goal: goal, intensity: .moderate, profile: WorkoutProfile(experience: .intermediate),

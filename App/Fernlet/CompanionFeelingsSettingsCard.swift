@@ -33,7 +33,7 @@ struct CompanionFeelingsSettingsCard: View {
             Toggle("Hunger and thirst cues", isOn: $appetiteCuesEnabled)
                 .font(.fernlet(.label))
                 .accessibilityIdentifier("settings.companionFeelings.appetiteCues")
-            Text("When it's been a while since a meal or some water, your companion can look a little hungry or thirsty — only in waking hours, never when you're unwell. Turn this off and it never will.")
+            AddressedText("When it's been a while since a meal or some water, your companion can look a little hungry or thirsty — only in waking hours, never when you're unwell. Turn this off and it never will.")
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()

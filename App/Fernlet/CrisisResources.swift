@@ -24,8 +24,8 @@ import Foundation
 struct CrisisResourceAction: Identifiable {
     /// Stable identifier, also used as the accessibility-identifier suffix (`"call"`, `"text"`).
     let id: String
-    /// The button's visible title, e.g. `"Call 988"`. Phase 1 localizes this; the number inside it
-    /// is not translated.
+    /// The button's visible title, e.g. `"Call 988"`: a catalog key (`crisis.action.call` /
+    /// `crisis.action.text`) with the number as printed dropped in. The number is never translated.
     let title: String
     /// SF Symbol drawn ahead of the title.
     let systemImage: String
@@ -42,7 +42,8 @@ struct CrisisResource {
     /// The service's own name, e.g. `"988 Suicide & Crisis Lifeline"`. Not translated — a person
     /// asking for help by name should use the name the operator answers to.
     let name: String
-    /// One sentence of supportive copy naming the line. Phase 1 localizes this.
+    /// Supportive copy naming the line: one whole catalog sentence per line (`crisis.blurb.*`), so a
+    /// translator can make "free" and "kind" agree with the line's own gender.
     let blurb: String
     /// Call/text buttons, in display order. Empty means "show no button" (see above).
     let actions: [CrisisResourceAction]
@@ -54,7 +55,13 @@ struct CrisisResource {
 /// ``fallback``, which names no number. The table is deliberately small and hand-verified rather
 /// than generated: each number below was checked against the operator's or health ministry's own
 /// page (sources in the case comments), and all listed lines are free and staffed 24/7 — which is
-/// what lets one piece of shared copy promise "there around the clock" for every listed region.
+/// what lets every line's sentence promise "free" and "there around the clock". A future entry that
+/// is not both needs copy that says what it is instead.
+///
+/// **Copy:** each line's blurb is one whole catalog sentence (`crisis.blurb.*`), never a shared
+/// sentence with the line's name spliced in: in Spanish "free" and "kind" agree with the line's
+/// gender (la línea … gratuita, el número … gratuito), which a splice cannot do. Every key is
+/// marked SAFETY COPY for the translator, and the owner signs off each translation (plan D-L5).
 ///
 /// **Maintenance:** verify against the operator's page before changing a number, update the
 /// source comment in the same edit, and keep `CrisisResourceTests` in step. This table is also
@@ -76,9 +83,11 @@ enum CrisisResources {
     /// everywhere, and inventing a plausible-looking number for an unlisted country would be a
     /// dead call at the worst possible moment.
     static let fallback = CrisisResource(
-        name: "Local emergency services",
-        blurb: "Some moments are bigger than any app. You deserve real support — your local "
-            + "emergency services, or a crisis line where you are, can help right now.",
+        name: String(localized: "crisis.fallback.name", defaultValue: "Local emergency services",
+                     comment: "SAFETY COPY. Crisis card, a region with no verified crisis line: who to reach instead. The owner reviews every translation before ship."),
+        blurb: String(localized: "crisis.fallback.blurb",
+                      defaultValue: "Some moments are bigger than any app. You deserve real support — your local emergency services, or a crisis line where you are, can help right now.",
+                      comment: "SAFETY COPY. Crisis card body where Fernlet knows no crisis line for the region, so it names no number. The owner reviews every translation before ship."),
         actions: []
     )
 
@@ -97,7 +106,9 @@ enum CrisisResources {
         // Run by the Ministerio de Sanidad since 2022-05-10. Source: sanidad.gob.es/linea024
         "ES": CrisisResource(
             name: "Línea 024 de atención a la conducta suicida",
-            blurb: supportiveBlurb(naming: "the 024 line"),
+            blurb: String(localized: "crisis.blurb.linea024",
+                          defaultValue: "Some moments are bigger than any app. You deserve real support — the 024 line is free, kind, and there around the clock.",
+                          comment: "SAFETY COPY. Crisis card body in Spain, naming the Línea 024. The owner reviews every translation before ship."),
             actions: actions(call: "024")
         ),
 
@@ -105,7 +116,9 @@ enum CrisisResources {
         // staffed by nurses and psychologists. Source: 3114.fr, info.gouv.fr
         "FR": CrisisResource(
             name: "3114 — numéro national de prévention du suicide",
-            blurb: supportiveBlurb(naming: "the 3114 line"),
+            blurb: String(localized: "crisis.blurb.numero3114",
+                          defaultValue: "Some moments are bigger than any app. You deserve real support — the 3114 line is free, kind, and there around the clock.",
+                          comment: "SAFETY COPY. Crisis card body in France, naming the 3114 line. The owner reviews every translation before ship."),
             actions: actions(call: "3114")
         ),
 
@@ -113,21 +126,27 @@ enum CrisisResources {
         // and the EU-harmonised 116 123. Source: telefonseelsorge.de
         "DE": CrisisResource(
             name: "TelefonSeelsorge",
-            blurb: supportiveBlurb(naming: "the TelefonSeelsorge line"),
-            actions: actions(call: "08001110111", display: "Call 0800 111 0 111")
+            blurb: String(localized: "crisis.blurb.telefonSeelsorge",
+                          defaultValue: "Some moments are bigger than any app. You deserve real support — the TelefonSeelsorge line is free, kind, and there around the clock.",
+                          comment: "SAFETY COPY. Crisis card body in Germany, naming TelefonSeelsorge (keep the name). The owner reviews every translation before ship."),
+            actions: actions(call: "08001110111", printed: "0800 111 0 111")
         ),
 
         // AU: Lifeline — 13 11 14, 24/7. Source: lifeline.org.au/131114
         "AU": CrisisResource(
             name: "Lifeline",
-            blurb: supportiveBlurb(naming: "the Lifeline number"),
-            actions: actions(call: "131114", display: "Call 13 11 14")
+            blurb: String(localized: "crisis.blurb.lifelineAU",
+                          defaultValue: "Some moments are bigger than any app. You deserve real support — the Lifeline number is free, kind, and there around the clock.",
+                          comment: "SAFETY COPY. Crisis card body in Australia, naming Lifeline (keep the name). The owner reviews every translation before ship."),
+            actions: actions(call: "131114", printed: "13 11 14")
         ),
 
         // NZ: 1737, Need to talk? — free, call or text, 24/7. Source: 1737.org.nz
         "NZ": CrisisResource(
             name: "1737, Need to talk?",
-            blurb: supportiveBlurb(naming: "the 1737 line"),
+            blurb: String(localized: "crisis.blurb.needToTalk1737",
+                          defaultValue: "Some moments are bigger than any app. You deserve real support — the 1737 line is free, kind, and there around the clock.",
+                          comment: "SAFETY COPY. Crisis card body in New Zealand, naming the 1737 line. The owner reviews every translation before ship."),
             actions: actions(call: "1737", text: "1737")
         ),
     ]
@@ -137,44 +156,39 @@ enum CrisisResources {
     /// US and Canada share one entry: same code, same call-or-text shape.
     private static let lifeline988 = CrisisResource(
         name: "988 Suicide & Crisis Lifeline",
-        blurb: supportiveBlurb(naming: "the 988 line"),
+        blurb: String(localized: "crisis.blurb.lifeline988",
+                      defaultValue: "Some moments are bigger than any app. You deserve real support — the 988 line is free, kind, and there around the clock.",
+                      comment: "SAFETY COPY. Crisis card body in the US and Canada, naming the 988 line. The owner reviews every translation before ship."),
         actions: actions(call: "988", text: "988")
     )
 
     /// Great Britain and Ireland share the Samaritans entry on the same harmonised number.
     private static let samaritans = CrisisResource(
         name: "Samaritans",
-        blurb: supportiveBlurb(naming: "the Samaritans line"),
-        actions: actions(call: "116123", display: "Call 116 123")
+        blurb: String(localized: "crisis.blurb.samaritans",
+                      defaultValue: "Some moments are bigger than any app. You deserve real support — the Samaritans line is free, kind, and there around the clock.",
+                      comment: "SAFETY COPY. Crisis card body in Great Britain and Ireland, naming Samaritans (keep the name). The owner reviews every translation before ship."),
+        actions: actions(call: "116123", printed: "116 123")
     )
 
     // MARK: - Builders
 
-    /// The shared supportive sentence, with the line's name dropped in.
-    ///
-    /// Safe to promise "free" and "around the clock" for every listed region because that was a
-    /// condition of listing: any future entry that is not free and 24/7 needs its own copy rather
-    /// than this sentence.
-    private static func supportiveBlurb(naming line: String) -> String {
-        "Some moments are bigger than any app. You deserve real support — \(line) is free, kind, "
-            + "and there around the clock."
-    }
-
     /// Builds the call (and optional text) actions, dropping any whose URL will not parse.
     ///
-    /// `display` overrides the button title for numbers written with spaces — the dialled string
-    /// stays unspaced so the `tel:` URL is unambiguous, while the button reads the way the
-    /// operator prints it.
+    /// `printed` is the number as the operator prints it, spaces and all, for the button title; the
+    /// dialled string stays unspaced so the `tel:` URL is unambiguous.
     private static func actions(
         call number: String,
         text textNumber: String? = nil,
-        display: String? = nil
+        printed: String? = nil
     ) -> [CrisisResourceAction] {
         var built: [CrisisResourceAction] = []
         if let url = URL(string: "tel:\(number)") {
+            let shown = printed ?? number
             built.append(CrisisResourceAction(
                 id: "call",
-                title: display ?? "Call \(number)",
+                title: String(localized: "crisis.action.call", defaultValue: "Call \(shown)",
+                              comment: "SAFETY COPY. Crisis card button that phones the line. %@ is the number as the operator prints it (988, 0800 111 0 111); never translate it."),
                 systemImage: "phone",
                 url: url
             ))
@@ -182,7 +196,8 @@ enum CrisisResources {
         if let textNumber, let url = URL(string: "sms:\(textNumber)") {
             built.append(CrisisResourceAction(
                 id: "text",
-                title: "Text \(textNumber)",
+                title: String(localized: "crisis.action.text", defaultValue: "Text \(textNumber)",
+                              comment: "SAFETY COPY. Crisis card button that opens a text message to the line. %@ is the number (988, 1737); never translate it."),
                 systemImage: "message",
                 url: url
             ))

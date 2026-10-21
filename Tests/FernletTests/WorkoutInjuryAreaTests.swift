@@ -31,7 +31,7 @@ struct WorkoutInjuryAreaTests {
     }
 
     func session(_ template: WorkoutSessionTemplate, profile: WorkoutProfile) throws -> WorkoutProgram.SessionSuggestion {
-        let split = TrainingSplit(id: "probe", name: "Probe", summary: "", specificity: .balanced,
+        let split = TrainingSplit(id: "probe", name: "Probe", specificity: .balanced,
                                   goalFit: [.strength], days: [WorkoutSplitDay(title: "Day", sessions: [template])])
         return try #require(WorkoutProgram.dayPlan(
             goal: .strength, intensity: .moderate, profile: profile, location: .fullGym,

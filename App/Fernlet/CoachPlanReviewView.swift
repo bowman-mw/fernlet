@@ -105,7 +105,9 @@ struct CoachPlanReviewView: View {
 
     private func header(_ review: CoachPlanImportReview) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(plan.title.isEmpty ? "Workout plan" : plan.title)
+            Group {
+                if plan.title.isEmpty { Text("Workout plan") } else { Text(verbatim: plan.title) }
+            }
                 .font(.fernlet(.header))
                 .foregroundStyle(Color.bark)
             Text(Self.subtitle(for: plan, review: review))
@@ -133,18 +135,33 @@ struct CoachPlanReviewView: View {
     /// Built from what the plan actually does rather than from `days` alone: an edits-only plan has
     /// no days and no sessions, and "0 days · 0 sessions" reads like a broken import when in fact it
     /// is a perfectly good set of changes.
+    ///
+    /// Each item is its own key, joined with " · " like every other caption row: the counts are
+    /// plural-ruled count phrases (the English "s" used to be spliced into the key), so "1 days"
+    /// cannot happen in any language.
     private static func subtitle(for plan: CoachPlan, review: CoachPlanImportReview) -> String {
         var parts: [String] = []
         if !plan.days.isEmpty {
-            parts.append("\(plan.days.count) day\(plan.days.count == 1 ? "" : "s")")
+            parts.append(String(localized: "coachPlan.count.days", defaultValue: "\(plan.days.count) days",
+                                comment: "Coach plan review subtitle item: how many days the plan covers, e.g. '7 days'. Needs a plural variation."))
             if plan.sessionCount > 0 {
-                parts.append("\(plan.sessionCount) session\(plan.sessionCount == 1 ? "" : "s")")
+                parts.append(String(localized: "coachPlan.count.sessions", defaultValue: "\(plan.sessionCount) sessions",
+                                    comment: "Coach plan review subtitle item: how many workout sessions the plan holds. Needs a plural variation."))
             }
         }
         let changes = review.resolvedEdits.count
-        if changes > 0 { parts.append("\(changes) change\(changes == 1 ? "" : "s")") }
-        if parts.isEmpty { parts.append("Nothing to add") }
-        if !plan.coachDisplayName.isEmpty { parts.append("from \(plan.coachDisplayName)") }
+        if changes > 0 {
+            parts.append(String(localized: "coachPlan.count.changes", defaultValue: "\(changes) changes",
+                                comment: "Coach plan review subtitle item: how many already-planned workouts the plan changes. Needs a plural variation."))
+        }
+        if parts.isEmpty {
+            parts.append(String(localized: "coachPlan.review.nothingToAdd", defaultValue: "Nothing to add",
+                                comment: "Coach plan review subtitle when the plan adds no days and changes nothing"))
+        }
+        if !plan.coachDisplayName.isEmpty {
+            parts.append(String(localized: "coachPlan.review.fromAuthor", defaultValue: "from \(plan.coachDisplayName)",
+                                comment: "Coach plan review subtitle item: who wrote the plan, e.g. 'from Claude'. Argument: the name the plan gives its author."))
+        }
         return parts.joined(separator: " · ")
     }
 
@@ -248,14 +265,19 @@ struct CoachPlanReviewView: View {
             }
 
             if noteChanged, resolved.action != .delete, let after {
-                changeLine(after.notes.isEmpty ? "Note cleared" : "Note: \(Self.lastNoteLine(after.notes))")
+                if after.notes.isEmpty {
+                    changeLine("Note cleared")
+                } else {
+                    changeLine("Note: \(Self.lastNoteLine(after.notes))")
+                }
             }
             FernletRowDivider()
         }
     }
 
-    /// A single "what changed" line under a workout name.
-    private func changeLine(_ text: String) -> some View {
+    /// A single "what changed" line under a workout name. `LocalizedStringKey`, not `String`: every
+    /// caller passes a literal, and a `String` parameter would keep all four out of the catalog.
+    private func changeLine(_ text: LocalizedStringKey) -> some View {
         Text(text)
             .font(.fernlet(.bodySmall))
             .foregroundStyle(Color.bark)
@@ -265,11 +287,13 @@ struct CoachPlanReviewView: View {
     /// The coach's own note, without the provenance stamp the importer appends.
     ///
     /// The stamp is added on apply, so showing the whole note here would preview a line the user
-    /// didn't write and the coach didn't send.
-    private static func lastNoteLine(_ notes: String) -> String {
+    /// didn't write and the coach didn't send. A stamp is matched by its exact shape
+    /// (``CoachPlanNoteStamp/isStamp(_:)``): the bare "Day " prefix this used to strip also hid a
+    /// note of the user's own such as "Day off, knees sore".
+    static func lastNoteLine(_ notes: String) -> String {
         notes
             .components(separatedBy: .newlines)
-            .filter { !$0.hasPrefix("Changed by ") && !$0.hasPrefix("Day ") }
+            .filter { !CoachPlanNoteStamp.isStamp($0) }
             .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
             .joined(separator: " ")
     }
@@ -292,23 +316,40 @@ struct CoachPlanReviewView: View {
     }
 
     /// "2 replaced, 1 adjusted, 1 removed" — counted by action so the sentence matches the list.
+    ///
+    /// Each count is a plural-ruled count phrase (a translator agrees the participle with the
+    /// count), joined with ", " (the house list separator), inside one sentence key.
     private static func changesSummary(_ edits: [ResolvedCoachPlanEdit]) -> String {
         let replaced = edits.filter { $0.action == .replace }.count
         let adjusted = edits.filter { $0.action == .adjust }.count
         let removed = edits.filter { $0.action == .delete }.count
         var parts: [String] = []
-        if replaced > 0 { parts.append("\(replaced) replaced") }
-        if adjusted > 0 { parts.append("\(adjusted) adjusted") }
-        if removed > 0 { parts.append("\(removed) removed") }
+        if replaced > 0 {
+            parts.append(String(localized: "coachPlan.count.replaced", defaultValue: "\(replaced) replaced",
+                                comment: "Coach plan review: how many planned workouts the plan replaces, e.g. '2 replaced'. Needs a plural variation."))
+        }
+        if adjusted > 0 {
+            parts.append(String(localized: "coachPlan.count.adjusted", defaultValue: "\(adjusted) adjusted",
+                                comment: "Coach plan review: how many planned workouts the plan adjusts, e.g. '1 adjusted'. Needs a plural variation."))
+        }
+        if removed > 0 {
+            parts.append(String(localized: "coachPlan.count.removed", defaultValue: "\(removed) removed",
+                                comment: "Coach plan review: how many planned workouts the plan removes, e.g. '1 removed'. Needs a plural variation."))
+        }
         let list = parts.joined(separator: ", ")
-        return "\(list). Workouts you've already logged are never touched."
+        return String(localized: "coachPlan.review.changesSummary",
+                      defaultValue: "\(list). Workouts you've already logged are never touched.",
+                      comment: "Coach plan review, the changes card. Argument: the counts by kind, e.g. '2 replaced, 1 adjusted'.")
     }
 
     private static func actionLabel(_ action: CoachPlanEditAction) -> String {
         switch action {
-        case .adjust: "Adjusted"
-        case .replace: "Replaced"
-        case .delete: "Removed"
+        case .adjust: String(localized: "coachPlan.review.action.adjusted", defaultValue: "Adjusted",
+                             comment: "Coach plan review: tag on a planned workout the plan adjusts")
+        case .replace: String(localized: "coachPlan.review.action.replaced", defaultValue: "Replaced",
+                              comment: "Coach plan review: tag on a planned workout the plan replaces")
+        case .delete: String(localized: "coachPlan.review.action.removed", defaultValue: "Removed",
+                             comment: "Coach plan review: tag on a planned workout the plan removes")
         }
     }
 
@@ -320,8 +361,7 @@ struct CoachPlanReviewView: View {
     private func collisionCard(_ review: CoachPlanImportReview) -> some View {
         card {
             cardTitle("You already have workouts planned")
-            Text("\(review.collidingDayKeys.count) day\(review.collidingDayKeys.count == 1 ? "" : "s") in this range already "
-                 + "have planned workouts. Workouts you've already logged are never touched.")
+            Text(Self.collisionBody(dayCount: review.collidingDayKeys.count))
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fixedSize(horizontal: false, vertical: true)
@@ -371,9 +411,7 @@ struct CoachPlanReviewView: View {
     private func newExercisesCard(_ review: CoachPlanImportReview) -> some View {
         card {
             cardTitle("New exercises")
-            Text("\(review.newExercises.count) exercise\(review.newExercises.count == 1 ? "" : "s") "
-                 + "will be added to your exercise list, so Fernlet can suggest and check "
-                 + (review.newExercises.count == 1 ? "it" : "them") + " later.")
+            Text(Self.newExercisesBody(count: review.newExercises.count))
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fixedSize(horizontal: false, vertical: true)
@@ -417,7 +455,7 @@ struct CoachPlanReviewView: View {
             } label: {
                 HStack(spacing: 8) {
                     VStack(alignment: .leading, spacing: 1) {
-                        Text("Day \(day.dayIndex) · \(day.title.isEmpty ? (day.isRestDay ? "Rest" : "Workout") : day.title)")
+                        Self.dayTitle(day)
                             .font(.fernlet(.label))
                             .foregroundStyle(Color.bark)
                         Text(dateLabel)
@@ -510,11 +548,41 @@ struct CoachPlanReviewView: View {
         return order.compactMap { key in
             guard let flags = byKey[key], let first = flags.first else { return nil }
             let days = flags.map(\.dayIndex).sorted()
-            let label = days.count == 1
-                ? "Day \(days[0])"
-                : "Days " + days.map(String.init).joined(separator: ", ")
-            return (key: key, name: first.exerciseName, reason: first.reason, dayLabel: label)
+            return (key: key, name: first.exerciseName, reason: first.reason, dayLabel: Self.flagDayLabel(days))
         }
+    }
+
+    /// "Day 3", or "Days 1, 8, 15" for an exercise flagged on several days: two keys rather than
+    /// "Days " spliced in front of the numbers. Day 0 is an edit's flag, which has no plan day.
+    static func flagDayLabel(_ days: [Int]) -> String {
+        guard days.count > 1 else {
+            return String(localized: "coachPlan.review.flagDay", defaultValue: "Day \(days.first ?? 0)",
+                          comment: "Coach plan review: the plan day a flagged exercise is on, e.g. 'Day 3'")
+        }
+        let list = days.map { $0.formatted() }.joined(separator: ", ")
+        return String(localized: "coachPlan.review.flagDays", defaultValue: "Days \(list)",
+                      comment: "Coach plan review: the plan days a flagged exercise is on. Argument: the day numbers, e.g. '1, 8, 15'.")
+    }
+
+    /// A plan day's heading: "Day 2 · Upper", or "Day 2 · Rest" / "Day 2 · Workout" for an untitled
+    /// day. Three whole keys rather than an English word spliced into the line.
+    static func dayTitle(_ day: CoachPlanDay) -> Text {
+        guard day.title.isEmpty else { return Text("Day \(day.dayIndex) · \(day.title)") }
+        return day.isRestDay ? Text("Day \(day.dayIndex) · Rest") : Text("Day \(day.dayIndex) · Workout")
+    }
+
+    /// The collision card's sentence, plural-ruled so one day reads "1 day … already has".
+    static func collisionBody(dayCount: Int) -> String {
+        String(localized: "coachPlan.review.collisionBody",
+               defaultValue: "\(dayCount) days in this range already have planned workouts. Workouts you've already logged are never touched.",
+               comment: "Coach plan review: some of the plan's days already have planned workouts. Argument: how many days. Needs a plural variation (English: '1 day … already has').")
+    }
+
+    /// The new-exercises card's sentence, plural-ruled so the pronoun agrees ("check it" / "check them").
+    static func newExercisesBody(count: Int) -> String {
+        String(localized: "coachPlan.review.newExercisesBody",
+               defaultValue: "\(count) exercises will be added to your exercise list, so Fernlet can suggest and check them later.",
+               comment: "Coach plan review: the plan defines exercises Fernlet doesn't have. Argument: how many. Needs a plural variation (English: '1 exercise … check it later').")
     }
 
     private func card<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
@@ -525,10 +593,14 @@ struct CoachPlanReviewView: View {
             .overlay(RoundedRectangle(cornerRadius: FernletMetrics.radiusMd).stroke(Color.bark.opacity(0.08), lineWidth: 1))
     }
 
-    private func cardTitle(_ text: String) -> some View {
+    /// A card's caption. `LocalizedStringKey`: every caller passes a literal, which a `String`
+    /// parameter would have kept out of the catalog.
+    private func cardTitle(_ text: LocalizedStringKey) -> some View {
         Text(text).font(.fernlet(.label)).foregroundStyle(Color.slate)
     }
 
+    /// One bulleted line of runtime text (an issue's already-localized detail, a new exercise's
+    /// coach-supplied name and muscles), drawn verbatim.
     private func bullet(_ text: String, tint: Color = Color.moss) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "circle.fill").font(.system(size: 5)).foregroundStyle(tint).padding(.top, 7)

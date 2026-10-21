@@ -505,9 +505,16 @@ public nonisolated enum FeelingTag: String, Codable, CaseIterable, Identifiable,
     /// Was `rawValue.capitalized`, which cannot be localized at all — it is the token wearing a
     /// coat of paint. `rawValue` is FROZEN: it is the value stored in the sealed journal column,
     /// the ``MemoryNote`` category, the parked-token side channel's vocabulary, AND the
-    /// accessibility identifier the UI-test suite selects mood chips by. Only this property is
-    /// text a person reads.
-    public var label: String {
+    /// accessibility identifier the UI-test suite selects mood chips by. Only this is text a
+    /// person reads.
+    ///
+    /// A mood describes the person who logged it, so Spanish agrees "Quiet" and "Tired" with them
+    /// (*Tranquila*, *Cansada*): those two resolve through ``AddressedCopy`` for `address`, the
+    /// effective profile's ``BiologicalSex/termOfAddress`` (a view's `fernletTermOfAddress`). The
+    /// other four read the same for everyone and stay plain keys. A label spliced into a longer
+    /// sentence (the journal calendar cell's spoken line) is this inflected `String`, so the word
+    /// agrees there too.
+    public func label(addressing address: TermOfAddress) -> String {
         switch self {
         case .bright:
             String(localized: "feeling.bright", defaultValue: "Bright", bundle: .module,
@@ -519,11 +526,13 @@ public nonisolated enum FeelingTag: String, Codable, CaseIterable, Identifiable,
             String(localized: "feeling.neutral", defaultValue: "Neutral", bundle: .module,
                    comment: "Journal mood tag: neither good nor bad")
         case .quiet:
-            String(localized: "feeling.quiet", defaultValue: "Quiet", bundle: .module,
-                   comment: "Journal mood tag: a subdued, low-key day")
+            AddressedCopy.string(LocalizedStringResource("feeling.quiet", defaultValue: "Quiet", bundle: .module,
+                                                         comment: "Journal mood tag: a subdued, low-key day"),
+                                 addressing: address)
         case .tired:
-            String(localized: "feeling.tired", defaultValue: "Tired", bundle: .module,
-                   comment: "Journal mood tag: a tired day")
+            AddressedCopy.string(LocalizedStringResource("feeling.tired", defaultValue: "Tired", bundle: .module,
+                                                         comment: "Journal mood tag: a tired day"),
+                                 addressing: address)
         case .hard:
             String(localized: "feeling.hard", defaultValue: "Hard", bundle: .module,
                    comment: "Journal mood tag: the hardest of the six moods")
@@ -966,27 +975,47 @@ public nonisolated enum GoalType: String, Codable, CaseIterable, Identifiable, S
 
     public var id: String { rawValue }
 
+    /// The goal's name on the preset cards, Home's goal line and Move's header.
+    ///
+    /// Localized in place (Spanish round, 2026-10-20): every reader draws it. The Title-Case
+    /// spellings it used to share with ``init(persistedToken:)``'s legacy aliases are NOT this
+    /// property's job — those aliases are their own frozen literals below and never read this.
     public var displayName: String {
         switch self {
-        case .wellness: "Wellness"
-        case .strength: "Strength"
-        case .weightManagement: "Weight Management"
-        case .mentalHealth: "Mental Health"
-        case .recovery: "Recovery"
-        case .exploring: "Exploring"
-        case .sportsPrep: "Sports Prep"
+        case .wellness: String(localized: "goal.wellness.name", defaultValue: "Wellness", bundle: .module,
+                               comment: "Goal preset name: balanced everyday care")
+        case .strength: String(localized: "goal.strength.name", defaultValue: "Strength", bundle: .module,
+                               comment: "Goal preset name: getting stronger")
+        case .weightManagement: String(localized: "goal.weightManagement.name", defaultValue: "Weight Management",
+                                       bundle: .module, comment: "Goal preset name: managing body weight gently")
+        case .mentalHealth: String(localized: "goal.mentalHealth.name", defaultValue: "Mental Health", bundle: .module,
+                                   comment: "Goal preset name: mood and steadiness first")
+        case .recovery: String(localized: "goal.recovery.name", defaultValue: "Recovery", bundle: .module,
+                               comment: "Goal preset name: resting and recovering")
+        case .exploring: String(localized: "goal.exploring.name", defaultValue: "Exploring", bundle: .module,
+                                comment: "Goal preset name: trying things out to learn what helps")
+        case .sportsPrep: String(localized: "goal.sportsPrep.name", defaultValue: "Sports Prep", bundle: .module,
+                                 comment: "Goal preset name: training for a sport")
         }
     }
 
+    /// The one-line description under the goal's name on its preset card. Localized in place.
     public var tagline: String {
         switch self {
-        case .wellness: "Balanced daily care."
-        case .strength: "Fuel, train, and recover."
-        case .weightManagement: "Steady habits without pressure."
-        case .mentalHealth: "Mood and steadiness first."
-        case .recovery: "Rest, hydration, and gentle care."
-        case .exploring: "Learn what feels useful."
-        case .sportsPrep: "Train for your sport."
+        case .wellness: String(localized: "goal.wellness.tagline", defaultValue: "Balanced daily care.", bundle: .module,
+                               comment: "Goal preset card: one-line description of the Wellness goal")
+        case .strength: String(localized: "goal.strength.tagline", defaultValue: "Fuel, train, and recover.", bundle: .module,
+                               comment: "Goal preset card: one-line description of the Strength goal")
+        case .weightManagement: String(localized: "goal.weightManagement.tagline", defaultValue: "Steady habits without pressure.",
+                                       bundle: .module, comment: "Goal preset card: one-line description of the Weight Management goal")
+        case .mentalHealth: String(localized: "goal.mentalHealth.tagline", defaultValue: "Mood and steadiness first.", bundle: .module,
+                                   comment: "Goal preset card: one-line description of the Mental Health goal")
+        case .recovery: String(localized: "goal.recovery.tagline", defaultValue: "Rest, hydration, and gentle care.", bundle: .module,
+                               comment: "Goal preset card: one-line description of the Recovery goal")
+        case .exploring: String(localized: "goal.exploring.tagline", defaultValue: "Learn what feels useful.", bundle: .module,
+                                comment: "Goal preset card: one-line description of the Exploring goal")
+        case .sportsPrep: String(localized: "goal.sportsPrep.tagline", defaultValue: "Train for your sport.", bundle: .module,
+                                 comment: "Goal preset card: one-line description of the Sports Prep goal")
         }
     }
 
@@ -1023,15 +1052,19 @@ public nonisolated enum GoalType: String, Codable, CaseIterable, Identifiable, S
     public func nutritionSummary(weightManagementDeficitPercent percent: Int) -> String {
         switch self {
         case .strength:
-            "A little more to grow on · high protein (~1.7 g/kg)"
+            String(localized: "goal.strength.nutrition", defaultValue: "A little more to grow on · high protein (~1.7 g/kg)",
+                   bundle: .module, comment: "Goal card: how the Strength goal sets daily nutrition (grams of protein per kilogram of body weight)")
         case .sportsPrep:
-            "Fuelled for training · high protein (~1.6 g/kg)"
+            String(localized: "goal.sportsPrep.nutrition", defaultValue: "Fuelled for training · high protein (~1.6 g/kg)",
+                   bundle: .module, comment: "Goal card: how the Sports Prep goal sets daily nutrition (grams of protein per kilogram of body weight)")
         case .weightManagement:
             Self.weightManagementSummary(deficitPercent: percent)
         case .recovery:
-            "Maintenance calories · easy on the body"
+            String(localized: "goal.recovery.nutrition", defaultValue: "Maintenance calories · easy on the body",
+                   bundle: .module, comment: "Goal card: how the Recovery goal sets daily nutrition")
         case .wellness, .mentalHealth, .exploring:
-            "Balanced maintenance · steady protein"
+            String(localized: "goal.balanced.nutrition", defaultValue: "Balanced maintenance · steady protein",
+                   bundle: .module, comment: "Goal card: how the Wellness, Mental Health and Exploring goals set daily nutrition")
         }
     }
 
@@ -1067,19 +1100,26 @@ public nonisolated enum GoalType: String, Codable, CaseIterable, Identifiable, S
     public var trainingSummary: String {
         switch self {
         case .strength:
-            "Upper, lower, and full-body days across the week."
+            String(localized: "goal.strength.training", defaultValue: "Upper, lower, and full-body days across the week.",
+                   bundle: .module, comment: "Goal card and Move tab: the training split the Strength goal recommends")
         case .weightManagement:
-            "Strength days mixed with cardio and recovery."
+            String(localized: "goal.weightManagement.training", defaultValue: "Strength days mixed with cardio and recovery.",
+                   bundle: .module, comment: "Goal card and Move tab: the training split the Weight Management goal recommends")
         case .mentalHealth:
-            "Gentle movement, cardio, and recovery anchors."
+            String(localized: "goal.mentalHealth.training", defaultValue: "Gentle movement, cardio, and recovery anchors.",
+                   bundle: .module, comment: "Goal card and Move tab: the training split the Mental Health goal recommends")
         case .recovery:
-            "Recovery-first movement with optional light strength."
+            String(localized: "goal.recovery.training", defaultValue: "Recovery-first movement with optional light strength.",
+                   bundle: .module, comment: "Goal card and Move tab: the training split the Recovery goal recommends")
         case .wellness:
-            "Balanced strength, cardio, and rest days."
+            String(localized: "goal.wellness.training", defaultValue: "Balanced strength, cardio, and rest days.",
+                   bundle: .module, comment: "Goal card and Move tab: the training split the Wellness goal recommends")
         case .exploring:
-            "Flexible splits based on what feels useful."
+            String(localized: "goal.exploring.training", defaultValue: "Flexible splits based on what feels useful.",
+                   bundle: .module, comment: "Goal card and Move tab: the training split the Exploring goal recommends")
         case .sportsPrep:
-            "Sport-specific training with strength and conditioning."
+            String(localized: "goal.sportsPrep.training", defaultValue: "Sport-specific training with strength and conditioning.",
+                   bundle: .module, comment: "Goal card and Move tab: the training split the Sports Prep goal recommends")
         }
     }
 

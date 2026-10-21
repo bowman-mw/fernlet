@@ -262,9 +262,11 @@ struct NutritionLabelCameraSheet: View {
     /// One row of the detected-values tables: its label, where to read the value, and its unit.
     ///
     /// Data, not code — the label's Double-valued fields are near-identical rows, so they live in the
-    /// two static tables below and render through one `ForEach`.
+    /// two static tables below and render through one `ForEach`. `label` is a `LocalizedStringKey`, so
+    /// the table's literals reach the catalog (as `String` they were drawn verbatim); the key path,
+    /// unique per row, is the row's identity.
     private struct DetectedValueRow {
-        let label: String
+        let label: LocalizedStringKey
         let keyPath: KeyPath<NutritionLabelResult, Double?>
         let unit: String
     }
@@ -351,14 +353,14 @@ struct NutritionLabelCameraSheet: View {
     /// Renders the rows of a table whose value is present on `result`.
     @ViewBuilder
     private func rows(_ table: [DetectedValueRow], of result: NutritionLabelResult) -> some View {
-        ForEach(table, id: \.label) { row in
+        ForEach(table, id: \.keyPath) { row in
             if let value = result[keyPath: row.keyPath] {
                 detectedRow(row.label, formatted(value, unit: row.unit))
             }
         }
     }
 
-    private func detectedGroup<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+    private func detectedGroup<Content: View>(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.fernlet(.labelSmall))
@@ -368,7 +370,8 @@ struct NutritionLabelCameraSheet: View {
         .padding(.vertical, 4)
     }
 
-    private func detectedRow(_ label: String, _ value: String) -> some View {
+    /// One detected value: its localized name, and the value as read (numbers and unit symbols).
+    private func detectedRow(_ label: LocalizedStringKey, _ value: String) -> some View {
         HStack {
             Text(label)
                 .font(.fernlet(.label))
@@ -497,3 +500,20 @@ struct ImagePickerView: UIViewControllerRepresentable {
 }
 
 #endif
+
+/// The name a nutrition-label scan pre-fills into an empty name field — the recipe editor's and the
+/// barcode "name it & remember" screen's (Spanish round step 2, 2026-10-20).
+///
+/// A pre-fill, not a stored default: the person sees it in an editable field and saves it as their own
+/// words, and nothing reads it back as a token, so it is written in their language.
+nonisolated enum ScannedItemName {
+    /// "Scanned item (2 cookies (30g))" when the label printed a serving size, else "Scanned item".
+    static func prefill(servingSize: String?) -> String {
+        guard let servingSize, !servingSize.isEmpty else {
+            return String(localized: "scan.itemName.default", defaultValue: "Scanned item",
+                          comment: "Pre-filled name of a food or recipe read from a nutrition label. The person can edit it.")
+        }
+        return String(localized: "scan.itemName.withServing", defaultValue: "Scanned item (\(servingSize))",
+                      comment: "Pre-filled name of a food or recipe read from a nutrition label. The argument is the serving size the label printed, as printed (e.g. '2 cookies (30g)'). The person can edit it.")
+    }
+}

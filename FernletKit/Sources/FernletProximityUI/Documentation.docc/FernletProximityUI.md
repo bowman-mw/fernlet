@@ -94,15 +94,17 @@ view spells the hex out for VoiceOver. `PeerNameDisplayTests` pins that no conne
 `FernletProximityUICopy` (the review, keep-friends and save-failure copy), and every lookup passes
 `bundle: .module`; `NothingSavedError`'s message is the one key written inline. The 28 keys that
 moved here from ProximityKit's catalog moved byte for byte, because a key is a token: a renamed key
-strands its translations; the review's `proximity.review.report` (2026-10-15) is the one key added
-since. The camera's hold-failure line is `FernletSocial`'s (`FernletSocialCopy` and that
-module's catalog), and the two `PeerNameDisplay` placeholders the screens show are
+strands its translations; the review's `proximity.review.report` (2026-10-15) and the Delete all
+confirmation's three `proximity.review.deleteConfirm.*` keys (2026-10-20, which closed the one gap
+that came over from ProximityKit: English literals handed to `confirmDestructive`) are the keys
+added since. `photoSaveFailureAlert(_:failure:)` takes its title as the CALLER's
+`LocalizedStringKey`, harvested into the app's catalog and resolved against `Bundle.main`, the
+FernletUI component shape. The camera's capture refusals are `FernletSocial`'s (`FernletSocialCopy`
+and that module's catalog), and the two `PeerNameDisplay` placeholders the screens show are
 `FernletConnections`' (`FernletConnectionsCopy` and that module's catalog); ProximityKit hands
 out no copy. The `friends.review.*` (`friends.review.report` among them, the Report… item),
 `friends.keepFriend.*` and `friends.keepFriends.done` accessibility identifiers are frozen tokens
-that the UI tests drive. One gap came over unchanged: the Delete all confirmation's title and message
-are English literals handed to `confirmDestructive`, which takes already-resolved strings, so they
-reach no catalog yet.
+that the UI tests drive.
 
 The whole module is main-actor isolated (`defaultIsolation(MainActor.self)` in `Package.swift`),
 matching its role as a SwiftUI surface; the saver above is the one deliberate `nonisolated` member.

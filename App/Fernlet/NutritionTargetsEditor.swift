@@ -66,11 +66,12 @@ struct NutritionTargetsEditor: View {
         return NutritionTargetCalculator.targets(for: settings)
     }
 
-    /// The footer/caution copy. Swaps to a gentle heads-up whenever the displayed totals read above the
+    /// The footer/caution copy, a `LocalizedStringKey` (as a `String` every variant was drawn verbatim).
+    /// Swaps to a gentle heads-up whenever the displayed totals read above the
     /// stated calories — strongest when protein + fat alone clear the target, a softer variant when only
     /// the carb minimum pushes the sum over; otherwise it explains the residual honestly without
     /// promising the numbers always add up exactly.
-    private var footerText: String {
+    private var footerText: LocalizedStringKey {
         if proteinAndFatExceedCalories {
             return "Your protein and fat alone are above your calorie target, so carbs sit at a gentle minimum and the totals come out a little higher than your calories."
         }
@@ -89,9 +90,9 @@ struct NutritionTargetsEditor: View {
             : "These come from your goal, profile, activity and eating pattern. Type a number to set your own — carbs fill in the calories your protein and fat leave room for."
     }
 
-    /// A gentle, non-blocking note when a manual target sits implausibly low. It discloses and points at
+    /// A gentle, non-blocking note when a manual target sits implausibly low (`LocalizedStringKey`, as above). It discloses and points at
     /// the derived value — it never blocks or hard-floors the input; staying in control is the point.
-    private var lowTargetNote: String? {
+    private var lowTargetNote: LocalizedStringKey? {
         if let calories = store.settings.calorieTargetOverride, calories < 1_200 {
             return "That's a very low daily target — your derived value is about \(derivedTargets.calories) cal. Gentle fueling helps your companion too."
         }
@@ -236,7 +237,9 @@ private struct MacroTargetRow: View {
     /// because the suite runs in English, CI would stay green until the first localized run, far
     /// from the cause. A display string can never be an identifier.
     let identifier: String
-    let unit: String
+    /// The unit beside the field ("cal", "g"). `LocalizedStringKey`: "cal" is an English abbreviation
+    /// a translation renders its own way, and as a `String` it was drawn verbatim.
+    let unit: LocalizedStringKey
     let placeholder: Int
     let maxValue: Int
     @Binding var value: Int?

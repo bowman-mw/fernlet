@@ -167,9 +167,9 @@ public final class ProximityActivityManager {
         expiresAt: Date
     ) -> ActivityDescriptor? {
         gcExpired()
-        guard let identity else { activityError = "Identity unavailable."; return nil }
+        guard let identity else { activityError = FernletSocialCopy.Activities.identityUnavailable; return nil }
         guard hostedActivities.count < ActivityLimits.maxHosted else {
-            activityError = "You can host up to \(ActivityLimits.maxHosted) activities."
+            activityError = FernletSocialCopy.Activities.hostLimit(ActivityLimits.maxHosted)
             return nil
         }
         let created = now()
@@ -200,7 +200,7 @@ public final class ProximityActivityManager {
             issuedAt: created,
             hostIdentity: identity
         ) else {
-            activityError = "Couldn't create the activity."
+            activityError = FernletSocialCopy.Activities.createFailed
             return nil
         }
         hostedActivities.append(HostedActivity(
@@ -246,7 +246,7 @@ public final class ProximityActivityManager {
             // leave the host believing the participant is gone.
             FernletAuditLog.log("activity.removeParticipant.signFailed",
                                 context: ["error": String(describing: error)])
-            activityError = "Couldn't update the activity."
+            activityError = FernletSocialCopy.Activities.updateFailed
             return
         }
         hosted.currentSnapshot = snapshot
@@ -267,7 +267,7 @@ public final class ProximityActivityManager {
         guard !hosted.participants.contains(where: { $0.signingPublicKey == pending.verifiedSigningPublicKey }) else { return }
         // Cap the roster (host included).
         guard hosted.participants.count < ActivityLimits.maxParticipants else {
-            activityError = "This activity is full."
+            activityError = FernletSocialCopy.Activities.full
             return
         }
         let paramsHash = ActivityParamsHash.of(hosted.descriptor)
@@ -298,7 +298,7 @@ public final class ProximityActivityManager {
                 hostIdentity: identity
             )
         else {
-            activityError = "Couldn't grant the join."
+            activityError = FernletSocialCopy.Activities.grantFailed
             return
         }
         hosted.currentSnapshot = snapshot
@@ -333,7 +333,7 @@ public final class ProximityActivityManager {
             // R7: the orphaned member stays orphaned; say so instead of returning silently.
             FernletAuditLog.log("activity.regrant.signFailed",
                                 context: ["error": String(describing: error)])
-            activityError = "Couldn't update the activity."
+            activityError = FernletSocialCopy.Activities.updateFailed
             return
         }
         let grant = ActivityJoinGrantPayload(token: token, snapshot: hosted.currentSnapshot)
@@ -350,15 +350,15 @@ public final class ProximityActivityManager {
     /// Ask an offered activity's host to join. Sends the UNSEALED `.activityJoinRequest` to the host's
     /// committed slot; the host re-validates our claimed identity against the transport-verified slot.
     public func requestJoin(_ offered: OfferedActivity) {
-        guard let identity else { activityError = "Identity unavailable."; return }
+        guard let identity else { activityError = FernletSocialCopy.Activities.identityUnavailable; return }
         gcExpired()
         guard !offered.descriptor.isExpired(at: now()) else {
-            activityError = "That activity has expired."
+            activityError = FernletSocialCopy.Activities.expired
             offeredActivities.removeAll { $0.descriptor.activityID == offered.descriptor.activityID }
             return
         }
         guard joinedActivities.count < ActivityLimits.maxJoined else {
-            activityError = "You've joined the maximum number of activities."
+            activityError = FernletSocialCopy.Activities.joinLimit
             return
         }
         let request = ActivityJoinRequestPayload(
@@ -489,7 +489,7 @@ public final class ProximityActivityManager {
                 expectedHostSigningPublicKey: descriptor.hostSigningPublicKey
             )
         } catch {
-            activityError = "That invitation couldn't be verified."
+            activityError = FernletSocialCopy.Activities.inviteUnverified
             return
         }
         offeredActivities.removeAll { $0.descriptor.activityID == activityID }

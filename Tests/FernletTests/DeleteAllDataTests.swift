@@ -756,6 +756,27 @@ struct DeleteAllDataTests {
         #expect(outcome.incompleteStores.filter { $0 == "your cycle history" }.count == 1)
     }
 
+    /// Every store name the wipe funnel writes draws through `DeleteAllStoreNames`, and in English
+    /// draws exactly as the funnel spells it (Spanish round, 2026-10-20).
+    ///
+    /// The names are frozen tokens — the funnel compares and dedupes them and the tests above assert
+    /// them by spelling — so the failure alert maps each one to a catalog key at draw time. A name the
+    /// funnel gains without an entry still draws, as frozen English in every language: the silent gap
+    /// this closes. Read off disk because the names are literals scattered through the funnel's legs.
+    @Test func everyIncompleteStoreNameHasALocalizedDisplayName() throws {
+        let source = try RepoRoot.source("App/Fernlet/FernletStore.swift")
+        let pattern = try Regex(#"incompleteStores\.append\("((?:[^"\\]|\\.)*)"\)"#)
+        let written = Set(source.matches(of: pattern).compactMap { $0.output[1].substring.map(String.init) })
+        #expect(written.count >= 30, "found only \(written.count) store names — the funnel moved or the pattern broke")
+        let missing = written.subtracting(DeleteAllStoreNames.names.keys)
+        #expect(missing.isEmpty, "store names the failure alert has no display entry for: \(missing.sorted())")
+        for (token, resource) in DeleteAllStoreNames.names {
+            #expect(written.contains(token), "DeleteAllStoreNames lists '\(token)', which the funnel no longer writes")
+            #expect(resource.key.hasPrefix("deleteAll.store."), "'\(token)' draws through '\(resource.key)'")
+            #expect(String(localized: resource) == token, "'\(token)' no longer draws its own English")
+        }
+    }
+
     /// The guided-workout runner (new on this branch: it backs the interactive Live Activity) mirrors an
     /// in-flight run to a process-wide app-group file that a foreground/launch reconcile re-reads — and a
     /// naturally-finished run re-LOGS a workout into the store. Without clearing it, a run

@@ -17,8 +17,9 @@ extension WorkoutProgram {
     /// What changed on the session's lifts, main lift first — at most two lines, plus one line for
     /// lifts that still need a first weight. A stalled or dipping lift is left to the trend story,
     /// which says what today changes on it. Each lift is named in the device's language
-    /// (``WorkoutPlannerCopy/exerciseName(_:)``, N8).
-    static func progressNotes(_ loaded: [LoadedPick]) -> [String] {
+    /// (``WorkoutPlannerCopy/exerciseName(_:)``, N8), and a line that greets the user agrees with
+    /// `address` (``WorkoutLoadContext/address``).
+    static func progressNotes(_ loaded: [LoadedPick], addressing address: TermOfAddress) -> [String] {
         var lines: [String] = []
         var needsFirstWeight = false
         for pick in loaded where !isRespondedTo(pick) {
@@ -29,7 +30,7 @@ extension WorkoutProgram {
             // A block's phase switch rebaselines the lift; the block note says why, once.
             guard lines.count < maxProgressLines, let plan = pick.plan,
                   !(pick.block != nil && plan.change == .recalibrated),
-                  let line = changeLine(name, plan: plan) else { continue }
+                  let line = changeLine(name, plan: plan, addressing: address) else { continue }
             lines.append(line)
         }
         if needsFirstWeight {
@@ -44,8 +45,9 @@ extension WorkoutProgram {
     }
 
     /// One lift's change in a sentence, or nil when there is nothing worth saying. `name` is the name
-    /// the note draws — the caller's display name, never matched against.
-    static func changeLine(_ name: String, plan: LiftPlan) -> String? {
+    /// the note draws — the caller's display name, never matched against. `address` is the user's
+    /// term of address, for the after-a-break line's greeting.
+    static func changeLine(_ name: String, plan: LiftPlan, addressing address: TermOfAddress) -> String? {
         let weight = plan.prescription.map(\.suggestedText)
         if plan.recentered, plan.change != .recalibrated {
             return WorkoutPlannerCopy.recentered(name)
@@ -57,7 +59,7 @@ extension WorkoutProgram {
         case .backToBottom: return WorkoutPlannerCopy.backToBottom(name, reps: plan.reps, weight: weight)
         case .lighter: return WorkoutPlannerCopy.lighter(name, weight: weight)
         case .lighterFewerSets: return WorkoutPlannerCopy.lighterFewerSets(name)
-        case .afterBreak: return WorkoutPlannerCopy.afterBreak(name, weight: weight)
+        case .afterBreak: return WorkoutPlannerCopy.afterBreak(name, weight: weight, addressing: address)
         case .recalibrated: return WorkoutPlannerCopy.recalibrated(name, weight: weight)
         case .holdForPain: return WorkoutPlannerCopy.holdForPain(name)
         case .holdForEquipment: return WorkoutPlannerCopy.holdForEquipment(name)
@@ -243,11 +245,14 @@ extension WorkoutProgram {
     }
 
     /// The calibration brief for the session note. `lift` is the frozen name; the note draws it in the
-    /// device's language (``WorkoutPlannerCopy/exerciseName(_:)``, N8).
-    static func calibrationNote(kind: CalibrationKind, lift: String, sets: [CalibrationSet], unit: LoadUnit) -> String {
+    /// device's language (``WorkoutPlannerCopy/exerciseName(_:)``, N8), agreed with `address`, the
+    /// user's term of address (``WorkoutLoadContext/address``).
+    static func calibrationNote(
+        kind: CalibrationKind, lift: String, sets: [CalibrationSet], unit: LoadUnit, addressing address: TermOfAddress
+    ) -> String {
         let keySet = sets.first(where: { $0.step != .ramp }) ?? sets.last
         let weight = keySet.map { loadText($0.weight, unit) } ?? ""
-        return WorkoutPlannerCopy.calibration(kind, lift: WorkoutPlannerCopy.exerciseName(lift), weight: weight)
+        return WorkoutPlannerCopy.calibration(kind, lift: WorkoutPlannerCopy.exerciseName(lift), weight: weight, addressing: address)
     }
 
     /// The count-based ladder's line when there is no load history to read (replaces the old

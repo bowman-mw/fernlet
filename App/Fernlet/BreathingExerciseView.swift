@@ -60,16 +60,22 @@ struct BreathPhase: Equatable {
 /// ``BreathingExerciseView``'s setup screen via ``all``; the session loop repeats the preset's
 /// phases until the chosen length elapses.
 struct BreathingPreset: Identifiable, Equatable {
+    /// The FROZEN persisted token (`@AppStorage("fernlet.breathing.presetID")`); never display text.
     let id: String
-    let name: String
-    let caption: String
+    /// The pattern tile's name. A `LocalizedStringResource`, like ``BreathPhase/label``: as a `String`
+    /// it reached `Text`'s verbatim initializer and was never harvested.
+    let name: LocalizedStringResource
+    /// The pattern tile's rhythm line ("In 4 · hold 4 · out 4 · hold 4").
+    let caption: LocalizedStringResource
     let phases: [BreathPhase]
 
     /// Box breathing: in 4 — hold 4 — out 4 — hold 4.
     static let box = BreathingPreset(
         id: "box",
-        name: "Box",
-        caption: "In 4 · hold 4 · out 4 · hold 4",
+        name: LocalizedStringResource("breathing.preset.box.name", defaultValue: "Box",
+                                      comment: "Breathing screen: the name of box breathing (in, hold, out, hold, four seconds each) on its pattern tile."),
+        caption: LocalizedStringResource("breathing.preset.box.caption", defaultValue: "In 4 · hold 4 · out 4 · hold 4",
+                                         comment: "Breathing screen: box breathing's rhythm under its name — breathe in 4 seconds, hold 4, out 4, hold 4."),
         phases: [
             BreathPhase(kind: .inhale, seconds: 4, targetScale: 1.0),
             BreathPhase(kind: .hold, seconds: 4, targetScale: 1.0),
@@ -81,8 +87,10 @@ struct BreathingPreset: Identifiable, Equatable {
     /// Relaxing breath: in 4 — hold 7 — out 8.
     static let relax = BreathingPreset(
         id: "relax",
-        name: "Relax",
-        caption: "In 4 · hold 7 · out 8",
+        name: LocalizedStringResource("breathing.preset.relax.name", defaultValue: "Relax",
+                                      comment: "Breathing screen: the name of the 4-7-8 relaxing breath on its pattern tile."),
+        caption: LocalizedStringResource("breathing.preset.relax.caption", defaultValue: "In 4 · hold 7 · out 8",
+                                         comment: "Breathing screen: the relaxing breath's rhythm under its name — breathe in 4 seconds, hold 7, out 8."),
         phases: [
             BreathPhase(kind: .inhale, seconds: 4, targetScale: 1.0),
             BreathPhase(kind: .hold, seconds: 7, targetScale: 1.0),
@@ -99,37 +107,55 @@ struct BreathingPreset: Identifiable, Equatable {
 /// presets, the idle state, the finish) and each has to be one catalog key rather than several
 /// copies that could drift apart in translation. They carry translator comments the bare literals
 /// could not: "Hold" is an instruction to hold a breath, not a verb for keeping something.
+///
+/// Every key is semantic (`breathing.phase.*`, `breathing.pacer.*`), never the English word: the
+/// guided workout runner draws its own "Hold" (a held position) and "Ready when you are", and a
+/// shared key would force one translation on both ("Retén el aire" here, "Mantén" there).
 enum BreathingCopy {
     /// The inhale phase.
     static let breatheIn = LocalizedStringResource(
-        "Breathe in",
+        "breathing.phase.inhale", defaultValue: "Breathe in",
         comment: "Shown and spoken while the breathing pacer's circle expands. An instruction to inhale, given to someone with their eyes closed — keep it short and calm.")
 
     /// A held breath, between the inhale and the exhale (and, in box breathing, after the exhale).
     static let hold = LocalizedStringResource(
-        "Hold",
-        comment: "Shown and spoken while the breathing pacer rests between breaths. It means 'hold your breath', not 'keep' or 'wait'.")
+        "breathing.phase.hold", defaultValue: "Hold",
+        comment: "Shown and spoken while the breathing pacer rests between breaths. It means 'hold your breath', not 'keep' or 'wait' (the workout runner's hold is a different key).")
 
     /// The exhale phase.
     static let breatheOut = LocalizedStringResource(
-        "Breathe out",
+        "breathing.phase.exhale", defaultValue: "Breathe out",
         comment: "Shown and spoken while the breathing pacer's circle contracts. An instruction to exhale.")
 
     /// The resting state, before a session starts and after one is ended early.
     static let ready = LocalizedStringResource(
-        "Ready when you are",
+        "breathing.pacer.ready", defaultValue: "Ready when you are",
         comment: "Shown and spoken by the breathing pacer while no session is running. Unhurried and permission-giving — the tool waits, it does not prompt.")
 
-    /// The last thing the pacer says, as a completed session fades into the finish screen.
+    /// The last thing the pacer says, as a completed session fades into the finish screen, and the
+    /// finish screen's heading.
     static let allDone = LocalizedStringResource(
-        "All done",
-        comment: "Shown and spoken by the breathing pacer the moment a session reaches its full length.")
+        "breathing.pacer.allDone", defaultValue: "All done",
+        comment: "Shown and spoken by the breathing pacer the moment a session reaches its full length, and the heading of the finish screen after it.")
 
     /// The pacer's stable accessibility NAME. Stable is the point: VoiceOver re-speaks a focused
     /// element's changed value, and a changed label would instead be read as a new element.
     static let pacerLabel = LocalizedStringResource(
-        "Breathing pacer",
+        "breathing.pacer.label", defaultValue: "Breathing pacer",
         comment: "VoiceOver name for the animated breathing circle. Its spoken value is the current phase — 'Breathe in', 'Hold', 'Breathe out'.")
+
+    /// The finish screen's line for a session of `minutes` (1, 2 or 3).
+    ///
+    /// One plural-ruled key, whose English `one` form is the "a whole minute" sentence: the length
+    /// is never more than three, so a plural category never stands for anything but the count it
+    /// names here, and the two English literals that used to be picked by `minutes == 1` become one
+    /// key a translator can vary.
+    static func finished(minutes: Int) -> LocalizedStringResource {
+        LocalizedStringResource(
+            "breathing.finished.minutes",
+            defaultValue: "That was \(minutes) whole minutes of care. Nicely done.",
+            comment: "Breathing finish screen: how long the session was, in minutes (1, 2 or 3). Needs a plural variation per language; English says 'That was a whole minute of care. Nicely done.' for one.")
+    }
 }
 
 /// The slow-breathing exercise: a softly swelling circle guided through a chosen
@@ -345,14 +371,12 @@ struct BreathingExerciseView: View {
             checkMedallion
                 .padding(.bottom, 30)
 
-            Text("All done")
+            Text(BreathingCopy.allDone)
                 .font(.fernlet(.display))
                 .foregroundStyle(Color.bark)
                 .padding(.bottom, 12)
 
-            Text(minutes == 1
-                 ? "That was a whole minute of care. Nicely done."
-                 : "That was \(minutes) whole minutes of care. Nicely done.")
+            Text(BreathingCopy.finished(minutes: minutes))
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .multilineTextAlignment(.center)

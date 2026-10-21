@@ -192,11 +192,12 @@ extension View {
     /// The success button is the one per-screen difference, so it is parameterized: ``SettingsSheet``
     /// passes ("Done", no role, dismiss the sheet) because success ends the visit; the pushed
     /// ``PrivacyDataSettingsView`` passes ("OK", `.cancel`, clear ``DeleteEverythingFlow/showSuccess``)
-    /// and stays put.
+    /// and stays put. The title is a `LocalizedStringKey`: as a `String` it took `Button`'s verbatim
+    /// initializer, so both screens' success button stayed English.
     @MainActor
     func deleteEverythingAlerts(
         _ flow: DeleteEverythingFlow,
-        successButtonTitle: String,
+        successButtonTitle: LocalizedStringKey,
         successButtonRole: ButtonRole?,
         onSuccess: @escaping () -> Void
     ) -> some View {

@@ -754,19 +754,25 @@ struct ContentView: View {
             switch target.destination {
             case .recipe:
                 guard let record = try messagesRecipeInbox.record(id: target.inboxID) else {
-                    messagesRecipeImportError = "This recipe review is no longer available."
+                    messagesRecipeImportError = String(localized: "messagesImport.error.recipeGone",
+                                                       defaultValue: "This recipe review is no longer available.",
+                                                       comment: "Alert body after tapping a recipe card in Messages whose import review has already been handled or cleared.")
                     return
                 }
                 messagesRecipeImport = record
             case .workoutPlan:
                 guard let record = try messagesRecipeInbox.workoutRecord(id: target.inboxID) else {
-                    messagesRecipeImportError = "This workout-plan review is no longer available."
+                    messagesRecipeImportError = String(localized: "messagesImport.error.planGone",
+                                                       defaultValue: "This workout-plan review is no longer available.",
+                                                       comment: "Alert body after tapping a workout-plan card in Messages whose import review has already been handled or cleared.")
                     return
                 }
                 messagesWorkoutPlanImport = record
             }
         } catch {
-            messagesRecipeImportError = "Fernlet couldn't read this review. Unlock your iPhone and try again."
+            messagesRecipeImportError = String(localized: "messagesImport.error.unreadable",
+                                               defaultValue: "Fernlet couldn't read this review. Unlock your iPhone and try again.",
+                                               comment: "Alert body when a recipe or workout-plan card from Messages can't be read, usually because the iPhone is locked. 'Fernlet' is the app's name.")
         }
     }
 
@@ -2376,9 +2382,16 @@ struct LaunchScreen: View {
 
     static func greeting(for date: Date, calendar: Calendar = .autoupdatingCurrent) -> String {
         let hour = calendar.component(.hour, from: date)
-        if (5..<12).contains(hour) { return "Good morning." }
-        if (12..<17).contains(hour) { return "Good afternoon." }
-        return "Good evening."
+        if (5..<12).contains(hour) {
+            return String(localized: "launch.greeting.morning", defaultValue: "Good morning.",
+                          comment: "Launch screen greeting before noon, above the loading line.")
+        }
+        if (12..<17).contains(hour) {
+            return String(localized: "launch.greeting.afternoon", defaultValue: "Good afternoon.",
+                          comment: "Launch screen greeting from noon to 5 pm, above the loading line.")
+        }
+        return String(localized: "launch.greeting.evening", defaultValue: "Good evening.",
+                      comment: "Launch screen greeting from 5 pm until 5 am, above the loading line.")
     }
 
     var body: some View {

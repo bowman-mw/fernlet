@@ -133,6 +133,9 @@ struct OpenFoodFactsLookupCard: View {
     @State private var showingConsent = false
     /// The single in-flight lookup; cancelled when a new one starts and when the card goes away.
     @State private var lookupTask: Task<Void, Never>?
+    /// The user's term of address (the app root sets it from the body profile), which the two
+    /// failure lines' "name it yourself" agrees with.
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
 
     /// Most lookups one visit to the screen may start (the first try plus two manual retries) —
     /// well inside Open Food Facts' 15-reads-per-minute limit.
@@ -223,9 +226,9 @@ struct OpenFoodFactsLookupCard: View {
     /// The failure line, plus a manual retry while attempts remain.
     @ViewBuilder private func failedContent(rateLimited: Bool) -> some View {
         if rateLimited {
-            message("Open Food Facts is busy right now. Give it a minute, or name it yourself below.")
+            message(Text(AddressedCopy.attributed("Open Food Facts is busy right now. Give it a minute, or name it yourself below.", addressing: termOfAddress)))
         } else {
-            message("Couldn't reach Open Food Facts right now. You can try again, or name it yourself below.")
+            message(Text(AddressedCopy.attributed("Couldn't reach Open Food Facts right now. You can try again, or name it yourself below.", addressing: termOfAddress)))
         }
         if attempts < Self.maxAttemptsPerVisit {
             lookUpButton(title: "Try again")
@@ -234,7 +237,13 @@ struct OpenFoodFactsLookupCard: View {
 
     /// One calm line of card copy.
     private func message(_ text: LocalizedStringKey) -> some View {
-        Text(text)
+        message(Text(text))
+    }
+
+    /// One calm line the caller resolved: the two failure lines say "name it yourself", which Spanish
+    /// agrees with the user (*tú mismo*, *tú misma*), so they arrive through `AddressedCopy`.
+    private func message(_ text: Text) -> some View {
+        text
             .font(.fernlet(.bodySmall))
             .foregroundStyle(Color.slate)
             .fernletWrappingText()

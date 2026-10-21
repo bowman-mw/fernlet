@@ -84,6 +84,7 @@ TARGETS=(
     "FernletMessagesExtension:App/FernletMessagesExtension/Localizable.xcstrings"
     "FernletDomainModel:FernletKit/Sources/FernletDomainModel/Localizable.xcstrings"
     "FernletLockUI:FernletKit/Sources/FernletLockUI/Localizable.xcstrings"
+    "FernletLock:FernletKit/Sources/FernletLock/Localizable.xcstrings"
     "FernletUI:FernletKit/Sources/FernletUI/Localizable.xcstrings"
     "FernletSocial:FernletKit/Sources/FernletSocial/Localizable.xcstrings"
     "FernletProximityUI:FernletKit/Sources/FernletProximityUI/Localizable.xcstrings"
@@ -93,6 +94,7 @@ TARGETS=(
     "CloudKitSync:FernletKit/Sources/CloudKitSync/Localizable.xcstrings"
     "FernletFoundation:FernletKit/Sources/FernletFoundation/Localizable.xcstrings"
     "HealthKitGateway:FernletKit/Sources/HealthKitGateway/Localizable.xcstrings"
+    "FernletScoring:FernletKit/Sources/FernletScoring/Localizable.xcstrings"
 )
 
 echo "==> Building (SWIFT_EMIT_LOC_STRINGS=YES) to emit .stringsdata"

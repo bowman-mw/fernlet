@@ -16,7 +16,7 @@ The module's one genuinely subtle mechanism is theme resolution. The adaptive su
 
 **Accessibility is a property of the primitives, not of the call sites.** Several rules are enforced here precisely because they cannot be enforced 41 chip sites at a time: ``ChipButtonStyle`` and ``HubSectionPicker`` add the `.isSelected` trait themselves (a custom style renders a selected state that VoiceOver otherwise cannot see); ``ScreenHeader`` titles *wrap* rather than shrink-and-truncate; ``HeaderActionButton`` takes an `accessibilityLabel:` because an icon-only button otherwise announces its SF Symbol name; `fernletIconButton(_:)` / `fernletTapTarget()` lift a glyph-sized control to the 44pt minimum; and the contrast-safe fill/ink pairs (`mossFill` + `onMoss`, `terracotta` + `onTerracotta`, `terracottaInk` for destructive *text*) exist because plain white on `moss` measures 4.29:1 in light mode and 2.53:1 in dark. Never hand-roll `.foregroundStyle(.white)` on an accent fill, and prefer ``ActionPillButtonStyle`` — 44pt, three roles — for anything that *acts*, leaving ``ChipButtonStyle`` for things that *select*.
 
-**Display text is `LocalizedStringKey`; tokens stay `String`.** Every text parameter a person reads — ``ScreenHeader``'s `title`/`subtitle`, ``HeaderActionButton``'s `title`/`accessibilityLabel`, ``SectionLabel``, ``SheetField``'s caption, ``SheetSaveBar``'s `label`, ``EmptyState``'s `text`, and `fernletIconButton(_:)`'s VoiceOver label — takes a `LocalizedStringKey`, while everything that is a *token* stays a plain `String`: SF Symbol names, the `identifier:` anchors the UX appearance tests match on, and any persisted rawValue a caller happens to render. This is the whole point of the type split, and it is not cosmetic: a `String` parameter looks localizable at the call site and silently is not, because the compiler only harvests a literal into a string catalog when the parameter it is passed to is a `LocalizedStringKey`. Flipping these seven signatures made ~289 existing app call sites extractable without touching one of them.
+**Display text is `LocalizedStringKey`; tokens stay `String`.** Every text parameter a person reads — ``ScreenHeader``'s `title`/`subtitle`, ``HeaderActionButton``'s `title`/`accessibilityLabel`, ``SectionLabel``, ``SheetField``'s caption, ``SheetSaveBar``'s `label`, ``EmptyState``'s `text`, ``PolaroidTile``'s `caption`, and `fernletIconButton(_:)`'s VoiceOver label — takes a `LocalizedStringKey`, while everything that is a *token* stays a plain `String`: SF Symbol names, the `identifier:` anchors the UX appearance tests match on, and any persisted rawValue a caller happens to render. This is the whole point of the type split, and it is not cosmetic: a `String` parameter looks localizable at the call site and silently is not, because the compiler only harvests a literal into a string catalog when the parameter it is passed to is a `LocalizedStringKey`. Flipping the first seven of these signatures made ~289 existing app call sites extractable without touching one of them; ``PolaroidTile`` followed in the Spanish extraction round (2026-10-20), its one caller (the Home photowall) moving to the `verbatimCaption:` initializer because every caption it draws is resolved before it gets there.
 
 **The module now owns a string catalog of its own** (`Localizable.xcstrings`, added by the 2026-08-22 accessibility review's §4.0). That is not a reversal of the rule above — copy a caller *names* is still a caller parameter — but a shared component cannot push everything outward, and the exceptions had been sitting here as bare literals: ``SheetSaveBar``'s `"Save"` **default** (a default value has no call site to come from; its own doc comment recorded that it translated only because several sheets happened to pass the same literal explicitly), the shared discard prompt (whose entire value is that all ~40 entry sheets word it identically), the keyboard toolbar's Done, ``SheetCancelBar``/``SheetHeader``'s Cancel, the coin pill's spoken balance, and the capture cover and nudge — which render from a *modifier* and are spoken from ``CaptureProtectionState``, so there is no call site to hand words in through at all. All of it now resolves through ``FernletUICopy`` (and ``CaptureNudgeCopy``) with `String(localized:…, bundle: .module)`, exactly as `FernletLockUI` has always done with `FernletLockCopy`. The mechanical half is `LocalizationBoundaryTests.packageDisplayLiteralsPassModuleBundle()`: any bare literal handed to a SwiftUI display initializer anywhere under `FernletKit/Sources` — including one hiding inside a ternary, or moved into a `LocalizedStringKey`-typed property — now fails that test, so the next one cannot ship silently.
 
@@ -84,6 +84,30 @@ Two other conventions matter before changing this module. First, **fonts resolve
 ### System integration
 
 - ``ActivityShareView``
+
+### Addressing the user
+
+Spanish (and every later gendered language) genders the words that describe the user. They agree
+with the body profile's Sex answer, masculine when it was never answered: the app root sets
+`EnvironmentValues.fernletTermOfAddress` from `BiologicalSex.termOfAddress`, and a translation's
+`^[listo](inflect: true)` mark is inflected with it rather than with the system's Form of Address.
+The resolution itself is `AddressedCopy` in FernletDomainModel (moved there 2026-10-21 so the
+planner's stored notes, the scoring lines and a notification body can use it without SwiftUI);
+this module keeps the view half: the environment value and ``AddressedText``, which reads it. A
+view that needs a `Text` value rather than a view (an alert message, a component's `Text`
+parameter) or a `String` calls `AddressedCopy.attributed(_:addressing:)` /
+`AddressedCopy.string(_:addressing:)` with the same environment value.
+
+A marked key must never be read by `String(localized:)`, which keeps the raw markup, and no
+caller-built `LocalizedStringResource` is resolved that way either. `LocalizationBoundaryTests`
+part I holds both walls, and part I2 pins every user-gendered key to an addressed reader: its
+literal sits inside ``AddressedText``, `AddressedCopy.string` / `.attributed` with an `addressing:`
+term, or ``FernletAnnouncer``'s resource overload with one (it resolves through `AddressedCopy`
+too), never `Text("…")`, a component's `LocalizedStringKey` parameter or `AddressedCopy.plain(_:)`.
+A component whose display text may describe the user therefore offers a `Text` (or `verbatim:`)
+form for its caller to fill: `EmptyState(verbatim:)`, `ScreenHeader(title: Text, …)`.
+
+- ``AddressedText``
 
 ### Accessibility seams
 

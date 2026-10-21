@@ -48,13 +48,21 @@ public nonisolated struct WorkoutLoadContext: Sendable {
     /// The weigh-ins the person logged, oldest first (G13); empty when they don't log their weight,
     /// and then the notes never mention it.
     public var bodyWeights: [BodyWeightSample]
+    /// The user's term of address (``BiologicalSex/termOfAddress`` of the effective body profile),
+    /// which the session notes that describe the user agree with ("welcome back" and the max test's
+    /// "if you're sore" are gendered in Spanish). The notes are composed here, at plan time, and
+    /// stored on the logged row, so the term has to travel with the plan's inputs rather than be read
+    /// where the note is drawn. The app's builder always passes the profile's; a context built
+    /// without saying so (a test fixture) addresses the user as an unanswered profile does,
+    /// masculine.
+    public var address: TermOfAddress
 
     public init(
         exposures: [String: [LiftExposure]], today: Date, defaultUnit: LoadUnit,
         recovery: RecoverySummary = .unknown, calibration: CalibrationSettings = CalibrationSettings(),
         warmUpSets: Bool = false, traits: LifterTraits = .unknown, experience: ExperienceLevel? = nil,
         liftWeeks: [String: Double] = [:], focus: WorkoutStrengthFocus = .both, foodAware: Bool = false,
-        bodyWeights: [BodyWeightSample] = []
+        bodyWeights: [BodyWeightSample] = [], address: TermOfAddress = .masculine
     ) {
         self.exposures = exposures
         self.today = today
@@ -68,6 +76,7 @@ public nonisolated struct WorkoutLoadContext: Sendable {
         self.focus = focus
         self.foodAware = foodAware
         self.bodyWeights = bodyWeights
+        self.address = address
     }
 
     /// One lift's training age (G8): the setup answer as a floor — six months for "6 months to 2
@@ -139,7 +148,7 @@ extension WorkoutProgram {
         for index in loaded.indices { plan(&loaded[index], inputs: inputs, load: load) }
         applyPlateauLoad(&loaded, inputs: inputs, load: load)
         let plateauNotes = plateauStory(loaded, inputs: inputs) ?? []
-        var notes = progressNotes(loaded)
+        var notes = progressNotes(loaded, addressing: load.address)
         if let week = loaded.lazy.compactMap(\.block).first {
             notes.insert(blockNote(week, energy: inputs.intensity), at: 0)
         }
@@ -510,7 +519,7 @@ extension WorkoutProgram {
         for other in loaded.indices where loaded[other].slot.role == .accessory {
             loaded[other].exercise.sets = max(1, loaded[other].exercise.sets - 1)
         }
-        return calibrationNote(kind: kind, lift: pick.target.name, sets: sets, unit: guidance.unit)
+        return calibrationNote(kind: kind, lift: pick.target.name, sets: sets, unit: guidance.unit, addressing: load.address)
     }
 
     /// The shortest session budget a strength check runs in: its ramp and its long rests need it.

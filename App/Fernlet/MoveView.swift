@@ -598,8 +598,12 @@ enum GuidedWorkoutCardState: Equatable {
         guard !guidable.isEmpty else {
             let hasMovement = plan.sessions.contains { !$0.exercises.isEmpty }
             return .noneToGuide(reason: hasMovement
-                ? "Today's about easy movement — no guided sets, but anything you do still counts."
-                : "Rest day. Nothing to push — let your body settle.")
+                ? String(localized: "move.guided.noneToGuide.easyMovement",
+                         defaultValue: "Today's about easy movement — no guided sets, but anything you do still counts.",
+                         comment: "Move tab, today's workout card on a day with only easy movement planned")
+                : String(localized: "move.guided.noneToGuide.rest",
+                         defaultValue: "Rest day. Nothing to push — let your body settle.",
+                         comment: "Move tab, today's workout card on a rest day"))
         }
         if let next = guidable.first(where: {
             !GuidedWorkoutAvailability.isAlreadyLogged($0, completed: completed, loggedGuidedWorkoutNames: loggedGuidedWorkoutNames)
@@ -2098,7 +2102,7 @@ struct WorkoutSuggestionSheet: View {
                 }
             }
             if !session.suggestion.notes.isEmpty {
-                Text(session.suggestion.notes)
+                Text(CoachPlanNoteStamp.displayedNotes(session.suggestion.notes))
                     .font(.fernlet(.bubble))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
@@ -2562,6 +2566,8 @@ struct WorkoutRow: View {
     var store: FernletStore
     var workout: Workout
     var date: String
+    /// The user's term of address, which the remove alert's "whenever you're ready" agrees with.
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
     /// Called after a remove or edit so the parent can refresh caches it snapshots (calendar days, or a
     /// past-day detail list that isn't observed).
     var onChanged: () -> Void = {}
@@ -2589,16 +2595,46 @@ struct WorkoutRow: View {
     /// A completion that consumed a planned row will restore it on remove — surfaced in the dialog copy.
     private var restoresPlannedRow: Bool { workout.plannedWorkoutID != nil }
 
+    /// The remove alert's title, under its own key: the shared "Remove %@?" is also asked about
+    /// PEOPLE (a friend), which Spanish words differently ("¿Quitar a Ana?"); this one names a workout.
+    private var removeAlertTitle: Text {
+        Text(String(localized: "move.workout.remove.title", defaultValue: "Remove \(workout.displayedName)?",
+                    comment: "Title of the alert before removing a logged workout. Argument: the workout's name."))
+    }
+
+    /// The remove alert's cancel button, under its own key: "Keep it" refers to the workout, so a
+    /// language that agrees the pronoun with its noun needs it apart from other "Keep it"s.
+    private static var keepItLabel: String {
+        String(localized: "move.workout.remove.keep", defaultValue: "Keep it",
+               comment: "Cancel button of the remove-workout alert: keep the logged workout")
+    }
+
+    /// The remove alert's body: one whole key per combination (plan restored or not, Health copy
+    /// removed or not), rather than two English sentences joined in code. The two that put the
+    /// workout back "whenever you're ready" describe the user (*lista*) and agree with them.
     private var removeConfirmMessage: String {
-        var parts: [String] = [
-            restoresPlannedRow
-                ? "I'll put it back in your plan so you can redo it whenever you're ready."
-                : "This just clears it from your log — no worries, you can always add it again."
-        ]
-        if removesHealthCopy {
-            parts.append("This also removes the copy saved to your Health app.")
+        switch (restoresPlannedRow, removesHealthCopy) {
+        case (true, false):
+            AddressedCopy.string(
+                LocalizedStringResource("move.workout.remove.restoresPlan",
+                                        defaultValue: "I'll put it back in your plan so you can redo it whenever you're ready.",
+                                        comment: "Remove-workout alert body, for a workout completed from a plan"),
+                addressing: termOfAddress)
+        case (true, true):
+            AddressedCopy.string(
+                LocalizedStringResource("move.workout.remove.restoresPlanAndHealth",
+                                        defaultValue: "I'll put it back in your plan so you can redo it whenever you're ready. This also removes the copy saved to your Health app.",
+                                        comment: "Remove-workout alert body, for a workout completed from a plan that Fernlet also saved to Apple Health"),
+                addressing: termOfAddress)
+        case (false, false):
+            String(localized: "move.workout.remove.clears",
+                   defaultValue: "This just clears it from your log — no worries, you can always add it again.",
+                   comment: "Remove-workout alert body")
+        case (false, true):
+            String(localized: "move.workout.remove.clearsAndHealth",
+                   defaultValue: "This just clears it from your log — no worries, you can always add it again. This also removes the copy saved to your Health app.",
+                   comment: "Remove-workout alert body, for a workout Fernlet also saved to Apple Health")
         }
-        return parts.joined(separator: " ")
     }
 
     /// Name plus the RPE capsule.
@@ -2712,8 +2748,8 @@ struct WorkoutRow: View {
         // SUPPRESSES the `.cancel` button (leaving a lone red Remove) and anchors to the view root
         // rather than the row, so its arrow pointed at a different workout. The title names the
         // workout, so there is no doubt which one is about to go.
-        .alert("Remove \(workout.displayedName)?", isPresented: $showRemoveConfirm) {
-            Button("Keep it", role: .cancel) {}
+        .alert(removeAlertTitle, isPresented: $showRemoveConfirm) {
+            Button(Self.keepItLabel, role: .cancel) {}
             Button("Remove", role: .destructive) { removeTapped() }
         } message: {
             Text(removeConfirmMessage)
@@ -3143,10 +3179,13 @@ extension MoveContextStrip {
 /// prompt so a first-run segment reads as an invitation, not a set value.
 private struct MoveContextSegment: View {
     var icon: String
-    var label: String
-    /// The set value; nil shows the italic empty prompt.
+    /// The uppercase caption. `LocalizedStringKey`: both callers pass a literal, which the `String`
+    /// this used to be kept out of the catalog (so `.textCase` ran on English).
+    var label: LocalizedStringKey
+    /// The set value (user data or an already-localized summary); nil shows the italic empty prompt.
     var value: String?
-    var emptyPrompt: String
+    /// The italic invitation shown while unset; a literal at both callers.
+    var emptyPrompt: LocalizedStringKey
     var action: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -4118,8 +4157,8 @@ struct WorkoutCalendarCell: View {
         // T2-2: ``summaryLine`` is deleted from the layout at accessibility sizes, and an undrawn
         // view is an absent accessibility element — so the counts vanished from speech too. (They
         // were never in the utterance at any size, in fact: the explicit label above replaces the
-        // derived one.) Re-attached on the More Content rotor, localized rather than reusing the
-        // drawn `summaryText`, which is a frozen-English `String`.
+        // derived one.) Re-attached on the More Content rotor as its own sentence rather than the
+        // drawn `summaryText`, which only has room for the logs on a mixed day.
         .accessibilityCustomContent("Summary", cell.accessibilitySummary)
         // T2-12: the label is a sentence ending in the day's categories.
         .accessibilityInputLabels([Text("Day \(cell.day)")])
@@ -4211,10 +4250,19 @@ struct WorkoutWeekCell: Identifiable {
         return Color.softTaupe.opacity(0.16)
     }
 
+    /// The tile's drawn count line, localized (2026-10-20): the counts are plural-ruled keys rather
+    /// than an English "1 plan" / "N plans" branch.
     var summaryText: String {
-        if workoutCount == 0 && plannedCount == 0 { return "Rest" }
-        if workoutCount == 0 { return plannedCount == 1 ? "1 plan" : "\(plannedCount) plans" }
-        return workoutCount == 1 ? "1 log" : "\(workoutCount) logs"
+        if workoutCount == 0 && plannedCount == 0 {
+            return String(localized: "move.week.cell.rest", defaultValue: "Rest",
+                          comment: "Move tab week strip: a day tile with nothing logged or planned")
+        }
+        if workoutCount == 0 {
+            return String(localized: "move.week.cell.plans", defaultValue: "\(plannedCount) plans",
+                          comment: "Move tab week strip: a day tile's count of planned workouts. Needs a plural variation.")
+        }
+        return String(localized: "move.week.cell.logs", defaultValue: "\(workoutCount) logs",
+                      comment: "Move tab week strip: a day tile's count of logged workouts. Needs a plural variation.")
     }
 
     /// `Text` rather than `String` (review T2-1), and `displayName` rather than `rawValue`.
@@ -4250,19 +4298,21 @@ struct WorkoutWeekCell: Identifiable {
     /// The count line the tile drops at accessibility sizes (1a·AX3), re-exposed as accessibility
     /// custom content (T2-2).
     ///
-    /// A separate, LOCALIZED `Text` rather than a reuse of ``summaryText``: that one is a plain
-    /// `String` of English literals rendered through the non-localizing `Text(_: S)` overload, so
-    /// speaking it would put frozen English on the rotor of an otherwise translated screen. It
-    /// also states both halves on a mixed day, where the drawn caption only has room for the logs.
+    /// A separate `Text` rather than a reuse of ``summaryText``: it was written when that was a plain
+    /// `String` of English literals (it is localized now, 2026-10-20), and it still states both
+    /// halves on a mixed day, where the drawn caption only has room for the logs.
+    ///
+    /// The counts are plural-ruled count phrases (a translator agrees the participle with each),
+    /// not a `count == 1` branch between two keys; a mixed day lists both, joined with ", ".
     var accessibilitySummary: Text {
         if workoutCount == 0 && plannedCount == 0 { return Text("Rest day") }
-        if workoutCount == 0 {
-            return plannedCount == 1 ? Text("1 planned") : Text("\(plannedCount) planned")
-        }
-        if plannedCount == 0 {
-            return workoutCount == 1 ? Text("1 logged") : Text("\(workoutCount) logged")
-        }
-        return Text("\(workoutCount) logged, \(plannedCount) planned")
+        let logged = String(localized: "move.week.cell.a11y.logged", defaultValue: "\(workoutCount) logged",
+                            comment: "Spoken summary of a Move week-strip day: how many workouts were logged. Needs a plural variation.")
+        let planned = String(localized: "move.week.cell.a11y.planned", defaultValue: "\(plannedCount) planned",
+                             comment: "Spoken summary of a Move week-strip day: how many workouts are planned. Needs a plural variation.")
+        if workoutCount == 0 { return Text(verbatim: planned) }
+        if plannedCount == 0 { return Text(verbatim: logged) }
+        return Text(verbatim: "\(logged), \(planned)")
     }
 }
 
@@ -4444,7 +4494,7 @@ struct MoveDayDetailView: View {
     }
 
     /// One toolbar capsule — the Plan and Log entries are the same chrome.
-    private func toolbarCapsule(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+    private func toolbarCapsule(_ title: LocalizedStringKey, systemImage: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 5) {
                 Image(systemName: systemImage)
@@ -4616,7 +4666,7 @@ struct PlannedWorkoutRow: View {
         }
 
         if !plannedWorkout.notes.isEmpty {
-            Text(plannedWorkout.notes)
+            Text(plannedWorkout.displayedNotes)
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
@@ -4786,8 +4836,13 @@ struct WorkoutPlanSheet: View {
         if isDirty { showDiscardConfirm = true } else { dismiss() }
     }
 
+    /// The plan sheet's date line: "Today", or the formatted target day. The literal was a `String`
+    /// drawn through `Text`'s verbatim overload, so it never reached the catalog.
     private var targetDateTitle: String {
-        if dateKey == store.todayKey { return "Today" }
+        if dateKey == store.todayKey {
+            return String(localized: "move.plan.targetDate.today", defaultValue: "Today",
+                          comment: "Plan sheet: the workout is being planned for today")
+        }
         let date = FernletDate.date(fromDayKey: dateKey) ?? .now
         return date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
     }
@@ -4880,7 +4935,7 @@ struct WorkoutPlanSheet: View {
     }
 
     /// The shared chrome behind "Copy previous week" and "Suggest a workout".
-    private func entryCard(icon: String, title: String, subtitle: String, action: @escaping () -> Void) -> some View {
+    private func entryCard(icon: String, title: LocalizedStringKey, subtitle: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: icon)
@@ -5024,7 +5079,9 @@ struct WorkoutPlanSheet: View {
             if showsSuggestEntry {
                 entryCard(icon: "wand.and.stars",
                           title: "Suggest a workout",
-                          subtitle: "Built from your split, equipment, and limits") {
+                          subtitle: String(localized: "move.plan.suggest.subtitle",
+                                           defaultValue: "Built from your split, equipment, and limits",
+                                           comment: "Plan sheet, the Suggest a workout card's second line")) {
                     showingSuggestion = true
                 }
                 .accessibilityIdentifier("plan.suggest")

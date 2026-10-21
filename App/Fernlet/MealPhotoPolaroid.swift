@@ -135,7 +135,8 @@ struct MealPhotoPolaroid: View {
 /// the two read identically apart from their wording.
 private struct MealPhotoPlaceholder: View {
     let systemImage: String
-    let text: String
+    /// Authored copy, so `LocalizedStringKey` (as `String` both states were drawn verbatim).
+    let text: LocalizedStringKey
 
     var body: some View {
         VStack(spacing: 5) {
@@ -160,8 +161,9 @@ private struct MealPhotoPlaceholder: View {
 /// open this photo" states.
 private struct MealPhotoUnavailableCard: View {
     let systemImage: String
-    let title: String
-    let detail: String
+    /// Authored copy, so `LocalizedStringKey` (as `String` both states were drawn verbatim).
+    let title: LocalizedStringKey
+    let detail: LocalizedStringKey
 
     var body: some View {
         RoundedRectangle(cornerRadius: 18, style: .continuous)

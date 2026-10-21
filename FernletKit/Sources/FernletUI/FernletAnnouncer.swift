@@ -28,6 +28,7 @@
 
 import SwiftUI
 import UIKit
+import FernletDomainModel
 
 // MARK: - Vocabulary
 
@@ -135,11 +136,20 @@ public struct FernletAnnouncer {
     /// result to ``announce(_:resolved:)``. `FernletAnnouncerTests.packageAnnounceCallsUseTheResolvedLabel`
     /// enforces that mechanically, because nothing else can.
     ///
+    /// Resolves through ``AddressedCopy``, never `String(localized:)`: a translation that marks a
+    /// word describing the user (`^[listo](inflect: true)`) is inflected for `address`, where
+    /// `String(localized:)` would hand VoiceOver the raw markup to read aloud.
+    ///
     /// - Parameters:
     ///   - kind: Why the app is speaking. See ``FernletAnnouncementKind``.
     ///   - text: The sentence to speak. Never sealed content.
-    public func announce(_ kind: FernletAnnouncementKind = .status, _ text: LocalizedStringResource) {
-        announce(kind, resolved: String(localized: text))
+    ///   - address: The user's term of address, from the view's `fernletTermOfAddress`; masculine
+    ///     when omitted, the same default as an unanswered profile.
+    public func announce(
+        _ kind: FernletAnnouncementKind = .status, _ text: LocalizedStringResource,
+        addressing address: TermOfAddress = .masculine
+    ) {
+        announce(kind, resolved: AddressedCopy.string(text, addressing: address))
     }
 
     /// Speaks a sentence the caller has ALREADY resolved.

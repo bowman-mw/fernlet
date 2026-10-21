@@ -57,6 +57,9 @@ struct FoodView: View {
     /// The root page's own scroll-to-top token; `tabReselect` bumps it only when nothing is pushed.
     @State private var scrollToTopToken = 0
     @Environment(\.scenePhase) private var scenePhase
+    /// The user's term of address (the app root sets it from the body profile), for the root page's
+    /// copy that describes them: the retry banner's companion line and the empty-day prompt.
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
 
     var body: some View {
         foodLifecycle(foodSheets(foodRoot))
@@ -306,7 +309,7 @@ struct FoodView: View {
                             .foregroundStyle(Color.bark)
                         Spacer()
                     }
-                    Text(FernletVoice.message(for: .retryAvailable))
+                    Text(FernletVoice.message(for: .retryAvailable, addressing: termOfAddress))
                         .font(.fernlet(.bubble))
                         .foregroundStyle(Color.slate)
                     Button("Retry oldest") {
@@ -321,7 +324,8 @@ struct FoodView: View {
     @ViewBuilder private var todayMealsSection: some View {
         if store.day.meals.isEmpty {
             FernletScrollSection("Today") {
-                EmptyState(text: "Nothing yet. Describe a meal when you are ready.")
+                // "When you are ready" describes the user (*lista*): resolved for them, then drawn verbatim.
+                EmptyState(verbatim: AddressedCopy.string("Nothing yet. Describe a meal when you are ready.", addressing: termOfAddress))
             }
         } else {
             // Each meal type is its OWN section card, titled by a distinct small-caps
@@ -571,7 +575,9 @@ struct FoodView: View {
             let protein = meals.reduce(0) { $0 + $1.macros.protein }
             let calories = meals.reduce(0) { $0 + $1.calories }
             HStack(spacing: 10) {
-                Text(verbatim: "\(type.displayName) total")
+                // One key with the slot as its argument, so a translator can put "total" where the
+                // language wants it; `verbatim:` here spliced an English word onto a localized one.
+                Text("\(type.displayName) total")
                     .foregroundStyle(Color.slate)
                 Spacer(minLength: 0)
                 Text("P \(protein)g")
@@ -738,11 +744,13 @@ private struct NutritionTargetsSheet: View {
 
 /// A small labeled stat tile (title over value) for macro and calorie figures.
 ///
-/// Shared by the recipe detail's per-serving card and the web-product review sheet so nutrition
-/// numbers render identically wherever they appear.
+/// Shared by the recipe detail's per-serving card, the web-product review sheet and the nearby-share
+/// review so nutrition numbers render identically wherever they appear. Both halves are
+/// `LocalizedStringKey`: every caller passes a literal ("Protein", "\(grams)g"), and as `String` they
+/// were drawn verbatim and never reached the catalog.
 struct NutritionPill: View {
-    var title: String
-    var value: String
+    var title: LocalizedStringKey
+    var value: LocalizedStringKey
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -985,13 +993,17 @@ private struct RecipeImportSheet: View {
         // page's explicit "Re-import from source" affordance.
         if let existing = store.savedRecipe(matchingSourceURL: url) {
             existingRecipe = existing
-            notice = "\u{201C}\(existing.name)\u{201D} was already imported from this page."
+            let name = existing.name
+            notice = String(localized: "recipeImport.notice.alreadyImported",
+                            defaultValue: "\u{201C}\(name)\u{201D} was already imported from this page.",
+                            comment: "Import recipe screen: the pasted link is a recipe already in the book. The argument is that recipe's name.")
             return
         }
         existingRecipe = nil
 
         isImportingURL = true
-        notice = "Fetching recipe..."
+        notice = String(localized: "recipeImport.notice.fetching", defaultValue: "Fetching recipe...",
+                        comment: "Import recipe screen: shown while a pasted recipe link is being fetched")
 
         Task {
             do {
@@ -1003,7 +1015,9 @@ private struct RecipeImportSheet: View {
                 // a slow image host never delays the import feedback — and an image failure never
                 // fails the import (the store marks the one attempt either way).
                 Task { await store.fetchRecipeWebImageIfNeeded(for: recipe) }
-                notice = "\(importedRecipe.name) added to your recipes."
+                let name = importedRecipe.name
+                notice = String(localized: "recipeImport.notice.added", defaultValue: "\(name) added to your recipes.",
+                                comment: "Import recipe screen: a pasted recipe link was imported. The argument is the recipe's name.")
                 isImportingURL = false
                 do {
                     // A beat so the "added to your recipes" line can be read before the sheet goes.
@@ -1078,7 +1092,7 @@ private struct SavedRecipeRow: View {
                 }
             }
             if !recipe.notes.isEmpty {
-                Text(recipe.notes)
+                Text(verbatim: StoredFoodNote.displayedRecipeNotes(recipe.notes))
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                     .fernletWrappingText()
@@ -1093,7 +1107,7 @@ private struct SavedRecipeRow: View {
                     Text("C \(macros.carbs)g")
                     Text("F \(macros.fat)g")
                     if recipe.servings > 1 {
-                        Text("· \(recipe.servings) servings")
+                        Text("· ^[\(recipe.servings) serving](inflect: true)")
                     }
                 }
                 .font(.fernlet(.stat))
@@ -1198,7 +1212,7 @@ struct SavedRecipeNotesSheet: View {
                     Text("F \(macros.fat)g")
                     Spacer()
                     if recipe.servings > 1 {
-                        Text("\(recipe.servings) servings")
+                        Text("^[\(recipe.servings) serving](inflect: true)")
                             .font(.fernlet(.stat))
                             .foregroundStyle(Color.slate)
                     }
@@ -1458,9 +1472,12 @@ struct RecipeSheet: View {
             // A multipart recipe opens into its parts; its flat lists stay empty (the parts hold every row).
             let loadedIngredients = loadedParts.isEmpty ? Self.inputs(for: recipe, foodItems: recipeFoods) : []
             let loadedSteps = loadedParts.isEmpty ? (recipe.steps ?? []) : []
+            // The notes field shows a stored default note in the person's language; the save hands the
+            // stored English back while the field is left as drawn (``StoredFoodNote``).
+            let drawnNotes = StoredFoodNote.displayedRecipeNotes(recipe.notes)
             _name = State(initialValue: recipe.name)
             _servings = State(initialValue: recipe.servings)
-            _notes = State(initialValue: recipe.notes)
+            _notes = State(initialValue: drawnNotes)
             _ingredients = State(initialValue: loadedIngredients)
             _steps = State(initialValue: loadedSteps)
             _partsDraft = State(initialValue: RecipePartsDraft(parts: loadedParts))
@@ -1471,7 +1488,7 @@ struct RecipeSheet: View {
             _originalDraft = State(initialValue: RecipeDraftSnapshot(
                 name: recipe.name,
                 servings: recipe.servings,
-                notes: recipe.notes,
+                notes: drawnNotes,
                 ingredients: loadedIngredients,
                 steps: loadedSteps,
                 parts: loadedParts
@@ -1787,10 +1804,12 @@ struct RecipeSheet: View {
     @ViewBuilder private var saveBar: some View {
         if let editingRecipe {
             SheetSaveBar(disabled: !canSave) {
+                let savedNotes = StoredFoodNote.savedRecipeNotes(editing: notes, stored: editingRecipe.notes)
                 if partsDraft.isMultipart {
-                    store.updateRecipe(editingRecipe, name: name, servings: servings, notes: notes, parts: partsDraft.parts)
+                    store.updateRecipe(editingRecipe, name: name, servings: servings, notes: savedNotes, parts: partsDraft.parts)
                 } else {
-                    store.updateRecipe(editingRecipe, name: name, servings: servings, notes: notes, ingredients: ingredients, steps: steps)
+                    store.updateRecipe(editingRecipe, name: name, servings: servings, notes: savedNotes,
+                                       ingredients: ingredients, steps: steps)
                 }
                 finishAfterSave(named: name)
             }
@@ -1976,7 +1995,11 @@ struct RecipeSheet: View {
 
         var ingredient = ingredients[0]
         if ingredient.trimmedName.isEmpty {
-            ingredient.name = result.servingSize ?? "Scanned serving"
+            // A pre-fill the person sees in the field and saves as their own words, so it is written
+            // in their language; nothing reads it back as a token.
+            ingredient.name = result.servingSize
+                ?? String(localized: "recipeEditor.scannedIngredient.defaultName", defaultValue: "Scanned serving",
+                          comment: "Pre-filled name of a recipe ingredient read from a nutrition label that printed no serving size. The person can edit it.")
         }
         ingredient.quantity = 1
         ingredient.unit = RecipeUnit.serving.rawValue
@@ -1990,10 +2013,7 @@ struct RecipeSheet: View {
     }
 
     private func scannedRecipeName(from result: NutritionLabelResult) -> String {
-        if let servingSize = result.servingSize, servingSize.isEmpty == false {
-            return "Scanned item (\(servingSize))"
-        }
-        return "Scanned item"
+        ScannedItemName.prefill(servingSize: result.servingSize)
     }
 
     private static func inputs(for recipe: RecipeDefinition, foodItems: [FoodItem]) -> [ManualRecipeIngredientInput] {
@@ -2041,22 +2061,28 @@ struct CollapsedIngredientRow: View {
     }
 
     /// The quantity and the grams share one locale separator ("1,5 cup · P3,4g" in de), so the
-    /// quantity goes through ``RecipeQuantityDisplay`` rather than a POSIX `%g`.
+    /// quantity goes through ``RecipeQuantityDisplay`` rather than a POSIX `%g`. Each shape of the
+    /// line is one whole key (the calorie tail is not appended in English).
     private var summaryLine: String {
         let quantity = RecipeQuantityDisplay.display(ingredient.quantity)
         // A named portion (F4b) reads as its words ("2 cup, sliced"); a unit as its token, as before.
         let measure = ingredient.portion?.label ?? ingredient.unit
         guard let grams else {
-            return "\(quantity) \(measure) · Conversion unavailable"
+            return String(localized: "food.ingredientRow.summary.unconverted",
+                          defaultValue: "\(quantity) \(measure) · Conversion unavailable",
+                          comment: "A collapsed recipe-ingredient row whose amount has no gram conversion. The arguments are the amount and its unit or portion word, shown as saved.")
         }
         let protein = MacroGramEntry.display(grams.protein)
         let carbs = MacroGramEntry.display(grams.carbs)
         let fat = MacroGramEntry.display(grams.fat)
-        var line = "\(quantity) \(measure) · P\(protein)g C\(carbs)g F\(fat)g"
-        if showCalories, let calories {
-            line += " · \(calories) cal"
+        guard showCalories, let calories else {
+            return String(localized: "food.ingredientRow.summary",
+                          defaultValue: "\(quantity) \(measure) · P\(protein)g C\(carbs)g F\(fat)g",
+                          comment: "A collapsed recipe-ingredient row: the amount and its unit, then grams of protein (P), carbs (C) and fat (F).")
         }
-        return line
+        return String(localized: "food.ingredientRow.summary.calories",
+                      defaultValue: "\(quantity) \(measure) · P\(protein)g C\(carbs)g F\(fat)g · \(calories) cal",
+                      comment: "A collapsed recipe-ingredient row with calories shown: the amount and its unit, grams of protein (P), carbs (C) and fat (F), then calories.")
     }
 
     var body: some View {
@@ -2079,7 +2105,8 @@ struct CollapsedIngredientRow: View {
                     .foregroundStyle(Color.slate)
             }
             .buttonStyle(.plain)
-            .fernletIconButton("Remove \(ingredient.name.isEmpty ? "ingredient" : ingredient.name)")
+            // Two whole labels: an English "ingredient" spliced into the key read English in every language.
+            .fernletIconButton(ingredient.name.isEmpty ? "Remove ingredient" : "Remove \(ingredient.name)")
         }
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
@@ -2354,7 +2381,7 @@ struct RecipeIngredientEditor: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
-            .accessibilityLabel("Remove \(ingredient.trimmedName.isEmpty ? "ingredient" : ingredient.name)")
+            .accessibilityLabel(ingredient.trimmedName.isEmpty ? "Remove ingredient" : "Remove \(ingredient.name)")
     }
 
     /// What a household amount counts as, when the line will be saved as grams (ingredient-search
@@ -2831,7 +2858,7 @@ struct MealSheet: View {
         case .productPageImport:
             FoodProductPageImportView(store: store) { product in
                 description = product.name
-                notice = "\(product.name) was saved. Review the meal description, then save your meal."
+                notice = Self.productSavedNotice(product.name)
                 path.removeLast()
             }
         case .productSearch(let query):
@@ -2846,10 +2873,17 @@ struct MealSheet: View {
                 }
             ) { product in
                 description = product.name
-                notice = "\(product.name) was saved. Review the meal description, then save your meal."
+                notice = Self.productSavedNotice(product.name)
                 path.removeLast()
             }
         }
+    }
+
+    /// The composer's notice after a web product was saved from the Import screen.
+    private static func productSavedNotice(_ name: String) -> String {
+        String(localized: "mealComposer.notice.productSaved",
+               defaultValue: "\(name) was saved. Review the meal description, then save your meal.",
+               comment: "Log meal sheet: a packaged product was saved from the web and put in the description field. The argument is the product's name.")
     }
 
     /// The three sheets layered over the composer — pre-log review, the capture chooser, and the
@@ -3522,7 +3556,9 @@ struct MealSheet: View {
             return
         }
         didLogMeal = true
-        notice = "Your meal is logged, but its photo couldn't be saved to your private store."
+        notice = String(localized: "mealComposer.notice.photoNotSaved",
+                        defaultValue: "Your meal is logged, but its photo couldn't be saved to your private store.",
+                        comment: "Log meal sheet: the meal was logged but its photo failed to save on the device")
     }
 
     /// The payload for the pre-log review sheet: the resolution under review plus any captured photo
@@ -3606,7 +3642,9 @@ struct MealSheet: View {
             case .aiOff:
                 break
             case .nothingRecognized:
-                notice = "Fernlet couldn't quite tell what's in this photo — want to type what you ate instead?"
+                notice = String(localized: "mealComposer.notice.photoNotRecognized",
+                                defaultValue: "Fernlet couldn't quite tell what's in this photo — want to type what you ate instead?",
+                                comment: "Log meal sheet: Identify from photo found no food it could name")
                 FernletFeedback.system.play(.caveat)
             case .resolved(let described, let resolution):
                 description = described
@@ -3677,7 +3715,9 @@ struct MealSheet: View {
             if let payload, payload.isEmpty == false {
                 path.append(.captureBarcode(payload))
             } else {
-                captureError = "Fernlet couldn't spot a barcode in that photo. Steady hands and a little more light usually does it — or type it instead."
+                captureError = String(localized: "mealComposer.capture.noBarcode",
+                                      defaultValue: "Fernlet couldn't spot a barcode in that photo. Steady hands and a little more light usually does it — or type it instead.",
+                                      comment: "Log meal sheet: a captured photo, sent to barcode lookup, showed no readable barcode")
                 // B9: the photo is kept and the banner offers a way on — a caveat, never an error.
                 FernletFeedback.system.play(.caveat)
             }
@@ -3699,7 +3739,9 @@ struct MealSheet: View {
             if let parsed {
                 path.append(.captureLabel(parsed))
             } else {
-                captureError = "Fernlet couldn't read that label. Steady hands and a little more light usually does it — or type it instead."
+                captureError = String(localized: "mealComposer.capture.labelUnreadable",
+                                      defaultValue: "Fernlet couldn't read that label. Steady hands and a little more light usually does it — or type it instead.",
+                                      comment: "Log meal sheet: a captured photo, sent to the nutrition-label reader, gave no values")
                 // B9: as for the barcode — a calm way on, felt as a caveat, never an error.
                 FernletFeedback.system.play(.caveat)
             }
@@ -4048,8 +4090,12 @@ private struct FoodProductPageImportView: View {
     /// mode…") was a double negative naming a mode by a label the user may never have seen.
     private var webNutritionLookupDisabledMessage: String {
         store.settings.aiStatus == .off
-            ? "Web nutrition lookup is off. Turn on AI features and Web nutrition lookup in Settings to search the web."
-            : "Web nutrition lookup is off. Turn on Web nutrition lookup in Settings to search the web."
+            ? String(localized: "productImport.notice.lookupOffWithAI",
+                     defaultValue: "Web nutrition lookup is off. Turn on AI features and Web nutrition lookup in Settings to search the web.",
+                     comment: "Import product screen: web nutrition lookup is off and AI features are off too. Names the two Settings switches.")
+            : String(localized: "productImport.notice.lookupOff",
+                     defaultValue: "Web nutrition lookup is off. Turn on Web nutrition lookup in Settings to search the web.",
+                     comment: "Import product screen: web nutrition lookup is off. Names the Settings switch that turns it on.")
     }
 
     /// Records the web-nutrition lookup at DISPATCH with a provisional `.fellBack` outcome and returns the
@@ -4066,7 +4112,9 @@ private struct FoodProductPageImportView: View {
         )
     }
 
-    private func actionButton(label: String, systemImage: String, action: @escaping () -> Void) -> some View {
+    /// The screen's moss action. `LocalizedStringKey`: as a `String` its "Find product page" label was
+    /// drawn verbatim and never reached the catalog.
+    private func actionButton(label: LocalizedStringKey, systemImage: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(label, systemImage: systemImage)
                 .font(.fernlet(.label))
@@ -4219,9 +4267,12 @@ struct FoodProductReviewSheet: View {
         #endif
     }
 
-    private func detail(label: String, value: String) -> some View {
+    /// One caption-over-value row. The caption is a `LocalizedStringKey` uppercased by
+    /// `.textCase(.uppercase)` after the lookup; `String.uppercased()` on it drew English verbatim.
+    private func detail(label: LocalizedStringKey, value: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(label.uppercased())
+            Text(label)
+                .textCase(.uppercase)
                 .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
                 .tracking(0.8)
@@ -4355,7 +4406,7 @@ private struct MealRow: View {
                         .background(meal.mealType.color.opacity(0.25), in: Capsule())
                 }
             }
-            Text(displayNote)
+            displayNote
                 .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
             if let dataAttribution {
@@ -4452,9 +4503,10 @@ private struct MealRow: View {
     }
 
     /// Seeded demo meals carry this exact note (`FernletStore+DemoSeed`); it is the identifying
-    /// signal because their confidence token (`logged`) is also a legitimate user stamp.
+    /// signal because their confidence token (`logged`) is also a legitimate user stamp. Matched on
+    /// the frozen English note, never on what the row draws.
     private var isSeededDemoMeal: Bool {
-        meal.note == "Seeded demo meal."
+        meal.note == StoredFoodNote.seededDemoMeal
     }
 
     /// Plain words for the capsule: recipe-backed rows say "From recipe"; everything else shows
@@ -4470,14 +4522,17 @@ private struct MealRow: View {
 
     /// The line under the meal name. A component breakdown says where the numbers came from — but
     /// only the food-matching path matched "local foods"; a recipe log and a cooking-mode log both
-    /// carry components too and used to claim the same thing.
-    private var displayNote: String {
-        guard breakdownText != nil else { return meal.note }
+    /// carry components too and used to claim the same thing. Without one, the stored note is drawn,
+    /// a note Fernlet wrote in the person's language (``StoredFoodNote``).
+    private var displayNote: Text {
+        guard breakdownText != nil else {
+            return Text(verbatim: StoredFoodNote.displayedMealNote(meal.note))
+        }
         switch meal.mealSource {
         case .recipe, .mealDefinition:
-            return "From your recipe."
+            return Text("From your recipe.")
         case .manual:
-            return "Matched from your foods."
+            return Text("Matched from your foods.")
         }
     }
 
@@ -4488,7 +4543,8 @@ private struct MealRow: View {
                 .joined(separator: ", ")
             return text.isEmpty ? nil : text
         }
-        let prefix = "Matched locally from food selection: "
+        // A legacy row's breakdown lives in its note; the prefix is the frozen English it was written with.
+        let prefix = StoredFoodNote.matchedFromFoodSelectionPrefix
         guard meal.note.hasPrefix(prefix) else { return nil }
         let trimmed = meal.note
             .dropFirst(prefix.count)
@@ -5452,11 +5508,10 @@ private struct MealReviewSheet: View {
                 .accessibilityIdentifier("mealReview.recipeName")
         }
         SheetField("Makes") {
-            Stepper(
-                "\(offer.wrappedValue.servings) serving\(offer.wrappedValue.servings == 1 ? "" : "s")",
-                value: offer.servings,
-                in: 1...24
-            )
+            // Grammar agreement, not a spliced English "s" (see `RecipeRow`).
+            Stepper(value: offer.servings, in: 1...24) {
+                Text("^[\(offer.wrappedValue.servings) serving](inflect: true)")
+            }
             .accessibilityIdentifier("mealReview.recipeServings")
         }
     }
@@ -5494,7 +5549,8 @@ private struct MealReviewSheet: View {
         }
     }
 
-    private var reviewMessage: String {
+    /// The line under the title. `LocalizedStringKey`: as a `String` it was drawn verbatim.
+    private var reviewMessage: LocalizedStringKey {
         switch confidence {
         case .low:
             return "Fernlet wasn't sure this matched what you ate, so it's a rough estimate. Adjust anything that looks off, then log it."
@@ -5604,15 +5660,17 @@ private struct RecipeRow: View {
                 Text(recipe.name)
                     .font(.fernlet(.headerMedium))
                 Spacer()
-                Text("\(recipe.servings) serving\(recipe.servings == 1 ? "" : "s")")
+                // Automatic grammar agreement. These spliced an English "s" in by count, which no
+                // translation can follow.
+                Text("^[\(recipe.servings) serving](inflect: true)")
                     .font(.fernlet(.stat))
                     .foregroundStyle(Color.slate)
             }
-            Text("\(recipe.ingredients.count) ingredient\(recipe.ingredients.count == 1 ? "" : "s")")
+            Text("^[\(recipe.ingredients.count) ingredient](inflect: true)")
                 .font(.fernlet(.stat))
                 .foregroundStyle(Color.slate)
             if !recipe.notes.isEmpty {
-                Text(recipe.notes)
+                Text(verbatim: StoredFoodNote.displayedRecipeNotes(recipe.notes))
                     .font(.fernlet(.bubble))
                     .foregroundStyle(Color.slate)
                     // A two-line preview, except at accessibility sizes, where two lines held only
@@ -5886,7 +5944,7 @@ struct RecipeDetailView: View {
             Text(recipe.name)
                 .font(.fernlet(.displayMedium))
                 .foregroundStyle(Color.bark)
-            Text("\(recipe.servings) serving\(recipe.servings == 1 ? "" : "s")")
+            Text("^[\(recipe.servings) serving](inflect: true)")
                 .font(.fernlet(.stat))
                 .foregroundStyle(Color.slate)
         }
@@ -5989,7 +6047,7 @@ struct RecipeDetailView: View {
                     PhotoCaptureControl(
                         onCameraCapture: { save($0) },
                         onLibraryPickData: { data, _ in saveLibraryData(data) },
-                        onLibraryPickFailed: { photoNotice = "Couldn't save this photo to your private store. Please try again." },
+                        onLibraryPickFailed: { photoNotice = Self.photoNotSavedNotice },
                         allowsLibraryChoice: true
                     ) {
                         photoIconChip("camera.fill")
@@ -6005,7 +6063,7 @@ struct RecipeDetailView: View {
             PhotoCaptureControl(
                 onCameraCapture: { save($0) },
                 onLibraryPickData: { data, _ in saveLibraryData(data) },
-                onLibraryPickFailed: { photoNotice = "Couldn't save this photo to your private store. Please try again." },
+                onLibraryPickFailed: { photoNotice = Self.photoNotSavedNotice },
                 allowsLibraryChoice: true
             ) {
                 HStack(spacing: 10) {
@@ -6049,7 +6107,7 @@ struct RecipeDetailView: View {
                         NutritionPill(title: "Calories", value: "\(perServing.calories)")
                     }
                 }
-                Text("Makes \(effectiveYield) serving\(effectiveYield == 1 ? "" : "s"): P \(displayTotals.protein)g · C \(displayTotals.carbs)g · F \(displayTotals.fat)g\(store.settings.showCalories ? " · \(displayTotals.calories) cal" : "")")
+                totalsLine
                     .font(.fernlet(.stat))
                     .foregroundStyle(Color.slate)
                 WebImportEstimateNote(
@@ -6058,6 +6116,17 @@ struct RecipeDetailView: View {
                 )
             }
         }
+    }
+
+    /// "Makes 4 servings: P 40g · C 120g · F 30g", with calories only behind the opt-in. Two whole
+    /// keys: the calorie tail used to be an English string spliced into the key, and the servings an
+    /// English plural picked by count.
+    private var totalsLine: Text {
+        let totals = displayTotals
+        guard store.settings.showCalories else {
+            return Text("Makes ^[\(effectiveYield) serving](inflect: true): P \(totals.protein)g · C \(totals.carbs)g · F \(totals.fat)g")
+        }
+        return Text("Makes ^[\(effectiveYield) serving](inflect: true): P \(totals.protein)g · C \(totals.carbs)g · F \(totals.fat)g · \(totals.calories) cal")
     }
 
     /// Ephemeral "cook for N" control (F4, §11.4). Shown only for structured recipes — web imports
@@ -6069,21 +6138,22 @@ struct RecipeDetailView: View {
             FernletCard {
                 VStack(alignment: .leading, spacing: 8) {
                     SectionLabel("Cook for")
-                    Stepper(
-                        "\(effectiveYield) serving\(effectiveYield == 1 ? "" : "s")",
-                        value: Binding(get: { effectiveYield }, set: { cookYield = $0 }),
-                        in: RecipeScaling.yieldRange
-                    )
+                    Stepper(value: Binding(get: { effectiveYield }, set: { cookYield = $0 }),
+                            in: RecipeScaling.yieldRange) {
+                        Text("^[\(effectiveYield) serving](inflect: true)")
+                    }
                     .accessibilityIdentifier("recipeDetail.cookForYield")
                     if isScaled {
-                        Text("Scaled from \(recipe.servings) serving\(recipe.servings == 1 ? "" : "s") for this view only — your saved recipe is unchanged, and logging still records one serving.")
+                        Text("Scaled from ^[\(recipe.servings) serving](inflect: true) for this view only — your saved recipe is unchanged, and logging still records one serving.")
                             .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
-                        Button("Reset to \(recipe.servings) serving\(recipe.servings == 1 ? "" : "s")") { cookYield = nil }
-                            .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.moss)
-                            .accessibilityIdentifier("recipeDetail.cookForReset")
+                        Button { cookYield = nil } label: {
+                            Text("Reset to ^[\(recipe.servings) serving](inflect: true)")
+                        }
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.moss)
+                        .accessibilityIdentifier("recipeDetail.cookForReset")
                     }
                 }
             }
@@ -6188,17 +6258,24 @@ struct RecipeDetailView: View {
                 // this top-aligned row; lift it so icon and text read as one line (the target is
                 // unchanged — only where it sits).
                 .padding(.top, -6)
-                .accessibilityLabel("Swap \(resolvedItems[ingredient.foodItemId]?.name ?? "ingredient")")
+                .accessibilityLabel(swapLabel(for: ingredient))
                 .accessibilityIdentifier("recipeDetail.swapIngredient")
             }
         }
+    }
+
+    /// The Swap button's spoken name: the food's own name, or a whole sentence of its own while the
+    /// food is unresolved (an English "ingredient" used to be spliced into the key).
+    private func swapLabel(for ingredient: RecipeIngredient) -> Text {
+        guard let name = resolvedItems[ingredient.foodItemId]?.name else { return Text("Swap ingredient") }
+        return Text("Swap \(name)")
     }
 
     private var notesCard: some View {
         FernletCard {
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel("Notes")
-                Text(recipe.notes)
+                Text(verbatim: StoredFoodNote.displayedRecipeNotes(recipe.notes))
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                     .fernletWrappingText()
@@ -6360,7 +6437,8 @@ struct RecipeDetailView: View {
         }
     }
 
-    private func secondaryActionLabel(_ title: String, icon: String) -> some View {
+    /// The Edit / Share secondaries. `LocalizedStringKey`: as a `String` both labels were verbatim.
+    private func secondaryActionLabel(_ title: LocalizedStringKey, icon: String) -> some View {
         Label(title, systemImage: icon)
             .font(.fernlet(.label))
             .foregroundStyle(Color.moss)
@@ -6370,10 +6448,16 @@ struct RecipeDetailView: View {
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
     }
 
+    /// The inline line when a recipe photo couldn't be sealed (camera, library pick or its failure).
+    private static var photoNotSavedNotice: String {
+        String(localized: "recipeDetail.photo.notSaved",
+               defaultValue: "Couldn't save this photo to your private store. Please try again.",
+               comment: "Recipe page: the photo the person took or picked could not be saved on the device")
+    }
+
     /// "118 g · Bananas, raw", or "1 medium (118 g) · Bananas, raw" for a household choice (F4a).
     private func ingredientLine(_ ingredient: RecipeIngredient) -> String {
-        let name = resolvedItems[ingredient.foodItemId]?.name ?? "Ingredient"
-        return "\(ingredient.amountText) · \(name)"
+        RecipeIngredientLine.text(ingredient, name: resolvedItems[ingredient.foodItemId]?.name)
     }
 
     /// Whether the line's household amount is a USDA typical size rather than the food's own portion.
@@ -6386,7 +6470,7 @@ struct RecipeDetailView: View {
         // when it actually sealed to disk — otherwise a false success would show it, then it would vanish
         // on next open when the store read finds nothing.
         guard store.saveRecipePhoto(image, for: recipe.id) else {
-            photoNotice = "Couldn't save this photo to your private store. Please try again."
+            photoNotice = Self.photoNotSavedNotice
             return
         }
         photo = image
@@ -6397,7 +6481,7 @@ struct RecipeDetailView: View {
     /// then show the just-sealed (≤1600px) bytes rather than re-decoding the full-resolution original.
     private func saveLibraryData(_ data: Data) {
         guard store.saveRecipePhoto(data: data, for: recipe.id) else {
-            photoNotice = "Couldn't save this photo to your private store. Please try again."
+            photoNotice = Self.photoNotSavedNotice
             return
         }
         photoNotice = nil
@@ -6413,15 +6497,43 @@ struct RecipeDetailView: View {
     /// the one button that deliberately re-fetches must say whose server it is about to reach — and
     /// it replaces the imported ingredients/macros on screen, which is why it routes through the
     /// shared destructive-confirmation affordance rather than firing on a bare tap.
+    ///
+    /// A source URL with no host gets whole sentences of its own: an English "the source page" used
+    /// to be spliced into each of them.
     private func confirmReimportFromSource() {
-        let host = recipe.webImport?.sourceURL?.host() ?? "the source page"
+        let host = recipe.webImport?.sourceURL?.host()
+        let title: LocalizedStringKey = if let host { "Re-import from \(host)?" } else { "Re-import from the source page?" }
+        let message: LocalizedStringKey = if let host {
+            "Fernlet will contact \(host) and replace this recipe's imported ingredients and nutrition with whatever the page says now. Your photo and notes are kept."
+        } else {
+            "Fernlet will contact the source page and replace this recipe's imported ingredients and nutrition with whatever the page says now. Your photo and notes are kept."
+        }
         pendingDestructiveAction = DestructiveConfirmation(
-            title: "Re-import from \(host)?",
-            message: "Fernlet will contact \(host) and replace this recipe's imported ingredients and nutrition with whatever the page says now. Your photo and notes are kept.",
+            title: title,
+            message: message,
             confirmLabel: "Re-import",
             auditEvent: "recipe.reimport.confirmed",
             perform: { reimportFromSource() }
         )
+    }
+
+    /// The re-import's progress and success lines, each one whole sentence with or without the host.
+    private static func reimportLine(refreshed: Bool, host: String?) -> String {
+        switch (refreshed, host) {
+        case (false, let host?):
+            String(localized: "recipeDetail.reimport.refreshing", defaultValue: "Refreshing from \(host)...",
+                   comment: "Inline line on a web recipe's page while it is re-imported. The argument is the source website's host name, e.g. 'example.com'.")
+        case (false, nil):
+            String(localized: "recipeDetail.reimport.refreshing.noHost", defaultValue: "Refreshing from the source page...",
+                   comment: "Inline line on a web recipe's page while it is re-imported from a source link with no host name.")
+        case (true, let host?):
+            String(localized: "recipeDetail.reimport.refreshed", defaultValue: "Refreshed from \(host). Your photo and notes are kept.",
+                   comment: "Inline line after a web recipe was re-imported. The argument is the source website's host name, e.g. 'example.com'.")
+        case (true, nil):
+            String(localized: "recipeDetail.reimport.refreshed.noHost",
+                   defaultValue: "Refreshed from the source page. Your photo and notes are kept.",
+                   comment: "Inline line after a web recipe was re-imported from a source link with no host name.")
+        }
     }
 
     /// Runs the explicit "Re-import from source" (owner decision 2026-08-09): re-fetches the source
@@ -6433,14 +6545,14 @@ struct RecipeDetailView: View {
     /// picture gets a fresh download while the user is right here.
     private func reimportFromSource() {
         let current = recipe
-        let host = current.webImport?.sourceURL?.host() ?? "the source page"
+        let host = current.webImport?.sourceURL?.host()
         isReimporting = true
-        reimportNotice = "Refreshing from \(host)..."
+        reimportNotice = Self.reimportLine(refreshed: false, host: host)
         Task {
             do {
                 if let refreshed = try await store.reimportSavedRecipeFromSource(current) {
                     reimportedRecipe = refreshed
-                    reimportNotice = "Refreshed from \(host). Your photo and notes are kept."
+                    reimportNotice = Self.reimportLine(refreshed: true, host: host)
                     // The refresh re-armed the web-image attempt: if the recipe still has no
                     // picture, fetch it now (same post-pick screen guard as the first-open path).
                     if photo == nil, let fetched = await store.fetchRecipeWebImageIfNeeded(for: refreshed) {
@@ -6448,7 +6560,9 @@ struct RecipeDetailView: View {
                         if photo == nil { photo = prepared }
                     }
                 } else {
-                    reimportNotice = "This recipe was deleted, so there's nothing to refresh."
+                    reimportNotice = String(localized: "recipeDetail.reimport.deleted",
+                                            defaultValue: "This recipe was deleted, so there's nothing to refresh.",
+                                            comment: "Inline line when a web recipe was deleted while its re-import was running.")
                 }
             } catch {
                 reimportNotice = (error as? LocalizedError)?.errorDescription
@@ -6620,6 +6734,9 @@ private struct RecipeCreationOptionsView: View {
     /// Told when "Log & save" logged the recipe it created. Runs before `onCreated`, so the book
     /// knows the meal toast will speak for that save.
     var onCreatedRecipeLogged: () -> Void = {}
+    /// The user's term of address (the app root sets it from the body profile), which Manual
+    /// entry's "yourself" agrees with.
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
 
     /// The editor this chooser can push: the import screen or the manual editor.
     private enum CreationStep: Hashable { case importing, manual }
@@ -6643,7 +6760,7 @@ private struct RecipeCreationOptionsView: View {
                     Button { step = .importing } label: {
                         RecipeCreationOptionRow(
                             title: "Import recipe",
-                            subtitle: "Paste a recipe link or Fernlet recipe data.",
+                            subtitle: Text("Paste a recipe link or Fernlet recipe data."),
                             systemImage: "tray.and.arrow.down"
                         )
                     }
@@ -6652,7 +6769,7 @@ private struct RecipeCreationOptionsView: View {
                     Button { step = .manual } label: {
                         RecipeCreationOptionRow(
                             title: "Manual entry",
-                            subtitle: "Enter ingredients, macros, servings, and notes yourself.",
+                            subtitle: Text(AddressedCopy.attributed("Enter ingredients, macros, servings, and notes yourself.", addressing: termOfAddress)),
                             systemImage: "square.and.pencil"
                         )
                     }
@@ -6692,7 +6809,9 @@ private struct RecipeCreationOptionRow: View {
     /// Display text, so `LocalizedStringKey`: a `String` here bound `Text`'s verbatim overload and
     /// left both rows English in every language (fixed 2026-09-30).
     var title: LocalizedStringKey
-    var subtitle: LocalizedStringKey
+    /// A `Text` the caller builds, for the same reason never a `String`: Manual entry's "yourself"
+    /// describes the user (*tú mismo*), so its caller resolves it for them through `AddressedCopy`.
+    var subtitle: Text
     var systemImage: String
 
     var body: some View {
@@ -6707,7 +6826,7 @@ private struct RecipeCreationOptionRow: View {
                 Text(title)
                     .font(.fernlet(.header))
                     .foregroundStyle(Color.bark)
-                Text(subtitle)
+                subtitle
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
@@ -6827,7 +6946,7 @@ private struct WebImportedFoodRow: View {
                         .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
                         .fernletWrappingText()
-                    Text(foodItem.brandSource ?? foodItem.sourceURL?.host() ?? "Saved web product")
+                    sourceLine
                         .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                         .lineLimit(1)
@@ -6849,6 +6968,12 @@ private struct WebImportedFoodRow: View {
         .padding(.vertical, 6)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Saved product \(foodItem.name)")
+    }
+
+    /// The brand or source host as data, else a localized stand-in (it used to fall back to English).
+    private var sourceLine: Text {
+        if let source = foodItem.brandSource ?? foodItem.sourceURL?.host() { return Text(verbatim: source) }
+        return Text("Saved web product")
     }
 }
 
@@ -7014,7 +7139,8 @@ struct RecipeBookSheet: View {
     /// same update but driving nothing but text.
     private func finishCreation(named recipeName: String) {
         isCreatingRecipe = false
-        createdNotice = "\u{201C}\(recipeName)\u{201D} added to your recipes."
+        createdNotice = String(localized: "recipeBook.notice.added", defaultValue: "\u{201C}\(recipeName)\u{201D} added to your recipes.",
+                               comment: "Recipe book: a recipe was just created or imported. The argument is its name, in quotation marks.")
         // "Log & save": the meal toast's sentence (with its Undo) is the one spoken.
         guard !createdRecipeWasLogged else {
             createdRecipeWasLogged = false

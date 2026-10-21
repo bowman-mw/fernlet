@@ -94,6 +94,21 @@ nil and drops the value. `Tests/FernletTests/LocalizationBoundaryTests` is the w
 of these into a test failure, and `Scripts/sync-string-catalogs.sh` repopulates the catalogs without
 opening Xcode (`--check` is the CI form).
 
+Words that describe the user agree with the body profile's Sex answer (``BiologicalSex/termOfAddress``,
+masculine when it was never answered), and ``AddressedCopy`` is where that happens: a translation
+marks each such word `^[listo](inflect: true)`, and the helper resolves the key with inflection off
+and inflects it for the term it is handed, never the system's Form of Address. It lives here
+(since 2026-10-21; FernletUI keeps only the view half, `AddressedText` and the
+`fernletTermOfAddress` environment value) because several of its callers are not views: the
+planner's session notes are composed at plan time and stored on the logged row, so
+``WorkoutLoadContext/address`` carries the user's term into the load pass ("welcome back" and the
+max test's safety line agree with it), and the scoring lines and a notification's body are written
+by modules with no SwiftUI. Display members here take the term from whoever draws them:
+``FeelingTag/label(addressing:)`` (Quiet and Tired describe the person who logged them) and
+``TrainingSplit/summary(addressing:)`` (Recovery Flow's says how the user should feel). A key built
+in a package names its own bundle, `LocalizedStringResource("key", defaultValue: …, bundle: .module, …)`,
+because a resource made here defaults to `Bundle.main`.
+
 > Warning: This page named only two rules, and none of the forked types, until 2026-08-20 — the
 > whole fork landed without the landing-page update CLAUDE.md requires. The next planned work is a
 > bulk conversion of roughly 1,700–2,200 literals to `String(localized:)`, and a contributor who
@@ -166,7 +181,10 @@ states the value in effect on the goal card. Evidence and options:
 intake against those days, never the nominal window (2026-10-16): an unlogged day is unknown, not
 zero, and a first day of logging is no gap. The fraction is the owner's dial; at its value of `1.0`
 the window must be full, so the gaps that feed the food score, the Home nudge and the AI prompt need
-a full week (or fortnight) of data behind them.
+a full week (or fortnight) of data behind them. A tracked nutrient's ``NutrientReference/name`` is
+frozen English, because the analyzer copies it into each ``NutrientGap/nutrientName`` and that rides
+the persisted derived signals; screens draw ``NutrientReference/displayName`` and
+``NutrientGap/displayedName``, which localize from the nutrient's key (2026-10-20).
 
 - ``UserNutritionProfile``
 - ``UserNutritionPreferences``
@@ -578,9 +596,10 @@ anything else one step marked done that shows the line. Nothing is filtered or d
 names is preselected as written (``WorkoutPlanRun/Step/weightAsWritten``); only a catalog lift whose line
 names none gets the load engine's suggestion, for the sets and reps as written.
 
-The planner's words are localized without touching what it stores (2026-10-20, idea 16). Every session-note sentence is a String Catalog key in ``WorkoutPlannerCopy``, composed in the device's language when the plan is built. The names the planner stores and matches stay frozen English — a session's name is what its guided log is saved under and what the rotation matches, a split's and a location's name are what the trainer export carries, the plan text is what the history parser reads — and screens draw them through ``WorkoutSessionNames``, ``WorkoutSplitDayNames``, `TrainingSplit.displayName`, ``WorkoutSlotNames``, ``WorkoutLocationNames`` (`WorkoutLocation.displayedName`, which a rename field saves back through `savedName(editing:)`) and ``WorkoutPlanLine``.
+The planner's words are localized without touching what it stores (2026-10-20, idea 16). Every session-note sentence is a String Catalog key in ``WorkoutPlannerCopy``, composed in the device's language when the plan is built. The names the planner stores and matches stay frozen English — a session's name is what its guided log is saved under and what the rotation matches, a split's and a location's name are what the trainer export carries, the plan text is what the history parser reads — and screens draw them through ``WorkoutSessionNames``, ``WorkoutSplitDayNames``, `TrainingSplit.displayName`, ``WorkoutSlotNames``, ``WorkoutLocationNames`` (`WorkoutLocation.displayedName`, which a rename field saves back through `savedName(editing:)`) and ``WorkoutPlanLine``. FernletScoring's AI-free fallback workouts are saved under a frozen ``WorkoutFallbackName`` ("Suggested Light", "Mood Reset"), which `Workout.displayedName` draws localized (2026-10-20, Spanish round step 2).
 
 - ``WorkoutPlannerCopy``
+- ``WorkoutFallbackName``
 - ``WorkoutSessionNames``
 - ``WorkoutSplitDayNames``
 - ``WorkoutSlotNames``
@@ -845,7 +864,16 @@ holds two workouts with the same name. An edit can only ever reach a PLANNED row
 ahead of today — never a logged workout, which is the guarantee that an import cannot rewrite
 what actually happened.
 
+Localization (2026-10-20, Spanish round step 2). Every sentence the decode and validation can show
+— `CoachPlanDecodeError.message` and `CoachPlanIssue.detail` — is a whole-sentence key in the
+internal `CoachPlanIssueCopy`; `CoachPlanIssue.subject` is never drawn and stays English, and the
+vocabularies after "Expected one of:" are wire tokens. The importer's provenance lines are stored
+text: ``CoachPlanNoteStamp`` writes them in frozen English, matches them back by their exact shape
+(a bare "Day " prefix used to drop the user's own "Day off, knees sore"), and draws them localized
+through `PlannedWorkout.displayedNotes` and `Workout.displayedNotes`.
+
 - ``CoachPlan``
+- ``CoachPlanNoteStamp``
 - ``CoachPlanDay``
 - ``CoachSession``
 - ``CoachExercise``
@@ -997,3 +1025,16 @@ separator (up to two decimal places), so an es/fr/de row never mixes "1.5" with 
 - ``LocaleTolerantNumber``
 - ``MacroGramEntry``
 - ``RecipeQuantityDisplay``
+
+### Addressing the user
+
+``AddressedCopy`` resolves catalog copy whose translation marks the words that describe the user,
+inflected for ``BiologicalSex/termOfAddress`` of the effective profile. `LocalizationBoundaryTests`
+part I fails any marked key read by `String(localized:)`, which keeps the markup verbatim, and part
+I2 pins every user-gendered key to an addressed reader: the key's literal must sit inside
+``AddressedCopy/string(_:addressing:)`` / ``AddressedCopy/attributed(_:addressing:)`` (or FernletUI's
+`AddressedText`), never `String(localized:)`, `Text(LocalizedStringKey)` or ``AddressedCopy/plain(_:)``;
+every literal `.masculine` in shipping code is pinned with its reason; and a
+`LocalizedStringResource` built in a package must name `bundle: .module`.
+
+- ``AddressedCopy``

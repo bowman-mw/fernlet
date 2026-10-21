@@ -141,10 +141,16 @@ struct ShoppingListBuilderView: View {
                         Text(recipe.name)
                             .font(.fernlet(.body))
                             .foregroundStyle(Color.bark)
-                        Text(recipe.isWebImport ? "Imported \u{00B7} free-text ingredients"
-                                                : "\(recipe.servings) serving\(recipe.servings == 1 ? "" : "s")")
-                            .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.slate)
+                        Group {
+                            if recipe.isWebImport {
+                                Text("Imported \u{00B7} free-text ingredients")
+                            } else {
+                                // Grammar agreement, never an English "s" picked by count.
+                                Text("^[\(recipe.servings) serving](inflect: true)")
+                            }
+                        }
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.slate)
                     }
                     Spacer(minLength: 0)
                 }
@@ -305,7 +311,7 @@ struct WeeklyMealPlannerView: View {
             }
             .fernletIconButton("Previous week")
             Spacer()
-            Text(weekLabel)
+            weekLabel
                 .font(.fernlet(.headerMedium))
                 .foregroundStyle(Color.bark)
             Spacer()
@@ -317,11 +323,15 @@ struct WeeklyMealPlannerView: View {
         .padding(.horizontal, 4)
     }
 
-    private var weekLabel: String {
-        if weekOffset == 0 { return "This week" }
-        if weekOffset == 1 { return "Next week" }
-        if weekOffset == -1 { return "Last week" }
-        return weekOffset > 0 ? "In \(weekOffset) weeks" : "\(-weekOffset) weeks ago"
+    /// The switcher's heading. `Text`, not `String`: as a `String` it was drawn verbatim and never
+    /// reached the catalog, and the counts agree by grammar rather than by an English plural.
+    private var weekLabel: Text {
+        if weekOffset == 0 { return Text("This week") }
+        if weekOffset == 1 { return Text("Next week") }
+        if weekOffset == -1 { return Text("Last week") }
+        return weekOffset > 0
+            ? Text("In ^[\(weekOffset) week](inflect: true)")
+            : Text("^[\(-weekOffset) week](inflect: true) ago")
     }
 
     @ViewBuilder

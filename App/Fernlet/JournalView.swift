@@ -260,6 +260,8 @@ struct JournalView: View {
 struct JournalSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    /// The user's term of address, which the Quiet and Tired chips agree with.
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
     var store: FernletStore
     @State private var text = ""
     @State private var tag: FeelingTag
@@ -301,7 +303,7 @@ struct JournalSheet: View {
                     SheetField("Feeling") {
                         FlowLayout(spacing: 8) {
                             ForEach(FeelingTag.allCases) { option in
-                                Button(option.label) { FernletFeedback.system.select(option, in: &tag) }
+                                Button(option.label(addressing: termOfAddress)) { FernletFeedback.system.select(option, in: &tag) }
                                     .buttonStyle(ChipButtonStyle(selected: tag == option))
                             }
                         }
@@ -361,7 +363,7 @@ struct JournalSheet: View {
     @ViewBuilder
     private var inspirationChip: some View {
         if !inspirationDismissed && text.isEmpty {
-            let prompt = JournalPromptLibrary.prompt(for: store.todayKey)
+            let prompt = JournalPromptLibrary.prompt(for: store.todayKey, addressing: termOfAddress)
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "sparkles")
@@ -653,6 +655,8 @@ struct JournalEntryEditTarget: Identifiable {
 struct JournalEntryEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    /// The user's term of address, which the Quiet and Tired chips agree with.
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
     var store: FernletStore
     var dateKey: String
     var entry: JournalEntry
@@ -692,7 +696,7 @@ struct JournalEntryEditorSheet: View {
             SheetField("Feeling") {
                 FlowLayout(spacing: 8) {
                     ForEach(FeelingTag.allCases) { option in
-                        Button(option.label) { FernletFeedback.system.select(option, in: &tag) }
+                        Button(option.label(addressing: termOfAddress)) { FernletFeedback.system.select(option, in: &tag) }
                             .buttonStyle(ChipButtonStyle(selected: tag == option))
                     }
                 }
@@ -842,6 +846,8 @@ struct JournalEntryEditorSheet: View {
 /// ``MonthCalendarCard``.
 struct JournalCalendarCard: View {
     @Binding var displayedMonth: Date
+    /// The user's term of address, which the legend's Quiet and Tired agree with.
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
     var allDays: [String: FernletDay]
     var todayKey: String
     var onDayTapped: (String) -> Void
@@ -884,7 +890,7 @@ struct JournalCalendarCard: View {
                     } else {
                         Circle().fill(tag.color).frame(width: 8, height: 8)
                     }
-                    Text(tag.label).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
+                    Text(tag.label(addressing: termOfAddress)).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
                 }
                 .fixedSize(horizontal: true, vertical: false)
             }
@@ -922,6 +928,48 @@ private extension FeelingTag {
         case .hard: "triangle.fill"
         }
     }
+
+    /// The day review's feeling phrase ("Feeling bright"), one whole phrase per case.
+    ///
+    /// It was `"Feeling \(label.lowercased())"`: an English word spliced around a localized one and
+    /// case-folded in code, which is wrong in every language that capitalizes nouns or agrees an
+    /// adjective with its subject. Switching on the case keeps a seventh feeling a compile error.
+    /// Quiet and Tired describe the user (*Te sentiste cansada*), so those two agree with `address`.
+    func dayBlurbPhrase(addressing address: TermOfAddress) -> String {
+        switch self {
+        case .bright: String(localized: "journal.day.blurb.feeling.bright", defaultValue: "Feeling bright",
+                             comment: "Day review line item: the day's journal feeling was Bright")
+        case .good: String(localized: "journal.day.blurb.feeling.good", defaultValue: "Feeling good",
+                           comment: "Day review line item: the day's journal feeling was Good")
+        case .neutral: String(localized: "journal.day.blurb.feeling.neutral", defaultValue: "Feeling neutral",
+                              comment: "Day review line item: the day's journal feeling was Neutral")
+        case .quiet: AddressedCopy.string(LocalizedStringResource("journal.day.blurb.feeling.quiet", defaultValue: "Feeling quiet",
+                                                                  comment: "Day review line item: the day's journal feeling was Quiet"),
+                                          addressing: address)
+        case .tired: AddressedCopy.string(LocalizedStringResource("journal.day.blurb.feeling.tired", defaultValue: "Feeling tired",
+                                                                  comment: "Day review line item: the day's journal feeling was Tired"),
+                                          addressing: address)
+        case .hard: String(localized: "journal.day.blurb.feeling.hard", defaultValue: "Feeling hard",
+                           comment: "Day review line item: the day's journal feeling was Hard (a hard day)")
+        }
+    }
+}
+
+private extension SleepQuality {
+    /// The day review's sleep phrase ("good sleep"), one whole phrase per case — the same fix as
+    /// ``FeelingTag/dayBlurbPhrase(addressing:)``: it was `"\(label.lowercased()) sleep"`.
+    var dayBlurbPhrase: String {
+        switch self {
+        case .poor: String(localized: "journal.day.blurb.sleep.poor", defaultValue: "poor sleep",
+                           comment: "Day review line item: the night's sleep was logged as Poor")
+        case .ok: String(localized: "journal.day.blurb.sleep.ok", defaultValue: "ok sleep",
+                         comment: "Day review line item: the night's sleep was logged as Ok")
+        case .good: String(localized: "journal.day.blurb.sleep.good", defaultValue: "good sleep",
+                           comment: "Day review line item: the night's sleep was logged as Good")
+        case .great: String(localized: "journal.day.blurb.sleep.great", defaultValue: "great sleep",
+                            comment: "Day review line item: the night's sleep was logged as Great")
+        }
+    }
 }
 
 // MARK: - Calendar Cell
@@ -936,6 +984,8 @@ struct JournalCalendarCell: View {
     /// Read ONCE per cell and consumed only by ``feelingMark`` — never re-read per mark. See
     /// ``FeelingTag/differentiatingSymbol``.
     @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
+    /// The user's term of address, for the spoken feeling (``JournalMonthCell/accessibilityLabel(addressing:)``).
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
 
     var body: some View {
         Button(action: onTap) {
@@ -976,7 +1026,7 @@ struct JournalCalendarCell: View {
         .buttonStyle(.plain)
         .aspectRatio(1, contentMode: .fit)
         .disabled(cell.day == nil || cell.isFuture)
-        .accessibilityLabel(cell.accessibilityLabel)
+        .accessibilityLabel(cell.accessibilityLabel(addressing: termOfAddress))
     }
 
     /// The feeling's shape mark, drawn ONLY under **Differentiate Without Color**.
@@ -1026,8 +1076,8 @@ struct JournalMonthCell: Identifiable {
     var isFuture: Bool = false
     var hasData: Bool = false
     /// The already-localized ABBREVIATED weekday NAME for this day ("Wed"), spoken but never drawn
-    /// — see ``accessibilityLabel``. Empty for a blank pad cell, and for the (unreachable in
-    /// practice) day whose `Date` the layout calendar could not resolve; ``weekdaylessLabel`` is
+    /// — see ``accessibilityLabel(addressing:)``. Empty for a blank pad cell, and for the (unreachable in
+    /// practice) day whose `Date` the layout calendar could not resolve; ``weekdaylessLabel(addressing:)`` is
     /// the honest fallback for that case rather than a sentence with a hole in it.
     var weekdayName: String = ""
 
@@ -1045,8 +1095,10 @@ struct JournalMonthCell: Identifiable {
     /// `Text` rather than `String`, and built by CHOOSING a whole sentence rather than appending
     /// clauses (review T2-1): a `String` reaches `.accessibilityLabel(_:)` through the verbatim
     /// overload, and a clause appended with `+=` can never be a catalog key at all. The feeling
-    /// name is no longer lower-cased on the way in — `tag.label` is already localized, and
-    /// case-folding a translated word is wrong in every language that capitalizes nouns.
+    /// name is no longer lower-cased on the way in — `tag.label(addressing:)` is already localized,
+    /// and case-folding a translated word is wrong in every language that capitalizes nouns. It is
+    /// spliced in already agreed with `address`, the user's term of address (*cansada*), so the
+    /// spoken word matches the chip.
     ///
     /// Every sentence now opens with the WEEKDAY (review T2-17). The drawn weekday initials came
     /// off the cells in that same review, which left "Day 14" as the entire utterance: a month
@@ -1055,11 +1107,11 @@ struct JournalMonthCell: Identifiable {
     /// ("Wed"), deliberately NOT the narrow symbol the header row draws, which VoiceOver reads out
     /// as the single letter "W". Same idiom, and the same reason, as ``WorkoutWeekCell``'s
     /// `longWeekdayText`. Today keeps saying "Today" in that slot, which is the more useful fact.
-    var accessibilityLabel: Text {
-        guard let day, !weekdayName.isEmpty else { return weekdaylessLabel }
+    func accessibilityLabel(addressing address: TermOfAddress) -> Text {
+        guard let day, !weekdayName.isEmpty else { return weekdaylessLabel(addressing: address) }
         let dayName = isToday ? Text("Today") : Text(verbatim: weekdayName)
         if isFuture { return Text("\(dayName), day \(day)") }
-        if let tag { return Text("\(dayName), day \(day), feeling \(tag.label)") }
+        if let tag { return Text("\(dayName), day \(day), feeling \(tag.label(addressing: address))") }
         if hasData { return Text("\(dayName), day \(day), has data") }
         return Text("\(dayName), day \(day)")
     }
@@ -1068,16 +1120,15 @@ struct JournalMonthCell: Identifiable {
     /// whose `Date` the layout calendar could not resolve.
     ///
     /// Kept as whole sentences rather than degrading to `Text("\(Text(verbatim: "")), day 5")`,
-    /// which would put a leading comma into a translated string and into speech. A computed
-    /// property rather than a `func` taking the day, so the `guard` that unwraps it lives here
-    /// once.
-    private var weekdaylessLabel: Text {
+    /// which would put a leading comma into a translated string and into speech. It unwraps the
+    /// day itself, so the `guard` lives here once; `address` agrees the spoken feeling.
+    private func weekdaylessLabel(addressing address: TermOfAddress) -> Text {
         guard let day else { return Text("Empty calendar cell") }
         if isFuture { return Text("Day \(day)") }
         if let tag {
             return isToday
-                ? Text("Today, day \(day), feeling \(tag.label)")
-                : Text("Day \(day), feeling \(tag.label)")
+                ? Text("Today, day \(day), feeling \(tag.label(addressing: address))")
+                : Text("Day \(day), feeling \(tag.label(addressing: address))")
         }
         if hasData {
             return isToday ? Text("Today, day \(day), has data") : Text("Day \(day), has data")
@@ -1159,12 +1210,14 @@ struct JournalMonthModel {
 struct JournalRow: View {
     var entry: JournalEntry
     var compact = false
+    /// The user's term of address, which the Quiet and Tired labels agree with.
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Circle().fill(entry.tag.color).frame(width: 10, height: 10)
-                Text(entry.tag.label).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
+                Text(entry.tag.label(addressing: termOfAddress)).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
                 if compact {
                     Text(FernletDate.shortDate(for: entry.date)).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
                 }
@@ -1211,6 +1264,9 @@ struct JournalRow: View {
 struct DayDetailView: View {
     var store: FernletStore
     var dateKey: String
+    /// The user's term of address (the app root sets it from the body profile), which the review
+    /// line's feeling phrase agrees with.
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
     /// The injected capture-friction state, read here only to RE-INJECT into the two sheets this
     /// view presents (``DayEditSheet``, ``JournalEntryEditorSheet``) — the explicit
     /// per-presentation-site convention; a missing environment object in a sheet is a runtime
@@ -1234,33 +1290,62 @@ struct DayDetailView: View {
         FernletDate.date(fromDayKey: dateKey) ?? .now
     }
 
-    private var navigationTitle: String {
-        if dateKey == store.todayKey { return "Today" }
-        return date.formatted(.dateTime.month(.abbreviated).day())
+    /// `Text`, not `String`: `.navigationTitle(_:)` takes a `String` through its verbatim overload,
+    /// so "Today" rendered in English in every language.
+    private var navigationTitle: Text {
+        if dateKey == store.todayKey { return Text("Today") }
+        return Text(verbatim: date.formatted(.dateTime.month(.abbreviated).day()))
     }
 
-    private var reviewTitle: String {
-        if dateKey == store.todayKey { return "Today so far" }
+    /// The review card's heading. `Text` for the same reason as ``navigationTitle``; the weekday is
+    /// already localized by `formatted`, so it fills the `%@` of a whole sentence a translator can
+    /// reorder.
+    private var reviewTitle: Text {
+        if dateKey == store.todayKey { return Text("Today so far") }
         let cal = Calendar.current
         if let yesterday = cal.date(byAdding: .day, value: -1, to: .now),
-           FernletDate.dayKey(for: yesterday) == dateKey { return "Yesterday" }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE"
-        return "Your \(formatter.string(from: date))"
+           FernletDate.dayKey(for: yesterday) == dateKey { return Text("Yesterday") }
+        let weekday = date.formatted(.dateTime.weekday(.wide))
+        return Text("Your \(weekday)", comment: "Day review heading for a past day, e.g. 'Your Tuesday'. The argument is the weekday's name.")
     }
 
+    /// The review card's line: the on-device day summary when one exists, else a short list of
+    /// what the day holds.
+    ///
+    /// Each list item is a WHOLE phrase from the catalog — the feeling and sleep phrases per case,
+    /// the three counts plural-ruled in the catalog — and only the " · " separator joins them, the
+    /// shape the Messages recipe card's subtitle uses for independent counts. It used to splice
+    /// English plurals ("meal"/"meals") and lowercase a localized word in code, which no catalog
+    /// could translate.
     private var reviewBlurb: String {
         if let summary = dailyHealthScore.daySummaryText?.trimmingCharacters(in: .whitespacesAndNewlines), summary.isEmpty == false {
             return summary
         }
         var parts: [String] = []
-        if let tag = day.journals.last?.tag { parts.append("Feeling \(tag.label.lowercased())") }
-        if day.meals.count > 0 { parts.append("\(day.meals.count) \(day.meals.count == 1 ? "meal" : "meals")") }
-        if day.workouts.count > 0 { parts.append(day.workouts.count == 1 ? "a workout" : "\(day.workouts.count) workouts") }
-        if let sleep = day.sleep { parts.append("\(sleep.quality.label.lowercased()) sleep") }
-        if day.bottleCount > 0 { parts.append("\(day.bottleCount) \(day.bottleCount == 1 ? "bottle" : "bottles")") }
-        if parts.isEmpty { return "Nothing logged yet. Tap \"Edit day\" to add missed details." }
+        if let tag = day.journals.last?.tag { parts.append(tag.dayBlurbPhrase(addressing: termOfAddress)) }
+        if day.meals.count > 0 {
+            parts.append(String(localized: "journal.day.blurb.meals", defaultValue: "\(day.meals.count) meals",
+                                comment: "Day review: how many meals were logged that day, e.g. '2 meals'. Plural-ruled in the catalog."))
+        }
+        if day.workouts.count > 0 {
+            parts.append(String(localized: "journal.day.blurb.workouts", defaultValue: "\(day.workouts.count) workouts",
+                                comment: "Day review: how many workouts were logged, e.g. 'a workout', '2 workouts'. Plural-ruled in the catalog; the English one-form reads 'a workout'."))
+        }
+        if let sleep = day.sleep { parts.append(sleep.quality.dayBlurbPhrase) }
+        if day.bottleCount > 0 { parts.append(Self.bottleCountText(day.bottleCount)) }
+        if parts.isEmpty {
+            return String(localized: "journal.day.blurb.empty",
+                          defaultValue: "Nothing logged yet. Tap \"Edit day\" to add missed details.",
+                          comment: "Day review line for a day with nothing logged. 'Edit day' is the button at the top right of the screen.")
+        }
         return parts.joined(separator: " · ")
+    }
+
+    /// "3 bottles" — the water count drawn in the review line and on the Water card, plural-ruled
+    /// in the catalog so English never reads "1 bottles" and a translator gets every form.
+    static func bottleCountText(_ count: Int) -> String {
+        String(localized: "journal.day.bottleCount", defaultValue: "\(count) bottles",
+               comment: "How many bottles of water were logged that day, e.g. '3 bottles'. Plural-ruled in the catalog.")
     }
 
     private var dailyHealthScore: DailyHealthScore {
@@ -1296,7 +1381,7 @@ struct DayDetailView: View {
         let tracked = MicronutrientGapAnalyzer.trackedNutrients.compactMap { nutrient -> DayMicronutrientBreakdownRow? in
             guard let value = nutrient.value(dayMicronutrients) else { return nil }
             return DayMicronutrientBreakdownRow(
-                name: nutrient.name,
+                name: nutrient.displayName,
                 value: value,
                 target: nutrient.recommendedDailyAmount,
                 unit: nutrient.unit,
@@ -1305,10 +1390,16 @@ struct DayDetailView: View {
         }
         let limitRows: [DayMicronutrientBreakdownRow] = [
             dayMicronutrients.sodium.map {
-                DayMicronutrientBreakdownRow(name: "Sodium", value: $0, target: Double(store.nutritionTargets.sodiumLimit), unit: "mg", isLimit: true)
+                DayMicronutrientBreakdownRow(
+                    name: String(localized: "journal.day.micronutrient.sodium", defaultValue: "Sodium",
+                                 comment: "Day review micronutrient row: sodium, shown against its daily limit"),
+                    value: $0, target: Double(store.nutritionTargets.sodiumLimit), unit: "mg", isLimit: true)
             },
             dayMicronutrients.saturatedFat.map {
-                DayMicronutrientBreakdownRow(name: "Saturated fat", value: $0, target: Double(store.nutritionTargets.saturatedFatLimit), unit: "g", isLimit: true)
+                DayMicronutrientBreakdownRow(
+                    name: String(localized: "journal.day.micronutrient.saturatedFat", defaultValue: "Saturated fat",
+                                 comment: "Day review micronutrient row: saturated fat, shown against its daily limit"),
+                    value: $0, target: Double(store.nutritionTargets.saturatedFatLimit), unit: "g", isLimit: true)
             },
             dayMicronutrients.sugar.map {
                 // The 50 g reference is the FDA **added-sugars** DRV
@@ -1317,7 +1408,10 @@ struct DayDetailView: View {
                 // an intentional over-strict approximation — the catalog does not separate
                 // added from total sugar per food. Kept as-is (not redesigned); the label
                 // stays "Sugar" because the value is total sugar, not added sugar.
-                DayMicronutrientBreakdownRow(name: "Sugar", value: $0, target: FDADailyValues.addedSugarsLimitGrams, unit: "g", isLimit: true)
+                DayMicronutrientBreakdownRow(
+                    name: String(localized: "journal.day.micronutrient.sugar", defaultValue: "Sugar",
+                                 comment: "Day review micronutrient row: total sugar, shown against a daily limit"),
+                    value: $0, target: FDADailyValues.addedSugarsLimitGrams, unit: "g", isLimit: true)
             }
         ].compactMap { $0 }
         return Array((tracked + limitRows).prefix(12))
@@ -1429,7 +1523,7 @@ struct DayDetailView: View {
     private var reviewCard: some View {
         FernletCard {
             VStack(alignment: .leading, spacing: 10) {
-                Text(reviewTitle)
+                reviewTitle
                     .font(.fernlet(.header))
                     .foregroundStyle(Color.bark)
                 Text(reviewBlurb)
@@ -1538,7 +1632,7 @@ struct DayDetailView: View {
                         .font(.caption)
                         .foregroundStyle(Color.slate)
                 }
-                Text(day.bottleCount == 0 ? "None logged" : "\(day.bottleCount) \(day.bottleCount == 1 ? "bottle" : "bottles")")
+                (day.bottleCount == 0 ? Text("None logged") : Text(verbatim: Self.bottleCountText(day.bottleCount)))
                     .font(.fernlet(.stat))
                     .foregroundStyle(day.bottleCount == 0 ? Color.slate : Color.bark)
                 if day.bottleCount > 0 {
@@ -1616,7 +1710,10 @@ struct DayDetailView: View {
                 }
                 PersonalCareTaskGrid {
                     ForEach(store.personalCareTasks) { task in
-                        Label(task.label, systemImage: task.systemImage)
+                        // `displayLabel`, not the stored `label`: a built-in task's stored label is
+                        // the English baked in at first launch, and only `displayLabel` resolves it
+                        // in the current language (a user's own task draws its own words either way).
+                        Label(task.displayLabel, systemImage: task.systemImage)
                             .font(.fernlet(.labelSmall))
                             .lineLimit(1)
                             .padding(.horizontal, 8)
@@ -1691,8 +1788,15 @@ struct DayMicronutrientBreakdownRow: Identifiable {
         "\(Self.formatted(value))\(unit)"
     }
 
+    /// "limit 2300mg" / "target 28g": one whole phrase per kind, so the word and the amount can be
+    /// reordered by a translator. It used to splice an English "limit"/"target" into the string.
     var targetText: String {
-        "\(isLimit ? "limit" : "target") \(Self.formatted(target))\(unit)"
+        let amount = "\(Self.formatted(target))\(unit)"
+        return isLimit
+            ? String(localized: "journal.day.micronutrient.limit", defaultValue: "limit \(amount)",
+                     comment: "Day review micronutrient row: the daily ceiling, e.g. 'limit 2300mg'. The argument is the amount with its unit.")
+            : String(localized: "journal.day.micronutrient.target", defaultValue: "target \(amount)",
+                     comment: "Day review micronutrient row: the daily goal, e.g. 'target 28g'. The argument is the amount with its unit.")
     }
 
     var statusColor: Color {
@@ -1773,6 +1877,8 @@ struct DayMicronutrientRow: View {
 struct DayEditSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    /// The user's term of address, which the Quiet and Tired chips agree with.
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
     var store: FernletStore
     var dateKey: String
     let initialDay: FernletDay
@@ -1917,7 +2023,7 @@ struct DayEditSheet: View {
             VStack(alignment: .leading, spacing: 10) {
                 FlowLayout(spacing: 8) {
                     ForEach(FeelingTag.allCases) { option in
-                        Button(option.label) { FernletFeedback.system.select(option, in: &journalTag) }
+                        Button(option.label(addressing: termOfAddress)) { FernletFeedback.system.select(option, in: &journalTag) }
                             .buttonStyle(ChipButtonStyle(selected: journalTag == option))
                     }
                 }
@@ -2032,7 +2138,8 @@ struct DayEditSheet: View {
             PersonalCareTaskGrid {
                 ForEach(store.personalCareTasks) { task in
                     Button { togglePersonalCareTask(task) } label: {
-                        Label(task.label, systemImage: task.systemImage)
+                        // `displayLabel`: see the same chip on ``DayDetailView``'s care card.
+                        Label(task.displayLabel, systemImage: task.systemImage)
                             .font(.fernlet(.labelSmall))
                             .lineLimit(1)
                             .padding(.horizontal, 8)

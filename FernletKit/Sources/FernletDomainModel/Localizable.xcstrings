@@ -721,6 +721,30 @@
         }
       }
     },
+    "biologicalSex.female" : {
+      "comment" : "Body profile: biological sex, used for energy and fiber targets",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Female"
+          }
+        }
+      }
+    },
+    "biologicalSex.male" : {
+      "comment" : "Body profile: biological sex, used for energy and fiber targets",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Male"
+          }
+        }
+      }
+    },
     "bodyArea.ankleFoot" : {
       "comment" : "Body area in the workout injury picker",
       "extractionState" : "extracted_with_value",
@@ -861,6 +885,773 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Morning"
+          }
+        }
+      }
+    },
+    "coachPlan.count.sets" : {
+      "comment" : "A number of sets, e.g. '0 sets', placed inside a coach plan review note. Needs a plural variation.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld set"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld sets"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "coachPlan.decode.tooManyDays" : {
+      "comment" : "Pasted coach plan refused. Arguments: how many days it has (always more than the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This plan has %1$lld days. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.decode.tooManyEditExercises" : {
+      "comment" : "Pasted coach plan refused: one of its changes to a planned workout lists too many exercises. Arguments: how many (always more than the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "\"an edit\" has %1$lld exercises. Fernlet accepts up to %2$lld per session."
+          }
+        }
+      }
+    },
+    "coachPlan.decode.tooManyEdits" : {
+      "comment" : "Pasted coach plan refused. Arguments: how many planned workouts it changes (always more than the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This plan changes %1$lld workouts you'd already planned. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.decode.tooManyExercises" : {
+      "comment" : "Pasted coach plan refused. Arguments: the session's title as the plan wrote it, how many exercises it lists (always more than the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "\"%1$@\" has %2$lld exercises. Fernlet accepts up to %3$lld per session."
+          }
+        }
+      }
+    },
+    "coachPlan.decode.tooManyMuscles" : {
+      "comment" : "Pasted coach plan refused. Arguments: the exercise's name as the plan wrote it, how many muscles it lists (always more than Fernlet knows), then how many Fernlet knows.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "\"%1$@\" lists %2$lld muscles. Fernlet knows %3$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.decode.tooManyNewExercises" : {
+      "comment" : "Pasted coach plan refused. Arguments: how many new exercises it defines (always more than the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This plan defines %1$lld new exercises. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.decode.tooManySessions" : {
+      "comment" : "Pasted coach plan refused. Arguments: the plan day, how many sessions it has (always more than the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Day %1$lld has %2$lld sessions. Fernlet accepts up to %3$lld per day."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.changeAltersNothing" : {
+      "comment" : "Coach plan review note (the plan still imports). Argument: the planned workout's title as the plan wrote it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A change to \"%@\" alters nothing; it will be skipped."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.changeAltersNothingUntitled" : {
+      "comment" : "Coach plan review note (the plan still imports): a change to an unnamed planned workout changes nothing",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A change to \"a planned workout\" alters nothing; it will be skipped."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.changeHasUnnamedExercise" : {
+      "comment" : "Coach plan review problem. Argument: the planned workout's title as the plan wrote it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A change to \"%@\" has an exercise with no name."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.changeHasUnnamedExerciseUntitled" : {
+      "comment" : "Coach plan review problem: a change to an unnamed planned workout lists an exercise without a name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A change to \"a planned workout\" has an exercise with no name."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.dayOutOfRange" : {
+      "comment" : "Coach plan review problem. Arguments: the highest day number allowed, then the day number the plan used.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Day numbers must run from 1 to %1$lld; found %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.dayRepeated" : {
+      "comment" : "Coach plan review problem. Argument: the plan day number that appears twice.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Day %lld appears more than once."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.dayTreatedAsRest" : {
+      "comment" : "Coach plan review note (the plan still imports). Argument: the plan day number.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Day %lld has no sessions and isn't marked a rest day; it will be treated as rest."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.definitionHasNoName" : {
+      "comment" : "Coach plan review problem: a new exercise the plan defines has no name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "An exercise definition has no name."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.definitionHasNoPrimaryMuscles" : {
+      "comment" : "Coach plan review problem. Argument: the new exercise's name as the plan wrote it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "\"%@\" lists no primary muscles, so Fernlet can't check it against the muscles you avoid."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.definitionNameTooLong" : {
+      "comment" : "Coach plan review problem: a new exercise's name is longer than Fernlet accepts",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That exercise name is too long."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.duplicateChangeTarget" : {
+      "comment" : "Coach plan review problem: two changes in the plan name the same planned workout",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Two changes target the same planned workout; Fernlet can't apply both."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.exerciseHasNoReps" : {
+      "comment" : "Coach plan review problem. Argument: the exercise's name as the plan wrote it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ has no reps."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.newerFormat" : {
+      "comment" : "Coach plan review problem. Argument: the plan format's version number.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This plan uses a newer format (version %lld). Update Fernlet to open it."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.notAFernletPlan" : {
+      "comment" : "Coach plan review problem: the pasted JSON is not in Fernlet's plan format",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This doesn't look like a Fernlet workout plan."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.planIsEmpty" : {
+      "comment" : "Coach plan review problem: the plan proposes nothing at all",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This plan has no days and changes nothing."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.replacementListsNothing" : {
+      "comment" : "Coach plan review problem: a change replaces a planned workout but lists no exercises",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A replacement has to say what the workout becomes, and this one lists no exercises."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.restClamped" : {
+      "comment" : "Coach plan review note (the plan still imports). Arguments: the exercise's name, its rest in seconds ('s' is the seconds symbol), then the most Fernlet accepts.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$llds rest is outside 0-%3$lld; it will be clamped."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.sessionHasUnnamedExercise" : {
+      "comment" : "Coach plan review problem. Argument: the session's title as the plan wrote it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "\"%@\" has an exercise with no name."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.sessionHasUnnamedExerciseUntitled" : {
+      "comment" : "Coach plan review problem: an untitled session lists an exercise without a name. Argument: the plan day number.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "\"Day %lld session\" has an exercise with no name."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.sessionPrescribesNothing" : {
+      "comment" : "Coach plan review problem. Argument: the session's title as the plan wrote it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "\"%@\" has no exercises and no conditioning description."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.sessionPrescribesNothingUntitled" : {
+      "comment" : "Coach plan review problem: an untitled session prescribes nothing. Argument: the plan day number.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "\"Day %lld session\" has no exercises and no conditioning description."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.setsClamped" : {
+      "comment" : "Coach plan review note (the plan still imports). Arguments: the exercise's name, its set count (e.g. '0 sets'), then the most sets Fernlet accepts.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$@ is outside 1-%3$lld; it will be clamped."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.tooLong.coachName" : {
+      "comment" : "Coach plan review problem: the name the plan gives its author is too long. Arguments: the length (always over the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That coach name is %1$lld characters. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.tooLong.conditioning" : {
+      "comment" : "Coach plan review problem: a conditioning description (e.g. '20 min easy run') is too long. Arguments: the length (always over the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That conditioning is %1$lld characters. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.tooLong.dayTitle" : {
+      "comment" : "Coach plan review problem. Arguments: the length (always over the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That day title is %1$lld characters. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.tooLong.exerciseName" : {
+      "comment" : "Coach plan review problem. Arguments: the length (always over the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That exercise name is %1$lld characters. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.tooLong.guidance" : {
+      "comment" : "Coach plan review problem: an exercise's guidance text is too long. Arguments: the length (always over the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That guidance is %1$lld characters. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.tooLong.notes" : {
+      "comment" : "Coach plan review problem: a change's notes are too long. Arguments: the length (always over the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That notes is %1$lld characters. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.tooLong.planNotes" : {
+      "comment" : "Coach plan review problem: the plan's notes are too long. Arguments: the length (always over the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That plan notes is %1$lld characters. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.tooLong.planTitle" : {
+      "comment" : "Coach plan review problem. Arguments: the length (always over the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That plan title is %1$lld characters. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.tooLong.reps" : {
+      "comment" : "Coach plan review problem: an exercise's reps text (e.g. '8-10') is too long. Arguments: the length (always over the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That reps is %1$lld characters. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.tooLong.sessionNotes" : {
+      "comment" : "Coach plan review problem: a session's notes are too long. Arguments: the length (always over the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That session notes is %1$lld characters. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.tooLong.sessionTitle" : {
+      "comment" : "Coach plan review problem. Arguments: the length (always over the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That session title is %1$lld characters. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.tooLong.workoutTitle" : {
+      "comment" : "Coach plan review problem: a change's new workout title is too long. Arguments: the length (always over the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That workout title is %1$lld characters. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.undefinedExercise" : {
+      "comment" : "Coach plan review problem. Argument: the exercise's name as the plan wrote it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "\"%@\" isn't in your exercise list and the plan doesn't define it. Ask for its muscles, equipment, and movement pattern, then paste again."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.unknownChangeType" : {
+      "comment" : "Coach plan review problem. Arguments: the change word the plan used, then the plan format's change words, which are code and stay in English.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unknown change type \"%1$@\". Expected one of: %2$@"
+          }
+        }
+      }
+    },
+    "coachPlan.issue.unknownEquipment" : {
+      "comment" : "Coach plan review problem. Arguments: the equipment word the plan used, then the plan format's equipment words, which are code and stay in English.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unknown equipment \"%1$@\". Expected one of: %2$@"
+          }
+        }
+      }
+    },
+    "coachPlan.issue.unknownMovementPattern" : {
+      "comment" : "Coach plan review problem. Arguments: the movement word the plan used, then the plan format's movement words, which are code and stay in English.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unknown movement pattern \"%1$@\". Expected one of: %2$@"
+          }
+        }
+      }
+    },
+    "coachPlan.issue.unknownMuscle" : {
+      "comment" : "Coach plan review problem. Arguments: the muscle word the plan used, then the plan format's muscle words, which are code and stay in English.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unknown muscle \"%1$@\". Expected one of: %2$@"
+          }
+        }
+      }
+    },
+    "coachPlan.issue.unknownSessionKind" : {
+      "comment" : "Coach plan review note (the plan still imports). Argument: the session kind word the plan used, which is code.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unknown session kind \"%@\"; treating it as strength."
+          }
+        }
+      }
+    },
+    "coachPlan.stamp.changed" : {
+      "comment" : "Note line on a planned workout a pasted plan changed. Arguments: who wrote the plan, then the plan's title.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Changed by %1$@ from \"%2$@\"."
+          }
+        }
+      }
+    },
+    "coachPlan.stamp.changedUnnamed" : {
+      "comment" : "Note line on a planned workout a pasted AI plan changed. Argument: the plan's title.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Changed by an assistant from \"%@\"."
+          }
+        }
+      }
+    },
+    "coachPlan.stamp.imported" : {
+      "comment" : "Note line on a workout that came from a pasted plan. Arguments: the plan's day number, the plan's title, then who wrote it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Day %1$lld of \"%2$@\", imported from %3$@."
+          }
+        }
+      }
+    },
+    "coachPlan.stamp.importedUnnamed" : {
+      "comment" : "Note line on a workout that came from a pasted AI plan. Arguments: the plan's day number, then the plan's title.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Day %1$lld of \"%2$@\", imported from an assistant."
+          }
+        }
+      }
+    },
+    "companionAccessory.flower" : {
+      "comment" : "Wardrobe: head accessory, a flower",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Flower"
+          }
+        }
+      }
+    },
+    "companionAccessory.glasses" : {
+      "comment" : "Wardrobe: face accessory, a pair of glasses",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Glasses"
+          }
+        }
+      }
+    },
+    "companionAccessory.none" : {
+      "comment" : "Wardrobe: no head accessory on the companion",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "None"
+          }
+        }
+      }
+    },
+    "companionAccessory.sprout" : {
+      "comment" : "Wardrobe: head accessory, a small leaf sprout",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sprout"
+          }
+        }
+      }
+    },
+    "companionBodyStyle.circle" : {
+      "comment" : "Wardrobe: companion body shape, a round circle",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Circle"
+          }
+        }
+      }
+    },
+    "companionBodyStyle.pear" : {
+      "comment" : "Wardrobe: companion body shape, pear-shaped",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pear"
+          }
+        }
+      }
+    },
+    "companionBodyStyle.puddle" : {
+      "comment" : "Wardrobe: companion body shape, low and spread out like a puddle",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Puddle"
+          }
+        }
+      }
+    },
+    "companionBodyStyle.softBlob" : {
+      "comment" : "Wardrobe: companion body shape, a soft rounded blob",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Soft"
+          }
+        }
+      }
+    },
+    "companionClothing.none" : {
+      "comment" : "Wardrobe: no clothing on the companion",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "None"
+          }
+        }
+      }
+    },
+    "companionClothing.scarf" : {
+      "comment" : "Wardrobe: clothing, a scarf",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Scarf"
+          }
+        }
+      }
+    },
+    "companionClothing.sleepCap" : {
+      "comment" : "Wardrobe: clothing, a nightcap for sleeping",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sleep cap"
           }
         }
       }
@@ -1249,6 +2040,126 @@
         }
       }
     },
+    "companionPalette.fern" : {
+      "comment" : "Companion palette: light green",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fern"
+          }
+        }
+      }
+    },
+    "companionPalette.rose" : {
+      "comment" : "Companion palette: pink",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rose"
+          }
+        }
+      }
+    },
+    "companionPalette.slate" : {
+      "comment" : "Companion palette: blue-grey",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Slate"
+          }
+        }
+      }
+    },
+    "companionPalette.state" : {
+      "comment" : "Companion palette that follows the day's mood instead of a fixed colour",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mood"
+          }
+        }
+      }
+    },
+    "companionPalette.sun" : {
+      "comment" : "Companion palette: yellow",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sun"
+          }
+        }
+      }
+    },
+    "companionSideItem.book" : {
+      "comment" : "Wardrobe: item beside the companion, a book",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Book"
+          }
+        }
+      }
+    },
+    "companionSideItem.dumbbell" : {
+      "comment" : "Wardrobe: item beside the companion, a small dumbbell",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Weight"
+          }
+        }
+      }
+    },
+    "companionSideItem.mug" : {
+      "comment" : "Wardrobe: item beside the companion, a mug",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mug"
+          }
+        }
+      }
+    },
+    "companionSideItem.none" : {
+      "comment" : "Wardrobe: nothing held beside the companion",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "None"
+          }
+        }
+      }
+    },
+    "companionSideItem.waterBottle" : {
+      "comment" : "Wardrobe: item beside the companion, a water bottle",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bottle"
+          }
+        }
+      }
+    },
     "companionState.okay" : {
       "comment" : "Companion wellbeing state: steady",
       "extractionState" : "extracted_with_value",
@@ -1305,6 +2216,42 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Tired"
+          }
+        }
+      }
+    },
+    "connectionInspector.mode.disabled" : {
+      "comment" : "Settings, Connection Inspector mode picker: records nothing",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Disabled"
+          }
+        }
+      }
+    },
+    "connectionInspector.mode.live" : {
+      "comment" : "Settings, Connection Inspector mode picker: shows connections as they happen",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Live"
+          }
+        }
+      }
+    },
+    "connectionInspector.mode.passive" : {
+      "comment" : "Settings, Connection Inspector mode picker: records quietly in the background",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Passive"
           }
         }
       }
@@ -28543,6 +29490,66 @@
         }
       }
     },
+    "foodItem.dataSource.aiEstimate" : {
+      "comment" : "Food search row tag: a food whose nutrition the on-device AI estimated",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "AI estimate"
+          }
+        }
+      }
+    },
+    "foodItem.dataSource.branded" : {
+      "comment" : "Food search row tag: a branded product with no brand name on record",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Branded"
+          }
+        }
+      }
+    },
+    "foodItem.dataSource.manual" : {
+      "comment" : "Food search row tag: a food the person created themselves",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your foods"
+          }
+        }
+      }
+    },
+    "foodItem.dataSource.restaurant" : {
+      "comment" : "Food search row tag: a restaurant item with no restaurant name on record",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Restaurant"
+          }
+        }
+      }
+    },
+    "foodItem.dataSource.usda" : {
+      "comment" : "Food search row tag: a reference food from the US Department of Agriculture's database. 'USDA' is the agency's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "USDA"
+          }
+        }
+      }
+    },
     "foodItemSource.openFoodFacts.attribution" : {
       "comment" : "Attribution shown wherever a food imported from the Open Food Facts database is displayed. 'Open Food Facts' is the database's name and 'ODbL' (Open Database License) is its licence — keep both untranslated.",
       "extractionState" : "extracted_with_value",
@@ -28551,6 +29558,246 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Data from Open Food Facts (ODbL)"
+          }
+        }
+      }
+    },
+    "goal.balanced.nutrition" : {
+      "comment" : "Goal card: how the Wellness, Mental Health and Exploring goals set daily nutrition",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Balanced maintenance · steady protein"
+          }
+        }
+      }
+    },
+    "goal.exploring.name" : {
+      "comment" : "Goal preset name: trying things out to learn what helps",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Exploring"
+          }
+        }
+      }
+    },
+    "goal.exploring.tagline" : {
+      "comment" : "Goal preset card: one-line description of the Exploring goal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Learn what feels useful."
+          }
+        }
+      }
+    },
+    "goal.exploring.training" : {
+      "comment" : "Goal card and Move tab: the training split the Exploring goal recommends",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Flexible splits based on what feels useful."
+          }
+        }
+      }
+    },
+    "goal.mentalHealth.name" : {
+      "comment" : "Goal preset name: mood and steadiness first",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mental Health"
+          }
+        }
+      }
+    },
+    "goal.mentalHealth.tagline" : {
+      "comment" : "Goal preset card: one-line description of the Mental Health goal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mood and steadiness first."
+          }
+        }
+      }
+    },
+    "goal.mentalHealth.training" : {
+      "comment" : "Goal card and Move tab: the training split the Mental Health goal recommends",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Gentle movement, cardio, and recovery anchors."
+          }
+        }
+      }
+    },
+    "goal.recovery.name" : {
+      "comment" : "Goal preset name: resting and recovering",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Recovery"
+          }
+        }
+      }
+    },
+    "goal.recovery.nutrition" : {
+      "comment" : "Goal card: how the Recovery goal sets daily nutrition",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Maintenance calories · easy on the body"
+          }
+        }
+      }
+    },
+    "goal.recovery.tagline" : {
+      "comment" : "Goal preset card: one-line description of the Recovery goal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rest, hydration, and gentle care."
+          }
+        }
+      }
+    },
+    "goal.recovery.training" : {
+      "comment" : "Goal card and Move tab: the training split the Recovery goal recommends",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Recovery-first movement with optional light strength."
+          }
+        }
+      }
+    },
+    "goal.sportsPrep.name" : {
+      "comment" : "Goal preset name: training for a sport",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sports Prep"
+          }
+        }
+      }
+    },
+    "goal.sportsPrep.nutrition" : {
+      "comment" : "Goal card: how the Sports Prep goal sets daily nutrition (grams of protein per kilogram of body weight)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fuelled for training · high protein (~1.6 g/kg)"
+          }
+        }
+      }
+    },
+    "goal.sportsPrep.tagline" : {
+      "comment" : "Goal preset card: one-line description of the Sports Prep goal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Train for your sport."
+          }
+        }
+      }
+    },
+    "goal.sportsPrep.training" : {
+      "comment" : "Goal card and Move tab: the training split the Sports Prep goal recommends",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sport-specific training with strength and conditioning."
+          }
+        }
+      }
+    },
+    "goal.strength.name" : {
+      "comment" : "Goal preset name: getting stronger",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Strength"
+          }
+        }
+      }
+    },
+    "goal.strength.nutrition" : {
+      "comment" : "Goal card: how the Strength goal sets daily nutrition (grams of protein per kilogram of body weight)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A little more to grow on · high protein (~1.7 g/kg)"
+          }
+        }
+      }
+    },
+    "goal.strength.tagline" : {
+      "comment" : "Goal preset card: one-line description of the Strength goal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fuel, train, and recover."
+          }
+        }
+      }
+    },
+    "goal.strength.training" : {
+      "comment" : "Goal card and Move tab: the training split the Strength goal recommends",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Upper, lower, and full-body days across the week."
+          }
+        }
+      }
+    },
+    "goal.weightManagement.name" : {
+      "comment" : "Goal preset name: managing body weight gently",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Weight Management"
           }
         }
       }
@@ -28599,6 +29846,66 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "A gentle calorie deficit (up to %@, your choice) · higher protein"
+          }
+        }
+      }
+    },
+    "goal.weightManagement.tagline" : {
+      "comment" : "Goal preset card: one-line description of the Weight Management goal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Steady habits without pressure."
+          }
+        }
+      }
+    },
+    "goal.weightManagement.training" : {
+      "comment" : "Goal card and Move tab: the training split the Weight Management goal recommends",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Strength days mixed with cardio and recovery."
+          }
+        }
+      }
+    },
+    "goal.wellness.name" : {
+      "comment" : "Goal preset name: balanced everyday care",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Wellness"
+          }
+        }
+      }
+    },
+    "goal.wellness.tagline" : {
+      "comment" : "Goal preset card: one-line description of the Wellness goal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Balanced daily care."
+          }
+        }
+      }
+    },
+    "goal.wellness.training" : {
+      "comment" : "Goal card and Move tab: the training split the Wellness goal recommends",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Balanced strength, cardio, and rest days."
           }
         }
       }
@@ -28903,6 +30210,150 @@
         }
       }
     },
+    "homeWidget.ambient" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: small seasonal and time-of-day moments",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Moments"
+          }
+        }
+      }
+    },
+    "homeWidget.companion" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: the companion creature and its speech bubble",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Companion"
+          }
+        }
+      }
+    },
+    "homeWidget.firstAid" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: the card that opens calming tools and crisis support",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "First aid"
+          }
+        }
+      }
+    },
+    "homeWidget.hygiene" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: the personal care checklist card",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Personal care"
+          }
+        }
+      }
+    },
+    "homeWidget.journal" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: a button that opens the journal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Journal"
+          }
+        }
+      }
+    },
+    "homeWidget.logFood" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: a button that opens food logging",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Log food"
+          }
+        }
+      }
+    },
+    "homeWidget.macros" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: the protein, carbs and fat card",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Macros"
+          }
+        }
+      }
+    },
+    "homeWidget.mealPhotos" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: photos of recent meals",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Recent bites"
+          }
+        }
+      }
+    },
+    "homeWidget.milestones" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: gentle milestones reached",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Milestones"
+          }
+        }
+      }
+    },
+    "homeWidget.newRecipe" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: a button that starts a new recipe",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "New recipe"
+          }
+        }
+      }
+    },
+    "homeWidget.quickLog" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: the grid of quick-log tiles",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Quick log"
+          }
+        }
+      }
+    },
+    "homeWidget.recipeBook" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: a button that opens the saved recipes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Recipe book"
+          }
+        }
+      }
+    },
     "homeWidget.sillyStats" : {
       "comment" : "Home widget name: the card of deliberately useless lifetime stats",
       "extractionState" : "extracted_with_value",
@@ -28911,6 +30362,78 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Silly stats"
+          }
+        }
+      }
+    },
+    "homeWidget.sleep" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: a button that logs sleep",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sleep"
+          }
+        }
+      }
+    },
+    "homeWidget.todayIntent" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: the card holding the user's intention for today",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Today's intent"
+          }
+        }
+      }
+    },
+    "homeWidget.todaySummary" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: today's summary card",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Today"
+          }
+        }
+      }
+    },
+    "homeWidget.trends" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: the weekly trends card",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Trends"
+          }
+        }
+      }
+    },
+    "homeWidget.water" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: a button that logs water",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Water"
+          }
+        }
+      }
+    },
+    "homeWidget.workout" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: a button that logs a workout",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Workout"
           }
         }
       }
@@ -29659,6 +31182,18 @@
         }
       }
     },
+    "nutrient.calcium" : {
+      "comment" : "Nutrient name: the mineral",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Calcium"
+          }
+        }
+      }
+    },
     "nutrient.calories" : {
       "comment" : "Nutrition field name: energy",
       "extractionState" : "extracted_with_value",
@@ -29719,6 +31254,42 @@
         }
       }
     },
+    "nutrient.folate" : {
+      "comment" : "Nutrient name: folate (vitamin B9)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Folate"
+          }
+        }
+      }
+    },
+    "nutrient.iron" : {
+      "comment" : "Nutrient name: the mineral",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Iron"
+          }
+        }
+      }
+    },
+    "nutrient.magnesium" : {
+      "comment" : "Nutrient name: the mineral",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Magnesium"
+          }
+        }
+      }
+    },
     "nutrient.monounsaturatedFat" : {
       "comment" : "Nutrition field name: monounsaturated fat",
       "extractionState" : "extracted_with_value",
@@ -29731,6 +31302,18 @@
         }
       }
     },
+    "nutrient.omega3" : {
+      "comment" : "Nutrient name: omega-3 fatty acids",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Omega-3"
+          }
+        }
+      }
+    },
     "nutrient.polyunsaturatedFat" : {
       "comment" : "Nutrition field name: polyunsaturated fat",
       "extractionState" : "extracted_with_value",
@@ -29739,6 +31322,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Polyunsaturated fat"
+          }
+        }
+      }
+    },
+    "nutrient.potassium" : {
+      "comment" : "Nutrient name: the mineral",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Potassium"
           }
         }
       }
@@ -29811,6 +31406,54 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Trans fat"
+          }
+        }
+      }
+    },
+    "nutrient.vitaminB12" : {
+      "comment" : "Nutrient name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Vitamin B12"
+          }
+        }
+      }
+    },
+    "nutrient.vitaminC" : {
+      "comment" : "Nutrient name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Vitamin C"
+          }
+        }
+      }
+    },
+    "nutrient.vitaminD" : {
+      "comment" : "Nutrient name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Vitamin D"
+          }
+        }
+      }
+    },
+    "nutrient.zinc" : {
+      "comment" : "Nutrient name: the mineral",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Zinc"
           }
         }
       }
@@ -29923,6 +31566,162 @@
         }
       }
     },
+    "quickLog.breathing" : {
+      "comment" : "Home quick-log tile and its editor: start the slow breathing exercise",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Slow breathing"
+          }
+        }
+      }
+    },
+    "quickLog.care" : {
+      "comment" : "Home quick-log tile and its editor: the personal care checklist",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Care"
+          }
+        }
+      }
+    },
+    "quickLog.friends" : {
+      "comment" : "Home quick-log tile and its editor: open friends",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Friends"
+          }
+        }
+      }
+    },
+    "quickLog.grounding" : {
+      "comment" : "Home quick-log tile and its editor: start the grounding exercise",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Grounding"
+          }
+        }
+      }
+    },
+    "quickLog.intimacyTracking" : {
+      "comment" : "Home quick-log tile and its editor: open intimacy notes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intimacy"
+          }
+        }
+      }
+    },
+    "quickLog.journal" : {
+      "comment" : "Home quick-log tile and its editor: open the journal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Journal"
+          }
+        }
+      }
+    },
+    "quickLog.logPeriod" : {
+      "comment" : "Home quick-log tile and its editor: log a period day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Log period"
+          }
+        }
+      }
+    },
+    "quickLog.meal" : {
+      "comment" : "Home quick-log tile and its editor: log a meal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Meal"
+          }
+        }
+      }
+    },
+    "quickLog.move" : {
+      "comment" : "Home quick-log tile and its editor: log movement",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Move"
+          }
+        }
+      }
+    },
+    "quickLog.periodTracking" : {
+      "comment" : "Home quick-log tile and its editor: open the cycle page (not a logging action)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cycle page"
+          }
+        }
+      }
+    },
+    "quickLog.sleep" : {
+      "comment" : "Home quick-log tile and its editor: log sleep",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sleep"
+          }
+        }
+      }
+    },
+    "quickLog.water" : {
+      "comment" : "Home quick-log tile and its editor: log water",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Water"
+          }
+        }
+      }
+    },
+    "quickLog.worryBox" : {
+      "comment" : "Home quick-log tile and its editor: open the worry box",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Worry box"
+          }
+        }
+      }
+    },
     "recipeImport.error.emptyRecipe" : {
       "comment" : "Import recipe screen: the pasted recipe has no name or no ingredients.",
       "extractionState" : "extracted_with_value",
@@ -29979,6 +31778,198 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Part %lld"
+          }
+        }
+      }
+    },
+    "recipeUnit.cup" : {
+      "comment" : "Recipe unit menu: US measuring cups",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cups"
+          }
+        }
+      }
+    },
+    "recipeUnit.each" : {
+      "comment" : "Recipe unit menu: whole items, a count ('2 each')",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Each"
+          }
+        }
+      }
+    },
+    "recipeUnit.fluidOunce" : {
+      "comment" : "Recipe unit menu: US fluid ounces (a volume)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "US Fluid Ounces"
+          }
+        }
+      }
+    },
+    "recipeUnit.glass" : {
+      "comment" : "Recipe unit menu: a drinking glass, counted as 12 US fluid ounces",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Glass (12 US fl oz)"
+          }
+        }
+      }
+    },
+    "recipeUnit.gram" : {
+      "comment" : "Recipe unit menu: grams",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Grams"
+          }
+        }
+      }
+    },
+    "recipeUnit.kilogram" : {
+      "comment" : "Recipe unit menu: kilograms",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Kilograms"
+          }
+        }
+      }
+    },
+    "recipeUnit.liter" : {
+      "comment" : "Recipe unit menu: liters",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Liters"
+          }
+        }
+      }
+    },
+    "recipeUnit.milligram" : {
+      "comment" : "Recipe unit menu: milligrams",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Milligrams"
+          }
+        }
+      }
+    },
+    "recipeUnit.milliliter" : {
+      "comment" : "Recipe unit menu: milliliters",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Milliliters"
+          }
+        }
+      }
+    },
+    "recipeUnit.ounce" : {
+      "comment" : "Recipe unit menu: ounces by weight",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ounces"
+          }
+        }
+      }
+    },
+    "recipeUnit.piece" : {
+      "comment" : "Recipe unit menu: pieces, a count",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pieces"
+          }
+        }
+      }
+    },
+    "recipeUnit.pound" : {
+      "comment" : "Recipe unit menu: pounds by weight",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pounds"
+          }
+        }
+      }
+    },
+    "recipeUnit.serving" : {
+      "comment" : "Recipe unit menu: servings",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Servings"
+          }
+        }
+      }
+    },
+    "recipeUnit.slice" : {
+      "comment" : "Recipe unit menu: slices, a count",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Slices"
+          }
+        }
+      }
+    },
+    "recipeUnit.tablespoon" : {
+      "comment" : "Recipe unit menu: tablespoons",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tablespoons"
+          }
+        }
+      }
+    },
+    "recipeUnit.teaspoon" : {
+      "comment" : "Recipe unit menu: teaspoons",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Teaspoons"
           }
         }
       }
@@ -30732,6 +32723,186 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Fairly consistent"
+          }
+        }
+      }
+    },
+    "workoutFallback.balancedStrengthCircuit" : {
+      "comment" : "Name of a suggested workout: a moderate full-body strength circuit",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Balanced Strength Circuit"
+          }
+        }
+      }
+    },
+    "workoutFallback.curiousChallenge" : {
+      "comment" : "Name of a suggested workout: a contained experiment for a high-energy day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Curious Challenge"
+          }
+        }
+      }
+    },
+    "workoutFallback.hardStrengthDay" : {
+      "comment" : "Name of a suggested workout: a heavy strength session",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hard Strength Day"
+          }
+        }
+      }
+    },
+    "workoutFallback.lowFrictionWalk" : {
+      "comment" : "Name of a suggested workout: a brisk walk that is easy to start",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Low Friction Walk"
+          }
+        }
+      }
+    },
+    "workoutFallback.moodReset" : {
+      "comment" : "Name of a suggested workout: an outdoor walk and breathing, to lift the mood",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mood Reset"
+          }
+        }
+      }
+    },
+    "workoutFallback.moveAndStrength" : {
+      "comment" : "Name of a suggested workout: walking mixed with strength moves",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Move And Strength"
+          }
+        }
+      }
+    },
+    "workoutFallback.recoveryFlow" : {
+      "comment" : "Name of a suggested workout: gentle mobility for recovery",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Recovery Flow"
+          }
+        }
+      }
+    },
+    "workoutFallback.softRebuild" : {
+      "comment" : "Name of a suggested workout: light strength work after time off",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Soft Rebuild"
+          }
+        }
+      }
+    },
+    "workoutFallback.steadyCareWalk" : {
+      "comment" : "Name of a suggested workout: an easy walk and a gentle stretch",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Steady Care Walk"
+          }
+        }
+      }
+    },
+    "workoutFallback.steadyMindCircuit" : {
+      "comment" : "Name of a suggested workout: a predictable, calming bodyweight circuit",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Steady Mind Circuit"
+          }
+        }
+      }
+    },
+    "workoutFallback.strengthBase" : {
+      "comment" : "Name of a suggested workout: a repeatable strength template",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Strength Base"
+          }
+        }
+      }
+    },
+    "workoutFallback.suggestedHard" : {
+      "comment" : "Name of a workout Fernlet suggested without AI for a high-energy day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Suggested Hard"
+          }
+        }
+      }
+    },
+    "workoutFallback.suggestedLight" : {
+      "comment" : "Name of a workout Fernlet suggested without AI for a low-energy day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Suggested Light"
+          }
+        }
+      }
+    },
+    "workoutFallback.suggestedModerate" : {
+      "comment" : "Name of a workout Fernlet suggested without AI for a medium-energy day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Suggested Moderate"
+          }
+        }
+      }
+    },
+    "workoutFallback.trySomethingSmall" : {
+      "comment" : "Name of a suggested workout: a short new walk and one mobility drill",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Try Something Small"
           }
         }
       }
