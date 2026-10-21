@@ -94,6 +94,17 @@ nil and drops the value. `Tests/FernletTests/LocalizationBoundaryTests` is the w
 of these into a test failure, and `Scripts/sync-string-catalogs.sh` repopulates the catalogs without
 opening Xcode (`--check` is the CI form).
 
+Words that describe the user agree with the body profile's Sex answer (``BiologicalSex/termOfAddress``,
+masculine when it was never answered), and ``AddressedCopy`` is where that happens: a translation
+marks each such word `^[listo](inflect: true)`, and the helper resolves the key with inflection off
+and inflects it for the term it is handed, never the system's Form of Address. It lives here
+(since 2026-10-21; FernletUI keeps only the view half, `AddressedText` and the
+`fernletTermOfAddress` environment value) because several of its callers are not views: the
+planner's session notes are composed at plan time and stored on the logged row, and the scoring
+lines and a notification's body are written by modules with no SwiftUI. A key built in a package
+names its own bundle, `LocalizedStringResource("key", defaultValue: …, bundle: .module, …)`,
+because a resource made here defaults to `Bundle.main`.
+
 > Warning: This page named only two rules, and none of the forked types, until 2026-08-20 — the
 > whole fork landed without the landing-page update CLAUDE.md requires. The next planned work is a
 > bulk conversion of roughly 1,700–2,200 literals to `String(localized:)`, and a contributor who
@@ -1010,3 +1021,11 @@ separator (up to two decimal places), so an es/fr/de row never mixes "1.5" with 
 - ``LocaleTolerantNumber``
 - ``MacroGramEntry``
 - ``RecipeQuantityDisplay``
+
+### Addressing the user
+
+``AddressedCopy`` resolves catalog copy whose translation marks the words that describe the user,
+inflected for ``BiologicalSex/termOfAddress`` of the effective profile. `LocalizationBoundaryTests`
+part I fails any marked key read by `String(localized:)`, which keeps the markup verbatim.
+
+- ``AddressedCopy``

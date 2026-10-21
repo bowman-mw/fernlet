@@ -24,6 +24,7 @@
 //
 
 import Foundation
+import FernletDomainModel
 import FernletUI
 
 /// What the guided runner says aloud when spoken cues are on, for each moment it cues.

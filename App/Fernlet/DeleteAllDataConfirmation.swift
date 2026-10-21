@@ -1,4 +1,5 @@
 import SwiftUI
+import FernletDomainModel
 import FernletFoundation
 import FernletUI
 

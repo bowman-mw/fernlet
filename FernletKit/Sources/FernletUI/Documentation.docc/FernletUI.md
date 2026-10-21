@@ -91,13 +91,18 @@ Spanish (and every later gendered language) genders the words that describe the 
 with the body profile's Sex answer, masculine when it was never answered: the app root sets
 `EnvironmentValues.fernletTermOfAddress` from `BiologicalSex.termOfAddress`, and a translation's
 `^[listo](inflect: true)` mark is inflected with it rather than with the system's Form of Address.
-A marked key must never be read by `String(localized:)`, which keeps the raw markup, and no
-caller-built `LocalizedStringResource` is resolved that way either: it goes through
-``AddressedCopy/string(_:addressing:)``, or ``AddressedCopy/plain(_:)`` for copy that never
-describes the user. `LocalizationBoundaryTests` part I holds both walls. ``FernletAnnouncer``
-resolves its resource overload through `AddressedCopy` too, taking an `addressing:` term.
+The resolution itself is `AddressedCopy` in FernletDomainModel (moved there 2026-10-21 so the
+planner's stored notes, the scoring lines and a notification body can use it without SwiftUI);
+this module keeps the view half: the environment value and ``AddressedText``, which reads it. A
+view that needs a `Text` value rather than a view (an alert message, a component's `Text`
+parameter) or a `String` calls `AddressedCopy.attributed(_:addressing:)` /
+`AddressedCopy.string(_:addressing:)` with the same environment value.
 
-- ``AddressedCopy``
+A marked key must never be read by `String(localized:)`, which keeps the raw markup, and no
+caller-built `LocalizedStringResource` is resolved that way either. `LocalizationBoundaryTests`
+part I holds both walls. ``FernletAnnouncer`` resolves its resource overload through
+`AddressedCopy` too, taking an `addressing:` term.
+
 - ``AddressedText``
 
 ### Accessibility seams

@@ -83,6 +83,7 @@
 // orphan reaper is all that remains, and the mesh's explicit injection at the channel-ready door is
 // kept as the legible, wall-asserted statement of the same fact.
 
+import FernletDomainModel
 import FernletFoundation
 import Foundation
 import ProximityKit

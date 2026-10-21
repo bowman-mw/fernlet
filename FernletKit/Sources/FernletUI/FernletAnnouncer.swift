@@ -28,6 +28,7 @@
 
 import SwiftUI
 import UIKit
+import FernletDomainModel
 
 // MARK: - Vocabulary
 

@@ -238,15 +238,18 @@ struct LocalizationBoundaryTests {
     static let bundleFreeResolutions: [BundleFreeResolution] = [
         // FernletAnnouncer's `String(localized: text)` held the first entry until the Spanish round
         // (2026-10-20) routed it through AddressedCopy, so a marked translation is inflected rather
-        // than read aloud as raw markup; the resolution it needed now lives in the entry below.
+        // than read aloud as raw markup; the resolution it needed now lives in the entry below. The
+        // helper's core moved from FernletUI to FernletDomainModel in the gendered-address lane
+        // (2026-10-21), so the planner, scoring and notification copy can reach it without SwiftUI.
         BundleFreeResolution(
-            path: "FernletKit/Sources/FernletUI/AddressedCopy.swift",
+            path: "FernletKit/Sources/FernletDomainModel/AddressedCopy.swift",
             call: "String(localized: resource, options: options)",
             reason: """
                 The head of `AttributedString(localized: resource, options: options)`: `resource` is \
-                a caller-supplied `LocalizedStringResource`, which carries its own bundle, and the \
-                resource-taking overload has no `bundle:` parameter. AddressedCopy holds no key of \
-                its own; it only inflects what callers resolve (part I).
+                a caller-supplied `LocalizedStringResource`, which carries its own bundle (a package \
+                caller builds it with `bundle: .module`), and the resource-taking overload has no \
+                `bundle:` parameter. AddressedCopy holds no key of its own; it only inflects what \
+                callers resolve (part I).
                 """
         )
     ]
@@ -6034,6 +6037,26 @@ struct LocalizationBoundaryTests {
         #expect(AddressedCopy.string(resource, addressing: BiologicalSex.female.termOfAddress) == "¿Estás lista?")
         #expect(AddressedCopy.string(resource, addressing: BiologicalSex.male.termOfAddress) == "¿Estás listo?")
         #expect(UserNutritionProfile().sex.termOfAddress == .masculine, "An unanswered profile must address the user in the masculine.")
+    }
+
+    /// An argument that is data comes back byte for byte through `AddressedCopy.argument(_:)`.
+    ///
+    /// `AttributedString(localized:)`, which `AddressedCopy` resolves through, parses the RESOLVED
+    /// text as Markdown, interpolated arguments included (measured 2026-10-21): a planner note naming
+    /// a lift someone typed as "*Row*" would store "Row". The unescaped line below proves the trap is
+    /// live, so the escape is not decoration.
+    @Test func addressedCopyArgumentsComeBackVerbatim() {
+        for name in ["*Row* _wide_", "Cable fly [high](x) `1`", "Farmer's carry 50%", #"a\b \"#, "Bench press", "22.5 kg"] {
+            let resource = LocalizedStringResource(
+                "test.addressedCopy.argument", defaultValue: "\(AddressedCopy.argument(name)): welcome back.",
+                comment: "Test-only: an escaped data argument")
+            #expect(AddressedCopy.string(resource, addressing: .feminine) == "\(name): welcome back.")
+        }
+        let raw = "*Row*"
+        let unescaped = LocalizedStringResource(
+            "test.addressedCopy.argumentRaw", defaultValue: "\(raw): welcome back.", comment: "Test-only: the trap")
+        #expect(AddressedCopy.string(unescaped, addressing: .masculine) == "Row: welcome back.",
+                "AttributedString(localized:) no longer parses arguments as Markdown; AddressedCopy.argument's doc is stale")
     }
 
     /// No shipping code resolves a `LocalizedStringResource` with `String(localized:)`.
