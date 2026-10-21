@@ -1986,6 +1986,9 @@
     "Camera viewfinder. Point the camera at the code on your other phone's screen." : {
 
     },
+    "Can't add this plan yet" : {
+
+    },
     "Can't be done without" : {
 
     },
@@ -2073,6 +2076,9 @@
 
     },
     "Changes save as you make them." : {
+
+    },
+    "Changes to workouts you'd planned" : {
 
     },
     "Changing the response asks for your duress code again — pick a code you have not used as your passcode." : {
@@ -2657,6 +2663,12 @@
           }
         }
       }
+    },
+    "Day %lld · Rest" : {
+
+    },
+    "Day %lld · Workout" : {
+
     },
     "Day %lld, feeling %@" : {
       "localizations" : {
@@ -3405,6 +3417,9 @@
 
     },
     "Fernlet adds the entries from the backup in iCloud to this iPhone's cycle history the next time you open the Cycle page in Private. Entries you deleted on this iPhone since that backup was made may come back." : {
+
+    },
+    "Fernlet adjusted a few things" : {
 
     },
     "Fernlet asks at first use where practical, so you can start without granting everything now." : {
@@ -5301,6 +5316,9 @@
         }
       }
     },
+    "New exercises" : {
+
+    },
     "New item" : {
 
     },
@@ -5612,6 +5630,12 @@
 
     },
     "Note (optional)" : {
+
+    },
+    "Note cleared" : {
+
+    },
+    "Note: %@" : {
 
     },
     "Notes" : {
@@ -6008,6 +6032,9 @@
 
     },
     "Paste the reply" : {
+
+    },
+    "Paste what your assistant replied with. Fernlet finds the plan inside it — you don't have to trim off the surrounding text. You'll see the whole plan before anything is added." : {
 
     },
     "Paste workout plan" : {
@@ -6761,6 +6788,9 @@
     "Rename session" : {
 
     },
+    "Renamed to \"%@\"" : {
+
+    },
     "Repeat cooking step" : {
 
     },
@@ -7070,6 +7100,9 @@
 
     },
     "Safety code" : {
+
+    },
+    "Same exercises, updated details" : {
 
     },
     "Samoas, Tagalongs (they're doing a lot)" : {
@@ -7923,6 +7956,9 @@
     "Start now" : {
 
     },
+    "Start on" : {
+
+    },
     "Start on your other phone: open Settings → App lock → Recovery device, choose \"This is the recovery device\", and scan the code it shows." : {
 
     },
@@ -8341,6 +8377,9 @@
 
     },
     "The part's ingredients and steps are taken out of this recipe." : {
+
+    },
+    "The plan" : {
 
     },
     "The recipe, its steps and any photo of it are removed from this device. Meals you already logged from it stay in your diary. Fernlet can't undo this." : {
@@ -9299,6 +9338,9 @@
     "Workout notes" : {
 
     },
+    "Workout plan" : {
+
+    },
     "Workout plan file" : {
 
     },
@@ -9381,6 +9423,9 @@
 
     },
     "You" : {
+
+    },
+    "You already have workouts planned" : {
 
     },
     "You appear as" : {
@@ -10041,6 +10086,681 @@
     },
     "cm" : {
 
+    },
+    "coachPlan.count.adjusted" : {
+      "comment" : "Coach plan review: how many planned workouts the plan adjusts, e.g. '1 adjusted'. Needs a plural variation.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld adjusted"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld adjusted"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "coachPlan.count.changes" : {
+      "comment" : "Coach plan review subtitle item: how many already-planned workouts the plan changes. Needs a plural variation.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld change"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld changes"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "coachPlan.count.days" : {
+      "comment" : "Coach plan review subtitle item: how many days the plan covers, e.g. '7 days'. Needs a plural variation.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld day"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld days"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "coachPlan.count.exercises" : {
+      "comment" : "A number of exercises, e.g. '5 exercises', placed inside other coach plan sentences. Needs a plural variation.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld exercise"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld exercises"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "coachPlan.count.removed" : {
+      "comment" : "Coach plan review: how many planned workouts the plan removes, e.g. '1 removed'. Needs a plural variation.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld removed"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld removed"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "coachPlan.count.replaced" : {
+      "comment" : "Coach plan review: how many planned workouts the plan replaces, e.g. '2 replaced'. Needs a plural variation.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld replaced"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld replaced"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "coachPlan.count.sessions" : {
+      "comment" : "Coach plan review subtitle item: how many workout sessions the plan holds. Needs a plural variation.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld session"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld sessions"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "coachPlan.paste.detail.missingKey" : {
+      "comment" : "Coach plan paste sheet, what went wrong. Arguments: the JSON key that is missing, then where it should be, as JSON keys joined by arrows, e.g. 'days → 2' (neither is translated).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "\"%1$@\" is missing from %2$@."
+          }
+        }
+      }
+    },
+    "coachPlan.paste.detail.missingKeyInPlan" : {
+      "comment" : "Coach plan paste sheet, what went wrong. Argument: the JSON key that is missing (not translated).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "\"%@\" is missing from the plan."
+          }
+        }
+      }
+    },
+    "coachPlan.paste.detail.notJSON" : {
+      "comment" : "Coach plan paste sheet, what went wrong (shown alone, and after 'That plan couldn't be read:'): the pasted plan is not valid JSON",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "it isn't valid JSON."
+          }
+        }
+      }
+    },
+    "coachPlan.paste.detail.unknown" : {
+      "comment" : "Coach plan paste sheet, what went wrong (shown alone, and after 'That plan couldn't be read:'), for a reason Fernlet can't name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "it couldn't be read."
+          }
+        }
+      }
+    },
+    "coachPlan.paste.detail.unreadableAt" : {
+      "comment" : "Coach plan paste sheet, what went wrong. Argument: where the unreadable value is, as JSON keys joined by arrows (not translated).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ couldn't be read."
+          }
+        }
+      }
+    },
+    "coachPlan.paste.detail.unreadablePlan" : {
+      "comment" : "Coach plan paste sheet, what went wrong (shown alone, and after 'That plan couldn't be read:'): part of the plan could not be read",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "the plan couldn't be read."
+          }
+        }
+      }
+    },
+    "coachPlan.paste.detail.wrongKind" : {
+      "comment" : "Coach plan paste sheet, what went wrong. Argument: where the bad value is, as JSON keys joined by arrows, e.g. 'days → 2 → sets' (not translated).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ has the wrong kind of value."
+          }
+        }
+      }
+    },
+    "coachPlan.paste.detail.wrongKindInPlan" : {
+      "comment" : "Coach plan paste sheet, what went wrong (shown alone, and after 'That plan couldn't be read:'): a value has the wrong type",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "the plan has the wrong kind of value."
+          }
+        }
+      }
+    },
+    "coachPlan.paste.error.empty" : {
+      "comment" : "Coach plan paste sheet: the person tapped import with nothing pasted",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "There's nothing to import. Copy the plan your assistant replied with, then paste it here."
+          }
+        }
+      }
+    },
+    "coachPlan.paste.error.incomplete" : {
+      "comment" : "Coach plan paste sheet: the pasted plan didn't decode; a smaller line under this says exactly what was wrong",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The plan is missing something Fernlet needs. Ask the assistant to reply with the complete JSON block again."
+          }
+        }
+      }
+    },
+    "coachPlan.paste.error.noJSON" : {
+      "comment" : "Coach plan paste sheet: the pasted text holds no JSON plan. 'JSON block' is the code block an AI assistant replies with.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet couldn't find a plan in what you pasted. Copy the whole JSON block from the reply, including its braces."
+          }
+        }
+      }
+    },
+    "coachPlan.paste.error.pastedSummary" : {
+      "comment" : "Coach plan paste sheet: the person pasted Fernlet's own training summary back instead of the AI's reply",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That looks like your training summary, not a plan — paste the assistant's reply instead."
+          }
+        }
+      }
+    },
+    "coachPlan.paste.error.tooLarge" : {
+      "comment" : "Coach plan paste sheet: the pasted text is too big. Argument: its size in kilobytes, always over 500.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That's %lld KB of text — larger than a workout plan should be. Paste just the JSON block from the reply."
+          }
+        }
+      }
+    },
+    "coachPlan.paste.error.unreadable" : {
+      "comment" : "Coach plan paste sheet: the plan failed to decode. Argument: what went wrong, a whole clause, e.g. '\"days\" is missing from the plan.'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That plan couldn't be read: %@"
+          }
+        }
+      }
+    },
+    "coachPlan.review.action.adjusted" : {
+      "comment" : "Coach plan review: tag on a planned workout the plan adjusts",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Adjusted"
+          }
+        }
+      }
+    },
+    "coachPlan.review.action.removed" : {
+      "comment" : "Coach plan review: tag on a planned workout the plan removes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Removed"
+          }
+        }
+      }
+    },
+    "coachPlan.review.action.replaced" : {
+      "comment" : "Coach plan review: tag on a planned workout the plan replaces",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Replaced"
+          }
+        }
+      }
+    },
+    "coachPlan.review.changesSummary" : {
+      "comment" : "Coach plan review, the changes card. Argument: the counts by kind, e.g. '2 replaced, 1 adjusted'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@. Workouts you've already logged are never touched."
+          }
+        }
+      }
+    },
+    "coachPlan.review.collisionBody" : {
+      "comment" : "Coach plan review: some of the plan's days already have planned workouts. Argument: how many days. Needs a plural variation (English: '1 day … already has').",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld day in this range already has planned workouts. Workouts you've already logged are never touched."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld days in this range already have planned workouts. Workouts you've already logged are never touched."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "coachPlan.review.customExercisesFull" : {
+      "comment" : "Coach plan review blocker. Arguments: a count of exercises ('5 exercises'), then how many more the person's custom exercise list can hold (0 or more).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This plan adds %1$@ but your list can hold only %2$lld more. Remove some custom exercises, then import again."
+          }
+        }
+      }
+    },
+    "coachPlan.review.edit.noChange" : {
+      "comment" : "Coach plan review, a change that would alter nothing. Argument: the planned workout's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "\"%@\" is already exactly what the change asks for; nothing to do."
+          }
+        }
+      }
+    },
+    "coachPlan.review.edit.targetGone" : {
+      "comment" : "Coach plan review, a change Fernlet can't apply: the planned workout it targets no longer exists",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A change points at a planned workout that isn't there any more — it may have been done, edited, or deleted since you copied your summary. Copy a fresh summary and ask again."
+          }
+        }
+      }
+    },
+    "coachPlan.review.edit.targetPast" : {
+      "comment" : "Coach plan review, a change Fernlet can't apply. Arguments: the planned workout's name, then its date as year-month-day.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "\"%1$@\" was planned for %2$@, which has already passed. Fernlet only changes workouts still ahead of you."
+          }
+        }
+      }
+    },
+    "coachPlan.review.flagDay" : {
+      "comment" : "Coach plan review: the plan day a flagged exercise is on, e.g. 'Day 3'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Day %lld"
+          }
+        }
+      }
+    },
+    "coachPlan.review.flagDays" : {
+      "comment" : "Coach plan review: the plan days a flagged exercise is on. Argument: the day numbers, e.g. '1, 8, 15'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Days %@"
+          }
+        }
+      }
+    },
+    "coachPlan.review.fromAuthor" : {
+      "comment" : "Coach plan review subtitle item: who wrote the plan, e.g. 'from Claude'. Argument: the name the plan gives its author.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "from %@"
+          }
+        }
+      }
+    },
+    "coachPlan.review.newExercisesBody" : {
+      "comment" : "Coach plan review: the plan defines exercises Fernlet doesn't have. Argument: how many. Needs a plural variation (English: '1 exercise … check it later').",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld exercise will be added to your exercise list, so Fernlet can suggest and check it later."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld exercises will be added to your exercise list, so Fernlet can suggest and check them later."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "coachPlan.review.nothingToAdd" : {
+      "comment" : "Coach plan review subtitle when the plan adds no days and changes nothing",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nothing to add"
+          }
+        }
+      }
+    },
+    "coachPlan.safety.avoidedMovement.carry" : {
+      "comment" : "Coach plan review, why an exercise is flagged: the person avoids loaded carries",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "you avoid carry movements"
+          }
+        }
+      }
+    },
+    "coachPlan.safety.avoidedMovement.hinge" : {
+      "comment" : "Coach plan review, why an exercise is flagged: the person avoids hip-hinge movements (deadlifts, swings)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "you avoid hinge movements"
+          }
+        }
+      }
+    },
+    "coachPlan.safety.avoidedMovement.isolation" : {
+      "comment" : "Coach plan review, why an exercise is flagged: the person avoids single-joint isolation movements",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "you avoid isolation movements"
+          }
+        }
+      }
+    },
+    "coachPlan.safety.avoidedMovement.locomotion" : {
+      "comment" : "Coach plan review, why an exercise is flagged: the person avoids locomotion (running, jumping, crawling)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "you avoid locomotion movements"
+          }
+        }
+      }
+    },
+    "coachPlan.safety.avoidedMovement.lunge" : {
+      "comment" : "Coach plan review, why an exercise is flagged: the person avoids lunges",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "you avoid lunge movements"
+          }
+        }
+      }
+    },
+    "coachPlan.safety.avoidedMovement.pull" : {
+      "comment" : "Coach plan review, why an exercise is flagged: the person avoids pulling movements",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "you avoid pull movements"
+          }
+        }
+      }
+    },
+    "coachPlan.safety.avoidedMovement.push" : {
+      "comment" : "Coach plan review, why an exercise is flagged: the person avoids pushing movements",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "you avoid push movements"
+          }
+        }
+      }
+    },
+    "coachPlan.safety.avoidedMovement.squat" : {
+      "comment" : "Coach plan review, why an exercise is flagged: the person avoids squatting movements",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "you avoid squat movements"
+          }
+        }
+      }
+    },
+    "coachPlan.safety.avoidedMovement.twist" : {
+      "comment" : "Coach plan review, why an exercise is flagged: the person avoids twisting movements",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "you avoid twist movements"
+          }
+        }
+      }
+    },
+    "coachPlan.safety.avoidedMuscles" : {
+      "comment" : "Coach plan review, why an exercise is flagged, shown under its name. Argument: the muscles it works that the person avoids, e.g. 'Chest, Triceps'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "it works %@, which you avoid"
+          }
+        }
+      }
+    },
+    "coachPlan.safety.easingArea" : {
+      "comment" : "Coach plan review, why a heavy exercise is flagged. Argument: the body areas the person is training around, e.g. 'Lower back'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "it loads your %@ heavily, which you're easing"
+          }
+        }
+      }
+    },
+    "coachPlan.safety.missingEquipment" : {
+      "comment" : "Coach plan review, why an exercise is flagged. Arguments: where the person trains (e.g. 'Home'), then the equipment it lacks, e.g. 'Barbell or Weight bench'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ has no %2$@"
+          }
+        }
+      }
+    },
+    "coachPlan.safety.restingArea" : {
+      "comment" : "Coach plan review, why an exercise is flagged. Argument: the body areas the person is keeping out of training, e.g. 'Knee'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "it loads your %@, which you're resting"
+          }
+        }
+      }
     },
     "completed" : {
 

@@ -111,9 +111,12 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
 
     /// The notes a screen DRAWS for this row: ``notes``, unless they are still a plan completion's
     /// frozen note ("Completed from user plan."), which is drawn in the user's language. Display only;
-    /// `reconstructPlannedWorkout` matches the stored note (2026-10-20, idea 16).
+    /// `reconstructPlannedWorkout` matches the stored note (2026-10-20, idea 16). A coach-plan stamp
+    /// line a guided run of an imported plan carried onto the row draws through
+    /// ``CoachPlanNoteStamp/displayedNotes(_:)``.
     public var displayedNotes: String {
-        WorkoutPlanSource.allCases.first { $0.completionNote == notes }?.completionNoteDisplay ?? notes
+        WorkoutPlanSource.allCases.first { $0.completionNote == notes }?.completionNoteDisplay
+            ?? CoachPlanNoteStamp.displayedNotes(notes)
     }
 
     /// The name to SAVE when a name field seeded with ``displayedName`` comes back as `typed` (already
@@ -359,6 +362,14 @@ public nonisolated struct PlannedWorkout: Identifiable, Codable, Equatable {
     /// exchange file, the coach-plan rename check and ``completedWorkout`` all carry ``name``.
     public var displayedName: String {
         StoredWorkoutName.displayed(name, mode: mode, activityType: activityType, matchesSplitDefault: true)
+    }
+
+    /// The notes a screen DRAWS for this plan: ``notes`` with each coach-plan provenance stamp ("Day 2 of
+    /// "Block A", imported from Sam.") drawn in the user's language through
+    /// ``CoachPlanNoteStamp/displayedNotes(_:)``. Display only: the importer, the exports and the
+    /// guided run read ``notes``.
+    public var displayedNotes: String {
+        CoachPlanNoteStamp.displayedNotes(notes)
     }
 
     /// The name to SAVE when a name field seeded with ``displayedName`` comes back as `typed` (already

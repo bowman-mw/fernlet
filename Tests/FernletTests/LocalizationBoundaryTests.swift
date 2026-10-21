@@ -1371,6 +1371,47 @@ struct LocalizationBoundaryTests {
         )
     }
 
+    /// The coach-plan importer's provenance stamps (2026-10-20, Spanish round step 2).
+    ///
+    /// The two lines are written into `PlannedWorkout.notes` (synced, exported, carried onto a guided
+    /// run's logged row) and read back by the importer, which strips the previous stamp before it
+    /// writes a new one. So they are frozen English, written through `CoachPlanNoteStamp` alone, and
+    /// recognised by their exact shape: the bare `hasPrefix("Day ")` the strip used to be also ate a
+    /// user's own "Day off, knees sore". A screen draws them through `displayedNotes`.
+    @Test func frozenCoachPlanNoteStamps() throws {
+        #expect(CoachPlanNoteStamp.imported(dayIndex: 2, planTitle: "Block A", author: "Sam")
+                == "Day 2 of \"Block A\", imported from Sam.")
+        #expect(CoachPlanNoteStamp.changed(author: "Sam", planTitle: "Block A") == "Changed by Sam from \"Block A\".")
+        #expect(CoachPlanNoteStamp.author(named: "") == "an assistant", "the unnamed author is part of the stored stamp")
+        #expect(CoachPlanDecodeError.unnamedEditTitle == "an edit")
+
+        let stamps = [CoachPlanNoteStamp.imported(dayIndex: 12, planTitle: "My \"best\" plan", author: "an assistant"),
+                      CoachPlanNoteStamp.changed(author: "Coach Kim", planTitle: "Block A")]
+        for stamp in stamps {
+            #expect(CoachPlanNoteStamp.isStamp(stamp), "\(stamp) is recognised by its exact shape")
+            #expect(CoachPlanNoteStamp.displayed(stamp) == stamp, "in English a stamp draws as stored")
+        }
+        for note in ["Day off, knees sore", "Day 2 felt heavy", "Changed by me: lighter", "Day 3 of \"X\""] {
+            #expect(!CoachPlanNoteStamp.isStamp(note), "\(note) is the user's own note, not a stamp")
+            #expect(CoachPlanNoteStamp.displayed(note) == nil)
+        }
+        let notes = "Day off, knees sore\n" + stamps[0]
+        #expect(CoachPlanNoteStamp.displayedNotes(notes) == notes)
+
+        let importer = try RepoRoot.source("App/Fernlet/CoachPlanImporter.swift")
+        let review = try RepoRoot.source("App/Fernlet/CoachPlanReviewView.swift")
+        for (needle, count) in [("CoachPlanNoteStamp.changed(", 1), ("CoachPlanNoteStamp.imported(", 1),
+                                ("CoachPlanNoteStamp.isStamp(", 1)] {
+            #expect(importer.components(separatedBy: needle).count - 1 == count,
+                    "CoachPlanImporter.swift must write and strip stamps through `\(needle)` (\(count)×)")
+        }
+        #expect(review.contains("CoachPlanNoteStamp.isStamp("), "the review's note preview strips stamps by shape")
+        for source in [importer, review] {
+            #expect(!source.contains("hasPrefix(\"Day \")"),
+                    "a bare \"Day \" prefix match drops the user's own notes; match the stamp's exact shape")
+        }
+    }
+
     /// `GoalType`'s legacy persisted-display aliases.
     ///
     /// The sharpest instance of the token/display collision in the tree: early builds persisted the
@@ -2767,6 +2808,14 @@ struct LocalizationBoundaryTests {
         ForkedMember(path: "App/Fernlet/DuressRecoveryCeremonyViews.swift",
                      declaration: "let title: LocalizedStringKey",
                      role: "CeremonyButton, every step's advance button"),
+        // Spanish round step 2, move lane (2026-10-20): Move and coach-plan helpers that took their
+        // literal copy as `String`, so it never reached the catalog.
+        ForkedMember(path: "App/Fernlet/CoachPlanReviewView.swift",
+                     declaration: "private func cardTitle(_ text: LocalizedStringKey) -> some View {",
+                     role: "every coach-plan review card's caption"),
+        ForkedMember(path: "App/Fernlet/CoachPlanReviewView.swift",
+                     declaration: "private func changeLine(_ text: LocalizedStringKey) -> some View {",
+                     role: "the coach-plan diff's Renamed / Note / Same exercises lines"),
     ]
 
     /// The members this round forked are still forked.
@@ -3101,6 +3150,28 @@ struct LocalizationBoundaryTests {
         // Workout setup's Days-per-week stepper, which spliced an English "s" into its key.
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
                      key: "%lld days a week", source: "Workout setup's days-per-week stepper"),
+        // Spanish round step 2, move lane (2026-10-20): the coach-plan, trainer-summary and Move
+        // counts that spliced an English "s" (or picked "it"/"them", "was"/"were") by count.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.exercises",
+                     source: "a coach plan's exercise count ('5 exercises')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.days",
+                     source: "a coach plan's day count, in the review subtitle and the Plan added alert"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.sessions",
+                     source: "the coach-plan review subtitle's session count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.changes",
+                     source: "the coach-plan review subtitle's change count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.replaced",
+                     source: "the coach-plan changes card's replaced count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.adjusted",
+                     source: "the coach-plan changes card's adjusted count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.removed",
+                     source: "the coach-plan changes card's removed count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.review.collisionBody",
+                     source: "the coach-plan collision card ('1 day … already has')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.review.newExercisesBody",
+                     source: "the coach-plan new-exercises card ('check it' / 'check them')"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings", key: "coachPlan.count.sets",
+                     source: "a coach-plan review note's set count ('0 sets')"),
     ]
 
     /// Every count-bearing key carries real plural variations.

@@ -586,8 +586,11 @@ final class CoachPlanExchangeTests: XCTestCase {
         let review = store.reviewCoachPlan(plan, startingOn: store.todayKey)
         let flag = try XCTUnwrap(review.safetyFlags.first)
         XCTAssertEqual(flag.exerciseName, "Zercher squat")
-        XCTAssertTrue(flag.reason.contains("squat"), "the reason must name the avoided movement")
-        XCTAssertTrue(flag.reason.contains("barbell"), "and the missing equipment")
+        XCTAssertTrue(flag.reason.contains("you avoid squat movements"), "the reason must name the avoided movement")
+        // The equipment's drawn name keeps its own case (2026-10-20): lowercasing a localized word in
+        // code breaks German nouns, so the English reads "has no Barbell" rather than "has no barbell".
+        XCTAssertTrue(flag.reason.contains("Living room has no \(Equipment.barbell.displayName)"),
+                      "and the missing equipment, by its drawn name: \(flag.reason)")
         XCTAssertTrue(review.isImportable, "a safety conflict is a decision to make, not a hard block")
     }
 
@@ -826,6 +829,34 @@ final class CoachPlanExchangeTests: XCTestCase {
         XCTAssertTrue(updated.notes.contains("my own note"), "the user's own note must survive")
         XCTAssertTrue(updated.notes.contains("Changed by Claude"), "provenance must be stamped")
         XCTAssertEqual(updated.source, .coach)
+    }
+
+    /// A note of the user's own that merely STARTS with "Day " survives an edit and the review's note
+    /// preview. The strip used to be `hasPrefix("Day ")`, which treated it as an import stamp and
+    /// silently dropped it from the row (2026-10-20). Only the stamps' exact shapes are stripped, and a
+    /// previous stamp is replaced rather than stacked.
+    func testAUserNoteStartingWithDaySurvivesAnEditAndThePreview() throws {
+        let store = makeTestStore()
+        let oldStamp = CoachPlanNoteStamp.imported(dayIndex: 3, planTitle: "Block A", author: "Claude")
+        let planned = PlannedWorkout(name: "My Upper", split: .upper, source: .coach,
+                                     exercises: "Bench press - 3 x 8",
+                                     notes: "Day off, knees sore\n\(oldStamp)", duration: 45)
+        store.planWorkout(planned, date: store.todayKey)
+
+        let json = editsOnlyJSON(targetID: planned.id, action: "adjust", extra: """
+        , "exercises": [ { "name": "Bench press", "sets": 4, "reps": "6" } ]
+        """)
+        let review = store.reviewCoachPlan(try decoded(json), startingOn: store.todayKey)
+        XCTAssertNotNil(store.applyCoachPlan(review, startingOn: store.todayKey,
+                                             struckExerciseKeys: [], collisionPolicy: .keepBoth))
+
+        let updated = try XCTUnwrap(store.loadDay(for: store.todayKey).plannedWorkouts.first)
+        XCTAssertEqual(updated.notes, "Day off, knees sore\nChanged by Claude from \"Tweaks\".",
+                       "the user's note survives, the old stamp is replaced, the new one is frozen English")
+        XCTAssertEqual(CoachPlanReviewView.lastNoteLine(updated.notes), "Day off, knees sore",
+                       "the review previews the user's note without any stamp")
+        XCTAssertEqual(FernletStore.editedNote("Day 2 felt heavy", plan: try decoded(json)),
+                       "Day 2 felt heavy\nChanged by Claude from \"Tweaks\".")
     }
 
     func testDeleteRemovesThePlannedRowAndNothingElse() throws {

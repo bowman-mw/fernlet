@@ -846,7 +846,16 @@ holds two workouts with the same name. An edit can only ever reach a PLANNED row
 ahead of today — never a logged workout, which is the guarantee that an import cannot rewrite
 what actually happened.
 
+Localization (2026-10-20, Spanish round step 2). Every sentence the decode and validation can show
+— `CoachPlanDecodeError.message` and `CoachPlanIssue.detail` — is a whole-sentence key in the
+internal `CoachPlanIssueCopy`; `CoachPlanIssue.subject` is never drawn and stays English, and the
+vocabularies after "Expected one of:" are wire tokens. The importer's provenance lines are stored
+text: ``CoachPlanNoteStamp`` writes them in frozen English, matches them back by their exact shape
+(a bare "Day " prefix used to drop the user's own "Day off, knees sore"), and draws them localized
+through `PlannedWorkout.displayedNotes` and `Workout.displayedNotes`.
+
 - ``CoachPlan``
+- ``CoachPlanNoteStamp``
 - ``CoachPlanDay``
 - ``CoachSession``
 - ``CoachExercise``

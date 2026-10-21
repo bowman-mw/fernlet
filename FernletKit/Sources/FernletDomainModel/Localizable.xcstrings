@@ -865,6 +865,641 @@
         }
       }
     },
+    "coachPlan.count.sets" : {
+      "comment" : "A number of sets, e.g. '0 sets', placed inside a coach plan review note. Needs a plural variation.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld set"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld sets"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "coachPlan.decode.tooManyDays" : {
+      "comment" : "Pasted coach plan refused. Arguments: how many days it has (always more than the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This plan has %1$lld days. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.decode.tooManyEditExercises" : {
+      "comment" : "Pasted coach plan refused: one of its changes to a planned workout lists too many exercises. Arguments: how many (always more than the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "\"an edit\" has %1$lld exercises. Fernlet accepts up to %2$lld per session."
+          }
+        }
+      }
+    },
+    "coachPlan.decode.tooManyEdits" : {
+      "comment" : "Pasted coach plan refused. Arguments: how many planned workouts it changes (always more than the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This plan changes %1$lld workouts you'd already planned. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.decode.tooManyExercises" : {
+      "comment" : "Pasted coach plan refused. Arguments: the session's title as the plan wrote it, how many exercises it lists (always more than the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "\"%1$@\" has %2$lld exercises. Fernlet accepts up to %3$lld per session."
+          }
+        }
+      }
+    },
+    "coachPlan.decode.tooManyMuscles" : {
+      "comment" : "Pasted coach plan refused. Arguments: the exercise's name as the plan wrote it, how many muscles it lists (always more than Fernlet knows), then how many Fernlet knows.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "\"%1$@\" lists %2$lld muscles. Fernlet knows %3$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.decode.tooManyNewExercises" : {
+      "comment" : "Pasted coach plan refused. Arguments: how many new exercises it defines (always more than the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This plan defines %1$lld new exercises. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.decode.tooManySessions" : {
+      "comment" : "Pasted coach plan refused. Arguments: the plan day, how many sessions it has (always more than the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Day %1$lld has %2$lld sessions. Fernlet accepts up to %3$lld per day."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.changeAltersNothing" : {
+      "comment" : "Coach plan review note (the plan still imports). Argument: the planned workout's title as the plan wrote it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A change to \"%@\" alters nothing; it will be skipped."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.changeAltersNothingUntitled" : {
+      "comment" : "Coach plan review note (the plan still imports): a change to an unnamed planned workout changes nothing",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A change to \"a planned workout\" alters nothing; it will be skipped."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.changeHasUnnamedExercise" : {
+      "comment" : "Coach plan review problem. Argument: the planned workout's title as the plan wrote it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A change to \"%@\" has an exercise with no name."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.changeHasUnnamedExerciseUntitled" : {
+      "comment" : "Coach plan review problem: a change to an unnamed planned workout lists an exercise without a name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A change to \"a planned workout\" has an exercise with no name."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.dayOutOfRange" : {
+      "comment" : "Coach plan review problem. Arguments: the highest day number allowed, then the day number the plan used.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Day numbers must run from 1 to %1$lld; found %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.dayRepeated" : {
+      "comment" : "Coach plan review problem. Argument: the plan day number that appears twice.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Day %lld appears more than once."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.dayTreatedAsRest" : {
+      "comment" : "Coach plan review note (the plan still imports). Argument: the plan day number.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Day %lld has no sessions and isn't marked a rest day; it will be treated as rest."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.definitionHasNoName" : {
+      "comment" : "Coach plan review problem: a new exercise the plan defines has no name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "An exercise definition has no name."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.definitionHasNoPrimaryMuscles" : {
+      "comment" : "Coach plan review problem. Argument: the new exercise's name as the plan wrote it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "\"%@\" lists no primary muscles, so Fernlet can't check it against the muscles you avoid."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.definitionNameTooLong" : {
+      "comment" : "Coach plan review problem: a new exercise's name is longer than Fernlet accepts",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That exercise name is too long."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.duplicateChangeTarget" : {
+      "comment" : "Coach plan review problem: two changes in the plan name the same planned workout",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Two changes target the same planned workout; Fernlet can't apply both."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.exerciseHasNoReps" : {
+      "comment" : "Coach plan review problem. Argument: the exercise's name as the plan wrote it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ has no reps."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.newerFormat" : {
+      "comment" : "Coach plan review problem. Argument: the plan format's version number.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This plan uses a newer format (version %lld). Update Fernlet to open it."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.notAFernletPlan" : {
+      "comment" : "Coach plan review problem: the pasted JSON is not in Fernlet's plan format",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This doesn't look like a Fernlet workout plan."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.planIsEmpty" : {
+      "comment" : "Coach plan review problem: the plan proposes nothing at all",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This plan has no days and changes nothing."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.replacementListsNothing" : {
+      "comment" : "Coach plan review problem: a change replaces a planned workout but lists no exercises",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A replacement has to say what the workout becomes, and this one lists no exercises."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.restClamped" : {
+      "comment" : "Coach plan review note (the plan still imports). Arguments: the exercise's name, its rest in seconds ('s' is the seconds symbol), then the most Fernlet accepts.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$llds rest is outside 0-%3$lld; it will be clamped."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.sessionHasUnnamedExercise" : {
+      "comment" : "Coach plan review problem. Argument: the session's title as the plan wrote it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "\"%@\" has an exercise with no name."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.sessionHasUnnamedExerciseUntitled" : {
+      "comment" : "Coach plan review problem: an untitled session lists an exercise without a name. Argument: the plan day number.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "\"Day %lld session\" has an exercise with no name."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.sessionPrescribesNothing" : {
+      "comment" : "Coach plan review problem. Argument: the session's title as the plan wrote it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "\"%@\" has no exercises and no conditioning description."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.sessionPrescribesNothingUntitled" : {
+      "comment" : "Coach plan review problem: an untitled session prescribes nothing. Argument: the plan day number.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "\"Day %lld session\" has no exercises and no conditioning description."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.setsClamped" : {
+      "comment" : "Coach plan review note (the plan still imports). Arguments: the exercise's name, its set count (e.g. '0 sets'), then the most sets Fernlet accepts.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$@ is outside 1-%3$lld; it will be clamped."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.tooLong.coachName" : {
+      "comment" : "Coach plan review problem: the name the plan gives its author is too long. Arguments: the length (always over the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That coach name is %1$lld characters. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.tooLong.conditioning" : {
+      "comment" : "Coach plan review problem: a conditioning description (e.g. '20 min easy run') is too long. Arguments: the length (always over the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That conditioning is %1$lld characters. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.tooLong.dayTitle" : {
+      "comment" : "Coach plan review problem. Arguments: the length (always over the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That day title is %1$lld characters. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.tooLong.exerciseName" : {
+      "comment" : "Coach plan review problem. Arguments: the length (always over the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That exercise name is %1$lld characters. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.tooLong.guidance" : {
+      "comment" : "Coach plan review problem: an exercise's guidance text is too long. Arguments: the length (always over the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That guidance is %1$lld characters. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.tooLong.notes" : {
+      "comment" : "Coach plan review problem: a change's notes are too long. Arguments: the length (always over the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That notes is %1$lld characters. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.tooLong.planNotes" : {
+      "comment" : "Coach plan review problem: the plan's notes are too long. Arguments: the length (always over the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That plan notes is %1$lld characters. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.tooLong.planTitle" : {
+      "comment" : "Coach plan review problem. Arguments: the length (always over the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That plan title is %1$lld characters. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.tooLong.reps" : {
+      "comment" : "Coach plan review problem: an exercise's reps text (e.g. '8-10') is too long. Arguments: the length (always over the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That reps is %1$lld characters. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.tooLong.sessionNotes" : {
+      "comment" : "Coach plan review problem: a session's notes are too long. Arguments: the length (always over the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That session notes is %1$lld characters. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.tooLong.sessionTitle" : {
+      "comment" : "Coach plan review problem. Arguments: the length (always over the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That session title is %1$lld characters. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.tooLong.workoutTitle" : {
+      "comment" : "Coach plan review problem: a change's new workout title is too long. Arguments: the length (always over the limit), then the limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That workout title is %1$lld characters. Fernlet accepts up to %2$lld."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.undefinedExercise" : {
+      "comment" : "Coach plan review problem. Argument: the exercise's name as the plan wrote it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "\"%@\" isn't in your exercise list and the plan doesn't define it. Ask for its muscles, equipment, and movement pattern, then paste again."
+          }
+        }
+      }
+    },
+    "coachPlan.issue.unknownChangeType" : {
+      "comment" : "Coach plan review problem. Arguments: the change word the plan used, then the plan format's change words, which are code and stay in English.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unknown change type \"%1$@\". Expected one of: %2$@"
+          }
+        }
+      }
+    },
+    "coachPlan.issue.unknownEquipment" : {
+      "comment" : "Coach plan review problem. Arguments: the equipment word the plan used, then the plan format's equipment words, which are code and stay in English.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unknown equipment \"%1$@\". Expected one of: %2$@"
+          }
+        }
+      }
+    },
+    "coachPlan.issue.unknownMovementPattern" : {
+      "comment" : "Coach plan review problem. Arguments: the movement word the plan used, then the plan format's movement words, which are code and stay in English.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unknown movement pattern \"%1$@\". Expected one of: %2$@"
+          }
+        }
+      }
+    },
+    "coachPlan.issue.unknownMuscle" : {
+      "comment" : "Coach plan review problem. Arguments: the muscle word the plan used, then the plan format's muscle words, which are code and stay in English.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unknown muscle \"%1$@\". Expected one of: %2$@"
+          }
+        }
+      }
+    },
+    "coachPlan.issue.unknownSessionKind" : {
+      "comment" : "Coach plan review note (the plan still imports). Argument: the session kind word the plan used, which is code.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unknown session kind \"%@\"; treating it as strength."
+          }
+        }
+      }
+    },
+    "coachPlan.stamp.changed" : {
+      "comment" : "Note line on a planned workout a pasted plan changed. Arguments: who wrote the plan, then the plan's title.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Changed by %1$@ from \"%2$@\"."
+          }
+        }
+      }
+    },
+    "coachPlan.stamp.changedUnnamed" : {
+      "comment" : "Note line on a planned workout a pasted AI plan changed. Argument: the plan's title.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Changed by an assistant from \"%@\"."
+          }
+        }
+      }
+    },
+    "coachPlan.stamp.imported" : {
+      "comment" : "Note line on a workout that came from a pasted plan. Arguments: the plan's day number, the plan's title, then who wrote it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Day %1$lld of \"%2$@\", imported from %3$@."
+          }
+        }
+      }
+    },
+    "coachPlan.stamp.importedUnnamed" : {
+      "comment" : "Note line on a workout that came from a pasted AI plan. Arguments: the plan's day number, then the plan's title.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Day %1$lld of \"%2$@\", imported from an assistant."
+          }
+        }
+      }
+    },
     "companionColor.bark" : {
       "comment" : "Companion colour: dark brown",
       "extractionState" : "extracted_with_value",

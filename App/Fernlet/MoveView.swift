@@ -2098,7 +2098,7 @@ struct WorkoutSuggestionSheet: View {
                 }
             }
             if !session.suggestion.notes.isEmpty {
-                Text(session.suggestion.notes)
+                Text(CoachPlanNoteStamp.displayedNotes(session.suggestion.notes))
                     .font(.fernlet(.bubble))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
@@ -4616,7 +4616,7 @@ struct PlannedWorkoutRow: View {
         }
 
         if !plannedWorkout.notes.isEmpty {
-            Text(plannedWorkout.notes)
+            Text(plannedWorkout.displayedNotes)
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
