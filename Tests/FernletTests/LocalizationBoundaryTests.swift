@@ -2746,6 +2746,23 @@ struct LocalizationBoundaryTests {
         ForkedMember(path: "App/Fernlet/DuressRecoveryCeremonyViews.swift",
                      declaration: "let title: LocalizedStringKey",
                      role: "CeremonyButton, every step's advance button"),
+        // Friends lane, Spanish round (2026-10-20): `String` members drawn with `Text(_:)`, the
+        // verbatim overload, so none of their literals reached the catalog.
+        ForkedMember(path: "App/Fernlet/FriendListView.swift",
+                     declaration: "private var label: LocalizedStringKey {",
+                     role: "SendGoodVibesLabel's Send good vibes / Sending... / Sent just now"),
+        ForkedMember(path: "App/Fernlet/FriendListView.swift",
+                     declaration: "private func detailRow(_ label: LocalizedStringKey, value: String) -> some View {",
+                     role: "the friend detail card's Friends since / Last seen / Revoked / Blocked since / Reported"),
+        ForkedMember(path: "App/Fernlet/FriendListView.swift",
+                     declaration: "private var heartStatusText: Text? {",
+                     role: "the Friends list's presence heart status line"),
+        ForkedMember(path: "App/Fernlet/DisposableCameraView.swift",
+                     declaration: "private var presenceHeartStatusText: Text? {",
+                     role: "the in-person camera's presence heart status line"),
+        ForkedMember(path: "App/Fernlet/DisposableCameraView.swift",
+                     declaration: "private func shutterCaption(canShoot: Bool) -> LocalizedStringKey {",
+                     role: "the caption under the camera's shutter"),
     ]
 
     /// The members this round forked are still forked.
@@ -2891,6 +2908,14 @@ struct LocalizationBoundaryTests {
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Return the key",
                      source: "CeremonyButton.title in the custodian flow, forked String → LocalizedStringKey"),
         // Friends lane, Spanish round (2026-10-20): each measured absent before its fork.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Send good vibes",
+                     source: "SendGoodVibesLabel.label, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Friends since",
+                     source: "FriendListView.detailRow's label, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Tap to shoot",
+                     source: "DisposableCameraView.shutterCaption, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Saying hello to %@…",
+                     source: "DisposableCameraView.presenceHeartStatusText, forked String → Text"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Expires in %lld min",
                      source: "ActivitiesView's ExpiryLabel, \"Expires \" + a separately built phrase → one key"),
         HarvestedKey(catalog: "FernletKit/Sources/FernletSocial/Localizable.xcstrings", key: "presence.heart.cooldown",
@@ -3085,8 +3110,23 @@ struct LocalizationBoundaryTests {
         // Workout setup's Days-per-week stepper, which spliced an English "s" into its key.
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
                      key: "%lld days a week", source: "Workout setup's days-per-week stepper"),
-        // Friends lane, Spanish round (2026-10-20): bare `%lld`s, each now carrying its hand-authored
-        // English `one`/`other` block.
+        // Friends lane, Spanish round (2026-10-20). The two hearts counts, the camera's two session
+        // counts and the photos-kept notice were `== 1` branches between two English sentences ("A
+        // heart is …" / "%lld hearts are …"); each is now ONE key whose English `one` form keeps the
+        // wording it had at one. The rest were bare `%lld`s.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "%lld hearts are tucked away for %@ — delivered when they next open Fernlet.",
+                     source: "a friend's heart row: hearts waiting at the drop-off"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "friends.awayHearts.undeliverable",
+                     source: "AwayHeartsCopy's undelivered-hearts line (friend row and Settings)"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "%lld people connected", source: "the in-person camera's session count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "%lld shots left", source: "the in-person camera's film count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "%lld photos stayed on this phone. No one else was in the session when you took them.",
+                     source: "RoutedShareRefusalCopy.photoKeptNotice, the camera's photos-kept notice"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
                      key: "Expires in %lld days", source: "an activity card's expiry label"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",

@@ -1225,8 +1225,9 @@ struct DisposableCameraView: View {
         .accessibilityIdentifier("camera.shutter")
     }
 
-    /// A short caption under the shutter, so its ring state reads without decoding a glyph.
-    private func shutterCaption(canShoot: Bool) -> String {
+    /// A short caption under the shutter, so its ring state reads without decoding a glyph. A key,
+    /// not a `String`: `Text(String)` is the verbatim overload, which kept all four out of the catalog.
+    private func shutterCaption(canShoot: Bool) -> LocalizedStringKey {
         if canShoot { return "Tap to shoot" }
         if features.photos.filmRemaining == 0 { return "No film left" }
         if !camera.canCapturePhoto { return "Camera off" }
@@ -1679,18 +1680,20 @@ struct DisposableCameraView: View {
 
     /// Participant count and remaining film.
     private var sessionStats: some View {
-        // Real plurals — "2 person(s) connected" is a placeholder that shipped.
+        // Real plurals — "2 person(s) connected" is a placeholder that shipped. Each is ONE
+        // count-bearing key whose English "1 person" / "1 shot" form is the catalog's `one` plural
+        // variation, not an `== 1` branch between two English sentences.
         let people = manager.sessionParticipants.count
         let shots = features.photos.filmRemaining
         return VStack(alignment: .leading, spacing: 22) {
-            Text(people == 1 ? "1 person connected" : "\(people) people connected")
+            Text("\(people) people connected")
                 .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
 
             HStack(spacing: 6) {
                 Image(systemName: "film")
                     .foregroundStyle(Color.slate)
-                Text(shots == 1 ? "1 shot left" : "\(shots) shots left")
+                Text("\(shots) shots left")
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.slate)
             }
@@ -1809,18 +1812,17 @@ struct DisposableCameraView: View {
 
     /// TF b19 item 5 tier 1: surface heart send state inline (no longer silent).
     ///
-    /// **Two sources, two types, one row** (P6 item 6). The mesh path publishes a frozen token the
-    /// app forks into a `LocalizedStringKey` (`SessionHeartStatusCopy`); the presence fallback still
-    /// publishes a composed `String` (P9's hole, deliberately not widened into here — typing the
-    /// whole row `LocalizedStringKey` would force `LocalizedStringKey(runtimeString)` on that arm
-    /// and move the defect rather than close it). The mesh line wins when present: only one send
+    /// **Two sources, one row** (P6 item 6). The mesh path publishes a frozen token the app forks
+    /// into a `LocalizedStringKey` (`SessionHeartStatusCopy`); the presence fallback publishes a
+    /// `String` its manager already resolved, which ``presenceHeartStatusText`` draws verbatim
+    /// (never `LocalizedStringKey(runtimeString)`). The mesh line wins when present: only one send
     /// runs at a time, and the mesh mint is synchronous.
     @ViewBuilder
     private var heartStatusRow: some View {
         if let status = sessionHeartStatusKey {
             heartStatusText(Text(status))
         } else if let status = presenceHeartStatusText {
-            heartStatusText(Text(status))
+            heartStatusText(status)
         }
     }
 
@@ -2061,20 +2063,21 @@ struct DisposableCameraView: View {
         SessionHeartStatusCopy.line(features.hearts.sessionHeartState)
     }
 
-    /// The PRESENCE fallback's status line, still a composed `String` — `PresenceManager`'s own
-    /// `heartSendState.failed(message:)` is the same localization hole in P9's scope, and forking
-    /// only half of it here would create a `LocalizedStringKey(runtimeString)` conversion rather
-    /// than close anything. Names go through `SessionHeartStatusCopy.shownRecipient`: the state
-    /// carries the trust-vault name, which is the fingerprint for a friend kept before their name
-    /// arrived. `.failed`'s sentence is the manager's, built on `PresenceManager.firstName(of:in:)`,
-    /// which applies the same rule.
-    private var presenceHeartStatusText: String? {
+    /// The PRESENCE fallback's status line. `PresenceManager`'s `heartSendState.failed(message:)`
+    /// arrives already resolved in this device's language (FernletSocial's
+    /// `FernletSocialCopy.Presence`, under `bundle: .module`, Spanish round 2026-10-20), so it is drawn
+    /// verbatim — never through `LocalizedStringKey(runtimeString)`; the other three lines are this
+    /// view's own keys. Names go through `SessionHeartStatusCopy.shownRecipient`: the state carries
+    /// the trust-vault name, which is the fingerprint for a friend kept before their name arrived.
+    /// `.failed`'s sentence is the manager's, built on `PresenceManager.firstName(of:in:)`, which
+    /// applies the same rule.
+    private var presenceHeartStatusText: Text? {
         switch store.presenceManager.heartSendState {
         case .idle: return nil
-        case .connecting(let name): return "Connecting to \(SessionHeartStatusCopy.shownRecipient(name))…"
-        case .verifying(let name): return "Saying hello to \(SessionHeartStatusCopy.shownRecipient(name))…"
-        case .sent(let name): return "Sent \(SessionHeartStatusCopy.shownRecipient(name)) some good vibes."
-        case .failed(let message): return message
+        case .connecting(let name): return Text("Connecting to \(SessionHeartStatusCopy.shownRecipient(name))…")
+        case .verifying(let name): return Text("Saying hello to \(SessionHeartStatusCopy.shownRecipient(name))…")
+        case .sent(let name): return Text("Sent \(SessionHeartStatusCopy.shownRecipient(name)) some good vibes.")
+        case .failed(let message): return Text(verbatim: message)
         }
     }
 

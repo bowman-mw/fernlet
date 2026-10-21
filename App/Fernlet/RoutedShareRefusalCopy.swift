@@ -53,13 +53,14 @@ enum RoutedShareRefusalCopy {
     /// The sentence for photos this session that reached nobody — one count, one sentence, nil
     /// for none (P8 item 0, device finding (c)).
     ///
+    /// One count-bearing key: its English "1 photo … took it." form is the catalog's `one`
+    /// plural variation (Spanish round, 2026-10-20), not a `count == 1` branch picking between two
+    /// English sentences, which a language with more plural forms than English could not follow.
+    ///
     /// - Parameter count: FernletSocial's `MeshSessionPhotos.photosKeptOnThisPhone`.
     /// - Returns: a `LocalizedStringKey`, or nil when every capture was shared.
     static func photoKeptNotice(count: Int) -> LocalizedStringKey? {
         guard count > 0 else { return nil }
-        if count == 1 {
-            return "1 photo stayed on this phone. No one else was in the session when you took it."
-        }
         return "\(count) photos stayed on this phone. No one else was in the session when you took them."
     }
 
