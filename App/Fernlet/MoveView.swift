@@ -963,7 +963,7 @@ struct WorkoutSheet: View {
     private var kindChips: some View {
         FlowLayout(spacing: 8) {
             ForEach(WorkoutMode.allCases) { mode in
-                Button { logMode = mode } label: { kindChipLabel(mode) }
+                Button { FernletFeedback.system.select(mode, in: &logMode) } label: { kindChipLabel(mode) }
                     .buttonStyle(ChipButtonStyle(selected: logMode == mode))
                     .accessibilityIdentifier("workout.kind.\(mode.rawValue)")
             }
@@ -2386,7 +2386,7 @@ struct WorkoutSuggestionSheet: View {
                 // `displayWord` is the localized token-free half; `.localizedCapitalized` raises it
                 // for a standalone chip using the USER's locale rules (Turkish dotless i included),
                 // which `String.capitalized` does not.
-                Button(intensity.displayWord.localizedCapitalized) { energy = intensity }
+                Button(intensity.displayWord.localizedCapitalized) { FernletFeedback.system.select(intensity, in: &energy) }
                     .buttonStyle(ChipButtonStyle(selected: energy == intensity))
             }
         }
@@ -2867,7 +2867,7 @@ struct EditWorkoutSheet: View {
         SheetField("Intensity") {
             FlowLayout(spacing: 8) {
                 ForEach(WorkoutIntensity.allCases) { level in
-                    Button(level.displayWord.localizedCapitalized) { intensity = level }
+                    Button(level.displayWord.localizedCapitalized) { FernletFeedback.system.select(level, in: &intensity) }
                         .buttonStyle(ChipButtonStyle(selected: intensity == level))
                         .accessibilityIdentifier("workout.edit.intensity.\(level.rawValue)")
                 }
@@ -4968,7 +4968,7 @@ struct WorkoutPlanSheet: View {
         SheetField("Split") {
             FlowLayout(spacing: 8) {
                 ForEach(strengthSplits) { option in
-                    Button(option.title) { split = option }
+                    Button(option.title) { FernletFeedback.system.select(option, in: &split) }
                         .buttonStyle(ChipButtonStyle(selected: split == option))
                 }
             }
@@ -4985,7 +4985,7 @@ struct WorkoutPlanSheet: View {
             FlowLayout(spacing: 8) {
                 ForEach(WorkoutMode.allCases) { mode in
                     Button(mode.label) {
-                        logMode = mode
+                        FernletFeedback.system.select(mode, in: &logMode)
                         if mode == .activity {
                             split = .workout
                         } else if split == .workout {

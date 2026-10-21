@@ -18,6 +18,7 @@
 
 import Foundation
 import Testing
+import FernletDomainModel
 import FernletUI
 @testable import FernletLockUI
 @testable import Fernlet
@@ -149,6 +150,67 @@ private final class SpokenLog {
         let styleEnd = try #require(components.range(of: "\n}\n", range: style.upperBound..<components.endIndex))
         #expect(!components[style.lowerBound..<styleEnd.upperBound].contains("FernletFeedback"))
         #expect(components.contains("FernletFeedback.system.select(section, in: &selection)"), "HubSectionPicker")
+    }
+
+    /// The weight-inventory and custom-exercise chips edit a copy with the model's own mutators and
+    /// choose the copy in. That ticks only on a real change because the models compare by what they
+    /// hold: re-tapping the preset or bar already chosen, or the main equipment again, plays nothing,
+    /// while a kettlebell's or a muscle's chip ticks both on and off.
+    @Test func aChipThatEditsACopyTicksOnlyWhenTheModelChanged() {
+        let log = CueLog()
+        func choose<Value: Equatable>(_ value: inout Value, _ edit: (inout Value) -> Void) {
+            var next = value
+            edit(&next)
+            log.feedback.select(next, in: &value, preferences: all)
+        }
+
+        var weights = WorkoutWeightInventory(unit: .lb)
+        let homeSet = WorkoutWeightPresets.Dumbbells.homeSet.weights(in: .lb)
+        choose(&weights) { $0.setDumbbells(homeSet) }
+        choose(&weights) { $0.setDumbbells(homeSet) }
+        #expect(log.events == [.tick] && weights.dumbbells == homeSet, "re-tapping the chosen preset is not a change")
+        choose(&weights) { $0.setBar(45) }
+        choose(&weights) { $0.setBar(45) }
+        choose(&weights) { _ = $0.addKettlebell(35) }
+        choose(&weights) { $0.removeKettlebell(35) }
+        #expect(log.events.count == 4, "the bar ticks once; a kettlebell ticks on and off")
+
+        let muscle = MuscleGroup.allCases[0]
+        var draft = CustomExerciseDraft()
+        choose(&draft) { $0.equipment = .bodyweight; $0.alternativeEquipment.remove(.bodyweight) }
+        #expect(log.events.count == 4, "re-tapping the main equipment is not a change")
+        choose(&draft) { $0.primaryMuscles.insert(muscle) }
+        choose(&draft) { $0.primaryMuscles.remove(muscle) }
+        #expect(log.events == Array(repeating: .tick, count: 6))
+    }
+
+    /// The selection chips no Tier B lane owned choose through the shared helper (a SwiftUI button's
+    /// action can't be pressed here, so the source is pinned): the Move tab's log, edit and plan
+    /// sheets, workout setup with its session and weight fields, the injury picker, the custom
+    /// exercise form, the ready screen's food question, the set editor's effort and reason, and the
+    /// Activities chips.
+    @Test func theRemainingSelectionChipsChooseThroughTheSharedHelper() throws {
+        let pins: [(path: String, selects: Int)] = [
+            ("App/Fernlet/MoveView.swift", 5),
+            ("App/Fernlet/WorkoutSetupView.swift", 2),
+            ("App/Fernlet/WorkoutSessionSection.swift", 2),
+            ("App/Fernlet/WorkoutWeightInventorySection.swift", 1),
+            ("App/Fernlet/WorkoutInjuryPicker.swift", 1),
+            ("App/Fernlet/CustomExerciseFormSheet.swift", 7),
+            ("App/Fernlet/WorkoutFoodAware.swift", 1),
+            ("App/Fernlet/WorkoutSetEditorViews.swift", 2),
+            ("App/Fernlet/ActivitiesView.swift", 1)
+        ]
+        for (path, selects) in pins {
+            let found = try RepoRoot.source(path).components(separatedBy: "FernletFeedback.system.select(").count - 1
+            #expect(found >= selects, "\(path): \(found) of its \(selects) selection chips choose through the helper")
+        }
+        let weights = try RepoRoot.source("App/Fernlet/WorkoutWeightInventorySection.swift")
+        #expect(weights.components(separatedBy: "choose(in: $weights)").count - 1 >= 3,
+                "the dumbbell presets, the kettlebells and the bar edit through the inventory helper")
+        let custom = try RepoRoot.source("App/Fernlet/CustomExerciseFormSheet.swift")
+        #expect(custom.components(separatedBy: "choose(in: $draft)").count - 1 >= 5,
+                "both muscle rows, both equipment rows and the gear edit through the draft helper")
     }
 
     // MARK: The water sheet

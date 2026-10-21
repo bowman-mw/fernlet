@@ -86,7 +86,7 @@ struct ContentView: View {
     @State private var trainerExportLaunchAction: TrainerExportLaunchAction?
     @State private var mealLogNotification: MealLogNotification?
     /// True while VoiceOver's cursor is on the meal-logged toast, which then waits rather than
-    /// vanishing from under it (see ``showMealLogNotification(_:loggedTo:)``).
+    /// vanishing from under it (see ``showMealLogNotification(_:loggedTo:landedWithCaveat:)``).
     @State private var isMealToastUnderCursor = false
     /// The just-logged meal the toast's "Adjust" action opens the correction sheet for — a local
     /// `.sheet(item:)` slot beside the `activeSheet` router (the toast fires only after the logging
@@ -1178,8 +1178,9 @@ struct ContentView: View {
         switch sheet {
         case .meal:
             // At accessibility sizes the six 80pt meal-type chips overflow the medium detent, so
-            // the sheet opens .large instead of hiding a control (artboard 4a·AX3).
-            MealSheet(store: store, onLogged: showMealLogNotification)
+            // the sheet opens .large instead of hiding a control (artboard 4a·AX3). The reporter, not
+            // a bare closure: a meal kept without its photo lands on the toast as a caveat.
+            MealSheet(store: store, onLogged: mealLogReporter)
                 .fernletSheetChrome(
                     anchor: "sheet.meal",
                     detents: dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large]
@@ -1895,30 +1896,32 @@ struct ContentView: View {
         periodContext.refresh(unlocked: unlocked, wellbeingByDay: store.periodWellbeingByDay)
     }
 
-    /// Raises the meal-logged toast for meals logged to today. The meal sheet's `onLogged`.
-    private func showMealLogNotification(_ meals: [Meal]) {
-        showMealLogNotification(meals, loggedTo: nil)
-    }
-
     /// The meal-logged toast as the food surfaces report to it (``MealLogReporter``), so a log made
-    /// anywhere on the Food tab, in the recipe book or on Home lands on the same toast.
+    /// anywhere on the Food tab, in the recipe book, on Home or in the meal sheet lands on the same toast.
     private var mealLogReporter: MealLogReporter {
-        MealLogReporter { meals, dayKey in showMealLogNotification(meals, loggedTo: dayKey) }
+        MealLogReporter { meals, dayKey, landedWithCaveat in
+            showMealLogNotification(meals, loggedTo: dayKey, landedWithCaveat: landedWithCaveat)
+        }
     }
 
     /// Raises the meal-logged toast: Undo, Adjust for a single meal logged to today, and the spoken
     /// confirmation. `dayKey` is the day the meals went to, `nil` for today; a cook that began before
     /// midnight passes the day it began, and the toast names that day and undoes the meals from it.
-    private func showMealLogNotification(_ meals: [Meal], loggedTo dayKey: String?) {
+    /// `landedWithCaveat` is a log that kept something to read beside it (the meal sheet's unsealed
+    /// photo); the toast then lands with `caveat` rather than `done`.
+    private func showMealLogNotification(_ meals: [Meal], loggedTo dayKey: String?, landedWithCaveat: Bool) {
         guard meals.isEmpty == false else { return }
-        let notification = MealLogNotification(meals: meals, dayKey: dayKey ?? store.todayKey, todayKey: store.todayKey)
+        let notification = MealLogNotification(
+            meals: meals, dayKey: dayKey ?? store.todayKey, todayKey: store.todayKey,
+            landedWithCaveat: landedWithCaveat)
         // Deliberately does NOT switch to Home. The toast overlays the tab pages, so it shows
         // over whichever tab the log started from; jumping to Home meant a meal logged from Food
         // landed the user on another tab and cost them a tab switch to check the match.
         mealLogNotification = notification
         // A8: the meal landed — often after a "Matching…" wait. Felt at once, not after the sheet's
-        // settle the announcement below waits for.
-        FernletFeedback.system.play(.done)
+        // settle the announcement below waits for. B9: one haptic, `caveat` when the log kept
+        // something to read, never `done` and then `caveat` (the sheet plays nothing of its own).
+        FernletFeedback.system.play(notification.landingEvent)
         // The toast appears with no focus change, so without this a VoiceOver user is never told
         // the meal landed or that an Undo exists. Spoken after the logging sheet has settled.
         Task { @MainActor in
@@ -2151,12 +2154,22 @@ struct MealLogNotification: Identifiable, Equatable {
     /// Whether ``dayKey`` was today when the meals were logged. False for a back-dated log, which
     /// names its day on the toast and offers no Adjust (the correction sheet edits today's meals).
     let isLoggedToToday: Bool
+    /// Whether the log kept something the person needs to read beside it: the meal sheet's photo
+    /// that couldn't be sealed, whose notice the sheet stays open on.
+    let landedWithCaveat: Bool
 
     /// Creates the payload for meals logged to `dayKey`, judged against today's `todayKey`.
-    init(meals: [Meal], dayKey: String, todayKey: String) {
+    init(meals: [Meal], dayKey: String, todayKey: String, landedWithCaveat: Bool = false) {
         self.meals = meals
         self.dayKey = dayKey
         self.isLoggedToToday = dayKey == todayKey
+        self.landedWithCaveat = landedWithCaveat
+    }
+
+    /// The one notification haptic the toast lands with (B9): `caveat` for a log that kept something
+    /// to read, `done` otherwise. Never both: back to back in one instant they blur into one buzz.
+    var landingEvent: FernletFeedbackEvent {
+        landedWithCaveat ? .caveat : .done
     }
 
     /// The one logged meal when exactly one was logged (a multi-meal log has no single meal to

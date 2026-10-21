@@ -97,6 +97,15 @@ enum WeightInventoryText {
 
 // MARK: - Blocks
 
+/// A chip's edit to the inventory, made on a copy with the model's own mutator and chosen in through
+/// ``FernletFeedback/select(_:in:preferences:)``: a chip that really changes what the space has ticks
+/// (report B6), and a re-tap on the preset or bar already chosen plays nothing.
+private func choose(in weights: Binding<WorkoutWeightInventory>, _ edit: (inout WorkoutWeightInventory) -> Void) {
+    var next = weights.wrappedValue
+    edit(&next)
+    FernletFeedback.system.select(next, in: &weights.wrappedValue)
+}
+
 /// A block's title (a heading for VoiceOver's rotor) and its one-line caption.
 private struct WeightBlockTitle: View {
     let title: LocalizedStringKey
@@ -125,7 +134,7 @@ private struct WeightDumbbellBlock: View {
             WeightBlockTitle(title: "Dumbbells", caption: "Pairs, by the weight of one dumbbell.")
             WeightChipFlow {
                 ForEach(WorkoutWeightPresets.Dumbbells.allCases, id: \.self) { preset in
-                    Button { weights.setDumbbells(preset.weights(in: weights.unit)) } label: { label(preset) }
+                    Button { choose(in: $weights) { $0.setDumbbells(preset.weights(in: weights.unit)) } } label: { label(preset) }
                         .buttonStyle(ChipButtonStyle(selected: weights.dumbbells == preset.weights(in: weights.unit)))
                         .accessibilityHint(Text("Replaces your dumbbell list"))
                         .accessibilityIdentifier("workout.location.weights.dumbbells.\(preset.rawValue)")
@@ -196,11 +205,13 @@ private struct WeightKettlebellBlock: View {
 
     /// Adds a size not owned, removes one that is.
     private func toggle(_ size: Double) {
-        guard weights.ownsKettlebell(size) else {
-            weights.addKettlebell(size)
-            return
+        choose(in: $weights) { next in
+            guard next.ownsKettlebell(size) else {
+                next.addKettlebell(size)
+                return
+            }
+            next.removeKettlebell(size)
         }
-        weights.removeKettlebell(size)
     }
 }
 
@@ -220,7 +231,7 @@ private struct WeightBarbellBlock: View {
             WeightBlockTitle(title: "Barbell", caption: "The bar, and how many pairs of each plate.")
             WeightChipFlow {
                 ForEach(bars, id: \.self) { bar in
-                    Button { weights.setBar(bar) } label: {
+                    Button { choose(in: $weights) { $0.setBar(bar) } } label: {
                         Text("\(WeightInventoryText.weight(bar, weights.unit)) bar")
                     }
                     .buttonStyle(ChipButtonStyle(selected: weights.barWeight == bar))

@@ -11,29 +11,46 @@
 // wiring is source-pinned, as `MealDataAttributionTests` pins its screens: SwiftUI bodies are not
 // inspectable here, and a log that stops reporting to the toast compiles clean. The census at the end
 // is a ratchet: a new meal-logging call in the app that hands nothing to the toast fails it.
+//
+// B9's meal kept without its photo lands on the toast as a caveat: the flag rides the reporter to the
+// toast's payload, and the player is asked for one haptic, `caveat` in place of `done`. That chain is
+// driven through the player's `perform` seam; that ContentView and the meal sheet are wired to it is
+// source-pinned.
 
 import Foundation
 import Testing
 import FernletDomainModel
 import FernletFoundation
+import FernletUI
 @testable import Fernlet
 
 /// Records every report a ``MealLogReporter`` makes, in order.
 @MainActor
 private final class ReportLog {
-    /// One report: the logged meals' names and the day key it carried (`nil` = today).
+    /// One report: the logged meals' names, the day key it carried (`nil` = today), and whether the
+    /// log landed with a caveat.
     struct Report: Equatable {
         let names: [String]
         let dayKey: String?
+        var landedWithCaveat = false
     }
 
     var reports: [Report] = []
 
     var reporter: MealLogReporter {
-        MealLogReporter { [self] meals, dayKey in
-            reports.append(Report(names: meals.map(\.name), dayKey: dayKey))
+        MealLogReporter { [self] meals, dayKey, landedWithCaveat in
+            reports.append(Report(names: meals.map(\.name), dayKey: dayKey, landedWithCaveat: landedWithCaveat))
         }
     }
+}
+
+/// Records the events a ``FernletFeedback`` was asked to play.
+@MainActor
+private final class PlayedLog {
+    /// Every event that reached the player, in order.
+    var events: [FernletFeedbackEvent] = []
+    /// ONE player for the log's life.
+    lazy var feedback = FernletFeedback(perform: { [unowned self] in events.append($0.event) })
 }
 
 @MainActor
@@ -234,6 +251,75 @@ private final class ReportLog {
         #expect(content.contains("RecipeSheet(store: store, onMealsLogged: mealLogReporter)"))
         let home = try RepoRoot.source("App/Fernlet/HomeView.swift")
         #expect(home.contains("onMealsLogged: onMealsLogged"), "Home no longer passes the toast to its ambient cards")
+    }
+
+    // MARK: Landing with a caveat (B9)
+
+    /// The caveat call carries its flag, the plain and dated calls never do, and `then` hands it on.
+    @Test func aCaveatReportCarriesItsFlagAndThenHandsItOn() {
+        let log = ReportLog()
+        let reporter = log.reporter.then {}
+        reporter([meal("Oats")])
+        reporter([meal("Stew")], loggedTo: "2026-10-19")
+        reporter([meal("Toast")], landedWithCaveat: true)
+        reporter([meal("Soup")], landedWithCaveat: false)
+
+        #expect(log.reports == [
+            ReportLog.Report(names: ["Oats"], dayKey: nil),
+            ReportLog.Report(names: ["Stew"], dayKey: "2026-10-19"),
+            ReportLog.Report(names: ["Toast"], dayKey: nil, landedWithCaveat: true),
+            ReportLog.Report(names: ["Soup"], dayKey: nil)
+        ])
+    }
+
+    /// The seam end to end: a report reaches the toast's payload the way ContentView builds it (pinned
+    /// below), and the player is asked for exactly one notification haptic: `caveat` in place of `done`
+    /// for a meal kept without its photo, `done` for every other log.
+    @Test func theToastPlaysOneHapticAndACaveatReplacesTheDone() {
+        let allOn = FernletFeedbackPreferences(hapticsEnabled: true, soundsEnabled: false)
+        func landing(_ log: (MealLogReporter) -> Void) -> [FernletFeedbackEvent] {
+            let played = PlayedLog()
+            let toast = MealLogReporter { meals, dayKey, landedWithCaveat in
+                let notification = MealLogNotification(
+                    meals: meals, dayKey: dayKey ?? "2026-10-20", todayKey: "2026-10-20",
+                    landedWithCaveat: landedWithCaveat)
+                played.feedback.play(notification.landingEvent, preferences: allOn)
+            }
+            log(toast)
+            return played.events
+        }
+
+        #expect(landing { $0([meal()], landedWithCaveat: true) } == [.caveat])
+        #expect(landing { $0.then {}([meal()], landedWithCaveat: true) } == [.caveat])
+        #expect(landing { $0([meal()], landedWithCaveat: false) } == [.done])
+        #expect(landing { $0([meal()]) } == [.done])
+        #expect(landing { $0([meal()], loggedTo: "2026-10-19") } == [.done])
+    }
+
+    /// ContentView hands the meal sheet the reporter and plays the payload's one landing haptic; the
+    /// meal sheet reports each commit's photo outcome and plays nothing of its own as it stays open on
+    /// the notice. A `caveat` there would land in the same instant as the toast's haptic.
+    @Test func theMealSheetLeavesItsCaveatToTheToast() throws {
+        let content = try RepoRoot.source("App/Fernlet/ContentView.swift")
+        #expect(content.contains("MealSheet(store: store, onLogged: mealLogReporter)"),
+                "the meal sheet no longer reports through the toast's reporter, so its caveat can't reach the toast")
+        let present = try #require(region(content, from: "private func showMealLogNotification(", to: "announceAfterSheetCloses()"))
+        #expect(present.contains("landedWithCaveat: landedWithCaveat"), "the toast drops the caveat flag")
+        #expect(present.contains("FernletFeedback.system.play(notification.landingEvent)"),
+                "the toast no longer lands with the payload's haptic")
+        #expect(present.components(separatedBy: "FernletFeedback.system.play(").count - 1 == 1,
+                "the toast plays more than its one landing haptic")
+
+        let food = try RepoRoot.source("App/Fernlet/FoodView.swift")
+        let close = try #require(region(food, from: "private func closeAfterLogging(photoAttached: Bool) {", to: "\n    }\n"))
+        #expect(!close.contains("FernletFeedback"), "the meal sheet plays its own haptic again, beside the toast's")
+        let lines = food.components(separatedBy: "\n")
+        let closes = lines.indices.filter { lines[$0].contains("closeAfterLogging(photoAttached: photoAttached)") }
+        #expect(closes.count >= 4, "found only \(closes.count) of the meal sheet's commit paths")
+        for index in closes where index > 0 {
+            #expect(lines[index - 1].contains("onLogged(") && lines[index - 1].contains("landedWithCaveat: !photoAttached)"),
+                    "FoodView.swift:\(index + 1) closes after a log that never told the toast about its photo")
+        }
     }
 
     // MARK: Census
