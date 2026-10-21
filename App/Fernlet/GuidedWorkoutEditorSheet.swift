@@ -55,6 +55,21 @@ struct GuidedWorkoutEditorSheet: View {
 
     private var goal: GoalType { store.settings.selectedGoal }
 
+    /// The note under the editor's rows: one whole sentence per goal. It used to lowercase the goal's
+    /// display name and splice it in ("your strength goal"), which a translator can neither inflect
+    /// nor reorder, and which lowercases German nouns.
+    static func restDefaultsNote(for goal: GoalType) -> Text {
+        switch goal {
+        case .wellness: Text("Rest defaults come from your wellness goal and the movement — tune any of them here. Changes apply the next time you start this workout.")
+        case .strength: Text("Rest defaults come from your strength goal and the movement — tune any of them here. Changes apply the next time you start this workout.")
+        case .weightManagement: Text("Rest defaults come from your weight management goal and the movement — tune any of them here. Changes apply the next time you start this workout.")
+        case .mentalHealth: Text("Rest defaults come from your mental health goal and the movement — tune any of them here. Changes apply the next time you start this workout.")
+        case .recovery: Text("Rest defaults come from your recovery goal and the movement — tune any of them here. Changes apply the next time you start this workout.")
+        case .exploring: Text("Rest defaults come from your exploring goal and the movement — tune any of them here. Changes apply the next time you start this workout.")
+        case .sportsPrep: Text("Rest defaults come from your sports prep goal and the movement — tune any of them here. Changes apply the next time you start this workout.")
+        }
+    }
+
     /// The row list diverges from the session this editor opened on (reorder, add, remove, or a
     /// sets/reps/rest tweak). `PrescribedExercise` is Equatable, so this is an honest compare.
     private var isDirty: Bool { rows != Self.liftingRows(of: session) || preferenceEdits.hasPending }
@@ -82,7 +97,7 @@ struct GuidedWorkoutEditorSheet: View {
 
                     addExerciseSection
 
-                    Text("Rest defaults come from your \(goal.displayName.lowercased()) goal and the movement — tune any of them here. Changes apply the next time you start this workout.")
+                    Self.restDefaultsNote(for: goal)
                         .font(.fernlet(.bubble))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()

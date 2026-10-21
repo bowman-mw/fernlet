@@ -712,16 +712,6 @@
     "%lld logged" : {
 
     },
-    "%lld logged, %lld planned" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld logged, %2$lld planned"
-          }
-        }
-      }
-    },
     "%lld meal logs, %lld journal entries, %lld workouts" : {
       "localizations" : {
         "en" : {
@@ -1111,16 +1101,10 @@
     "1 item" : {
 
     },
-    "1 logged" : {
-
-    },
     "1 person connected" : {
 
     },
     "1 photo stayed on this phone. No one else was in the session when you took it." : {
-
-    },
-    "1 planned" : {
 
     },
     "1 shot left" : {
@@ -2377,6 +2361,9 @@
 
     },
     "Copy diagnostic report" : {
+
+    },
+    "Copy previous week" : {
 
     },
     "Copy summary + prompt" : {
@@ -6957,7 +6944,25 @@
     "Rest day" : {
 
     },
-    "Rest defaults come from your %@ goal and the movement — tune any of them here. Changes apply the next time you start this workout." : {
+    "Rest defaults come from your exploring goal and the movement — tune any of them here. Changes apply the next time you start this workout." : {
+
+    },
+    "Rest defaults come from your mental health goal and the movement — tune any of them here. Changes apply the next time you start this workout." : {
+
+    },
+    "Rest defaults come from your recovery goal and the movement — tune any of them here. Changes apply the next time you start this workout." : {
+
+    },
+    "Rest defaults come from your sports prep goal and the movement — tune any of them here. Changes apply the next time you start this workout." : {
+
+    },
+    "Rest defaults come from your strength goal and the movement — tune any of them here. Changes apply the next time you start this workout." : {
+
+    },
+    "Rest defaults come from your weight management goal and the movement — tune any of them here. Changes apply the next time you start this workout." : {
+
+    },
+    "Rest defaults come from your wellness goal and the movement — tune any of them here. Changes apply the next time you start this workout." : {
 
     },
     "Rest next" : {
@@ -7549,6 +7554,9 @@
 
     },
     "Set up this device again" : {
+
+    },
+    "Set up your space" : {
 
     },
     "Sets" : {
@@ -8241,6 +8249,9 @@
       "comment" : "Location editor, Weights I have: how to use the kettlebell size chips"
     },
     "Tap to log it again with today's time." : {
+
+    },
+    "Tap to plan" : {
 
     },
     "Taps you can feel, and the few sounds Fernlet makes." : {
@@ -12320,6 +12331,54 @@
         }
       }
     },
+    "move.guided.noneToGuide.easyMovement" : {
+      "comment" : "Move tab, today's workout card on a day with only easy movement planned",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Today's about easy movement — no guided sets, but anything you do still counts."
+          }
+        }
+      }
+    },
+    "move.guided.noneToGuide.rest" : {
+      "comment" : "Move tab, today's workout card on a rest day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rest day. Nothing to push — let your body settle."
+          }
+        }
+      }
+    },
+    "move.plan.suggest.subtitle" : {
+      "comment" : "Plan sheet, the Suggest a workout card's second line",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Built from your split, equipment, and limits"
+          }
+        }
+      }
+    },
+    "move.plan.targetDate.today" : {
+      "comment" : "Plan sheet: the workout is being planned for today",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Today"
+          }
+        }
+      }
+    },
     "move.space.accessibilityValue" : {
       "comment" : "Spoken value of the Move header's space segment: the training location's name and how many pieces of equipment it has.",
       "extractionState" : "extracted_with_value",
@@ -12328,6 +12387,182 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@, %2$lld items"
+          }
+        }
+      }
+    },
+    "move.week.cell.a11y.logged" : {
+      "comment" : "Spoken summary of a Move week-strip day: how many workouts were logged. Needs a plural variation.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld logged"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld logged"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "move.week.cell.a11y.planned" : {
+      "comment" : "Spoken summary of a Move week-strip day: how many workouts are planned. Needs a plural variation.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld planned"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld planned"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "move.week.cell.logs" : {
+      "comment" : "Move tab week strip: a day tile's count of logged workouts. Needs a plural variation.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld log"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld logs"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "move.week.cell.plans" : {
+      "comment" : "Move tab week strip: a day tile's count of planned workouts. Needs a plural variation.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld plan"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld plans"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "move.week.cell.rest" : {
+      "comment" : "Move tab week strip: a day tile with nothing logged or planned",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rest"
+          }
+        }
+      }
+    },
+    "move.workout.remove.clears" : {
+      "comment" : "Remove-workout alert body",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This just clears it from your log — no worries, you can always add it again."
+          }
+        }
+      }
+    },
+    "move.workout.remove.clearsAndHealth" : {
+      "comment" : "Remove-workout alert body, for a workout Fernlet also saved to Apple Health",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This just clears it from your log — no worries, you can always add it again. This also removes the copy saved to your Health app."
+          }
+        }
+      }
+    },
+    "move.workout.remove.keep" : {
+      "comment" : "Cancel button of the remove-workout alert: keep the logged workout",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Keep it"
+          }
+        }
+      }
+    },
+    "move.workout.remove.restoresPlan" : {
+      "comment" : "Remove-workout alert body, for a workout completed from a plan",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "I'll put it back in your plan so you can redo it whenever you're ready."
+          }
+        }
+      }
+    },
+    "move.workout.remove.restoresPlanAndHealth" : {
+      "comment" : "Remove-workout alert body, for a workout completed from a plan that Fernlet also saved to Apple Health",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "I'll put it back in your plan so you can redo it whenever you're ready. This also removes the copy saved to your Health app."
+          }
+        }
+      }
+    },
+    "move.workout.remove.title" : {
+      "comment" : "Title of the alert before removing a logged workout. Argument: the workout's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Remove %@?"
           }
         }
       }
@@ -12703,6 +12938,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Fernlet could not identify a product on that page."
+          }
+        }
+      }
+    },
+    "progressPhoto.snapshotCover.hidden" : {
+      "comment" : "Caption on the cover over the progress photos in the app switcher: the photos are hidden",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hidden"
           }
         }
       }

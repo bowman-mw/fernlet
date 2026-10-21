@@ -1412,6 +1412,30 @@ struct LocalizationBoundaryTests {
         }
     }
 
+    /// The Move lane's "wrong, not missing" sites stay whole keys (2026-10-20, Spanish round step 2).
+    ///
+    /// Each of these rendered correct English while being untranslatable: an English plural "s" (or
+    /// "it"/"them", "was"/"were") picked by count and spliced into the line, a display name lowercased
+    /// and spliced mid-sentence (which also breaks German nouns), and a token's `rawValue` shown in
+    /// a sentence. A revert compiles and reads the same in English, so only a source pin notices.
+    @Test func theMoveLaneSplicedCopyStaysWholeKeys() throws {
+        let sites: [(path: String, needle: String, what: String)] = [
+            ("App/Fernlet/CoachPlanReviewView.swift", "== 1 ? \"\" : \"s\"", "an English plural spliced into a review line"),
+            ("App/Fernlet/CoachPlanReviewView.swift", "\"it\" : \"them\"", "the new-exercises card's pronoun picked by count"),
+            ("App/Fernlet/TrainerExportView.swift", "== 1 ? \"\" : \"s\"", "an English plural spliced into the summary copy"),
+            ("App/Fernlet/TrainerExportView.swift", "\"was\" : \"were\"", "the Plan added alert's verb picked by count"),
+            ("App/Fernlet/GuidedWorkoutEditorSheet.swift", "displayName.lowercased()", "the goal's name lowercased into the rest note"),
+            ("App/Fernlet/CoachPlanImporter.swift", "movementPattern.rawValue) movements", "a movement token shown in a safety reason"),
+            ("App/Fernlet/CoachPlanImporter.swift", ".lowercased())\")", "equipment names lowercased into a safety reason"),
+            ("App/Fernlet/MoveView.swift", "== 1 ? \"1 plan\"", "the week tile's count picked between two English strings"),
+        ]
+        for site in sites {
+            let source = try RepoRoot.source(site.path)
+            #expect(!source.contains(site.needle),
+                    "\(site.path) contains `\(site.needle)` again: \(site.what). Use one plural-ruled key (or one whole sentence per case).")
+        }
+    }
+
     /// `GoalType`'s legacy persisted-display aliases.
     ///
     /// The sharpest instance of the token/display collision in the tree: early builds persisted the
@@ -2810,6 +2834,18 @@ struct LocalizationBoundaryTests {
                      role: "CeremonyButton, every step's advance button"),
         // Spanish round step 2, move lane (2026-10-20): Move and coach-plan helpers that took their
         // literal copy as `String`, so it never reached the catalog.
+        ForkedMember(path: "App/Fernlet/MoveView.swift",
+                     declaration: "var label: LocalizedStringKey",
+                     role: "MoveContextSegment's uppercase Goal / Space caption"),
+        ForkedMember(path: "App/Fernlet/MoveView.swift",
+                     declaration: "var emptyPrompt: LocalizedStringKey",
+                     role: "MoveContextSegment's Tap to plan / Set up your space invitation"),
+        ForkedMember(path: "App/Fernlet/MoveView.swift",
+                     declaration: "private func toolbarCapsule(_ title: LocalizedStringKey, systemImage: String, action: @escaping () -> Void) -> some View {",
+                     role: "the Move day's Plan and Log toolbar capsules"),
+        ForkedMember(path: "App/Fernlet/MoveView.swift",
+                     declaration: "private func entryCard(icon: String, title: LocalizedStringKey, subtitle: String, action: @escaping () -> Void) -> some View {",
+                     role: "the plan sheet's Copy previous week and Suggest a workout cards"),
         ForkedMember(path: "App/Fernlet/CoachPlanReviewView.swift",
                      declaration: "private func cardTitle(_ text: LocalizedStringKey) -> some View {",
                      role: "every coach-plan review card's caption"),
@@ -3185,6 +3221,14 @@ struct LocalizationBoundaryTests {
                      source: "the Plan added alert's struck-exercise count ('was' / 'were')"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "trainerExport.preview.dayCount",
                      source: "the trainer summary's day count, which passed the English 's' as an argument"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "move.week.cell.plans",
+                     source: "a Move week-strip tile's planned count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "move.week.cell.logs",
+                     source: "a Move week-strip tile's logged count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "move.week.cell.a11y.planned",
+                     source: "a Move week-strip tile's spoken planned count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "move.week.cell.a11y.logged",
+                     source: "a Move week-strip tile's spoken logged count"),
         HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings", key: "coachPlan.count.sets",
                      source: "a coach-plan review note's set count ('0 sets')"),
     ]

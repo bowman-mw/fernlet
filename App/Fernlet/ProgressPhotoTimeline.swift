@@ -249,6 +249,13 @@ struct ProgressPhotoSection: View {
         .padding(.vertical, 8)
     }
 
+    /// The word on both app-switcher covers, under its own key: "Hidden" is also a safety code's state
+    /// elsewhere, and Spanish agrees it with what is hidden (here, the progress photos).
+    static var hiddenCaption: String {
+        String(localized: "progressPhoto.snapshotCover.hidden", defaultValue: "Hidden",
+               comment: "Caption on the cover over the progress photos in the app switcher: the photos are hidden")
+    }
+
     /// Opaque privacy cover used to redact the timeline in the app-switcher snapshot.
     private var snapshotCover: some View {
         ZStack {
@@ -257,7 +264,7 @@ struct ProgressPhotoSection: View {
                 Image(systemName: "lock.fill")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(Color.slate)
-                Text("Hidden")
+                Text(ProgressPhotoSection.hiddenCaption)
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
             }
@@ -810,7 +817,7 @@ struct ProgressPhotoDetailView: View {
                 Image(systemName: "lock.fill")
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(Color.slate)
-                Text("Hidden")
+                Text(ProgressPhotoSection.hiddenCaption)
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
             }
