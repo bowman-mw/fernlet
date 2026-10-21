@@ -429,8 +429,14 @@
         }
       }
     },
+    "%@, equipped" : {
+      "comment" : "Customize sheet, VoiceOver: one of the user's own companion items, currently worn. The placeholder is the item's name."
+    },
     "%@, intimacy logged" : {
 
+    },
+    "%@, not equipped" : {
+      "comment" : "Customize sheet, VoiceOver: one of the user's own companion items, not worn right now. The placeholder is the item's name."
     },
     "%@, part %lld of %lld. Step %lld of %lld. %@" : {
       "localizations" : {
@@ -628,9 +634,6 @@
         }
       }
     },
-    "%lld entries" : {
-
-    },
     "%lld envelopes" : {
 
     },
@@ -666,15 +669,6 @@
           }
         }
       }
-    },
-    "%lld gifted" : {
-
-    },
-    "%lld gifts" : {
-
-    },
-    "%lld gifts on the shelf" : {
-
     },
     "%lld hearts are tucked away for %@ — delivered when they next open Fernlet." : {
       "localizations" : {
@@ -1162,19 +1156,7 @@
     "1 bottle · %lld oz" : {
 
     },
-    "1 entry" : {
-
-    },
     "1 exercise · ~%lld min" : {
-
-    },
-    "1 gift" : {
-
-    },
-    "1 gift on the shelf" : {
-
-    },
-    "1 item" : {
 
     },
     "1 logged" : {
@@ -1210,6 +1192,9 @@
     "5.5 mph" : {
 
     },
+    "5·4·3·2·1 grounding" : {
+
+    },
     "6-digit PIN" : {
 
     },
@@ -1234,6 +1219,9 @@
     "A couple of readings looked close. Pick the one that fits." : {
 
     },
+    "A few signals hint your body might be fighting something off — resting counts double." : {
+
+    },
     "A flexible mix of meals and snacks." : {
 
     },
@@ -1250,6 +1238,9 @@
 
     },
     "A kind, safe space" : {
+
+    },
+    "A little tense" : {
 
     },
     "A mood, never a number." : {
@@ -1279,6 +1270,9 @@
 
     },
     "A quiet chime when the timer runs out. It follows your ring/silent switch." : {
+
+    },
+    "A quiet minute or three with a slowly swelling circle." : {
 
     },
     "A quiet minute, whenever" : {
@@ -1343,6 +1337,9 @@
       "comment" : "Silly stat: songs sung in the shower"
     },
     "About this day" : {
+
+    },
+    "About your usual" : {
 
     },
     "Accept" : {
@@ -1423,6 +1420,9 @@
     "Add a photo of this recipe" : {
 
     },
+    "Add a short note." : {
+
+    },
     "Add a workout" : {
 
     },
@@ -1451,6 +1451,9 @@
       "comment" : "Location editor, Weights I have: adds the typed dumbbell weight"
     },
     "Add exercise" : {
+
+    },
+    "Add food to today." : {
 
     },
     "Add ingredient" : {
@@ -1638,9 +1641,6 @@
     "All" : {
 
     },
-    "All done" : {
-      "comment" : "Shown and spoken by the breathing pacer the moment a session reaches its full length."
-    },
     "All done." : {
 
     },
@@ -1727,6 +1727,9 @@
     "Anyone you're with right now can ask to join. It stays on your devices — nothing is uploaded." : {
 
     },
+    "Anything at all — a corner of the ceiling, the light on your hand." : {
+
+    },
     "Anything else to keep in mind (not medical advice)" : {
 
     },
@@ -1772,6 +1775,9 @@
       }
     },
     "Areas to work around" : {
+
+    },
+    "Arrive back in the room, one gentle sense at a time." : {
 
     },
     "As planned: %@" : {
@@ -1976,12 +1982,6 @@
     "Breathe and ground sessions, written back to Health." : {
 
     },
-    "Breathe in" : {
-      "comment" : "Shown and spoken while the breathing pacer's circle expands. An instruction to inhale, given to someone with their eyes closed — keep it short and calm."
-    },
-    "Breathe out" : {
-      "comment" : "Shown and spoken while the breathing pacer's circle contracts. An instruction to exhale."
-    },
     "Breathe out and let it go." : {
 
     },
@@ -1991,9 +1991,6 @@
     "Breathing haptics" : {
 
     },
-    "Breathing pacer" : {
-      "comment" : "VoiceOver name for the animated breathing circle. Its spoken value is the current phase — 'Breathe in', 'Hold', 'Breathe out'."
-    },
     "Bring a plan back" : {
 
     },
@@ -2002,6 +1999,9 @@
     },
     "Brush Marathon" : {
       "comment" : "Silly stat title: total time brushing teeth"
+    },
+    "Build a recipe." : {
+
     },
     "Building your workout…" : {
 
@@ -3348,6 +3348,9 @@
     "Errors" : {
 
     },
+    "Even just the inside of your mouth counts." : {
+
+    },
     "Events" : {
 
     },
@@ -3473,6 +3476,9 @@
     "Exports a recipe as a Fernlet recipe file." : {
 
     },
+    "Extra tense lately" : {
+
+    },
     "F %lld" : {
 
     },
@@ -3480,6 +3486,9 @@
 
     },
     "Face ID needs a Fernlet passcode first. Nothing is locked until you set one." : {
+
+    },
+    "Faint is fine — the air itself has a scent, if you let it." : {
 
     },
     "Fat" : {
@@ -3629,6 +3638,9 @@
     "Fernlet needs Local Network access to find friends in person. Check Settings › Fernlet › Local Network, then come back to this screen." : {
 
     },
+    "Fernlet needs about a week of body signals before it can tell what \"usual\" looks like for you. Nothing to do — it will quietly settle in." : {
+
+    },
     "Fernlet needs the camera to take photos with friends. You can turn it on any time." : {
 
     },
@@ -3696,6 +3708,12 @@
     },
     "Fernlet won't suggest this again." : {
       "comment" : "Plan editor: this exercise is marked Don't suggest, written on Save"
+    },
+    "Fernlet's sense of your usual is still quite new." : {
+
+    },
+    "Fernlet's sense of your usual is still settling in." : {
+
     },
     "Fewer" : {
 
@@ -4957,6 +4975,9 @@
     "Log recipe as meal" : {
 
     },
+    "Log rest." : {
+
+    },
     "Log set by set" : {
       "comment" : "Log workout sheet: switch that gives each set of an exercise its own reps and weight instead of one sets × reps × weight entry. Also a Voice Control name for the switch.",
       "localizations" : {
@@ -4975,6 +4996,9 @@
 
     },
     "Log this recipe" : {
+
+    },
+    "Log training or movement." : {
 
     },
     "Log water" : {
@@ -5224,9 +5248,6 @@
     "Mild: Fernlet trains around it, lighter and with supported moves. Severe: those moves are left out." : {
       "comment" : "Explains the two severities in the workout injury picker"
     },
-    "Milestone gifts have added %lld coins to your pouch." : {
-
-    },
     "Milestones" : {
 
     },
@@ -5374,6 +5395,9 @@
 
     },
     "Name your item" : {
+
+    },
+    "Near or far — a hum in the walls, a bird, your own breath." : {
 
     },
     "Nearby Friends is off" : {
@@ -5778,6 +5802,21 @@
     "Notice body tension" : {
 
     },
+    "Notice five things you can see" : {
+
+    },
+    "Notice four things you can touch" : {
+
+    },
+    "Notice one thing you can taste" : {
+
+    },
+    "Notice three things you can hear" : {
+
+    },
+    "Notice two things you can smell" : {
+
+    },
     "Notifications" : {
 
     },
@@ -5906,10 +5945,16 @@
     "Open Settings" : {
 
     },
+    "Open care tasks." : {
+
+    },
     "Open page" : {
 
     },
     "Open saved recipe" : {
+
+    },
+    "Open saved recipes." : {
 
     },
     "Open the Creation Studio" : {
@@ -7138,6 +7183,9 @@
     "Review goals" : {
 
     },
+    "Review local signals." : {
+
+    },
     "Review plan" : {
 
     },
@@ -7688,6 +7736,9 @@
     "Settings" : {
 
     },
+    "Settled" : {
+
+    },
     "Setup finished." : {
 
     },
@@ -8158,6 +8209,9 @@
     "Steps (optional)" : {
 
     },
+    "Still getting to know you" : {
+
+    },
     "Stop" : {
 
     },
@@ -8407,12 +8461,6 @@
     "That session is over, so it can't be reopened. Anything you kept is already saved." : {
 
     },
-    "That was %lld whole minutes of care. Nicely done." : {
-
-    },
-    "That was a whole minute of care. Nicely done." : {
-
-    },
     "That was the last set — your workout is finished." : {
 
     },
@@ -8477,6 +8525,9 @@
 
     },
     "The cycle backup saved from your other iPhone stays in iCloud." : {
+
+    },
+    "The fabric on your knee, a cool table edge, your own two hands." : {
 
     },
     "The intimate log backup in iCloud is damaged and can't be opened." : {
@@ -9032,6 +9083,9 @@
     "Update data" : {
 
     },
+    "Update hydration." : {
+
+    },
     "Update plan" : {
 
     },
@@ -9515,6 +9569,9 @@
     "Worth a second look" : {
 
     },
+    "Write a worry down and let the box hold it for a while." : {
+
+    },
     "Write another" : {
 
     },
@@ -9731,6 +9788,9 @@
     "You've moved %@ so far. Gently, I hope." : {
       "comment" : "Companion line about weight lifted"
     },
+    "You've moved a lot recently, so this may just be that good kind of tired." : {
+
+    },
     "You've picked outside the range a few times. What's up?" : {
 
     },
@@ -9762,6 +9822,18 @@
 
     },
     "Your app lock was reset. Fernlet is keeping your Sealed backup from before the reset in iCloud as it was, and won't restore it or back up this iPhone over it on its own. Restore your Sealed backup?" : {
+
+    },
+    "Your body has seemed extra tense for a couple of days now. Going gently — rest, water, something small and kind — is more than enough." : {
+
+    },
+    "Your body seems a bit more tense than your usual. That can come from lots of ordinary things — be extra kind to yourself today." : {
+
+    },
+    "Your body seems more settled than your usual right now. Nice." : {
+
+    },
+    "Your body seems right around its usual. Nothing to read into." : {
 
     },
     "Your closet is empty" : {
@@ -10569,6 +10641,149 @@
     "bottles" : {
 
     },
+    "breathing.finished.minutes" : {
+      "comment" : "Breathing finish screen: how long the session was, in minutes (1, 2 or 3). Needs a plural variation per language; English says 'That was a whole minute of care. Nicely done.' for one.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "That was a whole minute of care. Nicely done."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "That was %lld whole minutes of care. Nicely done."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "breathing.pacer.allDone" : {
+      "comment" : "Shown and spoken by the breathing pacer the moment a session reaches its full length, and the heading of the finish screen after it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "All done"
+          }
+        }
+      }
+    },
+    "breathing.pacer.label" : {
+      "comment" : "VoiceOver name for the animated breathing circle. Its spoken value is the current phase — 'Breathe in', 'Hold', 'Breathe out'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Breathing pacer"
+          }
+        }
+      }
+    },
+    "breathing.pacer.ready" : {
+      "comment" : "Shown and spoken by the breathing pacer while no session is running. Unhurried and permission-giving — the tool waits, it does not prompt.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ready when you are"
+          }
+        }
+      }
+    },
+    "breathing.phase.exhale" : {
+      "comment" : "Shown and spoken while the breathing pacer's circle contracts. An instruction to exhale.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Breathe out"
+          }
+        }
+      }
+    },
+    "breathing.phase.hold" : {
+      "comment" : "Shown and spoken while the breathing pacer rests between breaths. It means 'hold your breath', not 'keep' or 'wait' (the workout runner's hold is a different key).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hold"
+          }
+        }
+      }
+    },
+    "breathing.phase.inhale" : {
+      "comment" : "Shown and spoken while the breathing pacer's circle expands. An instruction to inhale, given to someone with their eyes closed — keep it short and calm.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Breathe in"
+          }
+        }
+      }
+    },
+    "breathing.preset.box.caption" : {
+      "comment" : "Breathing screen: box breathing's rhythm under its name — breathe in 4 seconds, hold 4, out 4, hold 4.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "In 4 · hold 4 · out 4 · hold 4"
+          }
+        }
+      }
+    },
+    "breathing.preset.box.name" : {
+      "comment" : "Breathing screen: the name of box breathing (in, hold, out, hold, four seconds each) on its pattern tile.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Box"
+          }
+        }
+      }
+    },
+    "breathing.preset.relax.caption" : {
+      "comment" : "Breathing screen: the relaxing breath's rhythm under its name — breathe in 4 seconds, hold 7, out 8.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "In 4 · hold 7 · out 8"
+          }
+        }
+      }
+    },
+    "breathing.preset.relax.name" : {
+      "comment" : "Breathing screen: the name of the 4-7-8 relaxing breath on its pattern tile.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Relax"
+          }
+        }
+      }
+    },
     "camera.error.cameraUnavailable" : {
       "comment" : "Shown by the disposable camera when the capture session is not configured or camera access was denied.",
       "extractionState" : "extracted_with_value",
@@ -10684,9 +10899,6 @@
 
     },
     "cooking notes, substitutions, tips" : {
-
-    },
-    "covered" : {
 
     },
     "crisis.action.call" : {
@@ -12249,9 +12461,6 @@
     "g" : {
 
     },
-    "gap" : {
-
-    },
     "grams — no calories here" : {
 
     },
@@ -12263,6 +12472,585 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%@ is still going. Starting this one will let go of the sets you've already done there."
+          }
+        }
+      }
+    },
+    "home.customize.wardrobe.itemCount" : {
+      "comment" : "Customize sheet: the Wardrobe row's count of companion items the user designed. Needs a plural variation per language; English says '1 item'.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld item"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld items"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "home.cycleOutlook.early" : {
+      "comment" : "Home cycle outlook card while the prediction is only an early estimate (low confidence). The placeholder is a short date or a date range.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your next period is likely around %@, an early estimate. Gentle planning, no pressure."
+          }
+        }
+      }
+    },
+    "home.cycleOutlook.likely" : {
+      "comment" : "Home cycle outlook card. The placeholder is a short date or a date range. Calm, never a countdown.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your next period is likely around %@. Gentle planning, no pressure."
+          }
+        }
+      }
+    },
+    "home.cycleOutlook.settling" : {
+      "comment" : "Home cycle outlook card while the prediction is still settling (moderate confidence). The placeholder is a short date or a date range.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your next period is likely around %@, still settling. Gentle planning, no pressure."
+          }
+        }
+      }
+    },
+    "home.cycleOutlook.window" : {
+      "comment" : "Home cycle outlook: the range of days the next period is likely to start, e.g. 'Mar 3–Mar 6'. Both are short dates.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@–%2$@"
+          }
+        }
+      }
+    },
+    "home.gentleOffer.breathing" : {
+      "comment" : "Home gentle-offer card on a heavier day, inviting a breathing exercise. An offer, never an instruction: no 'you should'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Would a minute of slow breathing feel nice? No pressure at all."
+          }
+        }
+      }
+    },
+    "home.gentleOffer.shortWalk" : {
+      "comment" : "Home gentle-offer card when the weather is pleasant and it is daytime, inviting a short walk. An offer, never an instruction.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "It's gentle outside right now — a short stroll might feel nice, only if you want to."
+          }
+        }
+      }
+    },
+    "home.gentleOffer.worryBox" : {
+      "comment" : "Home gentle-offer card on a heavier day, inviting the Worry Box (write a worry down and set it aside). An offer, never an instruction.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Carrying something around? You could write it down and let the worry box hold it for a while."
+          }
+        }
+      }
+    },
+    "home.lookBack.sixMonthsAgo" : {
+      "comment" : "Home looking-back card: the label over a journal entry written six months ago.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Six months ago"
+          }
+        }
+      }
+    },
+    "home.lookBack.threeMonthsAgo" : {
+      "comment" : "Home looking-back card: the label over a journal entry written three months ago.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Three months ago"
+          }
+        }
+      }
+    },
+    "home.lookBack.yearAgo" : {
+      "comment" : "Home looking-back card: the label over a journal entry written exactly a year ago.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A year ago today"
+          }
+        }
+      }
+    },
+    "home.macroGap.protein" : {
+      "comment" : "Home 'Room for a little more' card: grams of protein still under today's target (always 20 or more), with a gentle suggestion. Never a scold.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "About %lldg protein left today — yogurt, eggs, or chicken would help close it."
+          }
+        }
+      }
+    },
+    "home.milestones.coinsGifted.pill" : {
+      "comment" : "Home milestones card: the small pill beside the title counting coins gifted by milestones, beside a star glyph. The noun (coins) is implied. Needs a plural variation per language.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld gifted"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld gifted"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "home.milestones.summary.allTime" : {
+      "comment" : "Home milestones card: how many kinds of care (journal, meals, movement, water, breathing, worries) have been kept. Needs a plural variation per language; English says 'One kind of care' for one.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "One kind of care kept so far, added up over all time."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld kinds of care kept so far, added up over all time."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "home.milestones.summary.coinsGifted" : {
+      "comment" : "Home milestones card, second half of the summary: how many coins milestone gifts have added. Needs a plural variation per language.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld coin gifted"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld coins gifted"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "home.milestones.summary.empty" : {
+      "comment" : "Home milestones card, before any care has been kept. A gentle invitation, never a to-do.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your keepsake shelf is waiting — every bit of care will find a place here."
+          }
+        }
+      }
+    },
+    "home.milestones.summary.keptAndGifted" : {
+      "comment" : "Home milestones card summary when coins were gifted. The first placeholder is the kinds-of-care clause ('3 kinds of care kept so far'), the second the coins clause ('40 coins gifted'). Reorder or re-punctuate freely.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@."
+          }
+        }
+      }
+    },
+    "home.milestones.summary.keptSoFar" : {
+      "comment" : "Home milestones card, first half of the summary when coins were gifted: how many kinds of care have been kept. Needs a plural variation per language; English says 'One kind of care kept so far' for one.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "One kind of care kept so far"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld kinds of care kept so far"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "home.photowall.caption.dinner" : {
+      "comment" : "Home photowall: handwritten lowercase caption on a placeholder polaroid. The evening meal.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "dinner"
+          }
+        }
+      }
+    },
+    "home.photowall.caption.morning" : {
+      "comment" : "Home photowall: handwritten lowercase caption on a polaroid. The early part of the day.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "morning"
+          }
+        }
+      }
+    },
+    "home.photowall.caption.music" : {
+      "comment" : "Home photowall: handwritten lowercase caption on a placeholder polaroid.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "music"
+          }
+        }
+      }
+    },
+    "home.photowall.caption.parkWalk" : {
+      "comment" : "Home photowall: handwritten lowercase caption on a placeholder polaroid. A walk in a park.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "park walk"
+          }
+        }
+      }
+    },
+    "home.quickLog.journal.count" : {
+      "comment" : "Home quick-log Journal tile: how many journal entries are written today. Needs a plural variation per language; English says '1 entry'.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld entry"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld entries"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "home.quickLog.meals.count" : {
+      "comment" : "Home quick-log Meals tile, under the word Meals: how many meals are logged today. The implied noun is meals. Needs a plural variation per language.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld logged"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld logged"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "home.quickLog.move.count" : {
+      "comment" : "Home quick-log Move tile, under the word Move: how many workouts are logged today. The implied noun is workouts. Needs a plural variation per language.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld logged"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld logged"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "home.quickLog.water.count" : {
+      "comment" : "Home quick-log Water tile: how many bottles of water are logged today. Needs a plural variation per language; English says '1 bottle'.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld bottle"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld bottles"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "home.thought.emptyDay" : {
+      "comment" : "Home companion thought bubble on a day with nothing logged yet. An invitation, never a to-do.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start with one small thing. Enough, not everything."
+          }
+        }
+      }
+    },
+    "home.thought.journalMood.bright" : {
+      "comment" : "Home companion thought bubble after today's journal mood was set to Bright. Gentle; the mood is information, not a grade.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You marked today as bright. Let that be enough information for now."
+          }
+        }
+      }
+    },
+    "home.thought.journalMood.good" : {
+      "comment" : "Home companion thought bubble after today's journal mood was set to Good.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You marked today as good. Let that be enough information for now."
+          }
+        }
+      }
+    },
+    "home.thought.journalMood.hard" : {
+      "comment" : "Home companion thought bubble after today's journal mood was set to Hard. Never alarmed; the mood is information, not a grade.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You marked today as hard. Let that be enough information for now."
+          }
+        }
+      }
+    },
+    "home.thought.journalMood.neutral" : {
+      "comment" : "Home companion thought bubble after today's journal mood was set to Neutral.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You marked today as neutral. Let that be enough information for now."
+          }
+        }
+      }
+    },
+    "home.thought.journalMood.quiet" : {
+      "comment" : "Home companion thought bubble after today's journal mood was set to Quiet (a subdued, low-key day).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You marked today as quiet. Let that be enough information for now."
+          }
+        }
+      }
+    },
+    "home.thought.journalMood.tired" : {
+      "comment" : "Home companion thought bubble after today's journal mood was set to Tired.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You marked today as tired. Let that be enough information for now."
+          }
+        }
+      }
+    },
+    "home.thought.ordinaryDay" : {
+      "comment" : "Home companion thought bubble on an ordinary day that already has a few logs, when no other line applies.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A few ordinary care notes are already here. Keep the day simple."
+          }
+        }
+      }
+    },
+    "home.thought.settled" : {
+      "comment" : "Home companion thought bubble when petting settles the companion. Fern is the companion's name; keep it as is.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fern is soaking up all this love — feeling completely content."
+          }
+        }
+      }
+    },
+    "home.thought.settledAgain" : {
+      "comment" : "Home companion thought bubble when the user keeps petting a settled companion. Warm, never a refusal. Fern is the companion's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fern is feeling nice and settled — check back in a little while."
+          }
+        }
+      }
+    },
+    "home.thought.tap.checkIn" : {
+      "comment" : "Home companion thought bubble after a tap on the companion.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A little check-in counts."
+          }
+        }
+      }
+    },
+    "home.thought.tap.notices" : {
+      "comment" : "Home companion thought bubble after a tap on the companion. 'Fernlet' is the app's name; keep it as is.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet notices you."
+          }
+        }
+      }
+    },
+    "home.thought.tap.smallCare" : {
+      "comment" : "Home companion thought bubble after a tap on the companion.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Small care is still care."
+          }
+        }
+      }
+    },
+    "home.thought.tap.stillHere" : {
+      "comment" : "Home companion thought bubble after a tap on the companion, spoken by the companion.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Still here with you."
           }
         }
       }
@@ -13174,6 +13962,42 @@
         }
       }
     },
+    "launch.greeting.afternoon" : {
+      "comment" : "Launch screen greeting from noon to 5 pm, above the loading line.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Good afternoon."
+          }
+        }
+      }
+    },
+    "launch.greeting.evening" : {
+      "comment" : "Launch screen greeting from 5 pm until 5 am, above the loading line.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Good evening."
+          }
+        }
+      }
+    },
+    "launch.greeting.morning" : {
+      "comment" : "Launch screen greeting before noon, above the loading line.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Good morning."
+          }
+        }
+      }
+    },
     "launch.status.checkingIn" : {
       "comment" : "Launch screen status line while Fernlet opens (the first one shown)",
       "extractionState" : "extracted_with_value",
@@ -13435,6 +14259,102 @@
     "logged" : {
 
     },
+    "macros.carbs" : {
+      "comment" : "Macro ring label under the carbohydrate figure (Home, Food and a journal day).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Carbs"
+          }
+        }
+      }
+    },
+    "macros.carbs.initial" : {
+      "comment" : "One-letter abbreviation of Carbs, shown under the figure at the largest text sizes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "C"
+          }
+        }
+      }
+    },
+    "macros.fat" : {
+      "comment" : "Macro ring label under the fat figure (Home, Food and a journal day).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fat"
+          }
+        }
+      }
+    },
+    "macros.fat.initial" : {
+      "comment" : "One-letter abbreviation of Fat, shown under the figure at the largest text sizes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "F"
+          }
+        }
+      }
+    },
+    "macros.fiber.intake" : {
+      "comment" : "Macros card footer: fiber eaten today out of the daily target, in grams, e.g. 'Fiber 18g of 30g'. The first number is what was eaten.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fiber %1$lldg of %2$lldg"
+          }
+        }
+      }
+    },
+    "macros.fiber.target" : {
+      "comment" : "Macros card footer when meals carry no fiber details: the daily fiber target in grams, e.g. 'Fiber target 30g'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fiber target %lldg"
+          }
+        }
+      }
+    },
+    "macros.protein" : {
+      "comment" : "Macro ring label under the protein figure (Home, Food and a journal day).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Protein"
+          }
+        }
+      }
+    },
+    "macros.protein.initial" : {
+      "comment" : "One-letter abbreviation of Protein, shown under the figure at the largest text sizes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "P"
+          }
+        }
+      }
+    },
     "max %@" : {
 
     },
@@ -13525,6 +14445,42 @@
         }
       }
     },
+    "messagesImport.error.planGone" : {
+      "comment" : "Alert body after tapping a workout-plan card in Messages whose import review has already been handled or cleared.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This workout-plan review is no longer available."
+          }
+        }
+      }
+    },
+    "messagesImport.error.recipeGone" : {
+      "comment" : "Alert body after tapping a recipe card in Messages whose import review has already been handled or cleared.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This recipe review is no longer available."
+          }
+        }
+      }
+    },
+    "messagesImport.error.unreadable" : {
+      "comment" : "Alert body when a recipe or workout-plan card from Messages can't be read, usually because the iPhone is locked. 'Fernlet' is the app's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet couldn't read this review. Unlock your iPhone and try again."
+          }
+        }
+      }
+    },
     "messagesRecipeImport.added" : {
       "comment" : "Shown in the Messages recipe review sheet for a moment after Save recipe, before it closes, and spoken once it has. The name is the recipe's; if the same recipe was already in Fernlet, it stays a single copy, so the line says it is there rather than that it was added.",
       "extractionState" : "extracted_with_value",
@@ -13605,6 +14561,501 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Saved the plan, but Fernlet couldn't clear this review. Try adding it again."
+          }
+        }
+      }
+    },
+    "milestones.coins.added" : {
+      "comment" : "Milestones screen and keepsake shelf footer: the coins milestone gifts have added to the user's coin pouch. Needs a plural variation per language.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Milestone gifts have added %lld coin to your pouch."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Milestone gifts have added %lld coins to your pouch."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "milestones.empty.breathing" : {
+      "comment" : "Milestones screen: a quiet placeholder row before the first finished breathing exercise. Never a to-do.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your first slow-breathing break will land here."
+          }
+        }
+      }
+    },
+    "milestones.empty.journal" : {
+      "comment" : "Milestones screen: a quiet placeholder row before the first journal entry. Never a to-do.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your first journal moment will land here."
+          }
+        }
+      }
+    },
+    "milestones.empty.meal" : {
+      "comment" : "Milestones screen: a quiet placeholder row before the first logged meal. Never a to-do.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your first noticed meal will land here."
+          }
+        }
+      }
+    },
+    "milestones.empty.water" : {
+      "comment" : "Milestones screen: a quiet placeholder row before the first day the water target was met. Never a to-do.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your first well-watered day will land here."
+          }
+        }
+      }
+    },
+    "milestones.empty.workout" : {
+      "comment" : "Milestones screen: a quiet placeholder row before the first logged workout. Never a to-do.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your first time moving will land here."
+          }
+        }
+      }
+    },
+    "milestones.empty.worry" : {
+      "comment" : "Milestones screen: a quiet placeholder row before the first worry released from the Worry Box. Never a to-do.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your first worry let go will land here."
+          }
+        }
+      }
+    },
+    "milestones.headline.breathing.count" : {
+      "comment" : "Milestones: the breathing row's lifetime count (2 or more). Needs a plural variation per language.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've taken %lld slow-breathing break."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've taken %lld slow-breathing breaks."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "milestones.headline.breathing.first" : {
+      "comment" : "Milestones: the breathing row after exactly one finished breathing exercise.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You've taken one slow-breathing break."
+          }
+        }
+      }
+    },
+    "milestones.headline.breathing.none" : {
+      "comment" : "Milestones: the breathing row's sentence before any breathing break.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Breathing breaks will gather here."
+          }
+        }
+      }
+    },
+    "milestones.headline.journal.count" : {
+      "comment" : "Milestones: the journal row's lifetime count (2 or more; exactly one has its own sentence). Needs a plural variation per language.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've written %lld journal moment."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've written %lld journal moments."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "milestones.headline.journal.first" : {
+      "comment" : "Milestones: the journal row after exactly one entry. Warm, a memory not a metric.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You've written your first journal moment."
+          }
+        }
+      }
+    },
+    "milestones.headline.journal.none" : {
+      "comment" : "Milestones: the journal row's sentence before any entry.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your journal moments will gather here."
+          }
+        }
+      }
+    },
+    "milestones.headline.meal.count" : {
+      "comment" : "Milestones: the meals row's lifetime count (2 or more). Needs a plural variation per language.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've noted %lld meal."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've noted %lld meals."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "milestones.headline.meal.first" : {
+      "comment" : "Milestones: the meals row after exactly one logged meal.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You've noted your first meal."
+          }
+        }
+      }
+    },
+    "milestones.headline.meal.none" : {
+      "comment" : "Milestones: the meals row's sentence before any logged meal.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Meals you notice will gather here."
+          }
+        }
+      }
+    },
+    "milestones.headline.water.count" : {
+      "comment" : "Milestones: the water row's lifetime count of days the water target was met (2 or more). Needs a plural variation per language.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've had %lld well-watered day."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've had %lld well-watered days."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "milestones.headline.water.first" : {
+      "comment" : "Milestones: the water row after exactly one day the water target was met.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You've had one well-watered day."
+          }
+        }
+      }
+    },
+    "milestones.headline.water.none" : {
+      "comment" : "Milestones: the water row's sentence before any well-watered day.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Days you drink enough water will gather here."
+          }
+        }
+      }
+    },
+    "milestones.headline.workout.count" : {
+      "comment" : "Milestones: the movement row's lifetime count of workouts (2 or more). Needs a plural variation per language.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've moved your body %lld time."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've moved your body %lld times."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "milestones.headline.workout.first" : {
+      "comment" : "Milestones: the movement row after exactly one logged workout.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You've moved your body once, on purpose."
+          }
+        }
+      }
+    },
+    "milestones.headline.workout.none" : {
+      "comment" : "Milestones: the movement row's sentence before any logged workout.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Times you move will gather here."
+          }
+        }
+      }
+    },
+    "milestones.headline.worry.count" : {
+      "comment" : "Milestones: the worries row's lifetime count of worries let go (2 or more). Needs a plural variation per language.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've let %lld worry go."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've let %lld worries go."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "milestones.headline.worry.first" : {
+      "comment" : "Milestones: the worries row after exactly one worry released from the Worry Box.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You've let one worry go."
+          }
+        }
+      }
+    },
+    "milestones.headline.worry.none" : {
+      "comment" : "Milestones: the worries row's sentence before any worry let go.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Worries you let go will gather here."
+          }
+        }
+      }
+    },
+    "milestones.row.giftsOnShelf" : {
+      "comment" : "Milestones screen, under a kind of care: how many milestone gifts it has put on the keepsake shelf. Needs a plural variation per language; English says '1 gift on the shelf'.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld gift on the shelf"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld gifts on the shelf"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "milestones.shelf.breathing" : {
+      "comment" : "Keepsake shelf: lowercase label under the breathing medallion, below its count of breathing breaks.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "breathing"
+          }
+        }
+      }
+    },
+    "milestones.shelf.journal" : {
+      "comment" : "Keepsake shelf: lowercase label under the journal medallion, below its count.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "journal"
+          }
+        }
+      }
+    },
+    "milestones.shelf.meals" : {
+      "comment" : "Keepsake shelf: lowercase label under the meals medallion, below its count.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "meals"
+          }
+        }
+      }
+    },
+    "milestones.shelf.water" : {
+      "comment" : "Keepsake shelf: lowercase label under the water medallion, below its count of well-watered days.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "water"
+          }
+        }
+      }
+    },
+    "milestones.shelf.workouts" : {
+      "comment" : "Keepsake shelf: lowercase label under the workouts medallion, below its count.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "workouts"
+          }
+        }
+      }
+    },
+    "milestones.shelf.worries" : {
+      "comment" : "Keepsake shelf: lowercase label under the worry medallion, below its count of worries let go.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "worries let go"
+          }
+        }
+      }
+    },
+    "milestones.shelfLink.giftCount" : {
+      "comment" : "Milestones screen: the Keepsake shelf link's count of milestone gifts. Needs a plural variation per language; English says '1 gift'.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld gift"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld gifts"
+                }
+              }
+            }
           }
         }
       }
@@ -14470,6 +15921,54 @@
     "shoulder issues, hotel gyms only" : {
 
     },
+    "signal.explanation.eatingPattern" : {
+      "comment" : "Trends: how the Eating pattern signal is worked out.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Looks at meal frequency, recent missed meal days, and protein totals."
+          }
+        }
+      }
+    },
+    "signal.explanation.energyTrend" : {
+      "comment" : "Trends: how the Energy trend signal is worked out.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Combines sleep, journal tags, and recent workout load."
+          }
+        }
+      }
+    },
+    "signal.explanation.intensityReadiness" : {
+      "comment" : "Trends: how the Readiness signal is worked out.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Blends recent energy, training load, hard sessions, and meal coverage."
+          }
+        }
+      }
+    },
+    "signal.explanation.moodTrend" : {
+      "comment" : "Trends: how the Mood trend signal is worked out. Tags are the moods on journal entries.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Compares recent journal tags against earlier tags in the rolling window."
+          }
+        }
+      }
+    },
     "signal.explanation.needsRest" : {
       "comment" : "Trends: why Readiness reads Needs Rest. The unwell mark clears itself at midnight.",
       "extractionState" : "extracted_with_value",
@@ -14478,6 +15977,162 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "You marked today as unwell, so readiness rests until tomorrow."
+          }
+        }
+      }
+    },
+    "signal.explanation.nutrients" : {
+      "comment" : "Trends: how a nutrients signal is worked out, from the vitamin and mineral details saved with each logged meal.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tracks covered nutrients and possible gaps from logged meal snapshots."
+          }
+        }
+      }
+    },
+    "signal.explanation.nutrientsNeedData" : {
+      "comment" : "Trends: a nutrients signal with too few logged meal details to read yet.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Micronutrient coverage needs more meal data."
+          }
+        }
+      }
+    },
+    "signal.explanation.progressionTrend" : {
+      "comment" : "Trends: how the Progression signal is worked out.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Compares newer workout load against earlier workout load."
+          }
+        }
+      }
+    },
+    "signal.nutrient.covered" : {
+      "comment" : "Trends, beside a vitamin or mineral's name: recent meals cover it well. Lowercase status word.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "covered"
+          }
+        }
+      }
+    },
+    "signal.nutrient.gap" : {
+      "comment" : "Trends, beside a vitamin or mineral's name: recent meals look low in it. Lowercase status word.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "gap"
+          }
+        }
+      }
+    },
+    "signal.source.heartRateVariability" : {
+      "comment" : "Trends: a source chip under a signal — heart rate variability read from Apple Health.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Heart rate variability"
+          }
+        }
+      }
+    },
+    "signal.source.journalMoods" : {
+      "comment" : "Trends: a source chip under a signal, naming what it was worked out from — the moods tagged on journal entries.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Journal moods"
+          }
+        }
+      }
+    },
+    "signal.source.mealCount" : {
+      "comment" : "Trends: a source chip under a signal — how many meals were logged.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Meal count"
+          }
+        }
+      }
+    },
+    "signal.source.mealEnergy" : {
+      "comment" : "Trends: a source chip under a signal — the calories of logged meals, worded as energy.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Meal energy"
+          }
+        }
+      }
+    },
+    "signal.source.mealMacros" : {
+      "comment" : "Trends: a source chip under a signal — the protein, carbs and fat of logged meals.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Meal macros"
+          }
+        }
+      }
+    },
+    "signal.source.mealNutrients" : {
+      "comment" : "Trends: a source chip under a signal — the vitamins and minerals of logged meals.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Meal nutrients"
+          }
+        }
+      }
+    },
+    "signal.source.perceivedEffort" : {
+      "comment" : "Trends: a source chip under a signal — how hard the user said a workout felt.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Perceived effort"
+          }
+        }
+      }
+    },
+    "signal.source.restingHeartRate" : {
+      "comment" : "Trends: a source chip under a signal — resting heart rate read from Apple Health.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Resting heart rate"
           }
         }
       }
@@ -14494,6 +16149,150 @@
         }
       }
     },
+    "signal.source.sleep" : {
+      "comment" : "Trends: a source chip under a signal — the user's logged sleep.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sleep"
+          }
+        }
+      }
+    },
+    "signal.source.sleepHours" : {
+      "comment" : "Trends: a source chip under a signal — the hours of sleep the user logged.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sleep hours"
+          }
+        }
+      }
+    },
+    "signal.source.sleepQuality" : {
+      "comment" : "Trends: a source chip under a signal — how well the user said they slept.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sleep quality"
+          }
+        }
+      }
+    },
+    "signal.source.workoutIntensity" : {
+      "comment" : "Trends: a source chip under a signal — the intensity of logged workouts.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Workout intensity"
+          }
+        }
+      }
+    },
+    "signal.source.workoutLength" : {
+      "comment" : "Trends: a source chip under a signal — how long logged workouts lasted.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Workout length"
+          }
+        }
+      }
+    },
+    "signal.thought.eatingLight" : {
+      "comment" : "Home companion thought when recent meals have been lighter than usual. Gentle; never mentions weight or calories.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nutrition has been lighter lately. One nourishing meal is enough."
+          }
+        }
+      }
+    },
+    "signal.thought.energyLow" : {
+      "comment" : "Home companion thought when recent energy has been low. Gentle; rest is care, never a failure.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Energy has been low lately. Rest counts as care."
+          }
+        }
+      }
+    },
+    "signal.thought.energyRising" : {
+      "comment" : "Home companion thought when recent energy has been rising.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Something has been building. Notice the upward pull."
+          }
+        }
+      }
+    },
+    "signal.thought.moodGentleness" : {
+      "comment" : "Home companion thought after several harder journal moods in recent days. Gentle, never alarming.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Some harder days in the window. Notice what is still steady."
+          }
+        }
+      }
+    },
+    "signal.thought.moodImproving" : {
+      "comment" : "Home companion thought when recent journal moods have been brighter.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The mood trend has been moving upward. Quiet progress."
+          }
+        }
+      }
+    },
+    "signal.thought.readyForHard" : {
+      "comment" : "Home companion thought when today could take a hard workout. An option, never an instruction.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The signals suggest room to push today if you want to."
+          }
+        }
+      }
+    },
+    "signal.thought.readyForLight" : {
+      "comment" : "Home companion thought when today suits only light movement.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Today looks like a day to move gently and restore."
+          }
+        }
+      }
+    },
     "signal.thought.restDay" : {
       "comment" : "Home companion thought on a day the user marked themselves unwell. Gentle; never suggests exercise.",
       "extractionState" : "extracted_with_value",
@@ -14506,6 +16305,245 @@
         }
       }
     },
+    "signal.title.eatingPattern" : {
+      "comment" : "Trends: title of the signal about how often and how much the user has been eating.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Eating pattern"
+          }
+        }
+      }
+    },
+    "signal.title.energyTrend" : {
+      "comment" : "Trends: title of the signal built from sleep, journal moods and recent workout load.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Energy trend"
+          }
+        }
+      }
+    },
+    "signal.title.intensityReadiness" : {
+      "comment" : "Trends: title of the signal saying how hard a workout today could reasonably be.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Readiness"
+          }
+        }
+      }
+    },
+    "signal.title.micronutrients14Day" : {
+      "comment" : "Trends: title of the vitamin and mineral coverage signal over the last 14 days.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "14-day nutrients"
+          }
+        }
+      }
+    },
+    "signal.title.micronutrients7Day" : {
+      "comment" : "Trends: title of the vitamin and mineral coverage signal over the last 7 days.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "7-day nutrients"
+          }
+        }
+      }
+    },
+    "signal.title.moodTrend" : {
+      "comment" : "Trends: title of the signal comparing recent journal moods with earlier ones.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mood trend"
+          }
+        }
+      }
+    },
+    "signal.title.progressionTrend" : {
+      "comment" : "Trends: title of the signal comparing newer workout load with earlier workout load.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Progression"
+          }
+        }
+      }
+    },
+    "signal.value.building" : {
+      "comment" : "Trends, Progression's value: workout load has been building. Title case.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Building"
+          }
+        }
+      }
+    },
+    "signal.value.consistent" : {
+      "comment" : "Trends, Eating pattern's value: meals have been regular. Title case.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Consistent"
+          }
+        }
+      }
+    },
+    "signal.value.covered" : {
+      "comment" : "Trends, a nutrients signal's value: how many vitamins and minerals recent meals cover well. Needs a plural variation per language. Title case.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Covered"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Covered"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "signal.value.declining" : {
+      "comment" : "Trends, Mood trend's value: recent journal moods are a little lower than earlier ones. Title case.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Declining"
+          }
+        }
+      }
+    },
+    "signal.value.deloading" : {
+      "comment" : "Trends, Progression's value: workout load has eased off (a deload, a lighter stretch of training). Title case.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Deloading"
+          }
+        }
+      }
+    },
+    "signal.value.dipping" : {
+      "comment" : "Trends, Energy trend's value: energy has dipped a little. Title case.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Dipping"
+          }
+        }
+      }
+    },
+    "signal.value.improving" : {
+      "comment" : "Trends, Mood trend's value: recent journal moods are brighter than earlier ones. Title case.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Improving"
+          }
+        }
+      }
+    },
+    "signal.value.inconsistent" : {
+      "comment" : "Trends, Eating pattern's value: meals have been irregular, with some missed days. Neutral, never a judgement. Title case.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Inconsistent"
+          }
+        }
+      }
+    },
+    "signal.value.insufficientData" : {
+      "comment" : "Trends: a signal's value while there are too few logs to read it yet. Title case, like the other signal values.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Insufficient Data"
+          }
+        }
+      }
+    },
+    "signal.value.light" : {
+      "comment" : "Trends, Eating pattern's value: the user has been eating lighter than usual. Title case.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Light"
+          }
+        }
+      }
+    },
+    "signal.value.low" : {
+      "comment" : "Trends, Energy trend's value: energy has been low lately. Title case.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Low"
+          }
+        }
+      }
+    },
+    "signal.value.needsGentleness" : {
+      "comment" : "Trends, Mood trend's value: recent journal moods have been harder. Gentle, never alarming. Title case.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Needs Gentleness"
+          }
+        }
+      }
+    },
     "signal.value.needsRest" : {
       "comment" : "Trends: the readiness value on a day the user marked themselves unwell. Title case, like the other signal values beside it.",
       "extractionState" : "extracted_with_value",
@@ -14514,6 +16552,101 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Needs Rest"
+          }
+        }
+      }
+    },
+    "signal.value.possibleGaps" : {
+      "comment" : "Trends, a nutrients signal's value: how many vitamins or minerals look low in recent meals. Needs a plural variation per language; English says '1 Possible Gap'. Title case.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Possible Gap"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Possible Gaps"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "signal.value.proteinForward" : {
+      "comment" : "Trends, Eating pattern's value: meals have leaned on protein. Title case.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Protein-Forward"
+          }
+        }
+      }
+    },
+    "signal.value.readyForHard" : {
+      "comment" : "Trends, Readiness's value: today could take a hard workout, if the user wants one. Title case.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ready For Hard"
+          }
+        }
+      }
+    },
+    "signal.value.readyForLight" : {
+      "comment" : "Trends, Readiness's value: today suits a light workout. Title case.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ready For Light"
+          }
+        }
+      }
+    },
+    "signal.value.readyForModerate" : {
+      "comment" : "Trends, Readiness's value: today suits a moderate workout. Title case.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ready For Moderate"
+          }
+        }
+      }
+    },
+    "signal.value.rising" : {
+      "comment" : "Trends, Energy trend's value: energy has been building. Title case.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rising"
+          }
+        }
+      }
+    },
+    "signal.value.steady" : {
+      "comment" : "Trends: the value of the Mood trend, Energy trend or Progression signal when nothing has clearly changed. Title case.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Steady"
           }
         }
       }

@@ -68,7 +68,10 @@ struct MicronutrientBoundsTests {
     /// The HOME tab's fiber footer — the same trap on the app's first screen, so a single poisoned
     /// meal would crash on render rather than merely on opening a day.
     @Test func fiberFooterSurvivesHostileTotal() {
-        #expect(MacroCard.fiberFooterText(intake: 1e300, target: 30) == "Fiber 1000000000g of 30g")
+        // The footer is a catalog key now (Spanish round, 2026-10-20), and a localized `%lld` is drawn
+        // with the device's digit grouping, so the clamped ceiling reads "1,000,000,000" in English.
+        let ceiling = 1_000_000_000.formatted()
+        #expect(MacroCard.fiberFooterText(intake: 1e300, target: 30) == "Fiber \(ceiling)g of 30g")
         #expect(MacroCard.fiberFooterText(intake: .infinity, target: 30) == "Fiber target 30g")
         #expect(MacroCard.fiberFooterText(intake: nil, target: 30) == "Fiber target 30g")
         #expect(MacroCard.fiberFooterText(intake: -5, target: 30) == "Fiber 0g of 30g")

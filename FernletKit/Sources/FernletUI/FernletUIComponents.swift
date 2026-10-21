@@ -534,24 +534,57 @@ public struct HeaderActionButton: View {
 /// Used by the friend photo wall and meal-photo surfaces to render snapshots as scattered keepsake
 /// prints. When `imageData` decodes to a `UIImage` it fills the frame; otherwise the `color`
 /// placeholder shows. `rotation` is in degrees, giving each tile its hand-placed tilt.
+///
+/// The caption is resolved at init, like ``SectionLabel``'s text: `caption:` takes a
+/// `LocalizedStringKey`, so a literal handed to it is harvested into the calling target's catalog,
+/// and ``init(color:verbatimCaption:rotation:imageData:imageWidth:imageHeight:)`` takes text that is
+/// already final (a seeded caption, user data, or copy a caller resolved itself).
 public struct PolaroidTile: View {
     var color: Color
-    var caption: String
+    var caption: Text
     var rotation: Double
     var imageData: Data?
     var imageWidth: CGFloat
     var imageHeight: CGFloat
 
+    /// The localizing initializer, for a caption written at the call site as a literal.
     public init(
         color: Color,
-        caption: String,
+        caption: LocalizedStringKey,
         rotation: Double,
         imageData: Data? = nil,
         imageWidth: CGFloat = 98,
         imageHeight: CGFloat = 86
     ) {
+        self.init(color: color, resolvedCaption: Text(caption), rotation: rotation,
+                  imageData: imageData, imageWidth: imageWidth, imageHeight: imageHeight)
+    }
+
+    /// The non-localizing initializer, for a caption that is already final. Kept under a distinct
+    /// label rather than a same-label `String` overload, which would win for every plain literal and
+    /// quietly un-localize the component (see ``SectionLabel/init(verbatim:)``).
+    public init(
+        color: Color,
+        verbatimCaption caption: String,
+        rotation: Double,
+        imageData: Data? = nil,
+        imageWidth: CGFloat = 98,
+        imageHeight: CGFloat = 86
+    ) {
+        self.init(color: color, resolvedCaption: Text(verbatim: caption), rotation: rotation,
+                  imageData: imageData, imageWidth: imageWidth, imageHeight: imageHeight)
+    }
+
+    private init(
+        color: Color,
+        resolvedCaption: Text,
+        rotation: Double,
+        imageData: Data?,
+        imageWidth: CGFloat,
+        imageHeight: CGFloat
+    ) {
         self.color = color
-        self.caption = caption
+        self.caption = resolvedCaption
         self.rotation = rotation
         self.imageData = imageData
         self.imageWidth = imageWidth
@@ -577,7 +610,7 @@ public struct PolaroidTile: View {
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 3))
-            Text(caption)
+            caption
                 .font(.fernlet(.bubble))
                 // Full-strength slate, not 58%: the faded caption measured 1.9:1 on the cream frame.
                 .foregroundStyle(Color.slate)
