@@ -10,6 +10,12 @@
             "state" : "new",
             "value" : "Confirm deletion by typing DELETE or using biometric verification again."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Confirma el borrado escribiendo BORRAR o usando de nuevo la verificación biométrica."
+          }
         }
       }
     },
@@ -21,6 +27,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Sign in to iCloud to check or delete Fernlet cloud data."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Inicia sesión en iCloud para revisar o borrar los datos de Fernlet en la nube."
           }
         }
       }
@@ -34,6 +46,12 @@
             "state" : "new",
             "value" : "Fernlet could not finish the iCloud operation: %@"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo terminar la operación de iCloud: %@"
+          }
         }
       }
     },
@@ -45,6 +63,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Fernlet couldn't open your local records. Your data was not deleted. Unlock your device if it was just restarted, free up storage if needed, then try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo abrir tus registros locales. Tus datos no se eliminaron. Desbloquea tu dispositivo si acabas de reiniciarlo, libera espacio si hace falta e inténtalo de nuevo."
           }
         }
       }

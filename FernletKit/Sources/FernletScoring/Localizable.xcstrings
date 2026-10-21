@@ -10,6 +10,12 @@
             "state" : "new",
             "value" : "The quiet helper is resting for today. Fernlet will use local care until tomorrow."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El ayudante silencioso descansa por hoy. Hasta mañana, Fernlet usará sus alternativas locales."
+          }
         }
       }
     },
@@ -21,6 +27,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "The quiet helper is off right now, so Fernlet will use local fallbacks."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El ayudante silencioso está desactivado por ahora, así que Fernlet usará alternativas locales."
           }
         }
       }
@@ -34,6 +46,12 @@
             "state" : "new",
             "value" : "Your journal is saved. I will look for patterns when the helper is awake again."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu diario está guardado. Buscaré patrones cuando el ayudante vuelva a despertar."
+          }
         }
       }
     },
@@ -45,6 +63,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "I saved this with a local estimate. We can give it another look later."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lo guardé con una estimación local. Podemos volver a revisarlo más tarde."
           }
         }
       }
@@ -58,6 +82,12 @@
             "state" : "new",
             "value" : "A few saved notes can be revisited when you are ready."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Puedes volver a revisar algunas notas guardadas cuando estés ^[listo](inflect: true)."
+          }
         }
       }
     },
@@ -69,6 +99,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "I made a simple local option for today. Keep it gentle and useful."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Preparé una opción local sencilla para hoy. Tómala con calma y que te sirva."
           }
         }
       }
@@ -82,6 +118,12 @@
             "state" : "new",
             "value" : "10 consistent weeks"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "10 semanas constantes"
+          }
         }
       }
     },
@@ -93,6 +135,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "4 weeks"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "4 semanas"
           }
         }
       }
@@ -106,6 +154,12 @@
             "state" : "new",
             "value" : "1 week"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "1 semana"
+          }
         }
       }
     },
@@ -117,6 +171,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Build a repeatable %@ rhythm"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Crear un ritmo de %@ que puedas mantener"
           }
         }
       }
@@ -130,6 +190,12 @@
             "state" : "new",
             "value" : "Build a repeatable general strength rhythm"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Crear un ritmo de fuerza general que puedas mantener"
+          }
         }
       }
     },
@@ -141,6 +207,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "RPE mostly 6-8"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "RPE casi siempre entre 6 y 8"
           }
         }
       }
@@ -154,6 +226,12 @@
             "state" : "new",
             "value" : "Complete 3 %@ sessions in a week"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Completar 3 sesiones de %@ en una semana"
+          }
         }
       }
     },
@@ -165,6 +243,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "sessions completed"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "sesiones completadas"
           }
         }
       }
@@ -178,6 +262,12 @@
             "state" : "new",
             "value" : "Complete 3 general strength sessions in a week"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Completar 3 sesiones de fuerza general en una semana"
+          }
         }
       }
     },
@@ -189,6 +279,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Keep most sessions at a sustainable effort"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mantener la mayoría de las sesiones a un esfuerzo sostenible"
           }
         }
       }
@@ -202,6 +298,12 @@
             "state" : "new",
             "value" : "3 months"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "3 meses"
+          }
         }
       }
     },
@@ -213,6 +315,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "week 8 adjust"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ajuste en la semana 8"
           }
         }
       }
@@ -226,6 +334,12 @@
             "state" : "new",
             "value" : "week 4 check-in"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "revisión en la semana 4"
+          }
         }
       }
     },
@@ -237,6 +351,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Three flexible sessions with one easier day between harder efforts."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tres sesiones flexibles, con un día más suave entre los esfuerzos más intensos."
           }
         }
       }
@@ -250,6 +370,12 @@
             "state" : "new",
             "value" : "Three flexible sessions shaped around: %@."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tres sesiones flexibles adaptadas a: %@."
+          }
         }
       }
     },
@@ -261,6 +387,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Enough movement to feel grounded."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lo justo de movimiento para sentirte ^[centrado](inflect: true)."
           }
         }
       }
@@ -274,6 +406,12 @@
             "state" : "new",
             "value" : "Built around %@."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pensado en torno a tu objetivo: %@."
+          }
         }
       }
     },
@@ -285,6 +423,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Built around %1$@ with: %2$@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pensado en torno a tu objetivo (%1$@), teniendo en cuenta: %2$@."
           }
         }
       }
@@ -298,6 +442,12 @@
             "state" : "new",
             "value" : "A contained experiment for a high-energy day."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un experimento acotado para un día con mucha energía."
+          }
         }
       }
     },
@@ -309,6 +459,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Use only if energy is genuinely there."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Úsalo solo si de verdad tienes energía."
           }
         }
       }
@@ -322,6 +478,12 @@
             "state" : "new",
             "value" : "Steady movement without optimization pressure."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Movimiento constante, sin presión por optimizar."
+          }
         }
       }
     },
@@ -333,6 +495,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Start easy and let it count."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Empieza suave y deja que cuente."
           }
         }
       }
@@ -346,6 +514,12 @@
             "state" : "new",
             "value" : "A practical mixed session."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Una sesión mixta y práctica."
+          }
         }
       }
     },
@@ -357,6 +531,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Recovery still counts as care."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Recuperarte también es cuidarte."
           }
         }
       }
@@ -370,6 +550,12 @@
             "state" : "new",
             "value" : "Keep the ceiling low today."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy, mantén la intensidad baja."
+          }
         }
       }
     },
@@ -381,6 +567,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "A simple local fallback for a balanced day."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Una alternativa local sencilla para un día equilibrado."
           }
         }
       }
@@ -394,6 +586,12 @@
             "state" : "new",
             "value" : "Predictable movement, low decision load."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Movimiento predecible, pocas decisiones."
+          }
         }
       }
     },
@@ -406,6 +604,12 @@
             "state" : "new",
             "value" : "A repeatable strength template."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Una plantilla de fuerza fácil de repetir."
+          }
         }
       }
     },
@@ -417,6 +621,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Gather information, not perfection."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Busca información, no perfección."
           }
         }
       }

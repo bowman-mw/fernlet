@@ -10,6 +10,12 @@
             "state" : "new",
             "value" : "Could not process the image. Please try again."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo procesar la imagen. Inténtalo de nuevo."
+          }
         }
       }
     },
@@ -21,6 +27,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Could not read any text from that image. Try a clearer photo of the nutrition label."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo leer ningún texto en esa imagen. Prueba con una foto más nítida de la información nutricional."
           }
         }
       }
@@ -34,6 +46,12 @@
             "state" : "new",
             "value" : "However today went, a small note of care still counts."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Como haya ido el día, una pequeña nota de cuidado también cuenta."
+          }
         }
       }
     },
@@ -45,6 +63,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "A gentle check-in"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un momento para ti"
           }
         }
       }
@@ -58,6 +82,12 @@
             "state" : "new",
             "value" : "Open Fernlet to reply — session messages disappear when the session ends."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre Fernlet para responder: los mensajes de la sesión desaparecen cuando termina la sesión."
+          }
         }
       }
     },
@@ -69,6 +99,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "New message from %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nuevo mensaje de %@"
           }
         }
       }
@@ -82,6 +118,12 @@
             "state" : "new",
             "value" : "a friend"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "un amigo"
+          }
         }
       }
     },
@@ -93,6 +135,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Ease out of it. The next step is ready when you are."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Suelta con calma. El siguiente paso te espera cuando quieras."
           }
         }
       }
@@ -106,6 +154,12 @@
             "state" : "new",
             "value" : "Hold's done"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ya puedes soltar"
+          }
         }
       }
     },
@@ -117,6 +171,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Start your next set when you're ready."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empieza la siguiente serie cuando estés ^[listo](inflect: true)."
           }
         }
       }
@@ -130,6 +190,12 @@
             "state" : "new",
             "value" : "Rest's over"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Terminó el descanso"
+          }
         }
       }
     },
@@ -142,6 +208,12 @@
             "state" : "new",
             "value" : "Change your pace when you're ready. The next part starts when you open Fernlet."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambia el ritmo cuando estés ^[listo](inflect: true). La siguiente parte empieza cuando abras Fernlet."
+          }
         }
       }
     },
@@ -153,6 +225,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Time's up on this part"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se acabó el tiempo de esta parte"
           }
         }
       }

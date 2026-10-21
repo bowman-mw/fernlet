@@ -10,6 +10,12 @@
             "state" : "new",
             "value" : "Cancel"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cancelar"
+          }
         }
       }
     },
@@ -22,6 +28,12 @@
             "state" : "new",
             "value" : "Continue"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Continuar"
+          }
         }
       }
     },
@@ -32,6 +44,12 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "OK"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
             "value" : "OK"
           }
         }
@@ -46,6 +64,12 @@
             "state" : "new",
             "value" : "Reset app lock"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Restablecer bloqueo de la app"
+          }
         }
       }
     },
@@ -57,6 +81,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Unlock"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Desbloquear"
           }
         }
       }
@@ -70,6 +100,12 @@
             "state" : "new",
             "value" : "Biometric unlock (optional)"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Desbloqueo biométrico (opcional)"
+          }
         }
       }
     },
@@ -81,6 +117,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Biometrics"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Biometría"
           }
         }
       }
@@ -94,6 +136,12 @@
             "state" : "new",
             "value" : "Choose a lock type"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Elige un tipo de bloqueo"
+          }
         }
       }
     },
@@ -105,6 +153,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Confirm PIN"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Confirmar PIN"
           }
         }
       }
@@ -118,6 +172,12 @@
             "state" : "new",
             "value" : "Confirm password"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Confirmar contraseña"
+          }
         }
       }
     },
@@ -129,6 +189,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Try again in %1$lldh %2$lldm"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Inténtalo de nuevo en %1$lld h %2$lld min"
           }
         }
       }
@@ -142,6 +208,12 @@
             "state" : "new",
             "value" : "Try again in %1$lldm %2$llds"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Inténtalo de nuevo en %1$lld min %2$lld s"
+          }
         }
       }
     },
@@ -153,6 +225,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Try again in %llds"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Inténtalo de nuevo en %lld s"
           }
         }
       }
@@ -166,6 +244,12 @@
             "state" : "new",
             "value" : "Create PIN"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Crear PIN"
+          }
         }
       }
     },
@@ -177,6 +261,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Create password"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Crear contraseña"
           }
         }
       }
@@ -190,6 +280,12 @@
             "state" : "new",
             "value" : "passcode"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "código"
+          }
         }
       }
     },
@@ -201,6 +297,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "password"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "contraseña"
           }
         }
       }
@@ -214,6 +316,12 @@
             "state" : "new",
             "value" : "4-digit PIN"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "PIN de 4 dígitos"
+          }
         }
       }
     },
@@ -225,6 +333,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "6-digit PIN"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "PIN de 6 dígitos"
           }
         }
       }
@@ -238,6 +352,12 @@
             "state" : "new",
             "value" : "I understand — set up lock"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Entiendo, configurar el bloqueo"
+          }
         }
       }
     },
@@ -249,6 +369,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "The same is true if this iPhone is erased, has its Secure Enclave reset, or is restored onto replacement hardware. The key lives inside this device's Secure Enclave and never leaves it."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lo mismo ocurre si este iPhone se borra, si se restablece su Secure Enclave o si se restaura en un hardware de reemplazo. La clave vive dentro del Secure Enclave de este dispositivo y nunca sale de él."
           }
         }
       }
@@ -262,6 +388,12 @@
             "state" : "new",
             "value" : "If you forget your passcode, your journal, cycle history and intimacy entries saved in Fernlet can't be opened again. Anything Fernlet copied to Apple Health stays there. If Sealed backup is on in Privacy & Data, it keeps an encrypted copy you can restore after a reset, before you add new entries."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Si olvidas tu código, tu diario, tu historial del ciclo y tus registros de intimidad guardados en Fernlet no se podrán volver a abrir. Lo que Fernlet haya copiado a Salud se queda ahí. Si la Copia de seguridad sellada está activada en Privacidad y datos, guarda una copia cifrada que puedes restaurar después de un restablecimiento, antes de agregar registros nuevos."
+          }
         }
       }
     },
@@ -273,6 +405,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Before you set a passcode"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Antes de configurar un código"
           }
         }
       }
@@ -286,6 +424,12 @@
             "state" : "new",
             "value" : "Only set a passcode if you're confident you'll remember it."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Configura un código solo si estás ^[seguro](inflect: true) de que lo recordarás."
+          }
         }
       }
     },
@@ -297,6 +441,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Turn on Sealed backup for journal, cycle, and intimate logs in Privacy & Data to keep an encrypted copy that survives. Worry Box notes are never backed up and are always lost."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Activa la Copia de seguridad sellada del diario, el ciclo y los registros íntimos en Privacidad y datos para conservar una copia cifrada que sobreviva. Las notas de la Caja de preocupaciones nunca tienen copia de seguridad y siempre se pierden."
           }
         }
       }
@@ -310,6 +460,12 @@
             "state" : "new",
             "value" : "There is no recovery path"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No hay ninguna vía de recuperación"
+          }
         }
       }
     },
@@ -321,6 +477,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%@ can still open your notes on this device and repair its key. Try that first — resetting destroys that surviving copy."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ todavía puede abrir tus notas en este dispositivo y reparar su clave. Pruébalo primero: restablecer destruye esa copia que aún sobrevive."
           }
         }
       }
@@ -334,6 +496,12 @@
             "state" : "new",
             "value" : "Your passcode was correct. This device's Secure Enclave key — the only thing that can open your sealed journal, cycle, and intimacy notes — is gone. Resetting app lock does not bring those notes back; it clears the lock so you can use Fernlet again."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu código era correcto. La clave del Secure Enclave de este dispositivo, lo único que puede abrir tus notas selladas del diario, del ciclo y de intimidad, ya no existe. Restablecer el bloqueo de la app no recupera esas notas; solo quita el bloqueo para que puedas volver a usar Fernlet."
+          }
         }
       }
     },
@@ -345,6 +513,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Sealed data can't be opened on this device"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los datos sellados no se pueden abrir en este dispositivo"
           }
         }
       }
@@ -358,6 +532,12 @@
             "state" : "new",
             "value" : "Unlock with %@"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Desbloquear con %@"
+          }
         }
       }
     },
@@ -369,6 +549,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Confirm password"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Confirmar contraseña"
           }
         }
       }
@@ -382,6 +568,12 @@
             "state" : "new",
             "value" : "Password"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Contraseña"
+          }
         }
       }
     },
@@ -393,6 +585,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Set up app lock"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Configurar bloqueo de la app"
           }
         }
       }
@@ -406,6 +604,12 @@
             "state" : "new",
             "value" : "Fernlet moved the key for your sealed journal, cycle history and intimacy entries into this iPhone's Secure Enclave, where it can't be copied off the device. Those entries are now lost if this iPhone is erased, has its Secure Enclave reset, or is restored onto replacement hardware, even with the right passcode. Turn on Sealed backup in Privacy & Data to keep an encrypted copy that survives."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet movió la clave de tu diario, tu historial del ciclo y tus registros de intimidad sellados al Secure Enclave de este iPhone, donde no se puede copiar fuera del dispositivo. Ahora esos registros se pierden si este iPhone se borra, si se restablece su Secure Enclave o si se restaura en un dispositivo de reemplazo, incluso con el código correcto. Activa la Copia de seguridad sellada en Privacidad y datos para conservar una copia cifrada que sobreviva."
+          }
         }
       }
     },
@@ -417,6 +621,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Your passcode is now tied to this iPhone"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu código ahora está vinculado a este iPhone"
           }
         }
       }
@@ -430,6 +640,12 @@
             "state" : "new",
             "value" : "Too many failed attempts"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Demasiados intentos fallidos"
+          }
         }
       }
     },
@@ -441,6 +657,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "No biometric authentication available on this device."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No hay autenticación biométrica disponible en este dispositivo."
           }
         }
       }
@@ -454,6 +676,12 @@
             "state" : "new",
             "value" : "Delete"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Borrar"
+          }
         }
       }
     },
@@ -465,6 +693,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$lld of %2$lld digits entered"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$lld de %2$lld dígitos ingresados"
           }
         }
       }
@@ -478,6 +712,12 @@
             "state" : "new",
             "value" : "Protects your journal, cycle, intimacy notes and worry box."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Protege tu diario, tu ciclo, tus notas de intimidad y tu caja de preocupaciones."
+          }
         }
       }
     },
@@ -489,6 +729,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Your journal, cycle history and intimacy entries saved in Fernlet will be permanently deleted. Anything Fernlet copied to Apple Health stays there. If Sealed backup is on, restore it from Privacy & Data afterwards, before you add new entries."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu diario, tu historial del ciclo y tus registros de intimidad guardados en Fernlet se eliminarán de forma permanente. Lo que Fernlet haya copiado a Salud se queda ahí. Si la Copia de seguridad sellada está activada, restáurala desde Privacidad y datos después, antes de agregar registros nuevos."
           }
         }
       }
@@ -502,6 +748,12 @@
             "state" : "new",
             "value" : "Reset app lock?"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Restablecer el bloqueo de la app?"
+          }
         }
       }
     },
@@ -513,6 +765,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Your app lock and its notes were destroyed, but the sealed store could not be rebuilt. Please relaunch Fernlet."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu bloqueo de la app y sus notas se destruyeron, pero Fernlet no pudo reconstruir el almacén sellado. Cierra Fernlet y vuelve a abrirlo."
           }
         }
       }
@@ -526,6 +784,12 @@
             "state" : "new",
             "value" : "App lock reset"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bloqueo de la app restablecido"
+          }
         }
       }
     },
@@ -537,6 +801,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "You must reset app lock to continue. Your journal, cycle history and intimacy entries saved in Fernlet will be deleted."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Para continuar, tienes que restablecer el bloqueo de la app. Se eliminarán tu diario, tu historial del ciclo y tus registros de intimidad guardados en Fernlet."
           }
         }
       }
@@ -550,6 +820,12 @@
             "state" : "new",
             "value" : "Enable %@"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Activar %@"
+          }
         }
       }
     },
@@ -561,6 +837,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%@ lets you unlock quickly without entering your passcode. Your passcode is still required to change lock settings."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ te permite desbloquear rápidamente sin ingresar tu código. Tu código seguirá siendo necesario para cambiar la configuración del bloqueo."
           }
         }
       }
@@ -574,6 +856,12 @@
             "state" : "new",
             "value" : "Re-enter to confirm."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ingresa lo mismo otra vez para confirmar."
+          }
         }
       }
     },
@@ -585,6 +873,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "You're set"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Todo listo"
           }
         }
       }
@@ -598,6 +892,12 @@
             "state" : "new",
             "value" : "Choose a password (8–64 characters)."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Elige una contraseña (de 8 a 64 caracteres)."
+          }
         }
       }
     },
@@ -609,6 +909,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Enter your %lld-digit PIN."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ingresa tu PIN de %lld dígitos."
           }
         }
       }
@@ -622,6 +928,12 @@
             "state" : "new",
             "value" : "Some entries on this iPhone can't be opened. Open the Private tab to review them, then set a passcode."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Algunas entradas de este iPhone no se pueden abrir. Abre la pestaña Privado para revisarlas y luego configura un código."
+          }
         }
       }
     },
@@ -633,6 +945,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Open the Private tab once, then set a passcode. Fernlet checks the entries already on this iPhone there."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre la pestaña Privado una vez y luego configura un código. Ahí Fernlet revisa las entradas que ya hay en este iPhone."
           }
         }
       }
@@ -646,6 +964,12 @@
             "state" : "new",
             "value" : "Passcodes don't match. Try again."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los códigos no coinciden. Inténtalo de nuevo."
+          }
         }
       }
     },
@@ -657,6 +981,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Fernlet can't check the entries on this iPhone right now, so the passcode wasn't set. Try again in a moment."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no puede revisar las entradas de este iPhone en este momento, así que no se configuró el código. Inténtalo de nuevo en un momento."
           }
         }
       }
@@ -670,6 +1000,12 @@
             "state" : "new",
             "value" : "8+ characters, highest security"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "8 caracteres o más, máxima seguridad"
+          }
         }
       }
     },
@@ -681,6 +1017,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Password"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Contraseña"
           }
         }
       }
@@ -694,6 +1036,12 @@
             "state" : "new",
             "value" : "Fast, lower security"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Rápido, menos seguro"
+          }
         }
       }
     },
@@ -705,6 +1053,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "4-digit PIN"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "PIN de 4 dígitos"
           }
         }
       }
@@ -718,6 +1072,12 @@
             "state" : "new",
             "value" : "Good balance of speed and security"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Buen equilibrio entre rapidez y seguridad"
+          }
         }
       }
     },
@@ -729,6 +1089,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "6-digit PIN"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "PIN de 6 dígitos"
           }
         }
       }
@@ -742,6 +1108,12 @@
             "state" : "new",
             "value" : "RECOMMENDED"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "RECOMENDADO"
+          }
         }
       }
     },
@@ -753,6 +1125,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Set up app lock"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Configurar bloqueo de la app"
           }
         }
       }
@@ -766,6 +1144,12 @@
             "state" : "new",
             "value" : "App lock is set up. %@ couldn't be turned on — you can enable it in Settings → App lock."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El bloqueo de la app está configurado. No se pudo activar %@; puedes activarlo en Configuración → Bloqueo de la app."
+          }
         }
       }
     },
@@ -777,6 +1161,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "App lock is set up."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El bloqueo de la app está configurado."
           }
         }
       }
@@ -790,6 +1180,12 @@
             "state" : "new",
             "value" : "Your journal, cycle and worry entries are here."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aquí están tu diario, tu ciclo y tus preocupaciones."
+          }
         }
       }
     },
@@ -801,6 +1197,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Your journal and worry entries are here."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aquí están tus entradas del diario y de la caja de preocupaciones."
           }
         }
       }
@@ -814,6 +1216,12 @@
             "state" : "new",
             "value" : "No passcode is set, so anyone using your unlocked iPhone can open this page. Your entries stay encrypted on this iPhone. You can add a passcode in Settings."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No hay un código configurado, así que cualquier persona que use tu iPhone desbloqueado puede abrir esta página. Tus entradas siguen cifradas en este iPhone. Puedes agregar un código en Configuración."
+          }
         }
       }
     },
@@ -825,6 +1233,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Private"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Privado"
           }
         }
       }
@@ -838,6 +1252,12 @@
             "state" : "new",
             "value" : "Fernlet can't open this right now. Try again in a moment."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no puede abrir esto ahora. Inténtalo de nuevo en un momento."
+          }
         }
       }
     },
@@ -849,6 +1269,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Unlock"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Desbloquear"
           }
         }
       }
@@ -862,6 +1288,12 @@
             "state" : "new",
             "value" : "Opens your private entries. No passcode is needed."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre tus entradas privadas. No se necesita código."
+          }
         }
       }
     },
@@ -873,6 +1305,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "This iPhone's key for your private entries is gone, so they can't be opened here. Resetting clears Private so you can use it again. It doesn't bring those entries back, but if Sealed backup is on, you can restore it from Privacy & Data afterwards, before you add new entries."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La clave de este iPhone para tus entradas privadas ya no está, así que no se pueden abrir aquí. Al restablecer, Privado se vacía para que puedas volver a usarlo. Eso no recupera esas entradas, pero si la copia de seguridad sellada está activada, después puedes restaurarla desde Privacidad y datos, antes de agregar entradas nuevas."
           }
         }
       }
@@ -910,6 +1348,12 @@
             "state" : "new",
             "value" : "1 attempt remaining before lockout"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Te queda un intento antes del bloqueo temporal"
+          }
         }
       }
     },
@@ -921,6 +1365,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%lld attempts remaining before lockout"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Te quedan %lld intentos antes del bloqueo temporal"
           }
         }
       }
@@ -934,6 +1384,12 @@
             "state" : "new",
             "value" : "Checking your passcode"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Comprobando tu código"
+          }
         }
       }
     },
@@ -945,6 +1401,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%@ is paused after too many tries. Use your passcode."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ está en pausa por demasiados intentos. Usa tu código."
           }
         }
       }
@@ -958,6 +1420,12 @@
             "state" : "new",
             "value" : "%@ didn't recognize you. Try your passcode."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ no te reconoció. Prueba con tu código."
+          }
         }
       }
     },
@@ -969,6 +1437,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Your passcode was correct, but sealed data can no longer be opened on this device. Enter it once more to confirm."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu código era correcto, pero los datos sellados ya no se pueden abrir en este dispositivo. Ingrésalo una vez más para confirmar."
           }
         }
       }
@@ -982,6 +1456,12 @@
             "state" : "new",
             "value" : "Your passcode was correct, but this device's key for sealed data is gone. Try %@ — it can still open and repair it."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu código era correcto, pero la clave de este dispositivo para los datos sellados ya no está. Prueba con %@: todavía puede abrirlos y reparar la clave."
+          }
         }
       }
     },
@@ -993,6 +1473,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Reset required."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hay que restablecer el bloqueo."
           }
         }
       }
@@ -1006,6 +1492,12 @@
             "state" : "new",
             "value" : "Too many attempts. Reset is required."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Demasiados intentos. Hay que restablecer el bloqueo."
+          }
         }
       }
     },
@@ -1017,6 +1509,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Enter your %@ to continue."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ingresa tu %@ para continuar."
           }
         }
       }
@@ -1030,6 +1528,12 @@
             "state" : "new",
             "value" : "Fernlet Lock"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bloqueo de Fernlet"
+          }
         }
       }
     },
@@ -1041,6 +1545,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Your Sealed backup will be restored after you continue."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu copia de seguridad sellada se restaurará cuando continúes."
           }
         }
       }
@@ -1054,6 +1564,12 @@
             "state" : "new",
             "value" : "This iPhone has entries that were encrypted on another iPhone, or before this iPhone was erased. The key that opened them never leaves the iPhone it was made on, so no one can open them now."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Este iPhone tiene entradas que se cifraron en otro iPhone, o antes de que este iPhone se borrara. La clave que las abría nunca sale del iPhone en el que se creó, así que ya nadie puede abrirlas."
+          }
         }
       }
     },
@@ -1065,6 +1581,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Cycle entries: %lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Registros del ciclo: %lld"
           }
         }
       }
@@ -1078,6 +1600,12 @@
             "state" : "new",
             "value" : "Intimacy entries: %lld"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Registros de intimidad: %lld"
+          }
         }
       }
     },
@@ -1089,6 +1617,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Journal entries: %lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Entradas del diario: %lld"
           }
         }
       }
@@ -1102,6 +1636,12 @@
             "state" : "new",
             "value" : "Other private entries: %lld"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Otras entradas privadas: %lld"
+          }
         }
       }
     },
@@ -1113,6 +1653,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Worry Box entries: %lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Entradas de la caja de preocupaciones: %lld"
           }
         }
       }
@@ -1126,6 +1672,12 @@
             "state" : "new",
             "value" : "Fernlet moved your earlier cycle notes into your cycle history. These ones can't be opened on this iPhone, so they were left behind. No one can open them now."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet movió tus notas anteriores del ciclo a tu historial del ciclo. Estas no se pueden abrir en este iPhone, así que se quedaron fuera. Nadie puede abrirlas ahora."
+          }
         }
       }
     },
@@ -1137,6 +1689,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Earlier cycle notes: %lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Notas anteriores del ciclo: %lld"
           }
         }
       }
@@ -1150,6 +1708,12 @@
             "state" : "new",
             "value" : "Remove them"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Eliminarlas"
+          }
         }
       }
     },
@@ -1161,6 +1725,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Some earlier cycle notes can't be opened here"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Algunas notas anteriores del ciclo no se pueden abrir aquí"
           }
         }
       }
@@ -1174,6 +1744,12 @@
             "state" : "new",
             "value" : "Entries saved while Private was closed"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Entradas guardadas mientras Privado estaba cerrado"
+          }
         }
       }
     },
@@ -1185,6 +1761,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Not now"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ahora no"
           }
         }
       }
@@ -1198,6 +1780,12 @@
             "state" : "new",
             "value" : "Remove them and open Private"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Eliminarlas y abrir Privado"
+          }
         }
       }
     },
@@ -1209,6 +1797,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Some entries can't be opened here"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Algunas entradas no se pueden abrir aquí"
           }
         }
       }

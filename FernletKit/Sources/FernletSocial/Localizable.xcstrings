@@ -10,6 +10,12 @@
             "state" : "new",
             "value" : "Couldn't create the activity."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo crear la actividad."
+          }
         }
       }
     },
@@ -21,6 +27,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "That activity has expired."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Esa actividad ya venció."
           }
         }
       }
@@ -34,6 +46,12 @@
             "state" : "new",
             "value" : "This activity is full."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Esta actividad ya está completa."
+          }
         }
       }
     },
@@ -45,6 +63,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Couldn't grant the join."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo aceptar la solicitud para unirse."
           }
         }
       }
@@ -69,6 +93,24 @@
               }
             }
           }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Puedes organizar hasta %lld actividad."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Puedes organizar hasta %lld actividades."
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -80,6 +122,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Identity unavailable."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La identidad de este teléfono no está disponible."
           }
         }
       }
@@ -93,6 +141,12 @@
             "state" : "new",
             "value" : "That invitation couldn't be verified."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo verificar esa invitación."
+          }
         }
       }
     },
@@ -104,6 +158,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "You've joined the maximum number of activities."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ya te uniste al máximo de actividades."
           }
         }
       }
@@ -117,6 +177,12 @@
             "state" : "new",
             "value" : "Couldn't update the activity."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo actualizar la actividad."
+          }
         }
       }
     },
@@ -128,6 +194,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Already sending %@ some warmth — one moment."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ya le estás enviando cariño a %@; un momento."
           }
         }
       }
@@ -141,6 +213,12 @@
             "state" : "new",
             "value" : "The connection dropped — no heart was sent."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se cortó la conexión; no se envió ningún corazón."
+          }
         }
       }
     },
@@ -152,6 +230,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "You just sent %@ some warmth — hearts settle for a few minutes."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Acabas de enviarle cariño a %@. Los corazones hacen una pausa de unos minutos."
           }
         }
       }
@@ -165,6 +249,12 @@
             "state" : "new",
             "value" : "Could not send that heart just now."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo enviar ese corazón en este momento."
+          }
         }
       }
     },
@@ -176,6 +266,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Couldn't verify %@ — no heart was sent."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo verificar a %@; no se envió ningún corazón."
           }
         }
       }
@@ -189,6 +285,12 @@
             "state" : "new",
             "value" : "Couldn't verify this friend — no heart was sent."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo verificar a esta persona; no se envió ningún corazón."
+          }
         }
       }
     },
@@ -200,6 +302,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%@ didn't answer — try again in a moment."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ no respondió; inténtalo de nuevo en un momento."
           }
         }
       }
@@ -213,6 +321,12 @@
             "state" : "new",
             "value" : "Turn on nearby hearts to send %@ some warmth."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Activa Corazones cerca para enviarle cariño a %@."
+          }
         }
       }
     },
@@ -224,6 +338,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "No heart was sent — the connection dropped."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se envió ningún corazón: se cortó la conexión."
           }
         }
       }
@@ -237,6 +357,12 @@
             "state" : "new",
             "value" : "%@ isn't nearby, and the heart couldn't be tucked away just now — try again in a moment."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ no está cerca y Fernlet no pudo guardar el corazón ahora; inténtalo de nuevo en un momento."
+          }
         }
       }
     },
@@ -249,6 +375,12 @@
             "state" : "new",
             "value" : "%@ isn't nearby right now — hearts travel in person for now."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ no está cerca en este momento; por ahora, los corazones viajan en persona."
+          }
         }
       }
     },
@@ -260,6 +392,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Couldn't keep that photo. Try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo conservar esa foto. Inténtalo de nuevo."
           }
         }
       }
@@ -284,6 +422,24 @@
               }
             }
           }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Ya compartiste el máximo de %lld foto en esta sesión."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Ya compartiste el máximo de %lld fotos en esta sesión."
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -295,6 +451,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Friend of %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Amigo de %@"
           }
         }
       }
@@ -308,6 +470,12 @@
             "state" : "new",
             "value" : "Still connecting to another Fernlet — recipe sharing links two Fernlets at a time."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Todavía se está conectando con otro Fernlet; compartir recetas enlaza solo dos Fernlet a la vez."
+          }
         }
       }
     },
@@ -319,6 +487,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Could not connect securely to %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo conectarse de forma segura con %@."
           }
         }
       }
@@ -332,6 +506,12 @@
             "state" : "new",
             "value" : "Could not send that recipe."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo enviar esa receta."
+          }
         }
       }
     },
@@ -343,6 +523,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "No answer from %@ — that Fernlet may be busy sharing with someone else."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ no responde; puede que ese Fernlet esté ocupado compartiendo con otra persona."
           }
         }
       }
@@ -356,6 +542,12 @@
             "state" : "new",
             "value" : "Connected to %@ — recipe sharing links two Fernlets at a time."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Este teléfono ya está conectado con %@; compartir recetas enlaza solo dos Fernlet a la vez."
+          }
         }
       }
     },
@@ -368,6 +560,12 @@
             "state" : "new",
             "value" : "Still sharing with %@ — recipe sharing links two Fernlets at a time."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Todavía estás compartiendo con %@; compartir recetas enlaza solo dos Fernlet a la vez."
+          }
         }
       }
     },
@@ -379,6 +577,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "That nearby Fernlet is no longer available."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ese Fernlet cercano ya no está disponible."
           }
         }
       }
