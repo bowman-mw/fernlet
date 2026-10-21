@@ -2674,7 +2674,9 @@ private struct PendingScannedFood: Identifiable {
 struct MealSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
-    var onLogged: ([Meal]) -> Void = { _ in }
+    /// The host's meal-logged toast. A meal kept without its photo reports `landedWithCaveat`, and the
+    /// toast's one haptic is then the caveat.
+    var onLogged: MealLogReporter = .none
     #if canImport(UIKit)
     /// One router owns the capture detectors, so the chooser branches reuse its injectable
     /// `barcodeDetector` seam (fakes reach every path) rather than newing up their own detector.
@@ -2971,7 +2973,7 @@ struct MealSheet: View {
         let photoAttached = true
         #endif
         reviewContext = nil
-        onLogged(committed)
+        onLogged(committed, landedWithCaveat: !photoAttached)
         closeAfterLogging(photoAttached: photoAttached)
     }
 
@@ -3444,7 +3446,7 @@ struct MealSheet: View {
         #else
         let photoAttached = true
         #endif
-        onLogged([meal])
+        onLogged([meal], landedWithCaveat: !photoAttached)
         closeAfterLogging(photoAttached: photoAttached)
     }
 
@@ -3457,7 +3459,7 @@ struct MealSheet: View {
         #else
         let photoAttached = true
         #endif
-        onLogged([meal])
+        onLogged([meal], landedWithCaveat: !photoAttached)
         closeAfterLogging(photoAttached: photoAttached)
     }
 
@@ -3499,7 +3501,7 @@ struct MealSheet: View {
             #else
             let photoAttached = true
             #endif
-            onLogged(meals)
+            onLogged(meals, landedWithCaveat: !photoAttached)
             closeAfterLogging(photoAttached: photoAttached)
         }
     }
@@ -3510,8 +3512,10 @@ struct MealSheet: View {
     /// that logs the meal again. Shared by every commit path here (typed resolve, review, by-hand
     /// macros, a picked catalog row).
     ///
-    /// B9: the second case is a meal that landed with something to read, so it is felt as one
-    /// (`caveat`) beside the notice — right after the toast's own `done`, which the log earned.
+    /// B9: the second case is a meal that landed with something to read. It is felt as one by the
+    /// toast, whose single haptic is `caveat` instead of `done` (every caller reports
+    /// `landedWithCaveat: !photoAttached`), so nothing plays here: a `caveat` of its own would land in
+    /// the same instant as the toast's.
     private func closeAfterLogging(photoAttached: Bool) {
         guard !photoAttached else {
             dismiss()
@@ -3519,7 +3523,6 @@ struct MealSheet: View {
         }
         didLogMeal = true
         notice = "Your meal is logged, but its photo couldn't be saved to your private store."
-        FernletFeedback.system.play(.caveat)
     }
 
     /// The payload for the pre-log review sheet: the resolution under review plus any captured photo
