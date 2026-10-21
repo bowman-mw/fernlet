@@ -40,8 +40,10 @@ nonisolated enum HomeCopy {
     ///
     /// One sentence per mood, so a translator can make the mood word agree with the sentence around
     /// it. The old line lowercased the mood chip's own label in code and spliced it into an English
-    /// sentence, which no language but English could survive.
-    static func journalMoodThought(_ tag: FeelingTag) -> String {
+    /// sentence, which no language but English could survive. `address` is the user's term of
+    /// address: "You marked today as tired" says how the USER is (*cansada*), so that one agrees with
+    /// them; the others describe the day.
+    static func journalMoodThought(_ tag: FeelingTag, addressing address: TermOfAddress) -> String {
         switch tag {
         case .bright:
             String(localized: "home.thought.journalMood.bright",
@@ -60,9 +62,11 @@ nonisolated enum HomeCopy {
                    defaultValue: "You marked today as quiet. Let that be enough information for now.",
                    comment: "Home companion thought bubble after today's journal mood was set to Quiet (a subdued, low-key day).")
         case .tired:
-            String(localized: "home.thought.journalMood.tired",
-                   defaultValue: "You marked today as tired. Let that be enough information for now.",
-                   comment: "Home companion thought bubble after today's journal mood was set to Tired.")
+            AddressedCopy.string(
+                LocalizedStringResource("home.thought.journalMood.tired",
+                                        defaultValue: "You marked today as tired. Let that be enough information for now.",
+                                        comment: "Home companion thought bubble after today's journal mood was set to Tired."),
+                addressing: address)
         case .hard:
             String(localized: "home.thought.journalMood.hard",
                    defaultValue: "You marked today as hard. Let that be enough information for now.",

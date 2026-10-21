@@ -404,6 +404,8 @@ struct WorkoutSetupSheet: View {
 private struct OneRepMaxOptIn: View {
     @Binding var isOn: Bool
     @State private var confirming = false
+    /// The user's term of address, which the confirmation's safety line agrees with (*adolorido*).
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -423,7 +425,8 @@ private struct OneRepMaxOptIn: View {
             Button("Turn on") { isOn = true }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Only with a spotter or safety arms. Stop if your form breaks, and skip it when you're sore, sick or short on sleep.")
+            // An alert's message takes a `Text`, not a view, so this is AddressedCopy rather than AddressedText.
+            Text(AddressedCopy.attributed("Only with a spotter or safety arms. Stop if your form breaks, and skip it when you're sore, sick or short on sleep.", addressing: termOfAddress))
         }
     }
 }

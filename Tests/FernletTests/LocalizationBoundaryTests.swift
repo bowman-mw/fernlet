@@ -2208,7 +2208,7 @@ struct LocalizationBoundaryTests {
     ///
     /// Part D freezes the tokens; this is the other half of the fork (Spanish round step 2, Home
     /// lane, 2026-10-20). The Trends card used to draw a value with `.capitalized` on the raw token,
-    /// which no translation can survive; ``SignalPresentation/valueLabel(for:)`` is now an exact-match
+    /// which no translation can survive; ``SignalPresentation/valueLabel(for:addressing:)`` is now an exact-match
     /// table from token to key. The vocabulary is expanded from ``frozenSignalValueVocabulary`` (the
     /// two counted shapes at one and at many, since the factory splices an English plural into the
     /// gap token), and each label is checked in English against the capitalized rendering it
@@ -2219,11 +2219,11 @@ struct LocalizationBoundaryTests {
         let values = Self.frozenSignalValueVocabulary.filter { !$0.contains("{}") }.sorted() + counted
         #expect(values.count == 22, "the frozen vocabulary changed size; extend this expansion with it")
         for value in values {
-            #expect(SignalPresentation.valueLabel(for: value) == value.capitalized,
-                    "Trends draws \"\(value)\" as \"\(SignalPresentation.valueLabel(for: value))\" — the value has no display key")
+            #expect(SignalPresentation.valueLabel(for: value, addressing: .masculine) == value.capitalized,
+                    "Trends draws \"\(value)\" as \"\(SignalPresentation.valueLabel(for: value, addressing: .masculine))\" — the value has no display key")
         }
         let unknown = "a token from a newer build"
-        #expect(SignalPresentation.valueLabel(for: unknown) == unknown, "an unknown token is drawn as it is")
+        #expect(SignalPresentation.valueLabel(for: unknown, addressing: .masculine) == unknown, "an unknown token is drawn as it is")
         for name in Self.frozenSignalNames {
             #expect(SignalPresentation.title(for: name) != name, "the \(name) signal has no display title")
         }
@@ -2239,7 +2239,7 @@ struct LocalizationBoundaryTests {
     /// come back.
     @Test @MainActor func homeMoodThoughtIsOneSentencePerFeelingTag() throws {
         for tag in FeelingTag.allCases {
-            #expect(HomeCopy.journalMoodThought(tag)
+            #expect(HomeCopy.journalMoodThought(tag, addressing: .masculine)
                     == "You marked today as \(tag.rawValue). Let that be enough information for now.")
         }
         let home = try RepoRoot.source("App/Fernlet/HomeView.swift")
@@ -3130,7 +3130,7 @@ struct LocalizationBoundaryTests {
                      role: "the polaroid's on-your-other-device / couldn't-open placeholder line"),
         ForkedMember(path: "App/Fernlet/MealPhotoPolaroid.swift", declaration: "let detail: LocalizedStringKey",
                      role: "the meal photo detail's unavailable card"),
-        ForkedMember(path: "App/Fernlet/CookingMode.swift", declaration: "private func primaryButtonLabel(_ title: LocalizedStringKey) -> some View {",
+        ForkedMember(path: "App/Fernlet/CookingMode.swift", declaration: "private func primaryButtonLabel(_ title: Text) -> some View {",
                      role: "cooking mode's Start cooking / I'm ready / Log this meal"),
         ForkedMember(path: "App/Fernlet/CookingMode.swift", declaration: "private func secondaryLabel(_ title: LocalizedStringKey, icon: String) -> some View {",
                      role: "cooking mode's Back"),
@@ -3179,7 +3179,7 @@ struct LocalizationBoundaryTests {
                      declaration: "let caption: LocalizedStringResource",
                      role: "a breathing pattern tile's rhythm line"),
         ForkedMember(path: "App/Fernlet/StressExplainerSheet.swift",
-                     declaration: "private var currentReadingTitle: LocalizedStringKey {",
+                     declaration: "private var currentReadingTitle: Text {",
                      role: "the body-signals explainer's reading title"),
         ForkedMember(path: "App/Fernlet/StressExplainerSheet.swift",
                      declaration: "private var currentReadingBody: LocalizedStringKey {",

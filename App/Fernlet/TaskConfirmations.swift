@@ -20,6 +20,7 @@
 //
 
 import Foundation
+import FernletDomainModel
 import FernletUI
 
 /// The spoken confirmation for a common task that just landed.
@@ -168,7 +169,14 @@ enum GuidedRunAnnouncement {
 
     /// Spoken when a rest's timer reaches zero. The rest does not end by itself — the user decides —
     /// so this says the nudge is over, not that anything moved.
-    static let restOver: LocalizedStringResource = "Rest's over. Start your next set when you're ready."
+    ///
+    /// Resolved here for `address`, the user's term of address, rather than handed out as a
+    /// resource: "when you're ready" describes the user, Spanish agrees it (*lista*), and
+    /// `LocalizationBoundaryTests` part I2 wants a gendered key's literal inside the addressed call
+    /// that reads it.
+    static func restOver(addressing address: TermOfAddress) -> String {
+        AddressedCopy.string("Rest's over. Start your next set when you're ready.", addressing: address)
+    }
 
     /// Spoken when a timed step's "Get into position" lead-in ends and the hold begins — the moment
     /// the hold countdown's caption turns to "Hold" and the haptic cue plays. Without it a VoiceOver

@@ -9,6 +9,7 @@
 //
 
 import SwiftUI
+import FernletDomainModel
 import FernletScoring
 import FernletUI
 
@@ -27,6 +28,9 @@ struct StressExplainerSheet: View {
     /// Set by ContentView to chain into the First Aid sheet (dismiss-then-represent).
     var onFirstAid: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
+    /// The user's term of address (the app root sets it from the body profile), for the lines that
+    /// describe the user: the tense reading titles and "marked yourself sick".
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,7 +47,7 @@ struct StressExplainerSheet: View {
     private var readingContent: some View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(currentReadingTitle)
+                currentReadingTitle
                     .font(.fernlet(.header))
                     .foregroundStyle(Color.bark)
                 Text(currentReadingBody)
@@ -71,7 +75,7 @@ struct StressExplainerSheet: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel("How Fernlet estimates this")
-                Text("Fernlet quietly compares your recent heart rate variability and resting heart rate with your own usual range from the last several weeks — never anyone else's numbers. Days you moved a lot, marked yourself sick, or showed signs of coming down with something are taken into account so a hard workout doesn't read as a hard week.")
+                AddressedText("Fernlet quietly compares your recent heart rate variability and resting heart rate with your own usual range from the last several weeks — never anyone else's numbers. Days you moved a lot, marked yourself sick, or showed signs of coming down with something are taken into account so a hard workout doesn't read as a hard week.")
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
@@ -128,16 +132,18 @@ struct StressExplainerSheet: View {
         }
     }
 
-    // The four reading lines below are `LocalizedStringKey`, not `String`: each returns a literal,
-    // and as `String` every one reached `Text`'s verbatim initializer and was never harvested.
+    // The four reading lines below are `LocalizedStringKey` or `Text`, not `String`: each returns a
+    // literal, and as `String` every one reached `Text`'s verbatim initializer and was never harvested.
 
-    private var currentReadingTitle: LocalizedStringKey {
-        guard let assessment else { return "Still getting to know you" }
+    /// The reading's title. A `Text` because the two tense titles describe the user (*tensa*) and are
+    /// agreed with them through `AddressedCopy`; the other three are plain literals.
+    private var currentReadingTitle: Text {
+        guard let assessment else { return Text("Still getting to know you") }
         switch assessment.state {
-        case .calm: return "Settled"
-        case .okay: return "About your usual"
-        case .tense: return "A little tense"
-        case .needsCare: return "Extra tense lately"
+        case .calm: return Text("Settled")
+        case .okay: return Text("About your usual")
+        case .tense: return Text(AddressedCopy.attributed("A little tense", addressing: termOfAddress))
+        case .needsCare: return Text(AddressedCopy.attributed("Extra tense lately", addressing: termOfAddress))
         }
     }
 

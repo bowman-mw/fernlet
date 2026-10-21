@@ -2566,6 +2566,8 @@ struct WorkoutRow: View {
     var store: FernletStore
     var workout: Workout
     var date: String
+    /// The user's term of address, which the remove alert's "whenever you're ready" agrees with.
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
     /// Called after a remove or edit so the parent can refresh caches it snapshots (calendar days, or a
     /// past-day detail list that isn't observed).
     var onChanged: () -> Void = {}
@@ -2608,17 +2610,22 @@ struct WorkoutRow: View {
     }
 
     /// The remove alert's body: one whole key per combination (plan restored or not, Health copy
-    /// removed or not), rather than two English sentences joined in code.
+    /// removed or not), rather than two English sentences joined in code. The two that put the
+    /// workout back "whenever you're ready" describe the user (*lista*) and agree with them.
     private var removeConfirmMessage: String {
         switch (restoresPlannedRow, removesHealthCopy) {
         case (true, false):
-            String(localized: "move.workout.remove.restoresPlan",
-                   defaultValue: "I'll put it back in your plan so you can redo it whenever you're ready.",
-                   comment: "Remove-workout alert body, for a workout completed from a plan")
+            AddressedCopy.string(
+                LocalizedStringResource("move.workout.remove.restoresPlan",
+                                        defaultValue: "I'll put it back in your plan so you can redo it whenever you're ready.",
+                                        comment: "Remove-workout alert body, for a workout completed from a plan"),
+                addressing: termOfAddress)
         case (true, true):
-            String(localized: "move.workout.remove.restoresPlanAndHealth",
-                   defaultValue: "I'll put it back in your plan so you can redo it whenever you're ready. This also removes the copy saved to your Health app.",
-                   comment: "Remove-workout alert body, for a workout completed from a plan that Fernlet also saved to Apple Health")
+            AddressedCopy.string(
+                LocalizedStringResource("move.workout.remove.restoresPlanAndHealth",
+                                        defaultValue: "I'll put it back in your plan so you can redo it whenever you're ready. This also removes the copy saved to your Health app.",
+                                        comment: "Remove-workout alert body, for a workout completed from a plan that Fernlet also saved to Apple Health"),
+                addressing: termOfAddress)
         case (false, false):
             String(localized: "move.workout.remove.clears",
                    defaultValue: "This just clears it from your log — no worries, you can always add it again.",

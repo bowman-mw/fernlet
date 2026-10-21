@@ -155,6 +155,9 @@ struct CookingModeView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    /// The user's term of address (the app root sets it from the body profile): "I'm ready" and the
+    /// timer's "when you're ready" describe the cook, and Spanish agrees them (*lista*).
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
 
     /// The cover's three screens: mise en place, the step walker, and the finish/log screen.
     ///
@@ -393,7 +396,7 @@ struct CookingModeView: View {
                 Button {
                     beginCooking()
                 } label: {
-                    primaryButtonLabel(hasSteps ? "Start cooking" : "I'm ready")
+                    primaryButtonLabel(hasSteps ? Text("Start cooking") : Text(AddressedCopy.attributed("I'm ready", addressing: termOfAddress)))
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("cookingMode.start")
@@ -535,7 +538,7 @@ struct CookingModeView: View {
                         .foregroundStyle(timerFired ? Color.goldenrod : Color.bark)
                         .accessibilityIdentifier("cookingMode.stepTimer")
                     if timerFired {
-                        Text("Timer's up — tap Next when you're ready. Nothing advances on its own.")
+                        AddressedText("Timer's up — tap Next when you're ready. Nothing advances on its own.")
                             .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
                             .multilineTextAlignment(.center)
@@ -670,7 +673,7 @@ struct CookingModeView: View {
                             Button { logMeal(mealType) } label: { Text(verbatim: mealType.displayName) }
                         }
                     } label: {
-                        primaryButtonLabel("Log this meal")
+                        primaryButtonLabel(Text("Log this meal"))
                     }
                     .accessibilityIdentifier("cookingMode.logMeal")
                     Button { closeCooking() } label: {
@@ -694,10 +697,11 @@ struct CookingModeView: View {
             .background(Color.parchment)
     }
 
-    /// The moss primary. `LocalizedStringKey`, as is ``secondaryLabel(_:icon:)``: as `String` the
-    /// "Start cooking", "Log this meal" and "Back" labels were drawn verbatim.
-    private func primaryButtonLabel(_ title: LocalizedStringKey) -> some View {
-        Text(title)
+    /// The moss primary. A `Text` the caller builds, never `String` (as `String` the "Start cooking",
+    /// "Log this meal" and "Back" labels were drawn verbatim): `Text("…")` extracts like any literal,
+    /// and "I'm ready", which describes the cook, arrives agreed with them through `AddressedCopy`.
+    private func primaryButtonLabel(_ title: Text) -> some View {
+        title
             .font(.fernlet(.label))
             .foregroundStyle(Color.onMoss)
             .frame(maxWidth: .infinity)
@@ -887,7 +891,8 @@ struct CookingModeView: View {
         FernletFeedback.system.play(.timerEnded, preferences: CookingCuePreferences.current())
         FernletAnnouncer.system.announce(
             .status,
-            LocalizedStringResource("Timer's up — tap Next when you're ready. Nothing advances on its own.")
+            LocalizedStringResource("Timer's up — tap Next when you're ready. Nothing advances on its own."),
+            addressing: termOfAddress
         )
     }
 

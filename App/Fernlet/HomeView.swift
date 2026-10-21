@@ -33,6 +33,9 @@ import FernletUI
 struct HomeView: View {
     var store: FernletStore
     var healthKitService: HealthKitService
+    /// The user's term of address (the app root sets it from the body profile), for the companion
+    /// thought that describes them ("You marked today as tired").
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
     @Binding var activeSheet: FernletSheet?
     @Binding var selectedTab: FernletTab
     @Binding var privateHubSection: PrivateHubSection
@@ -895,7 +898,7 @@ struct HomeView: View {
         // One whole sentence per mood (`HomeCopy`), never the mood chip's label lowercased into an
         // English sentence: a translation has to agree the word with the sentence around it.
         if let last = store.day.journals.last {
-            return HomeCopy.journalMoodThought(last.tag)
+            return HomeCopy.journalMoodThought(last.tag, addressing: termOfAddress)
         }
         // Every two or three days the companion brings up a silly stat. The pacer already kept it
         // off rest, sick and needs-gentleness days, so it never talks over those lines.
@@ -2372,6 +2375,8 @@ private struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelCo
 /// All presentation choices (title/icon/color/strength/explanation) come from
 /// ``SignalPresentation`` so the row stays a dumb renderer of `DerivedSignalRecord`.
 struct SignalDetailRow: View {
+    /// The user's term of address, which the readiness values agree with.
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
     var signal: DerivedSignalRecord
 
     var body: some View {
@@ -2390,7 +2395,7 @@ struct SignalDetailRow: View {
                     Text(SignalPresentation.title(for: signal.signalName))
                         .font(.fernlet(.header))
                         .foregroundStyle(Color.bark)
-                    Text(SignalPresentation.valueLabel(for: signal.value))
+                    Text(SignalPresentation.valueLabel(for: signal.value, addressing: termOfAddress))
                         .font(.fernlet(.headerMedium))
                         .foregroundStyle(SignalPresentation.color(for: signal.value))
                     Text(SignalPresentation.explanation(for: signal))
@@ -2521,13 +2526,14 @@ enum SignalPresentation {
     /// touch the token that `FernletStore.needsRestToday`, Home, the gentle offer and the Move tab
     /// compare against. The English values are the Title Case the card always drew (it used to apply
     /// `.capitalized` to the token, which no translation could survive); a token this table does not
-    /// know is drawn as it is.
-    static func valueLabel(for value: String) -> String {
-        stateValueLabel(for: value) ?? countedValueLabel(for: value) ?? value
+    /// know is drawn as it is. `address` is the user's term of address: the readiness values say
+    /// the USER is ready (*Lista para algo ligero*), so those agree with them.
+    static func valueLabel(for value: String, addressing address: TermOfAddress) -> String {
+        stateValueLabel(for: value, addressing: address) ?? countedValueLabel(for: value) ?? value
     }
 
     /// The display label for a mood, energy or progression token, or nil for any other token.
-    private static func stateValueLabel(for value: String) -> String? {
+    private static func stateValueLabel(for value: String, addressing address: TermOfAddress) -> String? {
         switch value {
         case "insufficient data":
             String(localized: "signal.value.insufficientData", defaultValue: "Insufficient Data",
@@ -2560,12 +2566,13 @@ enum SignalPresentation {
             String(localized: "signal.value.deloading", defaultValue: "Deloading",
                    comment: "Trends, Progression's value: workout load has eased off (a deload, a lighter stretch of training). Title case.")
         default:
-            eatingOrReadinessValueLabel(for: value)
+            eatingOrReadinessValueLabel(for: value, addressing: address)
         }
     }
 
-    /// The display label for an eating-pattern or readiness token, or nil for any other token.
-    private static func eatingOrReadinessValueLabel(for value: String) -> String? {
+    /// The display label for an eating-pattern or readiness token, or nil for any other token. The
+    /// three "ready for" values describe the user and agree with `address`.
+    private static func eatingOrReadinessValueLabel(for value: String, addressing address: TermOfAddress) -> String? {
         switch value {
         case "light":
             String(localized: "signal.value.light", defaultValue: "Light",
@@ -2583,14 +2590,17 @@ enum SignalPresentation {
             String(localized: "signal.value.needsRest", defaultValue: "Needs Rest",
                    comment: "Trends: the readiness value on a day the user marked themselves unwell. Title case, like the other signal values beside it.")
         case "ready for light":
-            String(localized: "signal.value.readyForLight", defaultValue: "Ready For Light",
-                   comment: "Trends, Readiness's value: today suits a light workout. Title case.")
+            AddressedCopy.string(LocalizedStringResource("signal.value.readyForLight", defaultValue: "Ready For Light",
+                                                         comment: "Trends, Readiness's value: today suits a light workout. Title case."),
+                                 addressing: address)
         case "ready for moderate":
-            String(localized: "signal.value.readyForModerate", defaultValue: "Ready For Moderate",
-                   comment: "Trends, Readiness's value: today suits a moderate workout. Title case.")
+            AddressedCopy.string(LocalizedStringResource("signal.value.readyForModerate", defaultValue: "Ready For Moderate",
+                                                         comment: "Trends, Readiness's value: today suits a moderate workout. Title case."),
+                                 addressing: address)
         case "ready for hard":
-            String(localized: "signal.value.readyForHard", defaultValue: "Ready For Hard",
-                   comment: "Trends, Readiness's value: today could take a hard workout, if the user wants one. Title case.")
+            AddressedCopy.string(LocalizedStringResource("signal.value.readyForHard", defaultValue: "Ready For Hard",
+                                                         comment: "Trends, Readiness's value: today could take a hard workout, if the user wants one. Title case."),
+                                 addressing: address)
         default:
             nil
         }

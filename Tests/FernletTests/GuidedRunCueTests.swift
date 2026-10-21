@@ -449,7 +449,7 @@ private final class BackgroundRecorder {
         let leadInEnd = Self.start
         let line = try #require(GuidedRunAnnouncement.holdStarted(leadInEndedAt: leadInEnd, now: leadInEnd.addingTimeInterval(0.2)))
         #expect(String(localized: line) == String(localized: GuidedRunAnnouncement.holdStartedLine))
-        #expect(String(localized: line) != String(localized: GuidedRunAnnouncement.restOver))
+        #expect(String(localized: line) != GuidedRunAnnouncement.restOver(addressing: .masculine))
         let late = leadInEnd.addingTimeInterval(GuidedRunCuePlan.lateTolerance + 5)
         #expect(GuidedRunAnnouncement.holdStarted(leadInEndedAt: leadInEnd, now: late) == nil)
     }

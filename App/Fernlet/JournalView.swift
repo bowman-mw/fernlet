@@ -363,7 +363,7 @@ struct JournalSheet: View {
     @ViewBuilder
     private var inspirationChip: some View {
         if !inspirationDismissed && text.isEmpty {
-            let prompt = JournalPromptLibrary.prompt(for: store.todayKey)
+            let prompt = JournalPromptLibrary.prompt(for: store.todayKey, addressing: termOfAddress)
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "sparkles")
@@ -934,7 +934,8 @@ private extension FeelingTag {
     /// It was `"Feeling \(label.lowercased())"`: an English word spliced around a localized one and
     /// case-folded in code, which is wrong in every language that capitalizes nouns or agrees an
     /// adjective with its subject. Switching on the case keeps a seventh feeling a compile error.
-    var dayBlurbPhrase: String {
+    /// Quiet and Tired describe the user (*Te sentiste cansada*), so those two agree with `address`.
+    func dayBlurbPhrase(addressing address: TermOfAddress) -> String {
         switch self {
         case .bright: String(localized: "journal.day.blurb.feeling.bright", defaultValue: "Feeling bright",
                              comment: "Day review line item: the day's journal feeling was Bright")
@@ -942,10 +943,12 @@ private extension FeelingTag {
                            comment: "Day review line item: the day's journal feeling was Good")
         case .neutral: String(localized: "journal.day.blurb.feeling.neutral", defaultValue: "Feeling neutral",
                               comment: "Day review line item: the day's journal feeling was Neutral")
-        case .quiet: String(localized: "journal.day.blurb.feeling.quiet", defaultValue: "Feeling quiet",
-                            comment: "Day review line item: the day's journal feeling was Quiet")
-        case .tired: String(localized: "journal.day.blurb.feeling.tired", defaultValue: "Feeling tired",
-                            comment: "Day review line item: the day's journal feeling was Tired")
+        case .quiet: AddressedCopy.string(LocalizedStringResource("journal.day.blurb.feeling.quiet", defaultValue: "Feeling quiet",
+                                                                  comment: "Day review line item: the day's journal feeling was Quiet"),
+                                          addressing: address)
+        case .tired: AddressedCopy.string(LocalizedStringResource("journal.day.blurb.feeling.tired", defaultValue: "Feeling tired",
+                                                                  comment: "Day review line item: the day's journal feeling was Tired"),
+                                          addressing: address)
         case .hard: String(localized: "journal.day.blurb.feeling.hard", defaultValue: "Feeling hard",
                            comment: "Day review line item: the day's journal feeling was Hard (a hard day)")
         }
@@ -954,7 +957,7 @@ private extension FeelingTag {
 
 private extension SleepQuality {
     /// The day review's sleep phrase ("good sleep"), one whole phrase per case — the same fix as
-    /// ``FeelingTag/dayBlurbPhrase``: it was `"\(label.lowercased()) sleep"`.
+    /// ``FeelingTag/dayBlurbPhrase(addressing:)``: it was `"\(label.lowercased()) sleep"`.
     var dayBlurbPhrase: String {
         switch self {
         case .poor: String(localized: "journal.day.blurb.sleep.poor", defaultValue: "poor sleep",
@@ -1261,6 +1264,9 @@ struct JournalRow: View {
 struct DayDetailView: View {
     var store: FernletStore
     var dateKey: String
+    /// The user's term of address (the app root sets it from the body profile), which the review
+    /// line's feeling phrase agrees with.
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
     /// The injected capture-friction state, read here only to RE-INJECT into the two sheets this
     /// view presents (``DayEditSheet``, ``JournalEntryEditorSheet``) — the explicit
     /// per-presentation-site convention; a missing environment object in a sheet is a runtime
@@ -1316,7 +1322,7 @@ struct DayDetailView: View {
             return summary
         }
         var parts: [String] = []
-        if let tag = day.journals.last?.tag { parts.append(tag.dayBlurbPhrase) }
+        if let tag = day.journals.last?.tag { parts.append(tag.dayBlurbPhrase(addressing: termOfAddress)) }
         if day.meals.count > 0 {
             parts.append(String(localized: "journal.day.blurb.meals", defaultValue: "\(day.meals.count) meals",
                                 comment: "Day review: how many meals were logged that day, e.g. '2 meals'. Plural-ruled in the catalog."))

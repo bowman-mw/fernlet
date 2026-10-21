@@ -324,7 +324,8 @@ struct FoodView: View {
     @ViewBuilder private var todayMealsSection: some View {
         if store.day.meals.isEmpty {
             FernletScrollSection("Today") {
-                EmptyState(text: "Nothing yet. Describe a meal when you are ready.")
+                // "When you are ready" describes the user (*lista*): resolved for them, then drawn verbatim.
+                EmptyState(verbatim: AddressedCopy.string("Nothing yet. Describe a meal when you are ready.", addressing: termOfAddress))
             }
         } else {
             // Each meal type is its OWN section card, titled by a distinct small-caps
@@ -6730,6 +6731,9 @@ private struct RecipeCreationOptionsView: View {
     /// Told when "Log & save" logged the recipe it created. Runs before `onCreated`, so the book
     /// knows the meal toast will speak for that save.
     var onCreatedRecipeLogged: () -> Void = {}
+    /// The user's term of address (the app root sets it from the body profile), which Manual
+    /// entry's "yourself" agrees with.
+    @Environment(\.fernletTermOfAddress) private var termOfAddress
 
     /// The editor this chooser can push: the import screen or the manual editor.
     private enum CreationStep: Hashable { case importing, manual }
@@ -6753,7 +6757,7 @@ private struct RecipeCreationOptionsView: View {
                     Button { step = .importing } label: {
                         RecipeCreationOptionRow(
                             title: "Import recipe",
-                            subtitle: "Paste a recipe link or Fernlet recipe data.",
+                            subtitle: Text("Paste a recipe link or Fernlet recipe data."),
                             systemImage: "tray.and.arrow.down"
                         )
                     }
@@ -6762,7 +6766,7 @@ private struct RecipeCreationOptionsView: View {
                     Button { step = .manual } label: {
                         RecipeCreationOptionRow(
                             title: "Manual entry",
-                            subtitle: "Enter ingredients, macros, servings, and notes yourself.",
+                            subtitle: Text(AddressedCopy.attributed("Enter ingredients, macros, servings, and notes yourself.", addressing: termOfAddress)),
                             systemImage: "square.and.pencil"
                         )
                     }
@@ -6802,7 +6806,9 @@ private struct RecipeCreationOptionRow: View {
     /// Display text, so `LocalizedStringKey`: a `String` here bound `Text`'s verbatim overload and
     /// left both rows English in every language (fixed 2026-09-30).
     var title: LocalizedStringKey
-    var subtitle: LocalizedStringKey
+    /// A `Text` the caller builds, for the same reason never a `String`: Manual entry's "yourself"
+    /// describes the user (*tú mismo*), so its caller resolves it for them through `AddressedCopy`.
+    var subtitle: Text
     var systemImage: String
 
     var body: some View {
@@ -6817,7 +6823,7 @@ private struct RecipeCreationOptionRow: View {
                 Text(title)
                     .font(.fernlet(.header))
                     .foregroundStyle(Color.bark)
-                Text(subtitle)
+                subtitle
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()

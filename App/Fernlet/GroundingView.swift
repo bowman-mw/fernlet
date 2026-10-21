@@ -236,7 +236,7 @@ struct GroundingView: View {
                             .buttonStyle(.plain)
                             .fernletTapTarget(minWidth: 60)
                     }
-                    Text("Tap anywhere when you're ready for the next one — take all the time you like.")
+                    AddressedText("Tap anywhere when you're ready for the next one — take all the time you like.")
                         .font(.fernlet(.bubble))
                         .foregroundStyle(Color.slate)
                         .multilineTextAlignment(.center)

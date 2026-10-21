@@ -523,10 +523,12 @@ struct OnboardingCoordinator: View {
 /// accessibility identifier stay identical across the flow; the save/continue bar sits outside it.
 struct OnboardingScreenContainer<Content: View>: View {
     var stepText: String
-    /// Authored copy, so `LocalizedStringKey` rather than `String`: every caller passes a literal,
-    /// which is what lets the header text extract into the string catalog (a `String` here would
-    /// silently opt the whole onboarding flow out of localization).
-    var title: LocalizedStringKey
+    /// The header's title. Callers pass an authored literal through the `LocalizedStringKey`
+    /// initializer, which is what lets it extract into the string catalog (a `String` here would
+    /// silently opt the whole onboarding flow out of localization); Welcome passes a `Text` it
+    /// resolved for the user, since "Welcome" agrees with them in Spanish (*Bienvenida*).
+    var title: Text
+    /// Authored copy, so `LocalizedStringKey` rather than `String`, for the same reason.
     var subtitle: LocalizedStringKey
     /// The step's way back. Every step past Welcome passes ``OnboardingCoordinatorModel/back()``;
     /// `nil` (the first step) draws no button, since there is nowhere to go. Without this the flow
@@ -539,6 +541,28 @@ struct OnboardingScreenContainer<Content: View>: View {
     /// skipping a whole screen unheard. Every step builds a fresh container, so `onAppear` fires
     /// once per step and the new title is the first thing spoken.
     @AccessibilityFocusState private var isHeaderFocused: Bool
+
+    /// The localizing initializer, for an authored title: every step but Welcome.
+    init(
+        stepText: String, title: LocalizedStringKey, subtitle: LocalizedStringKey,
+        backAction: (() -> Void)? = nil, @ViewBuilder content: () -> Content
+    ) {
+        self.init(stepText: stepText, title: Text(title), subtitle: subtitle, backAction: backAction, content: content)
+    }
+
+    /// The `Text`-taking initializer, for a title the caller resolved (Welcome's, agreed with the
+    /// profile being edited through `AddressedCopy`). `Text` is not expressible by a literal, so this
+    /// can never take a call site that meant to localize.
+    init(
+        stepText: String, title: Text, subtitle: LocalizedStringKey,
+        backAction: (() -> Void)? = nil, @ViewBuilder content: () -> Content
+    ) {
+        self.stepText = stepText
+        self.title = title
+        self.subtitle = subtitle
+        self.backAction = backAction
+        self.content = content()
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -562,7 +586,7 @@ struct OnboardingScreenContainer<Content: View>: View {
                             .accessibilityIdentifier("onboarding.step")
                         Spacer(minLength: 0)
                     }
-                    ScreenHeader(title: title, subtitle: subtitle)
+                    ScreenHeader(title: title, subtitle: Text(subtitle))
                         .accessibilityFocused($isHeaderFocused)
                     content
                 }
