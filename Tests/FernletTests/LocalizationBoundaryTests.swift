@@ -110,11 +110,18 @@
 // now owns a catalog and a `TARGETS` line in `Scripts/sync-string-catalogs.sh`, so what is left in
 // them is an ordinary `String(localized:bundle:.module)` sweep rather than a blocked one:
 //
-//   * `FernletScoring` (~24 strings) — the derived-signal and readiness phrasing. STILL HAS NO
-//     CATALOG. The hard part is not the count: several of these strings are ALSO logic tokens that
-//     six call sites compare with `==` (see part D below), so localizing them requires the
-//     token/display FORK, not a `String(localized:)` sweep. Part D is what stops a sweep from
-//     silently breaking those gates.
+//   * `FernletScoring` — HAS A CATALOG since the Spanish round's step 2 (2026-10-20): the
+//     companion's AI-fallback lines (`FernletVoice`), the AI-free workout suggestion's note and the
+//     starter goals (`WorkoutFallbackCopy`) are keys under `fernletVoice.*` / `workoutFallback.*`.
+//     The fallback workouts' NAMES are not: they are stored `Workout.name`s, frozen as
+//     `WorkoutFallbackName` (FernletDomainModel) and drawn through `Workout.displayedName`
+//     (``frozenFallbackWorkoutNames()``). `MealParser`'s "Meal" default name and its
+//     "Estimated locally…" note are stored meal text drawn verbatim by the food log, so they stay
+//     English until the food side gives them a draw-time mapping. The derived-signal and readiness
+//     phrasing once listed here lives in `LocalPersistence`'s `DerivedSignalFactory`, not in this
+//     module: several of those strings are ALSO logic tokens that six call sites compare with `==`
+//     (see part D below), so localizing them requires the token/display FORK, not a
+//     `String(localized:)` sweep. Part D is what stops a sweep from silently breaking those gates.
 //   * `HealthKitGateway` (14 strings) — `HealthCapability.title` (7) and `HealthCapability.summary`
 //     (7), the settings-row name and the sentence describing what each capability reads and writes.
 //     The module's four `HealthKitServiceError` sentences were localized by the sweep and are the
@@ -147,6 +154,7 @@ import CloudKitSync
 @testable import FernletDomainModel
 import FernletFoundation
 import FernletUI
+import FernletScoring
 import LocalPersistence
 import PrivateHealthStore
 import PrivateMemoryStore
@@ -924,6 +932,63 @@ struct LocalizationBoundaryTests {
         )
     }
 
+    /// The names FernletScoring's AI-free fallback workouts are SAVED under (2026-10-20, Spanish
+    /// round step 2).
+    ///
+    /// `WorkoutPlanner.suggestion` wrote `"Suggested \(energy.rawValue.capitalized)"` inline and
+    /// `WorkoutSuggestionLibrary` twelve literal names; a taken suggestion stores its name as the
+    /// row's `Workout.name`, which is synced, written to Health and keyword-matched by the category
+    /// inference. So the spellings are frozen as `WorkoutFallbackName` raw values, byte-identical to
+    /// what the literals wrote, and a screen draws them through `Workout.displayedName`.
+    @Test func frozenFallbackWorkoutNames() {
+        #expect(
+            WorkoutFallbackName.allCases.map(\.rawValue) == [
+                "Suggested Light", "Suggested Moderate", "Suggested Hard",
+                "Steady Care Walk", "Balanced Strength Circuit", "Strength Base", "Hard Strength Day",
+                "Low Friction Walk", "Move And Strength", "Mood Reset", "Steady Mind Circuit",
+                "Recovery Flow", "Soft Rebuild", "Try Something Small", "Curious Challenge",
+            ],
+            """
+            WorkoutFallbackName raw values changed. They are the names a taken fallback suggestion is \
+            PERSISTED under. Localize `displayName`, never these.
+            """
+        )
+        for energy in WorkoutIntensity.allCases {
+            let workout = WorkoutPlanner.suggestion(energy: energy, goal: "Feel strong", context: "", goals: [])
+            #expect(workout.name == "Suggested \(energy.rawValue.capitalized)",
+                    "the \(energy) suggestion saves the name the inline literal wrote")
+            #expect(workout.displayedName == WorkoutFallbackName.suggested(energy).displayName)
+            #expect(workout.savedName(editing: workout.displayedName) == workout.name,
+                    "a name left as drawn saves back as the stored English")
+        }
+        let library = GoalType.allCases.flatMap { goal in
+            WorkoutIntensity.allCases.flatMap { WorkoutSuggestionLibrary.suggestions(for: goal, intensity: $0) }
+        }
+        for suggestion in library {
+            let logged = suggestion.workout(intensity: .moderate)
+            let frozen = WorkoutFallbackName(rawValue: logged.name)
+            #expect(frozen != nil, "\(logged.name) is a library name with no frozen spelling")
+            #expect(logged.displayedName == frozen?.displayName)
+        }
+        // A PLAN the user named like a template stays theirs: only a logged row can carry one.
+        let plan = PlannedWorkout(name: WorkoutFallbackName.moodReset.rawValue, split: .workout, source: .user,
+                                  notes: "", duration: nil)
+        #expect(plan.displayedName == WorkoutFallbackName.moodReset.rawValue)
+        #expect(WorkoutFallbackName(rawValue: "mood reset") == nil, "the frozen spelling is matched exactly")
+    }
+
+    /// FernletScoring's catalog, added in the Spanish round's step 2, keeps existing and stays wired
+    /// into the sync script. Either half missing is silent: `String(localized:…, bundle: .module)`
+    /// keeps returning its English `defaultValue` and the catalog stops learning new keys.
+    @Test func theFernletScoringCatalogExistsAndIsSynced() throws {
+        let catalog = RepoRoot.url("FernletKit/Sources/FernletScoring/Localizable.xcstrings")
+        #expect(FileManager.default.fileExists(atPath: catalog.path),
+                "FernletKit/Sources/FernletScoring/Localizable.xcstrings is gone; restore it rather than deleting this pin.")
+        let script = try RepoRoot.source("Scripts/sync-string-catalogs.sh")
+        #expect(script.contains("\"FernletScoring:FernletKit/Sources/FernletScoring/Localizable.xcstrings\""),
+                "Scripts/sync-string-catalogs.sh no longer syncs FernletScoring's catalog; add it back to TARGETS.")
+    }
+
     /// A row whose stored name is a frozen default DRAWS it in the user's language, and saves it back
     /// untouched (2026-10-19).
     ///
@@ -1313,6 +1378,71 @@ struct LocalizationBoundaryTests {
             things are. Localize `displayName`, never `rawValue`.
             """
         )
+    }
+
+    /// The coach-plan importer's provenance stamps (2026-10-20, Spanish round step 2).
+    ///
+    /// The two lines are written into `PlannedWorkout.notes` (synced, exported, carried onto a guided
+    /// run's logged row) and read back by the importer, which strips the previous stamp before it
+    /// writes a new one. So they are frozen English, written through `CoachPlanNoteStamp` alone, and
+    /// recognised by their exact shape: the bare `hasPrefix("Day ")` the strip used to be also ate a
+    /// user's own "Day off, knees sore". A screen draws them through `displayedNotes`.
+    @Test func frozenCoachPlanNoteStamps() throws {
+        #expect(CoachPlanNoteStamp.imported(dayIndex: 2, planTitle: "Block A", author: "Sam")
+                == "Day 2 of \"Block A\", imported from Sam.")
+        #expect(CoachPlanNoteStamp.changed(author: "Sam", planTitle: "Block A") == "Changed by Sam from \"Block A\".")
+        #expect(CoachPlanNoteStamp.author(named: "") == "an assistant", "the unnamed author is part of the stored stamp")
+        #expect(CoachPlanDecodeError.unnamedEditTitle == "an edit")
+
+        let stamps = [CoachPlanNoteStamp.imported(dayIndex: 12, planTitle: "My \"best\" plan", author: "an assistant"),
+                      CoachPlanNoteStamp.changed(author: "Coach Kim", planTitle: "Block A")]
+        for stamp in stamps {
+            #expect(CoachPlanNoteStamp.isStamp(stamp), "\(stamp) is recognised by its exact shape")
+            #expect(CoachPlanNoteStamp.displayed(stamp) == stamp, "in English a stamp draws as stored")
+        }
+        for note in ["Day off, knees sore", "Day 2 felt heavy", "Changed by me: lighter", "Day 3 of \"X\""] {
+            #expect(!CoachPlanNoteStamp.isStamp(note), "\(note) is the user's own note, not a stamp")
+            #expect(CoachPlanNoteStamp.displayed(note) == nil)
+        }
+        let notes = "Day off, knees sore\n" + stamps[0]
+        #expect(CoachPlanNoteStamp.displayedNotes(notes) == notes)
+
+        let importer = try RepoRoot.source("App/Fernlet/CoachPlanImporter.swift")
+        let review = try RepoRoot.source("App/Fernlet/CoachPlanReviewView.swift")
+        for (needle, count) in [("CoachPlanNoteStamp.changed(", 1), ("CoachPlanNoteStamp.imported(", 1),
+                                ("CoachPlanNoteStamp.isStamp(", 1)] {
+            #expect(importer.components(separatedBy: needle).count - 1 == count,
+                    "CoachPlanImporter.swift must write and strip stamps through `\(needle)` (\(count)×)")
+        }
+        #expect(review.contains("CoachPlanNoteStamp.isStamp("), "the review's note preview strips stamps by shape")
+        for source in [importer, review] {
+            #expect(!source.contains("hasPrefix(\"Day \")"),
+                    "a bare \"Day \" prefix match drops the user's own notes; match the stamp's exact shape")
+        }
+    }
+
+    /// The Move lane's "wrong, not missing" sites stay whole keys (2026-10-20, Spanish round step 2).
+    ///
+    /// Each of these rendered correct English while being untranslatable: an English plural "s" (or
+    /// "it"/"them", "was"/"were") picked by count and spliced into the line, a display name lowercased
+    /// and spliced mid-sentence (which also breaks German nouns), and a token's `rawValue` shown in
+    /// a sentence. A revert compiles and reads the same in English, so only a source pin notices.
+    @Test func theMoveLaneSplicedCopyStaysWholeKeys() throws {
+        let sites: [(path: String, needle: String, what: String)] = [
+            ("App/Fernlet/CoachPlanReviewView.swift", "== 1 ? \"\" : \"s\"", "an English plural spliced into a review line"),
+            ("App/Fernlet/CoachPlanReviewView.swift", "\"it\" : \"them\"", "the new-exercises card's pronoun picked by count"),
+            ("App/Fernlet/TrainerExportView.swift", "== 1 ? \"\" : \"s\"", "an English plural spliced into the summary copy"),
+            ("App/Fernlet/TrainerExportView.swift", "\"was\" : \"were\"", "the Plan added alert's verb picked by count"),
+            ("App/Fernlet/GuidedWorkoutEditorSheet.swift", "displayName.lowercased()", "the goal's name lowercased into the rest note"),
+            ("App/Fernlet/CoachPlanImporter.swift", "movementPattern.rawValue) movements", "a movement token shown in a safety reason"),
+            ("App/Fernlet/CoachPlanImporter.swift", ".lowercased())\")", "equipment names lowercased into a safety reason"),
+            ("App/Fernlet/MoveView.swift", "== 1 ? \"1 plan\"", "the week tile's count picked between two English strings"),
+        ]
+        for site in sites {
+            let source = try RepoRoot.source(site.path)
+            #expect(!source.contains(site.needle),
+                    "\(site.path) contains `\(site.needle)` again: \(site.what). Use one plural-ruled key (or one whole sentence per case).")
+        }
     }
 
     /// `GoalType`'s legacy persisted-display aliases.
@@ -2870,6 +3000,29 @@ struct LocalizationBoundaryTests {
         ForkedMember(path: "FernletKit/Sources/FernletProximityUI/FriendPhotoReviewSheet.swift",
                      declaration: "_ title: LocalizedStringKey,",
                      role: "photoSaveFailureAlert's caller-supplied title (Couldn't Save Photo / Photos)"),
+        // Spanish round step 2, move lane (2026-10-20): Move and coach-plan helpers that took their
+        // literal copy as `String`, so it never reached the catalog.
+        ForkedMember(path: "App/Fernlet/MoveView.swift",
+                     declaration: "var label: LocalizedStringKey",
+                     role: "MoveContextSegment's uppercase Goal / Space caption"),
+        ForkedMember(path: "App/Fernlet/MoveView.swift",
+                     declaration: "var emptyPrompt: LocalizedStringKey",
+                     role: "MoveContextSegment's Tap to plan / Set up your space invitation"),
+        ForkedMember(path: "App/Fernlet/MoveView.swift",
+                     declaration: "private func toolbarCapsule(_ title: LocalizedStringKey, systemImage: String, action: @escaping () -> Void) -> some View {",
+                     role: "the Move day's Plan and Log toolbar capsules"),
+        ForkedMember(path: "App/Fernlet/MoveView.swift",
+                     declaration: "private func entryCard(icon: String, title: LocalizedStringKey, subtitle: String, action: @escaping () -> Void) -> some View {",
+                     role: "the plan sheet's Copy previous week and Suggest a workout cards"),
+        ForkedMember(path: "App/Fernlet/CoachPlanReviewView.swift",
+                     declaration: "private func cardTitle(_ text: LocalizedStringKey) -> some View {",
+                     role: "every coach-plan review card's caption"),
+        ForkedMember(path: "App/Fernlet/CoachPlanReviewView.swift",
+                     declaration: "private func changeLine(_ text: LocalizedStringKey) -> some View {",
+                     role: "the coach-plan diff's Renamed / Note / Same exercises lines"),
+        ForkedMember(path: "App/Fernlet/TrainerExportView.swift",
+                     declaration: "private func bullet(_ text: LocalizedStringKey, tint: Color = Color.moss) -> some View {",
+                     role: "the Ask an AI card's two bullets"),
     ]
 
     /// The members this round forked are still forked.
@@ -3316,6 +3469,48 @@ struct LocalizationBoundaryTests {
         HarvestedKey(catalog: "FernletKit/Sources/FernletProximityUI/Localizable.xcstrings",
                      key: "proximity.review.deleteConfirm.title",
                      source: "the photo review's delete confirmation title (two or more pictures)"),
+        // Spanish round step 2, move lane (2026-10-20): the coach-plan, trainer-summary and Move
+        // counts that spliced an English "s" (or picked "it"/"them", "was"/"were") by count.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.exercises",
+                     source: "a coach plan's exercise count ('5 exercises')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.days",
+                     source: "a coach plan's day count, in the review subtitle and the Plan added alert"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.sessions",
+                     source: "the coach-plan review subtitle's session count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.changes",
+                     source: "the coach-plan review subtitle's change count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.workouts",
+                     source: "the Plan added alert's workout count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.replaced",
+                     source: "the coach-plan changes card's replaced count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.adjusted",
+                     source: "the coach-plan changes card's adjusted count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.count.removed",
+                     source: "the coach-plan changes card's removed count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.review.collisionBody",
+                     source: "the coach-plan collision card ('1 day … already has')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.review.newExercisesBody",
+                     source: "the coach-plan new-exercises card ('check it' / 'check them')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.imported.changed",
+                     source: "the Plan added alert's changed count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.imported.removed",
+                     source: "the Plan added alert's removed count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.imported.newExercises",
+                     source: "the Plan added alert's new-exercise count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "coachPlan.imported.struck",
+                     source: "the Plan added alert's struck-exercise count ('was' / 'were')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "trainerExport.preview.dayCount",
+                     source: "the trainer summary's day count, which passed the English 's' as an argument"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "move.week.cell.plans",
+                     source: "a Move week-strip tile's planned count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "move.week.cell.logs",
+                     source: "a Move week-strip tile's logged count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "move.week.cell.a11y.planned",
+                     source: "a Move week-strip tile's spoken planned count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "move.week.cell.a11y.logged",
+                     source: "a Move week-strip tile's spoken logged count"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings", key: "coachPlan.count.sets",
+                     source: "a coach-plan review note's set count ('0 sets')"),
     ]
 
     /// Every count-bearing key carries real plural variations.

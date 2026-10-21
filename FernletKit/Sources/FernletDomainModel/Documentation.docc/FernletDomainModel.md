@@ -578,9 +578,10 @@ anything else one step marked done that shows the line. Nothing is filtered or d
 names is preselected as written (``WorkoutPlanRun/Step/weightAsWritten``); only a catalog lift whose line
 names none gets the load engine's suggestion, for the sets and reps as written.
 
-The planner's words are localized without touching what it stores (2026-10-20, idea 16). Every session-note sentence is a String Catalog key in ``WorkoutPlannerCopy``, composed in the device's language when the plan is built. The names the planner stores and matches stay frozen English — a session's name is what its guided log is saved under and what the rotation matches, a split's and a location's name are what the trainer export carries, the plan text is what the history parser reads — and screens draw them through ``WorkoutSessionNames``, ``WorkoutSplitDayNames``, `TrainingSplit.displayName`, ``WorkoutSlotNames``, ``WorkoutLocationNames`` (`WorkoutLocation.displayedName`, which a rename field saves back through `savedName(editing:)`) and ``WorkoutPlanLine``.
+The planner's words are localized without touching what it stores (2026-10-20, idea 16). Every session-note sentence is a String Catalog key in ``WorkoutPlannerCopy``, composed in the device's language when the plan is built. The names the planner stores and matches stay frozen English — a session's name is what its guided log is saved under and what the rotation matches, a split's and a location's name are what the trainer export carries, the plan text is what the history parser reads — and screens draw them through ``WorkoutSessionNames``, ``WorkoutSplitDayNames``, `TrainingSplit.displayName`, ``WorkoutSlotNames``, ``WorkoutLocationNames`` (`WorkoutLocation.displayedName`, which a rename field saves back through `savedName(editing:)`) and ``WorkoutPlanLine``. FernletScoring's AI-free fallback workouts are saved under a frozen ``WorkoutFallbackName`` ("Suggested Light", "Mood Reset"), which `Workout.displayedName` draws localized (2026-10-20, Spanish round step 2).
 
 - ``WorkoutPlannerCopy``
+- ``WorkoutFallbackName``
 - ``WorkoutSessionNames``
 - ``WorkoutSplitDayNames``
 - ``WorkoutSlotNames``
@@ -845,7 +846,16 @@ holds two workouts with the same name. An edit can only ever reach a PLANNED row
 ahead of today — never a logged workout, which is the guarantee that an import cannot rewrite
 what actually happened.
 
+Localization (2026-10-20, Spanish round step 2). Every sentence the decode and validation can show
+— `CoachPlanDecodeError.message` and `CoachPlanIssue.detail` — is a whole-sentence key in the
+internal `CoachPlanIssueCopy`; `CoachPlanIssue.subject` is never drawn and stays English, and the
+vocabularies after "Expected one of:" are wire tokens. The importer's provenance lines are stored
+text: ``CoachPlanNoteStamp`` writes them in frozen English, matches them back by their exact shape
+(a bare "Day " prefix used to drop the user's own "Day off, knees sore"), and draws them localized
+through `PlannedWorkout.displayedNotes` and `Workout.displayedNotes`.
+
 - ``CoachPlan``
+- ``CoachPlanNoteStamp``
 - ``CoachPlanDay``
 - ``CoachSession``
 - ``CoachExercise``

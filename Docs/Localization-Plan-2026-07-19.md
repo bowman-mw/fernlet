@@ -378,6 +378,36 @@ sentences (P9's `heartSendState.failed(message:)` hole, which `SessionHeartStatu
 purpose) are closed at their source, resolved in `FernletSocialCopy.Presence` under
 `bundle: .module`, so the `String` type stays and the surfaces draw it verbatim.
 
+**Addendum (2026-10-20, Spanish round step 2, Move lane: extraction around the workout copy).**
+- **FernletScoring has a catalog.** `FernletVoice` and the AI-free workout fallbacks' notes and starter
+  goals (`WorkoutFallbackCopy`) are keys, composed in the device's language like the planner's notes.
+  The fallbacks' NAMES are stored `Workout.name`s, so they are frozen as `WorkoutFallbackName`
+  (FernletDomainModel) and `StoredWorkoutName` gained a fourth case that draws them for a logged row
+  (`frozenFallbackWorkoutNames`). `MealParser`'s "Meal" and its "Estimated locally…" note stay English:
+  stored meal text the food log draws verbatim.
+- **Coach-plan stamps are frozen with a draw-time mapping.** `CoachPlanNoteStamp` writes the importer's
+  two provenance lines in English, matches them back by their exact shape, and draws them localized
+  (`PlannedWorkout.displayedNotes`, `Workout.displayedNotes`). The strip had been `hasPrefix("Day ")`,
+  which silently dropped a user's own "Day off, knees sore" on the first coach edit
+  (`frozenCoachPlanNoteStamps`, `CoachPlanExchangeTests.testAUserNoteStartingWithDaySurvivesAnEditAndThePreview`).
+- **Coach-plan copy.** Every decode and validation sentence (`CoachPlanIssueCopy`), the paste errors,
+  the review screen and the Plan added alert are whole-sentence keys; the English fallback labels a
+  sentence used to splice in ("a planned workout", "Day 3 session", "an edit") are sentences of their
+  own, and `CoachPlanIssue.subject` (never drawn) stays English. The importer's safety reasons, listed
+  as still English above, now localize: a clause per movement pattern instead of its `rawValue`, and the
+  missing equipment as a localized "or" list of drawn names. Those names are no longer lowercased, the
+  one deliberate English change of the round ("Home has no Barbell"): lowercasing a localized word in
+  code breaks German nouns.
+- **Exports: readme localizes, data does not.** In the trainer summary and the data export, the JSON
+  keys, `app`, `exportedOn` and every data field stay English tokens (`sessionLength`'s "45 min" / "no
+  limit" included); the `about` readme a person reads (`preparedFor`, `note`, `includes`,
+  `neverIncludes` / `excludes`) and the data export's recipe-step timer suffix are written in the
+  exporting device's language. The coach prompt's instructions stay English.
+- **Plurals and splices.** Every count that spliced an English "s", or picked "it"/"them" or
+  "was"/"were" by count, is a plural-ruled key with English one/other authored in the catalog; the
+  guided editor's rest note is one sentence per goal instead of a lowercased goal name spliced in.
+  Pinned by `theMoveLaneSplicedCopyStaysWholeKeys`.
+
 ---
 
 ## 4. Phase 2 — Translation pass (es / fr / de)

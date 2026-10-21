@@ -73,8 +73,9 @@ struct CoachPlanPasteSheet: View {
             Text("Paste the reply")
                 .font(.fernlet(.header))
                 .foregroundStyle(Color.bark)
-            Text("Paste what your assistant replied with. Fernlet finds the plan inside it — you don't "
-                 + "have to trim off the surrounding text. You'll see the whole plan before anything is added.")
+            // One literal, not `"…" + "…"`: a concatenated `String` binds `Text`'s verbatim overload
+            // and never reaches the catalog.
+            Text("Paste what your assistant replied with. Fernlet finds the plan inside it — you don't have to trim off the surrounding text. You'll see the whole plan before anything is added.")
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fixedSize(horizontal: false, vertical: true)
@@ -158,14 +159,17 @@ struct CoachPlanPasteSheet: View {
     private static func problem(for failure: CoachPlanImportFailure, pastedText: String) -> PasteProblem {
         if looksLikeFernletSummary(pastedText) {
             return PasteProblem(
-                message: "That looks like your training summary, not a plan — paste the assistant's reply instead."
+                message: String(localized: "coachPlan.paste.error.pastedSummary",
+                                defaultValue: "That looks like your training summary, not a plan — paste the assistant's reply instead.",
+                                comment: "Coach plan paste sheet: the person pasted Fernlet's own training summary back instead of the AI's reply")
             )
         }
         switch failure {
         case .malformed(let detail):
             return PasteProblem(
-                message: "The plan is missing something Fernlet needs. Ask the assistant to reply with "
-                    + "the complete JSON block again.",
+                message: String(localized: "coachPlan.paste.error.incomplete",
+                                defaultValue: "The plan is missing something Fernlet needs. Ask the assistant to reply with the complete JSON block again.",
+                                comment: "Coach plan paste sheet: the pasted plan didn't decode; a smaller line under this says exactly what was wrong"),
                 detail: detail
             )
         default:

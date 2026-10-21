@@ -48,11 +48,16 @@ struct FernletDataExport: Codable {
     ///
     /// Written first so a person opening the file learns what is (and deliberately isn't) inside
     /// before scrolling into their history.
+    ///
+    /// Localization (2026-10-20): the JSON keys are schema and stay English, as do `app` and the
+    /// `exportedOn` day key. `note`, `includes` and `excludes` are a readme the person reads, so they
+    /// are written in the exporting device's language; nothing reads them back.
     struct About: Codable {
         var app = "Fernlet"
         var exportedOn: String
-        var note = "Your own Fernlet data, exported for you. Fernlet keeps this on your device — we "
-            + "never receive it. Logs are grouped by day."
+        var note = String(localized: "dataExport.about.note",
+                          defaultValue: "Your own Fernlet data, exported for you. Fernlet keeps this on your device — we never receive it. Logs are grouped by day.",
+                          comment: "Data export file, a readme line at its top")
         var includes: [String]
         var excludes: [String]
     }
@@ -267,19 +272,30 @@ extension FernletStore {
             friends: exportFriends())
     }
 
-    /// What the export contains, as shown in its own About preamble.
-    private static let exportIncludes = [
-        "Daily logs (meals, workouts, sleep, water, hygiene, journal, planned meals) grouped by day",
-        "Non-sensitive Apple Health context (steps, energy, sleep hours, heart rate)",
-        "Your wellbeing scores, core memories, goals, recipes, wardrobe, coins, and friends",
-    ]
+    /// What the export contains, as shown in its own About preamble, in the device's language.
+    /// Computed, so the lines are resolved when the export is built rather than once per process.
+    private static var exportIncludes: [String] {
+        [
+            String(localized: "dataExport.about.includes.logs", defaultValue: "Daily logs (meals, workouts, sleep, water, hygiene, journal, planned meals) grouped by day",
+                   comment: "Data export file readme, what it includes"),
+            String(localized: "dataExport.about.includes.health", defaultValue: "Non-sensitive Apple Health context (steps, energy, sleep hours, heart rate)",
+                   comment: "Data export file readme, what it includes"),
+            String(localized: "dataExport.about.includes.rest", defaultValue: "Your wellbeing scores, core memories, goals, recipes, wardrobe, coins, and friends",
+                   comment: "Data export file readme, what it includes"),
+        ]
+    }
 
     /// What the export deliberately leaves out (the sealed/sensitive exclusion list).
-    private static let exportExcludes = [
-        "Period / cycle data and intimate-activity data",
-        "Sensitive (Tier-2) memories and Worry Box notes",
-        "Photo image data and your private cryptographic keys",
-    ]
+    private static var exportExcludes: [String] {
+        [
+            String(localized: "dataExport.about.excludes.cycle", defaultValue: "Period / cycle data and intimate-activity data",
+                   comment: "Data export file readme, what it leaves out"),
+            String(localized: "dataExport.about.excludes.memories", defaultValue: "Sensitive (Tier-2) memories and Worry Box notes",
+                   comment: "Data export file readme, what it leaves out. 'Worry Box' is the app's place for worries, keep its translated name."),
+            String(localized: "dataExport.about.excludes.keys", defaultValue: "Photo image data and your private cryptographic keys",
+                   comment: "Data export file readme, what it leaves out"),
+        ]
+    }
 
     /// Every day with logged content, newest first, each projected with its score and water target.
     private func exportDays() -> [FernletDataExport.DayExport] {
@@ -602,7 +618,9 @@ extension FernletStore {
             let step = cooking.step
             var line = step.text
             if let seconds = step.durationSeconds, seconds > 0 {
-                line = "\(step.text) (\(max(seconds / 60, 1)) min timer)"
+                let minutes = max(seconds / 60, 1)
+                line = String(localized: "dataExport.recipeStep.withTimer", defaultValue: "\(step.text) (\(minutes) min timer)",
+                              comment: "A recipe step in the data export file, with its timer. Arguments: the step as the person wrote it, then the timer in minutes ('min' is the abbreviation).")
             }
             return partLabelled(line, partName: cooking.partName, isMultipart: cooking.partName != nil)
         }

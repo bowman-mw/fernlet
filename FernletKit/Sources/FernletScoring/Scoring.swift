@@ -9,6 +9,9 @@ import FernletDomainModel
 /// reassuring line, so every fallback surface speaks with one voice. Consumed by
 /// `AIRetryQueueService` (StoreCore) when it saves a local meal estimate, by the food log's
 /// retry banner, and by the AI section of Settings.
+///
+/// Display copy, localized (2026-10-20): the two screens draw it, and the retry record's `note` that
+/// `AIRetryQueueService` stores it in has no reader at all, so nothing compares these lines.
 public enum FernletVoice: CaseIterable, Sendable {
     case mealAnalysisFailed
     case workoutSuggestionUnavailable
@@ -24,17 +27,29 @@ public enum FernletVoice: CaseIterable, Sendable {
     public static func message(for voice: FernletVoice) -> String {
         switch voice {
         case .mealAnalysisFailed:
-            "I saved this with a local estimate. We can give it another look later."
+            String(localized: "fernletVoice.mealAnalysisFailed",
+                   defaultValue: "I saved this with a local estimate. We can give it another look later.",
+                   bundle: .module, comment: "The companion speaking, after the on-device AI could not analyze a logged meal")
         case .workoutSuggestionUnavailable:
-            "I made a simple local option for today. Keep it gentle and useful."
+            String(localized: "fernletVoice.workoutSuggestionUnavailable",
+                   defaultValue: "I made a simple local option for today. Keep it gentle and useful.",
+                   bundle: .module, comment: "The companion speaking, when it suggested a workout without the on-device AI")
         case .journalAnalysisQueued:
-            "Your journal is saved. I will look for patterns when the helper is awake again."
+            String(localized: "fernletVoice.journalAnalysisQueued",
+                   defaultValue: "Your journal is saved. I will look for patterns when the helper is awake again.",
+                   bundle: .module, comment: "The companion speaking, when a journal entry is saved but the on-device AI ('the helper') is unavailable")
         case .retryAvailable:
-            "A few saved notes can be revisited when you are ready."
+            String(localized: "fernletVoice.retryAvailable",
+                   defaultValue: "A few saved notes can be revisited when you are ready.",
+                   bundle: .module, comment: "Food log banner: some meals were saved with a local estimate and can be looked at again")
         case .aiUnavailable:
-            "The quiet helper is off right now, so Fernlet will use local fallbacks."
+            String(localized: "fernletVoice.aiUnavailable",
+                   defaultValue: "The quiet helper is off right now, so Fernlet will use local fallbacks.",
+                   bundle: .module, comment: "Settings, AI section: the on-device AI ('the quiet helper') is switched off")
         case .aiResting:
-            "The quiet helper is resting for today. Fernlet will use local care until tomorrow."
+            String(localized: "fernletVoice.aiResting",
+                   defaultValue: "The quiet helper is resting for today. Fernlet will use local care until tomorrow.",
+                   bundle: .module, comment: "Settings, AI section: today's on-device AI budget is used up; it resets at midnight")
         }
     }
 }
@@ -612,6 +627,12 @@ public enum MealParser {
 /// `FitnessGoal`s shaped around the user's stated interests and constraints. `suggestion` builds an
 /// energy-matched `Workout` without AI; it currently has no production call sites — only
 /// `defaultGoals` is wired into the app. Pure statics, no state.
+///
+/// Localization (2026-10-20): the suggestion's NAME is a frozen English ``WorkoutFallbackName``
+/// (it is the stored `Workout.name`, drawn through `Workout.displayedName`), its exercise lines are
+/// plan text and stay English like every other plan's, and its note and every field of the starter
+/// goals are composed in the device's language from `WorkoutFallbackCopy`, as the planner's own
+/// notes are: they are stored on the row or the goal and drawn as stored, and nothing compares them.
 public enum WorkoutPlanner {
     /// An energy-matched local `Workout` (25/40/55 min) aligned to the user's first fitness goal.
     public static func suggestion(energy: WorkoutIntensity, goal: String, context: String, goals: [FitnessGoal]) -> Workout {
@@ -626,21 +647,134 @@ public enum WorkoutPlanner {
         case .hard:
             exercises = "Squat or leg press - 4 x 6\nBench or push-up - 4 x 8\nRow - 4 x 10\nCarry - 4 rounds"
         }
-        let note = context.isEmpty ? "Built around \(alignedGoal.lowercased())." : "Built around \(alignedGoal.lowercased()) with: \(context)."
-        return Workout(name: "Suggested \(energy.rawValue.capitalized)", type: .mixed, exercises: exercises, rpe: nil, notes: note, duration: duration, intensity: energy)
+        let note = WorkoutFallbackCopy.suggestionNote(goal: alignedGoal.lowercased(), context: context)
+        return Workout(name: WorkoutFallbackName.suggested(energy).rawValue, type: .mixed, exercises: exercises,
+                       rpe: nil, notes: note, duration: duration, intensity: energy)
     }
 
     /// Three gentle starter `FitnessGoal`s (1-week / 4-week / 3-month) shaped around the stated
     /// interests and constraints.
     public static func defaultGoals(level: String, interests: String, constraints: String) -> [FitnessGoal] {
-        let focus = interests.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "general strength" : interests
+        let trimmedInterests = interests.trimmingCharacters(in: .whitespacesAndNewlines)
+        let focus: String? = trimmedInterests.isEmpty ? nil : interests
         let limits = constraints.trimmingCharacters(in: .whitespacesAndNewlines)
-        let weekly = limits.isEmpty ? "Three flexible sessions with one easier day between harder efforts." : "Three flexible sessions shaped around: \(limits)."
+        let weekly = WorkoutFallbackCopy.weeklyStructure(limits: limits)
         return [
-            FitnessGoal(type: .strength, goal: "Complete 3 \(focus) sessions in a week", timeframe: "1 week", metric: "sessions completed", weeklyStructure: weekly),
-            FitnessGoal(type: .wellness, goal: "Keep most sessions at a sustainable effort", timeframe: "4 weeks", metric: "RPE mostly 6-8", weeklyStructure: weekly),
-            FitnessGoal(type: .exploring, goal: "Build a repeatable \(focus) rhythm", timeframe: "3 months", metric: "10 consistent weeks", milestones: ["week 4 check-in", "week 8 adjust"], weeklyStructure: weekly)
+            FitnessGoal(type: .strength, goal: WorkoutFallbackCopy.sessionsGoal(focus: focus),
+                        timeframe: WorkoutFallbackCopy.oneWeek, metric: WorkoutFallbackCopy.sessionsCompleted,
+                        weeklyStructure: weekly),
+            FitnessGoal(type: .wellness, goal: WorkoutFallbackCopy.sustainableGoal,
+                        timeframe: WorkoutFallbackCopy.fourWeeks, metric: WorkoutFallbackCopy.rpeMetric,
+                        weeklyStructure: weekly),
+            FitnessGoal(type: .exploring, goal: WorkoutFallbackCopy.rhythmGoal(focus: focus),
+                        timeframe: WorkoutFallbackCopy.threeMonths, metric: WorkoutFallbackCopy.consistentWeeks,
+                        milestones: [WorkoutFallbackCopy.weekFourCheckIn, WorkoutFallbackCopy.weekEightAdjust],
+                        weeklyStructure: weekly)
         ]
+    }
+}
+
+/// The words FernletScoring's AI-free workout fallbacks write into a suggestion's note and the
+/// starter goals, each a `String(localized:bundle: .module)` key composed in the device's language.
+///
+/// Whole sentences only, with the user's own interests, constraints or goal as a placeholder: the
+/// "general strength" a blank interests field used to splice in is a second whole sentence, so a
+/// translator never has to agree a sentence with an English fragment.
+enum WorkoutFallbackCopy {
+    /// The note on `WorkoutPlanner.suggestion`'s workout: `goal` is the user's goal, lowercased as before.
+    static func suggestionNote(goal: String, context: String) -> String {
+        guard !context.isEmpty else {
+            return String(localized: "workoutFallback.note.builtAround", defaultValue: "Built around \(goal).", bundle: .module,
+                          comment: "Note on a workout suggested without AI. Argument: the person's fitness goal, e.g. 'complete 3 running sessions in a week'.")
+        }
+        return String(localized: "workoutFallback.note.builtAroundWithContext", defaultValue: "Built around \(goal) with: \(context).", bundle: .module,
+                      comment: "Note on a workout suggested without AI. Arguments: the person's fitness goal, then what they said about today in their own words.")
+    }
+
+    /// The starter goals' shared weekly structure: `limits` is the user's constraints, trimmed.
+    static func weeklyStructure(limits: String) -> String {
+        guard !limits.isEmpty else {
+            return String(localized: "workoutFallback.goal.weekly", defaultValue: "Three flexible sessions with one easier day between harder efforts.", bundle: .module,
+                          comment: "Weekly structure of a starter fitness goal Fernlet wrote")
+        }
+        return String(localized: "workoutFallback.goal.weeklyAround", defaultValue: "Three flexible sessions shaped around: \(limits).", bundle: .module,
+                      comment: "Weekly structure of a starter fitness goal Fernlet wrote. Argument: the person's own constraints, e.g. 'shoulder issues, hotel gyms only'.")
+    }
+
+    /// The one-week goal: `focus` is the user's interests, or nil for the general-strength default.
+    static func sessionsGoal(focus: String?) -> String {
+        guard let focus else {
+            return String(localized: "workoutFallback.goal.sessionsGeneral", defaultValue: "Complete 3 general strength sessions in a week", bundle: .module,
+                          comment: "A starter fitness goal Fernlet wrote, for someone who named no interests")
+        }
+        return String(localized: "workoutFallback.goal.sessions", defaultValue: "Complete 3 \(focus) sessions in a week", bundle: .module,
+                      comment: "A starter fitness goal Fernlet wrote. Argument: the person's interests in their own words, e.g. 'running, mobility'.")
+    }
+
+    /// The three-month goal: `focus` as in ``sessionsGoal(focus:)``.
+    static func rhythmGoal(focus: String?) -> String {
+        guard let focus else {
+            return String(localized: "workoutFallback.goal.rhythmGeneral", defaultValue: "Build a repeatable general strength rhythm", bundle: .module,
+                          comment: "A starter fitness goal Fernlet wrote, for someone who named no interests")
+        }
+        return String(localized: "workoutFallback.goal.rhythm", defaultValue: "Build a repeatable \(focus) rhythm", bundle: .module,
+                      comment: "A starter fitness goal Fernlet wrote. Argument: the person's interests in their own words, e.g. 'running, mobility'.")
+    }
+
+    /// The four-week goal.
+    static var sustainableGoal: String {
+        String(localized: "workoutFallback.goal.sustainable", defaultValue: "Keep most sessions at a sustainable effort", bundle: .module,
+               comment: "A starter fitness goal Fernlet wrote")
+    }
+
+    /// The starter goals' timeframes and measures.
+    static var oneWeek: String {
+        String(localized: "workoutFallback.goal.oneWeek", defaultValue: "1 week", bundle: .module, comment: "Timeframe of a starter fitness goal")
+    }
+    static var fourWeeks: String {
+        String(localized: "workoutFallback.goal.fourWeeks", defaultValue: "4 weeks", bundle: .module, comment: "Timeframe of a starter fitness goal")
+    }
+    static var threeMonths: String {
+        String(localized: "workoutFallback.goal.threeMonths", defaultValue: "3 months", bundle: .module, comment: "Timeframe of a starter fitness goal")
+    }
+    static var sessionsCompleted: String {
+        String(localized: "workoutFallback.goal.sessionsCompleted", defaultValue: "sessions completed", bundle: .module,
+               comment: "How a starter fitness goal is measured, shown after its timeframe ('1 week - sessions completed')")
+    }
+    static var rpeMetric: String {
+        String(localized: "workoutFallback.goal.rpeMostly", defaultValue: "RPE mostly 6-8", bundle: .module,
+               comment: "How a starter fitness goal is measured: rate of perceived exertion mostly between 6 and 8 out of 10")
+    }
+    static var consistentWeeks: String {
+        String(localized: "workoutFallback.goal.consistentWeeks", defaultValue: "10 consistent weeks", bundle: .module,
+               comment: "How a starter fitness goal is measured")
+    }
+    static var weekFourCheckIn: String {
+        String(localized: "workoutFallback.goal.weekFourCheckIn", defaultValue: "week 4 check-in", bundle: .module,
+               comment: "A milestone of a starter fitness goal: look at how it is going in week 4")
+    }
+    static var weekEightAdjust: String {
+        String(localized: "workoutFallback.goal.weekEightAdjust", defaultValue: "week 8 adjust", bundle: .module,
+               comment: "A milestone of a starter fitness goal: adjust the plan in week 8")
+    }
+
+    /// The note on one of ``WorkoutSuggestionLibrary``'s templates, by its frozen name.
+    static func templateNote(_ name: WorkoutFallbackName) -> String {
+        switch name {
+        case .steadyCareWalk: String(localized: "workoutFallback.note.steadyCareWalk", defaultValue: "A simple local fallback for a balanced day.", bundle: .module, comment: "Note on the suggested workout 'Steady Care Walk'")
+        case .balancedStrengthCircuit: String(localized: "workoutFallback.note.balancedStrengthCircuit", defaultValue: "Enough movement to feel grounded.", bundle: .module, comment: "Note on the suggested workout 'Balanced Strength Circuit'")
+        case .strengthBase: String(localized: "workoutFallback.note.strengthBase", defaultValue: "A repeatable strength template.", bundle: .module, comment: "Note on the suggested workout 'Strength Base'")
+        case .hardStrengthDay: String(localized: "workoutFallback.note.hardStrengthDay", defaultValue: "Use only if energy is genuinely there.", bundle: .module, comment: "Note on the suggested workout 'Hard Strength Day'")
+        case .lowFrictionWalk: String(localized: "workoutFallback.note.lowFrictionWalk", defaultValue: "Steady movement without optimization pressure.", bundle: .module, comment: "Note on the suggested workout 'Low Friction Walk'")
+        case .moveAndStrength: String(localized: "workoutFallback.note.moveAndStrength", defaultValue: "A practical mixed session.", bundle: .module, comment: "Note on the suggested workout 'Move And Strength'")
+        case .moodReset: String(localized: "workoutFallback.note.moodReset", defaultValue: "Start easy and let it count.", bundle: .module, comment: "Note on the suggested workout 'Mood Reset'")
+        case .steadyMindCircuit: String(localized: "workoutFallback.note.steadyMindCircuit", defaultValue: "Predictable movement, low decision load.", bundle: .module, comment: "Note on the suggested workout 'Steady Mind Circuit'")
+        case .recoveryFlow: String(localized: "workoutFallback.note.recoveryFlow", defaultValue: "Recovery still counts as care.", bundle: .module, comment: "Note on the suggested workout 'Recovery Flow'")
+        case .softRebuild: String(localized: "workoutFallback.note.softRebuild", defaultValue: "Keep the ceiling low today.", bundle: .module, comment: "Note on the suggested workout 'Soft Rebuild'")
+        case .trySomethingSmall: String(localized: "workoutFallback.note.trySomethingSmall", defaultValue: "Gather information, not perfection.", bundle: .module, comment: "Note on the suggested workout 'Try Something Small'")
+        case .curiousChallenge: String(localized: "workoutFallback.note.curiousChallenge", defaultValue: "A contained experiment for a high-energy day.", bundle: .module, comment: "Note on the suggested workout 'Curious Challenge'")
+        case .suggestedLight, .suggestedModerate, .suggestedHard: ""
+        }
     }
 }
 
@@ -673,30 +807,39 @@ public struct WorkoutSuggestionLibrary {
     /// state at all: each caller gets its own freshly built literal, so no opt-out is needed and the
     /// values are identical. The one caller binds it once (`let table = templates`), and the library
     /// is a small AI-free fallback table read on a suggestion miss, so rebuilding costs nothing.
+    ///
+    /// Localization (2026-10-20): each template's name is its frozen ``WorkoutFallbackName`` (a taken
+    /// template is saved under it and drawn through `Workout.displayedName`), its exercise lines are
+    /// plan text and stay English, and its note is composed in the device's language.
     private static var templates: [GoalType: [(intensity: WorkoutIntensity, suggestion: WorkoutSuggestion)]] { [
         .wellness: [
-            (.light, WorkoutSuggestion(name: "Steady Care Walk", exercises: "Easy walk - 20 min\nGentle stretch - 5 min", notes: "A simple local fallback for a balanced day.")),
-            (.moderate, WorkoutSuggestion(name: "Balanced Strength Circuit", exercises: "Goblet squat - 3 x 8\nDB row - 3 x 10\nIncline push-up - 3 x 8", notes: "Enough movement to feel grounded."))
+            (.light, template(.steadyCareWalk, "Easy walk - 20 min\nGentle stretch - 5 min")),
+            (.moderate, template(.balancedStrengthCircuit, "Goblet squat - 3 x 8\nDB row - 3 x 10\nIncline push-up - 3 x 8"))
         ],
         .strength: [
-            (.moderate, WorkoutSuggestion(name: "Strength Base", exercises: "Squat or leg press - 4 x 6\nBench or push-up - 4 x 8\nRow - 4 x 10", notes: "A repeatable strength template.")),
-            (.hard, WorkoutSuggestion(name: "Hard Strength Day", exercises: "Main lift - 5 x 5\nAccessory pull - 4 x 8\nCarry - 4 rounds", notes: "Use only if energy is genuinely there."))
+            (.moderate, template(.strengthBase, "Squat or leg press - 4 x 6\nBench or push-up - 4 x 8\nRow - 4 x 10")),
+            (.hard, template(.hardStrengthDay, "Main lift - 5 x 5\nAccessory pull - 4 x 8\nCarry - 4 rounds"))
         ],
         .weightManagement: [
-            (.light, WorkoutSuggestion(name: "Low Friction Walk", exercises: "Brisk walk - 25 min\nMobility - 5 min", notes: "Steady movement without optimization pressure.")),
-            (.moderate, WorkoutSuggestion(name: "Move And Strength", exercises: "Step-up - 3 x 10\nDB row - 3 x 10\nWalk - 12 min", notes: "A practical mixed session."))
+            (.light, template(.lowFrictionWalk, "Brisk walk - 25 min\nMobility - 5 min")),
+            (.moderate, template(.moveAndStrength, "Step-up - 3 x 10\nDB row - 3 x 10\nWalk - 12 min"))
         ],
         .mentalHealth: [
-            (.light, WorkoutSuggestion(name: "Mood Reset", exercises: "Outdoor walk - 15 min\nBreathing reset - 3 min\nNeck and shoulders - 5 min", notes: "Start easy and let it count.")),
-            (.moderate, WorkoutSuggestion(name: "Steady Mind Circuit", exercises: "Bike or walk - 10 min\nBodyweight circuit - 3 rounds\nCooldown - 5 min", notes: "Predictable movement, low decision load."))
+            (.light, template(.moodReset, "Outdoor walk - 15 min\nBreathing reset - 3 min\nNeck and shoulders - 5 min")),
+            (.moderate, template(.steadyMindCircuit, "Bike or walk - 10 min\nBodyweight circuit - 3 rounds\nCooldown - 5 min"))
         ],
         .recovery: [
-            (.light, WorkoutSuggestion(name: "Recovery Flow", exercises: "Gentle mobility - 12 min\nEasy walk - 10 min\nBreathing - 3 min", notes: "Recovery still counts as care.")),
-            (.moderate, WorkoutSuggestion(name: "Soft Rebuild", exercises: "Light row - 3 x 12\nGlute bridge - 3 x 10\nWalk - 10 min", notes: "Keep the ceiling low today."))
+            (.light, template(.recoveryFlow, "Gentle mobility - 12 min\nEasy walk - 10 min\nBreathing - 3 min")),
+            (.moderate, template(.softRebuild, "Light row - 3 x 12\nGlute bridge - 3 x 10\nWalk - 10 min"))
         ],
         .exploring: [
-            (.light, WorkoutSuggestion(name: "Try Something Small", exercises: "Walk a new route - 15 min\nPick one mobility drill - 5 min", notes: "Gather information, not perfection.")),
-            (.hard, WorkoutSuggestion(name: "Curious Challenge", exercises: "Choose one main lift - 4 x 6\nChoose one carry - 4 rounds\nCooldown - 5 min", notes: "A contained experiment for a high-energy day."))
+            (.light, template(.trySomethingSmall, "Walk a new route - 15 min\nPick one mobility drill - 5 min")),
+            (.hard, template(.curiousChallenge, "Choose one main lift - 4 x 6\nChoose one carry - 4 rounds\nCooldown - 5 min"))
         ]
     ] }
+
+    /// One template: saved under `name`'s frozen spelling, with its localized note.
+    private static func template(_ name: WorkoutFallbackName, _ exercises: String) -> WorkoutSuggestion {
+        WorkoutSuggestion(name: name.rawValue, exercises: exercises, notes: WorkoutFallbackCopy.templateNote(name))
+    }
 }

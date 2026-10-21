@@ -174,10 +174,9 @@ struct TrainerExportView: View {
                 Button("Cancel", role: .cancel) {}
                 Button("Copy") { copyForAssistant() }
             } message: {
-                Text("This copies your training data as plain text so you can paste it somewhere else. "
-                     + "Once you paste it into another app, that app has it — Fernlet can't take it back. "
-                     + "The copy stays on this iPhone — it isn't shared to your other Apple devices. "
-                     + "To get it onto another device, use Prepare summary instead.")
+                // One literal, not `"…" + "…"`: a concatenated `String` binds `Text`'s verbatim
+                // overload and never reaches the catalog.
+                Text("This copies your training data as plain text so you can paste it somewhere else. Once you paste it into another app, that app has it — Fernlet can't take it back. The copy stays on this iPhone — it isn't shared to your other Apple devices. To get it onto another device, use Prepare summary instead.")
             }
             .alert("Plan added", isPresented: Binding(
                 get: { importResult != nil },
@@ -282,25 +281,34 @@ struct TrainerExportView: View {
 
     /// Confirmation copy after a plan is applied — states what actually changed, including the
     /// things a user would otherwise have to go looking for (struck exercises, new catalog entries).
-    private static func importSummary(_ result: CoachPlanImportResult) -> String {
+    ///
+    /// One whole sentence per fact, each plural-ruled in the catalog (the English "s", and the
+    /// "was"/"were", used to be spliced in by count); the sentences are joined with a space.
+    static func importSummary(_ result: CoachPlanImportResult) -> String {
         var parts: [String] = []
         if result.plannedWorkoutCount > 0 {
-            parts.append("Added \(result.plannedWorkoutCount) workout\(result.plannedWorkoutCount == 1 ? "" : "s") "
-                         + "across \(result.dayCount) day\(result.dayCount == 1 ? "" : "s").")
+            let workouts = String(localized: "coachPlan.count.workouts", defaultValue: "\(result.plannedWorkoutCount) workouts",
+                                  comment: "A number of workouts, e.g. '3 workouts', placed inside 'Added … across …'. Needs a plural variation.")
+            let days = String(localized: "coachPlan.count.days", defaultValue: "\(result.dayCount) days",
+                              comment: "Coach plan review subtitle item: how many days the plan covers, e.g. '7 days'. Needs a plural variation.")
+            parts.append(String(localized: "coachPlan.imported.added", defaultValue: "Added \(workouts) across \(days).",
+                                comment: "Coach plan added. Arguments: a count of workouts ('3 workouts'), then a count of days ('2 days')."))
         }
         if result.editedCount > 0 {
-            parts.append("Changed \(result.editedCount) workout\(result.editedCount == 1 ? "" : "s") you'd already planned.")
+            parts.append(String(localized: "coachPlan.imported.changed", defaultValue: "Changed \(result.editedCount) workouts you'd already planned.",
+                                comment: "Coach plan added: how many already-planned workouts it changed. Needs a plural variation."))
         }
         if result.deletedCount > 0 {
-            parts.append("Removed \(result.deletedCount) planned workout\(result.deletedCount == 1 ? "" : "s").")
+            parts.append(String(localized: "coachPlan.imported.removed", defaultValue: "Removed \(result.deletedCount) planned workouts.",
+                                comment: "Coach plan added: how many planned workouts it removed. Needs a plural variation."))
         }
         if result.newExerciseCount > 0 {
-            parts.append("\(result.newExerciseCount) new exercise\(result.newExerciseCount == 1 ? "" : "s") "
-                         + "added to your list.")
+            parts.append(String(localized: "coachPlan.imported.newExercises", defaultValue: "\(result.newExerciseCount) new exercises added to your list.",
+                                comment: "Coach plan added: how many new exercises joined the person's list. Needs a plural variation."))
         }
         if result.struckExerciseCount > 0 {
-            parts.append("\(result.struckExerciseCount) exercise\(result.struckExerciseCount == 1 ? "" : "s") "
-                         + "you turned off " + (result.struckExerciseCount == 1 ? "was" : "were") + " left out.")
+            parts.append(String(localized: "coachPlan.imported.struck", defaultValue: "\(result.struckExerciseCount) exercises you turned off were left out.",
+                                comment: "Coach plan added: how many exercises the person switched off in the review were left out. Needs a plural variation (English: '1 exercise … was left out')."))
         }
         return parts.joined(separator: " ")
     }
@@ -312,8 +320,7 @@ struct TrainerExportView: View {
             Text("Share your training")
                 .font(.fernlet(.header))
                 .foregroundStyle(Color.bark)
-            Text("Prepare a summary of your workouts and nutrition to give to a trainer or nutritionist. "
-                 + "You control exactly what goes in it, and nothing is shared until you choose to.")
+            Text("Prepare a summary of your workouts and nutrition to give to a trainer or nutritionist. You control exactly what goes in it, and nothing is shared until you choose to.")
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fixedSize(horizontal: false, vertical: true)
@@ -322,7 +329,11 @@ struct TrainerExportView: View {
 
     private var prepareSection: some View {
         VStack(spacing: 10) {
-            Text("\(previewDayCount) day\(previewDayCount == 1 ? "" : "s") of training will be included.")
+            // A plural-ruled key: the English "s" used to be passed in as an argument, which no other
+            // language can use.
+            Text(String(localized: "trainerExport.preview.dayCount",
+                        defaultValue: "\(previewDayCount) days of training will be included.",
+                        comment: "Trainer summary screen: how many days of training the summary will carry. Needs a plural variation."))
                 .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -401,7 +412,7 @@ struct TrainerExportView: View {
             if showsIncluded {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(includedLines, id: \.self) { line in
-                        bullet(line)
+                        bullet(verbatim: line)
                     }
                     Text("Change what's included in Settings › Sharing.")
                         .font(.fernlet(.labelSmall))
@@ -417,17 +428,30 @@ struct TrainerExportView: View {
     /// categories are switched on.
     private var includedLines: [String] {
         var lines = [
-            "Your workouts, and how each exercise has progressed",
-            "What you've eaten, and the targets you're aiming at",
-            "Your equipment and weights, your session length, and the muscles, movements and areas "
-                + "you avoid or train around",
+            String(localized: "trainerExport.included.workouts", defaultValue: "Your workouts, and how each exercise has progressed",
+                   comment: "Trainer summary screen, What's included: always included"),
+            String(localized: "trainerExport.included.nutrition", defaultValue: "What you've eaten, and the targets you're aiming at",
+                   comment: "Trainer summary screen, What's included: always included"),
+            String(localized: "trainerExport.included.setup",
+                   defaultValue: "Your equipment and weights, your session length, and the muscles, movements and areas you avoid or train around",
+                   comment: "Trainer summary screen, What's included: always included"),
         ]
         let settings = store.settings
-        if settings.trainerExportIncludesGoal { lines.append("Your goal") }
-        if settings.trainerExportIncludesHydration { lines.append("Hydration") }
-        if settings.trainerExportIncludesSleep { lines.append("Sleep") }
-        if settings.trainerExportIncludesSickness { lines.append("Days you were unwell") }
-        if settings.trainerExportIncludesWellbeing { lines.append("How you've been feeling") }
+        if settings.trainerExportIncludesGoal {
+            lines.append(String(localized: "trainerExport.included.goal", defaultValue: "Your goal", comment: "Trainer summary screen, What's included: optional, switched on in Settings"))
+        }
+        if settings.trainerExportIncludesHydration {
+            lines.append(String(localized: "trainerExport.included.hydration", defaultValue: "Hydration", comment: "Trainer summary screen, What's included: optional, switched on in Settings"))
+        }
+        if settings.trainerExportIncludesSleep {
+            lines.append(String(localized: "trainerExport.included.sleep", defaultValue: "Sleep", comment: "Trainer summary screen, What's included: optional, switched on in Settings"))
+        }
+        if settings.trainerExportIncludesSickness {
+            lines.append(String(localized: "trainerExport.included.sickness", defaultValue: "Days you were unwell", comment: "Trainer summary screen, What's included: optional, switched on in Settings"))
+        }
+        if settings.trainerExportIncludesWellbeing {
+            lines.append(String(localized: "trainerExport.included.wellbeing", defaultValue: "How you've been feeling", comment: "Trainer summary screen, What's included: optional, switched on in Settings"))
+        }
         return lines
     }
 
@@ -439,14 +463,11 @@ struct TrainerExportView: View {
     private var aiCoachCard: some View {
         card {
             cardTitle("Ask an AI for a plan")
-            Text("Copy your training summary along with instructions, paste it into an AI assistant, "
-                 + "and paste the plan it writes back into Fernlet below.")
+            Text("Copy your training summary along with instructions, paste it into an AI assistant, and paste the plan it writes back into Fernlet below.")
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fixedSize(horizontal: false, vertical: true)
-            bullet("Includes the last 8 weeks of workouts, 2 weeks of meals, and how each exercise has "
-                   + "progressed — plus your targets, equipment and weights, session length, and the muscles, "
-                   + "movements and areas you avoid or train around.",
+            bullet("Includes the last 8 weeks of workouts, 2 weeks of meals, and how each exercise has progressed — plus your targets, equipment and weights, session length, and the muscles, movements and areas you avoid or train around.",
                    tint: Color.moss)
             bullet("This is plain text on your clipboard. Whatever app you paste it into will have it.",
                    tint: Color.terracotta)
@@ -471,8 +492,7 @@ struct TrainerExportView: View {
     private var importCard: some View {
         card {
             cardTitle("Bring a plan back")
-            Text("Paste a workout plan and Fernlet will show it to you day by day — checked against the "
-                 + "muscles and movements you avoid and the equipment you have — before anything is added.")
+            Text("Paste a workout plan and Fernlet will show it to you day by day — checked against the muscles and movements you avoid and the equipment you have — before anything is added.")
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fixedSize(horizontal: false, vertical: true)
@@ -526,10 +546,21 @@ struct TrainerExportView: View {
         let url: URL
     }
 
-    private func bullet(_ text: String, tint: Color = Color.moss) -> some View {
+    /// A bulleted line of literal copy. `LocalizedStringKey`, so the literal reaches the catalog; a
+    /// line already resolved at runtime goes through ``bullet(verbatim:tint:)``.
+    private func bullet(_ text: LocalizedStringKey, tint: Color = Color.moss) -> some View {
+        bulletRow(Text(text), tint: tint)
+    }
+
+    /// A bulleted line of already-localized runtime text (the What's included list).
+    private func bullet(verbatim text: String, tint: Color = Color.moss) -> some View {
+        bulletRow(Text(verbatim: text), tint: tint)
+    }
+
+    private func bulletRow(_ text: Text, tint: Color) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "circle.fill").font(.system(size: 5)).foregroundStyle(tint).padding(.top, 7)
-            Text(text).font(.fernlet(.bodySmall)).foregroundStyle(Color.bark)
+            text.font(.fernlet(.bodySmall)).foregroundStyle(Color.bark)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
