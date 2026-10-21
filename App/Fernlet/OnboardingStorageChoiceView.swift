@@ -148,7 +148,8 @@ struct OnboardingStorageChoiceView: View {
 
     private func storageCard(choice: OnboardingStorageChoice, title: String, copy: String, systemImage: String) -> some View {
         Button {
-            selectedStorage = choice
+            // B6: a real change of card ticks; the write below still runs on every tap.
+            FernletFeedback.system.select(choice, in: &selectedStorage)
             storagePreferencesStore.update { preferences in
                 preferences.iCloudSyncEnabled = choice == .icloud
                 // "Just on this device" while this iCloud account already holds Fernlet data leaves

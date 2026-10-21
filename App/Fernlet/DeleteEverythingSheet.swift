@@ -56,8 +56,17 @@ struct DeleteEverythingSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var typedConfirmation = ""
+    /// Whether this sheet has already felt its arming (``armingEvent(isArmed:alreadyFelt:)``).
+    @State private var hasFeltArming = false
 
     private var isArmed: Bool { DeleteConfirmationWord.matches(typedConfirmation) }
+
+    /// B26: the moment the typed word matches and the delete buttons go live is felt once per sheet,
+    /// as a `caveat` — it worked, and what it unlocked needs reading. Never again on a re-arm after
+    /// a backspace, and never on disarming: a warning that repeats is a warning nobody feels.
+    static func armingEvent(isArmed: Bool, alreadyFelt: Bool) -> FernletFeedbackEvent? {
+        isArmed && !alreadyFelt ? .caveat : nil
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -80,6 +89,11 @@ struct DeleteEverythingSheet: View {
         }
         .background(Color.parchment)
         .presentationDragIndicator(.visible)
+        .onChange(of: isArmed) { _, armed in
+            guard let event = Self.armingEvent(isArmed: armed, alreadyFelt: hasFeltArming) else { return }
+            hasFeltArming = true
+            FernletFeedback.system.play(event)
+        }
     }
 
     // MARK: - Claims

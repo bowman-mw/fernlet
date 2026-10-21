@@ -597,7 +597,7 @@ private struct OnboardingGoalScreen: View {
                     SheetField("Current level") {
                         FlowLayout(spacing: 8) {
                             ForEach(["beginner", "intermediate", "advanced"], id: \.self) { option in
-                                Button(option.capitalized) { level = option }
+                                Button(option.capitalized) { FernletFeedback.system.select(option, in: &level) }
                                     .buttonStyle(ChipButtonStyle(selected: level == option))
                             }
                         }
@@ -858,7 +858,7 @@ private struct OnboardingDietaryPatternScreen: View {
                             systemImage: preferences.dietaryPattern == pattern ? "checkmark.circle.fill" : "circle",
                             isSelected: preferences.dietaryPattern == pattern
                         ) {
-                            preferences.dietaryPattern = pattern
+                            FernletFeedback.system.select(pattern, in: &preferences.dietaryPattern)
                         }
                         .accessibilityIdentifier("onboarding.diet.\(pattern.rawValue)")
                     }

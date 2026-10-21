@@ -139,11 +139,12 @@ struct LogIntimacySheet: View {
 
                 if writesToHealthKit {
                     FlowLayout(spacing: 8) {
-                        Button("Not specified") { protectionUsed = nil }
+                        // B6: a real change ticks (haptics only, as everywhere on this surface).
+                        Button("Not specified") { FernletFeedback.system.select(nil, in: &protectionUsed) }
                             .buttonStyle(ChipButtonStyle(selected: protectionUsed == nil))
-                        Button("Protection used") { protectionUsed = true }
+                        Button("Protection used") { FernletFeedback.system.select(true, in: &protectionUsed) }
                             .buttonStyle(ChipButtonStyle(selected: protectionUsed == true))
-                        Button("No protection") { protectionUsed = false }
+                        Button("No protection") { FernletFeedback.system.select(false, in: &protectionUsed) }
                             .buttonStyle(ChipButtonStyle(selected: protectionUsed == false))
                     }
                 }
@@ -229,7 +230,9 @@ struct LogIntimacySheet: View {
             // The note IS sealed; only part of the Health half went wrong. Say exactly which part and
             // STAY — the sentence is the whole point of the branch, and a 1.8 s window with the cursor
             // elsewhere is not a way of telling anyone anything. `.success`: the sealed note is on disk.
+            // B9: felt as a caveat beside the sentence — haptics only, and no content.
             savedWithCaveat = true
+            FernletFeedback.system.play(.caveat)
             report(caveat, kind: .success)
         } catch is IntimacyTrackingHiddenError {
             // The derived gate flipped to hidden while this sheet was open (a Settings toggle or a

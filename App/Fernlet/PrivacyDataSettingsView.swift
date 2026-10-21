@@ -1785,8 +1785,21 @@ struct PrivacyDataSettingsView: View {
             await MainActor.run {
                 if let enableRetried { finishOwnPhotoBackupApply(enabled: true, ok: enableRetried) }
                 isRetryingRestore = false
+                if let event = Self.retryRestoreEvent(enableRetried: enableRetried, stillRetryable: showsRetryRestore) {
+                    FernletFeedback.system.play(event)
+                }
             }
         }
+    }
+
+    /// What a finished "Retry restore" pass feels like (B10): the person tapped and waited, so
+    /// `done` when nothing on the banner is left to retry, `failed` when something still is. A failed
+    /// photo-backup enable has already played `failed` beside its own error line, so the pass adds
+    /// nothing then. Only this tap is ever felt: the automatic passes (launch, foreground, the hub's
+    /// settle) are background work, and background work is silent.
+    static func retryRestoreEvent(enableRetried: Bool?, stillRetryable: Bool) -> FernletFeedbackEvent? {
+        guard enableRetried != false else { return nil }
+        return stillRetryable ? .failed : .done
     }
 
     private func resolveEscrowConflict() {
@@ -1809,6 +1822,9 @@ struct PrivacyDataSettingsView: View {
                     FernletAuditLog.log("privacy.sealedBackup.resolveEscrowConflict.failed")
                     return
                 }
+                // B10: the switch the person asked for and waited on ("Switching…") landed; the
+                // conflict banner going away is what it looks like.
+                FernletFeedback.system.play(.done)
             }
         }
     }
@@ -2525,11 +2541,29 @@ struct PrivacyDataSettingsView: View {
                 // reflect the now-empty cloud instead of continuing to report data that no longer exists.
                 existingDataSummary = nil
                 isShowingDisableConfirmation = false
+                confirmCloudDataDeleted()
             } catch {
                 setOperationError(error.localizedDescription, scope: .iCloud)
                 isShowingDisableConfirmation = false
             }
             isUpdatingStorage = false
+        }
+    }
+
+    /// B10: "Delete iCloud data" finished. The sheet just closes on success, so this says it: the
+    /// `done` haptic at once, and — once the sheet has settled, as every sheet-closing confirmation
+    /// waits (``TaskConfirmation/sheetSettle``) — a sentence for VoiceOver, which used to hear nothing.
+    private func confirmCloudDataDeleted() {
+        FernletFeedback.system.play(.done)
+        Task { @MainActor in
+            do {
+                try await Task.sleep(for: TaskConfirmation.sheetSettle)
+            } catch {
+                return
+            }
+            FernletAnnouncer.system.announce(.success, resolved: String(
+                localized: "privacy.icloud.deleted.spoken", defaultValue: "Your iCloud data was deleted.",
+                comment: "Spoken after Delete iCloud data finishes and its sheet closes."))
         }
     }
 

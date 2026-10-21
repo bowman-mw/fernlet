@@ -103,7 +103,7 @@ struct OnboardingIntimacyChoiceScreen: View {
     ) -> some View {
         let isSelected = keepsIntimacyTracking == keep
         let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
-        return Button { keepsIntimacyTracking = keep } label: {
+        return Button { FernletFeedback.system.select(keep, in: &keepsIntimacyTracking) } label: {
             HStack(alignment: .top, spacing: 14) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.title3.weight(.semibold))

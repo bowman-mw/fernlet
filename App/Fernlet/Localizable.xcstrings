@@ -10821,6 +10821,66 @@
         }
       }
     },
+    "journal.prompt.limitReached.message" : {
+      "comment" : "Banner over the journal editor when the entry reaches its 800-character limit; Moments is Apple's journaling app.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet saved the short version here. Moments is better for the rest."
+          }
+        }
+      }
+    },
+    "journal.prompt.limitReached.title" : {
+      "comment" : "Title of the banner over the journal editor when the entry reaches its 800-character limit.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Journal limit reached"
+          }
+        }
+      }
+    },
+    "journal.prompt.longReflection.message" : {
+      "comment" : "Banner over the journal editor suggesting a long entry continue in the Moments app.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This is getting long enough for a dedicated journal entry."
+          }
+        }
+      }
+    },
+    "journal.prompt.longReflection.title" : {
+      "comment" : "Title of the banner over the journal editor suggesting a long entry continue in the Moments app.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Keep going in Moments"
+          }
+        }
+      }
+    },
+    "journal.prompt.spoken" : {
+      "comment" : "Spoken when a journal banner appears: its title, then its sentence.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@. %2$@"
+          }
+        }
+      }
+    },
     "labelScan.error.fallback" : {
       "comment" : "Shown in the nutrition-label camera sheet when the scan fails and the thrown error carries no description of its own.",
       "extractionState" : "extracted_with_value",
@@ -11494,6 +11554,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Couldn't prepare your export. Please try again."
+          }
+        }
+      }
+    },
+    "privacy.icloud.deleted.spoken" : {
+      "comment" : "Spoken after Delete iCloud data finishes and its sheet closes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your iCloud data was deleted."
           }
         }
       }
