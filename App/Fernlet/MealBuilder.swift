@@ -1,6 +1,7 @@
 import Foundation
 import FernletDomainModel
 import AIProviders
+import FernletUI
 
 /// Pure meal-construction helpers shared by every resolution tier: turning selection plans, recipes,
 /// and resolved ingredient pairs into fully snapshotted `Meal`s, and building the reusable recipe a
@@ -429,13 +430,13 @@ nonisolated enum StoredFoodNote {
     /// else the note exactly as stored.
     static func displayedMealNote(_ note: String) -> String {
         guard let row = mealNotes.first(where: { $0.frozen == note }) else { return note }
-        return String(localized: row.display)
+        return AddressedCopy.plain(row.display)
     }
 
     /// The notes a recipe screen draws for stored `notes`, by the same rule as ``displayedMealNote(_:)``.
     static func displayedRecipeNotes(_ notes: String) -> String {
         guard let row = recipeNotes.first(where: { $0.frozen == notes }) else { return notes }
-        return String(localized: row.display)
+        return AddressedCopy.plain(row.display)
     }
 
     /// The notes to SAVE when an editor seeded with ``displayedRecipeNotes(_:)`` comes back as `typed`:

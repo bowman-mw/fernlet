@@ -1861,7 +1861,7 @@ struct SettingsSheet: View {
             HStack {
                 // The display name, never `signalName`: that is a frozen logic token ("moodTrend")
                 // six gates compare, and it used to be drawn here raw.
-                Text(verbatim: SettingsSignalNames.displayName(for: signal.signalName))
+                Text(verbatim: SignalPresentation.title(for: signal.signalName))
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                 Spacer()
@@ -3161,44 +3161,6 @@ enum AwayDeliveryConsentCopy {
 }
 
 // MARK: - Display names for stored tokens
-
-/// The names Settings draws for derived signals, keyed by the frozen signal NAME.
-///
-/// `DerivedSignalRecord.signalName` ("moodTrend", "intensityReadiness", …) is a logic token: six
-/// call sites compare it with `==`, and `LocalizationBoundaryTests` part D pins the vocabulary. The
-/// Debug page's derived-signals inspector used to draw it raw. This is the display half — the same
-/// English Home's Trends card shows (`SignalPresentation.title(for:)`), under catalog keys — and an
-/// exact match on the frozen name, so a signal added later still draws, as its token.
-nonisolated enum SettingsSignalNames {
-    /// The localized name for `signalName`, or the token itself for a name this build does not know.
-    static func displayName(for signalName: String) -> String {
-        switch signalName {
-        case "moodTrend":
-            String(localized: "signal.name.moodTrend", defaultValue: "Mood trend",
-                   comment: "Name of a derived signal: the trend in the user's journal moods.")
-        case "energyTrend":
-            String(localized: "signal.name.energyTrend", defaultValue: "Energy trend",
-                   comment: "Name of a derived signal: the trend in the user's energy, from sleep, journal moods and recent workouts.")
-        case "eatingPattern":
-            String(localized: "signal.name.eatingPattern", defaultValue: "Eating pattern",
-                   comment: "Name of a derived signal: how regular recent meals were, and their protein.")
-        case "progressionTrend":
-            String(localized: "signal.name.progressionTrend", defaultValue: "Progression",
-                   comment: "Name of a derived signal: whether workouts are building over time.")
-        case "intensityReadiness":
-            String(localized: "signal.name.intensityReadiness", defaultValue: "Readiness",
-                   comment: "Name of a derived signal: how ready the body is for a hard workout today.")
-        case "micronutrientGaps7Day":
-            String(localized: "signal.name.micronutrientGaps7Day", defaultValue: "7-day nutrients",
-                   comment: "Name of a derived signal: vitamins and minerals over the last 7 days.")
-        case "micronutrientGaps14Day":
-            String(localized: "signal.name.micronutrientGaps14Day", defaultValue: "14-day nutrients",
-                   comment: "Name of a derived signal: vitamins and minerals over the last 14 days.")
-        default:
-            signalName
-        }
-    }
-}
 
 /// The names the Core memory page draws for a memory's stored `category` token.
 ///

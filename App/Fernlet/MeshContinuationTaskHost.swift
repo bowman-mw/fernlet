@@ -86,6 +86,7 @@
 import FernletFoundation
 import Foundation
 import ProximityKit
+import FernletUI
 
 // MARK: - MeshContinuationTaskHost
 
@@ -423,8 +424,8 @@ final class MeshContinuationTaskHost {
         do {
             try scheduler.submit(ContinuationTaskRequest(
                 identifier: identifier,
-                title: String(localized: copy.title),
-                subtitle: String(localized: copy.subtitle)
+                title: AddressedCopy.plain(copy.title),
+                subtitle: AddressedCopy.plain(copy.subtitle)
             ))
             FernletAuditLog.log(MeshContinuationAudit.submitted.rawValue, context: ["id": identifier])
         } catch {
@@ -479,7 +480,7 @@ final class MeshContinuationTaskHost {
         guard let handle = heldTask else { return }
         let copy = MeshContinuationCopy.card(friendCount: friendCount ?? connectedFriendCount())
         handle.updateContinuationCopy(
-            title: String(localized: copy.title), subtitle: String(localized: copy.subtitle)
+            title: AddressedCopy.plain(copy.title), subtitle: AddressedCopy.plain(copy.subtitle)
         )
     }
 

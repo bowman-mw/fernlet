@@ -757,7 +757,8 @@ struct GuidedWorkoutSheet: View {
             return
         }
         let addition = store.guidedRunCues.voiceOverAddition(from: before, to: after)
-        let line = GuidedRunSpokenCue.sentences(String(localized: spoken.sentence), addition)
+        let address = store.effectiveUserProfile.sex.termOfAddress
+        let line = GuidedRunSpokenCue.sentences(AddressedCopy.string(spoken.sentence, addressing: address), addition)
         FernletAnnouncer.system.announce(spoken.kind, resolved: line)
     }
 

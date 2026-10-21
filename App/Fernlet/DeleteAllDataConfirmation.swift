@@ -441,7 +441,7 @@ nonisolated enum DeleteAllStoreNames {
     /// has no entry for.
     static func displayName(for token: String) -> String {
         guard let resource = names[token] else { return token }
-        return String(localized: resource)
+        return AddressedCopy.plain(resource)
     }
 }
 

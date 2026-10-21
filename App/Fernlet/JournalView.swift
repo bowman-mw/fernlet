@@ -1364,7 +1364,7 @@ struct DayDetailView: View {
         let tracked = MicronutrientGapAnalyzer.trackedNutrients.compactMap { nutrient -> DayMicronutrientBreakdownRow? in
             guard let value = nutrient.value(dayMicronutrients) else { return nil }
             return DayMicronutrientBreakdownRow(
-                name: nutrient.name,
+                name: nutrient.displayName,
                 value: value,
                 target: nutrient.recommendedDailyAmount,
                 unit: nutrient.unit,

@@ -2420,7 +2420,7 @@ struct SignalDetailRow: View {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(signal.nutrientGaps.prefix(4)) { gap in
                         HStack {
-                            Text(gap.nutrientName)
+                            Text(gap.displayedName)
                                 .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.bark)
                             Spacer()

@@ -87,6 +87,17 @@ public nonisolated enum AddressedCopy {
     ) -> String {
         String(attributed(resource, addressing: address).characters)
     }
+
+    /// The resolved text of copy that never describes the user, as a plain `String`, for a caller
+    /// with no profile to hand (a pure formatter, a background task's title).
+    ///
+    /// It still consumes any grammar-agreement markup, plural agreement included, so a marked
+    /// translation can never reach the screen or VoiceOver raw; a word that does describe the user
+    /// would come out masculine, so such copy goes through ``string(_:addressing:)`` instead.
+    /// `LocalizationBoundaryTests` part I bans the bare `String(localized: resource)` this replaces.
+    public static func plain(_ resource: LocalizedStringResource) -> String {
+        string(resource, addressing: .masculine)
+    }
 }
 
 /// A `Text` for catalog copy that describes the user, inflected for the term of address in the

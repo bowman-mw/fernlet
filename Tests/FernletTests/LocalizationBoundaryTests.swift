@@ -3565,10 +3565,10 @@ struct LocalizationBoundaryTests {
             ("privacy.sealedBackup.intimacy.removeThem", "the intimate-log backup's Remove them, apart from the journal's (gender)"),
             ("Found ^[%lld meal log](inflect: true), ^[%lld journal entry](inflect: true), ^[%lld workout](inflect: true) in this iCloud account.",
              "the multiple-devices banner's counts, once fixed English plurals"),
-        ] + ["moodTrend", "energyTrend", "eatingPattern", "progressionTrend", "intensityReadiness",
-             "micronutrientGaps7Day", "micronutrientGaps14Day"].map {
-            ("signal.name.\($0)", "SettingsSignalNames, the Debug page's derived-signal names once drawn raw")
-        }
+        ]
+        // The Debug page's derived-signal names (once drawn raw) share Home's `signal.title.*` keys
+        // through SignalPresentation.title(for:); the duplicate `signal.name.*` family was retired
+        // when the home and settings lanes were integrated (2026-10-21).
         let lock = "FernletKit/Sources/FernletLock/Localizable.xcstrings"
         let lockKeys: [HarvestedKey] = [
             "lock.credential.invalid.pin4", "lock.credential.invalid.pin6", "lock.credential.invalid.password",
@@ -5958,10 +5958,14 @@ struct LocalizationBoundaryTests {
         let path: String
         /// 1-based line of the call's head.
         let line: Int
-        /// The key literal's text, interpolations included as written (`\(n)`).
+        /// The key literal's text with each `\(…)` collapsed to `{}`; for a resource resolution
+        /// (``isLiteral`` false), the argument's code as written.
         let key: String
         /// The whole call, from `String` to its matching `)`.
         let call: String
+        /// Whether the first argument is a string literal (a key). False is a caller-built
+        /// `LocalizedStringResource` resolved straight to a `String`.
+        var isLiteral = true
     }
 
     /// A catalog key whose text carries automatic-grammar-agreement markup (`](inflect:`) in the
@@ -5982,7 +5986,8 @@ struct LocalizationBoundaryTests {
             "Scanned only \(filesScanned) Swift files (floor \(Self.minimumInflectionFilesScanned)): part I is unenforced."
         )
         let offenders = sites.filter { site in
-            site.call.contains("](inflect:") || marked.contains { Self.literalKey(site.key, matches: $0) }
+            site.isLiteral
+                && (site.call.contains("](inflect:") || marked.contains { Self.literalKey(site.key, matches: $0) })
         }
         #expect(
             offenders.isEmpty,
@@ -6005,10 +6010,12 @@ struct LocalizationBoundaryTests {
             localized: "welcome.title", defaultValue: "^[Bienvenido](inflect: true)", comment: "x")
         let d = String(localized: resource)
         """
-        let sites = Self.bareStringKeys(in: source)
+        let all = Self.bareStringKeys(in: source)
+        let sites = all.filter(\.isLiteral)
         #expect(sites.map(\.key) == ["Made ^[{} time](inflect: true).", "welcome.title"])
         #expect(sites.map(\.line) == [1, 4])
         #expect(sites.last?.call.contains("](inflect:") == true)
+        #expect(all.filter { !$0.isLiteral }.map(\.key) == ["resource"], "a resource resolution is recorded as one")
         #expect(Self.literalKey("Made {} times", matches: "Made %lld times"))
         #expect(Self.literalKey("{}, {} time", matches: "%1$@, %2$lld time"))
         #expect(Self.literalKey("Made ^[{} time](inflect: true).", matches: "Made ^[%lld time](inflect: true)."))
@@ -6027,6 +6034,30 @@ struct LocalizationBoundaryTests {
         #expect(AddressedCopy.string(resource, addressing: BiologicalSex.female.termOfAddress) == "¿Estás lista?")
         #expect(AddressedCopy.string(resource, addressing: BiologicalSex.male.termOfAddress) == "¿Estás listo?")
         #expect(UserNutritionProfile().sex.termOfAddress == .masculine, "An unanswered profile must address the user in the masculine.")
+    }
+
+    /// No shipping code resolves a `LocalizedStringResource` with `String(localized:)`.
+    ///
+    /// Part I's first rule can only see a key written as a literal. A resource built elsewhere and
+    /// resolved to a `String` (an announcement's line, a spoken cue, a background task's title) is
+    /// the same trap one step removed: the Spanish drafting pass found the guided run's "rest over"
+    /// line, whose translation marks "listo", on exactly that path, where VoiceOver would have read
+    /// the markup aloud. Every such site goes through `AddressedCopy.string(_:addressing:)` (with the
+    /// user's term of address) or `AddressedCopy.plain(_:)` (copy that never describes the user),
+    /// both of which consume the markup. Comments are skipped, so documentation may name the call.
+    @Test func noShippingCodeResolvesAResourceStraightToAString() throws {
+        let (sites, filesScanned) = try Self.scanForBareStringKeys()
+        #expect(filesScanned >= Self.minimumInflectionFilesScanned)
+        let offenders = sites.filter { !$0.isLiteral }
+        #expect(
+            offenders.isEmpty,
+            """
+            \(offenders.count) `String(localized:)` call(s) resolve a caller-built resource straight to \
+            a String, which keeps a translation's grammar-agreement markup verbatim. Use \
+            AddressedCopy.string(_:addressing:) or AddressedCopy.plain(_:):
+            \(offenders.map { "\($0.path):\($0.line): \($0.key)" }.sorted().joined(separator: "\n"))
+            """
+        )
     }
 
     /// Every catalog key in the scan roots whose key or any value carries `](inflect:`.
@@ -6096,9 +6127,12 @@ struct LocalizationBoundaryTests {
             let end = endOfCall(chars, openParen: openParen)
             let labelStart = skipWhitespace(chars, from: openParen + 1)
             let keyStart = skipWhitespace(chars, from: labelStart + "localized:".count)
+            let call = String(chars[index..<min(end, chars.count)])
             if keyStart < chars.count, chars[keyStart] == "\"" {
-                let key = readStringLiteral(chars, from: keyStart).text
-                sites.append(BareStringKeySite(path: "", line: line, key: key, call: String(chars[index..<min(end, chars.count)])))
+                sites.append(BareStringKeySite(path: "", line: line, key: readStringLiteral(chars, from: keyStart).text, call: call))
+            } else if keyStart < chars.count {
+                let argument = String(chars[keyStart..<max(keyStart, min(end, chars.count) - 1)])
+                sites.append(BareStringKeySite(path: "", line: line, key: argument, call: call, isLiteral: false))
             }
             line += countNewlines(chars, from: index, to: end)
             index = max(end, index + 1)

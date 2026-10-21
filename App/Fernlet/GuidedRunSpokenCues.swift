@@ -47,8 +47,8 @@ enum GuidedRunSpokenCue {
         case .restEnded:
             return restOver
         case .holdStarted:
-            guard let paceRaw else { return String(localized: GuidedRunAnnouncement.holdStartedLine) }
-            return String(localized: GuidedSegmentWords.goLine(paceRaw))
+            guard let paceRaw else { return AddressedCopy.plain(GuidedRunAnnouncement.holdStartedLine) }
+            return AddressedCopy.plain(GuidedSegmentWords.goLine(paceRaw))
         case .holdEnded:
             return paceRaw == nil ? holdDone : partDone
         // A zone drift (idea 9) speaks through the zone director's own VoiceOver line, not here. The
@@ -131,7 +131,7 @@ enum GuidedRunSpokenCue {
         }
         if let warmUp = run.warmUpPosition {
             let line = GuidedWarmUpWords.setLine(index: warmUp.index, count: warmUp.count, name: exercise.name)
-            return sentences(String(localized: line), loadClause(for: run))
+            return sentences(AddressedCopy.plain(line), loadClause(for: run))
         }
         let named = first ? firstName(exercise) : nextName(exercise)
         return sentences(named, loadClause(for: run))
@@ -165,7 +165,7 @@ enum GuidedRunSpokenCue {
     /// in VoiceOver's own words ("Steady pace for 20 minutes.").
     private static func segmentLine(_ segment: GuidedWorkoutRunState.Segment, seconds: Int) -> String {
         guard let round = segment.round, let rounds = segment.rounds else {
-            return String(localized: GuidedSegmentWords.changeLine(segment, seconds: seconds))
+            return AddressedCopy.plain(GuidedSegmentWords.changeLine(segment, seconds: seconds))
         }
         switch segment.paceRaw {
         case GuidedWorkoutRunState.PaceToken.hard:
