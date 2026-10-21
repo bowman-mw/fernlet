@@ -113,7 +113,9 @@ public final class PresenceManager: ProximityPayloadHandling {
 
     /// The multi-second send pipeline, observed by FriendListView (spinner while connecting, then
     /// distinct copy for each terminal state). `verifying` is the window between the transport
-    /// connecting and the identity being confirmed as the intended friend.
+    /// connecting and the identity being confirmed as the intended friend. `failed`'s message is
+    /// display copy resolved here, in this device's language (`FernletSocialCopy.Presence`, under
+    /// `bundle: .module`); the surfaces draw it verbatim and nothing compares it.
     public enum HeartSendState: Equatable {
         case idle
         case connecting(recipientName: String)
@@ -859,13 +861,13 @@ public final class PresenceManager: ProximityPayloadHandling {
 
         // Send-side opt-out gate (one of the three homes of allowNearbyHearts).
         guard store.allowNearbyHearts else {
-            failHeart("Turn on nearby hearts to send \(firstName) some warmth.")
+            failHeart(FernletSocialCopy.Presence.heartsOff(firstName))
             return
         }
         // Active record only: never send to a blocked or revoked (unfriended) peer.
         guard friend.blockedAt == nil, friend.revokedAt == nil else { return }
         guard ledger.canSendHeart(to: friend.fingerprint) else {
-            failHeart("You just sent \(firstName) some warmth — hearts settle for a few minutes.")
+            failHeart(FernletSocialCopy.Presence.cooldown(firstName))
             return
         }
         guard isRunning else {
@@ -902,7 +904,7 @@ public final class PresenceManager: ProximityPayloadHandling {
         // until the connect timeout failed the send.
         guard !hasHeartConnection(with: peer),
               heartConnections.count < Self.maxHeartConnections else {
-            failHeart("Already sending \(firstName) some warmth — one moment.")
+            failHeart(FernletSocialCopy.Presence.alreadySending(firstName))
             return
         }
         // The dial hello claims the pairwise tag we advertise for this friend, which is how the
@@ -1086,7 +1088,7 @@ public final class PresenceManager: ProximityPayloadHandling {
             presenceSession.disconnectPeer(channel.peer)
             removePendingHeartSend(for: channel.peer)
             if intended != nil, isHeartSendInProgress {
-                failHeart("Couldn't verify this friend — no heart was sent.")
+                failHeart(FernletSocialCopy.Presence.couldNotVerifyThisFriend)
             }
             return
         }
@@ -1171,7 +1173,7 @@ public final class PresenceManager: ProximityPayloadHandling {
                     heartSendState = .verifying(recipientName: intended.displayName)
                     spawnHostPinned { [weak self] in await self?.deliverHeart(via: connection, to: intended) }
                 } else {
-                    failHeart("Couldn't verify \(Self.firstName(of: intended.displayName, in: namespace)) — no heart was sent.")
+                    failHeart(FernletSocialCopy.Presence.couldNotVerify(Self.firstName(of: intended.displayName, in: namespace)))
                     teardownIDs.append(heartConnections[index].id)
                 }
             } else if !eligible {
@@ -1192,7 +1194,7 @@ public final class PresenceManager: ProximityPayloadHandling {
         }
         for connection in stale {
             if connection.intendedFriend != nil, isHeartSendInProgress {
-                failHeart("No heart was sent — the connection dropped.")
+                failHeart(FernletSocialCopy.Presence.noHeartConnectionDropped)
             }
             // Every record drop runs the coordinator's own teardown. Idempotent for `.ended`
             // (its `end()` already stopped everything); for `.failed` it is what guarantees the
@@ -1217,7 +1219,7 @@ public final class PresenceManager: ProximityPayloadHandling {
         defer { teardownHeartConnection(id: connection.id) }
         // Re-check the cooldown right before the wire write (a racing send may have consumed it).
         guard ledger.canSendHeart(to: friend.fingerprint) else {
-            failHeart("You just sent \(Self.firstName(of: friend.displayName, in: namespace)) some warmth — hearts settle for a few minutes.")
+            failHeart(FernletSocialCopy.Presence.cooldown(Self.firstName(of: friend.displayName, in: namespace)))
             return
         }
         do {
@@ -1241,7 +1243,7 @@ public final class PresenceManager: ProximityPayloadHandling {
             heartSendState = .sent(recipientName: friend.displayName)
             recordDiagnostic("Sent good vibes to a friend.")
         } catch {
-            heartSendState = .failed(message: "Could not send that heart just now.")
+            heartSendState = .failed(message: FernletSocialCopy.Presence.couldNotSend)
             recordDiagnostic("Heart send failed.")
         }
         scheduleHeartStatusClear()
@@ -1305,7 +1307,7 @@ public final class PresenceManager: ProximityPayloadHandling {
         pruneDiscoveredPeerIfDeparted(peer.id)
         heartConnectionObservationRevision += 1
         if droppedOutbound, isHeartSendInProgress {
-            failHeart("The connection dropped — no heart was sent.")
+            failHeart(FernletSocialCopy.Presence.connectionDropped)
         }
     }
 
@@ -1355,7 +1357,7 @@ public final class PresenceManager: ProximityPayloadHandling {
         guard nextAttempt < Self.maxHeartInviteAttempts else {
             removePendingHeartSend(for: peer)
             presenceSession.disconnectPeer(peer)
-            failHeart("\(Self.firstName(of: friend.displayName, in: namespace)) didn't answer — try again in a moment.")
+            failHeart(FernletSocialCopy.Presence.didNotAnswer(Self.firstName(of: friend.displayName, in: namespace)))
             return
         }
         // Pre-discovery race: clear the stale invite, then re-invite after a short delay (mirrors
@@ -1511,8 +1513,8 @@ public final class PresenceManager: ProximityPayloadHandling {
     /// turned on.
     private func notNearbyHeartMessage(firstName: String) -> String {
         (heartsAwayEnabledProvider?() ?? false)
-            ? "\(firstName) isn't nearby, and the heart couldn't be tucked away just now — try again in a moment."
-            : "\(firstName) isn't nearby right now — hearts travel in person for now."
+            ? FernletSocialCopy.Presence.notNearbyAwayFailed(firstName)
+            : FernletSocialCopy.Presence.notNearbyInPersonOnly(firstName)
     }
 
     private func scheduleHeartStatusClear() {

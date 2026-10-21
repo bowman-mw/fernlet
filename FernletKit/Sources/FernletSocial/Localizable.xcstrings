@@ -1,6 +1,257 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "activities.error.createFailed" : {
+      "comment" : "Group Activities error when a new activity could not be set up",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couldn't create the activity."
+          }
+        }
+      }
+    },
+    "activities.error.expired" : {
+      "comment" : "Group Activities error when asking to join an activity whose time is up",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That activity has expired."
+          }
+        }
+      }
+    },
+    "activities.error.full" : {
+      "comment" : "Group Activities error shown to the host when allowing one more person would go over the member limit",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This activity is full."
+          }
+        }
+      }
+    },
+    "activities.error.grantFailed" : {
+      "comment" : "Group Activities error shown to the host when letting a person join failed",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couldn't grant the join."
+          }
+        }
+      }
+    },
+    "activities.error.hostLimit" : {
+      "comment" : "Group Activities error when starting one more activity than a phone may host. %lld is the limit.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You can host up to %lld activity."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You can host up to %lld activities."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "activities.error.identityUnavailable" : {
+      "comment" : "Group Activities error when this phone's secure identity is not available to start or join an activity",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Identity unavailable."
+          }
+        }
+      }
+    },
+    "activities.error.inviteUnverified" : {
+      "comment" : "Group Activities error when the host's answer to a join request could not be verified, so the join did not happen",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That invitation couldn't be verified."
+          }
+        }
+      }
+    },
+    "activities.error.joinLimit" : {
+      "comment" : "Group Activities error when asking to join one more activity than a phone may be in",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You've joined the maximum number of activities."
+          }
+        }
+      }
+    },
+    "activities.error.updateFailed" : {
+      "comment" : "Group Activities error when the member list could not be updated after someone joined, left or was removed",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couldn't update the activity."
+          }
+        }
+      }
+    },
+    "presence.heart.alreadySending" : {
+      "comment" : "Heart status line when a heart to this friend is already on its way. %@ is the friend's first name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Already sending %@ some warmth — one moment."
+          }
+        }
+      }
+    },
+    "presence.heart.connectionDropped" : {
+      "comment" : "Heart status line when the friend's phone disconnected before the heart was sent",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The connection dropped — no heart was sent."
+          }
+        }
+      }
+    },
+    "presence.heart.cooldown" : {
+      "comment" : "Heart status line when a heart was sent to this friend minutes ago. %@ is the friend's first name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You just sent %@ some warmth — hearts settle for a few minutes."
+          }
+        }
+      }
+    },
+    "presence.heart.couldNotSend" : {
+      "comment" : "Heart status line when sending the heart failed",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Could not send that heart just now."
+          }
+        }
+      }
+    },
+    "presence.heart.couldNotVerify" : {
+      "comment" : "Heart status line when the nearby phone could not be confirmed as this friend, so nothing was sent. %@ is the friend's first name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couldn't verify %@ — no heart was sent."
+          }
+        }
+      }
+    },
+    "presence.heart.couldNotVerifyThisFriend" : {
+      "comment" : "Heart status line when the nearby phone could not be confirmed as the friend, so nothing was sent",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couldn't verify this friend — no heart was sent."
+          }
+        }
+      }
+    },
+    "presence.heart.didNotAnswer" : {
+      "comment" : "Heart status line when the friend's phone did not answer. %@ is the friend's first name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ didn't answer — try again in a moment."
+          }
+        }
+      }
+    },
+    "presence.heart.heartsOff" : {
+      "comment" : "Heart status line when nearby hearts are turned off. %@ is the friend's first name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Turn on nearby hearts to send %@ some warmth."
+          }
+        }
+      }
+    },
+    "presence.heart.noHeartConnectionDropped" : {
+      "comment" : "Heart status line when the connection to the friend's phone failed before the heart was sent",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No heart was sent — the connection dropped."
+          }
+        }
+      }
+    },
+    "presence.heart.notNearbyAwayFailed" : {
+      "comment" : "Heart status line when the friend is not nearby and saving the heart for later delivery also failed. %@ is the friend's first name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ isn't nearby, and the heart couldn't be tucked away just now — try again in a moment."
+          }
+        }
+      }
+    },
+    "presence.heart.notNearbyInPersonOnly" : {
+      "comment" : "Heart status line when the friend is not nearby and hearts are only sent in person. %@ is the friend's first name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ isn't nearby right now — hearts travel in person for now."
+          }
+        }
+      }
+    },
     "proximity.camera.holdFailed" : {
       "comment" : "Alert on the in-person camera when a photo just taken could not be saved securely on this phone. No film was used and nothing was shared.",
       "extractionState" : "extracted_with_value",
@@ -9,6 +260,125 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Couldn't keep that photo. Try again."
+          }
+        }
+      }
+    },
+    "proximity.camera.photoLimitReached" : {
+      "comment" : "Alert on the in-person camera when this phone has shared as many photos as one session allows. %lld is that number.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've shared the maximum of %lld photo in this mesh session."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've shared the maximum of %lld photos in this mesh session."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "proximity.session.friendOf" : {
+      "comment" : "Under a person in the in-person session's list: one of your friends trusts them. %@ is that friend's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Friend of %@"
+          }
+        }
+      }
+    },
+    "recipeShare.failed.connectingToAnother" : {
+      "comment" : "Recipe share status when this phone is still connecting to a different nearby phone",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Still connecting to another Fernlet — recipe sharing links two Fernlets at a time."
+          }
+        }
+      }
+    },
+    "recipeShare.failed.couldNotConnect" : {
+      "comment" : "Recipe share status when a secure connection to the nearby phone could not be made. %@ is that phone's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Could not connect securely to %@."
+          }
+        }
+      }
+    },
+    "recipeShare.failed.couldNotSend" : {
+      "comment" : "Recipe share status when sending the recipe failed",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Could not send that recipe."
+          }
+        }
+      }
+    },
+    "recipeShare.failed.noAnswer" : {
+      "comment" : "Recipe share status when the chosen nearby phone did not answer. %@ is that phone's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No answer from %@ — that Fernlet may be busy sharing with someone else."
+          }
+        }
+      }
+    },
+    "recipeShare.failed.pairedAlready" : {
+      "comment" : "Recipe share status when this phone is already linked to another nearby phone. %@ is that phone's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Connected to %@ — recipe sharing links two Fernlets at a time."
+          }
+        }
+      }
+    },
+    "recipeShare.failed.pairedWithAnother" : {
+      "comment" : "Recipe share status when this phone is still sharing with another nearby phone. %@ is that phone's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Still sharing with %@ — recipe sharing links two Fernlets at a time."
+          }
+        }
+      }
+    },
+    "recipeShare.failed.recipientUnavailable" : {
+      "comment" : "Recipe share status when the chosen nearby phone is gone",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That nearby Fernlet is no longer available."
           }
         }
       }

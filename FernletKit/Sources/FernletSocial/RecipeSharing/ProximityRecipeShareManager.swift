@@ -75,7 +75,9 @@ public enum ProximityRecipeShareDiagnostics {
 /// The English the share sheet shows, the ``SendState`` line and each diagnostic, is rendered from the
 /// session's typed status and events in one place, the renderer at the foot of this file
 /// (`sendState(for:)`, `statusMessage(for:)`, `diagnostic(for:)`), byte for byte the sentences the
-/// share sheet and its tests read; the receive handler's four lines are its own.
+/// share sheet and its tests read; the receive handler's four lines are its own. The failure
+/// sentences are display copy, resolved through `FernletSocialCopy.RecipeShare` in this device's
+/// language; the diagnostics are the developer's debug-tools log and stay English.
 @MainActor
 @Observable
 public final class ProximityRecipeShareManager: ProximityPayloadHandling {
@@ -316,19 +318,19 @@ extension ProximityRecipeShareManager {
     static func statusMessage(for failure: ProximityPairSession.Status.Failure) -> String {
         switch failure {
         case .searchRefusedWhilePaired(let name):
-            return "Connected to \(name) — recipe sharing links two Fernlets at a time."
+            return FernletSocialCopy.RecipeShare.pairedAlready(name)
         case .recipientUnavailable:
-            return "That nearby Fernlet is no longer available."
+            return FernletSocialCopy.RecipeShare.recipientUnavailable
         case .connectingToAnother:
-            return "Still connecting to another Fernlet — recipe sharing links two Fernlets at a time."
+            return FernletSocialCopy.RecipeShare.connectingToAnother
         case .pairedWithAnother(let name):
-            return "Still sharing with \(name) — recipe sharing links two Fernlets at a time."
+            return FernletSocialCopy.RecipeShare.pairedWithAnother(name)
         case .noAnswer(let name):
-            return "No answer from \(name) — that Fernlet may be busy sharing with someone else."
+            return FernletSocialCopy.RecipeShare.noAnswer(name)
         case .couldNotConnect(let name):
-            return "Could not connect securely to \(name)."
+            return FernletSocialCopy.RecipeShare.couldNotConnect(name)
         case .duplicateSend, .sendFailed:
-            return "Could not send that recipe."
+            return FernletSocialCopy.RecipeShare.couldNotSend
         }
     }
 
