@@ -1802,6 +1802,70 @@ struct LocalizationBoundaryTests {
         #expect(!values.contains("not a signal value"))
     }
 
+    // MARK: - D2. The display half of the derived-signal fork, and Home's other draw-time mappings
+
+    /// Every value `DerivedSignalFactory` can mint draws through its own catalog key.
+    ///
+    /// Part D freezes the tokens; this is the other half of the fork (Spanish round step 2, Home
+    /// lane, 2026-10-20). The Trends card used to draw a value with `.capitalized` on the raw token,
+    /// which no translation can survive; ``SignalPresentation/valueLabel(for:)`` is now an exact-match
+    /// table from token to key. The vocabulary is expanded from ``frozenSignalValueVocabulary`` (the
+    /// two counted shapes at one and at many, since the factory splices an English plural into the
+    /// gap token), and each label is checked in English against the capitalized rendering it
+    /// replaced: byte-identical on screen today, and red for a token the table forgot, which falls
+    /// through to the raw lowercase token.
+    @Test @MainActor func everyFrozenSignalValueDrawsThroughItsDisplayKey() throws {
+        let counted = ["1 possible gap", "3 possible gaps", "1 covered", "5 covered"]
+        let values = Self.frozenSignalValueVocabulary.filter { !$0.contains("{}") }.sorted() + counted
+        #expect(values.count == 22, "the frozen vocabulary changed size; extend this expansion with it")
+        for value in values {
+            #expect(SignalPresentation.valueLabel(for: value) == value.capitalized,
+                    "Trends draws \"\(value)\" as \"\(SignalPresentation.valueLabel(for: value))\" — the value has no display key")
+        }
+        let unknown = "a token from a newer build"
+        #expect(SignalPresentation.valueLabel(for: unknown) == unknown, "an unknown token is drawn as it is")
+        for name in Self.frozenSignalNames {
+            #expect(SignalPresentation.title(for: name) != name, "the \(name) signal has no display title")
+        }
+        let home = try RepoRoot.source("App/Fernlet/HomeView.swift")
+        #expect(!home.contains("value.capitalized"),
+                "HomeView capitalizes a signal token in code again — that rendering cannot be translated")
+    }
+
+    /// Home's mood thought is one whole sentence per `FeelingTag`.
+    ///
+    /// It used to lowercase the mood chip's localized label and splice it into an English sentence.
+    /// Each sentence must read exactly as the spliced one did in English, and the splice must not
+    /// come back.
+    @Test @MainActor func homeMoodThoughtIsOneSentencePerFeelingTag() throws {
+        for tag in FeelingTag.allCases {
+            #expect(HomeCopy.journalMoodThought(tag)
+                    == "You marked today as \(tag.rawValue). Let that be enough information for now.")
+        }
+        let home = try RepoRoot.source("App/Fernlet/HomeView.swift")
+        #expect(!home.contains("label.lowercased()"),
+                "Home lowercases a localized label into a sentence again; give each case its own key")
+    }
+
+    /// The photowall's seeded default captions are frozen English produced in one file and drawn
+    /// through ``HomeCopy/photowallCaption(_:)`` in another, by exact match.
+    ///
+    /// A changed default in `LaunchPreparationService` would silently stop matching and draw English
+    /// in every language, so the producer's spelling is pinned here beside the mapping.
+    @Test @MainActor func photowallDefaultCaptionsMatchTheirDrawTimeMapping() throws {
+        let producer = try RepoRoot.source("App/Fernlet/LaunchPreparationService.swift")
+        #expect(producer.contains(#"let defaults = ["morning", "meal", "movement", "moment"]"#),
+                "the photowall's default captions changed; update HomeCopy.photowallCaption(_:) with them")
+        for caption in ["morning", "meal", "movement", "moment", "a category of the user's own"] {
+            #expect(HomeCopy.photowallCaption(caption) == caption, "English draws \"\(caption)\" unchanged")
+        }
+        let data = try Data(contentsOf: RepoRoot.url("App/Fernlet/Localizable.xcstrings"))
+        let strings = (try JSONSerialization.jsonObject(with: data) as? [String: Any])?["strings"] as? [String: Any] ?? [:]
+        for key in ["morning", "meal", "movement", "moment"].map({ "home.photowall.caption.\($0)" }) {
+            #expect(strings[key] != nil, "\(key) is missing from the app catalog")
+        }
+    }
+
     // MARK: - E. The SwiftUI display-literal wall
 
     /// SwiftUI initializers whose first parameter is a `LocalizedStringKey`.
@@ -2649,6 +2713,14 @@ struct LocalizationBoundaryTests {
         ForkedMember(path: "App/Fernlet/HomeView.swift",
                      declaration: "slot: LocalizedStringKey,",
                      role: "the wardrobe selector row's uppercase slot caption"),
+        // Spanish round step 2, Home lane (2026-10-20): the same T2-1 class on Home and the calm
+        // tools — `String` members drawn with `Text(x)`, so none of their literals reached a catalog.
+        ForkedMember(path: "App/Fernlet/HomeView.swift",
+                     declaration: "private var actionSubtitle: Text {",
+                     role: "the Home action rows' one-line subtitles (Add food to today., …)"),
+        ForkedMember(path: "FernletKit/Sources/FernletUI/FernletUIComponents.swift",
+                     declaration: "public init( color: Color, caption: LocalizedStringKey,",
+                     role: "PolaroidTile's caption; runtime captions take `verbatimCaption:`"),
         ForkedMember(path: "App/Fernlet/WardrobeView.swift",
                      declaration: "private func sectionLabel(_ text: LocalizedStringKey) -> some View {",
                      role: "the wardrobe's uppercase section caption"),
@@ -2759,6 +2831,11 @@ struct LocalizationBoundaryTests {
                      source: "DisposableCameraView.shutterAccessibilityLabel, forked String → Text"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Opens %@ straight away",
                      source: "HomeView.firstAidChip hint, label forked String → LocalizedStringKey"),
+        // Spanish round step 2, Home lane (2026-10-20): one key per fork above.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Add food to today.",
+                     source: "HomeActionWidget.actionSubtitle, forked String → Text"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "%@, not equipped",
+                     source: "the Customize sheet's custom-item row, whose state word was spliced in as an English String"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "tab.home",
                      source: "FernletTab.title, forked literal → String(localized:)"),
         HarvestedKey(catalog: "FernletKit/Sources/FernletUI/Localizable.xcstrings", key: "ui.action.save",
@@ -2960,6 +3037,30 @@ struct LocalizationBoundaryTests {
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
                      key: "move.goalCount",
                      source: "the Move header's goal count"),
+        // Spanish round step 2, Home lane (2026-10-20): every count Home and the milestones screen
+        // used to pick between two English literals by `count == 1`, or spliced into a bare `%lld`.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "home.milestones.summary.allTime",
+                     source: "the Home milestones card's summary (kinds of care, no coins)"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "home.milestones.summary.keptSoFar",
+                     source: "the Home milestones card's kinds-of-care clause"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "home.milestones.summary.coinsGifted",
+                     source: "the Home milestones card's coins clause"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "home.milestones.coinsGifted.pill",
+                     source: "the Home milestones card's coin pill"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "home.quickLog.meals.count",
+                     source: "the Meals quick-log tile's count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "home.quickLog.move.count",
+                     source: "the Move quick-log tile's count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "home.quickLog.water.count",
+                     source: "the Water quick-log tile's bottle count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "home.quickLog.journal.count",
+                     source: "the Journal quick-log tile's entry count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "home.customize.wardrobe.itemCount",
+                     source: "the Customize sheet's Wardrobe item count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "signal.value.possibleGaps",
+                     source: "Trends: a nutrients signal's gap count, drawn from the frozen '2 possible gaps' token"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "signal.value.covered",
+                     source: "Trends: a nutrients signal's covered count, drawn from the frozen '5 covered' token"),
         // Weekly totals (idea 18, 2026-10-20): a whole set count, spoken after a muscle name.
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
                      key: "weekly.sets.spoken.whole",

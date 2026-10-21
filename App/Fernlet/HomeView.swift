@@ -248,7 +248,7 @@ struct HomeView: View {
                             // (2.22:1) — the border stays the decorative accent.
                             HStack(spacing: 4) {
                                 Image(systemName: "star.fill").font(.system(size: 9))
-                                Text("\(coins) gifted").font(.fernlet(.labelSmall))
+                                Text(HomeCopy.coinsGiftedPill(coins)).font(.fernlet(.labelSmall))
                             }
                             .foregroundStyle(Color.goldenrodInk)
                             .padding(.horizontal, 9)
@@ -318,16 +318,10 @@ struct HomeView: View {
 
     /// A warm, count-aware one-liner for the milestones card, from already-scanned inputs. Keeps the
     /// keepsake framing: coins are a soft aside, the empty case is gentle — never a to-do. `static` +
-    /// pure so the card can compute it from ledger values it already read, without re-scanning.
+    /// pure so the card can compute it from ledger values it already read, without re-scanning. The
+    /// words, and their plural rules, are ``HomeCopy/milestonesSummary(keptKinds:coins:)``.
     static func milestonesSummary(keptKinds: Int, coins: Int) -> String {
-        if keptKinds == 0 {
-            return "Your keepsake shelf is waiting — every bit of care will find a place here."
-        }
-        let kindsPhrase = keptKinds == 1 ? "One kind of care" : "\(keptKinds) kinds of care"
-        if coins > 0 {
-            return "\(kindsPhrase) kept so far · \(coins) coins gifted."
-        }
-        return "\(kindsPhrase) kept so far, added up over all time."
+        HomeCopy.milestonesSummary(keptKinds: keptKinds, coins: coins)
     }
 
     @ViewBuilder
@@ -442,7 +436,7 @@ struct HomeView: View {
                             // The tiles overlap by design, so at accessibility sizes the four
                             // captions ran into each other ("brigh good note morning"). Only the
                             // front tile (highest zIndex) keeps its caption there.
-                            caption: showsAllPolaroidCaptions || index == finalIndex ? tile.caption : "",
+                            verbatimCaption: showsAllPolaroidCaptions || index == finalIndex ? tile.caption : "",
                             rotation: tile.rotation,
                             imageData: tile.photoID.flatMap { store.meshFeatures.photos.thumbnailData(forPhotoID: $0) },
                             // The original print, restored: at the 57×50 the 92pt strip allowed,
@@ -485,16 +479,18 @@ struct HomeView: View {
         let seeds = store.photowallSeeds
         guard seeds.count == 4 else {
             return [
-                PhotowallTile(caption: "park walk", rotation: -3, color: .fern.opacity(0.45), photoID: nil),
-                PhotowallTile(caption: "dinner",    rotation:  2, color: .goldenrod.opacity(0.45), photoID: nil),
-                PhotowallTile(caption: "morning",   rotation: -1, color: .slate.opacity(0.32), photoID: nil),
-                PhotowallTile(caption: "music",     rotation:  3, color: .dustyRose.opacity(0.38), photoID: nil),
+                PhotowallTile(caption: HomeCopy.photowallParkWalk, rotation: -3, color: .fern.opacity(0.45), photoID: nil),
+                PhotowallTile(caption: HomeCopy.photowallDinner,   rotation:  2, color: .goldenrod.opacity(0.45), photoID: nil),
+                PhotowallTile(caption: HomeCopy.photowallMorning,  rotation: -1, color: .slate.opacity(0.32), photoID: nil),
+                PhotowallTile(caption: HomeCopy.photowallMusic,    rotation:  3, color: .dustyRose.opacity(0.38), photoID: nil),
             ]
         }
         let palette: [Color] = [.fern.opacity(0.45), .goldenrod.opacity(0.45), .slate.opacity(0.32), .dustyRose.opacity(0.38)]
         return seeds.map { seed in
             PhotowallTile(
-                caption: seed.caption,
+                // A seed's frozen English default ("morning", "meal", …) draws localized; a memory
+                // category of the person's own draws as it came.
+                caption: HomeCopy.photowallCaption(seed.caption),
                 rotation: seed.rotation,
                 color: palette[seed.colorIndex % palette.count],
                 photoID: seed.photoID
@@ -895,8 +891,10 @@ struct HomeView: View {
     }
 
     private var ambientThought: String {
+        // One whole sentence per mood (`HomeCopy`), never the mood chip's label lowercased into an
+        // English sentence: a translation has to agree the word with the sentence around it.
         if let last = store.day.journals.last {
-            return "You marked today as \(last.tag.label.lowercased()). Let that be enough information for now."
+            return HomeCopy.journalMoodThought(last.tag)
         }
         // Every two or three days the companion brings up a silly stat. The pacer already kept it
         // off rest, sick and needs-gentleness days, so it never talks over those lines.
@@ -908,7 +906,7 @@ struct HomeView: View {
         // a fresh install the bubble claimed notes existed while the intent card below said nothing
         // was logged — and this empty-day line was unreachable.
         if hasNoUserLogsToday {
-            return "Start with one small thing. Enough, not everything."
+            return HomeCopy.emptyDayThought
         }
         if let thought = store.companionThought {
             return thought
@@ -916,23 +914,18 @@ struct HomeView: View {
         if let thought = signalThought {
             return thought
         }
-        return "A few ordinary care notes are already here. Keep the day simple."
+        return HomeCopy.ordinaryDayThought
     }
 
-    /// The rotating tap thoughts — a constant table, so it is `static let` rather than a computed
-    /// property that rebuilt the literal array on every access (R6: smallest scope, no per-read work).
-    private static let companionTapThoughts = [
-        "Fernlet notices you.",
-        "A little check-in counts.",
-        "Still here with you.",
-        "Small care is still care."
-    ]
+    /// The rotating tap thoughts, in their fixed order. Computed, because each line is a catalog
+    /// lookup; it is read on every third pet, never per render.
+    private static var companionTapThoughts: [String] { HomeCopy.tapThoughts }
 
     /// The 5th-pet moment: Fern is visibly content and settles in for a while.
-    private static let companionSettledThought = "Fern is soaking up all this love — feeling completely content."
+    private static var companionSettledThought: String { HomeCopy.settledThought }
     /// Shown at most once per settled period when petting continues. Warm, never a
     /// refusal — Fern is settled, not "locked".
-    private static let companionSettledLine = "Fern is feeling nice and settled — check back in a little while."
+    private static var companionSettledLine: String { HomeCopy.settledAgainLine }
 
     private func interactWithCompanion() {
         guard !isCompanionJumping else { return }
@@ -1111,24 +1104,27 @@ struct HomeView: View {
     ///
     /// Rest comes first. Marking today unwell forces readiness to `"needs rest"` (spec §6a), and on
     /// that day nothing further down — least of all "room to push" — is the thing to say.
+    ///
+    /// The comparisons read the FROZEN signal tokens (LocalizationBoundaryTests part D pins them);
+    /// the lines are display copy, resolved through ``SignalPresentation``.
     static func signalThought(for signals: [DerivedSignalRecord]) -> String? {
         if signals.first(where: { $0.signalName == "intensityReadiness" })?.value == "needs rest" {
             return SignalPresentation.restDayThought
         }
         if let energy = signals.first(where: { $0.signalName == "energyTrend" }) {
-            if energy.value == "low" { return "Energy has been low lately. Rest counts as care." }
-            if energy.value == "rising" { return "Something has been building. Notice the upward pull." }
+            if energy.value == "low" { return SignalPresentation.energyLowThought }
+            if energy.value == "rising" { return SignalPresentation.energyRisingThought }
         }
         if let mood = signals.first(where: { $0.signalName == "moodTrend" }) {
-            if mood.value == "needs gentleness" { return "Some harder days in the window. Notice what is still steady." }
-            if mood.value == "improving" { return "The mood trend has been moving upward. Quiet progress." }
+            if mood.value == "needs gentleness" { return SignalPresentation.moodGentlenessThought }
+            if mood.value == "improving" { return SignalPresentation.moodImprovingThought }
         }
         if let readiness = signals.first(where: { $0.signalName == "intensityReadiness" }) {
-            if readiness.value == "ready for hard" { return "The signals suggest room to push today if you want to." }
-            if readiness.value == "ready for light" { return "Today looks like a day to move gently and restore." }
+            if readiness.value == "ready for hard" { return SignalPresentation.readyForHardThought }
+            if readiness.value == "ready for light" { return SignalPresentation.readyForLightThought }
         }
         if let eating = signals.first(where: { $0.signalName == "eatingPattern" }) {
-            if eating.value == "light" { return "Nutrition has been lighter lately. One nourishing meal is enough." }
+            if eating.value == "light" { return SignalPresentation.eatingLightThought }
         }
         return nil
     }
@@ -1431,9 +1427,9 @@ struct HomeView: View {
     /// word. Tool tiles (breathing, grounding, …) have no daily count and return nil.
     private func stateText(for item: FernletShortcut, short: Bool) -> Text? {
         switch item {
-        case .meal: countedState(store.day.meals.count, short: short)
+        case .meal: countedState(store.day.meals.count, short: short, phrase: HomeCopy.mealsLogged)
         case .water: waterState(short: short)
-        case .move: countedState(store.day.workouts.count, short: short)
+        case .move: countedState(store.day.workouts.count, short: short, phrase: HomeCopy.workoutsLogged)
         case .sleep: sleepState(short: short)
         case .journal: journalState(short: short)
         case .care: careState(short: short)
@@ -1442,10 +1438,12 @@ struct HomeView: View {
         }
     }
 
-    /// "N logged" — shared by the Meals and Move tiles.
-    private func countedState(_ count: Int, short: Bool) -> Text {
+    /// "N logged" — the Meals and Move tiles' shape. Each tile hands in its own plural-ruled phrase
+    /// (`HomeCopy`): the words read the same in English, but a translation agrees the participle with
+    /// meals on one tile and workouts on the other.
+    private func countedState(_ count: Int, short: Bool, phrase: (Int) -> String) -> Text {
         if count == 0 { return Text("none yet") }
-        return short ? Text(verbatim: "\(count)") : Text("\(count) logged")
+        return short ? Text(verbatim: "\(count)") : Text(verbatim: phrase(count))
     }
 
     /// What Home's one-tap "+1 bottle" feels like: `logged` when the count went up, `limit` when it
@@ -1459,7 +1457,7 @@ struct HomeView: View {
         let count = store.day.bottleCount
         if count == 0 { return Text("none yet") }
         if short { return Text(verbatim: "\(count)") }
-        return count == 1 ? Text("1 bottle") : Text("\(count) bottles")
+        return Text(verbatim: HomeCopy.waterBottles(count))
     }
 
     /// "7h 20m" from the logged hours; a rare hours-less log states "logged" rather than a figure.
@@ -1477,7 +1475,7 @@ struct HomeView: View {
         let count = store.day.journals.count
         if count == 0 { return Text("none yet") }
         if short { return Text(verbatim: "\(count)") }
-        return count == 1 ? Text("1 entry") : Text("\(count) entries")
+        return Text(verbatim: HomeCopy.journalEntries(count))
     }
 
     private func careState(short: Bool) -> Text {
@@ -1686,7 +1684,9 @@ private struct CompanionCustomizationSheet: View {
             Text(verbatim: "\(store.coinBalance)")
                 .font(.fernlet(.stat))
                 .foregroundStyle(Color.bark)
-                .accessibilityLabel("\(store.coinBalance) coins")
+                // The pill's own spoken balance (`FernletUICopy`, plural-ruled), so the numeral form
+                // and the pill it replaces say the same words.
+                .accessibilityLabel(Text(verbatim: FernletUICopy.coinBalance(store.coinBalance)))
                 .accessibilityIdentifier("customize.coinBalance")
         } else {
             CoinBalancePill(balance: store.coinBalance)
@@ -1749,7 +1749,7 @@ private struct CompanionCustomizationSheet: View {
     private var wardrobeCountText: Text? {
         let count = store.customItems.count
         guard count > 0 else { return nil }
-        return count == 1 ? Text("1 item") : Text("\(count) items")
+        return Text(verbatim: HomeCopy.wardrobeItemCount(count))
     }
 
     /// The named Creation Studio row — a straight door to designing a new item.
@@ -2161,7 +2161,17 @@ private struct CompanionCustomizationSheet: View {
             )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(item.name.isEmpty ? item.slot.label : item.name), \(isEquipped ? "equipped" : "not equipped")")
+        .accessibilityLabel(customItemSpokenName(item, isEquipped: isEquipped))
+    }
+
+    /// What VoiceOver says for a custom-item row: its name and whether it is worn. Two whole keys,
+    /// not one "%@, %@" with an English state word spliced into its second slot (that word never
+    /// reached the catalog). The name is the user's own, or the slot's label when they left it blank.
+    private func customItemSpokenName(_ item: CustomizationItem, isEquipped: Bool) -> Text {
+        let name = item.name.isEmpty ? item.slot.label : item.name
+        return isEquipped
+            ? Text("\(name), equipped", comment: "Customize sheet, VoiceOver: one of the user's own companion items, currently worn. The placeholder is the item's name.")
+            : Text("\(name), not equipped", comment: "Customize sheet, VoiceOver: one of the user's own companion items, not worn right now. The placeholder is the item's name.")
     }
 
     private func appearanceBinding<Value>(_ keyPath: WritableKeyPath<CompanionAppearance, Value>) -> Binding<Value> {
@@ -2413,7 +2423,7 @@ struct SignalDetailRow: View {
                                 .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.bark)
                             Spacer()
-                            Text(gap.status == .gap ? "gap" : "covered")
+                            Text(SignalPresentation.nutrientStatusLabel(gap.status))
                                 .font(.fernlet(.labelSmall))
                                 .foregroundStyle(gap.status == .gap ? Color.terracotta : Color.moss)
                         }
@@ -2455,17 +2465,38 @@ struct SignalTrendMeter: View {
 /// Pure string matching against the exact literals `DerivedSignalsService` emits — shared by
 /// ``SignalDetailRow`` and ``SignalTrendMeter`` so every trends surface styles a signal the same
 /// way.
+///
+/// **The display half of the derived-signal fork.** A signal's `signalName` and `value` are FROZEN
+/// English logic tokens (LocalizationBoundaryTests part D: six `==` gates and the AI compare them),
+/// so they are never localized and never rewritten. Everything a person reads is mapped here, by
+/// exact match on the token, to a catalog key: the titles, the values, the source chips, the
+/// explanations and Home's signal-driven thoughts. The tint and meter heuristics
+/// (``color(for:)``, ``strength(for:)``) deliberately keep reading the raw token.
 enum SignalPresentation {
     /// Display title for a raw signal name (falls back to the raw name for unknown signals).
     static func title(for name: String) -> String {
         switch name {
-        case "moodTrend": "Mood trend"
-        case "energyTrend": "Energy trend"
-        case "eatingPattern": "Eating pattern"
-        case "progressionTrend": "Progression"
-        case "intensityReadiness": "Readiness"
-        case "micronutrientGaps7Day": "7-day nutrients"
-        case "micronutrientGaps14Day": "14-day nutrients"
+        case "moodTrend":
+            String(localized: "signal.title.moodTrend", defaultValue: "Mood trend",
+                   comment: "Trends: title of the signal comparing recent journal moods with earlier ones.")
+        case "energyTrend":
+            String(localized: "signal.title.energyTrend", defaultValue: "Energy trend",
+                   comment: "Trends: title of the signal built from sleep, journal moods and recent workout load.")
+        case "eatingPattern":
+            String(localized: "signal.title.eatingPattern", defaultValue: "Eating pattern",
+                   comment: "Trends: title of the signal about how often and how much the user has been eating.")
+        case "progressionTrend":
+            String(localized: "signal.title.progressionTrend", defaultValue: "Progression",
+                   comment: "Trends: title of the signal comparing newer workout load with earlier workout load.")
+        case "intensityReadiness":
+            String(localized: "signal.title.intensityReadiness", defaultValue: "Readiness",
+                   comment: "Trends: title of the signal saying how hard a workout today could reasonably be.")
+        case "micronutrientGaps7Day":
+            String(localized: "signal.title.micronutrients7Day", defaultValue: "7-day nutrients",
+                   comment: "Trends: title of the vitamin and mineral coverage signal over the last 7 days.")
+        case "micronutrientGaps14Day":
+            String(localized: "signal.title.micronutrients14Day", defaultValue: "14-day nutrients",
+                   comment: "Trends: title of the vitamin and mineral coverage signal over the last 14 days.")
         default: name
         }
     }
@@ -2481,20 +2512,116 @@ enum SignalPresentation {
         }
     }
 
-    /// The display label for a signal's value: the localized label for a token that has one, else the
-    /// token capitalized (the pre-existing rendering, which cannot localize — the unresolved
-    /// token/display collision recorded on the LocalPersistence landing page).
+    /// The display label for a signal's value.
     ///
     /// The value is a FROZEN logic token (`DerivedSignalFactory`); this is the separate display half.
-    /// `"needs rest"` is the first token to get one, so a translation never has to touch the token
-    /// that `FernletStore.needsRestToday`, Home, and the Move tab compare against.
+    /// Every token the factory can mint maps to a catalog key by exact match, the two counted ones
+    /// ("2 possible gaps", "5 covered") through plural-ruled keys, so a translation never has to
+    /// touch the token that `FernletStore.needsRestToday`, Home, the gentle offer and the Move tab
+    /// compare against. The English values are the Title Case the card always drew (it used to apply
+    /// `.capitalized` to the token, which no translation could survive); a token this table does not
+    /// know is drawn as it is.
     static func valueLabel(for value: String) -> String {
+        stateValueLabel(for: value) ?? countedValueLabel(for: value) ?? value
+    }
+
+    /// The display label for a mood, energy or progression token, or nil for any other token.
+    private static func stateValueLabel(for value: String) -> String? {
         switch value {
+        case "insufficient data":
+            String(localized: "signal.value.insufficientData", defaultValue: "Insufficient Data",
+                   comment: "Trends: a signal's value while there are too few logs to read it yet. Title case, like the other signal values.")
+        case "needs gentleness":
+            String(localized: "signal.value.needsGentleness", defaultValue: "Needs Gentleness",
+                   comment: "Trends, Mood trend's value: recent journal moods have been harder. Gentle, never alarming. Title case.")
+        case "improving":
+            String(localized: "signal.value.improving", defaultValue: "Improving",
+                   comment: "Trends, Mood trend's value: recent journal moods are brighter than earlier ones. Title case.")
+        case "declining":
+            String(localized: "signal.value.declining", defaultValue: "Declining",
+                   comment: "Trends, Mood trend's value: recent journal moods are a little lower than earlier ones. Title case.")
+        case "steady":
+            String(localized: "signal.value.steady", defaultValue: "Steady",
+                   comment: "Trends: the value of the Mood trend, Energy trend or Progression signal when nothing has clearly changed. Title case.")
+        case "low":
+            String(localized: "signal.value.low", defaultValue: "Low",
+                   comment: "Trends, Energy trend's value: energy has been low lately. Title case.")
+        case "rising":
+            String(localized: "signal.value.rising", defaultValue: "Rising",
+                   comment: "Trends, Energy trend's value: energy has been building. Title case.")
+        case "dipping":
+            String(localized: "signal.value.dipping", defaultValue: "Dipping",
+                   comment: "Trends, Energy trend's value: energy has dipped a little. Title case.")
+        case "building":
+            String(localized: "signal.value.building", defaultValue: "Building",
+                   comment: "Trends, Progression's value: workout load has been building. Title case.")
+        case "deloading":
+            String(localized: "signal.value.deloading", defaultValue: "Deloading",
+                   comment: "Trends, Progression's value: workout load has eased off (a deload, a lighter stretch of training). Title case.")
+        default:
+            eatingOrReadinessValueLabel(for: value)
+        }
+    }
+
+    /// The display label for an eating-pattern or readiness token, or nil for any other token.
+    private static func eatingOrReadinessValueLabel(for value: String) -> String? {
+        switch value {
+        case "light":
+            String(localized: "signal.value.light", defaultValue: "Light",
+                   comment: "Trends, Eating pattern's value: the user has been eating lighter than usual. Title case.")
+        case "protein-forward":
+            String(localized: "signal.value.proteinForward", defaultValue: "Protein-Forward",
+                   comment: "Trends, Eating pattern's value: meals have leaned on protein. Title case.")
+        case "inconsistent":
+            String(localized: "signal.value.inconsistent", defaultValue: "Inconsistent",
+                   comment: "Trends, Eating pattern's value: meals have been irregular, with some missed days. Neutral, never a judgement. Title case.")
+        case "consistent":
+            String(localized: "signal.value.consistent", defaultValue: "Consistent",
+                   comment: "Trends, Eating pattern's value: meals have been regular. Title case.")
         case "needs rest":
             String(localized: "signal.value.needsRest", defaultValue: "Needs Rest",
                    comment: "Trends: the readiness value on a day the user marked themselves unwell. Title case, like the other signal values beside it.")
+        case "ready for light":
+            String(localized: "signal.value.readyForLight", defaultValue: "Ready For Light",
+                   comment: "Trends, Readiness's value: today suits a light workout. Title case.")
+        case "ready for moderate":
+            String(localized: "signal.value.readyForModerate", defaultValue: "Ready For Moderate",
+                   comment: "Trends, Readiness's value: today suits a moderate workout. Title case.")
+        case "ready for hard":
+            String(localized: "signal.value.readyForHard", defaultValue: "Ready For Hard",
+                   comment: "Trends, Readiness's value: today could take a hard workout, if the user wants one. Title case.")
         default:
-            value.capitalized
+            nil
+        }
+    }
+
+    /// The display label for a micronutrient signal's counted value — the factory writes
+    /// `"\(n) possible gap(s)"` and `"\(n) covered"`, with an English plural inside the token — or nil
+    /// for any other value.
+    private static func countedValueLabel(for value: String) -> String? {
+        let parts = value.split(separator: " ", maxSplits: 1)
+        guard parts.count == 2, let count = Int(parts[0]), count >= 0 else { return nil }
+        switch parts[1] {
+        case "possible gap", "possible gaps":
+            return String(localized: "signal.value.possibleGaps", defaultValue: "\(count) Possible Gaps",
+                          comment: "Trends, a nutrients signal's value: how many vitamins or minerals look low in recent meals. Needs a plural variation per language; English says '1 Possible Gap'. Title case.")
+        case "covered":
+            return String(localized: "signal.value.covered", defaultValue: "\(count) Covered",
+                          comment: "Trends, a nutrients signal's value: how many vitamins and minerals recent meals cover well. Needs a plural variation per language. Title case.")
+        default:
+            return nil
+        }
+    }
+
+    /// A nutrient row's status word under a nutrients signal: "gap" or "covered".
+    static func nutrientStatusLabel(_ status: NutrientGapStatus) -> String {
+        switch status {
+        case .gap:
+            String(localized: "signal.nutrient.gap", defaultValue: "gap",
+                   comment: "Trends, beside a vitamin or mineral's name: recent meals look low in it. Lowercase status word.")
+        case .covered:
+            String(localized: "signal.nutrient.covered", defaultValue: "covered",
+                   comment: "Trends, beside a vitamin or mineral's name: recent meals cover it well. Lowercase status word.")
         }
     }
 
@@ -2505,6 +2632,48 @@ enum SignalPresentation {
         String(localized: "signal.thought.restDay",
                defaultValue: "Today is for resting. Being unwell is reason enough to go slow.",
                comment: "Home companion thought on a day the user marked themselves unwell. Gentle; never suggests exercise.")
+    }
+
+    /// Home's line when energy has been low (`energyTrend` "low").
+    static var energyLowThought: String {
+        String(localized: "signal.thought.energyLow", defaultValue: "Energy has been low lately. Rest counts as care.",
+               comment: "Home companion thought when recent energy has been low. Gentle; rest is care, never a failure.")
+    }
+
+    /// Home's line when energy has been rising (`energyTrend` "rising").
+    static var energyRisingThought: String {
+        String(localized: "signal.thought.energyRising", defaultValue: "Something has been building. Notice the upward pull.",
+               comment: "Home companion thought when recent energy has been rising.")
+    }
+
+    /// Home's line on a run of harder days (`moodTrend` "needs gentleness").
+    static var moodGentlenessThought: String {
+        String(localized: "signal.thought.moodGentleness", defaultValue: "Some harder days in the window. Notice what is still steady.",
+               comment: "Home companion thought after several harder journal moods in recent days. Gentle, never alarming.")
+    }
+
+    /// Home's line when the mood trend is improving (`moodTrend` "improving").
+    static var moodImprovingThought: String {
+        String(localized: "signal.thought.moodImproving", defaultValue: "The mood trend has been moving upward. Quiet progress.",
+               comment: "Home companion thought when recent journal moods have been brighter.")
+    }
+
+    /// Home's line when readiness allows a hard session (`intensityReadiness` "ready for hard").
+    static var readyForHardThought: String {
+        String(localized: "signal.thought.readyForHard", defaultValue: "The signals suggest room to push today if you want to.",
+               comment: "Home companion thought when today could take a hard workout. An option, never an instruction.")
+    }
+
+    /// Home's line when readiness suggests going light (`intensityReadiness` "ready for light").
+    static var readyForLightThought: String {
+        String(localized: "signal.thought.readyForLight", defaultValue: "Today looks like a day to move gently and restore.",
+               comment: "Home companion thought when today suits only light movement.")
+    }
+
+    /// Home's line when eating has been lighter (`eatingPattern` "light").
+    static var eatingLightThought: String {
+        String(localized: "signal.thought.eatingLight", defaultValue: "Nutrition has been lighter lately. One nourishing meal is enough.",
+               comment: "Home companion thought when recent meals have been lighter than usual. Gentle; never mentions weight or calories.")
     }
 
     static func color(for value: String) -> Color {
@@ -2535,19 +2704,21 @@ enum SignalPresentation {
     /// dots opened out, so a signal added later degrades to readable text rather than to code.
     static func sourceLabel(for field: String) -> String {
         switch field {
-        case "journals.tag": "Journal moods"
-        case "sleep": "Sleep"
-        case "sleep.hours": "Sleep hours"
-        case "sleep.quality": "Sleep quality"
-        case "meals.count": "Meal count"
-        case "meals.macros": "Meal macros"
-        case "meals.calorieSnapshot": "Meal energy"
-        case "meals.micronutrientSnapshot": "Meal nutrients"
-        case "workouts.intensity": "Workout intensity"
-        case "workouts.duration": "Workout length"
-        case "workouts.rpe": "Perceived effort"
-        case "body.restingHeartRate": "Resting heart rate"
-        case "body.heartRateVariability": "Heart rate variability"
+        case "journals.tag":
+            String(localized: "signal.source.journalMoods", defaultValue: "Journal moods",
+                   comment: "Trends: a source chip under a signal, naming what it was worked out from — the moods tagged on journal entries.")
+        case "sleep", "sleep.hours", "sleep.quality":
+            sleepSourceLabel(for: field)
+        case "meals.count", "meals.macros", "meals.calorieSnapshot", "meals.micronutrientSnapshot":
+            mealSourceLabel(for: field)
+        case "workouts.intensity", "workouts.duration", "workouts.rpe":
+            workoutSourceLabel(for: field)
+        case "body.restingHeartRate":
+            String(localized: "signal.source.restingHeartRate", defaultValue: "Resting heart rate",
+                   comment: "Trends: a source chip under a signal — resting heart rate read from Apple Health.")
+        case "body.heartRateVariability":
+            String(localized: "signal.source.heartRateVariability", defaultValue: "Heart rate variability",
+                   comment: "Trends: a source chip under a signal — heart rate variability read from Apple Health.")
         case "sickness":
             String(localized: "signal.source.sickness", defaultValue: "Marked unwell",
                    comment: "Trends: the source chip under Readiness on a day the user marked themselves unwell.")
@@ -2555,28 +2726,95 @@ enum SignalPresentation {
         }
     }
 
+    /// The source chip for a sleep field.
+    private static func sleepSourceLabel(for field: String) -> String {
+        switch field {
+        case "sleep.hours":
+            String(localized: "signal.source.sleepHours", defaultValue: "Sleep hours",
+                   comment: "Trends: a source chip under a signal — the hours of sleep the user logged.")
+        case "sleep.quality":
+            String(localized: "signal.source.sleepQuality", defaultValue: "Sleep quality",
+                   comment: "Trends: a source chip under a signal — how well the user said they slept.")
+        default:
+            String(localized: "signal.source.sleep", defaultValue: "Sleep",
+                   comment: "Trends: a source chip under a signal — the user's logged sleep.")
+        }
+    }
+
+    /// The source chip for a meal field.
+    private static func mealSourceLabel(for field: String) -> String {
+        switch field {
+        case "meals.macros":
+            String(localized: "signal.source.mealMacros", defaultValue: "Meal macros",
+                   comment: "Trends: a source chip under a signal — the protein, carbs and fat of logged meals.")
+        case "meals.calorieSnapshot":
+            String(localized: "signal.source.mealEnergy", defaultValue: "Meal energy",
+                   comment: "Trends: a source chip under a signal — the calories of logged meals, worded as energy.")
+        case "meals.micronutrientSnapshot":
+            String(localized: "signal.source.mealNutrients", defaultValue: "Meal nutrients",
+                   comment: "Trends: a source chip under a signal — the vitamins and minerals of logged meals.")
+        default:
+            String(localized: "signal.source.mealCount", defaultValue: "Meal count",
+                   comment: "Trends: a source chip under a signal — how many meals were logged.")
+        }
+    }
+
+    /// The source chip for a workout field.
+    private static func workoutSourceLabel(for field: String) -> String {
+        switch field {
+        case "workouts.duration":
+            String(localized: "signal.source.workoutLength", defaultValue: "Workout length",
+                   comment: "Trends: a source chip under a signal — how long logged workouts lasted.")
+        case "workouts.rpe":
+            String(localized: "signal.source.perceivedEffort", defaultValue: "Perceived effort",
+                   comment: "Trends: a source chip under a signal — how hard the user said a workout felt.")
+        default:
+            String(localized: "signal.source.workoutIntensity", defaultValue: "Workout intensity",
+                   comment: "Trends: a source chip under a signal — the intensity of logged workouts.")
+        }
+    }
+
     static func explanation(for signal: DerivedSignalRecord) -> String {
         switch signal.signalName {
         case "moodTrend":
-            return "Compares recent journal tags against earlier tags in the rolling window."
+            return String(localized: "signal.explanation.moodTrend",
+                          defaultValue: "Compares recent journal tags against earlier tags in the rolling window.",
+                          comment: "Trends: how the Mood trend signal is worked out. Tags are the moods on journal entries.")
         case "energyTrend":
-            return "Combines sleep, journal tags, and recent workout load."
+            return String(localized: "signal.explanation.energyTrend",
+                          defaultValue: "Combines sleep, journal tags, and recent workout load.",
+                          comment: "Trends: how the Energy trend signal is worked out.")
         case "eatingPattern":
-            return "Looks at meal frequency, recent missed meal days, and protein totals."
+            return String(localized: "signal.explanation.eatingPattern",
+                          defaultValue: "Looks at meal frequency, recent missed meal days, and protein totals.",
+                          comment: "Trends: how the Eating pattern signal is worked out.")
         case "progressionTrend":
-            return "Compares newer workout load against earlier workout load."
+            return String(localized: "signal.explanation.progressionTrend",
+                          defaultValue: "Compares newer workout load against earlier workout load.",
+                          comment: "Trends: how the Progression signal is worked out.")
         case "intensityReadiness" where signal.value == "needs rest":
             return String(localized: "signal.explanation.needsRest",
                           defaultValue: "You marked today as unwell, so readiness rests until tomorrow.",
                           comment: "Trends: why Readiness reads Needs Rest. The unwell mark clears itself at midnight.")
         case "intensityReadiness":
-            return "Blends recent energy, training load, hard sessions, and meal coverage."
+            return String(localized: "signal.explanation.intensityReadiness",
+                          defaultValue: "Blends recent energy, training load, hard sessions, and meal coverage.",
+                          comment: "Trends: how the Readiness signal is worked out.")
         default:
-            if signal.nutrientGaps.isEmpty {
-                return "Micronutrient coverage needs more meal data."
-            }
-            return "Tracks covered nutrients and possible gaps from logged meal snapshots."
+            return nutrientsExplanation(hasGaps: !signal.nutrientGaps.isEmpty)
         }
+    }
+
+    /// How a nutrients signal is worked out, or why it cannot be yet.
+    private static func nutrientsExplanation(hasGaps: Bool) -> String {
+        guard hasGaps else {
+            return String(localized: "signal.explanation.nutrientsNeedData",
+                          defaultValue: "Micronutrient coverage needs more meal data.",
+                          comment: "Trends: a nutrients signal with too few logged meal details to read yet.")
+        }
+        return String(localized: "signal.explanation.nutrients",
+                      defaultValue: "Tracks covered nutrients and possible gaps from logged meal snapshots.",
+                      comment: "Trends: how a nutrients signal is worked out, from the vitamin and mineral details saved with each logged meal.")
     }
 }
 
@@ -2741,7 +2979,7 @@ struct HomeActionWidget: View {
                         Text(widget.title)
                             .font(.fernlet(.headerMedium))
                             .foregroundStyle(Color.bark)
-                        Text(actionSubtitle)
+                        actionSubtitle
                             .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
@@ -2756,18 +2994,22 @@ struct HomeActionWidget: View {
         .buttonStyle(.plain)
     }
 
-    private var actionSubtitle: String {
+    /// The row's one-line subtitle. A `Text` from `LocalizedStringKey` literals, so each is a catalog
+    /// key: as a `String` property every subtitle reached `Text`'s verbatim initializer and was never
+    /// harvested.
+    private var actionSubtitle: Text {
         switch widget {
-        case .logFood: "Add food to today."
-        case .recipeBook: "Open saved recipes."
-        case .newRecipe: "Build a recipe."
-        case .workout: "Log training or movement."
-        case .journal: "Add a short note."
-        case .sleep: "Log rest."
-        case .water: "Update hydration."
-        case .hygiene: "Open care tasks."
-        case .trends: "Review local signals."
-        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient, .milestones, .firstAid, .mealPhotos, .sillyStats: ""
+        case .logFood: Text("Add food to today.")
+        case .recipeBook: Text("Open saved recipes.")
+        case .newRecipe: Text("Build a recipe.")
+        case .workout: Text("Log training or movement.")
+        case .journal: Text("Add a short note.")
+        case .sleep: Text("Log rest.")
+        case .water: Text("Update hydration.")
+        case .hygiene: Text("Open care tasks.")
+        case .trends: Text("Review local signals.")
+        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient, .milestones, .firstAid, .mealPhotos, .sillyStats:
+            Text(verbatim: "")
         }
     }
 }
@@ -2899,11 +3141,26 @@ struct MacroCard: View {
         }
     }
 
+    /// The three rings. Each label and its one-letter accessibility-size initial are catalog keys
+    /// resolved here: `MacroRing` takes them as finished `String`s because it also speaks the label
+    /// inside a sentence, and a literal handed to its `String` parameter was never harvested.
     @ViewBuilder
     private var macroRings: some View {
-        MacroRing(label: "Protein", color: .moss, current: totals.protein, goal: targets.protein)
-        MacroRing(label: "Carbs", color: .goldenrod, current: totals.carbs, goal: targets.carbs)
-        MacroRing(label: "Fat", color: .terracotta, current: totals.fat, goal: targets.fat)
+        MacroRing(label: String(localized: "macros.protein", defaultValue: "Protein",
+                                comment: "Macro ring label under the protein figure (Home, Food and a journal day)."),
+                  initial: String(localized: "macros.protein.initial", defaultValue: "P",
+                                  comment: "One-letter abbreviation of Protein, shown under the figure at the largest text sizes."),
+                  color: .moss, current: totals.protein, goal: targets.protein)
+        MacroRing(label: String(localized: "macros.carbs", defaultValue: "Carbs",
+                                comment: "Macro ring label under the carbohydrate figure (Home, Food and a journal day)."),
+                  initial: String(localized: "macros.carbs.initial", defaultValue: "C",
+                                  comment: "One-letter abbreviation of Carbs, shown under the figure at the largest text sizes."),
+                  color: .goldenrod, current: totals.carbs, goal: targets.carbs)
+        MacroRing(label: String(localized: "macros.fat", defaultValue: "Fat",
+                                comment: "Macro ring label under the fat figure (Home, Food and a journal day)."),
+                  initial: String(localized: "macros.fat.initial", defaultValue: "F",
+                                  comment: "One-letter abbreviation of Fat, shown under the figure at the largest text sizes."),
+                  color: .terracotta, current: totals.fat, goal: targets.fat)
     }
 
     /// Same ceiling and reasoning as `DayMicronutrientBreakdownRow.maxDisplayableAmount`: this
@@ -2918,9 +3175,13 @@ struct MacroCard: View {
 
     /// Pure so the hostile-value case is testable without rendering the card.
     static func fiberFooterText(intake: Double?, target: Int) -> String {
-        guard let intake, intake.isFinite else { return "Fiber target \(target)g" }
+        guard let intake, intake.isFinite else {
+            return String(localized: "macros.fiber.target", defaultValue: "Fiber target \(target)g",
+                          comment: "Macros card footer when meals carry no fiber details: the daily fiber target in grams, e.g. 'Fiber target 30g'.")
+        }
         let grams = Int(min(max(intake, 0), maxDisplayableFiber).rounded())
-        return "Fiber \(grams)g of \(target)g"
+        return String(localized: "macros.fiber.intake", defaultValue: "Fiber \(grams)g of \(target)g",
+                      comment: "Macros card footer: fiber eaten today out of the daily target, in grams, e.g. 'Fiber 18g of 30g'. The first number is what was eaten.")
     }
 }
 
@@ -2932,7 +3193,12 @@ struct MacroCard: View {
 /// label ("76 / P") — three rings with 40pt values inside them cannot hold a readable ring at
 /// that size (4b·AX3), and this applies wherever ``MacroCard`` renders.
 struct MacroRing: View {
+    /// The macro's name, already resolved ("Protein"): drawn under the ring and spoken inside the
+    /// element's sentence.
     var label: String
+    /// The one-letter form drawn at accessibility sizes ("P"), resolved by the caller rather than cut
+    /// from `label` in code, which would take the first letter of whatever the translation is.
+    var initial: String
     var color: Color
     var current: Int
     var goal: Int
@@ -3001,7 +3267,7 @@ struct MacroRing: View {
                 .font(.fernlet(.stat))
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-            Text(verbatim: String(label.prefix(1)))
+            Text(verbatim: initial)
                 .font(.fernlet(.labelSmall))
                 .foregroundStyle(color)
         }
