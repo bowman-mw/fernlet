@@ -1361,15 +1361,19 @@ struct DisposableCameraView: View {
     private func takePhoto() async {
         guard camera.isArmed, features.photos.filmRemaining > 0, camera.canCapturePhoto else { return }
         camera.disarm()  // openness → 0: the viewfinder retracts into the island.
-        // Still before the capture, as it always was. Apple warns a haptic can disturb the camera;
-        // moving it after `capturePhoto()` returns is report item B18, owed a device check.
-        FernletFeedback.system.play(.shutter)
         flashShutter()
         do {
             let data = try await camera.capturePhoto()
+            // B18: the shutter is felt only once the capture has RETURNED — Apple warns a haptic
+            // can disturb the camera while it is capturing, and the white flash above already
+            // answered the tap. Owed a device check: that this never blurs a shot.
+            FernletFeedback.system.play(.shutter)
             features.photos.addPhoto(data)
         } catch {
             manager.meshError = error.localizedDescription
+            // The session alert shows the error; this is its haptic. Only here, not on every
+            // `meshError`: most of those are the mesh's own news, which plays nothing.
+            FernletFeedback.system.play(.failed)
         }
     }
 
