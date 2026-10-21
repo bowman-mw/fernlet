@@ -118,9 +118,13 @@ struct DuressSetupAvailability: Equatable {
         guard !isSelectable(mode) else { return nil }
         guard !isDuressSessionActive else { return nil }
         if hasSupersededRecoveryBlob {
-            return "Your recovery device holds the key from before this app lock. Set it up again before choosing this."
+            return String(localized: "duress.mode.unavailable.supersededCustodian",
+                          defaultValue: "Your recovery device holds the key from before this app lock. Set it up again before choosing this.",
+                          comment: "Duress code screen: why 'Lock it away on your recovery device' can't be chosen — the recovery device was set up before the current app lock, so it holds an older key.")
         }
-        return "Set up a recovery device below before choosing this."
+        return String(localized: "duress.mode.unavailable.noCustodian",
+                      defaultValue: "Set up a recovery device below before choosing this.",
+                      comment: "Duress code screen: why 'Lock it away on your recovery device' can't be chosen yet — no recovery device is set up. 'Below' is the recovery-device card on the same screen.")
     }
 
     /// Whether the enrolled recovery device may be removed.
@@ -137,7 +141,9 @@ struct DuressSetupAvailability: Equatable {
     /// Why the remove button is withheld, or nil when it is offered.
     var recoveryRemovalRefusalReason: String? {
         guard hasRecoveryCustodian, !canRemoveRecoveryCustodian else { return nil }
-        return "Change your duress response before removing this device."
+        return String(localized: "duress.custodian.removalRefused",
+                      defaultValue: "Change your duress response before removing this device.",
+                      comment: "Duress code screen: shown instead of the Remove button for the recovery device while 'Lock it away on your recovery device' is the armed response.")
     }
 }
 
@@ -149,14 +155,22 @@ struct DuressSetupAvailability: Equatable {
 /// the plan treats the copy on a destructive path as reviewable surface, not decoration.
 ///
 /// `nonisolated` (the app target defaults to `MainActor`): pure `DuressMode` → `String` functions,
-/// which SwiftUI's dialog title/message builders call from nonisolated positions.
+/// which SwiftUI's dialog title/message builders call from nonisolated positions. Every line is a
+/// `String(localized:)` key (`duress.mode.*`): they are `String`s because the dialog builders and
+/// the tests take resolved text, and a bare literal returned as `String` never reached a catalog.
 nonisolated enum DuressModeCopy {
     /// The short name shown on the response card and in the status line.
     static func title(_ mode: DuressMode) -> String {
         switch mode {
-        case .decoy: "Show an empty Fernlet"
-        case .silentWipe: "Erase everything, then show an empty Fernlet"
-        case .recoveryLock: "Lock it away on your recovery device"
+        case .decoy:
+            String(localized: "duress.mode.decoy.title", defaultValue: "Show an empty Fernlet",
+                   comment: "Duress code response: the duress code opens an empty-looking Fernlet and deletes nothing.")
+        case .silentWipe:
+            String(localized: "duress.mode.silentWipe.title", defaultValue: "Erase everything, then show an empty Fernlet",
+                   comment: "Duress code response: the duress code destroys the sealed data's keys, then opens an empty Fernlet.")
+        case .recoveryLock:
+            String(localized: "duress.mode.recoveryLock.title", defaultValue: "Lock it away on your recovery device",
+                   comment: "Duress code response: the duress code locks this phone out; only the user's recovery device (another phone) can give the key back.")
         }
     }
 
@@ -164,11 +178,17 @@ nonisolated enum DuressModeCopy {
     static func summary(_ mode: DuressMode) -> String {
         switch mode {
         case .decoy:
-            "Nothing is deleted. Your real passcode brings everything back."
+            String(localized: "duress.mode.decoy.summary",
+                   defaultValue: "Nothing is deleted. Your real passcode brings everything back.",
+                   comment: "Duress code screen: the one-line summary under 'Show an empty Fernlet'.")
         case .silentWipe:
-            "Your sealed notes become permanently unreadable, immediately."
+            String(localized: "duress.mode.silentWipe.summary",
+                   defaultValue: "Your sealed notes become permanently unreadable, immediately.",
+                   comment: "Duress code screen: the one-line summary under 'Erase everything, then show an empty Fernlet'.")
         case .recoveryLock:
-            "This phone loses its way in. Only your recovery device can open it again."
+            String(localized: "duress.mode.recoveryLock.summary",
+                   defaultValue: "This phone loses its way in. Only your recovery device can open it again.",
+                   comment: "Duress code screen: the one-line summary under 'Lock it away on your recovery device'.")
         }
     }
 
@@ -177,38 +197,49 @@ nonisolated enum DuressModeCopy {
     static func detail(_ mode: DuressMode) -> String {
         switch mode {
         case .decoy:
-            """
-            Entering your duress code opens Fernlet with nothing in it — no journal, no cycle \
-            history, no intimacy notes, and no sign that anything is hidden. Your data is untouched \
-            and sealed the whole time, and entering your real passcode brings it straight back.
-            """
+            String(localized: "duress.mode.decoy.detail",
+                   defaultValue: """
+                       Entering your duress code opens Fernlet with nothing in it — no journal, no cycle \
+                       history, no intimacy notes, and no sign that anything is hidden. Your data is untouched \
+                       and sealed the whole time, and entering your real passcode brings it straight back.
+                       """,
+                   comment: "Duress code screen: the full description of the non-destructive response, shown when it is selected.")
         case .silentWipe:
-            """
-            Entering your duress code destroys the keys to your sealed journal, cycle and intimacy \
-            notes before anything appears on screen. This cannot be undone, and it cannot be \
-            recovered from a backup. Fernlet then opens as a brand-new empty app whose passcode is \
-            the duress code you just typed, so there is no duress code left until you set a new \
-            one. Fernlet also clears the sealed entries, your Apple Health cycle and intimacy \
-            entries, and its cloud copies in the background — copies already sent to a friend's \
-            phone or sitting in a backup are unreadable, but they exist until that clearing or \
-            their own expiry reaches them.
-            """
+            String(localized: "duress.mode.silentWipe.detail",
+                   defaultValue: """
+                       Entering your duress code destroys the keys to your sealed journal, cycle and intimacy \
+                       notes before anything appears on screen. This cannot be undone, and it cannot be \
+                       recovered from a backup. Fernlet then opens as a brand-new empty app whose passcode is \
+                       the duress code you just typed, so there is no duress code left until you set a new \
+                       one. Fernlet also clears the sealed entries, your Apple Health cycle and intimacy \
+                       entries, and its cloud copies in the background — copies already sent to a friend's \
+                       phone or sitting in a backup are unreadable, but they exist until that clearing or \
+                       their own expiry reaches them.
+                       """,
+                   comment: "Duress code screen: the full consequence of the erase response, shown when it is selected and again in its confirmation. Every claim is load-bearing; translate it whole, never shorten it.")
         case .recoveryLock:
-            """
-            Entering your duress code destroys this phone's passcode, Face ID and keys, but keeps \
-            your sealed notes. Nobody holding this phone can open them — including you. They can be \
-            opened again only in person, with the recovery device you enrolled below. If that \
-            device is lost, erased, or reinstalls Fernlet, your sealed notes are gone for good.
-            """
+            String(localized: "duress.mode.recoveryLock.detail",
+                   defaultValue: """
+                       Entering your duress code destroys this phone's passcode, Face ID and keys, but keeps \
+                       your sealed notes. Nobody holding this phone can open them — including you. They can be \
+                       opened again only in person, with the recovery device you enrolled below. If that \
+                       device is lost, erased, or reinstalls Fernlet, your sealed notes are gone for good.
+                       """,
+                   comment: "Duress code screen: the full consequence of the recovery-lock response, shown when it is selected and again in its confirmation. Every claim is load-bearing; translate it whole, never shorten it.")
         }
     }
 
     /// The confirmation-dialog title for a destructive response, or nil for the non-destructive one.
     static func armConfirmationTitle(_ mode: DuressMode) -> String? {
         switch mode {
-        case .decoy: nil
-        case .silentWipe: "Arm the erase response?"
-        case .recoveryLock: "Arm the recovery lock?"
+        case .decoy:
+            nil
+        case .silentWipe:
+            String(localized: "duress.mode.silentWipe.armTitle", defaultValue: "Arm the erase response?",
+                   comment: "Title of the confirmation before the erase response is set as the duress code's response.")
+        case .recoveryLock:
+            String(localized: "duress.mode.recoveryLock.armTitle", defaultValue: "Arm the recovery lock?",
+                   comment: "Title of the confirmation before the recovery-lock response is set as the duress code's response.")
         }
     }
 }
@@ -392,7 +423,7 @@ struct DuressPINSetupView: View {
                 }
                 Spacer()
             }
-            Text("Your duress code is the same shape as your passcode — \(kindNoun). If you change your passcode to a different type, set your duress code again so you can still type it.")
+            Text(shapeNote)
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
@@ -642,15 +673,22 @@ struct DuressPINSetupView: View {
 
     // MARK: Helpers
 
-    /// How the configured credential kind reads in a sentence, for the "same shape as your passcode"
-    /// note. The duress code is validated against the CONFIGURED kind because the lock renders
-    /// exactly one entry surface: a 6-digit duress code on a 4-digit install could never be typed.
-    private var kindNoun: String {
+    /// The "same shape as your passcode" note, naming the configured credential kind. The duress code
+    /// is validated against the CONFIGURED kind because the lock renders exactly one entry surface: a
+    /// 6-digit duress code on a 4-digit install could never be typed.
+    ///
+    /// One whole sentence per kind. It used to splice an English noun phrase ("a 4-digit PIN") into
+    /// one sentence, which a translator could neither see nor make agree.
+    private var shapeNote: LocalizedStringKey {
         switch lockService.credentialKind {
-        case .pin4: "a 4-digit PIN"
-        case .pin6: "a 6-digit PIN"
-        case .alphanumeric: "a password"
-        case nil: "the same kind of code"
+        case .pin4:
+            "Your duress code is the same shape as your passcode — a 4-digit PIN. If you change your passcode to a different type, set your duress code again so you can still type it."
+        case .pin6:
+            "Your duress code is the same shape as your passcode — a 6-digit PIN. If you change your passcode to a different type, set your duress code again so you can still type it."
+        case .alphanumeric:
+            "Your duress code is the same shape as your passcode — a password. If you change your passcode to a different type, set your duress code again so you can still type it."
+        case nil:
+            "Your duress code is the same shape as your passcode — the same kind of code. If you change your passcode to a different type, set your duress code again so you can still type it."
         }
     }
 
@@ -876,7 +914,9 @@ private struct DuressPINEntrySheet: View {
         case .confirm:
             guard entry == confirmation else {
                 confirmation = ""
-                fail("Those codes don't match. Try again.")
+                fail(String(localized: "duress.entry.mismatch",
+                            defaultValue: "Those codes don't match. Try again.",
+                            comment: "Duress code entry, confirm step: the second entry did not match the duress code."))
                 return
             }
             commit()

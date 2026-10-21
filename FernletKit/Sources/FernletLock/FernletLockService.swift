@@ -235,15 +235,21 @@ public enum FernletLockCredential {
         switch self {
         case .pin4(let value):
             guard value.count == 4, value.allSatisfy(\.isNumber) else {
-                throw FernletLockError.invalidCredential("PIN must be exactly 4 digits")
+                throw FernletLockError.invalidCredential(String(
+                    localized: "lock.credential.invalid.pin4", defaultValue: "PIN must be exactly 4 digits",
+                    bundle: .module, comment: "App lock: a 4-digit PIN was entered with the wrong number of digits, or with something other than digits."))
             }
         case .pin6(let value):
             guard value.count == 6, value.allSatisfy(\.isNumber) else {
-                throw FernletLockError.invalidCredential("PIN must be exactly 6 digits")
+                throw FernletLockError.invalidCredential(String(
+                    localized: "lock.credential.invalid.pin6", defaultValue: "PIN must be exactly 6 digits",
+                    bundle: .module, comment: "App lock: a 6-digit PIN was entered with the wrong number of digits, or with something other than digits."))
             }
         case .alphanumeric(let value):
             guard value.count >= 8, value.count <= 64 else {
-                throw FernletLockError.invalidCredential("Password must be 8-64 characters")
+                throw FernletLockError.invalidCredential(String(
+                    localized: "lock.credential.invalid.password", defaultValue: "Password must be 8-64 characters",
+                    bundle: .module, comment: "App lock: a password was shorter than 8 or longer than 64 characters."))
             }
         }
     }
@@ -2207,7 +2213,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
 
         var contentKeyData: Data
         if let biometricBypassLoader {
-            contentKeyData = try biometricBypassLoader("Unlock Fernlet", keychainService)
+            contentKeyData = try biometricBypassLoader(Self.biometricUnlockPrompt, keychainService)
         } else {
             let context = LAContext()
             var error: NSError?
@@ -2216,10 +2222,11 @@ public final class FernletLockService: @MainActor FernletLockServicing {
             }
 
             let service = keychainService
+            let prompt = Self.biometricUnlockPrompt
             contentKeyData = try await withCheckedThrowingContinuation { continuation in
                 DispatchQueue.global(qos: .userInitiated).async {
                     do {
-                        let data = try KeychainItem.loadBiometricBypassSync(prompt: "Unlock Fernlet", service: service)
+                        let data = try KeychainItem.loadBiometricBypassSync(prompt: prompt, service: service)
                         continuation.resume(returning: data)
                     } catch {
                         continuation.resume(throwing: error)
@@ -2476,35 +2483,55 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// The rejection copy shown when a duress PIN is the same secret as the real passcode (in
     /// either direction: choosing it as the duress PIN, or re-keying the real passcode to it).
     /// A constant so the two rejection sites and their tests cannot drift apart.
-    static let duressPINMatchesPasscodeMessage = "Your duress code must be different from your passcode."
+    nonisolated static var duressPINMatchesPasscodeMessage: String {
+        String(localized: "lock.duress.matchesPasscode", defaultValue: "Your duress code must be different from your passcode.",
+               bundle: .module, comment: "Duress code refused: it is the same as the real passcode (or the passcode is being changed to the duress code).")
+    }
 
     /// The rejection copy shown when ``DuressMode/recoveryLock`` is chosen with no enrolled
     /// custodian device — a response that would otherwise destroy the local keys with nothing on
     /// the other side able to give them back.
-    static let duressRecoveryCustodianRequiredMessage =
-        "Set up a recovery device before choosing this response."
+    nonisolated static var duressRecoveryCustodianRequiredMessage: String {
+        String(localized: "lock.duress.custodianRequired", defaultValue: "Set up a recovery device before choosing this response.",
+               bundle: .module, comment: "Duress code refused: the 'lock it away on your recovery device' response needs a recovery device (another phone) set up first.")
+    }
 
     /// The rejection copy shown when a recovery device is un-enrolled while ``DuressMode/recoveryLock``
     /// is still the armed duress response — removing it would leave a response that destroys the
     /// local keys with nothing left to give them back.
-    static let recoveryCustodianInUseMessage =
-        "Change your duress response before removing your recovery device."
+    nonisolated static var recoveryCustodianInUseMessage: String {
+        String(localized: "lock.recovery.custodianInUse", defaultValue: "Change your duress response before removing your recovery device.",
+               bundle: .module, comment: "Removing the recovery device refused: the armed duress response depends on it.")
+    }
 
     /// The rejection copy shown when an enrollment is offered public keys that are not the exact
     /// Curve25519 raw length the ceremony produces.
-    static let recoveryCustodianInvalidKeyMessage =
-        "That recovery device's code wasn't valid. Scan it again."
+    nonisolated static var recoveryCustodianInvalidKeyMessage: String {
+        String(localized: "lock.recovery.invalidKey", defaultValue: "That recovery device's code wasn't valid. Scan it again.",
+               bundle: .module, comment: "Setting up a recovery device: the other phone's scanned code carried keys of the wrong shape.")
+    }
 
     /// The rejection copy shown when ``reestablishLocalUnlock(contentKey:credential:grantingScope:)``
     /// is handed a key that is NOT the key the recovery blob seals. Installing it would re-lock the
     /// device around bytes that open nothing, permanently — so it is refused instead.
-    static let recoveryKeyMismatchMessage =
-        "That key doesn't match this phone's sealed data, so it wasn't installed."
+    nonisolated static var recoveryKeyMismatchMessage: String {
+        String(localized: "lock.recovery.keyMismatch", defaultValue: "That key doesn't match this phone's sealed data, so it wasn't installed.",
+               bundle: .module, comment: "Recovering this phone: the key the recovery device sent back does not open this phone's sealed data, so it was refused.")
+    }
 
     /// The rejection copy shown when a recovery is attempted on a device that never enrolled a
     /// custodian (or whose recovery material is gone).
-    static let recoveryNotAvailableMessage =
-        "This phone has no recovery device set up."
+    nonisolated static var recoveryNotAvailableMessage: String {
+        String(localized: "lock.recovery.notAvailable", defaultValue: "This phone has no recovery device set up.",
+               bundle: .module, comment: "Recovering this phone refused: no recovery device was set up, or its material is gone.")
+    }
+
+    /// The reason line iOS shows in its Touch ID sheet (and passcode fallback) when biometrics unlock
+    /// the app lock.
+    nonisolated static var biometricUnlockPrompt: String {
+        String(localized: "lock.biometric.prompt", defaultValue: "Unlock Fernlet",
+               bundle: .module, comment: "Shown by iOS in the Touch ID prompt, and its passcode fallback, when biometrics unlock Fernlet's app lock.")
+    }
 
     /// Raw Curve25519 public-key length, the only shape an enrolled custodian's keys may have.
     ///
@@ -2525,18 +2552,24 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// The rejection copy shown when a duress-sensitive action is attempted while a duress session
     /// is in force. Deliberately generic: it names no duress feature, because the one place it can
     /// surface is a screen a coercer is holding.
-    static let duressSessionRefusalMessage =
-        "Enter your passcode again to change this."
+    nonisolated static var duressSessionRefusalMessage: String {
+        String(localized: "lock.duress.sessionRefusal", defaultValue: "Enter your passcode again to change this.",
+               bundle: .module, comment: "Shown when an app-lock setting is changed during a duress session. Deliberately generic: it must never mention a duress code, because whoever holds the phone may read it.")
+    }
 
     /// The rejection copy shown when a credential-KIND change would leave the configured duress PIN
     /// unenterable on the new entry surface.
-    static let duressPINWouldBeUnenterableMessage =
-        "Your duress code can't be typed on that kind of lock. Remove or change your duress code first."
+    nonisolated static var duressPINWouldBeUnenterableMessage: String {
+        String(localized: "lock.duress.unenterable", defaultValue: "Your duress code can't be typed on that kind of lock. Remove or change your duress code first.",
+               bundle: .module, comment: "Changing the passcode type refused: the configured duress code could not be typed on the new kind of lock.")
+    }
 
     /// The rejection copy shown when ``DuressMode/recoveryLock`` is armed over a recovery blob that
     /// seals a SUPERSEDED content key (see ``LockKeychainKey/recoveryBlobSuperseded``).
-    static let recoveryCustodianSupersededMessage =
-        "Your recovery device holds the key from before this app lock. Set it up again before choosing this."
+    nonisolated static var recoveryCustodianSupersededMessage: String {
+        String(localized: "lock.duress.custodianSuperseded", defaultValue: "Your recovery device holds the key from before this app lock. Set it up again before choosing this.",
+               bundle: .module, comment: "Duress code refused: the recovery device was set up before the current app lock, so it holds an older key.")
+    }
 
     /// Whether a duress PIN is configured.
     ///

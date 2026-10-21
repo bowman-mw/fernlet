@@ -9618,7 +9618,16 @@
     "Your day" : {
 
     },
-    "Your duress code is the same shape as your passcode — %@. If you change your passcode to a different type, set your duress code again so you can still type it." : {
+    "Your duress code is the same shape as your passcode — a 4-digit PIN. If you change your passcode to a different type, set your duress code again so you can still type it." : {
+
+    },
+    "Your duress code is the same shape as your passcode — a 6-digit PIN. If you change your passcode to a different type, set your duress code again so you can still type it." : {
+
+    },
+    "Your duress code is the same shape as your passcode — a password. If you change your passcode to a different type, set your duress code again so you can still type it." : {
+
+    },
+    "Your duress code is the same shape as your passcode — the same kind of code. If you change your passcode to a different type, set your duress code again so you can still type it." : {
 
     },
     "Your duress code stops working. Your passcode and your data are untouched." : {
@@ -11070,6 +11079,186 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "That code wasn't signed by the phone it claims to come from."
+          }
+        }
+      }
+    },
+    "duress.custodian.removalRefused" : {
+      "comment" : "Duress code screen: shown instead of the Remove button for the recovery device while 'Lock it away on your recovery device' is the armed response.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Change your duress response before removing this device."
+          }
+        }
+      }
+    },
+    "duress.entry.mismatch" : {
+      "comment" : "Duress code entry, confirm step: the second entry did not match the duress code.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Those codes don't match. Try again."
+          }
+        }
+      }
+    },
+    "duress.mode.decoy.detail" : {
+      "comment" : "Duress code screen: the full description of the non-destructive response, shown when it is selected.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Entering your duress code opens Fernlet with nothing in it — no journal, no cycle history, no intimacy notes, and no sign that anything is hidden. Your data is untouched and sealed the whole time, and entering your real passcode brings it straight back."
+          }
+        }
+      }
+    },
+    "duress.mode.decoy.summary" : {
+      "comment" : "Duress code screen: the one-line summary under 'Show an empty Fernlet'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nothing is deleted. Your real passcode brings everything back."
+          }
+        }
+      }
+    },
+    "duress.mode.decoy.title" : {
+      "comment" : "Duress code response: the duress code opens an empty-looking Fernlet and deletes nothing.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Show an empty Fernlet"
+          }
+        }
+      }
+    },
+    "duress.mode.recoveryLock.armTitle" : {
+      "comment" : "Title of the confirmation before the recovery-lock response is set as the duress code's response.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Arm the recovery lock?"
+          }
+        }
+      }
+    },
+    "duress.mode.recoveryLock.detail" : {
+      "comment" : "Duress code screen: the full consequence of the recovery-lock response, shown when it is selected and again in its confirmation. Every claim is load-bearing; translate it whole, never shorten it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Entering your duress code destroys this phone's passcode, Face ID and keys, but keeps your sealed notes. Nobody holding this phone can open them — including you. They can be opened again only in person, with the recovery device you enrolled below. If that device is lost, erased, or reinstalls Fernlet, your sealed notes are gone for good."
+          }
+        }
+      }
+    },
+    "duress.mode.recoveryLock.summary" : {
+      "comment" : "Duress code screen: the one-line summary under 'Lock it away on your recovery device'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This phone loses its way in. Only your recovery device can open it again."
+          }
+        }
+      }
+    },
+    "duress.mode.recoveryLock.title" : {
+      "comment" : "Duress code response: the duress code locks this phone out; only the user's recovery device (another phone) can give the key back.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lock it away on your recovery device"
+          }
+        }
+      }
+    },
+    "duress.mode.silentWipe.armTitle" : {
+      "comment" : "Title of the confirmation before the erase response is set as the duress code's response.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Arm the erase response?"
+          }
+        }
+      }
+    },
+    "duress.mode.silentWipe.detail" : {
+      "comment" : "Duress code screen: the full consequence of the erase response, shown when it is selected and again in its confirmation. Every claim is load-bearing; translate it whole, never shorten it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Entering your duress code destroys the keys to your sealed journal, cycle and intimacy notes before anything appears on screen. This cannot be undone, and it cannot be recovered from a backup. Fernlet then opens as a brand-new empty app whose passcode is the duress code you just typed, so there is no duress code left until you set a new one. Fernlet also clears the sealed entries, your Apple Health cycle and intimacy entries, and its cloud copies in the background — copies already sent to a friend's phone or sitting in a backup are unreadable, but they exist until that clearing or their own expiry reaches them."
+          }
+        }
+      }
+    },
+    "duress.mode.silentWipe.summary" : {
+      "comment" : "Duress code screen: the one-line summary under 'Erase everything, then show an empty Fernlet'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your sealed notes become permanently unreadable, immediately."
+          }
+        }
+      }
+    },
+    "duress.mode.silentWipe.title" : {
+      "comment" : "Duress code response: the duress code destroys the sealed data's keys, then opens an empty Fernlet.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Erase everything, then show an empty Fernlet"
+          }
+        }
+      }
+    },
+    "duress.mode.unavailable.noCustodian" : {
+      "comment" : "Duress code screen: why 'Lock it away on your recovery device' can't be chosen yet — no recovery device is set up. 'Below' is the recovery-device card on the same screen.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set up a recovery device below before choosing this."
+          }
+        }
+      }
+    },
+    "duress.mode.unavailable.supersededCustodian" : {
+      "comment" : "Duress code screen: why 'Lock it away on your recovery device' can't be chosen — the recovery device was set up before the current app lock, so it holds an older key.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your recovery device holds the key from before this app lock. Set it up again before choosing this."
           }
         }
       }

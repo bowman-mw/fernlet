@@ -71,7 +71,9 @@
 //     bodies. A conformance whose `errorDescription` returns `Self.copy(for: self)`, or an
 //     associated value that arrived as an English literal from its thrower, is the same data-flow
 //     question — and `FernletLockError.invalidCredential` is a live example of the second, exempt
-//     by design because the pass-through IS its contract.
+//     by design because the pass-through IS its contract. Its throwers in `FernletLock` pass
+//     catalog sentences since the Spanish round (pinned in ``settingsLaneForkKeys``), which this
+//     rule could not have told you.
 //   * WHETHER A KEY IS ANY GOOD. A key can be present, bundled, harvested — and still be spliced
 //     into a sentence a translator cannot reorder, or carry an English plural rule. Reviews find
 //     those; this file cannot.
@@ -2946,7 +2948,21 @@ struct LocalizationBoundaryTests {
              "micronutrientGaps7Day", "micronutrientGaps14Day"].map {
             ("signal.name.\($0)", "SettingsSignalNames, the Debug page's derived-signal names once drawn raw")
         }
-        return appKeys.map { HarvestedKey(catalog: app, key: $0.key, source: $0.source) }
+        let lock = "FernletKit/Sources/FernletLock/Localizable.xcstrings"
+        let lockKeys: [HarvestedKey] = [
+            "lock.credential.invalid.pin4", "lock.credential.invalid.pin6", "lock.credential.invalid.password",
+            "lock.duress.matchesPasscode", "lock.duress.custodianRequired", "lock.recovery.custodianInUse",
+            "lock.recovery.invalidKey", "lock.recovery.keyMismatch", "lock.recovery.notAvailable",
+            "lock.duress.sessionRefusal", "lock.duress.unenterable", "lock.duress.custodianSuperseded",
+            "lock.biometric.prompt",
+        ].map { HarvestedKey(catalog: lock, key: $0, source: "FernletLockService, a refusal or prompt once a bare String") }
+        let duressKeys: [HarvestedKey] = [
+            "duress.mode.decoy.title", "duress.mode.silentWipe.title", "duress.mode.recoveryLock.title",
+            "duress.mode.decoy.detail", "duress.mode.silentWipe.armTitle", "duress.mode.recoveryLock.armTitle",
+            "duress.mode.unavailable.noCustodian", "duress.custodian.removalRefused", "duress.entry.mismatch",
+            "Your duress code is the same shape as your passcode — a password. If you change your passcode to a different type, set your duress code again so you can still type it.",
+        ].map { HarvestedKey(catalog: app, key: $0, source: "DuressPINSetupView, once a String return or a spliced English noun") }
+        return appKeys.map { HarvestedKey(catalog: app, key: $0.key, source: $0.source) } + lockKeys + duressKeys
     }()
 
     /// The forks actually reached a catalog.
@@ -3836,9 +3852,11 @@ struct LocalizationBoundaryTests {
         }
     }
 
-    /// The modules that gained their first catalog in the `LocalizedError` sweep.
+    /// The modules that gained their first catalog in the `LocalizedError` sweep — plus `FernletLock`
+    /// (Spanish round, 2026-10-20), whose `invalidCredential` refusals are the thrower's half of the
+    /// `FernletLockError` copy that `FernletFoundation`'s catalog cannot hold.
     static let localizedErrorSweepCatalogModules = [
-        "AIProviders", "CloudKitSync", "FernletFoundation", "HealthKitGateway",
+        "AIProviders", "CloudKitSync", "FernletFoundation", "HealthKitGateway", "FernletLock",
     ]
 
     /// Every module with a catalog is also named in the sync script's `TARGETS` array.
