@@ -27,10 +27,11 @@ import ImageIO
 struct FoodView: View {
     var store: FernletStore
     /// Reports meals logged from THIS tab's own surfaces (the Planned-today card, recipe rows,
-    /// the recipe detail and book) so the host can raise the post-log toast (FLOW-15). The host
-    /// (ContentView) passes its `showMealLogNotification` here; the MealSheet keeps its separate
-    /// `onLogged` wiring. Defaults to a no-op so construction sites compile before wiring.
-    var onMealsLogged: ([Meal]) -> Void = { _ in }
+    /// the recipe detail and book, cooking mode's finish) so the host can raise the post-log toast
+    /// (FLOW-15). The host (ContentView) passes its toast reporter here; the MealSheet keeps its
+    /// separate `onLogged` wiring. Defaults to reporting nowhere so construction sites compile
+    /// before wiring.
+    var onMealsLogged: MealLogReporter = .none
     @Binding var activeSheet: FernletSheet?
     @Binding var isTabBarCompact: Bool
     @Binding var tabResetToken: Int
@@ -48,6 +49,9 @@ struct FoodView: View {
     /// an in-progress cooking run whose recipe still exists). Carries whether it's a saved/web recipe so
     /// the completion log routes to the right store method.
     @State private var cookingResume: CookingResumeTarget?
+    /// The meal the resumed cook's finish screen logged, held until the cover has gone and then
+    /// handed to the toast (``CookedMealHandoff``).
+    @State private var cookedMeal = CookedMealHandoff()
     /// The Food tab stack's pushed pages. Cleared in one write when the Food tab is re-tapped.
     @State private var path: [FoodRoute] = []
     /// The root page's own scroll-to-top token; `tabReselect` bumps it only when nothing is pushed.
@@ -449,11 +453,11 @@ struct FoodView: View {
             onShare: { current in recipeShareDraft = store.recipeShareDraft(for: current) },
             onCookLog: { current, mealType, day in
                 if isSaved {
-                    store.logSavedRecipe(current, mealType: mealType, date: day)
-                } else {
-                    store.logRecipe(current, mealType: mealType, date: day)
+                    return store.logSavedRecipe(current, mealType: mealType, date: day)
                 }
-            }
+                return store.logRecipe(current, mealType: mealType, date: day)
+            },
+            onMealsLogged: onMealsLogged
         )
     }
     #endif
@@ -525,17 +529,17 @@ struct FoodView: View {
                 store.reconcileCookingRunFromAppGroup()
             }
             #if canImport(UIKit)
-            .fullScreenCover(item: $cookingResume) { target in
+            // The finished cook's meal reaches the toast from `onDismiss`, once the cover is gone.
+            .fullScreenCover(item: $cookingResume, onDismiss: { cookedMeal.release(to: onMealsLogged) }) { target in
                 CookingModeView(
                     store: store,
                     recipe: target.recipe,
                     resuming: true,
                     onLogToDay: { mealType, day in
-                        if target.isSaved {
-                            store.logSavedRecipe(target.recipe, mealType: mealType, date: day)
-                        } else {
-                            store.logRecipe(target.recipe, mealType: mealType, date: day)
-                        }
+                        let meal = target.isSaved
+                            ? store.logSavedRecipe(target.recipe, mealType: mealType, date: day)
+                            : store.logRecipe(target.recipe, mealType: mealType, date: day)
+                        cookedMeal.hold(meal, loggedTo: day)
                     }
                 )
             }
@@ -773,6 +777,9 @@ private struct RecipeImportSheet: View {
     /// past the create-recipe chooser to the book rather than leaving the user on it. `nil` keeps the
     /// plain one-level dismiss.
     var onSaved: ((String) -> Void)?
+    /// Reports a log from the matched recipe's detail (its Log, or cooking mode's finish) to the
+    /// recipe book's toast route, so logging an already-saved recipe from here is confirmed too.
+    var onMealsLogged: MealLogReporter = .none
     @State private var importText = ""
     @State private var notice: String?
     @State private var isImportingURL = false
@@ -957,9 +964,10 @@ private struct RecipeImportSheet: View {
             recipe: recipe,
             onEdit: { editingSavedRecipe = recipe },
             onSaveFork: { store.addForkedSavedRecipe($0) },
-            onLog: { current, mealType in store.logSavedRecipe(current, mealType: mealType) },
+            onLog: { current, mealType in onMealsLogged([store.logSavedRecipe(current, mealType: mealType)]) },
             onShare: { current in recipeShareDraft = store.recipeShareDraft(for: current) },
-            onCookLog: { current, mealType, day in store.logSavedRecipe(current, mealType: mealType, date: day) }
+            onCookLog: { current, mealType, day in store.logSavedRecipe(current, mealType: mealType, date: day) },
+            onMealsLogged: onMealsLogged
         )
     }
     #endif
@@ -1398,6 +1406,9 @@ struct RecipeSheet: View {
     /// back on the book, not on the "Import / Manual entry" chooser they passed through). `nil` keeps
     /// the plain dismiss the sheet and the meal-flow push both want.
     private var onSaved: ((String) -> Void)?
+    /// Reports the meal "Log & save" logs to the host's toast. The Home sheet passes ContentView's
+    /// reporter; the recipe book's create branch passes the book's.
+    private var onMealsLogged: MealLogReporter
     @State private var name = ""
     @State private var servings = 1
     @State private var notes = ""
@@ -1432,13 +1443,15 @@ struct RecipeSheet: View {
         recipe: RecipeDefinition? = nil,
         isEmbeddedInNavigationStack: Bool = false,
         startsWithScanner: Bool = false,
-        onSaved: ((String) -> Void)? = nil
+        onSaved: ((String) -> Void)? = nil,
+        onMealsLogged: MealLogReporter = .none
     ) {
         self.store = store
         self.editingRecipe = recipe
         self.isEmbeddedInNavigationStack = isEmbeddedInNavigationStack
         self.startsWithScanner = startsWithScanner
         self.onSaved = onSaved
+        self.onMealsLogged = onMealsLogged
         if let recipe {
             let recipeFoods = store.foodCatalog.items(forRecipe: recipe)
             let loadedParts = RecipePartsDraft.parts(for: recipe, foodItems: recipeFoods)
@@ -1815,7 +1828,11 @@ struct RecipeSheet: View {
 
             Button("Log & save") {
                 let recipe = addDraftRecipe()
-                store.logRecipe(recipe)
+                // Reported before the save finishes, so a host that pops or closes on save already
+                // knows a meal toast is coming (the recipe book then leaves the speaking to it).
+                if let meal = store.logRecipe(recipe) {
+                    onMealsLogged([meal])
+                }
                 finishAfterSave(named: name)
             }
             .buttonStyle(.plain)
@@ -5647,9 +5664,14 @@ struct RecipeDetailView: View {
     /// Logs the meal on cooking-mode COMPLETION, anchored to the day-key captured when the cook STARTED
     /// (F5, §6.4). Distinct from `onLog` (immediate, today): routed per call site to `logRecipe` (manual)
     /// vs `logSavedRecipe` (saved/web), each with an explicit `date:`. Receives the on-screen
-    /// definition like `onLog`. A no-op default keeps any non-updated call site compiling; the
-    /// real sites wire it.
-    var onCookLog: (RecipeDefinition, MealType, String) -> Void = { _, _, _ in }
+    /// definition like `onLog`, and returns the meal it logged (`nil` when the recipe built none),
+    /// which this view hands to ``onMealsLogged`` once the cooking cover has gone. A no-op default
+    /// keeps any non-updated call site compiling; the real sites wire it.
+    var onCookLog: (RecipeDefinition, MealType, String) -> Meal? = { _, _, _ in nil }
+    /// Where the finished cook's meal is reported, with the day it was logged to (the day the cook
+    /// began, which can be yesterday). Released from the cooking cover's `onDismiss`, so the toast
+    /// shows over the page the cover uncovers, not behind the closing cover.
+    var onMealsLogged: MealLogReporter = .none
 
     /// Creates the detail. Mirrors the old memberwise init exactly (same labels, same defaults) —
     /// it exists only because `initialRecipe` is private, which hides the memberwise init.
@@ -5660,7 +5682,8 @@ struct RecipeDetailView: View {
         onSaveFork: @escaping (RecipeDefinition) -> Void = { _ in },
         onLog: @escaping (RecipeDefinition, MealType) -> Void,
         onShare: @escaping (RecipeDefinition) -> Void,
-        onCookLog: @escaping (RecipeDefinition, MealType, String) -> Void = { _, _, _ in }
+        onCookLog: @escaping (RecipeDefinition, MealType, String) -> Meal? = { _, _, _ in nil },
+        onMealsLogged: MealLogReporter = .none
     ) {
         self.store = store
         self.initialRecipe = recipe
@@ -5669,6 +5692,7 @@ struct RecipeDetailView: View {
         self.onLog = onLog
         self.onShare = onShare
         self.onCookLog = onCookLog
+        self.onMealsLogged = onMealsLogged
     }
 
     /// The definition currently on screen: the re-imported refresh when one landed this
@@ -5686,6 +5710,8 @@ struct RecipeDetailView: View {
 
     /// Presents the F5 full-screen cooking-mode flow (mise-en-place → step walker → finish/log).
     @State private var showingCookingMode = false
+    /// The meal the cook's finish screen logged, held until the cover has gone (``CookedMealHandoff``).
+    @State private var cookedMeal = CookedMealHandoff()
 
     /// True while "Log this recipe" has its inline meal-slot chip row open (2026-08-21, FOOD-14 —
     /// the same chip row as the meal sheet, replacing the old Menu). A chip tap logs and closes it.
@@ -5804,6 +5830,9 @@ struct RecipeDetailView: View {
         .background(Color.parchment)
         .navigationTitle("Recipe")
         .navigationBarTitleDisplayMode(.inline)
+        // A6: a recipe photo that couldn't be sealed is a failure the person should feel, not only
+        // read in the italic notice line.
+        .fernletFeedback(.failed, trigger: photoNotice) { _, notice in notice != nil }
         // Warm the DNS/TLS connection to the source host while the detail is up, so the source
         // link opens near-instantly (owner decision 2026-08-09; documented in
         // Docs/No-Tracking-Wall.md §4b).
@@ -5924,13 +5953,13 @@ struct RecipeDetailView: View {
                     onSaveFork: onSaveFork
                 )
             }
-            .fullScreenCover(isPresented: $showingCookingMode) {
+            .fullScreenCover(isPresented: $showingCookingMode, onDismiss: { cookedMeal.release(to: onMealsLogged) }) {
                 // Carry the detail page's ephemeral "Cook for N" into cooking mode so mise opens at that
                 // yield instead of re-defaulting to the base (nil → base yield inside CookingModeView).
                 // The completion log routes through onCookLog with the definition on screen at cook
-                // start, mirroring onLog's currency rule.
+                // start, mirroring onLog's currency rule; its meal reaches the toast from `onDismiss`.
                 CookingModeView(store: store, recipe: recipe, initialYield: cookYield, onLogToDay: { mealType, day in
-                    onCookLog(recipe, mealType, day)
+                    cookedMeal.hold(onCookLog(recipe, mealType, day), loggedTo: day)
                 })
             }
     }
@@ -6574,6 +6603,12 @@ private struct RecipeCreationOptionsView: View {
     /// Reports a finished creation to the recipe book, which collapses the branch and shows the
     /// confirmation line. Both branches hand their saved name straight to it.
     var onCreated: (String) -> Void = { _ in }
+    /// The recipe book's toast route, for meals logged inside the branch: the import screen's
+    /// matched-recipe detail, and the manual editor's "Log & save".
+    var onMealsLogged: MealLogReporter = .none
+    /// Told when "Log & save" logged the recipe it created. Runs before `onCreated`, so the book
+    /// knows the meal toast will speak for that save.
+    var onCreatedRecipeLogged: () -> Void = {}
 
     /// The editor this chooser can push: the import screen or the manual editor.
     private enum CreationStep: Hashable { case importing, manual }
@@ -6625,9 +6660,14 @@ private struct RecipeCreationOptionsView: View {
         .navigationDestination(item: $step) { destination in
             switch destination {
             case .importing:
-                RecipeImportSheet(store: store, onSaved: onCreated)
+                RecipeImportSheet(store: store, onSaved: onCreated, onMealsLogged: onMealsLogged)
             case .manual:
-                RecipeSheet(store: store, isEmbeddedInNavigationStack: true, onSaved: onCreated)
+                RecipeSheet(
+                    store: store,
+                    isEmbeddedInNavigationStack: true,
+                    onSaved: onCreated,
+                    onMealsLogged: onMealsLogged.then(onCreatedRecipeLogged)
+                )
             }
         }
     }
@@ -6821,10 +6861,11 @@ struct RecipeBookSheet: View {
     /// started here returns to the recipe instead of dropping to the Food root — and it titles itself
     /// in the nav bar. The Home shortcut still presents it as a sheet, which keeps its own stack.
     var isEmbeddedInNavigationStack = false
-    /// Reports meals logged from the book's rows and details so the host can raise the post-log
-    /// toast (FLOW-15). FoodView threads its own callback through; the Home sheet route passes
-    /// ContentView's. Defaults to a no-op so construction sites compile before wiring.
-    var onMealsLogged: ([Meal]) -> Void = { _ in }
+    /// Reports meals logged from the book's rows and details, its planner, its create branch and
+    /// cooking mode so the host can raise the post-log toast (FLOW-15). FoodView threads its own
+    /// reporter through; the Home sheet route passes ContentView's. Defaults to reporting nowhere
+    /// so construction sites compile before wiring.
+    var onMealsLogged: MealLogReporter = .none
     @State private var searchText = ""
     @State private var recipeShareDraft: ProximityRecipeShareDraft?
     /// Calm confirmation after a recipe is created, shown here because this is where the create flow
@@ -6836,6 +6877,10 @@ struct RecipeBookSheet: View {
     /// its editor flag and `dismiss()` itself in the same tick, and a coalesced pair left the user
     /// standing on the "Import recipe / Manual entry" chooser with the recipe already saved).
     @State private var isCreatingRecipe = false
+    /// Set when the create branch's "Log & save" logged the recipe it created. That save's meal
+    /// toast speaks for it, Undo included, so ``finishCreation(named:)`` shows the "added" line but
+    /// leaves the announcement to the toast: two sentences posted together cut each other off.
+    @State private var createdRecipeWasLogged = false
 
     @ViewBuilder
     var body: some View {
@@ -6921,7 +6966,12 @@ struct RecipeBookSheet: View {
         // The create branch hangs off the book, not off the chooser, so `finishCreation` collapses
         // chooser + editor in one go and the user lands back here — the new recipe's home.
         .navigationDestination(isPresented: $isCreatingRecipe) {
-            RecipeCreationOptionsView(store: store, onCreated: { name in finishCreation(named: name) })
+            RecipeCreationOptionsView(
+                store: store,
+                onCreated: { name in finishCreation(named: name) },
+                onMealsLogged: loggedInBook,
+                onCreatedRecipeLogged: { createdRecipeWasLogged = true }
+            )
         }
         .task(id: createdNotice) {
             guard createdNotice != nil else { return }
@@ -6954,6 +7004,11 @@ struct RecipeBookSheet: View {
     private func finishCreation(named recipeName: String) {
         isCreatingRecipe = false
         createdNotice = "\u{201C}\(recipeName)\u{201D} added to your recipes."
+        // "Log & save": the meal toast's sentence (with its Undo) is the one spoken.
+        guard !createdRecipeWasLogged else {
+            createdRecipeWasLogged = false
+            return
+        }
         // The line appears with no focus change while the pop moves VoiceOver's cursor, so the
         // landing is spoken once the pop has settled. An unstructured Task, as the sheet-closing
         // confirmations use, so nothing about this update cancels it. This is the one confirmation
@@ -6967,6 +7022,15 @@ struct RecipeBookSheet: View {
     private func dismissIfPresented() {
         guard !isEmbeddedInNavigationStack else { return }
         dismiss()
+    }
+
+    /// The toast route for logs made deeper in the book: the planner, the create branch and cooking
+    /// mode. Reports to the host, then closes the book when it is a sheet, as the rows' and the
+    /// detail's own Log already do: the toast overlays the tab pages, and a sheet left standing
+    /// would hide it and its Undo. Pushed in the Food tab nothing closes; the toast shows over the
+    /// page the log was made on.
+    private var loggedInBook: MealLogReporter {
+        onMealsLogged.then { dismissIfPresented() }
     }
 
     /// Create-recipe plus the F3 grocery entry points, as THREE EQUAL secondaries (XCUT-14 —
@@ -6985,7 +7049,7 @@ struct RecipeBookSheet: View {
             }
             .buttonStyle(.plain)
             NavigationLink {
-                WeeklyMealPlannerView(store: store)
+                WeeklyMealPlannerView(store: store, onMealsLogged: loggedInBook)
             } label: {
                 plannerLabel("Planner", systemImage: "calendar")
             }
@@ -7090,11 +7154,11 @@ struct RecipeBookSheet: View {
             onShare: { current in recipeShareDraft = store.recipeShareDraft(for: current) },
             onCookLog: { current, mealType, day in
                 if isSaved {
-                    store.logSavedRecipe(current, mealType: mealType, date: day)
-                } else {
-                    store.logRecipe(current, mealType: mealType, date: day)
+                    return store.logSavedRecipe(current, mealType: mealType, date: day)
                 }
-            }
+                return store.logRecipe(current, mealType: mealType, date: day)
+            },
+            onMealsLogged: loggedInBook
         )
     }
     #endif

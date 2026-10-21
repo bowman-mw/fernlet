@@ -123,8 +123,14 @@ spoken — the inline error, the attempts-remaining warning, the countdown that 
 lost-key card — through an announcement posted from ``FernletLockView``'s catch arms plus an
 `@AccessibilityFocusState` move onto the error text. Never from a success: the service answers a
 duress code and a real passcode identically on purpose, and speech keyed off *which* secret matched
-would be a duress oracle audible from across the room. And the unlock column scrolls, because the
-app declares landscape on iPhone and locks orientation nowhere — unscrolled, the 3×4 pad clipped
+would be a duress oracle audible from across the room. A dismissed biometric sheet is not a
+failure: the gate auto-presents Face ID once per lock session, and someone who prefers typing waves
+it away every time. `FernletBiometricUnlockFailure` turns what the biometric attempt threw into the
+one inline message (Fernlet's own lines for a face that didn't match and for a sensor paused after
+too many tries, never LocalAuthentication's untranslated text; `nil` for a dismissal or unavailable
+biometrics), and the text, the error
+haptic and the announcement all key off that one answer: a dismissal shows no text, plays no
+haptic and says nothing. And the unlock column scrolls, because the app declares landscape on iPhone and locks orientation nowhere — unscrolled, the 3×4 pad clipped
 below the fold with no way to reach it.
 
 The gate encodes the module's central invariant: **one unlock session never outlives the

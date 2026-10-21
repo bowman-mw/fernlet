@@ -46,6 +46,11 @@ struct SettingsSearchIndexTests {
             ("hydration", .goalNutrition),
             ("face id", .appLock),
             ("export", .privacyData),
+            // The Sounds & haptics page (2026-10-20): the four words people type for it.
+            ("haptics", .soundsHaptics),
+            ("vibration", .soundsHaptics),
+            ("sound", .soundsHaptics),
+            ("voice", .soundsHaptics),
         ]
         for testCase in cases {
             let results = SettingsSearchIndex.results(for: testCase.query)
@@ -165,7 +170,8 @@ struct SettingsSearchIndexTests {
         // new wording belongs in the string catalog against the existing key.
         let titles = Set(SettingsSearchIndex.entries.map(\.title))
         for canary in ["Dark mode", "Face ID / Touch ID", "Change passcode", "Sync to iCloud",
-                       "Export my data", "AI activity log", "Delete everything", "App lock"] {
+                       "Export my data", "AI activity log", "Delete everything", "App lock",
+                       "Sounds & haptics", "Haptics"] {
             #expect(titles.contains(canary),
                     "frozen title '\(canary)' was renamed — search queries and row ids depend on it")
         }
@@ -193,5 +199,23 @@ struct SettingsSearchIndexTests {
                 "hubLink's title is no longer a LocalizedStringKey — the ~15 hub labels stopped localizing")
         #expect(sheet.contains("func hubToggle(_ title: LocalizedStringKey,"),
                 "hubToggle's title is no longer a LocalizedStringKey — the 11 hub switch labels stopped localizing")
+    }
+
+    /// The Sounds & haptics hub row routes to its page, and the page shows the workout and breathing
+    /// switches through the views that own their keys — never a second `@AppStorage` of those keys on
+    /// the page itself, which would be a copy the wipe wall cannot resolve.
+    @Test func soundsAndHapticsRowRoutesToItsPageAndBindsTheSurfaceKeys() throws {
+        let sheet = try RepoRoot.source("App/Fernlet/SettingsSheet.swift")
+        #expect(sheet.contains("hubLink(\"Sounds & haptics\", subtitle: Text(\"Haptics, workout sounds, spoken cues\"), .soundsHaptics)"),
+                "the Your day section lost its Sounds & haptics row")
+        #expect(sheet.contains("case .soundsHaptics:\n            SoundsHapticsSettingsView()"),
+                "the .soundsHaptics route no longer opens SoundsHapticsSettingsView")
+        let page = try RepoRoot.source("App/Fernlet/SoundsHapticsSettingsView.swift")
+        #expect(page.contains("@AppStorage(FernletHapticsLevel.storageKey)"))
+        #expect(page.contains("WorkoutCueSwitches()") && page.contains("BreathingHapticsSwitch()"))
+        for copied in ["WorkoutCuePreferences.hapticsKey", "WorkoutCuePreferences.soundsKey",
+                       "WorkoutCuePreferences.spokenKey", "BreathingPreferences.hapticsKey", "fernlet.breathing.haptics"] {
+            #expect(!page.contains(copied), "the page binds \(copied) itself; bind it through the view beside the key")
+        }
     }
 }

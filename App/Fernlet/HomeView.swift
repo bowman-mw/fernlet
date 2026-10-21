@@ -48,6 +48,9 @@ struct HomeView: View {
     /// The root `TabView` retains Home offscreen. Continuous Canvas clocks must pause whenever
     /// another tab or a root sheet covers Home, otherwise they render forever while invisible.
     var isActive: Bool = true
+    /// The meal-logged toast, for the ambient cards' one-tap meal chips (forgotten favorites and the
+    /// nutrient nudge's "add it"), which log in place and are confirmed like every other meal log.
+    var onMealsLogged: MealLogReporter = .none
     @State private var hasRecentPeriodEvent = false
     @State private var didLoadRecentPeriodActivity = false
     @State private var isCompanionThoughtVisible = true
@@ -352,7 +355,8 @@ struct HomeView: View {
                 store: store,
                 activeSheet: $activeSheet,
                 periodPrediction: homePeriodPrediction,
-                stressState: store.settings.stressAwarenessEnabled ? stressService?.assessment?.state : nil
+                stressState: store.settings.stressAwarenessEnabled ? stressService?.assessment?.state : nil,
+                onMealsLogged: onMealsLogged
             )
         case .milestones:
             milestonesCard
@@ -1336,9 +1340,13 @@ struct HomeView: View {
             // still opens the full water sheet, unchanged).
             button.overlay(alignment: .topTrailing) {
                 Button {
+                    let before = store.day.bottleCount
                     withAnimation(.easeInOut(duration: 0.18)) {
                         store.addBottle()
                     }
+                    // A7: the digit roll was the only sign the add landed, and at the cap a tap did
+                    // nothing at all. Compared, not assumed: the store clamps at its cap.
+                    FernletFeedback.system.play(Self.waterQuickAddEvent(before: before, after: store.day.bottleCount))
                 } label: {
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 20))
@@ -1420,6 +1428,13 @@ struct HomeView: View {
     private func countedState(_ count: Int, short: Bool) -> Text {
         if count == 0 { return Text("none yet") }
         return short ? Text(verbatim: "\(count)") : Text("\(count) logged")
+    }
+
+    /// What Home's one-tap "+1 bottle" feels like: `logged` when the count went up, `limit` when it
+    /// could not (the store holds the day at 30). Never a goal cue: reaching the water target feels
+    /// like any other bottle (the report's "never" list).
+    static func waterQuickAddEvent(before: Int, after: Int) -> FernletFeedbackEvent {
+        after > before ? .logged : .limit
     }
 
     private func waterState(short: Bool) -> Text {

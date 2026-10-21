@@ -323,6 +323,9 @@ struct BarcodeScanView: View {
     private func deliver(_ code: String) {
         guard !handedOff else { return }
         handedOff = true
+        // A10: "got it — the camera's done, move your hand". Only for a real code: "Add by hand"
+        // delivers an empty one, and a tap that opens a form is not a capture.
+        if !code.isEmpty { FernletFeedback.system.play(.captured) }
         onCode(code)
     }
 
@@ -1044,7 +1047,7 @@ struct BarcodeNotFoundView: View {
         )
         guard let item = store.saveCustomIngredient(input) else {
             // Recovery: tell the user rather than swallowing the failed save silently.
-            saveNotice = "Fernlet couldn't save that food — give it a name and try again."
+            reportSaveFailure("Fernlet couldn't save that food — give it a name and try again.")
             FernletAuditLog.log(
                 "barcode.rememberFood.failed",
                 context: ["reason": "saveCustomIngredient returned nil"]
@@ -1075,9 +1078,9 @@ struct BarcodeNotFoundView: View {
     /// step — the meal is logged only there).
     private func rememberOnlineImport(_ product: OpenFoodFactsProduct) {
         guard let item = store.saveOpenFoodFactsFood(product, named: trimmedName) else {
-            saveNotice = String(localized: "barcode.onlineImport.saveFailed",
-                                defaultValue: "Fernlet couldn't save that food — give it a name and try again.",
-                                comment: "Shown under the barcode naming screen when saving a product found on Open Food Facts failed.")
+            reportSaveFailure(String(localized: "barcode.onlineImport.saveFailed",
+                                     defaultValue: "Fernlet couldn't save that food — give it a name and try again.",
+                                     comment: "Shown under the barcode naming screen when saving a product found on Open Food Facts failed."))
             FernletAuditLog.log(
                 "barcode.rememberOnlineImport.failed",
                 context: ["reason": "saveOpenFoodFactsFood returned nil"]
@@ -1086,6 +1089,14 @@ struct BarcodeNotFoundView: View {
         }
         saveNotice = nil
         rememberedItem = item
+    }
+
+    /// A failed "Remember this food" says so three ways (A6): the line under the field, the error
+    /// haptic, and VoiceOver — which used to hear nothing, because nothing moves focus to the line.
+    private func reportSaveFailure(_ message: String) {
+        saveNotice = message
+        FernletFeedback.system.play(.failed)
+        FernletAnnouncer.system.announce(.error, resolved: message)
     }
 
     /// Whether a save should keep Open Food Facts provenance: only while the values on screen are

@@ -31,6 +31,7 @@ nonisolated enum SettingsRoute: Hashable, CaseIterable {
     case goalNutrition
     case personalCare
     case layoutShortcuts
+    case soundsHaptics
     case aiDataSources
     case health
     case coreMemory
@@ -287,6 +288,46 @@ nonisolated enum SettingsSearchIndex {
             keywords: ["quick log", "shortcuts", "quick actions", "home shortcuts", "buttons", "log shortcuts"],
             breadcrumb: "Quick-log shortcuts",
             route: .layoutShortcuts
+        ),
+
+        // Sounds & haptics (2026-10-20, the app-wide haptics pass): the Haptics level plus the
+        // workout and breathing switches it shows, bound to their own keys. The titles are the page's
+        // own drawn literals, so the catalog sync harvests every one.
+        SettingsSearchEntry(
+            title: "Sounds & haptics",
+            keywords: ["sounds", "sound", "haptics", "haptic", "vibration", "vibrate", "buzz", "taps", "feedback"],
+            breadcrumb: "Sounds & haptics",
+            route: .soundsHaptics
+        ),
+        SettingsSearchEntry(
+            title: "Haptics",
+            keywords: ["haptics", "vibration", "vibrate", "buzz", "taps", "fewer"],
+            breadcrumb: "Sounds & haptics",
+            route: .soundsHaptics
+        ),
+        SettingsSearchEntry(
+            title: "Workout haptics",
+            keywords: ["workout haptics", "rest timer", "vibration", "haptics", "taps"],
+            breadcrumb: "Sounds & haptics › During a workout",
+            route: .soundsHaptics
+        ),
+        SettingsSearchEntry(
+            title: "Workout sounds",
+            keywords: ["workout sounds", "sound", "sounds", "chime", "audio", "rest timer"],
+            breadcrumb: "Sounds & haptics › During a workout",
+            route: .soundsHaptics
+        ),
+        SettingsSearchEntry(
+            title: "Spoken cues",
+            keywords: ["spoken cues", "voice", "speak", "speech", "talk", "read aloud", "say"],
+            breadcrumb: "Sounds & haptics › During a workout",
+            route: .soundsHaptics
+        ),
+        SettingsSearchEntry(
+            title: "Breathing haptics",
+            keywords: ["breathing haptics", "breathing", "pacer", "vibration", "haptics", "taps"],
+            breadcrumb: "Sounds & haptics › Breathing",
+            route: .soundsHaptics
         ),
 
         // AI & data sources (the grouping page that took the AI/web/weather/body-signal switches

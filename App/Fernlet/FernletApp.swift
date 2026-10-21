@@ -112,6 +112,8 @@ struct FernletApp: App {
         // before launch finishes so a cold-launch notification tap is delivered; `shared` keeps
         // the strong reference the weak center delegate needs.
         UNUserNotificationCenter.current().delegate = FernletNotificationDelegate.shared
+        // Decision 6 (2026-10-20): a check-in an older build scheduled with a sound is re-filed quiet.
+        FernletNotificationDelegate.silenceLegacyCheckIn()
 
         StartupTiming.beginAppLaunch()
 

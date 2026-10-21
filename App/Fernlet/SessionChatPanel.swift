@@ -224,7 +224,13 @@ struct SessionChatPanel: View {
         let outcome = chat.sendTempMessage(text)
         sendNotice = RoutedShareRefusalCopy.chatNotice(outcome)
         // The draft survives anything but a staged send, so "send again" is the retry.
-        guard outcome == .staged else { return }
+        guard outcome == .staged else {
+            // A6: a refused send (one with a notice to read) is felt as well as shown. A send that
+            // lands gets nothing — the bubble appearing is enough, and a tick per message would be
+            // constant.
+            if sendNotice != nil { FernletFeedback.system.play(.failed) }
+            return
+        }
         draft = ""
     }
 }

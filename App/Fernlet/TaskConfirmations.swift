@@ -29,7 +29,8 @@ import FernletUI
 /// under the cursor — the mechanism `FernletAnnouncer` reserves for counters — so announcing as well
 /// would say the new count twice.
 enum TaskConfirmation: Equatable {
-    /// A meal sheet, the recipe book or a Food row logged `count` meals, and the Undo toast is up.
+    /// A meal sheet, the recipe book, a Food row, the planner, cooking mode's finish, the recipe
+    /// editor's "Log & save" or a Home meal chip logged `count` meals, and the Undo toast is up.
     case mealLogged(count: Int)
     /// The toast's Undo removed the `count` meals it had just logged. The Undo button the cursor
     /// was on goes with the toast, so this is the only word that the undo happened.
@@ -45,6 +46,9 @@ enum TaskConfirmation: Equatable {
     /// from a web page. The import screen's own "added" line hands off to this one rather than
     /// speaking too, so each recipe is confirmed once.
     case recipeAdded
+    /// "Start Fernlet" finished onboarding and the app opened (A14). The root view swaps with no
+    /// focus change of its own, so this is the only word that setup is over.
+    case onboardingFinished
 
     /// The sentence spoken. Event only, never the logged content.
     var sentence: LocalizedStringResource {
@@ -65,6 +69,8 @@ enum TaskConfirmation: Equatable {
             "Journal entry saved."
         case .recipeAdded:
             "Recipe added to your recipe book."
+        case .onboardingFinished:
+            "Setup finished."
         }
     }
 

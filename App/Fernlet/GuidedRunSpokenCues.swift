@@ -8,7 +8,8 @@
 //  because it let them set up without looking at the phone; NTC's and Shred's coach audio also draws
 //  complaints for fighting the person's music. So "Spoken cues" is off until the person turns it on
 //  (Workout setup › Cues during a workout, ``WorkoutCuePreferences``), says the same short, calm words
-//  the screen shows, and plays over the music without pausing it (FernletUI's `FernletSpeaker`).
+//  the screen shows, plays over the music without pausing it, and follows the ring/silent switch, in
+//  headphones too (FernletUI's `FernletSpeaker`).
 //
 //  This file is the words: pure functions of the run state for each moment the runner already cues.
 //  `GuidedRunCueDirector` decides WHEN — the same moments, the same app-is-in-front rule, the same
@@ -50,8 +51,11 @@ enum GuidedRunSpokenCue {
             return String(localized: GuidedSegmentWords.goLine(paceRaw))
         case .holdEnded:
             return paceRaw == nil ? holdDone : partDone
-        // A zone drift (idea 9) speaks through the zone director's own VoiceOver line, not here.
-        case .setLogged, .blockChanged, .workoutFinished, .zoneDrift:
+        // A zone drift (idea 9) speaks through the zone director's own VoiceOver line, not here. The
+        // app-wide events (sounds-and-haptics pass) never come from the run's clock.
+        case .setLogged, .blockChanged, .workoutFinished, .zoneDrift, .tick, .logged, .limit, .moved,
+             .held, .captured, .done, .caveat, .failed, .friendHere, .pace, .timerEnded, .messageIn,
+             .windDetent, .wound, .shutter:
             return nil
         }
     }

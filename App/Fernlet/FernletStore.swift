@@ -2708,6 +2708,41 @@ final class FernletStore {
         }
     }
 
+    /// Removes a meal from the day it was logged to: the meal-logged toast's Undo.
+    ///
+    /// Today goes through ``deleteMeal(_:)`` unchanged. Any other day (a cook that began before
+    /// midnight logs to the day it began, and a toast can outlive midnight) round-trips through the
+    /// repository the way ``retryOldestMeal()`` removes a past day's meal, with the same sealed-photo
+    /// rule as today: the photo goes when no other meal on that day still points at it.
+    ///
+    /// - Returns: Whether the removal was written. Today's always is. A past day's repository write can
+    ///   fail (R7), and the toast must not say "removed" over a meal that is still there, so the result
+    ///   is not discardable.
+    func deleteMeal(_ meal: Meal, loggedTo dayKey: String) -> Bool {
+        guard dayKey != todayKey else {
+            deleteMeal(meal)
+            return true
+        }
+        var photoStillReferenced = false
+        var removed = false
+        batchSnapshotPersistence {
+            removed = diary.mutateDay(date: dayKey) { pastDay in
+                pastDay.meals.removeAll { $0.id == meal.id }
+                photoStillReferenced = pastDay.meals.contains { $0.photoID != nil && $0.photoID == meal.photoID }
+            }
+            diary.invalidateDaySummary(for: dayKey)
+        }
+        guard removed else {
+            FernletAuditLog.log("meal.undo.pastDayRemoveFailed")
+            return false
+        }
+        aiRetryQueueService.clearForSourceID(meal.id)
+        if let photoID = meal.photoID, !photoStillReferenced {
+            mealPhotoStore.delete(id: photoID)
+        }
+        return true
+    }
+
     // NOTE (deviation): updateMealCorrection + its two static helpers STAY IN THE FACADE because they
     // use the app-target `MealBuilder`. (Classification had MealBuilder as portable/FoodCatalog; it is
     // not — its carve is future work.) The protein threshold itself is `Macros.goodProteinThreshold`.

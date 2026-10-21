@@ -28,6 +28,9 @@ struct AmbientCardsView: View {
     /// Today's opt-in body-signals reading, already gated by the caller on `stressAwarenessEnabled`
     /// (nil when opted out, cold-starting, or simply fine). One of the gentle-offer gates.
     var stressState: StressState? = nil
+    /// The meal-logged toast. Both meal chips report what they logged to it, so a one-tap log from
+    /// Home gets the same Undo, Adjust and spoken confirmation as a log from the meal sheet.
+    var onMealsLogged: MealLogReporter = .none
 
     @State private var didLoad = false
     @State private var lookBack: LookBack?
@@ -290,8 +293,9 @@ struct AmbientCardsView: View {
                     FlowLayout(spacing: 8) {
                         ForEach(forgottenFavorites, id: \.self) { name in
                             Button {
-                                store.addMeal(from: name, date: store.todayKey)
+                                let meal = store.addMeal(from: name, date: store.todayKey)
                                 forgottenFavorites.removeAll { $0 == name }
+                                onMealsLogged([meal])
                             } label: {
                                 Text(name)
                                     .font(.fernlet(.label))
@@ -463,7 +467,7 @@ struct AmbientCardsView: View {
                                 // R7: a nil is an unresolvable pinned food, i.e. nothing was
                                 // logged. Recovery is to leave the bubble standing — dismissing it
                                 // would retire the nudge for a meal that never landed.
-                                guard store.logNutrientSuggestionFood(food, date: store.todayKey) != nil else {
+                                guard let meal = store.logNutrientSuggestionFood(food, date: store.todayKey) else {
                                     FernletAuditLog.log(
                                         "food.nutrientSuggestion.logFailed",
                                         context: ["nutrient": food.nutrientKey]
@@ -471,6 +475,7 @@ struct AmbientCardsView: View {
                                     return
                                 }
                                 store.dismissNutrientBubble(gap.nutrientKey)
+                                onMealsLogged([meal])
                             } label: {
                                 Text(NutrientNudgeCopy.addButtonLabel(food: food))
                                     .font(.fernlet(.label))

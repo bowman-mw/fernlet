@@ -217,6 +217,30 @@ private final class BackgroundRecorder {
         #expect(GuidedRunCuePlan.transitionCue(from: coolDown, to: skippedCoolDown, cause: .skip) == .workoutFinished)
     }
 
+    /// "Skip to next exercise" walks the run through every set and rest left, but the person tapped
+    /// once, so it cues at most once: nothing inside one block, the block change when it crosses one
+    /// (sounds-and-haptics report §3.9).
+    @Test func skipToNextExerciseCuesAtMostOnce() {
+        func skipped(_ before: GuidedWorkoutRunState) -> GuidedWorkoutRunState {
+            var after = before
+            // What `FernletStore.guidedSkipToNextExercise` does, bounded the same way.
+            for _ in 0..<12 where after.exerciseIndex == before.exerciseIndex && !after.isDone {
+                if after.isResting { after.skipRest(now: Self.start) } else { after.markSetDone(now: Self.start) }
+            }
+            return after
+        }
+        var sameBlock = Self.run([Self.lift("Squat", sets: 3), Self.lift("Row")])
+        sameBlock.markSetDone(now: Self.start)
+        let inBlock = CueRecorder()
+        director(inBlock, BackgroundRecorder()).transition(from: sameBlock, to: skipped(sameBlock), cause: .skip)
+        #expect(inBlock.played.isEmpty, "a skip inside one block is silent")
+
+        let crossing = Self.run([Self.lift("Row", sets: 3), Self.hold("Calf stretch", seconds: 45, block: "coolDown")])
+        let across = CueRecorder()
+        director(across, BackgroundRecorder()).transition(from: crossing, to: skipped(crossing), cause: .skip)
+        #expect(across.events == [.blockChanged], "one cue for the whole skip, never one per set")
+    }
+
     /// A hold that runs out cues its end — or the new block it moves into.
     @Test func holdRunningOutCuesItsEndOrTheNewBlock() {
         let flow = Self.run([Self.hold("Forward fold", seconds: 20, block: "warmUp"),

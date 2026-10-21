@@ -379,6 +379,11 @@ final class OnboardingCoordinatorModel {
         appearance.bodyColor = starterColor
         store.setCompanionAppearance(appearance)
         defaults.set(true, forKey: OnboardingDefaults.hasCompletedOnboardingKey)
+        // A14: setup's one completion moment, once ever — felt as "Start Fernlet" lands, and said
+        // once the swap to the app has settled (the onboarding view is the one going away, so an
+        // unstructured task, not its `.task`).
+        FernletFeedback.system.play(.done)
+        Task { @MainActor in await TaskConfirmation.onboardingFinished.announceAfterSheetCloses() }
         onComplete()
     }
 }

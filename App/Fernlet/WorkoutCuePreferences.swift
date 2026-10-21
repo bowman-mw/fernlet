@@ -31,8 +31,17 @@ enum WorkoutCuePreferences {
     /// The switches until the person changes them: haptics on, sounds off.
     static let defaultSwitches = FernletFeedbackPreferences(hapticsEnabled: true, soundsEnabled: false)
 
-    /// The person's current switches, falling back to ``defaultSwitches`` for a switch never set.
+    /// What the runner plays under right now: the stored switches ANDed with the app-wide Haptics
+    /// level (Settings › Sounds & haptics) through FernletUI's one resolver. Read at every play.
     static func current(in defaults: UserDefaults = .standard) -> FernletFeedbackPreferences {
+        let switches = stored(in: defaults)
+        return .resolved(haptics: switches.hapticsEnabled, sounds: switches.soundsEnabled, in: defaults)
+    }
+
+    /// The switches exactly as the person set them, falling back to ``defaultSwitches`` for a switch
+    /// never set — the Workout setup sheet's draft. Never played from: a level of Off must not read
+    /// back as "Workout haptics off" and then be saved that way.
+    static func stored(in defaults: UserDefaults = .standard) -> FernletFeedbackPreferences {
         let haptics = defaults.object(forKey: hapticsKey) as? Bool ?? defaultSwitches.hapticsEnabled
         let sounds = defaults.object(forKey: soundsKey) as? Bool ?? defaultSwitches.soundsEnabled
         return FernletFeedbackPreferences(hapticsEnabled: haptics, soundsEnabled: sounds)
@@ -100,7 +109,7 @@ struct WorkoutCueSettingsSection: View {
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
-                Text("Spoken cues say the next exercise and side, its suggested weight and last time, an interval's pace and round, and when a rest or a hold ends, only while Fernlet is open. In headphones your music dips while they speak and a podcast pauses, then both carry on; on the phone's speaker they follow your ring/silent switch. With VoiceOver on, VoiceOver says them instead.")
+                Text("Spoken cues say the next exercise and side, its suggested weight and last time, an interval's pace and round, and when a rest or a hold ends, only while Fernlet is open. They follow your ring/silent switch, in headphones too, and play over your music without pausing it. With VoiceOver on, VoiceOver says them instead.")
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
@@ -110,6 +119,46 @@ struct WorkoutCueSettingsSection: View {
                 )
                 .padding(.top, 6)
             }
+        }
+    }
+}
+
+/// The three workout switches as Settings › Sounds & haptics shows them: bound straight to the
+/// stored keys (``WorkoutCuePreferences``), so a change here is the same change Workout setup would
+/// save, with no copy anywhere.
+///
+/// Lives beside the keys so every access stays in this file, where the wipe wall resolves each one to
+/// its literal. Unlike the setup sheet's drafts these write at once, as every Settings page does.
+struct WorkoutCueSwitches: View {
+    @AppStorage(WorkoutCuePreferences.hapticsKey)
+    private var haptics = WorkoutCuePreferences.defaultSwitches.hapticsEnabled
+    @AppStorage(WorkoutCuePreferences.soundsKey)
+    private var sounds = WorkoutCuePreferences.defaultSwitches.soundsEnabled
+    @AppStorage(WorkoutCuePreferences.spokenKey)
+    private var spoken = WorkoutCuePreferences.defaultSpoken
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SoundsHapticsSwitchRow(
+                title: "Workout haptics",
+                footnote: "A tap when a rest or a hold ends.",
+                isOn: $haptics,
+                identifier: "settings.soundsHaptics.workoutHaptics"
+            )
+            FernletRowDivider()
+            SoundsHapticsSwitchRow(
+                title: "Workout sounds",
+                footnote: "A quiet chime that follows your ring/silent switch.",
+                isOn: $sounds,
+                identifier: "settings.soundsHaptics.workoutSounds"
+            )
+            FernletRowDivider()
+            SoundsHapticsSwitchRow(
+                title: "Spoken cues",
+                footnote: "Says the next exercise, and when a rest or a hold ends.",
+                isOn: $spoken,
+                identifier: "settings.soundsHaptics.spokenCues"
+            )
         }
     }
 }

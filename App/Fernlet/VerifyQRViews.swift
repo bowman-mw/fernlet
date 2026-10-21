@@ -187,6 +187,8 @@ struct VerifyQRScanSheet: View {
         // The second half of acquisition feedback (T2-20). `handedOff` is a one-way latch, so this
         // fires exactly once per sheet; it is on the root rather than the viewfinder because the
         // viewfinder is inside the `else` branch and leaves the tree the instant the latch flips.
-        .sensoryFeedback(.success, trigger: handedOff)
+        // `captured`, not success (A10): the code was caught, and whether it MATCHED is not known
+        // yet — the caller cues that result separately, once the scanner has gone away.
+        .fernletFeedback(.captured, trigger: handedOff) { _, caught in caught }
     }
 }

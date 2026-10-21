@@ -937,6 +937,18 @@
         }
       }
     },
+    "lock.unlock.error.biometricLockout" : {
+      "comment" : "Inline error when the biometric sensor locked itself during the unlock prompt because too many tries failed. 'Paused' is deliberate: softer than 'locked', and the sensor returns once the iPhone's own passcode is entered. 'Your passcode' is the Fernlet passcode typed on this screen. The placeholder is an Apple product name and is not translated.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ is paused after too many tries. Use your passcode."
+          }
+        }
+      }
+    },
     "lock.unlock.error.biometricUnrecognized" : {
       "comment" : "Inline error when the biometric check ran and failed to match. The placeholder is an Apple product name and is not translated.",
       "extractionState" : "extracted_with_value",

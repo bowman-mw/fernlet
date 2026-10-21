@@ -136,9 +136,10 @@ enum GuidedRunCuePlan {
 
     /// The sound a background cue carries: the in-app chime when sounds are on, the silent file when
     /// only haptics are (so the system's notification haptic still plays), nothing when both are off.
+    /// "Haptics on" means the runner's switch AND the app-wide level, as for the in-app cue.
     static func notificationSound(for preferences: FernletFeedbackPreferences) -> String? {
         if preferences.soundsEnabled { return FernletSound.chime.fileName }
-        return preferences.hapticsEnabled ? silentNotificationSound : nil
+        return preferences.allowsHaptic(for: .restEnded) ? silentNotificationSound : nil
     }
 
     /// The end of a resting run's rest window, or nil when there is no window or it is empty.

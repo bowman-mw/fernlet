@@ -548,6 +548,7 @@ struct PowerOfTenBoundaryTests {
             ("NoTrackingBoundaryTests.shippingSwiftRoots", NoTrackingBoundaryTests.shippingSwiftRoots),
             ("TestHookBoundaryTests.shippingRoots", TestHookBoundaryTests.shippingRoots),
             ("PasteboardBoundaryTests.shippingRoots", PasteboardBoundaryTests.shippingRoots),
+            ("FeedbackBoundaryTests.shippingRoots", FeedbackBoundaryTests.shippingRoots),
             ("MemoryLifecycleBoundaryTests.shippingRoots", MemoryLifecycleBoundaryTests.shippingRoots),
             ("KeyCustodyBoundaryTests.shippingRoots", KeyCustodyBoundaryTests.shippingRoots),
             ("AccessibilityBoundaryTests.shippingRoots", AccessibilityBoundaryTests.shippingRoots),
