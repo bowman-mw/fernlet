@@ -160,9 +160,6 @@
         }
       }
     },
-    "%@ on this device, behind your app lock." : {
-
-    },
     "%@ plates" : {
       "comment" : "Location editor, Weights I have: a plate size's pair counter; the argument is the plate weight, e.g. 45 lb"
     },
@@ -631,9 +628,6 @@
     "%lld envelopes" : {
 
     },
-    "%lld events logged in Apple Health" : {
-
-    },
     "%lld exercises · ~%lld min" : {
       "localizations" : {
         "en" : {
@@ -1094,9 +1088,6 @@
 
     },
     "1 entry" : {
-
-    },
-    "1 event logged in Apple Health" : {
 
     },
     "1 exercise · ~%lld min" : {
@@ -9599,7 +9590,7 @@
     "Your cycle, at a glance." : {
 
     },
-    "Your cycles vary by about ±%lld days." : {
+    "Your cycles vary by about ±^[%lld day](inflect: true)." : {
 
     },
     "Your data" : {
@@ -9642,6 +9633,9 @@
 
     },
     "Your iCloud copy" : {
+
+    },
+    "Your intimacy data stays on this device, behind your app lock." : {
 
     },
     "Your intimate log backup didn't finish. It will try again when you next open Private." : {
@@ -9741,6 +9735,12 @@
 
     },
     "Your own provider endpoint" : {
+
+    },
+    "Your period and intimacy data stay on this device, behind your app lock." : {
+
+    },
+    "Your period data stays on this device, behind your app lock." : {
 
     },
     "Your photo shelf is nearly full" : {
@@ -9938,6 +9938,9 @@
     },
     "^[%lld concert](inflect: true)" : {
       "comment" : "Silly stat headline: showers, as concerts"
+    },
+    "^[%lld event](inflect: true) logged in Apple Health" : {
+      "comment" : "Cycle day detail: intimacy events Apple Health holds for the day with no note in Fernlet, e.g. '2 events logged in Apple Health'"
     },
     "^[%lld ingredient](inflect: true) not counted in this estimate" : {
 
@@ -10278,6 +10281,174 @@
         }
       }
     },
+    "cycle.phase.follicular" : {
+      "comment" : "Menstrual-cycle phase name, shown alone: after the period, before ovulation",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Follicular"
+          }
+        }
+      }
+    },
+    "cycle.phase.inSentence.follicular" : {
+      "comment" : "Cycle phase word inside 'during your %@ phase' (follicular), lower-case mid-sentence",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "follicular"
+          }
+        }
+      }
+    },
+    "cycle.phase.inSentence.luteal" : {
+      "comment" : "Cycle phase word inside 'during your %@ phase' (luteal), lower-case mid-sentence",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "luteal"
+          }
+        }
+      }
+    },
+    "cycle.phase.inSentence.menstrual" : {
+      "comment" : "Cycle phase word inside 'during your %@ phase' (menstrual), lower-case mid-sentence",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "menstrual"
+          }
+        }
+      }
+    },
+    "cycle.phase.inSentence.ovulatory" : {
+      "comment" : "Cycle phase word inside 'during your %@ phase' (ovulatory), lower-case mid-sentence",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "ovulatory"
+          }
+        }
+      }
+    },
+    "cycle.phase.inSentence.unknown" : {
+      "comment" : "Cycle phase word inside 'during your %@ phase' when the phase is not known (not normally shown)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "unknown"
+          }
+        }
+      }
+    },
+    "cycle.phase.luteal" : {
+      "comment" : "Menstrual-cycle phase name, shown alone: after ovulation, before the next period",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Luteal"
+          }
+        }
+      }
+    },
+    "cycle.phase.menstrual" : {
+      "comment" : "Menstrual-cycle phase name, shown alone: the period itself",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Menstrual"
+          }
+        }
+      }
+    },
+    "cycle.phase.ovulatory" : {
+      "comment" : "Menstrual-cycle phase name, shown alone: around ovulation",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ovulatory"
+          }
+        }
+      }
+    },
+    "cycle.phase.unknown" : {
+      "comment" : "Shown in place of a cycle phase when Fernlet cannot place the day in the cycle",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Unknown"
+          }
+        }
+      }
+    },
+    "cycle.prediction.confidence.building" : {
+      "comment" : "Predictions card chip: the prediction is getting more reliable as cycles are logged",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Building confidence"
+          }
+        }
+      }
+    },
+    "cycle.prediction.confidence.high" : {
+      "comment" : "Predictions card chip: the next-period prediction is reliable",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "High confidence"
+          }
+        }
+      }
+    },
+    "cycle.prediction.confidence.low" : {
+      "comment" : "Predictions card chip: the next-period prediction is uncertain",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Low confidence"
+          }
+        }
+      }
+    },
+    "cycle.prediction.range" : {
+      "comment" : "Predictions card: the likely window for the next period, e.g. 'Oct 3 – Oct 7'. Arguments: the first and last day.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ – %2$@"
+          }
+        }
+      }
+    },
     "cycle.sample.unknownValue" : {
       "comment" : "Shown in place of a cycle sample's value when the recorded value is one Fernlet has no wording for.",
       "extractionState" : "extracted_with_value",
@@ -10286,6 +10457,246 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Unknown"
+          }
+        }
+      }
+    },
+    "cycle.symptom.acne" : {
+      "comment" : "Period symptom: acne breakouts",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Acne"
+          }
+        }
+      }
+    },
+    "cycle.symptom.backPain" : {
+      "comment" : "Period symptom: lower back pain",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Back pain"
+          }
+        }
+      }
+    },
+    "cycle.symptom.bloating" : {
+      "comment" : "Period symptom: bloating",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bloating"
+          }
+        }
+      }
+    },
+    "cycle.symptom.breastTenderness" : {
+      "comment" : "Period symptom: sore or tender breasts",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Breast tenderness"
+          }
+        }
+      }
+    },
+    "cycle.symptom.cramps" : {
+      "comment" : "Period symptom: menstrual cramps",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cramps"
+          }
+        }
+      }
+    },
+    "cycle.symptom.fatigue" : {
+      "comment" : "Period symptom: tiredness, low energy",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fatigue"
+          }
+        }
+      }
+    },
+    "cycle.symptom.foodCravings" : {
+      "comment" : "Period symptom: food cravings",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Food cravings"
+          }
+        }
+      }
+    },
+    "cycle.symptom.headache" : {
+      "comment" : "Period symptom: headache",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Headache"
+          }
+        }
+      }
+    },
+    "cycle.symptom.moodSwings" : {
+      "comment" : "Period symptom: mood swings",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mood swings"
+          }
+        }
+      }
+    },
+    "cycle.symptom.withIntensity" : {
+      "comment" : "Cycle day detail: a symptom chip with the 1–10 intensity the user gave it, e.g. 'Cramps · 6'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$lld"
+          }
+        }
+      }
+    },
+    "cycle.trend.exercise.better" : {
+      "comment" : "Cycle page trend: the user usually moves more in this phase. The argument is the phase word, e.g. 'follicular'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Movement tends to pick up during your %@ phase."
+          }
+        }
+      }
+    },
+    "cycle.trend.exercise.worse" : {
+      "comment" : "Cycle page trend: the user usually moves less in this phase. The argument is the phase word, e.g. 'menstrual'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Movement tends to ease off during your %@ phase."
+          }
+        }
+      }
+    },
+    "cycle.trend.mood.better" : {
+      "comment" : "Cycle page trend: mood is usually brighter in this phase. The argument is the phase word, e.g. 'follicular'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mood tends to lift during your %@ phase."
+          }
+        }
+      }
+    },
+    "cycle.trend.mood.worse" : {
+      "comment" : "Cycle page trend: mood is usually lower in this phase. The argument is the phase word, e.g. 'luteal'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mood tends to be tender during your %@ phase."
+          }
+        }
+      }
+    },
+    "cycle.trend.nutrition.better" : {
+      "comment" : "Cycle page trend: the user usually eats more steadily in this phase. The argument is the phase word, e.g. 'follicular'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Eating tends to feel steadier during your %@ phase."
+          }
+        }
+      }
+    },
+    "cycle.trend.nutrition.worse" : {
+      "comment" : "Cycle page trend: the user usually eats less in this phase. The argument is the phase word, e.g. 'menstrual'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Eating tends to get lighter during your %@ phase."
+          }
+        }
+      }
+    },
+    "cycle.trend.sleep.better" : {
+      "comment" : "Cycle page trend: sleep is usually better in this phase. The argument is the phase word, e.g. 'luteal'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sleep tends to be steadier during your %@ phase."
+          }
+        }
+      }
+    },
+    "cycle.trend.sleep.worse" : {
+      "comment" : "Cycle page trend: sleep is usually worse in this phase. The argument is the phase word, e.g. 'luteal'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sleep tends to dip during your %@ phase."
+          }
+        }
+      }
+    },
+    "cycle.trend.symptoms.better" : {
+      "comment" : "Cycle page trend: fewer symptoms are usually logged in this phase. The argument is the phase word, e.g. 'follicular'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Symptoms tend to settle during your %@ phase."
+          }
+        }
+      }
+    },
+    "cycle.trend.symptoms.worse" : {
+      "comment" : "Cycle page trend: more symptoms are usually logged in this phase. The argument is the phase word, e.g. 'luteal'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Symptoms tend to gather during your %@ phase."
           }
         }
       }
@@ -11416,7 +11827,6 @@
     },
     "journal.day.blurb.meals" : {
       "comment" : "Day review: how many meals were logged that day, e.g. '2 meals'. Plural-ruled in the catalog.",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "variations" : {
@@ -11488,7 +11898,6 @@
     },
     "journal.day.blurb.workouts" : {
       "comment" : "Day review: how many workouts were logged, e.g. 'a workout', '2 workouts'. Plural-ruled in the catalog; the English one-form reads 'a workout'.",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "variations" : {
@@ -11512,7 +11921,6 @@
     },
     "journal.day.bottleCount" : {
       "comment" : "How many bottles of water were logged that day, e.g. '3 bottles'. Plural-ruled in the catalog.",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "variations" : {
@@ -11893,6 +12301,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Choose a flow level to mark the first day of your cycle."
+          }
+        }
+      }
+    },
+    "logPeriod.validation.temperatureRange" : {
+      "comment" : "Shown above Save on the period log sheet when the basal body temperature is outside the plausible range. Arguments: the lowest and highest accepted values, then the unit letter (F or C).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Enter a temperature between %1$lld and %2$lld %3$@, or leave it blank."
           }
         }
       }

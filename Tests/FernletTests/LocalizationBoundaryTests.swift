@@ -119,11 +119,13 @@
 //     (7), the settings-row name and the sentence describing what each capability reads and writes.
 //     The module's four `HealthKitServiceError` sentences were localized by the sweep and are the
 //     worked example for the rest; these are straightforward forks with a catalog now waiting.
-//   * `PrivateHealthStore`-adjacent copy — `PeriodFlowLevel.title` (`rawValue.capitalized`),
-//     `CycleDayEntry.flowLabel`, and the Tier-2 memory CATEGORY rendered by `SettingsSheet`. These
-//     are sealed modules and deliberately have NO catalog: the fork belongs at the app-target
-//     caller, as `PeriodFlowLevel.displayName` in `CycleTrackerView.swift` now demonstrates for the
-//     two cycle sites. The memory category is the remaining one.
+//   * `PrivateHealthStore`-adjacent copy — the Tier-2 memory CATEGORY rendered by `SettingsSheet`.
+//     These are sealed modules and deliberately have NO catalog: the fork belongs at the app-target
+//     caller. Every drawn word of the sealed cycle vocabulary now has one in `CycleTrackerView.swift`
+//     — `PeriodFlowLevel`, `CervicalMucusQuality` and `OvulationTestResult`, then (Spanish round,
+//     2026-10-20) `PeriodSymptom.displayName` and `CyclePhase.displayName` / `inSentenceName` — and
+//     the sealed `title`s are left in place with no on-screen reader
+//     (`theCycleSurfacesNeverDrawTheSealedTitles`). The memory category is the remaining one.
 //
 // Part G's allowlist is now EMPTY, and that is the finished state. It held `MessageTransportProbe`'s
 // three sentences on the argument that their target owned no catalog; rule H2 gave the Messages
@@ -3214,8 +3216,95 @@ struct LocalizationBoundaryTests {
             keys.append(HarvestedKey(catalog: domain, key: "goal.\(stem).nutrition",
                                      source: "GoalType.nutritionSummary, literal → String(localized:bundle: .module)"))
         }
-        return keys + journalLaneAppKeys
+        return keys + journalLaneAppKeys + journalLaneCycleKeys
     }()
+
+    /// The journal lane's cycle keys: the app-target forks over the sealed vocabulary
+    /// (`PeriodSymptom`, `CyclePhase`) and the cycle page's assembled or `String`-typed copy.
+    static let journalLaneCycleKeys: [HarvestedKey] = {
+        let app = "App/Fernlet/Localizable.xcstrings"
+        var names: [String] = PeriodSymptom.allCases.map { "cycle.symptom.\($0.rawValue)" }
+        names += CyclePhase.allCases.map { "cycle.phase.\($0.rawValue)" }
+        names += CyclePhase.allCases.map { "cycle.phase.inSentence.\($0.rawValue)" }
+        for metric in ["sleep", "mood", "exercise", "nutrition", "symptoms"] {
+            names += ["cycle.trend.\(metric).worse", "cycle.trend.\(metric).better"]
+        }
+        names += [
+            "cycle.prediction.range", "cycle.prediction.confidence.low", "cycle.prediction.confidence.building",
+            "cycle.prediction.confidence.high", "cycle.symptom.withIntensity", "logPeriod.validation.temperatureRange",
+            "Your period and intimacy data stay on this device, behind your app lock.",
+            "Your intimacy data stays on this device, behind your app lock.",
+            "Your period data stays on this device, behind your app lock.",
+            "^[%lld event](inflect: true) logged in Apple Health",
+            "Your cycles vary by about ±^[%lld day](inflect: true).",
+        ]
+        return names.map {
+            HarvestedKey(catalog: app, key: $0,
+                         source: "the cycle page, day detail and log sheet: sealed-title reads, assembled sentences and String-typed copy")
+        }
+    }()
+
+    /// Members the journal lane forked off `String` (the ``forkedMembers`` shape, kept apart for the
+    /// same reason as ``journalLaneKeys``).
+    static let journalLaneForkedMembers: [ForkedMember] = [
+        ForkedMember(path: "App/Fernlet/LogPeriodSheet.swift",
+                     declaration: "private func periodToggle(_ title: LocalizedStringKey, isOn: Binding<Bool>) -> some View {",
+                     role: "the period log sheet's 'First day of cycle' and 'Intermenstrual bleeding' switches"),
+    ]
+
+    /// The journal lane's forked members still carry their localized types.
+    @Test func theJournalLanesForkedMembersStillCarryLocalizedTypes() throws {
+        var missing: [String] = []
+        for entry in Self.journalLaneForkedMembers {
+            let source = try String(contentsOf: RepoRoot.url(entry.path), encoding: .utf8)
+            let present = Self.logicalLines(in: source).contains { $0.text.contains(entry.declaration) }
+            if !present { missing.append("\(entry.path): \(entry.declaration)  ← \(entry.role)") }
+        }
+        #expect(
+            missing.isEmpty,
+            """
+            \(missing.count) member(s) the journal lane forked off `String` no longer carry their \
+            localized type — a revert compiles, reads correctly in English, and silently leaves \
+            the catalog. If a member was deliberately renamed, update its pin:
+            \(missing.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// The cycle surfaces draw the app-target forks, never the sealed module's `title`s.
+    ///
+    /// `PeriodSymptom.title` is English literals and the other four sealed `title`s are
+    /// `rawValue.capitalized`; every one compiles beside its fork and reads correctly in English, so a
+    /// draw that drifts back to `title` is invisible to everything but a scan.
+    @Test func theCycleSurfacesNeverDrawTheSealedTitles() throws {
+        let files = ["App/Fernlet/CycleTrackerView.swift", "App/Fernlet/CycleDayDetailView.swift", "App/Fernlet/LogPeriodSheet.swift"]
+        let pattern = try NSRegularExpression(pattern: #"(?i:symptom|phase|level|quality|result)\??\.title\b"#)
+        let fires = { (line: String) in pattern.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil }
+        // Planted fixtures: the matcher must fire on the shapes it guards, and not on the forks.
+        #expect(fires("Text(verbatim: periodStore.currentPhase.title)"))
+        #expect(fires("periodToggle(symptom.title, isOn: binding)"))
+        #expect(fires("mucusQuality?.title ?? none"))
+        #expect(!fires("Text(verbatim: periodStore.currentPhase.displayName)"))
+        #expect(!fires("Text(notification.reason.title)"))
+        var offenders: [String] = []
+        for path in files {
+            let source = try String(contentsOf: RepoRoot.url(path), encoding: .utf8)
+            for (number, raw) in source.components(separatedBy: "\n").enumerated() {
+                let line = raw.trimmingCharacters(in: .whitespaces)
+                guard !line.hasPrefix("//") else { continue }
+                let range = NSRange(line.startIndex..., in: line)
+                if pattern.firstMatch(in: line, range: range) != nil { offenders.append("\(path):\(number + 1): \(line)") }
+            }
+        }
+        #expect(
+            offenders.isEmpty,
+            """
+            \(offenders.count) cycle draw(s) read a sealed `title` (English literals or \
+            `rawValue.capitalized`) instead of the app-target `displayName` fork beside it:
+            \(offenders.joined(separator: "\n"))
+            """
+        )
+    }
 
     /// The journal lane's app-catalog keys (see ``journalLaneKeys``).
     static let journalLaneAppKeys: [HarvestedKey] = {

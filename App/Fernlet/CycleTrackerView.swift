@@ -94,6 +94,83 @@ extension OvulationTestResult {
     }
 }
 
+/// App-target display fork over ``PeriodSymptom`` (Spanish round, 2026-10-20).
+///
+/// The sealed module's `title` is English literals beside the most destructive token in the app:
+/// a symptom's raw value is the storage format of every sealed record's narrative block, read back
+/// with a `compactMap` that silently DROPS what it cannot parse
+/// (`LocalizationBoundaryTests.frozenPeriodSymptomTokens`). So the raw value is not touched, the
+/// sealed `title` is left as it is, and every drawn symptom — the log sheet's toggles, the day
+/// detail's chips, Recent events — reads this instead, keyed on the case like the forks above.
+extension PeriodSymptom {
+    /// The localized symptom name.
+    var displayName: String {
+        switch self {
+        case .cramps: String(localized: "cycle.symptom.cramps", defaultValue: "Cramps",
+                             comment: "Period symptom: menstrual cramps")
+        case .headache: String(localized: "cycle.symptom.headache", defaultValue: "Headache",
+                               comment: "Period symptom: headache")
+        case .breastTenderness: String(localized: "cycle.symptom.breastTenderness", defaultValue: "Breast tenderness",
+                                       comment: "Period symptom: sore or tender breasts")
+        case .moodSwings: String(localized: "cycle.symptom.moodSwings", defaultValue: "Mood swings",
+                                 comment: "Period symptom: mood swings")
+        case .fatigue: String(localized: "cycle.symptom.fatigue", defaultValue: "Fatigue",
+                              comment: "Period symptom: tiredness, low energy")
+        case .bloating: String(localized: "cycle.symptom.bloating", defaultValue: "Bloating",
+                               comment: "Period symptom: bloating")
+        case .acne: String(localized: "cycle.symptom.acne", defaultValue: "Acne",
+                           comment: "Period symptom: acne breakouts")
+        case .backPain: String(localized: "cycle.symptom.backPain", defaultValue: "Back pain",
+                               comment: "Period symptom: lower back pain")
+        case .foodCravings: String(localized: "cycle.symptom.foodCravings", defaultValue: "Food cravings",
+                                   comment: "Period symptom: food cravings")
+        }
+    }
+}
+
+/// App-target display fork over ``CyclePhase`` (Spanish round, 2026-10-20).
+///
+/// The sealed `title` is `rawValue.capitalized` — a storage token wearing paint — and it was drawn
+/// as the Cycle page's subtitle and the day detail's, and lower-cased in code into the phase-trend
+/// sentences. Two display halves now, both keyed on the case: the standalone name, and the word as
+/// it sits inside "during your … phase", so a translator can agree it with "phase" in their own
+/// language rather than inherit an English case-fold.
+extension CyclePhase {
+    /// The localized phase name, standing alone (the page and day-detail subtitles).
+    var displayName: String {
+        switch self {
+        case .menstrual: String(localized: "cycle.phase.menstrual", defaultValue: "Menstrual",
+                                comment: "Menstrual-cycle phase name, shown alone: the period itself")
+        case .follicular: String(localized: "cycle.phase.follicular", defaultValue: "Follicular",
+                                 comment: "Menstrual-cycle phase name, shown alone: after the period, before ovulation")
+        case .ovulatory: String(localized: "cycle.phase.ovulatory", defaultValue: "Ovulatory",
+                                comment: "Menstrual-cycle phase name, shown alone: around ovulation")
+        case .luteal: String(localized: "cycle.phase.luteal", defaultValue: "Luteal",
+                             comment: "Menstrual-cycle phase name, shown alone: after ovulation, before the next period")
+        case .unknown: String(localized: "cycle.phase.unknown", defaultValue: "Unknown",
+                              comment: "Shown in place of a cycle phase when Fernlet cannot place the day in the cycle")
+        }
+    }
+
+    /// The phase word inside the phase-trend sentences ("… during your luteal phase."), lower-case in
+    /// English because it sits mid-sentence. `unknown` never reaches a trend; it has a word anyway so
+    /// the switch stays total.
+    var inSentenceName: String {
+        switch self {
+        case .menstrual: String(localized: "cycle.phase.inSentence.menstrual", defaultValue: "menstrual",
+                                comment: "Cycle phase word inside 'during your %@ phase' (menstrual), lower-case mid-sentence")
+        case .follicular: String(localized: "cycle.phase.inSentence.follicular", defaultValue: "follicular",
+                                 comment: "Cycle phase word inside 'during your %@ phase' (follicular), lower-case mid-sentence")
+        case .ovulatory: String(localized: "cycle.phase.inSentence.ovulatory", defaultValue: "ovulatory",
+                                comment: "Cycle phase word inside 'during your %@ phase' (ovulatory), lower-case mid-sentence")
+        case .luteal: String(localized: "cycle.phase.inSentence.luteal", defaultValue: "luteal",
+                             comment: "Cycle phase word inside 'during your %@ phase' (luteal), lower-case mid-sentence")
+        case .unknown: String(localized: "cycle.phase.inSentence.unknown", defaultValue: "unknown",
+                              comment: "Cycle phase word inside 'during your %@ phase' when the phase is not known (not normally shown)")
+        }
+    }
+}
+
 extension CycleDayEntry {
     /// The localized flow word for the day.
     ///
@@ -448,14 +525,14 @@ struct CycleTrackerView: View {
     /// Phase-aware while period is visible; a neutral line otherwise (never mentions the hidden half).
     ///
     /// Typed `Text` rather than `String` because the three branches are not the same kind of
-    /// string: two are authored copy that should translate, while the phase title is a domain
-    /// display property that has already resolved its own. Only `Text` can carry both without
+    /// string: two are authored copy that should translate, while the phase name is the app-target
+    /// ``CyclePhase/displayName`` fork, already resolved. Only `Text` can carry both without
     /// feeding a runtime value into a catalog lookup that could never match it.
     private var headerSubtitle: Text {
         guard store.isPeriodTrackingVisible else { return Text("Your private calendar.") }
         return periodStore.currentPhase == .unknown
             ? Text("Your cycle, at a glance.")
-            : Text(verbatim: periodStore.currentPhase.title)
+            : Text(verbatim: periodStore.currentPhase.displayName)
     }
 
     /// ONE plus button for the whole page: a menu when both halves can log, a direct button when
@@ -573,30 +650,62 @@ struct CycleTrackerView: View {
             .map { $0 }
     }
 
+    /// One whole sentence per metric and direction, the phase word (``CyclePhase/inSentenceName``)
+    /// its only placeholder. It used to glue an English clause to " during your \(phase) phase." and
+    /// lower-case the phase's storage token in code — no catalog could hold that, and a translator
+    /// needs the verb and the phase in their own order.
     private func phaseTrendSentence(_ trend: PeriodHealthTrend) -> String {
-        let phase = trend.phase.title.lowercased()
-        let verb: String
+        let phase = trend.phase.inSentenceName
+        let worse = trend.direction == .worse
         switch trend.metric {
-        case .sleep: verb = trend.direction == .worse ? "Sleep tends to dip" : "Sleep tends to be steadier"
-        case .mood: verb = trend.direction == .worse ? "Mood tends to be tender" : "Mood tends to lift"
-        case .exercise: verb = trend.direction == .worse ? "Movement tends to ease off" : "Movement tends to pick up"
-        case .nutrition: verb = trend.direction == .worse ? "Eating tends to get lighter" : "Eating tends to feel steadier"
-        case .symptomLoad: verb = trend.direction == .worse ? "Symptoms tend to gather" : "Symptoms tend to settle"
+        case .sleep:
+            return worse
+                ? String(localized: "cycle.trend.sleep.worse", defaultValue: "Sleep tends to dip during your \(phase) phase.",
+                         comment: "Cycle page trend: sleep is usually worse in this phase. The argument is the phase word, e.g. 'luteal'.")
+                : String(localized: "cycle.trend.sleep.better", defaultValue: "Sleep tends to be steadier during your \(phase) phase.",
+                         comment: "Cycle page trend: sleep is usually better in this phase. The argument is the phase word, e.g. 'luteal'.")
+        case .mood:
+            return worse
+                ? String(localized: "cycle.trend.mood.worse", defaultValue: "Mood tends to be tender during your \(phase) phase.",
+                         comment: "Cycle page trend: mood is usually lower in this phase. The argument is the phase word, e.g. 'luteal'.")
+                : String(localized: "cycle.trend.mood.better", defaultValue: "Mood tends to lift during your \(phase) phase.",
+                         comment: "Cycle page trend: mood is usually brighter in this phase. The argument is the phase word, e.g. 'follicular'.")
+        case .exercise:
+            return worse
+                ? String(localized: "cycle.trend.exercise.worse", defaultValue: "Movement tends to ease off during your \(phase) phase.",
+                         comment: "Cycle page trend: the user usually moves less in this phase. The argument is the phase word, e.g. 'menstrual'.")
+                : String(localized: "cycle.trend.exercise.better", defaultValue: "Movement tends to pick up during your \(phase) phase.",
+                         comment: "Cycle page trend: the user usually moves more in this phase. The argument is the phase word, e.g. 'follicular'.")
+        case .nutrition:
+            return worse
+                ? String(localized: "cycle.trend.nutrition.worse", defaultValue: "Eating tends to get lighter during your \(phase) phase.",
+                         comment: "Cycle page trend: the user usually eats less in this phase. The argument is the phase word, e.g. 'menstrual'.")
+                : String(localized: "cycle.trend.nutrition.better", defaultValue: "Eating tends to feel steadier during your \(phase) phase.",
+                         comment: "Cycle page trend: the user usually eats more steadily in this phase. The argument is the phase word, e.g. 'follicular'.")
+        case .symptomLoad:
+            return worse
+                ? String(localized: "cycle.trend.symptoms.worse", defaultValue: "Symptoms tend to gather during your \(phase) phase.",
+                         comment: "Cycle page trend: more symptoms are usually logged in this phase. The argument is the phase word, e.g. 'luteal'.")
+                : String(localized: "cycle.trend.symptoms.better", defaultValue: "Symptoms tend to settle during your \(phase) phase.",
+                         comment: "Cycle page trend: fewer symptoms are usually logged in this phase. The argument is the phase word, e.g. 'follicular'.")
         }
-        return "\(verb) during your \(phase) phase."
     }
 
     /// Names only the visible halves — mentioning the hidden one here would leak its existence.
+    ///
+    /// Three whole sentences. It used to interpolate an English subject ("Your period data stays")
+    /// into one key, so the catalog held "%@ on this device, behind your app lock." and the subject
+    /// could never be translated — nor agree with its verb in another language.
     private var privacyBanner: some View {
-        let subject: String
+        let sentence: Text
         if store.isPeriodTrackingVisible && store.isIntimacyTrackingVisible {
-            subject = "Your period and intimacy data stay"
+            sentence = Text("Your period and intimacy data stay on this device, behind your app lock.")
         } else if store.isIntimacyTrackingVisible {
-            subject = "Your intimacy data stays"
+            sentence = Text("Your intimacy data stays on this device, behind your app lock.")
         } else {
-            subject = "Your period data stays"
+            sentence = Text("Your period data stays on this device, behind your app lock.")
         }
-        return Text("\(subject) on this device, behind your app lock.")
+        return sentence
             .font(.fernlet(.bubble))
             .foregroundStyle(Color.slate)
             .fernletWrappingText()
@@ -637,7 +746,7 @@ struct CycleTrackerView: View {
                             HStack(spacing: 6) {
                                 Text(verbatim: entry.flowDisplayName)
                                 ForEach(entry.symptomFlags) { symptom in
-                                    Text(symptom.title)
+                                    Text(verbatim: symptom.displayName)
                                 }
                             }
                             .font(.fernlet(.labelSmall))
@@ -768,17 +877,31 @@ private struct PredictionsCard: View {
         }
     }
 
+    /// The likely start window, each end already localized by `formatted`. The range is a key so a
+    /// translator owns the dash and the order; it used to be an English-assembled `String`.
     private func formattedRange(_ range: ClosedRange<Date>) -> String {
+        let start = range.lowerBound.formatted(.dateTime.month(.abbreviated).day())
         if Calendar.current.isDate(range.lowerBound, inSameDayAs: range.upperBound) {
-            return range.lowerBound.formatted(.dateTime.month(.abbreviated).day())
+            return start
         }
-        return "\(range.lowerBound.formatted(.dateTime.month(.abbreviated).day())) – \(range.upperBound.formatted(.dateTime.month(.abbreviated).day()))"
+        let end = range.upperBound.formatted(.dateTime.month(.abbreviated).day())
+        return String(localized: "cycle.prediction.range", defaultValue: "\(start) – \(end)",
+                      comment: "Predictions card: the likely window for the next period, e.g. 'Oct 3 – Oct 7'. Arguments: the first and last day.")
     }
 
+    /// The confidence chip. Resolved here: the chip draws it with `Text(String)`, which never
+    /// looks a `String` up, so the three literals used to render in English in every language.
     private func confidenceLabel(for confidence: Double) -> String {
-        if confidence < 0.4 { return "Low confidence" }
-        if confidence < 0.7 { return "Building confidence" }
-        return "High confidence"
+        if confidence < 0.4 {
+            return String(localized: "cycle.prediction.confidence.low", defaultValue: "Low confidence",
+                          comment: "Predictions card chip: the next-period prediction is uncertain")
+        }
+        if confidence < 0.7 {
+            return String(localized: "cycle.prediction.confidence.building", defaultValue: "Building confidence",
+                          comment: "Predictions card chip: the prediction is getting more reliable as cycles are logged")
+        }
+        return String(localized: "cycle.prediction.confidence.high", defaultValue: "High confidence",
+                      comment: "Predictions card chip: the next-period prediction is reliable")
     }
 }
 
@@ -795,7 +918,8 @@ private struct TrendsCard: View {
                 Text("Average cycle length: \(prediction.averageCycleLength) days")
                     .font(.fernlet(.stat))
                     .foregroundStyle(Color.bark)
-                Text("Your cycles vary by about ±\(prediction.variationDays) days.")
+                // Automatic grammar agreement: a 1-day variation read "±1 days" in English.
+                Text("Your cycles vary by about ±^[\(prediction.variationDays) day](inflect: true).")
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
@@ -848,16 +972,18 @@ private struct CycleCalendarCard: View {
     private var legend: some View {
         FlowLayout(spacing: 12) {
             if showsFlowLegend {
+                // The swatch names come from the flow fork the cells and the log sheet use; as
+                // `(Color, String)` literals they reached `Text` as Strings and never localized.
                 ForEach([
-                    (Color.dustyRose.opacity(0.22), "Light"),
-                    (Color.dustyRose.opacity(0.40), "Medium"),
-                    (Color.dustyRose.opacity(0.60), "Heavy")
-                ], id: \.1) { color, label in
+                    (Color.dustyRose.opacity(0.22), PeriodFlowLevel.light),
+                    (Color.dustyRose.opacity(0.40), PeriodFlowLevel.medium),
+                    (Color.dustyRose.opacity(0.60), PeriodFlowLevel.heavy)
+                ], id: \.1) { color, level in
                     HStack(spacing: 4) {
                         RoundedRectangle(cornerRadius: 2)
                             .fill(color)
                             .frame(width: 10, height: 10)
-                        Text(label).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
+                        Text(verbatim: level.displayName).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
                     }
                     .fixedSize(horizontal: true, vertical: false)
                 }

@@ -354,7 +354,7 @@ struct LogPeriodSheet: View {
             VStack(spacing: 0) {
                 ForEach(PeriodSymptom.allCases) { symptom in
                     VStack(alignment: .leading, spacing: 8) {
-                        periodToggle(symptom.title, isOn: Binding(
+                        periodToggle(verbatim: symptom.displayName, isOn: Binding(
                             get: { symptoms.contains(symptom) },
                             set: { isOn in
                                 if isOn {
@@ -564,8 +564,24 @@ struct LogPeriodSheet: View {
             .accessibilityIdentifier("logPeriod.status")
     }
 
-    private func periodToggle(_ title: String, isOn: Binding<Bool>) -> some View {
-        Toggle(title, isOn: isOn)
+    /// One cycle-detail switch, named by authored copy.
+    ///
+    /// `LocalizedStringKey`, not `String`: the `String` this took sent "First day of cycle" and
+    /// "Intermenstrual bleeding" through `Toggle`'s verbatim overload, so both rendered in English in
+    /// every language with a clean build. The symptom rows carry runtime text and use
+    /// ``periodToggle(verbatim:isOn:)``.
+    private func periodToggle(_ title: LocalizedStringKey, isOn: Binding<Bool>) -> some View {
+        periodToggle(label: Text(title), isOn: isOn)
+    }
+
+    /// One symptom switch, named by an already-resolved ``PeriodSymptom/displayName``.
+    private func periodToggle(verbatim title: String, isOn: Binding<Bool>) -> some View {
+        periodToggle(label: Text(verbatim: title), isOn: isOn)
+    }
+
+    /// The shared switch chrome for both `periodToggle` forms.
+    private func periodToggle(label: Text, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) { label }
             // Without these the label rendered in system SF, next to DM Sans everywhere else.
             .font(.fernlet(.label))
             .foregroundStyle(Color.bark)
@@ -610,7 +626,10 @@ struct LogPeriodSheet: View {
         let range = temperatureRange
         guard let parsed = LocaleTolerantNumber.double(from: trimmed),
               parsed.isFinite, range.contains(parsed) else {
-            return .invalid("Enter a temperature between \(Int(range.lowerBound)) and \(Int(range.upperBound)) \(temperatureUnit.symbol), or leave it blank.")
+            return .invalid(String(
+                localized: "logPeriod.validation.temperatureRange",
+                defaultValue: "Enter a temperature between \(Int(range.lowerBound)) and \(Int(range.upperBound)) \(temperatureUnit.symbol), or leave it blank.",
+                comment: "Shown above Save on the period log sheet when the basal body temperature is outside the plausible range. Arguments: the lowest and highest accepted values, then the unit letter (F or C)."))
         }
         return .valid(temperature: parsed)
     }
