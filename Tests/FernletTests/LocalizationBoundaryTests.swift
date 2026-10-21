@@ -3216,7 +3216,23 @@ struct LocalizationBoundaryTests {
             keys.append(HarvestedKey(catalog: domain, key: "goal.\(stem).nutrition",
                                      source: "GoalType.nutritionSummary, literal → String(localized:bundle: .module)"))
         }
-        return keys + journalLaneAppKeys + journalLaneCycleKeys + journalLaneOnboardingKeys
+        return keys + journalLaneAppKeys + journalLaneCycleKeys + journalLaneOnboardingKeys + journalLaneLaunchKeys
+    }()
+
+    /// The journal lane's launch and companion keys: `LaunchPreparationService`'s status lines,
+    /// fallback photowall captions and deterministic companion thoughts (every prompt sent to the
+    /// on-device model is untouched), and the Worry Box's own undo word.
+    static let journalLaneLaunchKeys: [HarvestedKey] = {
+        let app = "App/Fernlet/Localizable.xcstrings"
+        var names: [String] = ["launch.status.checkingIn", "launch.status.readingPatterns",
+                               "launch.status.preparingSummary", "launch.status.gettingReady", "worryBox.undo.keep"]
+        names += ["morning", "meal", "movement", "moment"].map { "photowall.caption.\($0)" }
+        names += ["energyLow", "energyRising", "moodNeedsGentleness", "moodImproving", "readyForLight", "eatingLight", "ordinary"]
+            .map { "companion.thought.\($0)" }
+        return names.map {
+            HarvestedKey(catalog: app, key: $0,
+                         source: "launch status lines, fallback captions and thoughts, and the Worry Box undo, literal → String(localized:)")
+        }
     }()
 
     /// The journal lane's onboarding and age-gate keys: copy that reached `Text` as a `String`

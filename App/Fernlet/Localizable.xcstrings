@@ -10264,6 +10264,90 @@
     "cm" : {
 
     },
+    "companion.thought.eatingLight" : {
+      "comment" : "Companion thought bubble (no on-device AI): the user has been eating less recently",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nutrition has been lighter lately. One nourishing meal is enough."
+          }
+        }
+      }
+    },
+    "companion.thought.energyLow" : {
+      "comment" : "Companion thought bubble (no on-device AI): the user's energy has been low recently",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Energy has been low lately. Rest counts as care."
+          }
+        }
+      }
+    },
+    "companion.thought.energyRising" : {
+      "comment" : "Companion thought bubble (no on-device AI): the user's energy has been rising",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Something has been building. Notice the upward pull."
+          }
+        }
+      }
+    },
+    "companion.thought.moodImproving" : {
+      "comment" : "Companion thought bubble (no on-device AI): the user's mood has been improving",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The mood trend has been moving upward. Quiet progress."
+          }
+        }
+      }
+    },
+    "companion.thought.moodNeedsGentleness" : {
+      "comment" : "Companion thought bubble (no on-device AI): the recent days held some harder moods",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Some harder days in the window. Notice what is still steady."
+          }
+        }
+      }
+    },
+    "companion.thought.ordinary" : {
+      "comment" : "Companion thought bubble (no on-device AI): nothing stands out in the recent signals",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A few ordinary care notes are here. Keep the day simple."
+          }
+        }
+      }
+    },
+    "companion.thought.readyForLight" : {
+      "comment" : "Companion thought bubble (no on-device AI): today suits light movement",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Today looks like a day to move gently and restore."
+          }
+        }
+      }
+    },
     "completed" : {
 
     },
@@ -12327,6 +12411,54 @@
         }
       }
     },
+    "launch.status.checkingIn" : {
+      "comment" : "Launch screen status line while Fernlet opens (the first one shown)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Checking in with your body..."
+          }
+        }
+      }
+    },
+    "launch.status.gettingReady" : {
+      "comment" : "Launch screen status line while Fernlet opens (the last one shown)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Getting Fernlet ready..."
+          }
+        }
+      }
+    },
+    "launch.status.preparingSummary" : {
+      "comment" : "Launch screen status line while Fernlet opens (third)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Preparing your day summary..."
+          }
+        }
+      }
+    },
+    "launch.status.readingPatterns" : {
+      "comment" : "Launch screen status line while Fernlet opens (second)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Reading your recent patterns..."
+          }
+        }
+      }
+    },
     "legacy %@" : {
 
     },
@@ -13000,6 +13132,54 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "White"
+          }
+        }
+      }
+    },
+    "photowall.caption.meal" : {
+      "comment" : "Home photo wall: a polaroid's handwritten caption when no memory names it. Lower-case, like a scribbled label.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "meal"
+          }
+        }
+      }
+    },
+    "photowall.caption.moment" : {
+      "comment" : "Home photo wall: a polaroid's handwritten caption when no memory names it. Lower-case, like a scribbled label.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "moment"
+          }
+        }
+      }
+    },
+    "photowall.caption.morning" : {
+      "comment" : "Home photo wall: a polaroid's handwritten caption when no memory names it. Lower-case, like a scribbled label.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "morning"
+          }
+        }
+      }
+    },
+    "photowall.caption.movement" : {
+      "comment" : "Home photo wall: a polaroid's handwritten caption when no memory names it. Lower-case, like a scribbled label.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "movement"
           }
         }
       }
@@ -13747,6 +13927,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "That one didn't quite lift just now — try again in a moment."
+          }
+        }
+      }
+    },
+    "worryBox.undo.keep" : {
+      "comment" : "Worry Box undo strip: keeps a worry the user just released, before it is deleted for good",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Keep it"
           }
         }
       }

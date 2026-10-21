@@ -218,8 +218,11 @@ final class LaunchPreparationService {
     private let photowallPhotoSelector: PhotowallPhotoSelector
 
     /// The first status line, shared with `FernletStoreLoader` so both launch phases open on the
-    /// same message.
-    static let initialStatusMessage = "Checking in with your body..."
+    /// same message. Resolved here: the launch screen draws status lines with `Text(String)`.
+    static var initialStatusMessage: String {
+        String(localized: "launch.status.checkingIn", defaultValue: "Checking in with your body...",
+               comment: "Launch screen status line while Fernlet opens (the first one shown)")
+    }
 
     init(photowallPhotoSelector: PhotowallPhotoSelector? = nil) {
         self.photowallPhotoSelector = photowallPhotoSelector ?? PhotowallPhotoSelector()
@@ -266,7 +269,8 @@ final class LaunchPreparationService {
 
         // Keep launch work deterministic and cheap so the first screen can animate.
         store.photowallSeeds = buildPhotowallSeeds(store: store)
-        statusMessage = "Reading your recent patterns..."
+        statusMessage = String(localized: "launch.status.readingPatterns", defaultValue: "Reading your recent patterns...",
+                               comment: "Launch screen status line while Fernlet opens (second)")
         await backfillDaySummaries(for: store)
         store.storeCompanionThought(await generateCompanionThought(for: store))
         await store.backfillWorkoutsFromHealthIfNeeded()
@@ -279,10 +283,12 @@ final class LaunchPreparationService {
             // `statusMessage` — returning IS the recovery.
             do { try await Task.sleep(for: .seconds(0.55)) } catch { return }
             guard !isDone else { return }
-            statusMessage = "Preparing your day summary..."
+            statusMessage = String(localized: "launch.status.preparingSummary", defaultValue: "Preparing your day summary...",
+                                   comment: "Launch screen status line while Fernlet opens (third)")
             do { try await Task.sleep(for: .seconds(0.55)) } catch { return }
             guard !isDone else { return }
-            statusMessage = "Getting Fernlet ready..."
+            statusMessage = String(localized: "launch.status.gettingReady", defaultValue: "Getting Fernlet ready...",
+                                   comment: "Launch screen status line while Fernlet opens (the last one shown)")
         }
 
         // Minimum display time so the status text has time to settle.
@@ -309,7 +315,19 @@ final class LaunchPreparationService {
             Set(store.memories.suffix(30).map { $0.category.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) })
         ).filter { $0.count >= 3 }.sorted()
 
-        let defaults = ["morning", "meal", "movement", "moment"]
+        // The fallback captions are display words (drawn on the Home polaroids and read by nothing
+        // else), so they resolve here. The memory categories ahead of them are stored tokens drawn as
+        // they are — a known residual of the Spanish round.
+        let defaults = [
+            String(localized: "photowall.caption.morning", defaultValue: "morning",
+                   comment: "Home photo wall: a polaroid's handwritten caption when no memory names it. Lower-case, like a scribbled label."),
+            String(localized: "photowall.caption.meal", defaultValue: "meal",
+                   comment: "Home photo wall: a polaroid's handwritten caption when no memory names it. Lower-case, like a scribbled label."),
+            String(localized: "photowall.caption.movement", defaultValue: "movement",
+                   comment: "Home photo wall: a polaroid's handwritten caption when no memory names it. Lower-case, like a scribbled label."),
+            String(localized: "photowall.caption.moment", defaultValue: "moment",
+                   comment: "Home photo wall: a polaroid's handwritten caption when no memory names it. Lower-case, like a scribbled label."),
+        ]
         let captions = Array((categories + defaults).prefix(4))
         let selectedPhotoIDs = photowallPhotoSelector.selectPhotoIDs(
             from: store.meshFeatures.photos.meshPhotos,
@@ -407,25 +425,62 @@ final class LaunchPreparationService {
     /// Rest first: marking today unwell forces readiness to `"needs rest"` (spec §6a), and the line
     /// is Home's own (`SignalPresentation.restDayThought`), so the launch thought and the Home
     /// fallback can never disagree about what an unwell day hears.
+    ///
+    /// The signal names and values compared here are the frozen derived-signal vocabulary
+    /// (`LocalizationBoundaryTests` part D) and stay English; only the returned line is display copy,
+    /// resolved through ``fallbackThought(_:)``. The thought is transient (never persisted).
     static func deterministicThought(for signals: [DerivedSignalRecord]) -> String {
         if signals.first(where: { $0.signalName == "intensityReadiness" })?.value == "needs rest" {
             return SignalPresentation.restDayThought
         }
         if let energy = signals.first(where: { $0.signalName == "energyTrend" }) {
-            if energy.value == "low" { return "Energy has been low lately. Rest counts as care." }
-            if energy.value == "rising" { return "Something has been building. Notice the upward pull." }
+            if energy.value == "low" { return fallbackThought(.energyLow) }
+            if energy.value == "rising" { return fallbackThought(.energyRising) }
         }
         if let mood = signals.first(where: { $0.signalName == "moodTrend" }) {
-            if mood.value == "needs gentleness" { return "Some harder days in the window. Notice what is still steady." }
-            if mood.value == "improving" { return "The mood trend has been moving upward. Quiet progress." }
+            if mood.value == "needs gentleness" { return fallbackThought(.moodNeedsGentleness) }
+            if mood.value == "improving" { return fallbackThought(.moodImproving) }
         }
         if let readiness = signals.first(where: { $0.signalName == "intensityReadiness" }) {
-            if readiness.value == "ready for light" { return "Today looks like a day to move gently and restore." }
+            if readiness.value == "ready for light" { return fallbackThought(.readyForLight) }
         }
         if let eating = signals.first(where: { $0.signalName == "eatingPattern" }) {
-            if eating.value == "light" { return "Nutrition has been lighter lately. One nourishing meal is enough." }
+            if eating.value == "light" { return fallbackThought(.eatingLight) }
         }
-        return "A few ordinary care notes are here. Keep the day simple."
+        return fallbackThought(.ordinary)
+    }
+
+    /// The deterministic companion thoughts, one per signal reading ``deterministicThought(for:)``
+    /// answers (the rest-day line is Home's own).
+    enum FallbackThought {
+        case energyLow, energyRising, moodNeedsGentleness, moodImproving, readyForLight, eatingLight, ordinary
+    }
+
+    /// The localized line for one fallback thought.
+    static func fallbackThought(_ thought: FallbackThought) -> String {
+        switch thought {
+        case .energyLow:
+            String(localized: "companion.thought.energyLow", defaultValue: "Energy has been low lately. Rest counts as care.",
+                   comment: "Companion thought bubble (no on-device AI): the user's energy has been low recently")
+        case .energyRising:
+            String(localized: "companion.thought.energyRising", defaultValue: "Something has been building. Notice the upward pull.",
+                   comment: "Companion thought bubble (no on-device AI): the user's energy has been rising")
+        case .moodNeedsGentleness:
+            String(localized: "companion.thought.moodNeedsGentleness", defaultValue: "Some harder days in the window. Notice what is still steady.",
+                   comment: "Companion thought bubble (no on-device AI): the recent days held some harder moods")
+        case .moodImproving:
+            String(localized: "companion.thought.moodImproving", defaultValue: "The mood trend has been moving upward. Quiet progress.",
+                   comment: "Companion thought bubble (no on-device AI): the user's mood has been improving")
+        case .readyForLight:
+            String(localized: "companion.thought.readyForLight", defaultValue: "Today looks like a day to move gently and restore.",
+                   comment: "Companion thought bubble (no on-device AI): today suits light movement")
+        case .eatingLight:
+            String(localized: "companion.thought.eatingLight", defaultValue: "Nutrition has been lighter lately. One nourishing meal is enough.",
+                   comment: "Companion thought bubble (no on-device AI): the user has been eating less recently")
+        case .ordinary:
+            String(localized: "companion.thought.ordinary", defaultValue: "A few ordinary care notes are here. Keep the day simple.",
+                   comment: "Companion thought bubble (no on-device AI): nothing stands out in the recent signals")
+        }
     }
 
     /// The signals the on-device companion-thought prompt sees: every record that is not
