@@ -121,7 +121,44 @@ struct VoiceOverWalk {
     /// never through a coordinate.
     func activate(_ element: XCUIElement, file: StaticString = #file, line: UInt = #line) {
         XCTAssertTrue(element.isEnabled, "[\(task)] '\(element.label)' is disabled", file: file, line: line)
+        scrollClearOfTabBar(element)
         element.tap()
+    }
+
+    /// Most drags spent bringing one element out from under the tab bar.
+    static let maxTabBarClearingDrags = 4
+    /// The floating tab bar's buttons, by their spoken labels (``FernletTab`` titles; the buttons
+    /// carry no identifier).
+    static let tabBarLabels = ["Home", "Food", "Move", "Friends", "Private"]
+    /// The bar's own padding and material above its buttons' frames, in points.
+    static let tabBarTopInset: CGFloat = 12
+
+    /// Fernlet's custom floating tab bar draws over the bottom of a scrolling screen, and XCUITest
+    /// counts an element under it as visible, so `tap()` lands on the bar instead (Home's first Quick
+    /// log row at launch, once the seeded sick-day card pushes it down). VoiceOver's cursor would bring
+    /// the element fully into view, so drag the content up until the element clears the bar. Only
+    /// while a tab button is hittable: a sheet over the bar means the element is in the sheet, which
+    /// is never dragged. A tab button itself is never moved.
+    private func scrollClearOfTabBar(_ element: XCUIElement) {
+        guard !Self.tabBarLabels.contains(element.label), let barTop = tabBarTop() else { return }
+        for _ in 0..<Self.maxTabBarClearingDrags {
+            let covered = element.frame.maxY - barTop
+            guard covered > 0 else { return }
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
+            let end = start.withOffset(CGVector(dx: 0, dy: -min(300, covered + 60)))
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
+    }
+
+    /// The top edge of the floating tab bar on screen, or nil when no tab button is hittable (a sheet
+    /// or a full-screen flow covers it).
+    private func tabBarTop() -> CGFloat? {
+        let tops = Self.tabBarLabels.compactMap { label -> CGFloat? in
+            let button = app.buttons[label].firstMatch
+            guard button.exists, button.isHittable else { return nil }
+            return button.frame.minY
+        }
+        return tops.min().map { $0 - Self.tabBarTopInset }
     }
 
     /// Finds and activates the button for `key`.

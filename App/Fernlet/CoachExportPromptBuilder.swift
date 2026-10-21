@@ -17,10 +17,12 @@
 //  departure from Fernlet's on-device default — so the export screen says so plainly before the
 //  copy happens. Nothing here makes a network call; the no-tracking wall is untouched.
 //
-//  NO EXERCISE CATALOG IS SENT. Fernlet's 90-exercise catalog is deliberately NOT included: the
-//  assistant names exercises freely and defines any Fernlet doesn't know. What IS included is the
-//  ENUM VOCABULARY (muscles, equipment, movement patterns) — those are Fernlet's own tokens, and a
-//  definition that misses them can't be checked by `WorkoutSafetyFilter`, so the import rejects it.
+//  NO EXERCISE CATALOG IS SENT. Fernlet's exercise catalog (`WorkoutExerciseCatalog.allExercises` —
+//  its size is that array's count, so no number is written here to go stale) is deliberately NOT
+//  included: the assistant names exercises freely and defines any Fernlet doesn't know. What IS
+//  included is the ENUM VOCABULARY (muscles, equipment, movement patterns) — those are Fernlet's own
+//  tokens, and a definition that misses them can't be checked by `WorkoutSafetyFilter`, so the import
+//  rejects it.
 //
 
 import Foundation

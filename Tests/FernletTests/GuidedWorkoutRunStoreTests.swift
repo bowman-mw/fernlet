@@ -100,6 +100,30 @@ struct GuidedWorkoutRunStoreTests {
         #expect(run.estimatedSecondsRemaining() == WorkoutSessionTime.seconds(of: s.exercises, goal: goal))
     }
 
+    /// The Intervals session's line names no minutes ("8 × 1 min hard / 1 min easy"). The card once
+    /// priced it at the five-minute fallback while the runner counted all sixteen parts; the card now
+    /// costs its eight rounds, and a run started from it counts down from the same total.
+    @Test func aStartedIntervalRunCountsDownFromThePlanCardsEstimate() throws {
+        let store = makeStore()
+        store.clearGuidedRun()
+        let goal = store.settings.selectedGoal
+        let split = TrainingSplit(id: "probe", name: "Probe", summary: "", specificity: .balanced, goalFit: [goal],
+                                  days: [WorkoutSplitDay(title: "Day", sessions: [WorkoutSessions.intervals])])
+        let planned = WorkoutProgram.dayPlan(
+            goal: goal, intensity: .moderate, profile: WorkoutProfile(experience: .intermediate),
+            location: .fullGym, context: "", split: split, rotationIndex: 0
+        )
+        let s = try #require(planned.sessions.first)
+        let line = "Intervals - 8 × 1 min hard / 1 min easy"
+        #expect(s.exercises.contains { $0.name == line && $0.sets == 0 }, "the interval line is in the plan")
+        #expect(WorkoutSessionTime.seconds(of: s.exercises, goal: goal) >= 16 * 60, "eight two-minute rounds")
+        commitPlan(store, s)
+        #expect(store.startGuidedRun(s) == true)
+        let run = try #require(store.guidedRunState)
+        #expect(run.exercises.filter { $0.segment != nil }.count == 16, "each round's hard and easy parts")
+        #expect(run.estimatedSecondsRemaining() == WorkoutSessionTime.seconds(of: s.exercises, goal: goal))
+    }
+
     /// A planned lifting session — warm-up, activation, lifts, cool-down — starts its run at the plan
     /// card's estimate with its changeovers in it: about a minute before each exercise after the first.
     @Test func aStartedLiftingRunCountsTheChangeoversTheCardCounts() throws {

@@ -451,21 +451,49 @@ struct WorkoutSessionBudgetTests {
     }
 
     /// The runner reads a descriptor's minutes exactly as the planner does, with the same lead-in,
-    /// so a started run counts down from the plan card's estimate.
+    /// so a started run counts down from the plan card's estimate. A line the runner times as cardio
+    /// reaches it as countdown segments, so the estimate is compared over the steps a run is built
+    /// from: an interval line, which names no minutes, costs its rounds on both sides.
     @Test func theRunnerTimesStepsLikeThePlanner() {
         let lines = [
             "Easy cardio - 20 min", "Intervals - 8 × 1 min hard / 1 min easy", "Steady cardio - 40 min",
             "Mobility flow - 15 min", "Conditioning intervals - 12 min", "Basketball drills / conditioning - 15 min",
             "Easy walk - 15 min", "Gentle mobility + walk - 12 min", "Optional cardio - 10 min",
             "Full-body bodyweight circuit - 3 rounds", "Cooldown walk", "Gentle stretching or an easy walk - 10 min",
-            "Steady cardio – 25 min", "Steady cardio — 25 minutes",
+            "Steady cardio – 25 min", "Steady cardio — 25 minutes", "Intervals - 10 x 30 s fast / 90 s easy",
         ]
         for line in lines {
+            let named = WorkoutProgram.descriptorMinutes(in: line).map { $0 * 60 } ?? WorkoutSessionTime.descriptorFallbackSeconds
             #expect(GuidedWorkoutRunState.descriptorSeconds(named: line, fallback: WorkoutSessionTime.descriptorFallbackSeconds)
+                    == named, "\(line): the runner's spelled parser")
+            let step = PrescribedExercise(name: line, sets: 0, reps: "", role: .accessory, fromCatalog: false, block: .cardio)
+            #expect(runState(WorkoutTimedSessions.expand([step], feasible: [])).estimatedSecondsRemaining()
                     == WorkoutSessionTime.descriptorSeconds(line), "\(line)")
         }
         #expect(GuidedWorkoutRunState.holdLeadInSeconds == WorkoutSessionTime.holdLeadInSeconds)
         #expect(WorkoutSessionTime.descriptorSeconds("Conditioning intervals - 12 min") == 720)
+        #expect(WorkoutSessionTime.descriptorSeconds("Intervals - 8 × 1 min hard / 1 min easy") == 960)
+        #expect(WorkoutSessionTime.descriptorSeconds("Intervals - 10 x 30 s fast / 90 s easy") == 1_200)
+        #expect(WorkoutSessionTime.descriptorSeconds("Full-body bodyweight circuit - 3 rounds")
+                == WorkoutSessionTime.descriptorFallbackSeconds, "a line the runner cannot time keeps the fallback")
+    }
+
+    /// A run over `steps`, built the way the store builds one (`guidedRunExercises(for:)`): each
+    /// cardio segment carries its run segment and its follow-on lead-in.
+    func runState(_ steps: [PrescribedExercise]) -> GuidedWorkoutRunState {
+        let runSteps = steps.map { step in
+            GuidedWorkoutRunState.Exercise(
+                id: step.id, name: step.name, sets: step.sets, reps: step.reps, roleRaw: "accessory",
+                fromCatalog: step.fromCatalog, restSeconds: step.restSecondsOverride ?? 0,
+                holdSeconds: step.holdSeconds, blockRaw: step.block.rawValue, sideRaw: step.side?.rawValue,
+                leadInSeconds: step.segment?.followsOn == true ? 0 : nil,
+                segment: GuidedRunTimedLog.runSegment(step.segment)
+            )
+        }
+        return GuidedWorkoutRunState(
+            sessionID: UUID(), committedDayKey: "2026-10-20", intensityRaw: "moderate", title: "Probe",
+            suggestionExercisesText: "", suggestionNotes: "", sessionKindRaw: "cardio", exercises: runSteps
+        )
     }
 
     // MARK: - Settings
