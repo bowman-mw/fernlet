@@ -3179,6 +3179,72 @@ struct LocalizationBoundaryTests {
         }
     }
 
+    // MARK: - F3. Spanish round, journal lane (2026-10-20)
+
+    /// Keys the Spanish round's journal lane put into a catalog: journal, cycle, onboarding and
+    /// companion copy that was a bare English literal (a `String` helper parameter, a `String`
+    /// display property, or an English plural spliced in code) before this round.
+    ///
+    /// Kept apart from ``harvestedForkKeys`` so the lanes of one round do not all append to the
+    /// same list. Each key was measured absent from its catalog before the lane's change, so a
+    /// failure here means a conversion was reverted or the catalogs were not re-synced.
+    static let journalLaneKeys: [HarvestedKey] = {
+        let domain = "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings"
+        var keys: [HarvestedKey] = []
+        let cosmetics: [(prefix: String, tokens: [String])] = [
+            ("companionBodyStyle", CompanionBodyStyle.allCases.map(\.rawValue)),
+            ("companionPalette", CompanionPalette.allCases.map(\.rawValue)),
+            ("companionAccessory", CompanionAccessory.allCases.map(\.rawValue)),
+            ("companionClothing", CompanionClothing.allCases.map(\.rawValue)),
+            ("companionSideItem", CompanionSideItem.allCases.map(\.rawValue)),
+        ]
+        for slot in cosmetics {
+            for token in slot.tokens {
+                keys.append(HarvestedKey(catalog: domain, key: "\(slot.prefix).\(token)",
+                                         source: "the wardrobe's \(slot.prefix) label, literal → String(localized:bundle: .module)"))
+            }
+        }
+        for goal in GoalType.allCases {
+            for member in ["name", "tagline", "training"] {
+                keys.append(HarvestedKey(catalog: domain, key: "goal.\(goal.rawValue).\(member)",
+                                         source: "GoalType's \(member) on the preset cards, literal → String(localized:bundle: .module)"))
+            }
+        }
+        for stem in ["strength", "sportsPrep", "recovery", "balanced"] {
+            keys.append(HarvestedKey(catalog: domain, key: "goal.\(stem).nutrition",
+                                     source: "GoalType.nutritionSummary, literal → String(localized:bundle: .module)"))
+        }
+        return keys
+    }()
+
+    /// The journal lane's conversions reached their catalogs (see ``journalLaneKeys``).
+    @Test func theJournalLanesStringsReachedTheirCatalogs() throws {
+        var missing: [String] = []
+        var parsed: [String: [String: Any]] = [:]
+        for entry in Self.journalLaneKeys {
+            if parsed[entry.catalog] == nil {
+                let data = try Data(contentsOf: RepoRoot.url(entry.catalog))
+                let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+                parsed[entry.catalog] = json?["strings"] as? [String: Any] ?? [:]
+            }
+            let strings = parsed[entry.catalog] ?? [:]
+            #expect(!strings.isEmpty, "\(entry.catalog) parsed to zero keys — the catalog moved or broke")
+            if strings[entry.key] == nil {
+                missing.append("\(entry.catalog): \(entry.key)  ← \(entry.source)")
+            }
+        }
+        #expect(
+            missing.isEmpty,
+            """
+            \(missing.count) key(s) the Spanish round's journal lane put into a string catalog are \
+            gone. Either the conversion was reverted — the string is frozen English again, with a \
+            clean build — or the catalogs were not re-synced. Run Scripts/sync-string-catalogs.sh \
+            and commit the diff with the code change:
+            \(missing.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
     // MARK: - F. Accessibility copy may not be typed `String`
 
     /// Roots scanned by part F: shipping source in both the app target and the package.
