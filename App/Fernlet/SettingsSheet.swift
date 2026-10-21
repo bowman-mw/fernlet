@@ -266,9 +266,10 @@ struct SettingsSheet: View {
     /// Search results: one value-based link per matching leaf (title + breadcrumb subtitle), routed
     /// through the same `.navigationDestination`. A quiet row stands in when nothing matches.
     ///
-    /// Rows render ``SettingsSearchEntry/displayTitle`` — the display half of the entry's
-    /// token/display fork. `entry.title` is the frozen English matching input and must never reach a
-    /// `Text`: as a `String` it would take `Text`'s verbatim initializer and render untranslated.
+    /// Rows render ``SettingsSearchEntry/displayTitle`` and ``SettingsSearchEntry/displayBreadcrumb``
+    /// — the display halves of the entry's token/display fork. `entry.title` and `entry.breadcrumb`
+    /// are frozen English tokens and must never reach a `Text`: as a `String` either would take
+    /// `Text`'s verbatim initializer and render untranslated.
     private var searchResultsList: some View {
         List {
             let results = SettingsSearchIndex.results(for: settingsSearch)
@@ -284,7 +285,7 @@ struct SettingsSheet: View {
                             Text(entry.displayTitle)
                                 .font(.fernlet(.label))
                                 .foregroundStyle(Color.bark)
-                            Text(entry.breadcrumb)
+                            Text(entry.displayBreadcrumb)
                                 .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.slate)
                         }

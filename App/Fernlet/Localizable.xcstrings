@@ -2189,9 +2189,6 @@
     "Clothing shops" : {
 
     },
-    "Clothing shops with friends" : {
-      "extractionState" : "manual"
-    },
     "Cloud records" : {
 
     },
@@ -2787,17 +2784,6 @@
     },
     "Deliver hearts later?" : {
 
-    },
-    "Deliver hearts when apart" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deliver hearts later"
-          }
-        }
-      }
     },
     "Demonstration" : {
       "comment" : "Exercise how-to sheet: short Voice Control name of the demonstration picture",
@@ -5278,17 +5264,11 @@
     "Nearby friends" : {
 
     },
-    "Nearby hearts" : {
-      "extractionState" : "manual"
-    },
     "Nearby invites" : {
 
     },
     "Nearby now" : {
 
-    },
-    "Nearby recipe shares" : {
-      "extractionState" : "manual"
     },
     "Needs workout sharing with Apple Health — turn it on in Settings › Health." : {
       "comment" : "Workout setup: shown under the heart-rate switches while Fernlet does not share workouts with Apple Health, which the live heart rate needs. 'Settings › Health' is Fernlet's own Settings screen.",
@@ -11998,6 +11978,510 @@
         }
       }
     },
+    "settings.search.breadcrumb.aiActivityLog" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "AI activity log"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.aiDataSources" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "AI & data sources"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.aiDataSourcesBodySignals" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "AI & data sources › Body signals"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.aiDataSourcesCoreMemory" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "AI & data sources › Core memory"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.aiDataSourcesSignals" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "AI & data sources › Signals"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.appLock" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "App lock"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.appLockBiometrics" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "App lock › Biometrics"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.appLockDangerZone" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "App lock › Danger zone"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.appLockManage" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "App lock › Manage"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.appLockSetup" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "App lock › Setup"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.appearance" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Appearance"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.appearanceBackgrounds" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Appearance › Backgrounds"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.appearanceCompanionFeelings" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Appearance › Companion feelings"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.appearanceHomeWidgets" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Appearance › Home widgets"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.connectionLog" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Connection log"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.connectionLogHistory" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Connection log › History"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.debug" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Debug"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.debugDerivedSignals" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Debug › Derived signals"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.debugTier2Memory" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Debug › Tier 2 memory"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.goalNutrition" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Goal & nutrition"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.goalNutritionBodyPreferences" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Goal & nutrition › Body & preferences"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.goalNutritionHydration" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Goal & nutrition › Hydration"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.goalNutritionNutritionTargets" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Goal & nutrition › Nutrition targets"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.goalNutritionReminders" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Goal & nutrition › Reminders"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.health" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Health"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.nearbyFriends" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nearby friends"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.periodSensitiveContent" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Period & sensitive content"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.personalCareTasks" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Personal care tasks"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.privacyDataAppLockData" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Privacy & Data › App lock data"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.privacyDataEncryptedBackupStatus" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Privacy & Data › Encrypted backup status"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.privacyDataICloud" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Privacy & Data › iCloud"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.privacyDataLocalBackup" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Privacy & Data › Local backup"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.privacyDataMultipleDevices" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Privacy & Data › Multiple devices"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.privacyDataYourData" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Privacy & Data › Your data"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.privacyPolicy" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Privacy Policy"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.quickLogShortcuts" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Quick-log shortcuts"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.safetyReporting" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Safety & reporting"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.sharingSettings" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sharing settings"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.soundsHaptics" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sounds & haptics"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.soundsHapticsBreathing" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sounds & haptics › Breathing"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.soundsHapticsCooking" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sounds & haptics › Cooking"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.soundsHapticsDuringAWorkout" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sounds & haptics › During a workout"
+          }
+        }
+      }
+    },
     "settings.search.resultCount" : {
       "comment" : "Spoken count of settings search results, e.g. '6 settings'. Needs a plural variation per language; English also needs the one-setting form.",
       "localizations" : {
@@ -12017,6 +12501,954 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "settings.search.title.activityStepsAccess" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Health page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Activity & steps access"
+          }
+        }
+      }
+    },
+    "settings.search.title.aiActivityLog" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the AI activity log page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "AI activity log"
+          }
+        }
+      }
+    },
+    "settings.search.title.aiStatus" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the AI & data sources page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "AI status"
+          }
+        }
+      }
+    },
+    "settings.search.title.alsoIncludeInTrainerSummaries" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Sharing settings page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Also include in trainer summaries"
+          }
+        }
+      }
+    },
+    "settings.search.title.appLock" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the App lock page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "App lock"
+          }
+        }
+      }
+    },
+    "settings.search.title.bodyMeasurements" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition › Body & preferences page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Body & measurements"
+          }
+        }
+      }
+    },
+    "settings.search.title.bodyVitalsAccess" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Health page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Body vitals access"
+          }
+        }
+      }
+    },
+    "settings.search.title.breathingHaptics" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Sounds & haptics › Breathing page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Breathing haptics"
+          }
+        }
+      }
+    },
+    "settings.search.title.calorieDeficit" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition › Nutrition targets page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Calorie deficit"
+          }
+        }
+      }
+    },
+    "settings.search.title.changePasscode" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the App lock › Manage page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Change passcode"
+          }
+        }
+      }
+    },
+    "settings.search.title.clothingShopsWithFriends" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Nearby friends page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Clothing shops with friends"
+          }
+        }
+      }
+    },
+    "settings.search.title.companionFeelings" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Appearance › Companion feelings page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Companion feelings"
+          }
+        }
+      }
+    },
+    "settings.search.title.connectionHistory" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Connection log › History page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Connection History"
+          }
+        }
+      }
+    },
+    "settings.search.title.connectionInspector" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Connection log page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Connection Inspector"
+          }
+        }
+      }
+    },
+    "settings.search.title.cookingTimerSound" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Sounds & haptics › Cooking page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cooking timer sound"
+          }
+        }
+      }
+    },
+    "settings.search.title.coreMemory" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the AI & data sources › Core memory page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Core memory"
+          }
+        }
+      }
+    },
+    "settings.search.title.cyclePeriodAccess" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Health page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cycle & period access"
+          }
+        }
+      }
+    },
+    "settings.search.title.dailyCheckInReminder" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition › Reminders page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Daily check-in reminder"
+          }
+        }
+      }
+    },
+    "settings.search.title.dailyWaterTarget" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition › Hydration page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Daily water target"
+          }
+        }
+      }
+    },
+    "settings.search.title.darkMode" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Appearance page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Dark mode"
+          }
+        }
+      }
+    },
+    "settings.search.title.darkModeBackground" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Appearance › Backgrounds page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Dark mode background"
+          }
+        }
+      }
+    },
+    "settings.search.title.deleteEverything" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data › App lock data page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Delete everything"
+          }
+        }
+      }
+    },
+    "settings.search.title.deleteICloudData" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data › iCloud page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Delete iCloud data"
+          }
+        }
+      }
+    },
+    "settings.search.title.deliverHeartsWhenApart" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Nearby friends page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Deliver hearts later"
+          }
+        }
+      }
+    },
+    "settings.search.title.derivedSignals" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Debug › Derived signals page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Derived signals"
+          }
+        }
+      }
+    },
+    "settings.search.title.dietaryPreferences" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition › Body & preferences page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Dietary preferences"
+          }
+        }
+      }
+    },
+    "settings.search.title.encryptedBackupStatus" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data › Encrypted backup status page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Encrypted backup status"
+          }
+        }
+      }
+    },
+    "settings.search.title.exportMyData" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data › Your data page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Export my data"
+          }
+        }
+      }
+    },
+    "settings.search.title.faceIDTouchID" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the App lock › Biometrics page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Face ID / Touch ID"
+          }
+        }
+      }
+    },
+    "settings.search.title.forgetAMemory" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the AI & data sources › Core memory page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Forget a memory"
+          }
+        }
+      }
+    },
+    "settings.search.title.goal" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Goal"
+          }
+        }
+      }
+    },
+    "settings.search.title.haptics" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Sounds & haptics page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Haptics"
+          }
+        }
+      }
+    },
+    "settings.search.title.healthAccess" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Health page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Health access"
+          }
+        }
+      }
+    },
+    "settings.search.title.healthIntegration" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Health page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Health integration"
+          }
+        }
+      }
+    },
+    "settings.search.title.homeWidgets" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Appearance › Home widgets page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Home widgets"
+          }
+        }
+      }
+    },
+    "settings.search.title.includeLocalDataInIOSBackup" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data › Local backup page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Include local data in iOS backup"
+          }
+        }
+      }
+    },
+    "settings.search.title.intimacyTracking" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Period & sensitive content page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intimacy tracking"
+          }
+        }
+      }
+    },
+    "settings.search.title.intimateLoggingAccess" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Health page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intimate logging access"
+          }
+        }
+      }
+    },
+    "settings.search.title.lightModeBackground" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Appearance › Backgrounds page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Light mode background"
+          }
+        }
+      }
+    },
+    "settings.search.title.lockNow" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the App lock › Manage page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lock now"
+          }
+        }
+      }
+    },
+    "settings.search.title.manualPlanExchange" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Sharing settings page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Manual plan exchange"
+          }
+        }
+      }
+    },
+    "settings.search.title.mindfulnessAccess" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Health page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mindfulness access"
+          }
+        }
+      }
+    },
+    "settings.search.title.multipleDevices" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data › Multiple devices page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Multiple devices"
+          }
+        }
+      }
+    },
+    "settings.search.title.nearbyFriends" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Nearby friends page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nearby friends"
+          }
+        }
+      }
+    },
+    "settings.search.title.nearbyHearts" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Nearby friends page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nearby hearts"
+          }
+        }
+      }
+    },
+    "settings.search.title.nearbyRecipeShares" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Nearby friends page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nearby recipe shares"
+          }
+        }
+      }
+    },
+    "settings.search.title.noticeBodyTension" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the AI & data sources › Body signals page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Notice body tension"
+          }
+        }
+      }
+    },
+    "settings.search.title.notifications" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition › Reminders page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Notifications"
+          }
+        }
+      }
+    },
+    "settings.search.title.nutritionTargets" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition › Nutrition targets page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nutrition targets"
+          }
+        }
+      }
+    },
+    "settings.search.title.openHealthPrivacySettings" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Health page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Open Health Privacy Settings"
+          }
+        }
+      }
+    },
+    "settings.search.title.passcodeType" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the App lock › Setup page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Passcode type"
+          }
+        }
+      }
+    },
+    "settings.search.title.periodTracking" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Period & sensitive content page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Period tracking"
+          }
+        }
+      }
+    },
+    "settings.search.title.personalCareTasks" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Personal care tasks page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Personal care tasks"
+          }
+        }
+      }
+    },
+    "settings.search.title.privacyPolicy" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy Policy page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Privacy Policy"
+          }
+        }
+      }
+    },
+    "settings.search.title.proximityDebugTools" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Debug page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Proximity debug tools"
+          }
+        }
+      }
+    },
+    "settings.search.title.quickLogShortcuts" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Quick-log shortcuts page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Quick log shortcuts"
+          }
+        }
+      }
+    },
+    "settings.search.title.reminderTime" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition › Reminders page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Reminder time"
+          }
+        }
+      }
+    },
+    "settings.search.title.resetAppLock" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the App lock › Danger zone page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Reset app lock"
+          }
+        }
+      }
+    },
+    "settings.search.title.safetyReporting" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Safety & reporting page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Safety & reporting"
+          }
+        }
+      }
+    },
+    "settings.search.title.sealedBackupForJournalEntries" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data › iCloud page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sealed backup for journal entries"
+          }
+        }
+      }
+    },
+    "settings.search.title.sealedBackupForPeriodData" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data › iCloud page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sealed backup for period data"
+          }
+        }
+      }
+    },
+    "settings.search.title.setUpAppLock" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the App lock › Setup page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set up app lock"
+          }
+        }
+      }
+    },
+    "settings.search.title.shareWithATrainer" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Sharing settings page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Share with a trainer"
+          }
+        }
+      }
+    },
+    "settings.search.title.shareYourVibe" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Nearby friends page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Share your vibe"
+          }
+        }
+      }
+    },
+    "settings.search.title.showCalories" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Show calories"
+          }
+        }
+      }
+    },
+    "settings.search.title.sickMode" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sick mode"
+          }
+        }
+      }
+    },
+    "settings.search.title.signals" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the AI & data sources › Signals page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Signals"
+          }
+        }
+      }
+    },
+    "settings.search.title.soundsHaptics" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Sounds & haptics page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sounds & haptics"
+          }
+        }
+      }
+    },
+    "settings.search.title.spokenCues" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Sounds & haptics › During a workout page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Spoken cues"
+          }
+        }
+      }
+    },
+    "settings.search.title.syncToICloud" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data › iCloud page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sync to iCloud"
+          }
+        }
+      }
+    },
+    "settings.search.title.tier2Memory" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Debug › Tier 2 memory page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tier 2 memory"
+          }
+        }
+      }
+    },
+    "settings.search.title.turnAIOff" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the AI & data sources page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Turn AI off"
+          }
+        }
+      }
+    },
+    "settings.search.title.turnOffPasscode" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the App lock › Manage page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Turn off passcode"
+          }
+        }
+      }
+    },
+    "settings.search.title.waterBottleSize" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition › Hydration page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Water bottle size"
+          }
+        }
+      }
+    },
+    "settings.search.title.weatherAwareRecoveryPrompts" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the AI & data sources page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Weather-aware recovery prompts"
+          }
+        }
+      }
+    },
+    "settings.search.title.webNutritionLookup" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the AI & data sources page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Web nutrition lookup"
+          }
+        }
+      }
+    },
+    "settings.search.title.workoutAccess" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Health page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Workout access"
+          }
+        }
+      }
+    },
+    "settings.search.title.workoutHaptics" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Sounds & haptics › During a workout page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Workout haptics"
+          }
+        }
+      }
+    },
+    "settings.search.title.workoutSounds" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Sounds & haptics › During a workout page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Workout sounds"
           }
         }
       }
