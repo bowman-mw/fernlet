@@ -415,6 +415,9 @@ struct OnboardingCoordinator: View {
         .animation(.spring(response: 0.34, dampingFraction: 0.88), value: model.step)
         // The personal-details step's second page swaps in with the same spring as a step change.
         .animation(.spring(response: 0.34, dampingFraction: 0.88), value: model.isShowingIntimacyChoice)
+        // Copy that describes the user follows the Sex picker as it changes, before the profile is
+        // saved (AddressedCopy); masculine until it is answered, like the profile's own default.
+        .environment(\.fernletTermOfAddress, model.profile.sex.termOfAddress)
         // One keyboard "Done" for every step's fields (the age is a number pad with no return key).
         // The coordinator is the window's root view, with no stack and no sheet chrome around it, and
         // the steps it swaps in all share its host, so they must not declare a second one.

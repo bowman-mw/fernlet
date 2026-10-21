@@ -144,6 +144,7 @@ import Testing
 import CloudKitSync
 @testable import FernletDomainModel
 import FernletFoundation
+import FernletUI
 import LocalPersistence
 import PrivateHealthStore
 import PrivateMemoryStore
@@ -168,6 +169,10 @@ import PrivateMemoryStore
 ///   ``everyMessagesExtensionLiteralIsCataloguedOrAnArguedToken()`` — the UIKit surface, which
 ///   ASSIGNS its copy rather than declaring it and so is invisible to F, and the one UIKit target,
 ///   held shut whole because an assignment rule reaches only a fifth of it (H).
+/// - ``inflectionMarkedKeysNeverReachABareString()`` — a key whose text carries `^[…](inflect:)`
+///   grammar-agreement markup is never read by `String(localized:)`, which keeps the markup, and
+///   ``addressedCopyInflectsForTheProfilesSex()`` — the profile's Sex, not the system setting,
+///   decides the user's grammatical gender (I).
 ///
 /// Concurrency: the scans are pure functions over `String`s read off disk; the two tests that touch
 /// app-target types are `@MainActor` because the app target builds with
@@ -226,6 +231,16 @@ struct LocalizationBoundaryTests {
                 the app's single VoiceOver-announcement seam and holds ZERO copy by design — \
                 FernletAnnouncerTests scans its source for string literals to keep it that way, \
                 which is the other half of this entry's invariant.
+                """
+        ),
+        BundleFreeResolution(
+            path: "FernletKit/Sources/FernletUI/AddressedCopy.swift",
+            call: "String(localized: resource, options: options)",
+            reason: """
+                The head of `AttributedString(localized: resource, options: options)`: `resource` is \
+                a caller-supplied `LocalizedStringResource`, which carries its own bundle, and the \
+                resource-taking overload has no `bundle:` parameter. AddressedCopy holds no key of \
+                its own; it only inflects what callers resolve (part I).
                 """
         )
     ]
@@ -4836,6 +4851,180 @@ struct LocalizationBoundaryTests {
         var cursor = index
         while cursor < chars.count, chars[cursor].isWhitespace { cursor += 1 }
         return cursor
+    }
+
+    // MARK: - I. Inflection markup never reaches a bare `String`
+
+    /// Every root whose Swift may read a catalog key: the app, its extensions, and the package.
+    static let inflectionScanRoots = ["App", "FernletKit/Sources"]
+
+    /// Floor for part I's scan (about 690 shipping `.swift` files when it was written), so a root
+    /// that stops resolving fails instead of passing over nothing.
+    static let minimumInflectionFilesScanned = 500
+
+    /// A `String(localized:)` call (never `AttributedString(localized:)`) whose key was a literal.
+    struct BareStringKeySite: Hashable, Sendable {
+        /// Repo-relative path, filled in by the discovery pass.
+        let path: String
+        /// 1-based line of the call's head.
+        let line: Int
+        /// The key literal's text, interpolations included as written (`\(n)`).
+        let key: String
+        /// The whole call, from `String` to its matching `)`.
+        let call: String
+    }
+
+    /// A catalog key whose text carries automatic-grammar-agreement markup (`](inflect:`) in the
+    /// key itself or in any language's value: such a key must be drawn through `Text`,
+    /// `AttributedString(localized:)` or `AddressedCopy`, which consume the markup.
+    ///
+    /// `String(localized:)` does NOT consume it. Measured 2026-10-20 (macOS 26 Foundation, a bundle
+    /// holding only `es`): the call returned `^[Bienvenido](inflect: true) a Fernlet` verbatim, markup
+    /// and all. The day the Spanish translation marks "listo" for agreement with the user, every key
+    /// read that way would put the raw markup on screen in Spanish while English stays clean, and no
+    /// English run would ever show it. Plural agreement (`^[%lld pair](inflect: true)`) is the same
+    /// trap in English today. `AddressedCopy.string(_:addressing:)` is the safe `String` path.
+    @Test func inflectionMarkedKeysNeverReachABareString() throws {
+        let marked = try Self.inflectionMarkedCatalogKeys()
+        let (sites, filesScanned) = try Self.scanForBareStringKeys()
+        #expect(
+            filesScanned >= Self.minimumInflectionFilesScanned,
+            "Scanned only \(filesScanned) Swift files (floor \(Self.minimumInflectionFilesScanned)): part I is unenforced."
+        )
+        let offenders = sites.filter { site in
+            site.call.contains("](inflect:") || marked.contains { Self.literalKey(site.key, matches: $0) }
+        }
+        #expect(
+            offenders.isEmpty,
+            """
+            \(offenders.count) `String(localized:)` call(s) read a key whose text carries `^[…](inflect: \
+            true)` markup. A plain String keeps the markup, so it shows on screen. Draw the key with \
+            Text, AttributedString(localized:), or AddressedCopy.string(_:addressing:):
+            \(offenders.map { "\($0.path):\($0.line): \($0.key)" }.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// Fixture: part I's matchers fire on each shape they must catch and stay silent on the rest.
+    @Test func bareStringKeyScannerSeparatesStringFromAttributedString() {
+        let source = """
+        let a = String(localized: "Made ^[\\(n) time](inflect: true).")
+        let b = AttributedString(localized: "Made ^[\\(n) time](inflect: true).")
+        // String(localized: "commented out")
+        let c = String(
+            localized: "welcome.title", defaultValue: "^[Bienvenido](inflect: true)", comment: "x")
+        let d = String(localized: resource)
+        """
+        let sites = Self.bareStringKeys(in: source)
+        #expect(sites.map(\.key) == ["Made ^[{} time](inflect: true).", "welcome.title"])
+        #expect(sites.map(\.line) == [1, 4])
+        #expect(sites.last?.call.contains("](inflect:") == true)
+        #expect(Self.literalKey("Made {} times", matches: "Made %lld times"))
+        #expect(Self.literalKey("{}, {} time", matches: "%1$@, %2$lld time"))
+        #expect(Self.literalKey("Made ^[{} time](inflect: true).", matches: "Made ^[%lld time](inflect: true)."))
+        #expect(!Self.literalKey("Made {} times", matches: "Made %lld times today"))
+        #expect(!Self.literalKey("Made it", matches: "Made %lld times"))
+    }
+
+    /// The runtime half: `AddressedCopy` inflects for the term of address it is handed, whatever
+    /// the system's own Form of Address says, and the body profile's Sex picks that term.
+    @Test func addressedCopyInflectsForTheProfilesSex() {
+        let resource = LocalizedStringResource(
+            "test.addressedCopy.ready", defaultValue: "¿Estás ^[listo](inflect: true)?",
+            locale: Locale(identifier: "es"), comment: "Test-only Spanish default value")
+        #expect(BiologicalSex.female.termOfAddress == .feminine)
+        #expect(BiologicalSex.male.termOfAddress == .masculine)
+        #expect(AddressedCopy.string(resource, addressing: BiologicalSex.female.termOfAddress) == "¿Estás lista?")
+        #expect(AddressedCopy.string(resource, addressing: BiologicalSex.male.termOfAddress) == "¿Estás listo?")
+        #expect(UserNutritionProfile().sex.termOfAddress == .masculine, "An unanswered profile must address the user in the masculine.")
+    }
+
+    /// Every catalog key in the scan roots whose key or any value carries `](inflect:`.
+    static func inflectionMarkedCatalogKeys() throws -> [String] {
+        var marked: [String] = []
+        for root in inflectionScanRoots {
+            guard let enumerator = FileManager.default.enumerator(at: RepoRoot.url(root), includingPropertiesForKeys: nil) else {
+                Issue.record("Could not enumerate \(root): part I is unenforced.")
+                continue
+            }
+            for case let url as URL in enumerator where url.pathExtension == "xcstrings" {
+                let object = try JSONSerialization.jsonObject(with: Data(contentsOf: url))
+                let strings = (object as? [String: Any])?["strings"] as? [String: Any] ?? [:]
+                for (key, entry) in strings {
+                    let body = try JSONSerialization.data(withJSONObject: entry)
+                    if key.contains("](inflect:") || String(decoding: body, as: UTF8.self).contains("](inflect:") {
+                        marked.append(key)
+                    }
+                }
+            }
+        }
+        return marked
+    }
+
+    /// Scans every shipping `.swift` file under ``inflectionScanRoots`` for literal-key
+    /// `String(localized:)` calls.
+    static func scanForBareStringKeys() throws -> (sites: [BareStringKeySite], filesScanned: Int) {
+        var sites: [BareStringKeySite] = []
+        var filesScanned = 0
+        for root in inflectionScanRoots {
+            guard let enumerator = FileManager.default.enumerator(at: RepoRoot.url(root), includingPropertiesForKeys: nil) else {
+                Issue.record("Could not enumerate \(root): part I is unenforced.")
+                continue
+            }
+            for case let url as URL in enumerator where url.pathExtension == "swift" {
+                let source = try String(contentsOf: url, encoding: .utf8)
+                filesScanned += 1
+                let path = url.path.replacingOccurrences(of: RepoRoot.url.path + "/", with: "")
+                sites += bareStringKeys(in: source).map {
+                    BareStringKeySite(path: path, line: $0.line, key: $0.key, call: $0.call)
+                }
+            }
+        }
+        return (sites, filesScanned)
+    }
+
+    /// Every `String(localized: "<literal>"…)` call in `source`, skipping comments, string contents
+    /// and `AttributedString(localized:)` (whose head contains `String(` but consumes the markup).
+    /// Pure + testable.
+    static func bareStringKeys(in source: String) -> [BareStringKeySite] {
+        let chars = Array(source)
+        var sites: [BareStringKeySite] = []
+        var index = 0
+        var line = 1
+        while index < chars.count {
+            if let skip = skipNonCode(chars, from: index) {
+                line += countNewlines(chars, from: index, to: skip)
+                index = max(skip, index + 1)
+                continue
+            }
+            if chars[index] == "\n" { line += 1 }
+            let preceded = index > 0 && (chars[index - 1].isLetter || chars[index - 1].isNumber || chars[index - 1] == "_")
+            guard chars[index] == "S", !preceded, let openParen = localizedCallHead(chars, at: index) else {
+                index += 1
+                continue
+            }
+            let end = endOfCall(chars, openParen: openParen)
+            let labelStart = skipWhitespace(chars, from: openParen + 1)
+            let keyStart = skipWhitespace(chars, from: labelStart + "localized:".count)
+            if keyStart < chars.count, chars[keyStart] == "\"" {
+                let key = readStringLiteral(chars, from: keyStart).text
+                sites.append(BareStringKeySite(path: "", line: line, key: key, call: String(chars[index..<min(end, chars.count)])))
+            }
+            line += countNewlines(chars, from: index, to: end)
+            index = max(end, index + 1)
+        }
+        return sites
+    }
+
+    /// Whether a source key literal names `catalogKey`. ``readStringLiteral(_:from:)`` collapses each
+    /// `\(…)` interpolation to `{}`; extraction turned each into a format specifier (`%@`, `%lld`,
+    /// `%1$@`, …), so a `{}` matches exactly one specifier.
+    static func literalKey(_ literal: String, matches catalogKey: String) -> Bool {
+        guard literal.contains("{}") else { return literal == catalogKey }
+        let pieces = literal.components(separatedBy: "{}")
+        let specifier = "%(?:[0-9]+\\$)?[-#+ 0]*[0-9]*(?:\\.[0-9]+)?(?:hh|h|ll|l|q|z|t|j)?[@dDuUxXoOfFeEgGcCsSpaA]"
+        let pattern = "^" + pieces.map(NSRegularExpression.escapedPattern(for:)).joined(separator: specifier) + "$"
+        return catalogKey.range(of: pattern, options: .regularExpression) != nil
     }
 
     // MARK: - Discovery

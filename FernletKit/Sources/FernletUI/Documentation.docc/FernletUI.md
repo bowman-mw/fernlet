@@ -85,6 +85,18 @@ Two other conventions matter before changing this module. First, **fonts resolve
 
 - ``ActivityShareView``
 
+### Addressing the user
+
+Spanish (and every later gendered language) genders the words that describe the user. They agree
+with the body profile's Sex answer, masculine when it was never answered: the app root sets
+`EnvironmentValues.fernletTermOfAddress` from `BiologicalSex.termOfAddress`, and a translation's
+`^[listo](inflect: true)` mark is inflected with it rather than with the system's Form of Address.
+A marked key must never be read by `String(localized:)`, which keeps the raw markup;
+`LocalizationBoundaryTests` part I holds that wall.
+
+- ``AddressedCopy``
+- ``AddressedText``
+
 ### Accessibility seams
 
 - ``FernletAnnouncer``
