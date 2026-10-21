@@ -65,7 +65,11 @@ public extension BiologicalSex {
 /// Use it for every key whose translation carries a user-agreement mark, with the user's real term
 /// (``BiologicalSex/termOfAddress`` of the effective body profile, which a view reads from FernletUI's
 /// `fernletTermOfAddress` environment value). Copy without such a mark renders identically through
-/// it, so a call site never needs to know which languages mark a key.
+/// it, so a call site never needs to know which languages mark a key. `LocalizationBoundaryTests`
+/// part I2 pins every user-gendered key to an addressed reader: its literal must sit inside a
+/// ``string(_:addressing:)`` or ``attributed(_:addressing:)`` call (or FernletUI's `AddressedText`,
+/// or the announcer's `announce(_:_:addressing:)`), never `String(localized:)`, `Text("…")` or
+/// ``plain(_:)``.
 ///
 /// **Concurrency:** nonisolated and stateless. `LocalizedStringResource`, `AttributedString` and
 /// `TermOfAddress` are all `Sendable`, so a store, a planner or a background formatter may call it.
@@ -103,9 +107,9 @@ public nonisolated enum AddressedCopy {
     ///
     /// It still consumes any grammar-agreement markup, so a marked translation can never reach the
     /// screen or VoiceOver raw; a word that does describe the user would come out masculine, so such
-    /// copy goes through ``string(_:addressing:)`` instead. It is not a plural path either: see the
-    /// file header. `LocalizationBoundaryTests` part I bans the bare `String(localized: resource)`
-    /// this replaces.
+    /// copy goes through ``string(_:addressing:)`` instead (part I2 fails a user-gendered key read
+    /// here). It is not a plural path either: see the file header. `LocalizationBoundaryTests` part I
+    /// bans the bare `String(localized: resource)` this replaces.
     public static func plain(_ resource: LocalizedStringResource) -> String {
         string(resource, addressing: .masculine)
     }

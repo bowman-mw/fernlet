@@ -187,6 +187,10 @@ import PrivateMemoryStore
 ///   grammar-agreement markup is never read by `String(localized:)`, which keeps the markup, and
 ///   ``addressedCopyInflectsForTheProfilesSex()`` — the profile's Sex, not the system setting,
 ///   decides the user's grammatical gender (I).
+/// - ``userGenderedKeysAreReadOnlyThroughAnAddressedReader()`` — copy that describes the user is
+///   read only inside an addressed call that names a term, with every literal `.masculine` pinned
+///   (``everyMasculineDefaultIsPinnedWithItsReason()``) and every package-built resource on
+///   `bundle: .module` (``packageBuiltResourcesNameTheModuleBundle()``) (I2).
 ///
 /// Concurrency: the scans are pure functions over `String`s read off disk; the two tests that touch
 /// app-target types are `@MainActor` because the app target builds with
@@ -6172,6 +6176,454 @@ struct LocalizationBoundaryTests {
         let specifier = "%(?:[0-9]+\\$)?[-#+ 0]*[0-9]*(?:\\.[0-9]+)?(?:hh|h|ll|l|q|z|t|j)?[@dDuUxXoOfFeEgGcCsSpaA]"
         let pattern = "^" + pieces.map(NSRegularExpression.escapedPattern(for:)).joined(separator: specifier) + "$"
         return catalogKey.range(of: pattern, options: .regularExpression) != nil
+    }
+
+    // MARK: - I2. Copy that describes the user is read only through an addressed reader
+
+    /// Every key whose Spanish draft (2026-10-20) marks a word that describes the user,
+    /// `^[listo](inflect: true)`: the owner's rule is that such a word agrees with the body profile's
+    /// Sex (`UserNutritionProfile.sex`), masculine when it was never answered.
+    ///
+    /// Pinned by hand because the drafts are not in the catalogs yet (a later step applies them), so
+    /// the catalogs alone cannot say today which keys describe the user. Once a translation carrying a
+    /// gender mark lands, ``catalogKeysByMark()`` finds its key on its own, and this list is the floor
+    /// that survives a draft being reworded. A key here that no catalog holds is a stale pin and
+    /// fails, so a renamed key cannot quietly drop out.
+    static let userGenderedKeys: [String] = [
+        // App catalog, literal keys.
+        "Tap anywhere when you're ready for the next one — take all the time you like.",
+        "Fernlet quietly compares your recent heart rate variability and resting heart rate with your own usual range from the last several weeks — never anyone else's numbers. Days you moved a lot, marked yourself sick, or showed signs of coming down with something are taken into account so a hard workout doesn't read as a hard week.",
+        "Timer's up — tap Next when you're ready. Nothing advances on its own.",
+        "Nothing yet. Describe a meal when you are ready.",
+        "Enter ingredients, macros, servings, and notes yourself.",
+        "Open Food Facts is busy right now. Give it a minute, or name it yourself below.",
+        "Couldn't reach Open Food Facts right now. You can try again, or name it yourself below.",
+        "When it's been a while since a meal or some water, your companion can look a little hungry or thirsty — only in waking hours, never when you're unwell. Turn this off and it never will.",
+        "Just a few easy stretches, kneeling, lying and sitting. Stop whenever you've had enough — resting counts just as much today.",
+        "Only with a spotter or safety arms. Stop if your form breaks, and skip it when you're sore, sick or short on sleep.",
+        "Welcome to Fernlet",
+        "Rest's over. Start your next set when you're ready.",
+        "A little tense",
+        "Extra tense lately",
+        "I'm ready",
+        // App catalog, semantic keys.
+        "home.thought.journalMood.tired",
+        "signal.value.readyForLight",
+        "signal.value.readyForModerate",
+        "signal.value.readyForHard",
+        "journal.dailyPrompt.body.3",
+        "journal.day.blurb.feeling.quiet",
+        "journal.day.blurb.feeling.tired",
+        "move.workout.remove.restoresPlan",
+        "move.workout.remove.restoresPlanAndHealth",
+        // Package catalogs: AppServices, FernletDomainModel, FernletLockUI, FernletScoring.
+        "notification.workoutCue.restEnded.body",
+        "notification.workoutCue.segmentEnded.body",
+        "workoutNote.load.afterBreak",
+        "workoutNote.load.afterBreakAt",
+        "workoutNote.calibration.oneRepMax",
+        "trainingSplit.recoveryFlow.summary",
+        "feeling.quiet",
+        "feeling.tired",
+        "lock.disclosure.onlyIfConfident",
+        "fernletVoice.retryAvailable",
+        "workoutFallback.note.balancedStrengthCircuit",
+    ]
+
+    /// The readers that resolve a key for an explicit term of address: FernletUI's `AddressedText`
+    /// (which reads the environment's), `AddressedCopy.string` / `.attributed`, and
+    /// `FernletAnnouncer`'s resource overload (which resolves through `AddressedCopy`). The last three
+    /// count only with an `addressing:` argument; the announcer's would otherwise default to masculine.
+    static let addressedReaders: [(name: String, needsTerm: Bool)] = [
+        ("AddressedText", false), ("AddressedCopy.string", true), ("AddressedCopy.attributed", true), ("announce", true),
+    ]
+
+    /// One read of a user-gendered key: where its literal sits, and the call that reads it.
+    struct GenderedKeySite: Hashable, Sendable {
+        /// Repo-relative path, filled in by the discovery pass.
+        var path = ""
+        /// 1-based line of the literal.
+        let line: Int
+        /// The key, as the catalog holds it.
+        let key: String
+        /// The call the literal is an argument of, looking through a `LocalizedStringResource(…)`
+        /// built around it; `[` or `{` when it is an element or a block's value, "no call" when it
+        /// is not inside any call at all.
+        let reader: String
+        /// Whether ``reader`` resolves the key for an explicit term of address.
+        let addressed: Bool
+    }
+
+    /// Copy that describes the user is read only through an addressed reader.
+    ///
+    /// Every key of ``userGenderedKeys``, and every catalog key whose value carries a gender mark,
+    /// must appear in shipping source only as an argument of `AddressedText(…)`, or of
+    /// `AddressedCopy.string(…, addressing:)` / `.attributed(…, addressing:)` / `announce(…,
+    /// addressing:)`, looking through a `LocalizedStringResource(…)` built around it.
+    ///
+    /// Why lexical, and not "the resource reaches an addressed reader eventually". Every one of the
+    /// 35 sites this list started with was a SILENT miss: `Text("…")` inflects for the system's Form
+    /// of Address, a component's `LocalizedStringKey` parameter does the same one call removed,
+    /// `String(localized:)` keeps the raw markup, and `AddressedCopy.plain(_:)` says masculine to
+    /// everyone — and all four read correctly in English, which is every build anyone runs. A literal
+    /// sitting inside the addressed call that reads it is the one shape a line scan can prove; a key
+    /// held in a property, returned from a `switch` or handed to a helper is the data-flow question
+    /// this file's header says it cannot answer. So those sites were rewritten to the lexical shape:
+    /// a helper takes the `Text` or `String` its caller resolved, and a switch returns
+    /// `AddressedCopy.string(…)` from the case that needs it.
+    ///
+    /// It does not check WHICH term a reader passes. The compiler makes every reader name one;
+    /// ``everyMasculineDefaultIsPinnedWithItsReason()`` holds the literal `.masculine`, and review
+    /// holds the rest (`fernletTermOfAddress` in a view, `effectiveUserProfile.sex.termOfAddress` in
+    /// the store, `WorkoutLoadContext.address` in the planner).
+    @Test func userGenderedKeysAreReadOnlyThroughAnAddressedReader() throws {
+        let catalogs = try Self.catalogKeysByMark()
+        let stale = Self.userGenderedKeys.filter { !catalogs.all.contains($0) }
+        #expect(stale.isEmpty, "Pinned user-gendered key(s) no catalog holds (renamed? re-pin them): \(stale)")
+        let keys = Set(Self.userGenderedKeys).union(catalogs.genderMarked)
+        let (sites, filesScanned) = try Self.scanForGenderedKeySites(keys: keys)
+        #expect(filesScanned >= Self.minimumInflectionFilesScanned, "Scanned only \(filesScanned) Swift files: part I2 is unenforced.")
+        let offenders = sites.filter { !$0.addressed }
+        #expect(
+            offenders.isEmpty,
+            """
+            \(offenders.count) read(s) of copy that describes the user are not addressed. Its translation \
+            agrees a word with the profile's Sex, which only AddressedText, AddressedCopy.string / \
+            .attributed(…, addressing:) and announce(…, addressing:) apply: Text("…") and a \
+            LocalizedStringKey parameter inflect for the system's setting, String(localized:) keeps the \
+            markup, and AddressedCopy.plain says masculine to everyone. Put the literal inside the \
+            addressed call that reads it:
+            \(offenders.map { "\($0.path):\($0.line): \($0.key.prefix(60)) (read by \($0.reader))" }.sorted().joined(separator: "\n"))
+            """
+        )
+        let unread = Self.userGenderedKeys.filter { key in !sites.contains { $0.key == key } }
+        #expect(unread.isEmpty, "Pinned user-gendered key(s) no shipping code reads (a stale pin, or a reader the scan cannot see): \(unread)")
+    }
+
+    /// Fixture: each reader shape part I2 must catch or pass, and the gender-mark detector.
+    @Test func genderedKeyScannerNamesTheReaderOfEachLiteral() {
+        let keys: Set<String> = ["I'm ready", "feeling.tired", "Day %lld, ready"]
+        let source = """
+        Text("I'm ready")
+        Text(AddressedCopy.attributed("I'm ready", addressing: address))
+        AddressedText("I'm ready")
+        let a = AddressedCopy.string(LocalizedStringResource("feeling.tired", defaultValue: "Tired", bundle: .module), addressing: term)
+        let b = String(localized: "feeling.tired", defaultValue: "Tired", bundle: .module)
+        let c = AddressedCopy.plain("I'm ready")
+        let d = AddressedCopy.string("I'm ready")
+        static let e: LocalizedStringResource = "I'm ready"
+        FernletAnnouncer.system.announce(.status, LocalizedStringResource("I'm ready"), addressing: termOfAddress)
+        FernletAnnouncer.system.announce(.status, "I'm ready")
+        EmptyState(text: "I'm ready")
+        let f = ["I'm ready"]
+        // Text("I'm ready")
+        Text("I'm ready, really")
+        AddressedText("Day \\(n), ready")
+        """
+        let sites = Self.genderedKeySites(in: source, keys: keys)
+        #expect(sites.map(\.line) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15], "the comment and the longer sentence are not reads")
+        #expect(sites.map(\.addressed) == [false, true, true, true, false, false, false, false, true, false, false, false, true])
+        #expect(sites.map(\.reader) == [
+            "Text", "AddressedCopy.attributed", "AddressedText", "AddressedCopy.string", "String", "AddressedCopy.plain",
+            "AddressedCopy.string", "no call", "FernletAnnouncer.system.announce", "FernletAnnouncer.system.announce",
+            "EmptyState", "[", "AddressedText",
+        ])
+        #expect(Self.genderMarks(in: "Estás ^[listo](inflect: true) y ^[%lld serie](inflect: true), ^[x](inflect:true)") == ["listo", "x"],
+                "a count's plural mark is not a gender mark")
+        #expect(Self.genderMarks(in: "^[listo](morphology: {})").isEmpty)
+    }
+
+    /// Every catalog key, and the ones whose value in any language carries a gender mark.
+    static func catalogKeysByMark() throws -> (all: Set<String>, genderMarked: Set<String>) {
+        var all: Set<String> = []
+        var marked: Set<String> = []
+        for root in inflectionScanRoots {
+            guard let enumerator = FileManager.default.enumerator(at: RepoRoot.url(root), includingPropertiesForKeys: nil) else {
+                Issue.record("Could not enumerate \(root): part I2 is unenforced.")
+                continue
+            }
+            for case let url as URL in enumerator where url.pathExtension == "xcstrings" {
+                let object = try JSONSerialization.jsonObject(with: Data(contentsOf: url))
+                let strings = (object as? [String: Any])?["strings"] as? [String: Any] ?? [:]
+                for (key, entry) in strings {
+                    all.insert(key)
+                    let body = String(decoding: try JSONSerialization.data(withJSONObject: entry), as: UTF8.self)
+                    if !genderMarks(in: key + body).isEmpty { marked.insert(key) }
+                }
+            }
+        }
+        return (all, marked)
+    }
+
+    /// The marked words of every gender mark in `text`: `^[…](inflect: true)` around words with no
+    /// format specifier (a count's plural mark, `^[%lld serving](inflect: true)`, always holds one).
+    /// Pure + testable.
+    static func genderMarks(in text: String) -> [String] {
+        var marks: [String] = []
+        var rest = Substring(text)
+        while let open = rest.range(of: "^[") {
+            let afterOpen = rest[open.upperBound...]
+            guard let close = afterOpen.range(of: "](") else { break }
+            let words = afterOpen[..<close.lowerBound]
+            let attribute = afterOpen[close.upperBound...].prefix { $0 != ")" }.filter { $0 != " " }
+            if attribute == "inflect:true", !words.contains("%") { marks.append(String(words)) }
+            rest = afterOpen[close.upperBound...]
+        }
+        return marks
+    }
+
+    /// Scans every shipping `.swift` file under ``inflectionScanRoots`` for reads of `keys`.
+    static func scanForGenderedKeySites(keys: Set<String>) throws -> (sites: [GenderedKeySite], filesScanned: Int) {
+        var sites: [GenderedKeySite] = []
+        var filesScanned = 0
+        for root in inflectionScanRoots {
+            guard let enumerator = FileManager.default.enumerator(at: RepoRoot.url(root), includingPropertiesForKeys: nil) else {
+                Issue.record("Could not enumerate \(root): part I2 is unenforced.")
+                continue
+            }
+            for case let url as URL in enumerator where url.pathExtension == "swift" {
+                let source = try String(contentsOf: url, encoding: .utf8)
+                filesScanned += 1
+                let path = url.path.replacingOccurrences(of: RepoRoot.url.path + "/", with: "")
+                sites += genderedKeySites(in: source, keys: keys).map { site in
+                    var located = site
+                    located.path = path
+                    return located
+                }
+            }
+        }
+        return (sites, filesScanned)
+    }
+
+    /// One open delimiter during ``genderedKeySites(in:keys:)``.
+    struct OpenDelimiter: Sendable {
+        /// `(`, `[` or `{`.
+        let character: Character
+        /// Its index in the source.
+        let index: Int
+        /// For `(`, the call's name as written before it (`AddressedCopy.string`, `Text`); else empty.
+        let head: String
+    }
+
+    /// Every string literal in `source` that names one of `keys`, with the call that reads it.
+    /// Comments are skipped, so documentation may quote a key. Pure + testable.
+    static func genderedKeySites(in source: String, keys: Set<String>) -> [GenderedKeySite] {
+        let chars = Array(source)
+        let formatKeys = keys.filter { $0.contains("%") }
+        var sites: [GenderedKeySite] = []
+        var stack: [OpenDelimiter] = []
+        var index = 0
+        var line = 1
+        while index < chars.count {
+            let character = chars[index]
+            if character == "\"" {
+                let literal = readStringLiteral(chars, from: index)
+                let key = literal.text.contains("{}")
+                    ? formatKeys.first(where: { literalKey(literal.text, matches: $0) })
+                    : (keys.contains(literal.text) ? literal.text : nil)
+                if let key {
+                    let reader = readerOfLiteral(chars, stack: stack)
+                    sites.append(GenderedKeySite(line: line, key: key, reader: reader.name, addressed: reader.addressed))
+                }
+                line += countNewlines(chars, from: index, to: literal.end)
+                index = max(literal.end, index + 1)
+                continue
+            }
+            if let skip = skipNonCode(chars, from: index) {
+                line += countNewlines(chars, from: index, to: skip)
+                index = max(skip, index + 1)
+                continue
+            }
+            if character == "\n" { line += 1 }
+            if character == "(" || character == "[" || character == "{" {
+                let head = character == "(" ? callHead(chars, before: index) : ""
+                stack.append(OpenDelimiter(character: character, index: index, head: head))
+            } else if character == ")" || character == "]" || character == "}" {
+                _ = stack.popLast()
+            }
+            index += 1
+        }
+        return sites
+    }
+
+    /// The call a literal is an argument of, walking out through any `LocalizedStringResource(…)`
+    /// built around it, and whether that call is an addressed reader. A `[` or `{` ends the walk:
+    /// the literal is an element or a block's value, not an argument.
+    static func readerOfLiteral(_ chars: [Character], stack: [OpenDelimiter]) -> (name: String, addressed: Bool) {
+        for open in stack.reversed() {
+            guard open.character == "(" else { return (String(open.character), false) }
+            let name = open.head.hasPrefix(".") ? String(open.head.dropFirst()) : open.head
+            if name == "LocalizedStringResource" { continue }
+            guard let reader = addressedReaders.first(where: { name == $0.name || name.hasSuffix("." + $0.name) }) else {
+                return (name, false)
+            }
+            guard reader.needsTerm else { return (name, true) }
+            let call = code(chars, from: open.index, to: endOfCall(chars, openParen: open.index))
+            return (name, call.contains("addressing:"))
+        }
+        return ("no call", false)
+    }
+
+    /// The name written immediately before the `(` at `openParen`: identifier characters and dots,
+    /// so `AddressedCopy.string`, `FernletAnnouncer.system.announce`, `.announce`, `Text`.
+    static func callHead(_ chars: [Character], before openParen: Int) -> String {
+        var cursor = openParen - 1
+        while cursor >= 0, chars[cursor] == " " { cursor -= 1 }
+        var head: [Character] = []
+        while cursor >= 0, chars[cursor].isLetter || chars[cursor].isNumber || chars[cursor] == "_" || chars[cursor] == "." {
+            head.append(chars[cursor])
+            cursor -= 1
+        }
+        return String(head.reversed())
+    }
+
+    /// One literal `.masculine` in shipping code, and why it is not standing in for a profile's term.
+    struct MasculineDefault: Sendable {
+        /// Repo-relative path of the file.
+        let path: String
+        /// The line's trimmed code, comments removed.
+        let line: String
+        /// Why no profile's term exists there.
+        let reason: String
+    }
+
+    /// Every `.masculine` shipping code may write. The owner's rule allows it only where no profile
+    /// can exist yet, or as an unanswered profile's own default; a `.masculine` that quieted the
+    /// compiler at a call site that knew the profile is exactly the bug part I2 cannot see, so a new
+    /// one argues its case here.
+    static let masculineDefaults: [MasculineDefault] = [
+        MasculineDefault(
+            path: "FernletKit/Sources/FernletDomainModel/AddressedCopy.swift", line: "case .male: .masculine",
+            reason: "BiologicalSex.termOfAddress itself: the male answer, which is also an unanswered profile's."),
+        MasculineDefault(
+            path: "FernletKit/Sources/FernletDomainModel/AddressedCopy.swift", line: "string(resource, addressing: .masculine)",
+            reason: "AddressedCopy.plain: copy that never describes the user; part I2 keeps every user-gendered key off it."),
+        MasculineDefault(
+            path: "FernletKit/Sources/FernletUI/AddressedText.swift", line: "@Entry var fernletTermOfAddress: TermOfAddress = .masculine",
+            reason: "The environment's value before the app root (or onboarding) sets it from the profile: the unanswered default."),
+        MasculineDefault(
+            path: "FernletKit/Sources/FernletUI/FernletAnnouncer.swift", line: "addressing address: TermOfAddress = .masculine",
+            reason: "The resource overload's default for its many callers whose copy never describes the user; part I2 makes every user-gendered key pass addressing:."),
+        MasculineDefault(
+            path: "FernletKit/Sources/FernletDomainModel/WorkoutProgram+Load.swift",
+            line: "bodyWeights: [BodyWeightSample] = [], address: TermOfAddress = .masculine",
+            reason: "A load context built without saying so (test fixtures) plans as an unanswered profile; WorkoutLoadContextBuilder always passes the effective profile's term."),
+        MasculineDefault(
+            path: "App/Fernlet/FernletStore.swift", line: "let address = self?.effectiveUserProfile.sex.termOfAddress ?? .masculine",
+            reason: "The store owns the cue director, so it outlives every schedule; the fallback cannot run, and reads as an unanswered profile."),
+    ]
+
+    /// No `.masculine` in shipping code but the pinned ones, each with its reason.
+    @Test func everyMasculineDefaultIsPinnedWithItsReason() throws {
+        var found: [(path: String, line: String)] = []
+        var filesScanned = 0
+        for root in Self.inflectionScanRoots {
+            guard let enumerator = FileManager.default.enumerator(at: RepoRoot.url(root), includingPropertiesForKeys: nil) else {
+                Issue.record("Could not enumerate \(root): the masculine audit is unenforced.")
+                continue
+            }
+            for case let url as URL in enumerator where url.pathExtension == "swift" {
+                let source = try String(contentsOf: url, encoding: .utf8)
+                filesScanned += 1
+                let path = url.path.replacingOccurrences(of: RepoRoot.url.path + "/", with: "")
+                found += Self.masculineLines(in: source).map { (path, $0) }
+            }
+        }
+        #expect(filesScanned >= Self.minimumInflectionFilesScanned)
+        let unlisted = found.filter { site in !Self.masculineDefaults.contains { $0.path == site.path && $0.line == site.line } }
+        #expect(
+            unlisted.isEmpty,
+            """
+            \(unlisted.count) `.masculine` in shipping code with no stated reason. Copy that describes the \
+            user takes the profile's term (fernletTermOfAddress in a view, \
+            effectiveUserProfile.sex.termOfAddress in the store); pin a real exception in masculineDefaults:
+            \(unlisted.map { "\($0.path): \($0.line)" }.sorted().joined(separator: "\n"))
+            """
+        )
+        let unused = Self.masculineDefaults.filter { entry in !found.contains { $0.path == entry.path && $0.line == entry.line } }
+        #expect(unused.isEmpty, "masculineDefaults entries matching nothing (moved or reworded? re-pin): \(unused.map { "\($0.path): \($0.line)" })")
+        #expect(Self.masculineLines(in: "// x = .masculine\n    let a = b ?? .masculine // why\n") == ["let a = b ?? .masculine"],
+                "the audit reads code lines, comments removed")
+    }
+
+    /// The trimmed code lines of `source` that write `.masculine`, comments removed. Pure + testable.
+    static func masculineLines(in source: String) -> [String] {
+        let chars = Array(source)
+        return code(chars, from: 0, to: chars.count)
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { $0.contains(".masculine") }
+    }
+
+    /// A `LocalizedStringResource` built in package source names the module's bundle.
+    ///
+    /// The resource initializer's `bundle:` defaults to `.main`, the APP's bundle, so a key built in
+    /// a package without one silently misses the module's catalog and renders its English default
+    /// forever (FernletAnnouncer's doc and `FernletAnnouncerTests` measured the same trap on the
+    /// announcer). Part A's rule reads `String(localized:)` only; this is its twin for the resources
+    /// the addressed paths build (`AddressedCopy.string(LocalizedStringResource(…, bundle: .module,
+    /// …), addressing:)`), which arrived with the gendered-address lane.
+    @Test func packageBuiltResourcesNameTheModuleBundle() throws {
+        let rootURL = RepoRoot.url(Self.packageSourceRoot)
+        guard let enumerator = FileManager.default.enumerator(at: rootURL, includingPropertiesForKeys: nil) else {
+            Issue.record("Could not enumerate \(Self.packageSourceRoot): the resource bundle rule is unenforced.")
+            return
+        }
+        var offenders: [String] = []
+        var resources = 0
+        var filesScanned = 0
+        for case let url as URL in enumerator where url.pathExtension == "swift" {
+            let source = try String(contentsOf: url, encoding: .utf8)
+            filesScanned += 1
+            let path = url.path.replacingOccurrences(of: RepoRoot.url.path + "/", with: "")
+            let calls = Self.resourceCalls(in: source)
+            resources += calls.count
+            offenders += calls.filter { !$0.call.contains("bundle: .module") }.map { "\(path):\($0.line): \($0.call)" }
+        }
+        #expect(filesScanned >= Self.minimumPackageFilesScanned)
+        #expect(resources >= 10, "found only \(resources) package-built resources: the scan broke or the addressed paths moved")
+        #expect(offenders.isEmpty, "Package `LocalizedStringResource(…)` built without `bundle: .module` (it resolves against the app's bundle):\n\(offenders.sorted().joined(separator: "\n"))")
+        let fixture = Self.resourceCalls(in: """
+            let a = LocalizedStringResource("k", defaultValue: "v", bundle: .module, comment: "c")
+            let b = LocalizedStringResource("k")
+            func f(_ r: LocalizedStringResource) {}
+            // LocalizedStringResource("commented")
+            """)
+        #expect(fixture.map(\.line) == [1, 2], "a constructor is found, the type in a signature and a comment are not")
+        #expect(fixture.map { $0.call.contains("bundle: .module") } == [true, false])
+    }
+
+    /// Every `LocalizedStringResource(` constructor call in `source` (not the type named in a
+    /// signature), with its comment-free text flattened to one line. Pure + testable.
+    static func resourceCalls(in source: String) -> [(line: Int, call: String)] {
+        let chars = Array(source)
+        let head = "LocalizedStringResource"
+        var found: [(line: Int, call: String)] = []
+        var index = 0
+        var line = 1
+        while index < chars.count {
+            if let skip = skipNonCode(chars, from: index) {
+                line += countNewlines(chars, from: index, to: skip)
+                index = max(skip, index + 1)
+                continue
+            }
+            if chars[index] == "\n" { line += 1 }
+            let preceded = index > 0 && (chars[index - 1].isLetter || chars[index - 1].isNumber || chars[index - 1] == "_")
+            let open = index + head.count
+            guard !preceded, matches(chars, at: index, head), open < chars.count, chars[open] == "(" else {
+                index += 1
+                continue
+            }
+            let end = endOfCall(chars, openParen: open)
+            let call = code(chars, from: index, to: end)
+                .components(separatedBy: .newlines)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .joined(separator: " ")
+            found.append((line, call))
+            line += countNewlines(chars, from: index, to: end)
+            index = max(end, index + 1)
+        }
+        return found
     }
 
     // MARK: - Discovery

@@ -1030,6 +1030,11 @@ separator (up to two decimal places), so an es/fr/de row never mixes "1.5" with 
 
 ``AddressedCopy`` resolves catalog copy whose translation marks the words that describe the user,
 inflected for ``BiologicalSex/termOfAddress`` of the effective profile. `LocalizationBoundaryTests`
-part I fails any marked key read by `String(localized:)`, which keeps the markup verbatim.
+part I fails any marked key read by `String(localized:)`, which keeps the markup verbatim, and part
+I2 pins every user-gendered key to an addressed reader: the key's literal must sit inside
+``AddressedCopy/string(_:addressing:)`` / ``AddressedCopy/attributed(_:addressing:)`` (or FernletUI's
+`AddressedText`), never `String(localized:)`, `Text(LocalizedStringKey)` or ``AddressedCopy/plain(_:)``;
+every literal `.masculine` in shipping code is pinned with its reason; and a
+`LocalizedStringResource` built in a package must name `bundle: .module`.
 
 - ``AddressedCopy``

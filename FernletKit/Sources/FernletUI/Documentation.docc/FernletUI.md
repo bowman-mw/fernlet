@@ -100,8 +100,12 @@ parameter) or a `String` calls `AddressedCopy.attributed(_:addressing:)` /
 
 A marked key must never be read by `String(localized:)`, which keeps the raw markup, and no
 caller-built `LocalizedStringResource` is resolved that way either. `LocalizationBoundaryTests`
-part I holds both walls. ``FernletAnnouncer`` resolves its resource overload through
-`AddressedCopy` too, taking an `addressing:` term.
+part I holds both walls, and part I2 pins every user-gendered key to an addressed reader: its
+literal sits inside ``AddressedText``, `AddressedCopy.string` / `.attributed` with an `addressing:`
+term, or ``FernletAnnouncer``'s resource overload with one (it resolves through `AddressedCopy`
+too), never `Text("…")`, a component's `LocalizedStringKey` parameter or `AddressedCopy.plain(_:)`.
+A component whose display text may describe the user therefore offers a `Text` (or `verbatim:`)
+form for its caller to fill: `EmptyState(verbatim:)`, `ScreenHeader(title: Text, …)`.
 
 - ``AddressedText``
 

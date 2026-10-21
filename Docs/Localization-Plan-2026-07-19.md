@@ -486,6 +486,38 @@ purpose) are closed at their source, resolved in `FernletSocialCopy.Presence` un
 >   1,300 display literals that never reach a catalog, about one display string in five; it is being
 >   closed area by area before any es drafts are written.
 
+> **Gendered address wired (2026-10-21, gendered-address lane).** The 35 keys whose Spanish draft
+> marks a word that describes the user are read only through an addressed reader with the user's
+> REAL term of address: a view reads `fernletTermOfAddress`; a helper that returns copy takes
+> `addressing:` from its caller; a package API takes one from the app (`replaceWorkoutCues`,
+> `FernletVoice.message`, `FeelingTag.label(addressing:)`, `TrainingSplit.summary(addressing:)`,
+> `AIRetryQueueService.queueMealRetry`). `AddressedCopy` moved to FernletDomainModel, so modules with
+> no SwiftUI can use it; FernletUI keeps `AddressedText` and the environment value. The planner
+> composes its session notes at plan time and STORES them, so `WorkoutLoadContext.address` carries
+> the term into the load pass ("welcome back", the max test's safety line). Package callers build
+> `LocalizedStringResource("key", defaultValue: …, bundle: .module, …)`; the keys stayed in the
+> same catalogs with the same English (a sync after each step changed no catalog).
+> - **Two more measured traps** (macOS 26 Foundation). `AttributedString(localized:)` parses the
+>   resolved text as Markdown, interpolated arguments included, so a data argument goes in through
+>   `AddressedCopy.argument(_:)`, which escapes it. And the second pass, `inflected(locale:
+>   userTermOfAddress:)` after creating with inflection off, agrees GENDER only: a count's plural
+>   mark comes out unagreed ("Made 3 time."), so count-marked copy stays on `Text` /
+>   `AttributedString(localized:)`. None of the 35 carries a count; a future string that needs both
+>   needs a different answer.
+> - **The wall** (`LocalizationBoundaryTests` part I2): every pinned key, plus any catalog key whose
+>   value in any language carries a gender mark (an `inflect` mark with no format specifier
+>   inside), must sit lexically inside `AddressedText(…)`, `AddressedCopy.string` / `.attributed(…,
+>   addressing:)` or `announce(…, addressing:)` — never `Text("…")`, a `LocalizedStringKey`
+>   parameter, `String(localized:)` or `AddressedCopy.plain`. Lexical on purpose: a key held in a
+>   property is the data-flow question a grep cannot answer, so those sites were rewritten to the
+>   lexical shape. Every literal `.masculine` in shipping code is pinned with its reason (six: the
+>   mapping itself, `plain`, the environment's and the announcer's defaults, the planner context's
+>   test default, and an unreachable store fallback), and a package-built `LocalizedStringResource`
+>   must name `bundle: .module`.
+> - **Owed:** a simulator or device pass in Spanish once the drafts are applied — in particular that
+>   sheets and full-screen covers inherit `fernletTermOfAddress` from the app root, which no
+>   English run can show.
+
 ---
 
 ## 5. Phase 3 — Language-sensitive engines
