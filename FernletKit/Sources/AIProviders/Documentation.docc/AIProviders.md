@@ -104,7 +104,10 @@ not ready) onto `OnDeviceModelAvailability` for the app's Settings row, and appl
 language is `languageNotSupported`, so every call site takes its deterministic path. Each provider's
 instructions append the line its payload's `AIPromptLanguage` gives — the reply language for the
 journal memory line, the "keep these fields English" line for food selection, substitution and the
-adjuster — and are byte-identical in English.
+adjuster — and are byte-identical in English. `RecipeWebImporter`'s ingredient-line reader takes its
+unit words from `RecipeUnit.spellings(languages:)` (FernletDomainModel's one unit table) plus the
+active language packs' count words and connectors, so a Spanish recipe page's "2 tazas de harina"
+reads as 2 cups of "harina".
 
 Note: three further AI files (`FoundationDishDecomposition`, `FoodProductWebImporter`,
 `LaunchPreparationService`) still live in the app target — they need app-side helpers a package

@@ -1033,7 +1033,20 @@ codes, and ``FernletLanguage/app`` is the one the app's interface resolved — a
 construction, since a bundle resolves only a language it ships. The on-device model's prompts read
 it (AIContext's `AIPromptLanguage`).
 
+A ``LanguagePack`` is one language's MATCHING vocabulary — unit words, meal connectors, protected
+dish names, plural rules — every key folded (``LanguagePack/folded(_:)``) and every value a frozen
+English token, so a pack changes what Fernlet reads, never what it stores or shows ("2 tazas" stores
+`cup`). The food engines read the packs of ``InputLanguages/current`` (English plus the app's
+language): ``RecipeUnit/normalized(_:languages:)`` over ``RecipeUnit/englishSpellings`` (the one unit
+table; the recipe line reader builds its unit words from ``RecipeUnit/spellings(languages:)``),
+``MealItemSplitter``, and ``FoodItemSearch/matchVariants(for:)``. A new language is a
+`LanguagePack+<Language>.swift` and one line in ``LanguagePack/pack(for:)``; `LanguagePackTests`
+checks every pack is filled and folded.
+
 - ``FernletLanguage``
+- ``InputLanguages``
+- ``LanguagePack``
+- ``PluralRule``
 
 ### Addressing the user
 

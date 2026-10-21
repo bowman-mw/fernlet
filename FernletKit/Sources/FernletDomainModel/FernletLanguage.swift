@@ -6,9 +6,9 @@
 //
 //  Display copy localizes through the string catalogs and needs none of this. What does need it is
 //  everything that reads or writes LANGUAGE rather than drawing it: the on-device model's prompts
-//  (which language to answer in), and the matching inputs — food words, unit words, the clinical and
-//  moderation screens, Settings search — whose frozen English tables cannot understand another
-//  language's input on their own. Each of those engines asks this file which languages are in play
+//  (which language to answer in), and the matching inputs — unit words, meal connectors, plurals,
+//  the clinical and moderation screens, Settings search — whose frozen English tables cannot
+//  understand another language's input on their own. Each of those engines asks this file which languages are in play
 //  and asks ``LanguagePack`` for that language's words.
 //
 //  Adding a language (French, say) is three steps and no engine change:
