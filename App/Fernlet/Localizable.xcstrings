@@ -1609,9 +1609,6 @@
         }
       }
     },
-    "All" : {
-
-    },
     "All done." : {
 
     },
@@ -1625,6 +1622,9 @@
 
     },
     "Allow web lookup" : {
+
+    },
+    "Alphanumeric password" : {
 
     },
     "Already did this" : {
@@ -2225,9 +2225,6 @@
     "Clothing shops" : {
 
     },
-    "Clothing shops with friends" : {
-      "extractionState" : "manual"
-    },
     "Cloud records" : {
 
     },
@@ -2491,6 +2488,9 @@
     "Couldn't find" : {
 
     },
+    "Couldn't lock the photos to this device just now. Your choice is saved — Fernlet will finish it the next time it can reach the keychain." : {
+
+    },
     "Couldn't log that just now — please try again in a moment." : {
 
     },
@@ -2502,12 +2502,6 @@
 
     },
     "Couldn't reach Open Food Facts right now. You can try again, or name it yourself below." : {
-
-    },
-    "Couldn't read %lld of your photos while verifying your encrypted backup, so some may be missing from iCloud or out of date there. Copies already backed up were kept. Tap Retry to verify again." : {
-
-    },
-    "Couldn't read 1 of your photos while verifying your encrypted backup, so it may be missing from iCloud or out of date there. Copies already backed up were kept. Tap Retry to verify again." : {
 
     },
     "Couldn't read that" : {
@@ -2529,6 +2523,9 @@
 
     },
     "Couldn't update your workout just now — please try again in a moment." : {
+
+    },
+    "Couldn't upload your photos to your encrypted backup just now, so some or all of them may not be in iCloud yet. We'll keep trying, or tap Retry." : {
 
     },
     "Counted as %@ %@%@ (%@ g)" : {
@@ -2678,10 +2675,13 @@
     "Daily score" : {
 
     },
-    "Daily target: %lld bottles" : {
+    "Daily target: ^[%lld bottle](inflect: true)" : {
 
     },
     "Danger zone" : {
+
+    },
+    "Dark mode" : {
 
     },
     "Data & sources" : {
@@ -2847,17 +2847,6 @@
     },
     "Deliver hearts later?" : {
 
-    },
-    "Deliver hearts when apart" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deliver hearts later"
-          }
-        }
-      }
     },
     "Demonstration" : {
       "comment" : "Exercise how-to sheet: short Voice Control name of the demonstration picture",
@@ -3288,15 +3277,11 @@
     "Enter your current passcode again — Fernlet needs it to re-key your sealed notes." : {
 
     },
-    "Enter your current passcode to %@ %@." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Enter your current passcode to %1$@ %2$@."
-          }
-        }
-      }
+    "Enter your current passcode to disable %@." : {
+      "comment" : "Prompt on the verify sheet before biometric unlock is turned off. The placeholder is Face ID or Touch ID (an Apple product name)."
+    },
+    "Enter your current passcode to enable %@." : {
+      "comment" : "Prompt on the verify sheet before biometric unlock is turned on. The placeholder is Face ID or Touch ID (an Apple product name)."
     },
     "Enter your current passcode to turn it off." : {
       "comment" : "Prompt on the verify sheet shown after confirming Turn off passcode in App lock settings."
@@ -3445,6 +3430,9 @@
 
     },
     "Explains how body signals are estimated" : {
+
+    },
+    "Export a readable copy of your own Fernlet data as a JSON file. It leaves out your sealed period, intimate, and sensitive-memory data, and your photos." : {
 
     },
     "Export connection history" : {
@@ -3604,6 +3592,9 @@
     "Fernlet is holding all it can, so that photo stayed on your own wall." : {
 
     },
+    "Fernlet is still checking your existing photos. Locking them to this device becomes available once that finishes." : {
+
+    },
     "Fernlet is still connected to %@. Recipe sharing links two Fernlets at a time, so nothing went to %@." : {
       "comment" : "Why a recipe share did not go out: this phone is already connected to someone else. The first %@ is who it is connected to, the second is who the user tried to share with.",
       "localizations" : {
@@ -3705,9 +3696,6 @@
 
     },
     "Fernlet's sense of your usual is still settling in." : {
-
-    },
-    "Fewer" : {
 
     },
     "Fewer sets" : {
@@ -3847,12 +3835,12 @@
     "Forget" : {
 
     },
-    "Forget %lld memor%@ matching \"%@\"?" : {
+    "Forget ^[%lld memory](inflect: true) matching \"%@\"?" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Forget %1$lld memor%2$@ matching \"%3$@\"?"
+            "value" : "Forget ^[%1$lld memory](inflect: true) matching \"%2$@\"?"
           }
         }
       }
@@ -3866,12 +3854,12 @@
     "Fortune cookie (mostly fortune)" : {
 
     },
-    "Found %lld meal logs, %lld journal entries, %lld workouts in this iCloud account." : {
+    "Found ^[%lld meal log](inflect: true), ^[%lld journal entry](inflect: true), ^[%lld workout](inflect: true) in this iCloud account." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Found %1$lld meal logs, %2$lld journal entries, %3$lld workouts in this iCloud account."
+            "value" : "Found ^[%1$lld meal log](inflect: true), ^[%2$lld journal entry](inflect: true), ^[%3$lld workout](inflect: true) in this iCloud account."
           }
         }
       }
@@ -4845,6 +4833,9 @@
     "Light and steady — just waking things up." : {
 
     },
+    "Light mode" : {
+
+    },
     "Light on purpose — just getting ready." : {
       "comment" : "Guided workout: the cue on a warm-up set (a lighter set before a lift's working sets or a strength check).",
       "localizations" : {
@@ -4920,6 +4911,12 @@
 
     },
     "Locked (reset required)" : {
+
+    },
+    "Locks your meal, recipe and progress photos to a key that never leaves this device, so a copy of your device backup can't open them. Because the encrypted photo backup (under Backups) is off, these photos then won't come back on a new or erased phone. This can't be undone." : {
+
+    },
+    "Locks your meal, recipe and progress photos to a key that never leaves this device, so a copy of your device backup can't open them. Your encrypted photo backup still restores them onto a new phone." : {
 
     },
     "Log" : {
@@ -5398,17 +5395,11 @@
     "Nearby friends" : {
 
     },
-    "Nearby hearts" : {
-      "extractionState" : "manual"
-    },
     "Nearby invites" : {
 
     },
     "Nearby now" : {
 
-    },
-    "Nearby recipe shares" : {
-      "extractionState" : "manual"
     },
     "Needs workout sharing with Apple Health — turn it on in Settings › Health." : {
       "comment" : "Workout setup: shown under the heart-rate switches while Fernlet does not share workouts with Apple Health, which the live heart rate needs. 'Settings › Health' is Fernlet's own Settings screen.",
@@ -5596,6 +5587,9 @@
 
     },
     "No one matches \"%@\"." : {
+
+    },
+    "No overlay and no saved history." : {
 
     },
     "No passcode" : {
@@ -6741,6 +6735,12 @@
     "Recorded by a newer version of Fernlet. Shown exactly as it was recorded, because this version has no name for it." : {
 
     },
+    "Records session history and shows the live inspector when you open it manually." : {
+
+    },
+    "Records session history without showing the live overlay." : {
+
+    },
     "Recover this phone" : {
 
     },
@@ -6904,9 +6904,6 @@
     },
     "Remove step %lld" : {
 
-    },
-    "Remove them" : {
-      "comment" : "Privacy & Data: remove the Sealed backup entries (journal or intimate logs) this iPhone cannot open."
     },
     "Remove this meal?" : {
 
@@ -8663,6 +8660,12 @@
     "These only ever grow, in their own time. There's nothing to keep up with here." : {
 
     },
+    "These photos are locked to this device: their key never leaves it, so a copy of your device backup can't open them. They won't restore onto a new phone at all. Turn on the encrypted photo backup under Backups if you want them to survive a phone swap." : {
+
+    },
+    "These photos are locked to this device: their key never leaves it, so a copy of your device backup can't open them. They won't restore onto a new phone from a device backup — the encrypted photo backup under Backups is how they come back." : {
+
+    },
     "These words weren't matched to a food, so they aren't counted below. Check the matched items or adjust the numbers before logging." : {
 
     },
@@ -9231,6 +9234,12 @@
 
     },
     "Verify passcode" : {
+
+    },
+    "Verify to continue" : {
+
+    },
+    "Verifying" : {
 
     },
     "Very easy — barely trying." : {
@@ -9942,7 +9951,16 @@
     "Your day" : {
 
     },
-    "Your duress code is the same shape as your passcode — %@. If you change your passcode to a different type, set your duress code again so you can still type it." : {
+    "Your duress code is the same shape as your passcode — a 4-digit PIN. If you change your passcode to a different type, set your duress code again so you can still type it." : {
+
+    },
+    "Your duress code is the same shape as your passcode — a 6-digit PIN. If you change your passcode to a different type, set your duress code again so you can still type it." : {
+
+    },
+    "Your duress code is the same shape as your passcode — a password. If you change your passcode to a different type, set your duress code again so you can still type it." : {
+
+    },
+    "Your duress code is the same shape as your passcode — the same kind of code. If you change your passcode to a different type, set your duress code again so you can still type it." : {
 
     },
     "Your duress code stops working. Your passcode and your data are untouched." : {
@@ -10671,6 +10689,42 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Intimacy tracking is for people %lld and older. Fernlet doesn't know your age yet — Apple can confirm your age range without sharing your birthday."
+          }
+        }
+      }
+    },
+    "appearanceMode.dark" : {
+      "comment" : "Settings › Appearance chip: always use the dark appearance.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Dark"
+          }
+        }
+      }
+    },
+    "appearanceMode.light" : {
+      "comment" : "Settings › Appearance chip: always use the light appearance.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Light"
+          }
+        }
+      }
+    },
+    "appearanceMode.system" : {
+      "comment" : "Settings › Appearance chip: follow the phone's own Light/Dark setting.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "System"
           }
         }
       }
@@ -12757,6 +12811,438 @@
         }
       }
     },
+    "deleteAll.store.aiActivityLog" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "AI activity log"
+          }
+        }
+      }
+    },
+    "deleteAll.store.appleHealthEntries" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your Apple Health entries"
+          }
+        }
+      }
+    },
+    "deleteAll.store.appleHealthEntriesAccessOff" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your Apple Health entries (Fernlet's Health access is turned off — remove them in the Health app)"
+          }
+        }
+      }
+    },
+    "deleteAll.store.appleHealthPermissionHistory" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your Apple Health permission history"
+          }
+        }
+      }
+    },
+    "deleteAll.store.bodySignalsBaseline" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your body-signals baseline"
+          }
+        }
+      }
+    },
+    "deleteAll.store.cachedAppleHealthReadings" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your cached Apple Health readings"
+          }
+        }
+      }
+    },
+    "deleteAll.store.coins" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your coins"
+          }
+        }
+      }
+    },
+    "deleteAll.store.customItems" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your custom items"
+          }
+        }
+      }
+    },
+    "deleteAll.store.cycleHistory" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your cycle history"
+          }
+        }
+      }
+    },
+    "deleteAll.store.dayHistory" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your day history"
+          }
+        }
+      }
+    },
+    "deleteAll.store.daySummaries" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your day summaries"
+          }
+        }
+      }
+    },
+    "deleteAll.store.encryptedICloudBackup" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your encrypted iCloud backup"
+          }
+        }
+      }
+    },
+    "deleteAll.store.exchangeImportHistory" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your exchange import history"
+          }
+        }
+      }
+    },
+    "deleteAll.store.exportedDataFile" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your exported data file"
+          }
+        }
+      }
+    },
+    "deleteAll.store.heartsParkedInICloud" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "hearts parked in iCloud"
+          }
+        }
+      }
+    },
+    "deleteAll.store.iCloudCopy" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your iCloud copy"
+          }
+        }
+      }
+    },
+    "deleteAll.store.intimateLogs" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your intimate logs"
+          }
+        }
+      }
+    },
+    "deleteAll.store.journalEntries" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your journal entries"
+          }
+        }
+      }
+    },
+    "deleteAll.store.leftoverLocalTraces" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "leftover traces in your local records"
+          }
+        }
+      }
+    },
+    "deleteAll.store.mealPhotos" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "meal photos"
+          }
+        }
+      }
+    },
+    "deleteAll.store.messagesCatalog" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Messages catalog"
+          }
+        }
+      }
+    },
+    "deleteAll.store.messagesImportInbox" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Messages import inbox"
+          }
+        }
+      }
+    },
+    "deleteAll.store.milestoneHistory" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your milestone history"
+          }
+        }
+      }
+    },
+    "deleteAll.store.nearbyDesignerBans" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "nearby designer bans"
+          }
+        }
+      }
+    },
+    "deleteAll.store.nearbyFriendsDeliveryState" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your nearby-friends delivery state"
+          }
+        }
+      }
+    },
+    "deleteAll.store.nearbyFriendsIdentity" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your nearby-friends identity"
+          }
+        }
+      }
+    },
+    "deleteAll.store.nearbyFriendsSessionState" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your nearby-friends session state"
+          }
+        }
+      }
+    },
+    "deleteAll.store.progressPhotos" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "progress photos"
+          }
+        }
+      }
+    },
+    "deleteAll.store.recipePhotos" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "recipe photos"
+          }
+        }
+      }
+    },
+    "deleteAll.store.savedRecipes" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your saved recipes"
+          }
+        }
+      }
+    },
+    "deleteAll.store.sealedStore" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your sealed store"
+          }
+        }
+      }
+    },
+    "deleteAll.store.sharedRecipeInbox" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "shared recipe inbox"
+          }
+        }
+      }
+    },
+    "deleteAll.store.storageSettings" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your storage settings"
+          }
+        }
+      }
+    },
+    "deleteAll.store.unchosenSessionPhotos" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "session photos you hadn't chosen yet"
+          }
+        }
+      }
+    },
+    "deleteAll.store.widgetData" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "widget data"
+          }
+        }
+      }
+    },
+    "deleteAll.store.worryBoxNotes" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your Worry Box notes"
+          }
+        }
+      }
+    },
     "designed by %@" : {
 
     },
@@ -12939,6 +13425,186 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "That code wasn't signed by the phone it claims to come from."
+          }
+        }
+      }
+    },
+    "duress.custodian.removalRefused" : {
+      "comment" : "Duress code screen: shown instead of the Remove button for the recovery device while 'Lock it away on your recovery device' is the armed response.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Change your duress response before removing this device."
+          }
+        }
+      }
+    },
+    "duress.entry.mismatch" : {
+      "comment" : "Duress code entry, confirm step: the second entry did not match the duress code.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Those codes don't match. Try again."
+          }
+        }
+      }
+    },
+    "duress.mode.decoy.detail" : {
+      "comment" : "Duress code screen: the full description of the non-destructive response, shown when it is selected.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Entering your duress code opens Fernlet with nothing in it — no journal, no cycle history, no intimacy notes, and no sign that anything is hidden. Your data is untouched and sealed the whole time, and entering your real passcode brings it straight back."
+          }
+        }
+      }
+    },
+    "duress.mode.decoy.summary" : {
+      "comment" : "Duress code screen: the one-line summary under 'Show an empty Fernlet'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nothing is deleted. Your real passcode brings everything back."
+          }
+        }
+      }
+    },
+    "duress.mode.decoy.title" : {
+      "comment" : "Duress code response: the duress code opens an empty-looking Fernlet and deletes nothing.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Show an empty Fernlet"
+          }
+        }
+      }
+    },
+    "duress.mode.recoveryLock.armTitle" : {
+      "comment" : "Title of the confirmation before the recovery-lock response is set as the duress code's response.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Arm the recovery lock?"
+          }
+        }
+      }
+    },
+    "duress.mode.recoveryLock.detail" : {
+      "comment" : "Duress code screen: the full consequence of the recovery-lock response, shown when it is selected and again in its confirmation. Every claim is load-bearing; translate it whole, never shorten it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Entering your duress code destroys this phone's passcode, Face ID and keys, but keeps your sealed notes. Nobody holding this phone can open them — including you. They can be opened again only in person, with the recovery device you enrolled below. If that device is lost, erased, or reinstalls Fernlet, your sealed notes are gone for good."
+          }
+        }
+      }
+    },
+    "duress.mode.recoveryLock.summary" : {
+      "comment" : "Duress code screen: the one-line summary under 'Lock it away on your recovery device'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This phone loses its way in. Only your recovery device can open it again."
+          }
+        }
+      }
+    },
+    "duress.mode.recoveryLock.title" : {
+      "comment" : "Duress code response: the duress code locks this phone out; only the user's recovery device (another phone) can give the key back.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lock it away on your recovery device"
+          }
+        }
+      }
+    },
+    "duress.mode.silentWipe.armTitle" : {
+      "comment" : "Title of the confirmation before the erase response is set as the duress code's response.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Arm the erase response?"
+          }
+        }
+      }
+    },
+    "duress.mode.silentWipe.detail" : {
+      "comment" : "Duress code screen: the full consequence of the erase response, shown when it is selected and again in its confirmation. Every claim is load-bearing; translate it whole, never shorten it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Entering your duress code destroys the keys to your sealed journal, cycle and intimacy notes before anything appears on screen. This cannot be undone, and it cannot be recovered from a backup. Fernlet then opens as a brand-new empty app whose passcode is the duress code you just typed, so there is no duress code left until you set a new one. Fernlet also clears the sealed entries, your Apple Health cycle and intimacy entries, and its cloud copies in the background — copies already sent to a friend's phone or sitting in a backup are unreadable, but they exist until that clearing or their own expiry reaches them."
+          }
+        }
+      }
+    },
+    "duress.mode.silentWipe.summary" : {
+      "comment" : "Duress code screen: the one-line summary under 'Erase everything, then show an empty Fernlet'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your sealed notes become permanently unreadable, immediately."
+          }
+        }
+      }
+    },
+    "duress.mode.silentWipe.title" : {
+      "comment" : "Duress code response: the duress code destroys the sealed data's keys, then opens an empty Fernlet.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Erase everything, then show an empty Fernlet"
+          }
+        }
+      }
+    },
+    "duress.mode.unavailable.noCustodian" : {
+      "comment" : "Duress code screen: why 'Lock it away on your recovery device' can't be chosen yet — no recovery device is set up. 'Below' is the recovery-device card on the same screen.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set up a recovery device below before choosing this."
+          }
+        }
+      }
+    },
+    "duress.mode.unavailable.supersededCustodian" : {
+      "comment" : "Duress code screen: why 'Lock it away on your recovery device' can't be chosen — the recovery device was set up before the current app lock, so it holds an older key.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your recovery device holds the key from before this app lock. Set it up again before choosing this."
           }
         }
       }
@@ -16641,6 +17307,161 @@
         }
       }
     },
+    "privacy.ownPhotos.bindingDisclosure" : {
+      "comment" : "Privacy & Data: the last paragraph of the encrypted photo backup's consent alert. Turning the backup on is what eventually locks the photos' key to this iPhone.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Once your photos are safely in the backup, Fernlet locks their encryption key to this device, so a copy of your device backup can't open them. That can't be undone, and from then on this encrypted backup is how they come back on a new phone."
+          }
+        }
+      }
+    },
+    "privacy.ownPhotos.sizeDisclosure" : {
+      "comment" : "Privacy & Data: under the encrypted photo backup switch, and the first paragraph of its consent alert. The sizes are approximate; keep the numbers.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your meal, recipe and progress photos, encrypted. Fernlet doesn't limit how many photos you keep, so this can use a lot of your iCloud storage — roughly 150–400 KB per photo, which is 100–250 MB or more for a big library. Only photos that changed are uploaded."
+          }
+        }
+      }
+    },
+    "privacy.ownPhotos.verifiedUnreadable" : {
+      "comment" : "Privacy & Data: the encrypted photo backup's verification pass could not read this many photos. Needs a plural variation; the one-photo English says 'so it may be missing'.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Couldn't read %lld of your photos while verifying your encrypted backup, so it may be missing from iCloud or out of date there. Copies already backed up were kept. Tap Retry to verify again."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Couldn't read %lld of your photos while verifying your encrypted backup, so some may be missing from iCloud or out of date there. Copies already backed up were kept. Tap Retry to verify again."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "privacy.sealedBackup.disclosure.appleCantRead" : {
+      "comment" : "Encrypted backup consent alert, second paragraph: 'it' is the encrypted backup.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Apple can't read it."
+          }
+        }
+      }
+    },
+    "privacy.sealedBackup.disclosure.encryptedOnly" : {
+      "comment" : "Encrypted backup consent alert, first paragraph.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your data leaves this device only in encrypted form."
+          }
+        }
+      }
+    },
+    "privacy.sealedBackup.disclosure.intimacy" : {
+      "comment" : "Encrypted backup consent alert, last paragraph when turning on the intimate log backup.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intimate logs are sensitive; they are uploaded only in this encrypted form."
+          }
+        }
+      }
+    },
+    "privacy.sealedBackup.disclosure.journal" : {
+      "comment" : "Encrypted backup consent alert, last paragraph when turning on the journal backup.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your journal text is uploaded only in this encrypted form."
+          }
+        }
+      }
+    },
+    "privacy.sealedBackup.disclosure.keychainLoss" : {
+      "comment" : "Encrypted backup consent alert, third paragraph: the backup's key lives in iCloud Keychain.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "If iCloud Keychain is ever permanently lost, this backup can't be recovered on a new device."
+          }
+        }
+      }
+    },
+    "privacy.sealedBackup.disclosure.period" : {
+      "comment" : "Encrypted backup consent alert, last paragraph when turning on the cycle backup.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Period data is sensitive; it is uploaded only in this encrypted form."
+          }
+        }
+      }
+    },
+    "privacy.sealedBackup.intimacy.removeThem" : {
+      "comment" : "Privacy & Data: remove the intimate logs this iPhone cannot open from the intimate-log Sealed backup. 'Them' is the logs.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Remove them"
+          }
+        }
+      }
+    },
+    "privacy.sealedBackup.journal.removeThem" : {
+      "comment" : "Privacy & Data: remove the journal entries this iPhone cannot open from the journal Sealed backup. 'Them' is the entries.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Remove them"
+          }
+        }
+      }
+    },
+    "privacy.verify.reason" : {
+      "comment" : "Shown by iOS in the Face ID or device passcode prompt that guards Privacy & Data.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Verify to access Privacy & Data settings."
+          }
+        }
+      }
+    },
     "productImport.error.emptyHTML" : {
       "comment" : "Inline notice when a product page loaded but its body decoded to empty or whitespace-only text.",
       "extractionState" : "extracted_with_value",
@@ -16979,6 +17800,18 @@
         }
       }
     },
+    "sealedBackup.noun.ownPhotos" : {
+      "comment" : "Mid-sentence noun for the encrypted backup of the user's own meal, recipe and progress photos, e.g. 'Couldn't reach your photo backup just now.'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "photo"
+          }
+        }
+      }
+    },
     "sealedBackup.noun.periodData" : {
       "comment" : "Mid-sentence noun for the sealed backup of cycle data, e.g. 'the encrypted period backup'.",
       "extractionState" : "extracted_with_value",
@@ -17003,6 +17836,42 @@
         }
       }
     },
+    "sealedBackup.restore.deferredKeyNotSynced" : {
+      "comment" : "Privacy & Data: a Sealed backup could not be restored yet because its key has not arrived through iCloud Keychain. The placeholder is a mid-sentence backup noun such as 'period' or 'photo'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couldn't restore your %@ backup on this device yet — iCloud Keychain may still be syncing. We'll keep trying, or tap Retry."
+          }
+        }
+      }
+    },
+    "sealedBackup.restore.deferredLocked" : {
+      "comment" : "Privacy & Data: a Sealed backup is waiting for Fernlet's app lock to be unlocked. The placeholder is a mid-sentence backup noun such as 'period' or 'photo'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your %@ backup is ready to restore, but Fernlet is locked. Unlock, then tap Retry."
+          }
+        }
+      }
+    },
+    "sealedBackup.restore.deferredTransient" : {
+      "comment" : "Privacy & Data: iCloud could not be reached for a Sealed backup. The placeholder is a mid-sentence backup noun such as 'period' or 'photo'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couldn't reach your %@ backup just now. We'll keep trying, or tap Retry."
+          }
+        }
+      }
+    },
     "sealedBackup.restore.needsNewerFernlet" : {
       "comment" : "Privacy & Data: a Sealed backup, or entries on this iPhone, were written by a newer version of Fernlet that this version can't read. The placeholder is a mid-sentence backup noun such as 'period'.",
       "extractionState" : "extracted_with_value",
@@ -17015,6 +17884,30 @@
         }
       }
     },
+    "sealedBackup.restore.notRecognized" : {
+      "comment" : "Privacy & Data: a Sealed backup in iCloud was sealed with a different account's key. The placeholder is a mid-sentence backup noun such as 'period' or 'photo'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A %@ backup was found in iCloud, but it isn't encrypted with this account's key, so it can't be restored on this device."
+          }
+        }
+      }
+    },
+    "sealedBackup.restore.rolledBack" : {
+      "comment" : "Privacy & Data: the Sealed backup in iCloud is older than this iPhone's copy, so it was not restored. The placeholder is a mid-sentence backup noun such as 'period' or 'photo'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The %@ backup in iCloud is older than one this device already has, so Fernlet didn't restore it — that shouldn't happen on its own. Nothing was changed. If you still have this data on another device, back it up again from there."
+          }
+        }
+      }
+    },
     "settings.appLock.reset.message.v2" : {
       "comment" : "Message in the Reset app lock confirmation in Settings. Keep it identical to the lock screen's own reset confirmation. The journal and intimacy backups restore only into an empty store, so the sentence tells the user to restore before adding new entries.",
       "extractionState" : "extracted_with_value",
@@ -17023,6 +17916,606 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Your journal, cycle history and intimacy entries saved in Fernlet will be permanently deleted. Anything Fernlet copied to Apple Health stays there. If Sealed backup is on, restore it from Privacy & Data afterwards, before you add new entries."
+          }
+        }
+      }
+    },
+    "settings.changePasscode.mismatch" : {
+      "comment" : "Change passcode, confirm step: the second entry did not match the new passcode.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Passcodes don't match. Try again."
+          }
+        }
+      }
+    },
+    "settings.goal.overrideFootnote.split" : {
+      "comment" : "Goal & nutrition, under the goal cards: the user picked a training split, which a goal preset does not override. One split: in translation the verb and pronoun agree with it ('stays as you set it').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your chosen training split stay as you set them — clear them to follow this goal's plan."
+          }
+        }
+      }
+    },
+    "settings.goal.overrideFootnote.targets" : {
+      "comment" : "Goal & nutrition, under the goal cards: the user pinned their own nutrition targets, which a goal preset does not override.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your custom nutrition targets stay as you set them — clear them to follow this goal's plan."
+          }
+        }
+      }
+    },
+    "settings.goal.overrideFootnote.targetsAndSplit" : {
+      "comment" : "Goal & nutrition, under the goal cards: the user pinned both their own nutrition targets and a training split, which a goal preset does not override.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your custom nutrition targets and chosen training split stay as you set them — clear them to follow this goal's plan."
+          }
+        }
+      }
+    },
+    "settings.haptics.level.all" : {
+      "comment" : "Sounds & haptics: segmented control choice, every haptic plays.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "All"
+          }
+        }
+      }
+    },
+    "settings.haptics.level.fewer" : {
+      "comment" : "Sounds & haptics: segmented control choice, only the important haptics play.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fewer"
+          }
+        }
+      }
+    },
+    "settings.haptics.level.off" : {
+      "comment" : "Sounds & haptics: segmented control choice, no haptics play. A choice on a switch-like control, not a status readout.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Off"
+          }
+        }
+      }
+    },
+    "settings.memory.category.other" : {
+      "comment" : "Core memory: the category for a memory that fits no other group. A chip in the memory editor, and a group heading (drawn in capitals).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Other"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.aiActivityLog" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "AI activity log"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.aiDataSources" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "AI & data sources"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.aiDataSourcesBodySignals" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "AI & data sources › Body signals"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.aiDataSourcesCoreMemory" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "AI & data sources › Core memory"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.aiDataSourcesSignals" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "AI & data sources › Signals"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.appLock" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "App lock"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.appLockBiometrics" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "App lock › Biometrics"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.appLockDangerZone" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "App lock › Danger zone"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.appLockManage" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "App lock › Manage"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.appLockSetup" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "App lock › Setup"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.appearance" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Appearance"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.appearanceBackgrounds" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Appearance › Backgrounds"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.appearanceCompanionFeelings" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Appearance › Companion feelings"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.appearanceHomeWidgets" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Appearance › Home widgets"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.connectionLog" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Connection log"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.connectionLogHistory" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Connection log › History"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.debug" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Debug"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.debugDerivedSignals" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Debug › Derived signals"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.debugTier2Memory" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Debug › Tier 2 memory"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.goalNutrition" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Goal & nutrition"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.goalNutritionBodyPreferences" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Goal & nutrition › Body & preferences"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.goalNutritionHydration" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Goal & nutrition › Hydration"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.goalNutritionNutritionTargets" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Goal & nutrition › Nutrition targets"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.goalNutritionReminders" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Goal & nutrition › Reminders"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.health" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Health"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.nearbyFriends" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nearby friends"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.periodSensitiveContent" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Period & sensitive content"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.personalCareTasks" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Personal care tasks"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.privacyDataAppLockData" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Privacy & Data › App lock data"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.privacyDataEncryptedBackupStatus" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Privacy & Data › Encrypted backup status"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.privacyDataICloud" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Privacy & Data › iCloud"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.privacyDataLocalBackup" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Privacy & Data › Local backup"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.privacyDataMultipleDevices" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Privacy & Data › Multiple devices"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.privacyDataYourData" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Privacy & Data › Your data"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.privacyPolicy" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Privacy Policy"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.quickLogShortcuts" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Quick-log shortcuts"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.safetyReporting" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Safety & reporting"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.sharingSettings" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sharing settings"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.soundsHaptics" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sounds & haptics"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.soundsHapticsBreathing" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sounds & haptics › Breathing"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.soundsHapticsCooking" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sounds & haptics › Cooking"
+          }
+        }
+      }
+    },
+    "settings.search.breadcrumb.soundsHapticsDuringAWorkout" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sounds & haptics › During a workout"
           }
         }
       }
@@ -17046,6 +18539,954 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "settings.search.title.activityStepsAccess" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Health page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Activity & steps access"
+          }
+        }
+      }
+    },
+    "settings.search.title.aiActivityLog" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the AI activity log page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "AI activity log"
+          }
+        }
+      }
+    },
+    "settings.search.title.aiStatus" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the AI & data sources page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "AI status"
+          }
+        }
+      }
+    },
+    "settings.search.title.alsoIncludeInTrainerSummaries" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Sharing settings page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Also include in trainer summaries"
+          }
+        }
+      }
+    },
+    "settings.search.title.appLock" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the App lock page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "App lock"
+          }
+        }
+      }
+    },
+    "settings.search.title.bodyMeasurements" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition › Body & preferences page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Body & measurements"
+          }
+        }
+      }
+    },
+    "settings.search.title.bodyVitalsAccess" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Health page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Body vitals access"
+          }
+        }
+      }
+    },
+    "settings.search.title.breathingHaptics" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Sounds & haptics › Breathing page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Breathing haptics"
+          }
+        }
+      }
+    },
+    "settings.search.title.calorieDeficit" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition › Nutrition targets page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Calorie deficit"
+          }
+        }
+      }
+    },
+    "settings.search.title.changePasscode" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the App lock › Manage page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Change passcode"
+          }
+        }
+      }
+    },
+    "settings.search.title.clothingShopsWithFriends" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Nearby friends page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Clothing shops with friends"
+          }
+        }
+      }
+    },
+    "settings.search.title.companionFeelings" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Appearance › Companion feelings page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Companion feelings"
+          }
+        }
+      }
+    },
+    "settings.search.title.connectionHistory" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Connection log › History page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Connection History"
+          }
+        }
+      }
+    },
+    "settings.search.title.connectionInspector" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Connection log page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Connection Inspector"
+          }
+        }
+      }
+    },
+    "settings.search.title.cookingTimerSound" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Sounds & haptics › Cooking page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cooking timer sound"
+          }
+        }
+      }
+    },
+    "settings.search.title.coreMemory" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the AI & data sources › Core memory page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Core memory"
+          }
+        }
+      }
+    },
+    "settings.search.title.cyclePeriodAccess" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Health page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cycle & period access"
+          }
+        }
+      }
+    },
+    "settings.search.title.dailyCheckInReminder" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition › Reminders page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Daily check-in reminder"
+          }
+        }
+      }
+    },
+    "settings.search.title.dailyWaterTarget" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition › Hydration page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Daily water target"
+          }
+        }
+      }
+    },
+    "settings.search.title.darkMode" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Appearance page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Dark mode"
+          }
+        }
+      }
+    },
+    "settings.search.title.darkModeBackground" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Appearance › Backgrounds page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Dark mode background"
+          }
+        }
+      }
+    },
+    "settings.search.title.deleteEverything" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data › App lock data page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Delete everything"
+          }
+        }
+      }
+    },
+    "settings.search.title.deleteICloudData" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data › iCloud page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Delete iCloud data"
+          }
+        }
+      }
+    },
+    "settings.search.title.deliverHeartsWhenApart" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Nearby friends page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Deliver hearts later"
+          }
+        }
+      }
+    },
+    "settings.search.title.derivedSignals" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Debug › Derived signals page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Derived signals"
+          }
+        }
+      }
+    },
+    "settings.search.title.dietaryPreferences" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition › Body & preferences page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Dietary preferences"
+          }
+        }
+      }
+    },
+    "settings.search.title.encryptedBackupStatus" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data › Encrypted backup status page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Encrypted backup status"
+          }
+        }
+      }
+    },
+    "settings.search.title.exportMyData" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data › Your data page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Export my data"
+          }
+        }
+      }
+    },
+    "settings.search.title.faceIDTouchID" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the App lock › Biometrics page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Face ID / Touch ID"
+          }
+        }
+      }
+    },
+    "settings.search.title.forgetAMemory" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the AI & data sources › Core memory page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Forget a memory"
+          }
+        }
+      }
+    },
+    "settings.search.title.goal" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Goal"
+          }
+        }
+      }
+    },
+    "settings.search.title.haptics" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Sounds & haptics page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Haptics"
+          }
+        }
+      }
+    },
+    "settings.search.title.healthAccess" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Health page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Health access"
+          }
+        }
+      }
+    },
+    "settings.search.title.healthIntegration" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Health page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Health integration"
+          }
+        }
+      }
+    },
+    "settings.search.title.homeWidgets" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Appearance › Home widgets page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Home widgets"
+          }
+        }
+      }
+    },
+    "settings.search.title.includeLocalDataInIOSBackup" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data › Local backup page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Include local data in iOS backup"
+          }
+        }
+      }
+    },
+    "settings.search.title.intimacyTracking" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Period & sensitive content page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intimacy tracking"
+          }
+        }
+      }
+    },
+    "settings.search.title.intimateLoggingAccess" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Health page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intimate logging access"
+          }
+        }
+      }
+    },
+    "settings.search.title.lightModeBackground" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Appearance › Backgrounds page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Light mode background"
+          }
+        }
+      }
+    },
+    "settings.search.title.lockNow" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the App lock › Manage page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lock now"
+          }
+        }
+      }
+    },
+    "settings.search.title.manualPlanExchange" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Sharing settings page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Manual plan exchange"
+          }
+        }
+      }
+    },
+    "settings.search.title.mindfulnessAccess" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Health page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mindfulness access"
+          }
+        }
+      }
+    },
+    "settings.search.title.multipleDevices" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data › Multiple devices page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Multiple devices"
+          }
+        }
+      }
+    },
+    "settings.search.title.nearbyFriends" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Nearby friends page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nearby friends"
+          }
+        }
+      }
+    },
+    "settings.search.title.nearbyHearts" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Nearby friends page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nearby hearts"
+          }
+        }
+      }
+    },
+    "settings.search.title.nearbyRecipeShares" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Nearby friends page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nearby recipe shares"
+          }
+        }
+      }
+    },
+    "settings.search.title.noticeBodyTension" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the AI & data sources › Body signals page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Notice body tension"
+          }
+        }
+      }
+    },
+    "settings.search.title.notifications" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition › Reminders page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Notifications"
+          }
+        }
+      }
+    },
+    "settings.search.title.nutritionTargets" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition › Nutrition targets page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nutrition targets"
+          }
+        }
+      }
+    },
+    "settings.search.title.openHealthPrivacySettings" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Health page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Open Health Privacy Settings"
+          }
+        }
+      }
+    },
+    "settings.search.title.passcodeType" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the App lock › Setup page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Passcode type"
+          }
+        }
+      }
+    },
+    "settings.search.title.periodTracking" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Period & sensitive content page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Period tracking"
+          }
+        }
+      }
+    },
+    "settings.search.title.personalCareTasks" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Personal care tasks page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Personal care tasks"
+          }
+        }
+      }
+    },
+    "settings.search.title.privacyPolicy" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy Policy page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Privacy Policy"
+          }
+        }
+      }
+    },
+    "settings.search.title.proximityDebugTools" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Debug page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Proximity debug tools"
+          }
+        }
+      }
+    },
+    "settings.search.title.quickLogShortcuts" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Quick-log shortcuts page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Quick log shortcuts"
+          }
+        }
+      }
+    },
+    "settings.search.title.reminderTime" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition › Reminders page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Reminder time"
+          }
+        }
+      }
+    },
+    "settings.search.title.resetAppLock" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the App lock › Danger zone page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Reset app lock"
+          }
+        }
+      }
+    },
+    "settings.search.title.safetyReporting" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Safety & reporting page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Safety & reporting"
+          }
+        }
+      }
+    },
+    "settings.search.title.sealedBackupForJournalEntries" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data › iCloud page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sealed backup for journal entries"
+          }
+        }
+      }
+    },
+    "settings.search.title.sealedBackupForPeriodData" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data › iCloud page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sealed backup for period data"
+          }
+        }
+      }
+    },
+    "settings.search.title.setUpAppLock" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the App lock › Setup page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set up app lock"
+          }
+        }
+      }
+    },
+    "settings.search.title.shareWithATrainer" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Sharing settings page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Share with a trainer"
+          }
+        }
+      }
+    },
+    "settings.search.title.shareYourVibe" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Nearby friends page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Share your vibe"
+          }
+        }
+      }
+    },
+    "settings.search.title.showCalories" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Show calories"
+          }
+        }
+      }
+    },
+    "settings.search.title.sickMode" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sick mode"
+          }
+        }
+      }
+    },
+    "settings.search.title.signals" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the AI & data sources › Signals page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Signals"
+          }
+        }
+      }
+    },
+    "settings.search.title.soundsHaptics" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Sounds & haptics page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sounds & haptics"
+          }
+        }
+      }
+    },
+    "settings.search.title.spokenCues" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Sounds & haptics › During a workout page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Spoken cues"
+          }
+        }
+      }
+    },
+    "settings.search.title.syncToICloud" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data › iCloud page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sync to iCloud"
+          }
+        }
+      }
+    },
+    "settings.search.title.tier2Memory" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Debug › Tier 2 memory page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tier 2 memory"
+          }
+        }
+      }
+    },
+    "settings.search.title.turnAIOff" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the AI & data sources page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Turn AI off"
+          }
+        }
+      }
+    },
+    "settings.search.title.turnOffPasscode" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the App lock › Manage page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Turn off passcode"
+          }
+        }
+      }
+    },
+    "settings.search.title.waterBottleSize" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition › Hydration page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Water bottle size"
+          }
+        }
+      }
+    },
+    "settings.search.title.weatherAwareRecoveryPrompts" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the AI & data sources page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Weather-aware recovery prompts"
+          }
+        }
+      }
+    },
+    "settings.search.title.webNutritionLookup" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the AI & data sources page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Web nutrition lookup"
+          }
+        }
+      }
+    },
+    "settings.search.title.workoutAccess" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Health page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Workout access"
+          }
+        }
+      }
+    },
+    "settings.search.title.workoutHaptics" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Sounds & haptics › During a workout page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Workout haptics"
+          }
+        }
+      }
+    },
+    "settings.search.title.workoutSounds" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Sounds & haptics › During a workout page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Workout sounds"
           }
         }
       }
@@ -17205,6 +19646,90 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Compares newer workout load against earlier workout load."
+          }
+        }
+      }
+    },
+    "signal.name.eatingPattern" : {
+      "comment" : "Name of a derived signal: how regular recent meals were, and their protein.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Eating pattern"
+          }
+        }
+      }
+    },
+    "signal.name.energyTrend" : {
+      "comment" : "Name of a derived signal: the trend in the user's energy, from sleep, journal moods and recent workouts.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Energy trend"
+          }
+        }
+      }
+    },
+    "signal.name.intensityReadiness" : {
+      "comment" : "Name of a derived signal: how ready the body is for a hard workout today.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Readiness"
+          }
+        }
+      }
+    },
+    "signal.name.micronutrientGaps14Day" : {
+      "comment" : "Name of a derived signal: vitamins and minerals over the last 14 days.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "14-day nutrients"
+          }
+        }
+      }
+    },
+    "signal.name.micronutrientGaps7Day" : {
+      "comment" : "Name of a derived signal: vitamins and minerals over the last 7 days.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "7-day nutrients"
+          }
+        }
+      }
+    },
+    "signal.name.moodTrend" : {
+      "comment" : "Name of a derived signal: the trend in the user's journal moods.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mood trend"
+          }
+        }
+      }
+    },
+    "signal.name.progressionTrend" : {
+      "comment" : "Name of a derived signal: whether workouts are building over time.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Progression"
           }
         }
       }

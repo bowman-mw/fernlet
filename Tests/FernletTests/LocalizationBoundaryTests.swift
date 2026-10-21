@@ -71,7 +71,9 @@
 //     bodies. A conformance whose `errorDescription` returns `Self.copy(for: self)`, or an
 //     associated value that arrived as an English literal from its thrower, is the same data-flow
 //     question — and `FernletLockError.invalidCredential` is a live example of the second, exempt
-//     by design because the pass-through IS its contract.
+//     by design because the pass-through IS its contract. Its throwers in `FernletLock` pass
+//     catalog sentences since the Spanish round (pinned in ``settingsLaneForkKeys``), which this
+//     rule could not have told you.
 //   * WHETHER A KEY IS ANY GOOD. A key can be present, bundled, harvested — and still be spliced
 //     into a sentence a translator cannot reorder, or carry an English plural rule. Reviews find
 //     those; this file cannot.
@@ -122,17 +124,19 @@
 //     module: several of those strings are ALSO logic tokens that six call sites compare with `==`
 //     (see part D below), so localizing them requires the token/display FORK, not a
 //     `String(localized:)` sweep. Part D is what stops a sweep from silently breaking those gates.
-//   * `HealthKitGateway` (14 strings) — `HealthCapability.title` (7) and `HealthCapability.summary`
-//     (7), the settings-row name and the sentence describing what each capability reads and writes.
-//     The module's four `HealthKitServiceError` sentences were localized by the sweep and are the
-//     worked example for the rest; these are straightforward forks with a catalog now waiting.
+//   * `HealthKitGateway` — CLOSED in the Spanish round (2026-10-20). `HealthCapability.title` and
+//     `.summary` (the 14 strings this entry listed) are catalog keys, and so is every status line of
+//     `HealthKitAuthorizationViewModel`, the readers that used to `.lowercased()` a title mid-sentence
+//     (they read `HealthCapability.inSentenceName` now). Left: `HKAuthorizationStatus.fernletLabel`,
+//     which nothing reads.
 //   * `PrivateHealthStore`-adjacent copy — the Tier-2 memory CATEGORY rendered by `SettingsSheet`.
 //     These are sealed modules and deliberately have NO catalog: the fork belongs at the app-target
 //     caller. Every drawn word of the sealed cycle vocabulary now has one in `CycleTrackerView.swift`
 //     — `PeriodFlowLevel`, `CervicalMucusQuality` and `OvulationTestResult`, then (Spanish round,
 //     2026-10-20) `PeriodSymptom.displayName` and `CyclePhase.displayName` / `inSentenceName` — and
 //     the sealed `title`s are left in place with no on-screen reader
-//     (`theCycleSurfacesNeverDrawTheSealedTitles`). The memory category is the remaining one.
+//     (`theCycleSurfacesNeverDrawTheSealedTitles`). Settings' Core memory categories draw through
+//     `MemoryCategoryName`; the Debug page's Tier-2 category is the remaining one.
 //
 // Part G's allowlist is now EMPTY, and that is the finished state. It held `MessageTransportProbe`'s
 // three sentences on the argument that their target owned no catalog; rule H2 gave the Messages
@@ -3023,6 +3027,23 @@ struct LocalizationBoundaryTests {
         ForkedMember(path: "App/Fernlet/TrainerExportView.swift",
                      declaration: "private func bullet(_ text: LocalizedStringKey, tint: Color = Color.moss) -> some View {",
                      role: "the Ask an AI card's two bullets"),
+        // Spanish round, settings lane (2026-10-20): `String` helpers on the Settings pages whose
+        // literal callers never reached the catalog.
+        ForkedMember(path: "App/Fernlet/SettingsSheet.swift",
+                     declaration: "private func themeColorRow(title: LocalizedStringKey, color: Binding<Color>, hex: String, defaultHex: String, isDarkRow: Bool, reset: @escaping () -> Void) -> some View {",
+                     role: "Appearance's background rows: the colour picker's name and the row's Reset Voice Control label"),
+        ForkedMember(path: "App/Fernlet/SettingsSheet.swift",
+                     declaration: "private var connectionInspectorModeDescription: LocalizedStringKey {",
+                     role: "the Connection Inspector mode picker's explanation line"),
+        ForkedMember(path: "App/Fernlet/SettingsSheet.swift",
+                     declaration: "private func kindLabel(_ kind: FernletLockCredentialKind) -> LocalizedStringKey {",
+                     role: "the App lock status card's passcode-type line"),
+        ForkedMember(path: "App/Fernlet/SettingsSheet.swift",
+                     declaration: "private func changeKindCard(_ kind: FernletLockCredentialKind, title: LocalizedStringKey) -> some View {",
+                     role: "Change passcode's lock-type rows"),
+        ForkedMember(path: "App/Fernlet/DeleteEverythingFlow.swift",
+                     declaration: "successButtonTitle: LocalizedStringKey,",
+                     role: "the Everything deleted alert's button on both delete screens"),
     ]
 
     /// The members this round forked are still forked.
@@ -3244,6 +3265,81 @@ struct LocalizationBoundaryTests {
         return keys
     }()
 
+    /// The Spanish round's settings-lane forks (2026-10-20), kept apart from the other lists for the
+    /// same type-checker reason as ``workoutCopyForkKeys``. Every key was measured absent from its
+    /// catalog before the fork: a `String` helper, a `String`-returning switch, a `+`-assembled or
+    /// English-spliced sentence, or a frozen token drawn raw.
+    static let settingsLaneForkKeys: [HarvestedKey] = {
+        let app = "App/Fernlet/Localizable.xcstrings"
+        let appKeys: [(key: String, source: String)] = [
+            ("Light mode", "SettingsSheet.themeColorRow, forked String → LocalizedStringKey"),
+            ("Dark mode", "SettingsSheet.themeColorRow, forked String → LocalizedStringKey"),
+            ("No overlay and no saved history.", "SettingsSheet.connectionInspectorModeDescription"),
+            ("Records session history without showing the live overlay.", "SettingsSheet.connectionInspectorModeDescription"),
+            ("Records session history and shows the live inspector when you open it manually.",
+             "SettingsSheet.connectionInspectorModeDescription"),
+            ("Alphanumeric password", "AppLockSettingsView.kindLabel"),
+            ("Forget ^[%lld memory](inflect: true) matching \"%@\"?", "Core memory's forget prompt, once an English y/ies splice"),
+            ("Daily target: ^[%lld bottle](inflect: true)", "the hydration stepper, once a fixed 'bottles'"),
+            ("Enter your current passcode to enable %@.", "the biometric verify prompt, once an English enable/disable splice"),
+            ("Enter your current passcode to disable %@.", "the biometric verify prompt, once an English enable/disable splice"),
+            ("settings.goal.overrideFootnote.targetsAndSplit", "the goal override footnote, once assembled from fragments"),
+            ("settings.goal.overrideFootnote.targets", "the goal override footnote, once assembled from fragments"),
+            ("settings.goal.overrideFootnote.split", "the goal override footnote, once assembled from fragments"),
+            ("settings.changePasscode.mismatch", "Change passcode's mismatch line, once a bare String"),
+            ("settings.memory.category.other", "MemoryCategoryName, the Core memory category drawn raw"),
+            ("appearanceMode.system", "FernletAppearanceMode.label, once bare literals"),
+            ("appearanceMode.light", "FernletAppearanceMode.label, once bare literals"),
+            ("appearanceMode.dark", "FernletAppearanceMode.label, once bare literals"),
+            ("settings.haptics.level.off", "the haptics segmented control's own Off, apart from the status 'Off'"),
+            ("Verify to continue", "PrivacyDataSettingsView.verifyButtonTitle, forked String → LocalizedStringKey"),
+            ("Verifying", "PrivacyDataSettingsView.verifyButtonTitle, forked String → LocalizedStringKey"),
+            ("privacy.verify.reason", "the Privacy & Data Face ID / passcode prompt's reason line"),
+            ("privacy.ownPhotos.sizeDisclosure", "the photo backup's size disclosure, once a `+`-built String"),
+            ("privacy.ownPhotos.bindingDisclosure", "the photo backup's binding disclosure, once a `+`-built String"),
+            ("privacy.sealedBackup.disclosure.encryptedOnly", "the encrypted-backup consent alert, once bare String lines"),
+            ("privacy.sealedBackup.disclosure.journal", "the encrypted-backup consent alert, once bare String lines"),
+            ("sealedBackup.noun.ownPhotos", "the photo route's restore lines, once the bare English noun 'photo'"),
+            ("sealedBackup.restore.deferredKeyNotSynced", "restoreStatusMessage, once English sentences returned as String"),
+            ("sealedBackup.restore.rolledBack", "restoreStatusMessage, once English sentences returned as String"),
+            ("privacy.sealedBackup.journal.removeThem", "the journal backup's Remove them, apart from the intimate logs' (gender)"),
+            ("privacy.sealedBackup.intimacy.removeThem", "the intimate-log backup's Remove them, apart from the journal's (gender)"),
+            ("Found ^[%lld meal log](inflect: true), ^[%lld journal entry](inflect: true), ^[%lld workout](inflect: true) in this iCloud account.",
+             "the multiple-devices banner's counts, once fixed English plurals"),
+        ] + ["moodTrend", "energyTrend", "eatingPattern", "progressionTrend", "intensityReadiness",
+             "micronutrientGaps7Day", "micronutrientGaps14Day"].map {
+            ("signal.name.\($0)", "SettingsSignalNames, the Debug page's derived-signal names once drawn raw")
+        }
+        let lock = "FernletKit/Sources/FernletLock/Localizable.xcstrings"
+        let lockKeys: [HarvestedKey] = [
+            "lock.credential.invalid.pin4", "lock.credential.invalid.pin6", "lock.credential.invalid.password",
+            "lock.duress.matchesPasscode", "lock.duress.custodianRequired", "lock.recovery.custodianInUse",
+            "lock.recovery.invalidKey", "lock.recovery.keyMismatch", "lock.recovery.notAvailable",
+            "lock.duress.sessionRefusal", "lock.duress.unenterable", "lock.duress.custodianSuperseded",
+            "lock.biometric.prompt",
+        ].map { HarvestedKey(catalog: lock, key: $0, source: "FernletLockService, a refusal or prompt once a bare String") }
+        let duressKeys: [HarvestedKey] = [
+            "duress.mode.decoy.title", "duress.mode.silentWipe.title", "duress.mode.recoveryLock.title",
+            "duress.mode.decoy.detail", "duress.mode.silentWipe.armTitle", "duress.mode.recoveryLock.armTitle",
+            "duress.mode.unavailable.noCustodian", "duress.custodian.removalRefused", "duress.entry.mismatch",
+            "Your duress code is the same shape as your passcode — a password. If you change your passcode to a different type, set your duress code again so you can still type it.",
+        ].map { HarvestedKey(catalog: app, key: $0, source: "DuressPINSetupView, once a String return or a spliced English noun") }
+        let health = "FernletKit/Sources/HealthKitGateway/Localizable.xcstrings"
+        // The seven `HealthCapability` raw values, spelled out: this file does not import the gateway.
+        let capabilities = ["bodyProfile", "cycleTracking", "bodyContext", "workoutLogging",
+                            "activityContext", "mindfulness", "intimateLogging"]
+        let healthKeys: [HarvestedKey] = capabilities.flatMap { capability in
+            ["title", "summary", "inSentence"].map {
+                HarvestedKey(catalog: health, key: "healthCapability.\(capability).\($0)",
+                             source: "HealthCapability, once bare literals (the deferred 14) plus its mid-sentence name")
+            }
+        } + ["health.status.accessUpdated", "health.status.revokeInstructions", "health.status.contextUpdated",
+             "health.status.contextUnavailable", "health.status.bodyProfilePartial"].map {
+            HarvestedKey(catalog: health, key: $0, source: "a HealthKitAuthorizationViewModel status line that lower-cased a title")
+        }
+        return appKeys.map { HarvestedKey(catalog: app, key: $0.key, source: $0.source) } + lockKeys + duressKeys + healthKeys
+    }()
+
     /// The forks actually reached a catalog.
     ///
     /// This is the half the other tests cannot show. Parts A, E and F prove no *bad* shape is left
@@ -3257,7 +3353,7 @@ struct LocalizationBoundaryTests {
     /// committed), not that a string moved.
     @Test func everyForkedStringActuallyReachedItsCatalog() throws {
         var missing: [String] = []
-        for entry in Self.harvestedForkKeys + Self.workoutCopyForkKeys {
+        for entry in Self.harvestedForkKeys + Self.workoutCopyForkKeys + Self.settingsLaneForkKeys {
             let url = RepoRoot.url(entry.catalog)
             let data = try Data(contentsOf: url)
             let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -3511,6 +3607,11 @@ struct LocalizationBoundaryTests {
                      source: "a Move week-strip tile's spoken logged count"),
         HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings", key: "coachPlan.count.sets",
                      source: "a coach-plan review note's set count ('0 sets')"),
+        // Spanish round, settings lane (2026-10-20): the photo-verification line, once two English
+        // sentences picked by `== 1`. Its one-photo English ("so it may be missing") is the `one` form.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "privacy.ownPhotos.verifiedUnreadable",
+                     source: "Privacy & Data's encrypted photo backup verification line"),
     ]
 
     /// Every count-bearing key carries real plural variations.
@@ -4509,9 +4610,11 @@ struct LocalizationBoundaryTests {
         }
     }
 
-    /// The modules that gained their first catalog in the `LocalizedError` sweep.
+    /// The modules that gained their first catalog in the `LocalizedError` sweep — plus `FernletLock`
+    /// (Spanish round, 2026-10-20), whose `invalidCredential` refusals are the thrower's half of the
+    /// `FernletLockError` copy that `FernletFoundation`'s catalog cannot hold.
     static let localizedErrorSweepCatalogModules = [
-        "AIProviders", "CloudKitSync", "FernletFoundation", "HealthKitGateway",
+        "AIProviders", "CloudKitSync", "FernletFoundation", "HealthKitGateway", "FernletLock",
     ]
 
     /// Every module with a catalog is also named in the sync script's `TARGETS` array.

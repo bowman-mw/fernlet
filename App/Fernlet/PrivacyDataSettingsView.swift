@@ -479,8 +479,9 @@ struct PrivacyDataSettingsView: View {
     }
 
     /// "Try again" once an attempt has been made — the card is the retry state after the automatic
-    /// check on entry was cancelled or failed.
-    private var verifyButtonTitle: String {
+    /// check on entry was cancelled or failed. `LocalizedStringKey`: as a `String` it took `Label`'s
+    /// verbatim initializer, so "Verify to continue" and "Verifying" never reached the catalog.
+    private var verifyButtonTitle: LocalizedStringKey {
         if isVerifying { return "Verifying" }
         return verificationError == nil ? "Verify to continue" : "Try again"
     }
@@ -640,8 +641,12 @@ struct PrivacyDataSettingsView: View {
     private var exportDataCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionLabel("Your data")
-            Text("Export a readable copy of your own Fernlet data as a JSON file. It leaves out your "
-                 + "sealed period, intimate, and sensitive-memory data, and your photos.")
+            // One literal, not a `+`: a concatenation is a `String`, which binds `Text`'s verbatim
+            // initializer and never reaches the catalog (the T2-1 class). Same rendered words.
+            Text("""
+                Export a readable copy of your own Fernlet data as a JSON file. It leaves out your \
+                sealed period, intimate, and sensitive-memory data, and your photos.
+                """)
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
@@ -942,18 +947,16 @@ struct PrivacyDataSettingsView: View {
     private var ownPhotoDeviceBindingRow: some View {
         if let store {
             if store.ownPhotoKeyDeviceBound {
-                Text("These photos are locked to this device: their key never leaves it, so a copy of "
-                    + "your device backup can't open them. They won't restore onto a new phone "
-                    + (storagePreferencesStore.preferences.sealedBackupOwnPhotosEnabled
-                        ? "from a device backup — the encrypted photo backup under Backups is how they come back."
-                        : "at all. Turn on the encrypted photo backup under Backups if you want them to survive a phone swap."))
+                ownPhotoDeviceBoundLine
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
                     .accessibilityIdentifier("privacy.ownPhotos.deviceBound")
             } else if !store.ownPhotoSweepComplete {
-                Text("Fernlet is still checking your existing photos. "
-                    + "Locking them to this device becomes available once that finishes.")
+                Text("""
+                    Fernlet is still checking your existing photos. \
+                    Locking them to this device becomes available once that finishes.
+                    """)
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
@@ -994,8 +997,10 @@ struct PrivacyDataSettingsView: View {
                     .fernletWrappingText()
 
                 if ownPhotoBindingDeferred {
-                    Text("Couldn't lock the photos to this device just now. Your choice is saved — "
-                        + "Fernlet will finish it the next time it can reach the keychain.")
+                    Text("""
+                        Couldn't lock the photos to this device just now. Your choice is saved — \
+                        Fernlet will finish it the next time it can reach the keychain.
+                        """)
                         .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.terracotta)
                         .fernletWrappingText()
@@ -1003,6 +1008,26 @@ struct PrivacyDataSettingsView: View {
                 }
             }
         }
+    }
+
+    /// What the device-bound photos line says, by whether the encrypted photo backup covers a phone
+    /// swap. Two whole sentences chosen by the backup switch, rather than one sentence with its
+    /// second half spliced on by `+` — which made it a `String` that never reached the catalog, and
+    /// a fragment no translator could reorder.
+    private var ownPhotoDeviceBoundLine: Text {
+        if storagePreferencesStore.preferences.sealedBackupOwnPhotosEnabled {
+            return Text("""
+                These photos are locked to this device: their key never leaves it, so a copy of \
+                your device backup can't open them. They won't restore onto a new phone from a \
+                device backup — the encrypted photo backup under Backups is how they come back.
+                """)
+        }
+        return Text("""
+            These photos are locked to this device: their key never leaves it, so a copy of \
+            your device backup can't open them. They won't restore onto a new phone at all. \
+            Turn on the encrypted photo backup under Backups if you want them to survive a \
+            phone swap.
+            """)
     }
 
     /// The lock button's label: the full sentence normally, shortened to "Lock photos" at
@@ -1018,16 +1043,21 @@ struct PrivacyDataSettingsView: View {
     }
 
     /// The trade, stated before the tap — and it differs by exactly one fact: whether the encrypted
-    /// photo backup is already covering the phone-swap case.
-    private var ownPhotoDeviceBindingExplanation: String {
+    /// photo backup is already covering the phone-swap case. `LocalizedStringKey` from one literal per
+    /// branch: the `+`-built `String` it used to be never reached the catalog.
+    private var ownPhotoDeviceBindingExplanation: LocalizedStringKey {
         if storagePreferencesStore.preferences.sealedBackupOwnPhotosEnabled {
-            return "Locks your meal, recipe and progress photos to a key that never leaves this device, "
-                + "so a copy of your device backup can't open them. Your encrypted photo backup still "
-                + "restores them onto a new phone."
+            return """
+                Locks your meal, recipe and progress photos to a key that never leaves this device, \
+                so a copy of your device backup can't open them. Your encrypted photo backup still \
+                restores them onto a new phone.
+                """
         }
-        return "Locks your meal, recipe and progress photos to a key that never leaves this device, so a "
-            + "copy of your device backup can't open them. Because the encrypted photo backup (under "
-            + "Backups) is off, these photos then won't come back on a new or erased phone. This can't be undone."
+        return """
+            Locks your meal, recipe and progress photos to a key that never leaves this device, so a \
+            copy of your device backup can't open them. Because the encrypted photo backup (under \
+            Backups) is off, these photos then won't come back on a new or erased phone. This can't be undone.
+            """
     }
 
     private func presentOwnPhotoDeviceBindingConfirmation() {
@@ -1066,20 +1096,33 @@ struct PrivacyDataSettingsView: View {
     /// The honest size disclosure for the own-photo backup. Fernlet puts no count cap on meal,
     /// recipe or progress photos, so a heavy user's library really can run to hundreds of megabytes
     /// — and it is the USER's iCloud quota, not the developer's. Said plainly next to the switch.
-    private static let ownPhotoBackupSizeDisclosure =
-        "Your meal, recipe and progress photos, encrypted. Fernlet doesn't limit how many photos you keep, "
-        + "so this can use a lot of your iCloud storage — roughly 150–400 KB per photo, which is 100–250 MB "
-        + "or more for a big library. Only photos that changed are uploaded."
+    ///
+    /// A resolved `String` (one catalog key) rather than a `LocalizedStringKey`, because the backup
+    /// consent alert joins it with the other two paragraphs.
+    private static var ownPhotoBackupSizeDisclosure: String {
+        String(localized: "privacy.ownPhotos.sizeDisclosure",
+               defaultValue: """
+                   Your meal, recipe and progress photos, encrypted. Fernlet doesn't limit how many photos you keep, \
+                   so this can use a lot of your iCloud storage — roughly 150–400 KB per photo, which is 100–250 MB \
+                   or more for a big library. Only photos that changed are uploaded.
+                   """,
+               comment: "Privacy & Data: under the encrypted photo backup switch, and the first paragraph of its consent alert. The sizes are approximate; keep the numbers.")
+    }
 
     /// The one consequence of this switch that is NOT about iCloud, said before the tap rather than
     /// only afterwards in `ownPhotoDeviceBindingRow`: once the first backup actually lands, these
     /// photos' key is locked to this device, which is irreversible and changes how they come back on
     /// a new phone. Deliberately phrased "once your photos are safely in the backup" because that is
     /// exactly the gate — the binding follows a committed upload, never the switch alone.
-    private static let ownPhotoBackupBindingDisclosure =
-        "Once your photos are safely in the backup, Fernlet locks their encryption key to this device, "
-        + "so a copy of your device backup can't open them. That can't be undone, and from then on this "
-        + "encrypted backup is how they come back on a new phone."
+    private static var ownPhotoBackupBindingDisclosure: String {
+        String(localized: "privacy.ownPhotos.bindingDisclosure",
+               defaultValue: """
+                   Once your photos are safely in the backup, Fernlet locks their encryption key to this device, \
+                   so a copy of your device backup can't open them. That can't be undone, and from then on this \
+                   encrypted backup is how they come back on a new phone.
+                   """,
+               comment: "Privacy & Data: the last paragraph of the encrypted photo backup's consent alert. Turning the backup on is what eventually locks the photos' key to this iPhone.")
+    }
 
     /// True when an iCloud account is signed in on this device. A DEBUG launch override lets UI tests
     /// exercise the "another device has data" path without a real iCloud account (mirrors the
@@ -1114,7 +1157,8 @@ struct PrivacyDataSettingsView: View {
                     .foregroundStyle(Color.bark)
                     .fernletWrappingText()
                 if warning == .anotherDeviceHasData, let summary = existingDataSummary {
-                    Text("Found \(summary.mealLogCount) meal logs, \(summary.journalEntryCount) journal entries, \(summary.workoutCount) workouts in this iCloud account.")
+                    // Grammar agreement on each count: the fixed plurals read "1 workouts".
+                    Text("Found ^[\(summary.mealLogCount) meal log](inflect: true), ^[\(summary.journalEntryCount) journal entry](inflect: true), ^[\(summary.workoutCount) workout](inflect: true) in this iCloud account.")
                         .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                         .fernletWrappingText()
@@ -1205,8 +1249,10 @@ struct PrivacyDataSettingsView: View {
             // photos never takes the restore path at all, so without this line a pass in which
             // nothing reached iCloud is completely invisible — an ON switch, an accepted size
             // disclosure, and no backup.
-            Text("Couldn't upload your photos to your encrypted backup just now, so some or "
-                + "all of them may not be in iCloud yet. We'll keep trying, or tap Retry.")
+            Text("""
+                Couldn't upload your photos to your encrypted backup just now, so some or \
+                all of them may not be in iCloud yet. We'll keep trying, or tap Retry.
+                """)
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
@@ -1219,16 +1265,10 @@ struct PrivacyDataSettingsView: View {
             // may be missing from the backup or out of date in it. Silently reporting the pass as
             // clean is exactly what the verification pass exists to prevent.
             //
-            // Two whole-sentence literals rather than one concatenation: a literal in first-argument
-            // position is a `LocalizedStringKey` the catalog sync can harvest, while a built `String`
-            // binds the verbatim overload and stays English in every language.
-            Group {
-                if store.ownPhotoBackupVerifiedUnreadable == 1 {
-                    Text("Couldn't read 1 of your photos while verifying your encrypted backup, so it may be missing from iCloud or out of date there. Copies already backed up were kept. Tap Retry to verify again.")
-                } else {
-                    Text("Couldn't read \(store.ownPhotoBackupVerifiedUnreadable) of your photos while verifying your encrypted backup, so some may be missing from iCloud or out of date there. Copies already backed up were kept. Tap Retry to verify again.")
-                }
-            }
+            // One count-bearing key whose `one`/`other` English is authored in the catalog, rather
+            // than two English sentences picked by `== 1`: a language with more plural forms than
+            // English needs the choice to be the catalog's, not this branch's.
+            Text(Self.photosUnreadableLine(store.ownPhotoBackupVerifiedUnreadable))
             .font(.fernlet(.bodySmall))
             .foregroundStyle(Color.slate)
             .fernletWrappingText()
@@ -1246,7 +1286,7 @@ struct PrivacyDataSettingsView: View {
         // The photo route reuses the same outcome vocabulary as the payload backups, so
         // it reads the same — only the noun differs.
         if let ownPhotoAttention {
-            Text(restoreStatusMessage(ownPhotoAttention, noun: "photo"))
+            Text(restoreStatusMessage(ownPhotoAttention, noun: Self.ownPhotoBackupNoun))
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
@@ -1740,22 +1780,50 @@ struct PrivacyDataSettingsView: View {
         restoreStatusMessage(outcome, noun: payload.displayNoun)
     }
 
+    /// The mid-sentence noun the own-photo route's restore lines use — the photo backup's equivalent
+    /// of `SealedBackupPayloadType.displayNoun`, which it is not a case of.
+    private static var ownPhotoBackupNoun: String {
+        String(localized: "sealedBackup.noun.ownPhotos", defaultValue: "photo",
+               comment: "Mid-sentence noun for the encrypted backup of the user's own meal, recipe and progress photos, e.g. 'Couldn't reach your photo backup just now.'")
+    }
+
+    /// The photo-verification line for `count` photos that could not be read. The key carries `one`
+    /// and `other` English in the catalog ("so it may be" / "so some may be").
+    private static func photosUnreadableLine(_ count: Int) -> String {
+        String(localized: "privacy.ownPhotos.verifiedUnreadable",
+               defaultValue: "Couldn't read \(count) of your photos while verifying your encrypted backup, so some may be missing from iCloud or out of date there. Copies already backed up were kept. Tap Retry to verify again.",
+               comment: "Privacy & Data: the encrypted photo backup's verification pass could not read this many photos. Needs a plural variation; the one-photo English says 'so it may be missing'.")
+    }
+
     /// The same copy, keyed by a bare noun so the own-photo route — which is not a
     /// `SealedBackupPayloadType` — reads identically to the payload backups.
+    ///
+    /// Each line is one catalog sentence with the noun as its argument (the house pattern of
+    /// `displayNoun`, whose keys are mid-sentence nouns), never English with a word spliced in.
     private func restoreStatusMessage(_ outcome: SealedBackupRestoreOutcome, noun: String) -> String {
         switch outcome {
         case .deferredKeyNotSynced:
-            return "Couldn't restore your \(noun) backup on this device yet — iCloud Keychain may still be syncing. We'll keep trying, or tap Retry."
+            return String(localized: "sealedBackup.restore.deferredKeyNotSynced",
+                          defaultValue: "Couldn't restore your \(noun) backup on this device yet — iCloud Keychain may still be syncing. We'll keep trying, or tap Retry.",
+                          comment: "Privacy & Data: a Sealed backup could not be restored yet because its key has not arrived through iCloud Keychain. The placeholder is a mid-sentence backup noun such as 'period' or 'photo'.")
         case .deferredLocked:
-            return "Your \(noun) backup is ready to restore, but Fernlet is locked. Unlock, then tap Retry."
+            return String(localized: "sealedBackup.restore.deferredLocked",
+                          defaultValue: "Your \(noun) backup is ready to restore, but Fernlet is locked. Unlock, then tap Retry.",
+                          comment: "Privacy & Data: a Sealed backup is waiting for Fernlet's app lock to be unlocked. The placeholder is a mid-sentence backup noun such as 'period' or 'photo'.")
         case .deferredTransient:
-            return "Couldn't reach your \(noun) backup just now. We'll keep trying, or tap Retry."
+            return String(localized: "sealedBackup.restore.deferredTransient",
+                          defaultValue: "Couldn't reach your \(noun) backup just now. We'll keep trying, or tap Retry.",
+                          comment: "Privacy & Data: iCloud could not be reached for a Sealed backup. The placeholder is a mid-sentence backup noun such as 'period' or 'photo'.")
         case .notRecognized:
-            return "A \(noun) backup was found in iCloud, but it isn't encrypted with this account's key, so it can't be restored on this device."
+            return String(localized: "sealedBackup.restore.notRecognized",
+                          defaultValue: "A \(noun) backup was found in iCloud, but it isn't encrypted with this account's key, so it can't be restored on this device.",
+                          comment: "Privacy & Data: a Sealed backup in iCloud was sealed with a different account's key. The placeholder is a mid-sentence backup noun such as 'period' or 'photo'.")
         case .rolledBack:
             // No Retry hint: retrying re-fetches the same record. The honest ask is to re-upload
             // from a device that still holds the data, which is the only path that recovers.
-            return "The \(noun) backup in iCloud is older than one this device already has, so Fernlet didn't restore it — that shouldn't happen on its own. Nothing was changed. If you still have this data on another device, back it up again from there."
+            return String(localized: "sealedBackup.restore.rolledBack",
+                          defaultValue: "The \(noun) backup in iCloud is older than one this device already has, so Fernlet didn't restore it — that shouldn't happen on its own. Nothing was changed. If you still have this data on another device, back it up again from there.",
+                          comment: "Privacy & Data: the Sealed backup in iCloud is older than this iPhone's copy, so it was not restored. The placeholder is a mid-sentence backup noun such as 'period' or 'photo'.")
         case .needsNewerFernlet:
             // No Retry hint either: only an update reads it (review B3 fix round 1).
             return String(
@@ -2354,19 +2422,34 @@ struct PrivacyDataSettingsView: View {
         }
     }
 
+    /// The encrypted-backup consent paragraphs: three every backup shares, plus one naming the
+    /// payload. Each paragraph is a whole catalog sentence; joining PARAGRAPHS with a blank line is
+    /// layout, not sentence assembly.
     private func sealedBackupDisclosure(for payload: SealedBackupPayloadType?) -> String {
         var lines = [
-            "Your data leaves this device only in encrypted form.",
-            "Apple can't read it.",
-            "If iCloud Keychain is ever permanently lost, this backup can't be recovered on a new device."
+            String(localized: "privacy.sealedBackup.disclosure.encryptedOnly",
+                   defaultValue: "Your data leaves this device only in encrypted form.",
+                   comment: "Encrypted backup consent alert, first paragraph."),
+            String(localized: "privacy.sealedBackup.disclosure.appleCantRead",
+                   defaultValue: "Apple can't read it.",
+                   comment: "Encrypted backup consent alert, second paragraph: 'it' is the encrypted backup."),
+            String(localized: "privacy.sealedBackup.disclosure.keychainLoss",
+                   defaultValue: "If iCloud Keychain is ever permanently lost, this backup can't be recovered on a new device.",
+                   comment: "Encrypted backup consent alert, third paragraph: the backup's key lives in iCloud Keychain."),
         ]
         switch payload {
         case .periodData:
-            lines.append("Period data is sensitive; it is uploaded only in this encrypted form.")
+            lines.append(String(localized: "privacy.sealedBackup.disclosure.period",
+                                defaultValue: "Period data is sensitive; it is uploaded only in this encrypted form.",
+                                comment: "Encrypted backup consent alert, last paragraph when turning on the cycle backup."))
         case .intimacyLogs:
-            lines.append("Intimate logs are sensitive; they are uploaded only in this encrypted form.")
+            lines.append(String(localized: "privacy.sealedBackup.disclosure.intimacy",
+                                defaultValue: "Intimate logs are sensitive; they are uploaded only in this encrypted form.",
+                                comment: "Encrypted backup consent alert, last paragraph when turning on the intimate log backup."))
         case .journalNarratives:
-            lines.append("Your journal text is uploaded only in this encrypted form.")
+            lines.append(String(localized: "privacy.sealedBackup.disclosure.journal",
+                                defaultValue: "Your journal text is uploaded only in this encrypted form.",
+                                comment: "Encrypted backup consent alert, last paragraph when turning on the journal backup."))
         case .sensitiveNotes, nil:
             break
         }
@@ -2446,13 +2529,17 @@ struct PrivacyDataSettingsView: View {
         isVerifying = true
         verificationError = nil
         let hasFernletPasscode = isLockConfigured
+        // The system's Face ID / passcode sheet shows this line, so it is the app's to localize.
+        let reason = String(localized: "privacy.verify.reason",
+                            defaultValue: "Verify to access Privacy & Data settings.",
+                            comment: "Shown by iOS in the Face ID or device passcode prompt that guards Privacy & Data.")
         Task { @MainActor in
             let context = LAContext()
-            context.localizedReason = "Verify to access Privacy & Data settings."
+            context.localizedReason = reason
             do {
                 let success = try await context.evaluatePolicy(
                     .deviceOwnerAuthentication,
-                    localizedReason: "Verify to access Privacy & Data settings."
+                    localizedReason: reason
                 )
                 hasFreshVerification = success
             } catch let error as LAError where error.code == .passcodeNotSet && !hasFernletPasscode {

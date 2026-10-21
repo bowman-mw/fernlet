@@ -169,15 +169,62 @@ public enum HealthCapability: String, CaseIterable, Identifiable {
     public var id: String { rawValue }
 
     /// Short display name for settings rows and status messages.
+    ///
+    /// Display only — persistence and the preference keys ride `rawValue` — so it localizes in place
+    /// (Spanish round, 2026-10-20). A sentence that names a capability mid-sentence uses
+    /// ``inSentenceName``, never `title.lowercased()`: lower-casing a translated word in code is
+    /// wrong in most languages.
     public var title: String {
         switch self {
-        case .bodyProfile: "Body profile"
-        case .cycleTracking: "Cycle tracking"
-        case .bodyContext: "Body context"
-        case .workoutLogging: "Workout logging"
-        case .activityContext: "Activity context"
-        case .mindfulness: "Mindfulness"
-        case .intimateLogging: "Intimate logging"
+        case .bodyProfile:
+            String(localized: "healthCapability.bodyProfile.title", defaultValue: "Body profile", bundle: .module,
+                   comment: "Name of an Apple Health permission kind (age, sex, height and weight), as a heading or at the start of a sentence.")
+        case .cycleTracking:
+            String(localized: "healthCapability.cycleTracking.title", defaultValue: "Cycle tracking", bundle: .module,
+                   comment: "Name of an Apple Health permission kind (menstrual-cycle observations), as a heading or at the start of a sentence.")
+        case .bodyContext:
+            String(localized: "healthCapability.bodyContext.title", defaultValue: "Body context", bundle: .module,
+                   comment: "Name of an Apple Health permission kind (sleep, heart and temperature signals for recovery), as a heading or at the start of a sentence.")
+        case .workoutLogging:
+            String(localized: "healthCapability.workoutLogging.title", defaultValue: "Workout logging", bundle: .module,
+                   comment: "Name of an Apple Health permission kind (workouts, read and written), as a heading or at the start of a sentence.")
+        case .activityContext:
+            String(localized: "healthCapability.activityContext.title", defaultValue: "Activity context", bundle: .module,
+                   comment: "Name of an Apple Health permission kind (steps, active energy and exercise minutes), as a heading or at the start of a sentence.")
+        case .mindfulness:
+            String(localized: "healthCapability.mindfulness.title", defaultValue: "Mindfulness", bundle: .module,
+                   comment: "Name of an Apple Health permission kind (mindful sessions written to Health), as a heading or at the start of a sentence.")
+        case .intimateLogging:
+            String(localized: "healthCapability.intimateLogging.title", defaultValue: "Intimate logging", bundle: .module,
+                   comment: "Name of an Apple Health permission kind (sexual activity, only when the user turns it on), as a heading or at the start of a sentence.")
+        }
+    }
+
+    /// The capability's name as it reads in the middle of a sentence ("Updated Health access for
+    /// body profile."), its own catalog key rather than a lower-cased ``title``.
+    public var inSentenceName: String {
+        switch self {
+        case .bodyProfile:
+            String(localized: "healthCapability.bodyProfile.inSentence", defaultValue: "body profile", bundle: .module,
+                   comment: "Name of an Apple Health permission kind (age, sex, height and weight) in the middle of a sentence, e.g. 'Updated Health access for body profile.'")
+        case .cycleTracking:
+            String(localized: "healthCapability.cycleTracking.inSentence", defaultValue: "cycle tracking", bundle: .module,
+                   comment: "Name of an Apple Health permission kind (menstrual-cycle observations) in the middle of a sentence, e.g. 'Updated Health access for cycle tracking.'")
+        case .bodyContext:
+            String(localized: "healthCapability.bodyContext.inSentence", defaultValue: "body context", bundle: .module,
+                   comment: "Name of an Apple Health permission kind (sleep, heart and temperature signals for recovery) in the middle of a sentence, e.g. 'Updated Health access for body context.'")
+        case .workoutLogging:
+            String(localized: "healthCapability.workoutLogging.inSentence", defaultValue: "workout logging", bundle: .module,
+                   comment: "Name of an Apple Health permission kind (workouts, read and written) in the middle of a sentence, e.g. 'Updated Health access for workout logging.'")
+        case .activityContext:
+            String(localized: "healthCapability.activityContext.inSentence", defaultValue: "activity context", bundle: .module,
+                   comment: "Name of an Apple Health permission kind (steps, active energy and exercise minutes) in the middle of a sentence, e.g. 'Updated Health access for activity context.'")
+        case .mindfulness:
+            String(localized: "healthCapability.mindfulness.inSentence", defaultValue: "mindfulness", bundle: .module,
+                   comment: "Name of an Apple Health permission kind (mindful sessions written to Health) in the middle of a sentence, e.g. 'Updated Health access for mindfulness.'")
+        case .intimateLogging:
+            String(localized: "healthCapability.intimateLogging.inSentence", defaultValue: "intimate logging", bundle: .module,
+                   comment: "Name of an Apple Health permission kind (sexual activity, only when the user turns it on) in the middle of a sentence, e.g. 'Updated Health access for intimate logging.'")
         }
     }
 
@@ -186,19 +233,33 @@ public enum HealthCapability: String, CaseIterable, Identifiable {
     public var summary: String {
         switch self {
         case .bodyProfile:
-            "Read age, biological sex, height, and weight from Apple Health. Fernlet can write height and weight changes back when Health access allows it."
+            String(localized: "healthCapability.bodyProfile.summary",
+                   defaultValue: "Read age, biological sex, height, and weight from Apple Health. Fernlet can write height and weight changes back when Health access allows it.",
+                   bundle: .module, comment: "The sentence beside an Apple Health permission kind's switch, saying exactly what it reads and writes.")
         case .cycleTracking:
-            "Read and write cycle observations like menstrual flow, basal body temperature, cervical mucus, intermenstrual bleeding, and ovulation test results."
+            String(localized: "healthCapability.cycleTracking.summary",
+                   defaultValue: "Read and write cycle observations like menstrual flow, basal body temperature, cervical mucus, intermenstrual bleeding, and ovulation test results.",
+                   bundle: .module, comment: "The sentence beside an Apple Health permission kind's switch, saying exactly what it reads and writes.")
         case .bodyContext:
-            "Read sleep, resting heart rate, heart rate variability, respiratory rate, and sleeping wrist temperature for recovery-aware companion context."
+            String(localized: "healthCapability.bodyContext.summary",
+                   defaultValue: "Read sleep, resting heart rate, heart rate variability, respiratory rate, and sleeping wrist temperature for recovery-aware companion context.",
+                   bundle: .module, comment: "The sentence beside an Apple Health permission kind's switch, saying exactly what it reads and writes.")
         case .workoutLogging:
-            "Read and write workouts in Apple Health so Fernlet and Apple Fitness stay in sync."
+            String(localized: "healthCapability.workoutLogging.summary",
+                   defaultValue: "Read and write workouts in Apple Health so Fernlet and Apple Fitness stay in sync.",
+                   bundle: .module, comment: "The sentence beside an Apple Health permission kind's switch, saying exactly what it reads and writes.")
         case .activityContext:
-            "Read steps, active energy, and exercise minutes for daily activity context."
+            String(localized: "healthCapability.activityContext.summary",
+                   defaultValue: "Read steps, active energy, and exercise minutes for daily activity context.",
+                   bundle: .module, comment: "The sentence beside an Apple Health permission kind's switch, saying exactly what it reads and writes.")
         case .mindfulness:
-            "Write mindful sessions completed in Fernlet to Apple Health."
+            String(localized: "healthCapability.mindfulness.summary",
+                   defaultValue: "Write mindful sessions completed in Fernlet to Apple Health.",
+                   bundle: .module, comment: "The sentence beside an Apple Health permission kind's switch, saying exactly what it reads and writes.")
         case .intimateLogging:
-            "Read and write sexual activity only when explicitly enabled."
+            String(localized: "healthCapability.intimateLogging.summary",
+                   defaultValue: "Read and write sexual activity only when explicitly enabled.",
+                   bundle: .module, comment: "The sentence beside an Apple Health permission kind's switch, saying exactly what it reads and writes.")
         }
     }
 }
@@ -243,13 +304,37 @@ public struct HealthBodyProfile {
         [age != nil, sex != nil, heightInches != nil, weightPounds != nil].filter { $0 }.count
     }
 
-    /// Names of the fields Health did not supply, for the "manual settings remain for …" message.
+    /// Names of the fields Health did not supply, as plain English tokens. Display goes through
+    /// ``missingFieldDisplayNames``.
     public var missingFieldNames: [String] {
         var names: [String] = []
         if age == nil { names.append("age") }
         if sex == nil { names.append("sex") }
         if heightInches == nil { names.append("height") }
         if weightPounds == nil { names.append("weight") }
+        return names
+    }
+
+    /// The localized names of the fields Health did not supply, for the "manual settings remain for
+    /// …" message, in the same order as ``missingFieldNames``.
+    public var missingFieldDisplayNames: [String] {
+        var names: [String] = []
+        if age == nil {
+            names.append(String(localized: "health.bodyField.age", defaultValue: "age", bundle: .module,
+                                comment: "A body-profile field Apple Health did not supply, listed mid-sentence."))
+        }
+        if sex == nil {
+            names.append(String(localized: "health.bodyField.sex", defaultValue: "sex", bundle: .module,
+                                comment: "A body-profile field Apple Health did not supply (biological sex), listed mid-sentence."))
+        }
+        if heightInches == nil {
+            names.append(String(localized: "health.bodyField.height", defaultValue: "height", bundle: .module,
+                                comment: "A body-profile field Apple Health did not supply, listed mid-sentence."))
+        }
+        if weightPounds == nil {
+            names.append(String(localized: "health.bodyField.weight", defaultValue: "weight", bundle: .module,
+                                comment: "A body-profile field Apple Health did not supply, listed mid-sentence."))
+        }
         return names
     }
 
@@ -2592,7 +2677,9 @@ public final class HealthKitAuthorizationViewModel {
         // incapability there stated the wrong cause. The settings screen presents its own routed
         // integration-off card for that state, so no status text is set for it here.
         if !resolvedService.isHealthDataAvailable() {
-            statusMessage = "Health data is not available on this device."
+            statusMessage = String(localized: "health.status.deviceUnavailable",
+                                   defaultValue: "Health data is not available on this device.", bundle: .module,
+                                   comment: "Settings › Health status line on a device with no Apple Health (for example an iPad).")
         }
     }
 
@@ -2617,7 +2704,9 @@ public final class HealthKitAuthorizationViewModel {
             _ = try await service.requestAuthorization(for: capability)
             markRequested(capability)
             snapshot = service.currentAuthorizationSnapshot()
-            statusMessage = "Updated Health access for \(capability.title.lowercased())."
+            statusMessage = String(localized: "health.status.accessUpdated",
+                                   defaultValue: "Updated Health access for \(capability.inSentenceName).", bundle: .module,
+                                   comment: "Settings › Health status line after the Health permission sheet closed. The placeholder is a permission kind read mid-sentence, e.g. 'body profile'.")
         } catch {
             statusMessage = error.localizedDescription
         }
@@ -2626,13 +2715,19 @@ public final class HealthKitAuthorizationViewModel {
     /// Sets `statusMessage` to the manual-revocation walkthrough — iOS gives apps no API to revoke
     /// Health permissions themselves.
     public func showRevocationInstructions(for capability: HealthCapability) {
-        statusMessage = "To revoke \(capability.title.lowercased()) access, open Settings > Privacy & Security > Health > Fernlet. iOS does not allow apps to revoke Health permissions directly."
+        statusMessage = String(localized: "health.status.revokeInstructions",
+                               defaultValue: "To revoke \(capability.inSentenceName) access, open Settings > Privacy & Security > Health > Fernlet. iOS does not allow apps to revoke Health permissions directly.",
+                               bundle: .module,
+                               comment: "Settings › Health: how to take back a Health permission. The placeholder is a permission kind read mid-sentence. 'Settings > Privacy & Security > Health > Fernlet' is the iOS Settings path: use the names iOS shows in this language.")
     }
 
     /// Sets `statusMessage` to the 16+ age-gate explanation shown instead of the intimate-logging
     /// authorization flow when the user is below the gate.
     public func showIntimateLoggingAgeWallMessage() {
-        statusMessage = "Intimate logging is available at 16 and older. Fernlet checks your age range with Apple — see Settings › Intimacy."
+        statusMessage = String(localized: "health.status.intimateAgeWall",
+                               defaultValue: "Intimate logging is available at 16 and older. Fernlet checks your age range with Apple — see Settings › Intimacy.",
+                               bundle: .module,
+                               comment: "Settings › Health: shown instead of the intimate-logging Health permission for someone under 16.")
     }
 
     /// First-time body-profile import: prompts for authorization, then returns the fields Health
@@ -2661,7 +2756,10 @@ public final class HealthKitAuthorizationViewModel {
             try await service.saveBodyProfileMeasurements(profile)
             snapshot = service.currentAuthorizationSnapshot()
         } catch {
-            statusMessage = "Could not update height or weight in Health. \(error.localizedDescription)"
+            statusMessage = String(localized: "health.status.measurementsFailed",
+                                   defaultValue: "Could not update height or weight in Health. \(error.localizedDescription)",
+                                   bundle: .module,
+                                   comment: "Settings › Health: writing height or weight to Apple Health failed. The placeholder is the system's own error sentence.")
         }
     }
 
@@ -2675,10 +2773,15 @@ public final class HealthKitAuthorizationViewModel {
         do {
             let context = try await service.loadDailyHealthContext(referenceDate: .now, capabilities: [capability])
             markRequested(capability)
-            statusMessage = "Updated \(capability.title.lowercased()) data from Health."
+            statusMessage = String(localized: "health.status.contextUpdated",
+                                   defaultValue: "Updated \(capability.inSentenceName) data from Health.", bundle: .module,
+                                   comment: "Settings › Health: a permission kind's data was refreshed from Apple Health. The placeholder is the kind read mid-sentence, e.g. 'activity context'.")
             return context
         } catch {
-            statusMessage = "\(capability.title) update was unavailable. Manual app entries remain available. \(error.localizedDescription)"
+            statusMessage = String(localized: "health.status.contextUnavailable",
+                                   defaultValue: "\(capability.title) update was unavailable. Manual app entries remain available. \(error.localizedDescription)",
+                                   bundle: .module,
+                                   comment: "Settings › Health: refreshing a permission kind from Apple Health failed. The first placeholder is the kind's name as a heading, the second the system's own error sentence.")
             return nil
         }
     }
@@ -2695,19 +2798,44 @@ public final class HealthKitAuthorizationViewModel {
             markRequested(.bodyProfile)
             snapshot = service.currentAuthorizationSnapshot()
             guard healthProfile.appliedFieldCount > 0 else {
-                statusMessage = "No body profile data was available from Health. Manual settings will be used."
+                statusMessage = String(localized: "health.status.bodyProfileEmpty",
+                                       defaultValue: "No body profile data was available from Health. Manual settings will be used.",
+                                       bundle: .module,
+                                       comment: "Settings › Health: Apple Health supplied no age, sex, height or weight.")
                 return nil
             }
-            if healthProfile.missingFieldNames.isEmpty {
-                statusMessage = requestsAuthorization ? "Imported body profile from Health." : "Updated body profile from Health."
-            } else {
-                statusMessage = "Updated \(healthProfile.appliedFieldCount) fields from Health. Manual settings remain for \(healthProfile.missingFieldNames.joined(separator: ", "))."
-            }
+            statusMessage = Self.bodyProfileMessage(for: healthProfile, imported: requestsAuthorization)
             return healthProfile
         } catch {
-            statusMessage = "Health profile update was unavailable. Manual settings will be used. \(error.localizedDescription)"
+            statusMessage = String(localized: "health.status.bodyProfileFailed",
+                                   defaultValue: "Health profile update was unavailable. Manual settings will be used. \(error.localizedDescription)",
+                                   bundle: .module,
+                                   comment: "Settings › Health: reading the body profile from Apple Health failed. The placeholder is the system's own error sentence.")
             return nil
         }
+    }
+
+    /// The status line after a body-profile read that supplied at least one field.
+    ///
+    /// The partial case agrees its count by grammar agreement in `AttributedString(localized:)` (a
+    /// fixed "fields" read "Updated 1 fields") and lists the missing fields with the locale's own
+    /// narrow list format, which in English is the ", " join this line always used.
+    private static func bodyProfileMessage(for profile: HealthBodyProfile, imported: Bool) -> String {
+        guard !profile.missingFieldDisplayNames.isEmpty else {
+            if imported {
+                return String(localized: "health.status.bodyProfileImported", defaultValue: "Imported body profile from Health.",
+                              bundle: .module, comment: "Settings › Health: the first body-profile import from Apple Health supplied every field.")
+            }
+            return String(localized: "health.status.bodyProfileUpdated", defaultValue: "Updated body profile from Health.",
+                          bundle: .module, comment: "Settings › Health: a body-profile refresh from Apple Health supplied every field.")
+        }
+        let missing = profile.missingFieldDisplayNames.formatted(.list(type: .and, width: .narrow))
+        let line = AttributedString(
+            localized: "health.status.bodyProfilePartial",
+            defaultValue: "Updated ^[\(profile.appliedFieldCount) field](inflect: true) from Health. Manual settings remain for \(missing).",
+            bundle: .module,
+            comment: "Settings › Health: Apple Health supplied only some body-profile fields. The count agrees with 'field' automatically; the second placeholder lists the fields it did not supply, e.g. 'age, sex'.")
+        return String(line.characters)
     }
 
     /// Records the prompt in the persisted ledger.

@@ -239,7 +239,10 @@ extension SealedBackupV2RowCopy {
                             hint: Text("Backs up this iPhone over the backup in iCloud.", comment: "Accessibility hint for Replace on a Sealed backup (journal or intimate logs).")),
             startNew: Choice(title: Text("Start a new backup", comment: "Privacy & Data: start a new Sealed backup (journal or intimate logs) over one this iPhone cannot open."),
                              hint: Text("Replaces a backup this iPhone can't open.", comment: "Accessibility hint for Start a new backup on a Sealed backup (journal or intimate logs).")),
-            remove: Choice(title: Text("Remove them", comment: "Privacy & Data: remove the Sealed backup entries (journal or intimate logs) this iPhone cannot open."),
+            // Its own key, not the journal's shared "Remove them": "them" is the intimate LOGS here
+            // and the journal ENTRIES there, which take different genders in Spanish.
+            remove: Choice(title: Text(LocalizedStringResource("privacy.sealedBackup.intimacy.removeThem", defaultValue: "Remove them",
+                                                               comment: "Privacy & Data: remove the intimate logs this iPhone cannot open from the intimate-log Sealed backup. 'Them' is the logs.")),
                            hint: Text("Checks the logs again, then deletes those that still can't be opened.", comment: "Accessibility hint for Remove them on the intimate-log Sealed backup."))
         )
     }
@@ -282,7 +285,8 @@ extension SealedBackupV2RowCopy {
                             hint: Text("Backs up this iPhone over the backup in iCloud.", comment: "Accessibility hint for Replace on a Sealed backup (journal or intimate logs).")),
             startNew: Choice(title: Text("Start a new backup", comment: "Privacy & Data: start a new Sealed backup (journal or intimate logs) over one this iPhone cannot open."),
                              hint: Text("Replaces a backup this iPhone can't open.", comment: "Accessibility hint for Start a new backup on a Sealed backup (journal or intimate logs).")),
-            remove: Choice(title: Text("Remove them", comment: "Privacy & Data: remove the Sealed backup entries (journal or intimate logs) this iPhone cannot open."),
+            remove: Choice(title: Text(LocalizedStringResource("privacy.sealedBackup.journal.removeThem", defaultValue: "Remove them",
+                                                               comment: "Privacy & Data: remove the journal entries this iPhone cannot open from the journal Sealed backup. 'Them' is the entries.")),
                            hint: Text("Checks the entries again, then deletes those that still can't be opened.", comment: "Accessibility hint for Remove them on the journal Sealed backup."))
         )
     }
