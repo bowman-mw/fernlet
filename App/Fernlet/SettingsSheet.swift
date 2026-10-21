@@ -1655,7 +1655,7 @@ struct SettingsSheet: View {
                 // same string is precisely the bug ``CareGroup`` exists to prevent: the stored value
                 // is the filter predicate and rides the synced settings blob.
                 ForEach(PersonalCareTask.groupCases) { group in
-                    Button { newCareTaskGroup = group.token } label: {
+                    Button { FernletFeedback.system.select(group.token, in: &newCareTaskGroup) } label: {
                         Text(verbatim: group.label)
                     }
                     .buttonStyle(ChipButtonStyle(selected: newCareTaskGroup == group.token))
@@ -2199,8 +2199,16 @@ private struct MemoryEditorSheet: View {
                 FlowLayout(spacing: 8) {
                     ForEach(categoryChoices, id: \.self) { choice in
                         // The chip SHOWS a name but STORES the token: `choice` is what the list
-                        // groups by, so only the drawn half goes through `MemoryCategoryName`.
-                        Button { category = choice } label: {
+                        // groups by, so only the drawn half goes through `MemoryCategoryName`. A stored
+                        // "Food" already draws the "food" chip as chosen: re-tapping it takes the token
+                        // without a tick, because nothing on screen changed.
+                        Button {
+                            if category.lowercased() == choice {
+                                category = choice
+                            } else {
+                                FernletFeedback.system.select(choice, in: &category)
+                            }
+                        } label: {
                             Text(verbatim: MemoryCategoryName.chipLabel(for: choice, addressing: termOfAddress))
                         }
                         .buttonStyle(ChipButtonStyle(selected: category.lowercased() == choice))

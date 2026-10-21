@@ -187,8 +187,8 @@ private final class SpokenLog {
     /// The selection chips no Tier B lane owned choose through the shared helper (a SwiftUI button's
     /// action can't be pressed here, so the source is pinned): the Move tab's log, edit and plan
     /// sheets, workout setup with its session and weight fields, the injury picker, the custom
-    /// exercise form, the ready screen's food question, the set editor's effort and reason, and the
-    /// Activities chips.
+    /// exercise form, the ready screen's food question, the set editor's effort and reason, the
+    /// Activities chips, and Settings' care-task group and memory category chips (2026-10-21).
     @Test func theRemainingSelectionChipsChooseThroughTheSharedHelper() throws {
         let pins: [(path: String, selects: Int)] = [
             ("App/Fernlet/MoveView.swift", 5),
@@ -199,7 +199,8 @@ private final class SpokenLog {
             ("App/Fernlet/CustomExerciseFormSheet.swift", 7),
             ("App/Fernlet/WorkoutFoodAware.swift", 1),
             ("App/Fernlet/WorkoutSetEditorViews.swift", 2),
-            ("App/Fernlet/ActivitiesView.swift", 1)
+            ("App/Fernlet/ActivitiesView.swift", 1),
+            ("App/Fernlet/SettingsSheet.swift", 2)
         ]
         for (path, selects) in pins {
             let found = try RepoRoot.source(path).components(separatedBy: "FernletFeedback.system.select(").count - 1

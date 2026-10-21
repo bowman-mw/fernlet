@@ -156,6 +156,17 @@ private final class TimerPlayedLog {
                 "a tick never sounds, whatever Workout sounds says")
     }
 
+    /// The live runner's chips tick through ``GuidedTouchCue`` (B7), never the app-wide helper, so
+    /// they answer to Workout haptics: the effort chips and the override-reason chips (2026-10-21) each
+    /// play one detent per tap. A SwiftUI button's action can't be pressed here, so the source is pinned.
+    @Test func theRunnersChipsTickThroughTheRunnersOwnCue() throws {
+        let source = try RepoRoot.source("App/Fernlet/GuidedWorkoutLoadViews.swift")
+        #expect(source.components(separatedBy: "GuidedTouchCue.play(.tick)").count - 1 >= 2,
+                "the effort chips and the override-reason chips tick")
+        #expect(!source.contains("FernletFeedback.system.select("),
+                "a runner chip that ticked through the app-wide helper would ignore the Workout haptics switch")
+    }
+
     // MARK: The cooking walker
 
     private func run(stepIndex: Int = 0, finished: Bool = false) -> CookingRunState {

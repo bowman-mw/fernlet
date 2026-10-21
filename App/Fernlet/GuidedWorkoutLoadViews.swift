@@ -246,7 +246,12 @@ struct GuidedOverrideReasonPicker: View {
                 .fernletWrappingText()
             FlowLayout(spacing: 8) {
                 ForEach(OverrideReason.allCases, id: \.self) { reason in
-                    Button { store.guidedSetOverrideReason(selected == reason ? nil : reason, exerciseID: exerciseID) } label: {
+                    Button {
+                        store.guidedSetOverrideReason(selected == reason ? nil : reason, exerciseID: exerciseID)
+                        // B7, as the effort chips below: every tap picks or clears a reason, so every
+                        // tap is one detent, and it answers to the Workout haptics switch.
+                        GuidedTouchCue.play(.tick)
+                    } label: {
                         Self.label(reason)
                     }
                     .buttonStyle(ChipButtonStyle(selected: selected == reason))
