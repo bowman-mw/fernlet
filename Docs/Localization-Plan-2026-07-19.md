@@ -411,6 +411,36 @@ sentences (idea 16).
 > the main bundle a French localization too (one `fr` entry in `App/Fernlet/Localizable.xcstrings`,
 > reverted afterwards).
 
+> **Spanish round started (2026-10-20).** The owner speaks Spanish and is the native reviewer.
+> Decided with the owner:
+> - **Variant:** one base `es`, neutral Spanish leaning Latin American where a word must be chosen
+>   (celular, jugo, agregar, Configuración). No `es-419` / `es-ES` split yet.
+> - **Glossary and style rules:** `Docs/Localization-es-Glossary.md`, approved line by line (129
+>   items). Every es string follows it; a new term is added there in the same commit.
+> - **The user's grammatical gender is the body profile's Sex answer** (`UserNutritionProfile.sex`),
+>   masculine when it was never answered (the profile's default). No separate "address me as"
+>   setting. Translators mark each word that describes the user, `^[listo](inflect: true)`, and the
+>   app inflects it through FernletUI's `AddressedCopy` / `AddressedText` with the term of address
+>   the app root puts in the environment (`fernletTermOfAddress`, from `BiologicalSex.termOfAddress`;
+>   onboarding sets it from the profile being edited). Measured on macOS 26 Foundation:
+>   `String(localized:)` keeps the markup verbatim, `AttributedString(localized:)` and `Text`
+>   inflect at creation against the SYSTEM Form of Address, and inflection follows each run's
+>   `languageIdentifier`, not the `locale:` argument; hence the helper (inflection off at creation,
+>   then `inflected(locale:userTermOfAddress:)` with the language set). `LocalizationBoundaryTests`
+>   part I fails any `String(localized:)` that reads a key carrying `](inflect:` in its key or in any
+>   language's value.
+> - **The companion is grammatically masculine** (*el compañero*; its name on Home is Fern).
+> - **Crisis copy:** the support card's blurb was one English sentence with the line's name spliced
+>   in ("— the 988 line is free, kind…"). Spanish has to make "free" agree with the line's gender
+>   (la línea … gratuita, el número … gratuito), so each listed line now has its own whole-sentence
+>   key (`crisis.blurb.*`), and the Call/Text titles are keys with the printed number as `%@`. Every
+>   key is marked SAFETY COPY in its translator comment. Still owed under D-L5: the table lists no
+>   Latin American line, so a phone set to Mexico or Argentina sees the no-number fallback in
+>   Spanish. Adding one means verifying the operator's own page first.
+> - **Extraction before drafting.** A read-only sweep of `origin/main` (2026-10-20) counted about
+>   1,300 display literals that never reach a catalog, about one display string in five; it is being
+>   closed area by area before any es drafts are written.
+
 ---
 
 ## 5. Phase 3 — Language-sensitive engines

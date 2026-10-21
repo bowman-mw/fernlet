@@ -1309,6 +1309,42 @@
         }
       }
     },
+    "connectionInspector.mode.disabled" : {
+      "comment" : "Settings, Connection Inspector mode picker: records nothing",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Disabled"
+          }
+        }
+      }
+    },
+    "connectionInspector.mode.live" : {
+      "comment" : "Settings, Connection Inspector mode picker: shows connections as they happen",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Live"
+          }
+        }
+      }
+    },
+    "connectionInspector.mode.passive" : {
+      "comment" : "Settings, Connection Inspector mode picker: records quietly in the background",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Passive"
+          }
+        }
+      }
+    },
     "customExercise.issue.atCapacity" : {
       "comment" : "Custom exercise form: the custom exercise list is full",
       "extractionState" : "extracted_with_value",
@@ -28903,6 +28939,150 @@
         }
       }
     },
+    "homeWidget.ambient" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: small seasonal and time-of-day moments",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Moments"
+          }
+        }
+      }
+    },
+    "homeWidget.companion" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: the companion creature and its speech bubble",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Companion"
+          }
+        }
+      }
+    },
+    "homeWidget.firstAid" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: the card that opens calming tools and crisis support",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "First aid"
+          }
+        }
+      }
+    },
+    "homeWidget.hygiene" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: the personal care checklist card",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Personal care"
+          }
+        }
+      }
+    },
+    "homeWidget.journal" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: a button that opens the journal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Journal"
+          }
+        }
+      }
+    },
+    "homeWidget.logFood" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: a button that opens food logging",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Log food"
+          }
+        }
+      }
+    },
+    "homeWidget.macros" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: the protein, carbs and fat card",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Macros"
+          }
+        }
+      }
+    },
+    "homeWidget.mealPhotos" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: photos of recent meals",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Recent bites"
+          }
+        }
+      }
+    },
+    "homeWidget.milestones" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: gentle milestones reached",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Milestones"
+          }
+        }
+      }
+    },
+    "homeWidget.newRecipe" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: a button that starts a new recipe",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "New recipe"
+          }
+        }
+      }
+    },
+    "homeWidget.quickLog" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: the grid of quick-log tiles",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Quick log"
+          }
+        }
+      }
+    },
+    "homeWidget.recipeBook" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: a button that opens the saved recipes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Recipe book"
+          }
+        }
+      }
+    },
     "homeWidget.sillyStats" : {
       "comment" : "Home widget name: the card of deliberately useless lifetime stats",
       "extractionState" : "extracted_with_value",
@@ -28911,6 +29091,78 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Silly stats"
+          }
+        }
+      }
+    },
+    "homeWidget.sleep" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: a button that logs sleep",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sleep"
+          }
+        }
+      }
+    },
+    "homeWidget.todayIntent" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: the card holding the user's intention for today",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Today's intent"
+          }
+        }
+      }
+    },
+    "homeWidget.todaySummary" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: today's summary card",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Today"
+          }
+        }
+      }
+    },
+    "homeWidget.trends" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: the weekly trends card",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Trends"
+          }
+        }
+      }
+    },
+    "homeWidget.water" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: a button that logs water",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Water"
+          }
+        }
+      }
+    },
+    "homeWidget.workout" : {
+      "comment" : "Home widget name, in the Home layout list and on the card: a button that logs a workout",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Workout"
           }
         }
       }
@@ -29919,6 +30171,162 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%@ didn't come through as a number."
+          }
+        }
+      }
+    },
+    "quickLog.breathing" : {
+      "comment" : "Home quick-log tile and its editor: start the slow breathing exercise",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Slow breathing"
+          }
+        }
+      }
+    },
+    "quickLog.care" : {
+      "comment" : "Home quick-log tile and its editor: the personal care checklist",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Care"
+          }
+        }
+      }
+    },
+    "quickLog.friends" : {
+      "comment" : "Home quick-log tile and its editor: open friends",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Friends"
+          }
+        }
+      }
+    },
+    "quickLog.grounding" : {
+      "comment" : "Home quick-log tile and its editor: start the grounding exercise",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Grounding"
+          }
+        }
+      }
+    },
+    "quickLog.intimacyTracking" : {
+      "comment" : "Home quick-log tile and its editor: open intimacy notes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Intimacy"
+          }
+        }
+      }
+    },
+    "quickLog.journal" : {
+      "comment" : "Home quick-log tile and its editor: open the journal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Journal"
+          }
+        }
+      }
+    },
+    "quickLog.logPeriod" : {
+      "comment" : "Home quick-log tile and its editor: log a period day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Log period"
+          }
+        }
+      }
+    },
+    "quickLog.meal" : {
+      "comment" : "Home quick-log tile and its editor: log a meal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Meal"
+          }
+        }
+      }
+    },
+    "quickLog.move" : {
+      "comment" : "Home quick-log tile and its editor: log movement",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Move"
+          }
+        }
+      }
+    },
+    "quickLog.periodTracking" : {
+      "comment" : "Home quick-log tile and its editor: open the cycle page (not a logging action)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cycle page"
+          }
+        }
+      }
+    },
+    "quickLog.sleep" : {
+      "comment" : "Home quick-log tile and its editor: log sleep",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sleep"
+          }
+        }
+      }
+    },
+    "quickLog.water" : {
+      "comment" : "Home quick-log tile and its editor: log water",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Water"
+          }
+        }
+      }
+    },
+    "quickLog.worryBox" : {
+      "comment" : "Home quick-log tile and its editor: open the worry box",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Worry box"
           }
         }
       }

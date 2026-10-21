@@ -10051,6 +10051,138 @@
     "covered" : {
 
     },
+    "crisis.action.call" : {
+      "comment" : "SAFETY COPY. Crisis card button that phones the line. %@ is the number as the operator prints it (988, 0800 111 0 111); never translate it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Call %@"
+          }
+        }
+      }
+    },
+    "crisis.action.text" : {
+      "comment" : "SAFETY COPY. Crisis card button that opens a text message to the line. %@ is the number (988, 1737); never translate it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Text %@"
+          }
+        }
+      }
+    },
+    "crisis.blurb.lifeline988" : {
+      "comment" : "SAFETY COPY. Crisis card body in the US and Canada, naming the 988 line. The owner reviews every translation before ship.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Some moments are bigger than any app. You deserve real support — the 988 line is free, kind, and there around the clock."
+          }
+        }
+      }
+    },
+    "crisis.blurb.lifelineAU" : {
+      "comment" : "SAFETY COPY. Crisis card body in Australia, naming Lifeline (keep the name). The owner reviews every translation before ship.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Some moments are bigger than any app. You deserve real support — the Lifeline number is free, kind, and there around the clock."
+          }
+        }
+      }
+    },
+    "crisis.blurb.linea024" : {
+      "comment" : "SAFETY COPY. Crisis card body in Spain, naming the Línea 024. The owner reviews every translation before ship.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Some moments are bigger than any app. You deserve real support — the 024 line is free, kind, and there around the clock."
+          }
+        }
+      }
+    },
+    "crisis.blurb.needToTalk1737" : {
+      "comment" : "SAFETY COPY. Crisis card body in New Zealand, naming the 1737 line. The owner reviews every translation before ship.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Some moments are bigger than any app. You deserve real support — the 1737 line is free, kind, and there around the clock."
+          }
+        }
+      }
+    },
+    "crisis.blurb.numero3114" : {
+      "comment" : "SAFETY COPY. Crisis card body in France, naming the 3114 line. The owner reviews every translation before ship.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Some moments are bigger than any app. You deserve real support — the 3114 line is free, kind, and there around the clock."
+          }
+        }
+      }
+    },
+    "crisis.blurb.samaritans" : {
+      "comment" : "SAFETY COPY. Crisis card body in Great Britain and Ireland, naming Samaritans (keep the name). The owner reviews every translation before ship.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Some moments are bigger than any app. You deserve real support — the Samaritans line is free, kind, and there around the clock."
+          }
+        }
+      }
+    },
+    "crisis.blurb.telefonSeelsorge" : {
+      "comment" : "SAFETY COPY. Crisis card body in Germany, naming TelefonSeelsorge (keep the name). The owner reviews every translation before ship.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Some moments are bigger than any app. You deserve real support — the TelefonSeelsorge line is free, kind, and there around the clock."
+          }
+        }
+      }
+    },
+    "crisis.fallback.blurb" : {
+      "comment" : "SAFETY COPY. Crisis card body where Fernlet knows no crisis line for the region, so it names no number. The owner reviews every translation before ship.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Some moments are bigger than any app. You deserve real support — your local emergency services, or a crisis line where you are, can help right now."
+          }
+        }
+      }
+    },
+    "crisis.fallback.name" : {
+      "comment" : "SAFETY COPY. Crisis card, a region with no verified crisis line: who to reach instead. The owner reviews every translation before ship.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Local emergency services"
+          }
+        }
+      }
+    },
     "cycle.delete.failed" : {
       "comment" : "Alert message when deleting a cycle day failed and nothing was removed.",
       "extractionState" : "extracted_with_value",
