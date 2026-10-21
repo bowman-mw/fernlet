@@ -117,10 +117,11 @@
 //     six call sites compare with `==` (see part D below), so localizing them requires the
 //     token/display FORK, not a `String(localized:)` sweep. Part D is what stops a sweep from
 //     silently breaking those gates.
-//   * `HealthKitGateway` (14 strings) — `HealthCapability.title` (7) and `HealthCapability.summary`
-//     (7), the settings-row name and the sentence describing what each capability reads and writes.
-//     The module's four `HealthKitServiceError` sentences were localized by the sweep and are the
-//     worked example for the rest; these are straightforward forks with a catalog now waiting.
+//   * `HealthKitGateway` — CLOSED in the Spanish round (2026-10-20). `HealthCapability.title` and
+//     `.summary` (the 14 strings this entry listed) are catalog keys, and so is every status line of
+//     `HealthKitAuthorizationViewModel`, the readers that used to `.lowercased()` a title mid-sentence
+//     (they read `HealthCapability.inSentenceName` now). Left: `HKAuthorizationStatus.fernletLabel`,
+//     which nothing reads.
 //   * `PrivateHealthStore`-adjacent copy — `PeriodFlowLevel.title` (`rawValue.capitalized`),
 //     `CycleDayEntry.flowLabel`, and the Tier-2 memory CATEGORY rendered by `SettingsSheet`. These
 //     are sealed modules and deliberately have NO catalog: the fork belongs at the app-target
@@ -2962,7 +2963,20 @@ struct LocalizationBoundaryTests {
             "duress.mode.unavailable.noCustodian", "duress.custodian.removalRefused", "duress.entry.mismatch",
             "Your duress code is the same shape as your passcode — a password. If you change your passcode to a different type, set your duress code again so you can still type it.",
         ].map { HarvestedKey(catalog: app, key: $0, source: "DuressPINSetupView, once a String return or a spliced English noun") }
-        return appKeys.map { HarvestedKey(catalog: app, key: $0.key, source: $0.source) } + lockKeys + duressKeys
+        let health = "FernletKit/Sources/HealthKitGateway/Localizable.xcstrings"
+        // The seven `HealthCapability` raw values, spelled out: this file does not import the gateway.
+        let capabilities = ["bodyProfile", "cycleTracking", "bodyContext", "workoutLogging",
+                            "activityContext", "mindfulness", "intimateLogging"]
+        let healthKeys: [HarvestedKey] = capabilities.flatMap { capability in
+            ["title", "summary", "inSentence"].map {
+                HarvestedKey(catalog: health, key: "healthCapability.\(capability).\($0)",
+                             source: "HealthCapability, once bare literals (the deferred 14) plus its mid-sentence name")
+            }
+        } + ["health.status.accessUpdated", "health.status.revokeInstructions", "health.status.contextUpdated",
+             "health.status.contextUnavailable", "health.status.bodyProfilePartial"].map {
+            HarvestedKey(catalog: health, key: $0, source: "a HealthKitAuthorizationViewModel status line that lower-cased a title")
+        }
+        return appKeys.map { HarvestedKey(catalog: app, key: $0.key, source: $0.source) } + lockKeys + duressKeys + healthKeys
     }()
 
     /// The forks actually reached a catalog.
