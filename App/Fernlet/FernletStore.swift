@@ -5258,7 +5258,9 @@ final class FernletStore {
     ///
     /// A planned workout's run whose planned row was removed mid-run logs here too, as a plain guided
     /// run with no plan id, but it stays that plan's run (``Workout/isPlanRun``, by the plan's lines
-    /// it keeps): no name backstop against the generated plan, and no step up its rep ladder.
+    /// it keeps): no name backstop against the generated plan, and no step up its rep ladder. Its
+    /// durable backstop is its id instead: the row is filed under the run's session id, which
+    /// `logPlannedRun` finds when the finish is seen again.
     private func finishGuidedRunLogging(_ state: GuidedWorkoutRunState) {
         guard !guidedCompletedSessionIDs.contains(state.sessionID) else { return }
         // A planned workout's run completes its planned row, as "log it" does (`PlannedWorkoutRun.swift`).
@@ -5279,6 +5281,9 @@ final class FernletStore {
         // workout keeps (`GuidedRunDuration`); nil for a run persisted before it recorded a start.
         let timing = GuidedRunDuration.minutes(startedAt: state.startedAt, finishedAt: state.finishedAt)
         var workout = Workout(
+            // A plan's run is filed under its own session id, which `logPlannedRun` checks so a finish
+            // seen again after a rework or a relaunch emptied the completed set logs nothing more.
+            id: isPlanRun ? state.sessionID : UUID(),
             name: state.title, type: type, mode: mode,
             activityType: GuidedRunTimedLog.activityType(
                 for: state, sport: settings.workoutProfile.sport, region: Locale.current.region?.identifier

@@ -258,8 +258,13 @@ extension FernletStore {
     /// Logs a finished planned run and completes its planned row, as "log it" does: the logged workout
     /// (``PlannedWorkoutRun/loggedWorkout(for:run:todayKey:)``) goes on the plan's day and the planned
     /// row comes off it. Returns false — leaving the run to log as an ordinary guided run — when the run
-    /// is not a plan's, or the planned row is gone (removed during the run). A row already completed
-    /// (ticked off during the run, or a finish seen twice) logs nothing more.
+    /// is not a plan's, or the planned row is gone (removed during the run) and the run is not logged
+    /// yet. A row already completed (ticked off during the run, or a finish seen twice) logs nothing more.
+    ///
+    /// A run whose planned row was removed logs under the run's own session id
+    /// (`finishGuidedRunLogging`), the one mark that outlives the in-memory completed set: a rework or a
+    /// relaunch empties that set, and a run-state file that failed to clear brings the finish back. That
+    /// row is found here, so the finish seen again logs nothing more.
     ///
     /// The lifts are not counted toward the generated plan's rep ladder (`recordCompletedExercises`),
     /// just as "log it" does not count them, so removing the row undoes everything it did; the load
@@ -273,6 +278,10 @@ extension FernletStore {
             return true
         }
         guard let planned = record.plannedWorkouts.first(where: { $0.id == plannedID }) else {
+            if record.workouts.contains(where: { $0.id == state.sessionID }) {
+                markGuidedSessionCompleted(state.sessionID)
+                return true
+            }
             FernletAuditLog.log("workout.plannedRun.planGone", context: ["date": dayKey])
             return false
         }
