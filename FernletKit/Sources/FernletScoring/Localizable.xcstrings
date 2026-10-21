@@ -1,0 +1,426 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "fernletVoice.aiResting" : {
+      "comment" : "Settings, AI section: today's on-device AI budget is used up; it resets at midnight",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The quiet helper is resting for today. Fernlet will use local care until tomorrow."
+          }
+        }
+      }
+    },
+    "fernletVoice.aiUnavailable" : {
+      "comment" : "Settings, AI section: the on-device AI ('the quiet helper') is switched off",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The quiet helper is off right now, so Fernlet will use local fallbacks."
+          }
+        }
+      }
+    },
+    "fernletVoice.journalAnalysisQueued" : {
+      "comment" : "The companion speaking, when a journal entry is saved but the on-device AI ('the helper') is unavailable",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your journal is saved. I will look for patterns when the helper is awake again."
+          }
+        }
+      }
+    },
+    "fernletVoice.mealAnalysisFailed" : {
+      "comment" : "The companion speaking, after the on-device AI could not analyze a logged meal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "I saved this with a local estimate. We can give it another look later."
+          }
+        }
+      }
+    },
+    "fernletVoice.retryAvailable" : {
+      "comment" : "Food log banner: some meals were saved with a local estimate and can be looked at again",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A few saved notes can be revisited when you are ready."
+          }
+        }
+      }
+    },
+    "fernletVoice.workoutSuggestionUnavailable" : {
+      "comment" : "The companion speaking, when it suggested a workout without the on-device AI",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "I made a simple local option for today. Keep it gentle and useful."
+          }
+        }
+      }
+    },
+    "workoutFallback.goal.consistentWeeks" : {
+      "comment" : "How a starter fitness goal is measured",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "10 consistent weeks"
+          }
+        }
+      }
+    },
+    "workoutFallback.goal.fourWeeks" : {
+      "comment" : "Timeframe of a starter fitness goal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "4 weeks"
+          }
+        }
+      }
+    },
+    "workoutFallback.goal.oneWeek" : {
+      "comment" : "Timeframe of a starter fitness goal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "1 week"
+          }
+        }
+      }
+    },
+    "workoutFallback.goal.rhythm" : {
+      "comment" : "A starter fitness goal Fernlet wrote. Argument: the person's interests in their own words, e.g. 'running, mobility'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Build a repeatable %@ rhythm"
+          }
+        }
+      }
+    },
+    "workoutFallback.goal.rhythmGeneral" : {
+      "comment" : "A starter fitness goal Fernlet wrote, for someone who named no interests",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Build a repeatable general strength rhythm"
+          }
+        }
+      }
+    },
+    "workoutFallback.goal.rpeMostly" : {
+      "comment" : "How a starter fitness goal is measured: rate of perceived exertion mostly between 6 and 8 out of 10",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "RPE mostly 6-8"
+          }
+        }
+      }
+    },
+    "workoutFallback.goal.sessions" : {
+      "comment" : "A starter fitness goal Fernlet wrote. Argument: the person's interests in their own words, e.g. 'running, mobility'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Complete 3 %@ sessions in a week"
+          }
+        }
+      }
+    },
+    "workoutFallback.goal.sessionsCompleted" : {
+      "comment" : "How a starter fitness goal is measured, shown after its timeframe ('1 week - sessions completed')",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "sessions completed"
+          }
+        }
+      }
+    },
+    "workoutFallback.goal.sessionsGeneral" : {
+      "comment" : "A starter fitness goal Fernlet wrote, for someone who named no interests",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Complete 3 general strength sessions in a week"
+          }
+        }
+      }
+    },
+    "workoutFallback.goal.sustainable" : {
+      "comment" : "A starter fitness goal Fernlet wrote",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Keep most sessions at a sustainable effort"
+          }
+        }
+      }
+    },
+    "workoutFallback.goal.threeMonths" : {
+      "comment" : "Timeframe of a starter fitness goal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "3 months"
+          }
+        }
+      }
+    },
+    "workoutFallback.goal.weekEightAdjust" : {
+      "comment" : "A milestone of a starter fitness goal: adjust the plan in week 8",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "week 8 adjust"
+          }
+        }
+      }
+    },
+    "workoutFallback.goal.weekFourCheckIn" : {
+      "comment" : "A milestone of a starter fitness goal: look at how it is going in week 4",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "week 4 check-in"
+          }
+        }
+      }
+    },
+    "workoutFallback.goal.weekly" : {
+      "comment" : "Weekly structure of a starter fitness goal Fernlet wrote",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Three flexible sessions with one easier day between harder efforts."
+          }
+        }
+      }
+    },
+    "workoutFallback.goal.weeklyAround" : {
+      "comment" : "Weekly structure of a starter fitness goal Fernlet wrote. Argument: the person's own constraints, e.g. 'shoulder issues, hotel gyms only'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Three flexible sessions shaped around: %@."
+          }
+        }
+      }
+    },
+    "workoutFallback.note.balancedStrengthCircuit" : {
+      "comment" : "Note on the suggested workout 'Balanced Strength Circuit'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Enough movement to feel grounded."
+          }
+        }
+      }
+    },
+    "workoutFallback.note.builtAround" : {
+      "comment" : "Note on a workout suggested without AI. Argument: the person's fitness goal, e.g. 'complete 3 running sessions in a week'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Built around %@."
+          }
+        }
+      }
+    },
+    "workoutFallback.note.builtAroundWithContext" : {
+      "comment" : "Note on a workout suggested without AI. Arguments: the person's fitness goal, then what they said about today in their own words.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Built around %1$@ with: %2$@."
+          }
+        }
+      }
+    },
+    "workoutFallback.note.curiousChallenge" : {
+      "comment" : "Note on the suggested workout 'Curious Challenge'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A contained experiment for a high-energy day."
+          }
+        }
+      }
+    },
+    "workoutFallback.note.hardStrengthDay" : {
+      "comment" : "Note on the suggested workout 'Hard Strength Day'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Use only if energy is genuinely there."
+          }
+        }
+      }
+    },
+    "workoutFallback.note.lowFrictionWalk" : {
+      "comment" : "Note on the suggested workout 'Low Friction Walk'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Steady movement without optimization pressure."
+          }
+        }
+      }
+    },
+    "workoutFallback.note.moodReset" : {
+      "comment" : "Note on the suggested workout 'Mood Reset'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start easy and let it count."
+          }
+        }
+      }
+    },
+    "workoutFallback.note.moveAndStrength" : {
+      "comment" : "Note on the suggested workout 'Move And Strength'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A practical mixed session."
+          }
+        }
+      }
+    },
+    "workoutFallback.note.recoveryFlow" : {
+      "comment" : "Note on the suggested workout 'Recovery Flow'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Recovery still counts as care."
+          }
+        }
+      }
+    },
+    "workoutFallback.note.softRebuild" : {
+      "comment" : "Note on the suggested workout 'Soft Rebuild'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Keep the ceiling low today."
+          }
+        }
+      }
+    },
+    "workoutFallback.note.steadyCareWalk" : {
+      "comment" : "Note on the suggested workout 'Steady Care Walk'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A simple local fallback for a balanced day."
+          }
+        }
+      }
+    },
+    "workoutFallback.note.steadyMindCircuit" : {
+      "comment" : "Note on the suggested workout 'Steady Mind Circuit'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Predictable movement, low decision load."
+          }
+        }
+      }
+    },
+    "workoutFallback.note.strengthBase" : {
+      "comment" : "Note on the suggested workout 'Strength Base'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A repeatable strength template."
+          }
+        }
+      }
+    },
+    "workoutFallback.note.trySomethingSmall" : {
+      "comment" : "Note on the suggested workout 'Try Something Small'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Gather information, not perfection."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

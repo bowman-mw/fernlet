@@ -97,14 +97,16 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
     /// which is drawn in the user's language instead.
     ///
     /// An activity logged with a blank name is stored as ``WorkoutActivityType/defaultName`` ("Pool
-    /// Swim"), and a completed plan carries a blank-named plan's ``WorkoutSplit/defaultPlanName``.
+    /// Swim"), a completed plan carries a blank-named plan's ``WorkoutSplit/defaultPlanName``, and a
+    /// taken fallback suggestion carries its ``WorkoutFallbackName``.
     /// Display only: never persist, export, prompt with or match against this. Exports, prompts,
     /// HealthKit's `fernlet.activityName`, the category inference and the guided reconciliation all
     /// read ``name``, and a name field seeded from this saves back through ``savedName(editing:)``.
     public var displayedName: String {
         StoredWorkoutName.displayed(name, mode: mode, activityType: activityType,
                                     matchesSplitDefault: plannedWorkoutID != nil,
-                                    matchesPlannerSession: loggedFromGuidedSession == true)
+                                    matchesPlannerSession: loggedFromGuidedSession == true,
+                                    matchesFallbackSuggestion: true)
     }
 
     /// The notes a screen DRAWS for this row: ``notes``, unless they are still a plan completion's
@@ -595,7 +597,9 @@ public nonisolated enum WorkoutSplit: String, Codable, CaseIterable, Identifiabl
 /// The planner's session names are the third kind of stored default (2026-10-20, idea 16): a guided
 /// session is logged under its frozen English name ("Full Body A", "Morning · Easy cardio"), which the
 /// rotation and the guided reconciliation match, and a row the guided flow logged draws it through
-/// ``WorkoutSessionNames``.
+/// ``WorkoutSessionNames``. The fourth (2026-10-20, Spanish round step 2) is FernletScoring's AI-free
+/// fallback suggestions ("Suggested Light", "Mood Reset"): a logged row carrying a
+/// ``WorkoutFallbackName`` draws its ``WorkoutFallbackName/displayName``.
 nonisolated enum StoredWorkoutName {
     /// The name to draw for a row stored as `name`.
     ///
@@ -603,8 +607,11 @@ nonisolated enum StoredWorkoutName {
     /// and a logged workout only when a plan's completion minted it (`plannedWorkoutID` is set).
     /// `matchesPlannerSession` is whether it can carry a planner session's name: only a row the
     /// guided flow logged (`loggedFromGuidedSession`), so a hand-logged "Push" stays the user's own.
+    /// `matchesFallbackSuggestion` is whether it can carry a fallback suggestion's name: a logged row
+    /// can (a taken suggestion leaves no other mark on it), a plan never does.
     static func displayed(_ name: String, mode: WorkoutMode, activityType: WorkoutActivityType?,
-                          matchesSplitDefault: Bool, matchesPlannerSession: Bool = false) -> String {
+                          matchesSplitDefault: Bool, matchesPlannerSession: Bool = false,
+                          matchesFallbackSuggestion: Bool = false) -> String {
         if mode == .activity, let activityType, name == activityType.defaultName {
             return activityType.displayName
         }
@@ -613,6 +620,9 @@ nonisolated enum StoredWorkoutName {
         }
         if matchesPlannerSession, let session = WorkoutSessionNames.displayed(name) {
             return session
+        }
+        if matchesFallbackSuggestion, let fallback = WorkoutFallbackName(rawValue: name) {
+            return fallback.displayName
         }
         return name
     }

@@ -30736,6 +30736,186 @@
         }
       }
     },
+    "workoutFallback.balancedStrengthCircuit" : {
+      "comment" : "Name of a suggested workout: a moderate full-body strength circuit",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Balanced Strength Circuit"
+          }
+        }
+      }
+    },
+    "workoutFallback.curiousChallenge" : {
+      "comment" : "Name of a suggested workout: a contained experiment for a high-energy day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Curious Challenge"
+          }
+        }
+      }
+    },
+    "workoutFallback.hardStrengthDay" : {
+      "comment" : "Name of a suggested workout: a heavy strength session",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hard Strength Day"
+          }
+        }
+      }
+    },
+    "workoutFallback.lowFrictionWalk" : {
+      "comment" : "Name of a suggested workout: a brisk walk that is easy to start",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Low Friction Walk"
+          }
+        }
+      }
+    },
+    "workoutFallback.moodReset" : {
+      "comment" : "Name of a suggested workout: an outdoor walk and breathing, to lift the mood",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mood Reset"
+          }
+        }
+      }
+    },
+    "workoutFallback.moveAndStrength" : {
+      "comment" : "Name of a suggested workout: walking mixed with strength moves",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Move And Strength"
+          }
+        }
+      }
+    },
+    "workoutFallback.recoveryFlow" : {
+      "comment" : "Name of a suggested workout: gentle mobility for recovery",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Recovery Flow"
+          }
+        }
+      }
+    },
+    "workoutFallback.softRebuild" : {
+      "comment" : "Name of a suggested workout: light strength work after time off",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Soft Rebuild"
+          }
+        }
+      }
+    },
+    "workoutFallback.steadyCareWalk" : {
+      "comment" : "Name of a suggested workout: an easy walk and a gentle stretch",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Steady Care Walk"
+          }
+        }
+      }
+    },
+    "workoutFallback.steadyMindCircuit" : {
+      "comment" : "Name of a suggested workout: a predictable, calming bodyweight circuit",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Steady Mind Circuit"
+          }
+        }
+      }
+    },
+    "workoutFallback.strengthBase" : {
+      "comment" : "Name of a suggested workout: a repeatable strength template",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Strength Base"
+          }
+        }
+      }
+    },
+    "workoutFallback.suggestedHard" : {
+      "comment" : "Name of a workout Fernlet suggested without AI for a high-energy day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Suggested Hard"
+          }
+        }
+      }
+    },
+    "workoutFallback.suggestedLight" : {
+      "comment" : "Name of a workout Fernlet suggested without AI for a low-energy day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Suggested Light"
+          }
+        }
+      }
+    },
+    "workoutFallback.suggestedModerate" : {
+      "comment" : "Name of a workout Fernlet suggested without AI for a medium-energy day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Suggested Moderate"
+          }
+        }
+      }
+    },
+    "workoutFallback.trySomethingSmall" : {
+      "comment" : "Name of a suggested workout: a short new walk and one mobility drill",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Try Something Small"
+          }
+        }
+      }
+    },
     "workoutFocus.both" : {
       "comment" : "Workout setup: the lifting focus that mixes strength and muscle building",
       "extractionState" : "extracted_with_value",

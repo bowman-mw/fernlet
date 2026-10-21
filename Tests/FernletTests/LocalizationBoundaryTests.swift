@@ -110,11 +110,18 @@
 // now owns a catalog and a `TARGETS` line in `Scripts/sync-string-catalogs.sh`, so what is left in
 // them is an ordinary `String(localized:bundle:.module)` sweep rather than a blocked one:
 //
-//   * `FernletScoring` (~24 strings) — the derived-signal and readiness phrasing. STILL HAS NO
-//     CATALOG. The hard part is not the count: several of these strings are ALSO logic tokens that
-//     six call sites compare with `==` (see part D below), so localizing them requires the
-//     token/display FORK, not a `String(localized:)` sweep. Part D is what stops a sweep from
-//     silently breaking those gates.
+//   * `FernletScoring` — HAS A CATALOG since the Spanish round's step 2 (2026-10-20): the
+//     companion's AI-fallback lines (`FernletVoice`), the AI-free workout suggestion's note and the
+//     starter goals (`WorkoutFallbackCopy`) are keys under `fernletVoice.*` / `workoutFallback.*`.
+//     The fallback workouts' NAMES are not: they are stored `Workout.name`s, frozen as
+//     `WorkoutFallbackName` (FernletDomainModel) and drawn through `Workout.displayedName`
+//     (``frozenFallbackWorkoutNames()``). `MealParser`'s "Meal" default name and its
+//     "Estimated locally…" note are stored meal text drawn verbatim by the food log, so they stay
+//     English until the food side gives them a draw-time mapping. The derived-signal and readiness
+//     phrasing once listed here lives in `LocalPersistence`'s `DerivedSignalFactory`, not in this
+//     module: several of those strings are ALSO logic tokens that six call sites compare with `==`
+//     (see part D below), so localizing them requires the token/display FORK, not a
+//     `String(localized:)` sweep. Part D is what stops a sweep from silently breaking those gates.
 //   * `HealthKitGateway` (14 strings) — `HealthCapability.title` (7) and `HealthCapability.summary`
 //     (7), the settings-row name and the sentence describing what each capability reads and writes.
 //     The module's four `HealthKitServiceError` sentences were localized by the sweep and are the
@@ -144,6 +151,7 @@ import Testing
 import CloudKitSync
 @testable import FernletDomainModel
 import FernletFoundation
+import FernletScoring
 import LocalPersistence
 import PrivateHealthStore
 import PrivateMemoryStore
@@ -913,6 +921,63 @@ struct LocalizationBoundaryTests {
             persisted name must be the frozen half; `defaultPlanDisplayName` is the user's language.
             """
         )
+    }
+
+    /// The names FernletScoring's AI-free fallback workouts are SAVED under (2026-10-20, Spanish
+    /// round step 2).
+    ///
+    /// `WorkoutPlanner.suggestion` wrote `"Suggested \(energy.rawValue.capitalized)"` inline and
+    /// `WorkoutSuggestionLibrary` twelve literal names; a taken suggestion stores its name as the
+    /// row's `Workout.name`, which is synced, written to Health and keyword-matched by the category
+    /// inference. So the spellings are frozen as `WorkoutFallbackName` raw values, byte-identical to
+    /// what the literals wrote, and a screen draws them through `Workout.displayedName`.
+    @Test func frozenFallbackWorkoutNames() {
+        #expect(
+            WorkoutFallbackName.allCases.map(\.rawValue) == [
+                "Suggested Light", "Suggested Moderate", "Suggested Hard",
+                "Steady Care Walk", "Balanced Strength Circuit", "Strength Base", "Hard Strength Day",
+                "Low Friction Walk", "Move And Strength", "Mood Reset", "Steady Mind Circuit",
+                "Recovery Flow", "Soft Rebuild", "Try Something Small", "Curious Challenge",
+            ],
+            """
+            WorkoutFallbackName raw values changed. They are the names a taken fallback suggestion is \
+            PERSISTED under. Localize `displayName`, never these.
+            """
+        )
+        for energy in WorkoutIntensity.allCases {
+            let workout = WorkoutPlanner.suggestion(energy: energy, goal: "Feel strong", context: "", goals: [])
+            #expect(workout.name == "Suggested \(energy.rawValue.capitalized)",
+                    "the \(energy) suggestion saves the name the inline literal wrote")
+            #expect(workout.displayedName == WorkoutFallbackName.suggested(energy).displayName)
+            #expect(workout.savedName(editing: workout.displayedName) == workout.name,
+                    "a name left as drawn saves back as the stored English")
+        }
+        let library = GoalType.allCases.flatMap { goal in
+            WorkoutIntensity.allCases.flatMap { WorkoutSuggestionLibrary.suggestions(for: goal, intensity: $0) }
+        }
+        for suggestion in library {
+            let logged = suggestion.workout(intensity: .moderate)
+            let frozen = WorkoutFallbackName(rawValue: logged.name)
+            #expect(frozen != nil, "\(logged.name) is a library name with no frozen spelling")
+            #expect(logged.displayedName == frozen?.displayName)
+        }
+        // A PLAN the user named like a template stays theirs: only a logged row can carry one.
+        let plan = PlannedWorkout(name: WorkoutFallbackName.moodReset.rawValue, split: .workout, source: .user,
+                                  notes: "", duration: nil)
+        #expect(plan.displayedName == WorkoutFallbackName.moodReset.rawValue)
+        #expect(WorkoutFallbackName(rawValue: "mood reset") == nil, "the frozen spelling is matched exactly")
+    }
+
+    /// FernletScoring's catalog, added in the Spanish round's step 2, keeps existing and stays wired
+    /// into the sync script. Either half missing is silent: `String(localized:…, bundle: .module)`
+    /// keeps returning its English `defaultValue` and the catalog stops learning new keys.
+    @Test func theFernletScoringCatalogExistsAndIsSynced() throws {
+        let catalog = RepoRoot.url("FernletKit/Sources/FernletScoring/Localizable.xcstrings")
+        #expect(FileManager.default.fileExists(atPath: catalog.path),
+                "FernletKit/Sources/FernletScoring/Localizable.xcstrings is gone; restore it rather than deleting this pin.")
+        let script = try RepoRoot.source("Scripts/sync-string-catalogs.sh")
+        #expect(script.contains("\"FernletScoring:FernletKit/Sources/FernletScoring/Localizable.xcstrings\""),
+                "Scripts/sync-string-catalogs.sh no longer syncs FernletScoring's catalog; add it back to TARGETS.")
     }
 
     /// A row whose stored name is a frozen default DRAWS it in the user's language, and saves it back
