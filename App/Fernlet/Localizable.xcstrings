@@ -1231,6 +1231,12 @@
     "A quiet chime that follows your ring/silent switch." : {
 
     },
+    "A quiet chime when a step's timer runs out. It follows your ring/silent switch." : {
+
+    },
+    "A quiet chime when the timer runs out. It follows your ring/silent switch." : {
+
+    },
     "A quiet minute, whenever" : {
 
     },
@@ -2324,10 +2330,16 @@
     "Cookies per day, over every day you've had Fernlet. Homemade is always a whole cookie; everything else follows the cookie table." : {
       "comment" : "Silly stat: how cookies per day is counted"
     },
+    "Cooking" : {
+
+    },
     "Cooking action" : {
 
     },
     "Cooking in progress" : {
+
+    },
+    "Cooking timer sound" : {
 
     },
     "Cool-down %lld of %lld · %lld min left" : {
@@ -4011,6 +4023,9 @@
 
     },
     "Haptics are off for all of Fernlet, so breathing's taps won't play either." : {
+
+    },
+    "Haptics are off for all of Fernlet, so the cooking timer's tap won't play. Its sound keeps its own switch." : {
 
     },
     "Haptics, workout sounds, spoken cues" : {
@@ -7791,7 +7806,7 @@
     "Sounds & haptics" : {
 
     },
-    "Sounds play only in a workout you started, and only if you turn them on. Your phone's own sound and haptics settings still apply." : {
+    "Sounds play only in a workout or a cook you started, and only if you turn them on. Your phone's own sound and haptics settings still apply." : {
 
     },
     "Source" : {
@@ -8337,6 +8352,9 @@
     "The recovery lock needs a second phone of your own, enrolled in person. It holds the only copy of the key that can open this phone again — Fernlet never puts that key in the cloud, and there is no way to enrol a device remotely." : {
 
     },
+    "The same switch as on a step's timer while you cook." : {
+
+    },
     "The same switches as Move › Workout setup." : {
 
     },
@@ -8571,6 +8589,9 @@
           }
         }
       }
+    },
+    "Timer sound" : {
+
     },
     "Timer's up — tap Next when you're ready. Nothing advances on its own." : {
 

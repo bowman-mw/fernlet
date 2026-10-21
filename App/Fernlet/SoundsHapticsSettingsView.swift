@@ -7,8 +7,9 @@ import FernletUI
 /// It holds the app-wide Haptics level — *All / Fewer / Off*, the owner's decision 2 ("Like the three
 /// way") — and shows, bound to the SAME keys rather than copies, the switches that already live with
 /// their surfaces: the guided workout's Workout haptics, Workout sounds and Spoken cues
-/// (``WorkoutCueSwitches``, also in Move › Workout setup) and the breathing timer's Haptics
-/// (``BreathingHapticsSwitch``, also on the breathing screen, the owner's decision 5, "Keep it").
+/// (``WorkoutCueSwitches``, also in Move › Workout setup), the cooking timer's sound
+/// (``CookingSoundSwitch``, also on a cooking step's timer card, report C1) and the breathing timer's
+/// Haptics (``BreathingHapticsSwitch``, also on the breathing screen, the owner's decision 5, "Keep it").
 ///
 /// The level sits above every surface switch: FernletUI's one resolver
 /// (`FernletFeedbackPreferences.resolved(haptics:sounds:in:)`) ANDs them at every play, so nothing on
@@ -34,6 +35,7 @@ struct SoundsHapticsSettingsView: View {
                 )
                 levelCard
                 workoutCard
+                cookingCard
                 breathingCard
             }
             .padding(20)
@@ -64,7 +66,7 @@ struct SoundsHapticsSettingsView: View {
                 .fernletWrappingText()
                 .accessibilityIdentifier("settings.soundsHaptics.levelFootnote")
             if !dynamicTypeSize.isAccessibilitySize {
-                Text("Sounds play only in a workout you started, and only if you turn them on. Your phone's own sound and haptics settings still apply.")
+                Text("Sounds play only in a workout or a cook you started, and only if you turn them on. Your phone's own sound and haptics settings still apply.")
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
@@ -91,6 +93,20 @@ struct SoundsHapticsSettingsView: View {
             surfaceNote(
                 whenOff: "Haptics are off for all of Fernlet, so Workout haptics won't play. Sounds and spoken cues keep their own switches.",
                 closing: "The same switches as Move › Workout setup."
+            )
+        }
+        .padding(14)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// The cooking timer's sound switch, the same key as the switch on a cooking step's timer.
+    private var cookingCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SectionLabel("Cooking")
+            CookingSoundSwitch()
+            surfaceNote(
+                whenOff: "Haptics are off for all of Fernlet, so the cooking timer's tap won't play. Its sound keeps its own switch.",
+                closing: "The same switch as on a step's timer while you cook."
             )
         }
         .padding(14)
