@@ -670,7 +670,11 @@ struct SettingsSheet: View {
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
-    private func themeColorRow(title: String, color: Binding<Color>, hex: String, defaultHex: String, isDarkRow: Bool, reset: @escaping () -> Void) -> some View {
+    /// One background row: the colour picker, its hex, the live contrast line and Reset.
+    ///
+    /// `title` is a `LocalizedStringKey`, not a `String`: as a `String` it took `ColorPicker`'s
+    /// verbatim initializer, so "Light mode" and "Dark mode" never reached the catalog.
+    private func themeColorRow(title: LocalizedStringKey, color: Binding<Color>, hex: String, defaultHex: String, isDarkRow: Bool, reset: @escaping () -> Void) -> some View {
         HStack(spacing: 12) {
             ColorPicker(title, selection: color, supportsOpacity: false)
                 .font(.fernlet(.label))
@@ -686,7 +690,7 @@ struct SettingsSheet: View {
                 .font(.fernlet(.label))
                 .foregroundStyle(Color.mossInk)
                 // Voice Control: both colour rows draw "Reset"; the row's title tells them apart.
-                .accessibilityInputLabels([Text("Reset"), Text("Reset \(title)")])
+                .accessibilityInputLabels([Text("Reset"), Text("Reset \(Text(title))")])
                 .disabled(hex.caseInsensitiveCompare(defaultHex) == .orderedSame)
         }
         .padding(12)
@@ -1009,10 +1013,11 @@ struct SettingsSheet: View {
                 let keys = groupedMemoryKeys(for: displayed)
                 let groups = groupedMemories(for: displayed)
                 ForEach(keys, id: \.self) { key in
-                    // `verbatim:` — `key` is a persisted `MemoryNote.category` token being used as
-                    // a grouping heading, not authored copy. Rendering the token is a pre-existing
-                    // defect; `verbatim:` makes it honest rather than pretending it localizes.
-                    SectionLabel(verbatim: key)
+                    // `key` is the persisted `MemoryNote.category` token, upper-cased for grouping.
+                    // The heading draws it through `MemoryCategoryName`, which names the categories
+                    // Fernlet itself writes (a journal feeling, "other") in the reader's language and
+                    // leaves any other token as it was stored.
+                    SectionLabel(verbatim: MemoryCategoryName.heading(forGroup: key))
                     ForEach(groups[key] ?? []) { memory in
                         memoryRow(memory)
                     }
@@ -1056,7 +1061,9 @@ struct SettingsSheet: View {
             FernletCard { EmptyState(text: "No memories match \"\(keyword)\".") }
         } else {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Forget \(matches.count) memor\(matches.count == 1 ? "y" : "ies") matching \"\(keyword)\"?")
+                // Grammar agreement, not an English "y"/"ies" spliced in by count: the old splice
+                // reached no catalog and welded the sentence to English's two-form plural.
+                Text("Forget ^[\(matches.count) memory](inflect: true) matching \"\(keyword)\"?")
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                 HStack(spacing: 16) {
@@ -1097,13 +1104,28 @@ struct SettingsSheet: View {
     /// Shown under the goal cards when the user has pinned nutrition targets or an explicit training
     /// split: a preset only sets the *goal*, so those custom choices quietly win over the goal's plan.
     /// nil when nothing is pinned (the goal's own summaries then describe the plan in effect).
+    ///
+    /// One whole sentence per combination: it used to be assembled from English fragments
+    /// ("custom nutrition targets" + " and " + …), which no translator could reorder or agree.
     private var goalOverrideFootnote: String? {
-        var pieces: [String] = []
-        if store.settings.hasAnyNutritionOverride { pieces.append("custom nutrition targets") }
-        if store.settings.workoutProfile.selectedSplitID != nil { pieces.append("chosen training split") }
-        guard !pieces.isEmpty else { return nil }
-        let list = pieces.count == 2 ? "\(pieces[0]) and \(pieces[1])" : pieces[0]
-        return "Your \(list) stay as you set them — clear them to follow this goal's plan."
+        let pinsTargets = store.settings.hasAnyNutritionOverride
+        let pinsSplit = store.settings.workoutProfile.selectedSplitID != nil
+        switch (pinsTargets, pinsSplit) {
+        case (true, true):
+            return String(localized: "settings.goal.overrideFootnote.targetsAndSplit",
+                          defaultValue: "Your custom nutrition targets and chosen training split stay as you set them — clear them to follow this goal's plan.",
+                          comment: "Goal & nutrition, under the goal cards: the user pinned both their own nutrition targets and a training split, which a goal preset does not override.")
+        case (true, false):
+            return String(localized: "settings.goal.overrideFootnote.targets",
+                          defaultValue: "Your custom nutrition targets stay as you set them — clear them to follow this goal's plan.",
+                          comment: "Goal & nutrition, under the goal cards: the user pinned their own nutrition targets, which a goal preset does not override.")
+        case (false, true):
+            return String(localized: "settings.goal.overrideFootnote.split",
+                          defaultValue: "Your chosen training split stay as you set them — clear them to follow this goal's plan.",
+                          comment: "Goal & nutrition, under the goal cards: the user picked a training split, which a goal preset does not override. One split: in translation the verb and pronoun agree with it ('stays as you set it').")
+        case (false, false):
+            return nil
+        }
     }
 
     /// A binding onto one settings field that also **schedules the save**.
@@ -1465,8 +1487,12 @@ struct SettingsSheet: View {
             Stepper("Bottle: \(store.settings.bottleOz) oz", value: settingsBinding(\.bottleOz), in: 4...64)
                 .font(.fernlet(.label))
             Divider().overlay(Color.bark.opacity(0.08))
-            Stepper("Daily target: \(store.settings.hydrationTarget) bottles", value: settingsBinding(\.hydrationTarget), in: 1...30)
-                .font(.fernlet(.label))
+            // Grammar agreement on the count: the plain literal fixed "bottles" for every number,
+            // so a target of one read "1 bottles" and translators had no plural to work with.
+            Stepper(value: settingsBinding(\.hydrationTarget), in: 1...30) {
+                Text("Daily target: ^[\(store.settings.hydrationTarget) bottle](inflect: true)")
+            }
+            .font(.fernlet(.label))
         }
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
@@ -1683,7 +1709,9 @@ struct SettingsSheet: View {
                                 .frame(width: 32, height: 32)
                         }
                         .buttonStyle(.plain)
-                        .fernletIconButton("Remove \(task.label)")
+                        // `displayLabel`, like the row beside it: the stored `label` is the frozen
+                        // English a built-in task was first written with.
+                        .fernletIconButton("Remove \(task.displayLabel)")
                     }
                     .padding(12)
                     .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
@@ -1831,7 +1859,9 @@ struct SettingsSheet: View {
     private func derivedSignalRow(_ signal: DerivedSignalRecord) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(signal.signalName)
+                // The display name, never `signalName`: that is a frozen logic token ("moodTrend")
+                // six gates compare, and it used to be drawn here raw.
+                Text(verbatim: SettingsSignalNames.displayName(for: signal.signalName))
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                 Spacer()
@@ -2027,7 +2057,9 @@ struct SettingsSheet: View {
         }
     }
 
-    private var connectionInspectorModeDescription: String {
+    /// The line under the mode picker. `LocalizedStringKey`: as a `String` the three sentences took
+    /// `Text`'s verbatim initializer and never reached the catalog.
+    private var connectionInspectorModeDescription: LocalizedStringKey {
         switch store.settings.connectionInspectorMode {
         case .disabled:
             return "No overlay and no saved history."
@@ -2161,8 +2193,12 @@ private struct MemoryEditorSheet: View {
             SheetField("Category") {
                 FlowLayout(spacing: 8) {
                     ForEach(categoryChoices, id: \.self) { choice in
-                        Button(choice.capitalized) { category = choice }
-                            .buttonStyle(ChipButtonStyle(selected: category.lowercased() == choice))
+                        // The chip SHOWS a name but STORES the token: `choice` is what the list
+                        // groups by, so only the drawn half goes through `MemoryCategoryName`.
+                        Button { category = choice } label: {
+                            Text(verbatim: MemoryCategoryName.chipLabel(for: choice))
+                        }
+                        .buttonStyle(ChipButtonStyle(selected: category.lowercased() == choice))
                     }
                 }
             }
@@ -2642,8 +2678,13 @@ struct AppLockSettingsView: View {
         if verifyTurnsOffPasscode {
             Text("Enter your current passcode to turn it off.",
                  comment: "Prompt on the verify sheet shown after confirming Turn off passcode in App lock settings.")
+        } else if pendingBiometricEnable {
+            // Two whole sentences rather than an English "enable"/"disable" spliced into one.
+            Text("Enter your current passcode to enable \(biometricName(lockService.biometricType)).",
+                 comment: "Prompt on the verify sheet before biometric unlock is turned on. The placeholder is Face ID or Touch ID (an Apple product name).")
         } else {
-            Text("Enter your current passcode to \(pendingBiometricEnable ? "enable" : "disable") \(biometricName(lockService.biometricType)).")
+            Text("Enter your current passcode to disable \(biometricName(lockService.biometricType)).",
+                 comment: "Prompt on the verify sheet before biometric unlock is turned off. The placeholder is Face ID or Touch ID (an Apple product name).")
         }
     }
 
@@ -2808,7 +2849,8 @@ struct AppLockSettingsView: View {
         }
     }
 
-    private func kindLabel(_ kind: FernletLockCredentialKind) -> String {
+    /// The status card's credential line. `LocalizedStringKey`: as a `String` it was drawn verbatim.
+    private func kindLabel(_ kind: FernletLockCredentialKind) -> LocalizedStringKey {
         switch kind {
         case .pin4: "4-digit PIN"
         case .pin6: "6-digit PIN"
@@ -2995,7 +3037,9 @@ private struct FernletLockChangePasscodeView: View {
         .onChange(of: selectedKind) { _, _ in newPasscode = "" }
     }
 
-    private func changeKindCard(_ kind: FernletLockCredentialKind, title: String) -> some View {
+    /// One lock-type row. `title` is a `LocalizedStringKey`: as a `String` the three literals passed to
+    /// it never reached the catalog.
+    private func changeKindCard(_ kind: FernletLockCredentialKind, title: LocalizedStringKey) -> some View {
         Button { selectedKind = kind } label: {
             HStack(spacing: 14) {
                 Image(systemName: kind == selectedKind ? "checkmark.circle.fill" : "circle")
@@ -3049,7 +3093,9 @@ private struct FernletLockChangePasscodeView: View {
     private func commitChange() {
         guard newPasscode == confirmPasscode else {
             confirmPasscode = ""
-            fail("Passcodes don't match. Try again.")
+            fail(String(localized: "settings.changePasscode.mismatch",
+                        defaultValue: "Passcodes don't match. Try again.",
+                        comment: "Change passcode, confirm step: the second entry did not match the new passcode."))
             return
         }
         Task { @MainActor in
@@ -3112,6 +3158,75 @@ private struct FernletLockChangePasscodeView: View {
 enum AwayDeliveryConsentCopy {
     /// The full consent disclosure, shown under the "Deliver hearts later" toggle while it is on.
     static let disclosure: LocalizedStringKey = "When a friend isn't nearby, a heart is sealed end-to-end and left in a shared iCloud drop-off under a rotating tag only that friend's device can recognize — delivered when they next open Fernlet. This is separate from iCloud Sync: only hearts go there, never your own data, and it works whether or not you sync Fernlet. Turning it off deletes the hearts still waiting there, so they won't be delivered later."
+}
+
+// MARK: - Display names for stored tokens
+
+/// The names Settings draws for derived signals, keyed by the frozen signal NAME.
+///
+/// `DerivedSignalRecord.signalName` ("moodTrend", "intensityReadiness", …) is a logic token: six
+/// call sites compare it with `==`, and `LocalizationBoundaryTests` part D pins the vocabulary. The
+/// Debug page's derived-signals inspector used to draw it raw. This is the display half — the same
+/// English Home's Trends card shows (`SignalPresentation.title(for:)`), under catalog keys — and an
+/// exact match on the frozen name, so a signal added later still draws, as its token.
+nonisolated enum SettingsSignalNames {
+    /// The localized name for `signalName`, or the token itself for a name this build does not know.
+    static func displayName(for signalName: String) -> String {
+        switch signalName {
+        case "moodTrend":
+            String(localized: "signal.name.moodTrend", defaultValue: "Mood trend",
+                   comment: "Name of a derived signal: the trend in the user's journal moods.")
+        case "energyTrend":
+            String(localized: "signal.name.energyTrend", defaultValue: "Energy trend",
+                   comment: "Name of a derived signal: the trend in the user's energy, from sleep, journal moods and recent workouts.")
+        case "eatingPattern":
+            String(localized: "signal.name.eatingPattern", defaultValue: "Eating pattern",
+                   comment: "Name of a derived signal: how regular recent meals were, and their protein.")
+        case "progressionTrend":
+            String(localized: "signal.name.progressionTrend", defaultValue: "Progression",
+                   comment: "Name of a derived signal: whether workouts are building over time.")
+        case "intensityReadiness":
+            String(localized: "signal.name.intensityReadiness", defaultValue: "Readiness",
+                   comment: "Name of a derived signal: how ready the body is for a hard workout today.")
+        case "micronutrientGaps7Day":
+            String(localized: "signal.name.micronutrientGaps7Day", defaultValue: "7-day nutrients",
+                   comment: "Name of a derived signal: vitamins and minerals over the last 7 days.")
+        case "micronutrientGaps14Day":
+            String(localized: "signal.name.micronutrientGaps14Day", defaultValue: "14-day nutrients",
+                   comment: "Name of a derived signal: vitamins and minerals over the last 14 days.")
+        default:
+            signalName
+        }
+    }
+}
+
+/// The names the Core memory page draws for a memory's stored `category` token.
+///
+/// `MemoryNote.category` is persisted and synced, and it is what the page groups by and the editor's
+/// chips store — so it never localizes. The categories Fernlet itself writes are a journal entry's
+/// ``FeelingTag`` raw value and the editor's "other"; those draw localized names here. Any other token
+/// (one an older build or the user wrote) draws exactly as before: capitalized on a chip, upper-cased
+/// in the root locale on a heading.
+nonisolated enum MemoryCategoryName {
+    /// The localized name for a category token Fernlet writes, or nil for any other token.
+    static func knownName(for token: String) -> String? {
+        if let feeling = FeelingTag(rawValue: token) { return feeling.label }
+        guard token == "other" else { return nil }
+        return String(localized: "settings.memory.category.other", defaultValue: "Other",
+                      comment: "Core memory: the category for a memory that fits no other group. A chip in the memory editor, and a group heading (drawn in capitals).")
+    }
+
+    /// A group heading for `groupKey`, the upper-cased token the page groups by. A known category
+    /// draws its localized name (the heading's `.textCase(.uppercase)` capitalizes it after the
+    /// lookup); any other token draws as it always has.
+    static func heading(forGroup groupKey: String) -> String {
+        knownName(for: groupKey.lowercased()) ?? groupKey
+    }
+
+    /// An editor chip's label for `token` (stored lower-cased).
+    static func chipLabel(for token: String) -> String {
+        knownName(for: token) ?? token.capitalized
+    }
 }
 
 // MARK: - Shared pin dots row helper (used in SettingsSheet-internal views)

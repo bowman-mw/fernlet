@@ -2702,6 +2702,23 @@ struct LocalizationBoundaryTests {
         ForkedMember(path: "App/Fernlet/DuressRecoveryCeremonyViews.swift",
                      declaration: "let title: LocalizedStringKey",
                      role: "CeremonyButton, every step's advance button"),
+        // Spanish round, settings lane (2026-10-20): `String` helpers on the Settings pages whose
+        // literal callers never reached the catalog.
+        ForkedMember(path: "App/Fernlet/SettingsSheet.swift",
+                     declaration: "private func themeColorRow(title: LocalizedStringKey, color: Binding<Color>, hex: String, defaultHex: String, isDarkRow: Bool, reset: @escaping () -> Void) -> some View {",
+                     role: "Appearance's background rows: the colour picker's name and the row's Reset Voice Control label"),
+        ForkedMember(path: "App/Fernlet/SettingsSheet.swift",
+                     declaration: "private var connectionInspectorModeDescription: LocalizedStringKey {",
+                     role: "the Connection Inspector mode picker's explanation line"),
+        ForkedMember(path: "App/Fernlet/SettingsSheet.swift",
+                     declaration: "private func kindLabel(_ kind: FernletLockCredentialKind) -> LocalizedStringKey {",
+                     role: "the App lock status card's passcode-type line"),
+        ForkedMember(path: "App/Fernlet/SettingsSheet.swift",
+                     declaration: "private func changeKindCard(_ kind: FernletLockCredentialKind, title: LocalizedStringKey) -> some View {",
+                     role: "Change passcode's lock-type rows"),
+        ForkedMember(path: "App/Fernlet/DeleteEverythingFlow.swift",
+                     declaration: "successButtonTitle: LocalizedStringKey,",
+                     role: "the Everything deleted alert's button on both delete screens"),
     ]
 
     /// The members this round forked are still forked.
@@ -2884,6 +2901,40 @@ struct LocalizationBoundaryTests {
         return keys
     }()
 
+    /// The Spanish round's settings-lane forks (2026-10-20), kept apart from the other lists for the
+    /// same type-checker reason as ``workoutCopyForkKeys``. Every key was measured absent from its
+    /// catalog before the fork: a `String` helper, a `String`-returning switch, a `+`-assembled or
+    /// English-spliced sentence, or a frozen token drawn raw.
+    static let settingsLaneForkKeys: [HarvestedKey] = {
+        let app = "App/Fernlet/Localizable.xcstrings"
+        let appKeys: [(key: String, source: String)] = [
+            ("Light mode", "SettingsSheet.themeColorRow, forked String → LocalizedStringKey"),
+            ("Dark mode", "SettingsSheet.themeColorRow, forked String → LocalizedStringKey"),
+            ("No overlay and no saved history.", "SettingsSheet.connectionInspectorModeDescription"),
+            ("Records session history without showing the live overlay.", "SettingsSheet.connectionInspectorModeDescription"),
+            ("Records session history and shows the live inspector when you open it manually.",
+             "SettingsSheet.connectionInspectorModeDescription"),
+            ("Alphanumeric password", "AppLockSettingsView.kindLabel"),
+            ("Forget ^[%lld memory](inflect: true) matching \"%@\"?", "Core memory's forget prompt, once an English y/ies splice"),
+            ("Daily target: ^[%lld bottle](inflect: true)", "the hydration stepper, once a fixed 'bottles'"),
+            ("Enter your current passcode to enable %@.", "the biometric verify prompt, once an English enable/disable splice"),
+            ("Enter your current passcode to disable %@.", "the biometric verify prompt, once an English enable/disable splice"),
+            ("settings.goal.overrideFootnote.targetsAndSplit", "the goal override footnote, once assembled from fragments"),
+            ("settings.goal.overrideFootnote.targets", "the goal override footnote, once assembled from fragments"),
+            ("settings.goal.overrideFootnote.split", "the goal override footnote, once assembled from fragments"),
+            ("settings.changePasscode.mismatch", "Change passcode's mismatch line, once a bare String"),
+            ("settings.memory.category.other", "MemoryCategoryName, the Core memory category drawn raw"),
+            ("appearanceMode.system", "FernletAppearanceMode.label, once bare literals"),
+            ("appearanceMode.light", "FernletAppearanceMode.label, once bare literals"),
+            ("appearanceMode.dark", "FernletAppearanceMode.label, once bare literals"),
+            ("settings.haptics.level.off", "the haptics segmented control's own Off, apart from the status 'Off'"),
+        ] + ["moodTrend", "energyTrend", "eatingPattern", "progressionTrend", "intensityReadiness",
+             "micronutrientGaps7Day", "micronutrientGaps14Day"].map {
+            ("signal.name.\($0)", "SettingsSignalNames, the Debug page's derived-signal names once drawn raw")
+        }
+        return appKeys.map { HarvestedKey(catalog: app, key: $0.key, source: $0.source) }
+    }()
+
     /// The forks actually reached a catalog.
     ///
     /// This is the half the other tests cannot show. Parts A, E and F prove no *bad* shape is left
@@ -2897,7 +2948,7 @@ struct LocalizationBoundaryTests {
     /// committed), not that a string moved.
     @Test func everyForkedStringActuallyReachedItsCatalog() throws {
         var missing: [String] = []
-        for entry in Self.harvestedForkKeys + Self.workoutCopyForkKeys {
+        for entry in Self.harvestedForkKeys + Self.workoutCopyForkKeys + Self.settingsLaneForkKeys {
             let url = RepoRoot.url(entry.catalog)
             let data = try Data(contentsOf: url)
             let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]

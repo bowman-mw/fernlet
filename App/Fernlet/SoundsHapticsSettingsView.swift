@@ -53,10 +53,16 @@ struct SoundsHapticsSettingsView: View {
             Text("Haptics")
                 .font(.fernlet(.label))
                 .foregroundStyle(Color.bark)
+            // The segments' own keys rather than the bare "All" / "Off" every other screen shares:
+            // a segmented control's choice and a status readout can need different words ("Off" is
+            // also the AI and Health status).
             Picker("Haptics", selection: $level) {
-                Text("All").tag(FernletHapticsLevel.all)
-                Text("Fewer").tag(FernletHapticsLevel.fewer)
-                Text("Off").tag(FernletHapticsLevel.off)
+                Text(LocalizedStringResource("settings.haptics.level.all", defaultValue: "All",
+                                             comment: "Sounds & haptics: segmented control choice, every haptic plays.")).tag(FernletHapticsLevel.all)
+                Text(LocalizedStringResource("settings.haptics.level.fewer", defaultValue: "Fewer",
+                                             comment: "Sounds & haptics: segmented control choice, only the important haptics play.")).tag(FernletHapticsLevel.fewer)
+                Text(LocalizedStringResource("settings.haptics.level.off", defaultValue: "Off",
+                                             comment: "Sounds & haptics: segmented control choice, no haptics play. A choice on a switch-like control, not a status readout.")).tag(FernletHapticsLevel.off)
             }
             .pickerStyle(.segmented)
             .accessibilityIdentifier("settings.soundsHaptics.level")

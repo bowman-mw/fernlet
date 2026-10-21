@@ -1591,9 +1591,6 @@
         }
       }
     },
-    "All" : {
-
-    },
     "All done" : {
       "comment" : "Shown and spoken by the breathing pacer the moment a session reaches its full length."
     },
@@ -1610,6 +1607,9 @@
 
     },
     "Allow web lookup" : {
+
+    },
+    "Alphanumeric password" : {
 
     },
     "Already did this" : {
@@ -2621,10 +2621,13 @@
     "Daily score" : {
 
     },
-    "Daily target: %lld bottles" : {
+    "Daily target: ^[%lld bottle](inflect: true)" : {
 
     },
     "Danger zone" : {
+
+    },
+    "Dark mode" : {
 
     },
     "Data & sources" : {
@@ -3214,15 +3217,11 @@
     "Enter your current passcode again — Fernlet needs it to re-key your sealed notes." : {
 
     },
-    "Enter your current passcode to %@ %@." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Enter your current passcode to %1$@ %2$@."
-          }
-        }
-      }
+    "Enter your current passcode to disable %@." : {
+      "comment" : "Prompt on the verify sheet before biometric unlock is turned off. The placeholder is Face ID or Touch ID (an Apple product name)."
+    },
+    "Enter your current passcode to enable %@." : {
+      "comment" : "Prompt on the verify sheet before biometric unlock is turned on. The placeholder is Face ID or Touch ID (an Apple product name)."
     },
     "Enter your current passcode to turn it off." : {
       "comment" : "Prompt on the verify sheet shown after confirming Turn off passcode in App lock settings."
@@ -3591,9 +3590,6 @@
     "Fernlet won't suggest this again." : {
       "comment" : "Plan editor: this exercise is marked Don't suggest, written on Save"
     },
-    "Fewer" : {
-
-    },
     "Fewer sets" : {
 
     },
@@ -3731,12 +3727,12 @@
     "Forget" : {
 
     },
-    "Forget %lld memor%@ matching \"%@\"?" : {
+    "Forget ^[%lld memory](inflect: true) matching \"%@\"?" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Forget %1$lld memor%2$@ matching \"%3$@\"?"
+            "value" : "Forget ^[%1$lld memory](inflect: true) matching \"%2$@\"?"
           }
         }
       }
@@ -4717,6 +4713,9 @@
     "Light and steady — just waking things up." : {
 
     },
+    "Light mode" : {
+
+    },
     "Light on purpose — just getting ready." : {
       "comment" : "Guided workout: the cue on a warm-up set (a lighter set before a lift's working sets or a strength check).",
       "localizations" : {
@@ -5450,6 +5449,9 @@
 
     },
     "No one matches \"%@\"." : {
+
+    },
+    "No overlay and no saved history." : {
 
     },
     "No passcode" : {
@@ -6545,6 +6547,12 @@
 
     },
     "Recorded by a newer version of Fernlet. Shown exactly as it was recorded, because this version has no name for it." : {
+
+    },
+    "Records session history and shows the live inspector when you open it manually." : {
+
+    },
+    "Records session history without showing the live overlay." : {
 
     },
     "Recover this phone" : {
@@ -9971,6 +9979,42 @@
         }
       }
     },
+    "appearanceMode.dark" : {
+      "comment" : "Settings › Appearance chip: always use the dark appearance.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Dark"
+          }
+        }
+      }
+    },
+    "appearanceMode.light" : {
+      "comment" : "Settings › Appearance chip: always use the light appearance.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Light"
+          }
+        }
+      }
+    },
+    "appearanceMode.system" : {
+      "comment" : "Settings › Appearance chip: follow the phone's own Light/Dark setting.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "System"
+          }
+        }
+      }
+    },
     "as of %@" : {
 
     },
@@ -11978,6 +12022,102 @@
         }
       }
     },
+    "settings.changePasscode.mismatch" : {
+      "comment" : "Change passcode, confirm step: the second entry did not match the new passcode.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Passcodes don't match. Try again."
+          }
+        }
+      }
+    },
+    "settings.goal.overrideFootnote.split" : {
+      "comment" : "Goal & nutrition, under the goal cards: the user picked a training split, which a goal preset does not override. One split: in translation the verb and pronoun agree with it ('stays as you set it').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your chosen training split stay as you set them — clear them to follow this goal's plan."
+          }
+        }
+      }
+    },
+    "settings.goal.overrideFootnote.targets" : {
+      "comment" : "Goal & nutrition, under the goal cards: the user pinned their own nutrition targets, which a goal preset does not override.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your custom nutrition targets stay as you set them — clear them to follow this goal's plan."
+          }
+        }
+      }
+    },
+    "settings.goal.overrideFootnote.targetsAndSplit" : {
+      "comment" : "Goal & nutrition, under the goal cards: the user pinned both their own nutrition targets and a training split, which a goal preset does not override.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your custom nutrition targets and chosen training split stay as you set them — clear them to follow this goal's plan."
+          }
+        }
+      }
+    },
+    "settings.haptics.level.all" : {
+      "comment" : "Sounds & haptics: segmented control choice, every haptic plays.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "All"
+          }
+        }
+      }
+    },
+    "settings.haptics.level.fewer" : {
+      "comment" : "Sounds & haptics: segmented control choice, only the important haptics play.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fewer"
+          }
+        }
+      }
+    },
+    "settings.haptics.level.off" : {
+      "comment" : "Sounds & haptics: segmented control choice, no haptics play. A choice on a switch-like control, not a status readout.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Off"
+          }
+        }
+      }
+    },
+    "settings.memory.category.other" : {
+      "comment" : "Core memory: the category for a memory that fits no other group. A chip in the memory editor, and a group heading (drawn in capitals).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Other"
+          }
+        }
+      }
+    },
     "settings.search.breadcrumb.aiActivityLog" : {
       "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
       "extractionState" : "extracted_with_value",
@@ -13464,6 +13604,90 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "You marked today as unwell, so readiness rests until tomorrow."
+          }
+        }
+      }
+    },
+    "signal.name.eatingPattern" : {
+      "comment" : "Name of a derived signal: how regular recent meals were, and their protein.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Eating pattern"
+          }
+        }
+      }
+    },
+    "signal.name.energyTrend" : {
+      "comment" : "Name of a derived signal: the trend in the user's energy, from sleep, journal moods and recent workouts.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Energy trend"
+          }
+        }
+      }
+    },
+    "signal.name.intensityReadiness" : {
+      "comment" : "Name of a derived signal: how ready the body is for a hard workout today.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Readiness"
+          }
+        }
+      }
+    },
+    "signal.name.micronutrientGaps14Day" : {
+      "comment" : "Name of a derived signal: vitamins and minerals over the last 14 days.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "14-day nutrients"
+          }
+        }
+      }
+    },
+    "signal.name.micronutrientGaps7Day" : {
+      "comment" : "Name of a derived signal: vitamins and minerals over the last 7 days.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "7-day nutrients"
+          }
+        }
+      }
+    },
+    "signal.name.moodTrend" : {
+      "comment" : "Name of a derived signal: the trend in the user's journal moods.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mood trend"
+          }
+        }
+      }
+    },
+    "signal.name.progressionTrend" : {
+      "comment" : "Name of a derived signal: whether workouts are building over time.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Progression"
           }
         }
       }
