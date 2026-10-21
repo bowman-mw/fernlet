@@ -721,6 +721,30 @@
         }
       }
     },
+    "biologicalSex.female" : {
+      "comment" : "Body profile: biological sex, used for energy and fiber targets",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Female"
+          }
+        }
+      }
+    },
+    "biologicalSex.male" : {
+      "comment" : "Body profile: biological sex, used for energy and fiber targets",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Male"
+          }
+        }
+      }
+    },
     "bodyArea.ankleFoot" : {
       "comment" : "Body area in the workout injury picker",
       "extractionState" : "extracted_with_value",
@@ -28543,6 +28567,66 @@
         }
       }
     },
+    "foodItem.dataSource.aiEstimate" : {
+      "comment" : "Food search row tag: a food whose nutrition the on-device AI estimated",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "AI estimate"
+          }
+        }
+      }
+    },
+    "foodItem.dataSource.branded" : {
+      "comment" : "Food search row tag: a branded product with no brand name on record",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Branded"
+          }
+        }
+      }
+    },
+    "foodItem.dataSource.manual" : {
+      "comment" : "Food search row tag: a food the person created themselves",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your foods"
+          }
+        }
+      }
+    },
+    "foodItem.dataSource.restaurant" : {
+      "comment" : "Food search row tag: a restaurant item with no restaurant name on record",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Restaurant"
+          }
+        }
+      }
+    },
+    "foodItem.dataSource.usda" : {
+      "comment" : "Food search row tag: a reference food from the US Department of Agriculture's database. 'USDA' is the agency's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "USDA"
+          }
+        }
+      }
+    },
     "foodItemSource.openFoodFacts.attribution" : {
       "comment" : "Attribution shown wherever a food imported from the Open Food Facts database is displayed. 'Open Food Facts' is the database's name and 'ODbL' (Open Database License) is its licence — keep both untranslated.",
       "extractionState" : "extracted_with_value",
@@ -29659,6 +29743,18 @@
         }
       }
     },
+    "nutrient.calcium" : {
+      "comment" : "Nutrient name: the mineral",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Calcium"
+          }
+        }
+      }
+    },
     "nutrient.calories" : {
       "comment" : "Nutrition field name: energy",
       "extractionState" : "extracted_with_value",
@@ -29719,6 +29815,42 @@
         }
       }
     },
+    "nutrient.folate" : {
+      "comment" : "Nutrient name: folate (vitamin B9)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Folate"
+          }
+        }
+      }
+    },
+    "nutrient.iron" : {
+      "comment" : "Nutrient name: the mineral",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Iron"
+          }
+        }
+      }
+    },
+    "nutrient.magnesium" : {
+      "comment" : "Nutrient name: the mineral",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Magnesium"
+          }
+        }
+      }
+    },
     "nutrient.monounsaturatedFat" : {
       "comment" : "Nutrition field name: monounsaturated fat",
       "extractionState" : "extracted_with_value",
@@ -29731,6 +29863,18 @@
         }
       }
     },
+    "nutrient.omega3" : {
+      "comment" : "Nutrient name: omega-3 fatty acids",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Omega-3"
+          }
+        }
+      }
+    },
     "nutrient.polyunsaturatedFat" : {
       "comment" : "Nutrition field name: polyunsaturated fat",
       "extractionState" : "extracted_with_value",
@@ -29739,6 +29883,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Polyunsaturated fat"
+          }
+        }
+      }
+    },
+    "nutrient.potassium" : {
+      "comment" : "Nutrient name: the mineral",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Potassium"
           }
         }
       }
@@ -29811,6 +29967,54 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Trans fat"
+          }
+        }
+      }
+    },
+    "nutrient.vitaminB12" : {
+      "comment" : "Nutrient name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Vitamin B12"
+          }
+        }
+      }
+    },
+    "nutrient.vitaminC" : {
+      "comment" : "Nutrient name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Vitamin C"
+          }
+        }
+      }
+    },
+    "nutrient.vitaminD" : {
+      "comment" : "Nutrient name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Vitamin D"
+          }
+        }
+      }
+    },
+    "nutrient.zinc" : {
+      "comment" : "Nutrient name: the mineral",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Zinc"
           }
         }
       }
@@ -29979,6 +30183,198 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Part %lld"
+          }
+        }
+      }
+    },
+    "recipeUnit.cup" : {
+      "comment" : "Recipe unit menu: US measuring cups",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cups"
+          }
+        }
+      }
+    },
+    "recipeUnit.each" : {
+      "comment" : "Recipe unit menu: whole items, a count ('2 each')",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Each"
+          }
+        }
+      }
+    },
+    "recipeUnit.fluidOunce" : {
+      "comment" : "Recipe unit menu: US fluid ounces (a volume)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "US Fluid Ounces"
+          }
+        }
+      }
+    },
+    "recipeUnit.glass" : {
+      "comment" : "Recipe unit menu: a drinking glass, counted as 12 US fluid ounces",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Glass (12 US fl oz)"
+          }
+        }
+      }
+    },
+    "recipeUnit.gram" : {
+      "comment" : "Recipe unit menu: grams",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Grams"
+          }
+        }
+      }
+    },
+    "recipeUnit.kilogram" : {
+      "comment" : "Recipe unit menu: kilograms",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Kilograms"
+          }
+        }
+      }
+    },
+    "recipeUnit.liter" : {
+      "comment" : "Recipe unit menu: liters",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Liters"
+          }
+        }
+      }
+    },
+    "recipeUnit.milligram" : {
+      "comment" : "Recipe unit menu: milligrams",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Milligrams"
+          }
+        }
+      }
+    },
+    "recipeUnit.milliliter" : {
+      "comment" : "Recipe unit menu: milliliters",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Milliliters"
+          }
+        }
+      }
+    },
+    "recipeUnit.ounce" : {
+      "comment" : "Recipe unit menu: ounces by weight",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ounces"
+          }
+        }
+      }
+    },
+    "recipeUnit.piece" : {
+      "comment" : "Recipe unit menu: pieces, a count",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pieces"
+          }
+        }
+      }
+    },
+    "recipeUnit.pound" : {
+      "comment" : "Recipe unit menu: pounds by weight",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pounds"
+          }
+        }
+      }
+    },
+    "recipeUnit.serving" : {
+      "comment" : "Recipe unit menu: servings",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Servings"
+          }
+        }
+      }
+    },
+    "recipeUnit.slice" : {
+      "comment" : "Recipe unit menu: slices, a count",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Slices"
+          }
+        }
+      }
+    },
+    "recipeUnit.tablespoon" : {
+      "comment" : "Recipe unit menu: tablespoons",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tablespoons"
+          }
+        }
+      }
+    },
+    "recipeUnit.teaspoon" : {
+      "comment" : "Recipe unit menu: teaspoons",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Teaspoons"
           }
         }
       }

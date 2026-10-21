@@ -1431,6 +1431,48 @@ struct LocalizationBoundaryTests {
             """)
     }
 
+    /// The tracked nutrients' names stay English; screens draw them by key (Spanish round step 2, 2026-10-20).
+    ///
+    /// `NutrientReference.name` is copied into every `NutrientGap.nutrientName`, which is persisted with
+    /// the derived signals. A localized name would put one device's language into a stored record, so it
+    /// is frozen, and `NutrientReference.displayName` / `NutrientGap.displayedName` localize from the key.
+    @Test func frozenTrackedNutrientNamesDrawLocalizedByKey() throws {
+        let tracked = MicronutrientGapAnalyzer.trackedNutrients
+        #expect(tracked.map(\.name) == [
+            "Fiber", "Vitamin C", "Vitamin D", "Vitamin B12", "Folate", "Calcium", "Iron", "Magnesium", "Potassium",
+            "Zinc", "Omega-3",
+        ], "a tracked nutrient's stored name changed: it is persisted in every derived signal's nutrient gaps")
+        let strings = try Self.foodCatalogStrings("FernletKit/Sources/FernletDomainModel/Localizable.xcstrings")
+        for nutrient in tracked {
+            #expect(NutrientReference.displayName(forKey: nutrient.key) != nil, "\(nutrient.key) has no display name")
+            #expect(Self.englishCatalogValue(strings, key: "nutrient.\(nutrient.key)") == nutrient.name,
+                    "nutrient.\(nutrient.key) must reach the domain catalog with the frozen name as its English")
+            let gap = NutrientGap(nutrientKey: nutrient.key, nutrientName: nutrient.name, unit: nutrient.unit, windowDays: 7,
+                                  coverageRatio: 0.1, dataCoverageRatio: 1, status: .gap)
+            #expect(gap.displayedName == nutrient.displayName)
+        }
+        let unknown = NutrientGap(nutrientKey: "boron", nutrientName: "Boron", unit: "mg", windowDays: 7,
+                                  coverageRatio: 0.1, dataCoverageRatio: 1, status: .gap)
+        #expect(unknown.displayedName == "Boron", "a key this build does not track draws its stored name")
+    }
+
+    /// The nutrition display labels localized in place reached the domain catalog (2026-10-20). Each
+    /// was traced to display readers only: `RecipeUnit.label` (the unit menu), `BiologicalSex.label`
+    /// (the Sex pickers) and `FoodItem.dataSourceLabel` (search rows; the swap sheet's per-screen
+    /// de-duplication key). Each is a `String(localized:)` line revertible to a bare literal on its own.
+    @Test func nutritionDisplayLabelsReachedTheDomainCatalog() throws {
+        let strings = try Self.foodCatalogStrings("FernletKit/Sources/FernletDomainModel/Localizable.xcstrings")
+        var keys = RecipeUnit.allCases.map { "recipeUnit.\(String(describing: $0))" }
+        keys += BiologicalSex.allCases.map { "biologicalSex.\($0.rawValue)" }
+        keys += ["manual", "aiEstimate", "branded", "restaurant", "usda"].map { "foodItem.dataSource.\($0)" }
+        let missing = keys.filter { strings[$0] == nil }
+        #expect(missing.isEmpty, """
+            \(missing.count) nutrition label key(s) are not in the FernletDomainModel catalog: \(missing). A label went \
+            back to a bare literal, or the catalogs were not re-synced and committed.
+            """)
+        #expect(Self.englishCatalogValue(strings, key: "recipeUnit.glass") == RecipeUnit.glass.label)
+    }
+
     /// A key's English `stringUnit` value in a catalog's `strings` table, or nil when it has none.
     static func englishCatalogValue(_ strings: [String: Any], key: String) -> String? {
         let localizations = (strings[key] as? [String: Any])?["localizations"] as? [String: Any]

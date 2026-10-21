@@ -124,10 +124,14 @@ public nonisolated enum BiologicalSex: String, Codable, CaseIterable, Identifiab
 
     public var id: String { rawValue }
 
+    /// The localized name the onboarding and profile Sex pickers draw. Display only: ``rawValue`` is
+    /// the persisted token, and nothing else reads this (traced 2026-10-20).
     public var label: String {
         switch self {
-        case .female: "Female"
-        case .male: "Male"
+        case .female: String(localized: "biologicalSex.female", defaultValue: "Female", bundle: .module,
+                             comment: "Body profile: biological sex, used for energy and fiber targets")
+        case .male: String(localized: "biologicalSex.male", defaultValue: "Male", bundle: .module,
+                           comment: "Body profile: biological sex, used for energy and fiber targets")
         }
     }
 }
@@ -1041,12 +1045,23 @@ public nonisolated struct NutrientGap: Identifiable, Codable, Equatable {
     public var id: String {
         "\(nutrientKey)-\(windowDays)-\(status.rawValue)"
     }
+
+    /// The nutrient's name as a screen DRAWS it: localized from ``nutrientKey``, or ``nutrientName``
+    /// as stored for a key this build does not track. ``nutrientName`` is stored English (it rides the
+    /// persisted derived-signal record), so it is never drawn directly (Spanish round step 2,
+    /// 2026-10-20). Display only.
+    public var displayedName: String {
+        NutrientReference.displayName(forKey: nutrientKey) ?? nutrientName
+    }
 }
 
 /// A tracked nutrient's identity, unit, recommended daily amount, and value accessor.
 ///
 /// The row type of ``MicronutrientGapAnalyzer/trackedNutrients``; recommended amounts come from
-/// the shared ``FDADailyValues`` table.
+/// the shared ``FDADailyValues`` table. ``name`` is FROZEN English: the analyzer copies it into every
+/// ``NutrientGap/nutrientName``, which is persisted with the derived signals, so a localized name would
+/// store one device's language in a synced record. Screens draw ``displayName`` (or
+/// ``NutrientGap/displayedName``) instead.
 public nonisolated struct NutrientReference: Sendable {
 
     public init(key: String, name: String, unit: String, recommendedDailyAmount: Double,
@@ -1062,6 +1077,28 @@ public nonisolated struct NutrientReference: Sendable {
     public var unit: String
     public var recommendedDailyAmount: Double
     public var value: @Sendable (Micronutrients) -> Double?
+
+    /// ``name`` in the person's language. Display only.
+    public var displayName: String { Self.displayName(forKey: key) ?? name }
+
+    /// The localized name of the tracked nutrient `key` names, or nil for a key that is not tracked.
+    public static func displayName(forKey key: String) -> String? {
+        switch key {
+        // The same key, value and comment as `NutrientField.fiber.displayName`: one word, one entry.
+        case "fiber": String(localized: "nutrient.fiber", defaultValue: "Fiber", bundle: .module, comment: "Nutrition field name: dietary fiber")
+        case "vitaminC": String(localized: "nutrient.vitaminC", defaultValue: "Vitamin C", bundle: .module, comment: "Nutrient name")
+        case "vitaminD": String(localized: "nutrient.vitaminD", defaultValue: "Vitamin D", bundle: .module, comment: "Nutrient name")
+        case "vitaminB12": String(localized: "nutrient.vitaminB12", defaultValue: "Vitamin B12", bundle: .module, comment: "Nutrient name")
+        case "folate": String(localized: "nutrient.folate", defaultValue: "Folate", bundle: .module, comment: "Nutrient name: folate (vitamin B9)")
+        case "calcium": String(localized: "nutrient.calcium", defaultValue: "Calcium", bundle: .module, comment: "Nutrient name: the mineral")
+        case "iron": String(localized: "nutrient.iron", defaultValue: "Iron", bundle: .module, comment: "Nutrient name: the mineral")
+        case "magnesium": String(localized: "nutrient.magnesium", defaultValue: "Magnesium", bundle: .module, comment: "Nutrient name: the mineral")
+        case "potassium": String(localized: "nutrient.potassium", defaultValue: "Potassium", bundle: .module, comment: "Nutrient name: the mineral")
+        case "zinc": String(localized: "nutrient.zinc", defaultValue: "Zinc", bundle: .module, comment: "Nutrient name: the mineral")
+        case "omega3": String(localized: "nutrient.omega3", defaultValue: "Omega-3", bundle: .module, comment: "Nutrient name: omega-3 fatty acids")
+        default: nil
+        }
+    }
 }
 
 /// Deterministic micronutrient gap analysis over recent days' meals.
@@ -1429,22 +1466,31 @@ public nonisolated struct FoodItem: Identifiable, Codable, Equatable, Sendable {
     /// name; reference USDA foods read "USDA"; user and AI-derived foods are labelled distinctly; an
     /// Open Food Facts import reads as its ODbL attribution line, so the licence notice appears on
     /// every row that names where the numbers came from.
+    ///
+    /// Localized display only (Spanish round step 2, 2026-10-20). Its one non-display reader, the swap
+    /// sheet's de-duplication key, is built and compared within one screen, so it never meets a value
+    /// made in another language.
     public var dataSourceLabel: String {
         switch source {
         case .manual:
-            return "Your foods"
+            return String(localized: "foodItem.dataSource.manual", defaultValue: "Your foods", bundle: .module,
+                          comment: "Food search row tag: a food the person created themselves")
         case .openFoodFacts:
             return FoodItemSource.openFoodFactsAttribution
         case .aiResolved:
-            return "AI estimate"
+            return String(localized: "foodItem.dataSource.aiEstimate", defaultValue: "AI estimate", bundle: .module,
+                          comment: "Food search row tag: a food whose nutrition the on-device AI estimated")
         case .usda:
             switch dataType {
             case .branded:
-                return nonEmptyBrandSource ?? "Branded"
+                return nonEmptyBrandSource ?? String(localized: "foodItem.dataSource.branded", defaultValue: "Branded",
+                                                     bundle: .module, comment: "Food search row tag: a branded product with no brand name on record")
             case .restaurant:
-                return nonEmptyBrandSource ?? "Restaurant"
+                return nonEmptyBrandSource ?? String(localized: "foodItem.dataSource.restaurant", defaultValue: "Restaurant",
+                                                     bundle: .module, comment: "Food search row tag: a restaurant item with no restaurant name on record")
             case .foundation, .survey, .srLegacy:
-                return "USDA"
+                return String(localized: "foodItem.dataSource.usda", defaultValue: "USDA", bundle: .module,
+                              comment: "Food search row tag: a reference food from the US Department of Agriculture's database. 'USDA' is the agency's name.")
             }
         }
     }
@@ -2058,24 +2104,28 @@ public nonisolated enum RecipeUnit: String, CaseIterable, Identifiable, Sendable
 
     public var id: String { rawValue }
 
+    /// The unit's name in the recipe editor's unit menu and its spoken value. Localized display only:
+    /// ``rawValue`` is the persisted and shared token (`LocalizationBoundaryTests.frozenRecipeUnitTokens`).
     public var label: String {
         switch self {
-        case .milligram: "Milligrams"
-        case .gram: "Grams"
-        case .kilogram: "Kilograms"
-        case .milliliter: "Milliliters"
-        case .ounce: "Ounces"
-        case .pound: "Pounds"
-        case .fluidOunce: "US Fluid Ounces"
-        case .liter: "Liters"
-        case .cup: "Cups"
-        case .tablespoon: "Tablespoons"
-        case .teaspoon: "Teaspoons"
-        case .glass: "Glass (12 US fl oz)"
-        case .slice: "Slices"
-        case .piece: "Pieces"
-        case .each: "Each"
-        case .serving: "Servings"
+        case .milligram: String(localized: "recipeUnit.milligram", defaultValue: "Milligrams", bundle: .module, comment: "Recipe unit menu: milligrams")
+        case .gram: String(localized: "recipeUnit.gram", defaultValue: "Grams", bundle: .module, comment: "Recipe unit menu: grams")
+        case .kilogram: String(localized: "recipeUnit.kilogram", defaultValue: "Kilograms", bundle: .module, comment: "Recipe unit menu: kilograms")
+        case .milliliter: String(localized: "recipeUnit.milliliter", defaultValue: "Milliliters", bundle: .module, comment: "Recipe unit menu: milliliters")
+        case .ounce: String(localized: "recipeUnit.ounce", defaultValue: "Ounces", bundle: .module, comment: "Recipe unit menu: ounces by weight")
+        case .pound: String(localized: "recipeUnit.pound", defaultValue: "Pounds", bundle: .module, comment: "Recipe unit menu: pounds by weight")
+        case .fluidOunce: String(localized: "recipeUnit.fluidOunce", defaultValue: "US Fluid Ounces", bundle: .module,
+                                 comment: "Recipe unit menu: US fluid ounces (a volume)")
+        case .liter: String(localized: "recipeUnit.liter", defaultValue: "Liters", bundle: .module, comment: "Recipe unit menu: liters")
+        case .cup: String(localized: "recipeUnit.cup", defaultValue: "Cups", bundle: .module, comment: "Recipe unit menu: US measuring cups")
+        case .tablespoon: String(localized: "recipeUnit.tablespoon", defaultValue: "Tablespoons", bundle: .module, comment: "Recipe unit menu: tablespoons")
+        case .teaspoon: String(localized: "recipeUnit.teaspoon", defaultValue: "Teaspoons", bundle: .module, comment: "Recipe unit menu: teaspoons")
+        case .glass: String(localized: "recipeUnit.glass", defaultValue: "Glass (12 US fl oz)", bundle: .module,
+                            comment: "Recipe unit menu: a drinking glass, counted as 12 US fluid ounces")
+        case .slice: String(localized: "recipeUnit.slice", defaultValue: "Slices", bundle: .module, comment: "Recipe unit menu: slices, a count")
+        case .piece: String(localized: "recipeUnit.piece", defaultValue: "Pieces", bundle: .module, comment: "Recipe unit menu: pieces, a count")
+        case .each: String(localized: "recipeUnit.each", defaultValue: "Each", bundle: .module, comment: "Recipe unit menu: whole items, a count ('2 each')")
+        case .serving: String(localized: "recipeUnit.serving", defaultValue: "Servings", bundle: .module, comment: "Recipe unit menu: servings")
         }
     }
 
