@@ -222,17 +222,9 @@ struct LocalizationBoundaryTests {
     /// Every allowlisted bundle-free resolution. Keep this list at one or two entries; a third
     /// should prompt the question of whether the rule, not the list, needs to change.
     static let bundleFreeResolutions: [BundleFreeResolution] = [
-        BundleFreeResolution(
-            path: "FernletKit/Sources/FernletUI/FernletAnnouncer.swift",
-            call: "String(localized: text)",
-            reason: """
-                `text` is a caller-supplied `LocalizedStringResource`, which carries its own bundle; \
-                the resource-taking overload has no `bundle:` parameter at all. FernletAnnouncer is \
-                the app's single VoiceOver-announcement seam and holds ZERO copy by design — \
-                FernletAnnouncerTests scans its source for string literals to keep it that way, \
-                which is the other half of this entry's invariant.
-                """
-        ),
+        // FernletAnnouncer's `String(localized: text)` held the first entry until the Spanish round
+        // (2026-10-20) routed it through AddressedCopy, so a marked translation is inflected rather
+        // than read aloud as raw markup; the resolution it needed now lives in the entry below.
         BundleFreeResolution(
             path: "FernletKit/Sources/FernletUI/AddressedCopy.swift",
             call: "String(localized: resource, options: options)",
