@@ -571,7 +571,9 @@ struct FoodView: View {
             let protein = meals.reduce(0) { $0 + $1.macros.protein }
             let calories = meals.reduce(0) { $0 + $1.calories }
             HStack(spacing: 10) {
-                Text(verbatim: "\(type.displayName) total")
+                // One key with the slot as its argument, so a translator can put "total" where the
+                // language wants it; `verbatim:` here spliced an English word onto a localized one.
+                Text("\(type.displayName) total")
                     .foregroundStyle(Color.slate)
                 Spacer(minLength: 0)
                 Text("P \(protein)g")
@@ -1078,7 +1080,7 @@ private struct SavedRecipeRow: View {
                 }
             }
             if !recipe.notes.isEmpty {
-                Text(recipe.notes)
+                Text(verbatim: StoredFoodNote.displayedRecipeNotes(recipe.notes))
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                     .fernletWrappingText()
@@ -1093,7 +1095,7 @@ private struct SavedRecipeRow: View {
                     Text("C \(macros.carbs)g")
                     Text("F \(macros.fat)g")
                     if recipe.servings > 1 {
-                        Text("· \(recipe.servings) servings")
+                        Text("· ^[\(recipe.servings) serving](inflect: true)")
                     }
                 }
                 .font(.fernlet(.stat))
@@ -1198,7 +1200,7 @@ struct SavedRecipeNotesSheet: View {
                     Text("F \(macros.fat)g")
                     Spacer()
                     if recipe.servings > 1 {
-                        Text("\(recipe.servings) servings")
+                        Text("^[\(recipe.servings) serving](inflect: true)")
                             .font(.fernlet(.stat))
                             .foregroundStyle(Color.slate)
                     }
@@ -1458,9 +1460,12 @@ struct RecipeSheet: View {
             // A multipart recipe opens into its parts; its flat lists stay empty (the parts hold every row).
             let loadedIngredients = loadedParts.isEmpty ? Self.inputs(for: recipe, foodItems: recipeFoods) : []
             let loadedSteps = loadedParts.isEmpty ? (recipe.steps ?? []) : []
+            // The notes field shows a stored default note in the person's language; the save hands the
+            // stored English back while the field is left as drawn (``StoredFoodNote``).
+            let drawnNotes = StoredFoodNote.displayedRecipeNotes(recipe.notes)
             _name = State(initialValue: recipe.name)
             _servings = State(initialValue: recipe.servings)
-            _notes = State(initialValue: recipe.notes)
+            _notes = State(initialValue: drawnNotes)
             _ingredients = State(initialValue: loadedIngredients)
             _steps = State(initialValue: loadedSteps)
             _partsDraft = State(initialValue: RecipePartsDraft(parts: loadedParts))
@@ -1471,7 +1476,7 @@ struct RecipeSheet: View {
             _originalDraft = State(initialValue: RecipeDraftSnapshot(
                 name: recipe.name,
                 servings: recipe.servings,
-                notes: recipe.notes,
+                notes: drawnNotes,
                 ingredients: loadedIngredients,
                 steps: loadedSteps,
                 parts: loadedParts
@@ -1787,10 +1792,12 @@ struct RecipeSheet: View {
     @ViewBuilder private var saveBar: some View {
         if let editingRecipe {
             SheetSaveBar(disabled: !canSave) {
+                let savedNotes = StoredFoodNote.savedRecipeNotes(editing: notes, stored: editingRecipe.notes)
                 if partsDraft.isMultipart {
-                    store.updateRecipe(editingRecipe, name: name, servings: servings, notes: notes, parts: partsDraft.parts)
+                    store.updateRecipe(editingRecipe, name: name, servings: servings, notes: savedNotes, parts: partsDraft.parts)
                 } else {
-                    store.updateRecipe(editingRecipe, name: name, servings: servings, notes: notes, ingredients: ingredients, steps: steps)
+                    store.updateRecipe(editingRecipe, name: name, servings: servings, notes: savedNotes,
+                                       ingredients: ingredients, steps: steps)
                 }
                 finishAfterSave(named: name)
             }
@@ -2041,22 +2048,28 @@ struct CollapsedIngredientRow: View {
     }
 
     /// The quantity and the grams share one locale separator ("1,5 cup · P3,4g" in de), so the
-    /// quantity goes through ``RecipeQuantityDisplay`` rather than a POSIX `%g`.
+    /// quantity goes through ``RecipeQuantityDisplay`` rather than a POSIX `%g`. Each shape of the
+    /// line is one whole key (the calorie tail is not appended in English).
     private var summaryLine: String {
         let quantity = RecipeQuantityDisplay.display(ingredient.quantity)
         // A named portion (F4b) reads as its words ("2 cup, sliced"); a unit as its token, as before.
         let measure = ingredient.portion?.label ?? ingredient.unit
         guard let grams else {
-            return "\(quantity) \(measure) · Conversion unavailable"
+            return String(localized: "food.ingredientRow.summary.unconverted",
+                          defaultValue: "\(quantity) \(measure) · Conversion unavailable",
+                          comment: "A collapsed recipe-ingredient row whose amount has no gram conversion. The arguments are the amount and its unit or portion word, shown as saved.")
         }
         let protein = MacroGramEntry.display(grams.protein)
         let carbs = MacroGramEntry.display(grams.carbs)
         let fat = MacroGramEntry.display(grams.fat)
-        var line = "\(quantity) \(measure) · P\(protein)g C\(carbs)g F\(fat)g"
-        if showCalories, let calories {
-            line += " · \(calories) cal"
+        guard showCalories, let calories else {
+            return String(localized: "food.ingredientRow.summary",
+                          defaultValue: "\(quantity) \(measure) · P\(protein)g C\(carbs)g F\(fat)g",
+                          comment: "A collapsed recipe-ingredient row: the amount and its unit, then grams of protein (P), carbs (C) and fat (F).")
         }
-        return line
+        return String(localized: "food.ingredientRow.summary.calories",
+                      defaultValue: "\(quantity) \(measure) · P\(protein)g C\(carbs)g F\(fat)g · \(calories) cal",
+                      comment: "A collapsed recipe-ingredient row with calories shown: the amount and its unit, grams of protein (P), carbs (C) and fat (F), then calories.")
     }
 
     var body: some View {
@@ -2079,7 +2092,8 @@ struct CollapsedIngredientRow: View {
                     .foregroundStyle(Color.slate)
             }
             .buttonStyle(.plain)
-            .fernletIconButton("Remove \(ingredient.name.isEmpty ? "ingredient" : ingredient.name)")
+            // Two whole labels: an English "ingredient" spliced into the key read English in every language.
+            .fernletIconButton(ingredient.name.isEmpty ? "Remove ingredient" : "Remove \(ingredient.name)")
         }
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
@@ -2354,7 +2368,7 @@ struct RecipeIngredientEditor: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
-            .accessibilityLabel("Remove \(ingredient.trimmedName.isEmpty ? "ingredient" : ingredient.name)")
+            .accessibilityLabel(ingredient.trimmedName.isEmpty ? "Remove ingredient" : "Remove \(ingredient.name)")
     }
 
     /// What a household amount counts as, when the line will be saved as grams (ingredient-search
@@ -4352,7 +4366,7 @@ private struct MealRow: View {
                         .background(meal.mealType.color.opacity(0.25), in: Capsule())
                 }
             }
-            Text(displayNote)
+            displayNote
                 .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
             if let dataAttribution {
@@ -4449,9 +4463,10 @@ private struct MealRow: View {
     }
 
     /// Seeded demo meals carry this exact note (`FernletStore+DemoSeed`); it is the identifying
-    /// signal because their confidence token (`logged`) is also a legitimate user stamp.
+    /// signal because their confidence token (`logged`) is also a legitimate user stamp. Matched on
+    /// the frozen English note, never on what the row draws.
     private var isSeededDemoMeal: Bool {
-        meal.note == "Seeded demo meal."
+        meal.note == StoredFoodNote.seededDemoMeal
     }
 
     /// Plain words for the capsule: recipe-backed rows say "From recipe"; everything else shows
@@ -4467,14 +4482,17 @@ private struct MealRow: View {
 
     /// The line under the meal name. A component breakdown says where the numbers came from — but
     /// only the food-matching path matched "local foods"; a recipe log and a cooking-mode log both
-    /// carry components too and used to claim the same thing.
-    private var displayNote: String {
-        guard breakdownText != nil else { return meal.note }
+    /// carry components too and used to claim the same thing. Without one, the stored note is drawn,
+    /// a note Fernlet wrote in the person's language (``StoredFoodNote``).
+    private var displayNote: Text {
+        guard breakdownText != nil else {
+            return Text(verbatim: StoredFoodNote.displayedMealNote(meal.note))
+        }
         switch meal.mealSource {
         case .recipe, .mealDefinition:
-            return "From your recipe."
+            return Text("From your recipe.")
         case .manual:
-            return "Matched from your foods."
+            return Text("Matched from your foods.")
         }
     }
 
@@ -4485,7 +4503,8 @@ private struct MealRow: View {
                 .joined(separator: ", ")
             return text.isEmpty ? nil : text
         }
-        let prefix = "Matched locally from food selection: "
+        // A legacy row's breakdown lives in its note; the prefix is the frozen English it was written with.
+        let prefix = StoredFoodNote.matchedFromFoodSelectionPrefix
         guard meal.note.hasPrefix(prefix) else { return nil }
         let trimmed = meal.note
             .dropFirst(prefix.count)
@@ -5449,11 +5468,10 @@ private struct MealReviewSheet: View {
                 .accessibilityIdentifier("mealReview.recipeName")
         }
         SheetField("Makes") {
-            Stepper(
-                "\(offer.wrappedValue.servings) serving\(offer.wrappedValue.servings == 1 ? "" : "s")",
-                value: offer.servings,
-                in: 1...24
-            )
+            // Grammar agreement, not a spliced English "s" (see `RecipeRow`).
+            Stepper(value: offer.servings, in: 1...24) {
+                Text("^[\(offer.wrappedValue.servings) serving](inflect: true)")
+            }
             .accessibilityIdentifier("mealReview.recipeServings")
         }
     }
@@ -5601,15 +5619,17 @@ private struct RecipeRow: View {
                 Text(recipe.name)
                     .font(.fernlet(.headerMedium))
                 Spacer()
-                Text("\(recipe.servings) serving\(recipe.servings == 1 ? "" : "s")")
+                // Automatic grammar agreement. These spliced an English "s" in by count, which no
+                // translation can follow.
+                Text("^[\(recipe.servings) serving](inflect: true)")
                     .font(.fernlet(.stat))
                     .foregroundStyle(Color.slate)
             }
-            Text("\(recipe.ingredients.count) ingredient\(recipe.ingredients.count == 1 ? "" : "s")")
+            Text("^[\(recipe.ingredients.count) ingredient](inflect: true)")
                 .font(.fernlet(.stat))
                 .foregroundStyle(Color.slate)
             if !recipe.notes.isEmpty {
-                Text(recipe.notes)
+                Text(verbatim: StoredFoodNote.displayedRecipeNotes(recipe.notes))
                     .font(.fernlet(.bubble))
                     .foregroundStyle(Color.slate)
                     // A two-line preview, except at accessibility sizes, where two lines held only
@@ -5883,7 +5903,7 @@ struct RecipeDetailView: View {
             Text(recipe.name)
                 .font(.fernlet(.displayMedium))
                 .foregroundStyle(Color.bark)
-            Text("\(recipe.servings) serving\(recipe.servings == 1 ? "" : "s")")
+            Text("^[\(recipe.servings) serving](inflect: true)")
                 .font(.fernlet(.stat))
                 .foregroundStyle(Color.slate)
         }
@@ -6046,7 +6066,7 @@ struct RecipeDetailView: View {
                         NutritionPill(title: "Calories", value: "\(perServing.calories)")
                     }
                 }
-                Text("Makes \(effectiveYield) serving\(effectiveYield == 1 ? "" : "s"): P \(displayTotals.protein)g · C \(displayTotals.carbs)g · F \(displayTotals.fat)g\(store.settings.showCalories ? " · \(displayTotals.calories) cal" : "")")
+                totalsLine
                     .font(.fernlet(.stat))
                     .foregroundStyle(Color.slate)
                 WebImportEstimateNote(
@@ -6055,6 +6075,17 @@ struct RecipeDetailView: View {
                 )
             }
         }
+    }
+
+    /// "Makes 4 servings: P 40g · C 120g · F 30g", with calories only behind the opt-in. Two whole
+    /// keys: the calorie tail used to be an English string spliced into the key, and the servings an
+    /// English plural picked by count.
+    private var totalsLine: Text {
+        let totals = displayTotals
+        guard store.settings.showCalories else {
+            return Text("Makes ^[\(effectiveYield) serving](inflect: true): P \(totals.protein)g · C \(totals.carbs)g · F \(totals.fat)g")
+        }
+        return Text("Makes ^[\(effectiveYield) serving](inflect: true): P \(totals.protein)g · C \(totals.carbs)g · F \(totals.fat)g · \(totals.calories) cal")
     }
 
     /// Ephemeral "cook for N" control (F4, §11.4). Shown only for structured recipes — web imports
@@ -6066,21 +6097,22 @@ struct RecipeDetailView: View {
             FernletCard {
                 VStack(alignment: .leading, spacing: 8) {
                     SectionLabel("Cook for")
-                    Stepper(
-                        "\(effectiveYield) serving\(effectiveYield == 1 ? "" : "s")",
-                        value: Binding(get: { effectiveYield }, set: { cookYield = $0 }),
-                        in: RecipeScaling.yieldRange
-                    )
+                    Stepper(value: Binding(get: { effectiveYield }, set: { cookYield = $0 }),
+                            in: RecipeScaling.yieldRange) {
+                        Text("^[\(effectiveYield) serving](inflect: true)")
+                    }
                     .accessibilityIdentifier("recipeDetail.cookForYield")
                     if isScaled {
-                        Text("Scaled from \(recipe.servings) serving\(recipe.servings == 1 ? "" : "s") for this view only — your saved recipe is unchanged, and logging still records one serving.")
+                        Text("Scaled from ^[\(recipe.servings) serving](inflect: true) for this view only — your saved recipe is unchanged, and logging still records one serving.")
                             .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
-                        Button("Reset to \(recipe.servings) serving\(recipe.servings == 1 ? "" : "s")") { cookYield = nil }
-                            .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.moss)
-                            .accessibilityIdentifier("recipeDetail.cookForReset")
+                        Button { cookYield = nil } label: {
+                            Text("Reset to ^[\(recipe.servings) serving](inflect: true)")
+                        }
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.moss)
+                        .accessibilityIdentifier("recipeDetail.cookForReset")
                     }
                 }
             }
@@ -6185,17 +6217,24 @@ struct RecipeDetailView: View {
                 // this top-aligned row; lift it so icon and text read as one line (the target is
                 // unchanged — only where it sits).
                 .padding(.top, -6)
-                .accessibilityLabel("Swap \(resolvedItems[ingredient.foodItemId]?.name ?? "ingredient")")
+                .accessibilityLabel(swapLabel(for: ingredient))
                 .accessibilityIdentifier("recipeDetail.swapIngredient")
             }
         }
+    }
+
+    /// The Swap button's spoken name: the food's own name, or a whole sentence of its own while the
+    /// food is unresolved (an English "ingredient" used to be spliced into the key).
+    private func swapLabel(for ingredient: RecipeIngredient) -> Text {
+        guard let name = resolvedItems[ingredient.foodItemId]?.name else { return Text("Swap ingredient") }
+        return Text("Swap \(name)")
     }
 
     private var notesCard: some View {
         FernletCard {
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel("Notes")
-                Text(recipe.notes)
+                Text(verbatim: StoredFoodNote.displayedRecipeNotes(recipe.notes))
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                     .fernletWrappingText()
@@ -6410,15 +6449,43 @@ struct RecipeDetailView: View {
     /// the one button that deliberately re-fetches must say whose server it is about to reach — and
     /// it replaces the imported ingredients/macros on screen, which is why it routes through the
     /// shared destructive-confirmation affordance rather than firing on a bare tap.
+    ///
+    /// A source URL with no host gets whole sentences of its own: an English "the source page" used
+    /// to be spliced into each of them.
     private func confirmReimportFromSource() {
-        let host = recipe.webImport?.sourceURL?.host() ?? "the source page"
+        let host = recipe.webImport?.sourceURL?.host()
+        let title: LocalizedStringKey = if let host { "Re-import from \(host)?" } else { "Re-import from the source page?" }
+        let message: LocalizedStringKey = if let host {
+            "Fernlet will contact \(host) and replace this recipe's imported ingredients and nutrition with whatever the page says now. Your photo and notes are kept."
+        } else {
+            "Fernlet will contact the source page and replace this recipe's imported ingredients and nutrition with whatever the page says now. Your photo and notes are kept."
+        }
         pendingDestructiveAction = DestructiveConfirmation(
-            title: "Re-import from \(host)?",
-            message: "Fernlet will contact \(host) and replace this recipe's imported ingredients and nutrition with whatever the page says now. Your photo and notes are kept.",
+            title: title,
+            message: message,
             confirmLabel: "Re-import",
             auditEvent: "recipe.reimport.confirmed",
             perform: { reimportFromSource() }
         )
+    }
+
+    /// The re-import's progress and success lines, each one whole sentence with or without the host.
+    private static func reimportLine(refreshed: Bool, host: String?) -> String {
+        switch (refreshed, host) {
+        case (false, let host?):
+            String(localized: "recipeDetail.reimport.refreshing", defaultValue: "Refreshing from \(host)...",
+                   comment: "Inline line on a web recipe's page while it is re-imported. The argument is the source website's host name, e.g. 'example.com'.")
+        case (false, nil):
+            String(localized: "recipeDetail.reimport.refreshing.noHost", defaultValue: "Refreshing from the source page...",
+                   comment: "Inline line on a web recipe's page while it is re-imported from a source link with no host name.")
+        case (true, let host?):
+            String(localized: "recipeDetail.reimport.refreshed", defaultValue: "Refreshed from \(host). Your photo and notes are kept.",
+                   comment: "Inline line after a web recipe was re-imported. The argument is the source website's host name, e.g. 'example.com'.")
+        case (true, nil):
+            String(localized: "recipeDetail.reimport.refreshed.noHost",
+                   defaultValue: "Refreshed from the source page. Your photo and notes are kept.",
+                   comment: "Inline line after a web recipe was re-imported from a source link with no host name.")
+        }
     }
 
     /// Runs the explicit "Re-import from source" (owner decision 2026-08-09): re-fetches the source
@@ -6430,14 +6497,14 @@ struct RecipeDetailView: View {
     /// picture gets a fresh download while the user is right here.
     private func reimportFromSource() {
         let current = recipe
-        let host = current.webImport?.sourceURL?.host() ?? "the source page"
+        let host = current.webImport?.sourceURL?.host()
         isReimporting = true
-        reimportNotice = "Refreshing from \(host)..."
+        reimportNotice = Self.reimportLine(refreshed: false, host: host)
         Task {
             do {
                 if let refreshed = try await store.reimportSavedRecipeFromSource(current) {
                     reimportedRecipe = refreshed
-                    reimportNotice = "Refreshed from \(host). Your photo and notes are kept."
+                    reimportNotice = Self.reimportLine(refreshed: true, host: host)
                     // The refresh re-armed the web-image attempt: if the recipe still has no
                     // picture, fetch it now (same post-pick screen guard as the first-open path).
                     if photo == nil, let fetched = await store.fetchRecipeWebImageIfNeeded(for: refreshed) {
@@ -6445,7 +6512,9 @@ struct RecipeDetailView: View {
                         if photo == nil { photo = prepared }
                     }
                 } else {
-                    reimportNotice = "This recipe was deleted, so there's nothing to refresh."
+                    reimportNotice = String(localized: "recipeDetail.reimport.deleted",
+                                            defaultValue: "This recipe was deleted, so there's nothing to refresh.",
+                                            comment: "Inline line when a web recipe was deleted while its re-import was running.")
                 }
             } catch {
                 reimportNotice = (error as? LocalizedError)?.errorDescription

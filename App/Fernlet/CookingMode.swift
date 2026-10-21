@@ -345,14 +345,14 @@ struct CookingModeView: View {
                     FernletCard {
                         VStack(alignment: .leading, spacing: 8) {
                             SectionLabel("Cook for")
-                            Stepper(
-                                "\(cookYield) serving\(cookYield == 1 ? "" : "s")",
-                                value: Binding(get: { cookYield }, set: { cookYield = RecipeScaling.clampedYield($0) }),
-                                in: RecipeScaling.yieldRange
-                            )
+                            // Grammar agreement, never an English "s" picked by count.
+                            Stepper(value: Binding(get: { cookYield }, set: { cookYield = RecipeScaling.clampedYield($0) }),
+                                    in: RecipeScaling.yieldRange) {
+                                Text("^[\(cookYield) serving](inflect: true)")
+                            }
                             .accessibilityIdentifier("cookingMode.cookForYield")
                             if cookYield != recipe.servings {
-                                Text("Scaled from \(recipe.servings) serving\(recipe.servings == 1 ? "" : "s") — amounts below adjust to match. Logging still records one serving.")
+                                Text("Scaled from ^[\(recipe.servings) serving](inflect: true) — amounts below adjust to match. Logging still records one serving.")
                                     .font(.fernlet(.bodySmall))
                                     .foregroundStyle(Color.slate)
                                     .fernletWrappingText()

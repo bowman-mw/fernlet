@@ -1270,6 +1270,133 @@ struct LocalizationBoundaryTests {
                 "plural abbreviations read out of English recipe lines — matching inputs, never display text")
     }
 
+    /// The notes Fernlet itself writes onto a meal or a recipe (Spanish round step 2, 2026-10-20).
+    ///
+    /// They are stored text — synced, exported and read back — and two are matched as well: `MealRow`
+    /// hides a demo meal's provenance tag by its exact note, and reads a legacy row's breakdown out of
+    /// the "Matched locally…" prefix. So they keep these English spellings and draw localized through
+    /// `StoredFoodNote`. A note localized where it is WRITTEN would sync one device's language into
+    /// another's history, and the demo match would stop matching on any device not set to English.
+    @Test func frozenStoredFoodNotes() throws {
+        #expect(StoredFoodNote.frozenMealNotes == [
+            "Logged from saved recipe.", "Logged as one meal from your description.", "Entered by hand.",
+            "Corrected manually after quick logging.", "Seeded demo meal.", "Logged from saved product.",
+            "Selected from the food catalog.", "Logged from a barcode scan.", "Logged from a nutrition label scan.",
+            "Added from a gentle nutrient nudge.", "Logged from URL recipe.", "Logged from URL recipe. Macros not available.",
+            "Estimated locally from the description. Add API lookup later for branded meals.",
+        ], "a stored meal note changed spelling: the rows already holding the old one no longer draw localized")
+        #expect(StoredFoodNote.frozenRecipeNotes == ["Created from meal logging."])
+        #expect(StoredFoodNote.seededDemoMeal == "Seeded demo meal.", "MealRow matches the demo seed's note by this")
+        #expect(StoredFoodNote.matchedFromFoodSelectionPrefix == "Matched locally from food selection: ",
+                "MealRow reads a legacy row's breakdown after this prefix")
+        for site in Self.storedFoodNoteWriters {
+            let found = try RepoRoot.source(site.path).components(separatedBy: site.needle).count - 1
+            #expect(found == site.count, """
+                \(site.path) writes `\(site.needle)` \(found) time(s), expected \(site.count). A stored note is \
+                written in English and drawn through StoredFoodNote; localizing it here stores a translation. \
+                If the writer moved, re-point this pin at it.
+                """)
+        }
+        let strings = try Self.foodCatalogStrings("App/Fernlet/Localizable.xcstrings")
+        for note in StoredFoodNote.frozenMealNotes + StoredFoodNote.frozenRecipeNotes {
+            let key = try #require(StoredFoodNote.displayKey(forStoredNote: note), "\(note) has no display line")
+            #expect(Self.englishCatalogValue(strings, key: key) == note,
+                    "\(key) must be in the app catalog with the stored note's exact English")
+        }
+    }
+
+    /// Every site that WRITES a stored food note, so a localized write cannot slip in at one of them.
+    static let storedFoodNoteWriters: [(path: String, needle: String, count: Int)] = [
+        ("App/Fernlet/MealBuilder.swift", "note: \"Logged from saved recipe.\"", 1),
+        ("App/Fernlet/MealBuilder.swift", "note: \"Matched locally from food selection: \\(ingredientText).\"", 1),
+        ("App/Fernlet/MealBuilder.swift", "notes: \"Created from meal logging.\"", 1),
+        ("App/Fernlet/MealResolutionService.swift", "note: \"Logged as one meal from your description.\"", 1),
+        ("App/Fernlet/FoodPlanning.swift", "note: \"Entered by hand.\"", 1),
+        ("App/Fernlet/FernletStore.swift", "\"Corrected manually after quick logging.\"", 2),
+        ("App/Fernlet/FernletStore.swift", "\"Corrected components: \\(componentText).\"", 1),
+        ("App/Fernlet/FernletStore+DemoSeed.swift", "note: \"Seeded demo meal.\"", 3),
+        ("FernletKit/Sources/DiaryStore/DiaryStore.swift", "note: \"Logged from saved product.\"", 1),
+        ("FernletKit/Sources/DiaryStore/DiaryStore.swift", "note: \"Selected from the food catalog.\"", 1),
+        ("FernletKit/Sources/DiaryStore/DiaryStore.swift", "note: \"Logged from a barcode scan.\"", 1),
+        ("FernletKit/Sources/DiaryStore/DiaryStore.swift", "note: \"Logged from a nutrition label scan.\"", 1),
+        ("FernletKit/Sources/DiaryStore/DiaryStore.swift", "note: \"Added from a gentle nutrient nudge.\"", 1),
+        ("FernletKit/Sources/StoreCore/SavedRecipeService.swift",
+         "\"Logged from URL recipe.\" : \"Logged from URL recipe. Macros not available.\"", 1),
+        ("FernletKit/Sources/FernletScoring/Scoring.swift",
+         "note: \"Estimated locally from the description. Add API lookup later for branded meals.\"", 1),
+    ]
+
+    /// A stored food note draws localized and saves back untouched; anything else draws as stored.
+    @Test func storedFoodNotesDrawThroughTheDisplayHelper() throws {
+        for note in StoredFoodNote.frozenMealNotes {
+            #expect(StoredFoodNote.displayKey(forStoredNote: note)?.hasPrefix("food.mealNote.") == true)
+        }
+        // The person's own words, and the component-list notes that are never drawn as stored, pass through.
+        for typed in ["Leftovers from Sunday", "logged from saved recipe.", "Matched locally from food selection: 2 g salt."] {
+            #expect(StoredFoodNote.displayedMealNote(typed) == typed)
+            #expect(StoredFoodNote.displayedRecipeNotes(typed) == typed)
+        }
+        let stored = "Created from meal logging."
+        let drawn = StoredFoodNote.displayedRecipeNotes(stored)
+        #expect(StoredFoodNote.savedRecipeNotes(editing: drawn, stored: stored) == stored,
+                "a recipe's notes left as drawn save back as the stored English")
+        #expect(StoredFoodNote.savedRecipeNotes(editing: "Add more lime", stored: stored) == "Add more lime")
+        let sites: [(path: String, needle: String, count: Int, what: String)] = [
+            ("App/Fernlet/FoodView.swift", "Text(verbatim: StoredFoodNote.displayedMealNote(meal.note))", 1, "MealRow's note line"),
+            ("App/Fernlet/FoodView.swift", "meal.note == StoredFoodNote.seededDemoMeal", 1, "MealRow's demo match, on the frozen note"),
+            ("App/Fernlet/FoodView.swift", "let prefix = StoredFoodNote.matchedFromFoodSelectionPrefix", 1, "MealRow's legacy breakdown"),
+            ("App/Fernlet/FoodView.swift", "Text(verbatim: StoredFoodNote.displayedRecipeNotes(recipe.notes))", 3,
+             "the saved-recipe row, the recipe row and the recipe page's Notes card"),
+            ("App/Fernlet/FoodView.swift", "let drawnNotes = StoredFoodNote.displayedRecipeNotes(recipe.notes)", 1, "the recipe editor's notes field"),
+            ("App/Fernlet/FoodView.swift", "StoredFoodNote.savedRecipeNotes(editing: notes, stored: editingRecipe.notes)", 1,
+             "...and the notes it saves"),
+            ("App/Fernlet/RecipeShareText.swift", "StoredFoodNote.displayedRecipeNotes(notes)", 1, "a recipe shared as text"),
+        ]
+        for site in sites {
+            let found = try RepoRoot.source(site.path).components(separatedBy: site.needle).count - 1
+            #expect(found == site.count, """
+                \(site.path) contains `\(site.needle)` \(found) time(s), expected \(site.count): \(site.what). A drawn \
+                note goes through StoredFoodNote and a field seeded from it saves through savedRecipeNotes; a match \
+                reads the frozen note. If the site moved, re-point this pin at it.
+                """)
+        }
+    }
+
+    /// The food lane's files pick no English plural by count (Spanish round step 2, 2026-10-20).
+    ///
+    /// `"\(n) serving\(n == 1 ? "" : "s")"` renders correctly in English, harvests a key, and then
+    /// cannot be translated: the "s" is outside the key and the rule is English's. Every one of these is
+    /// now `^[\(n) serving](inflect: true)` in a `Text`. The scan reads the files the round converted.
+    @Test func theFoodSurfacesSpliceNoEnglishPlural() throws {
+        let files = [
+            "FoodView", "CookingMode", "GroceryPlannerView", "IngredientSubstitutionSheet", "RecipePortionMenu",
+            "NutritionLabelCameraSheet", "BarcodeScanView", "BarcodeServingStepView", "RecipePartsEditor",
+        ]
+        let splice = try NSRegularExpression(pattern: #"== 1 \? "" : "s"|== 1 \? "s" : ""|!= 1 \? "s" : """#)
+        for file in files {
+            let path = "App/Fernlet/\(file).swift"
+            let source = try RepoRoot.source(path)
+            let hits = splice.numberOfMatches(in: source, range: NSRange(source.startIndex..., in: source))
+            #expect(hits == 0, "\(path) splices an English plural \(hits) time(s); use `^[\\(n) noun](inflect: true)` in a Text")
+        }
+    }
+
+    /// One catalog's `strings` table.
+    static func foodCatalogStrings(_ path: String) throws -> [String: Any] {
+        let data = try Data(contentsOf: RepoRoot.url(path))
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let strings = json?["strings"] as? [String: Any] ?? [:]
+        #expect(!strings.isEmpty, "\(path) parsed to zero keys — the catalog moved or broke")
+        return strings
+    }
+
+    /// A key's English `stringUnit` value in a catalog's `strings` table, or nil when it has none.
+    static func englishCatalogValue(_ strings: [String: Any], key: String) -> String? {
+        let localizations = (strings[key] as? [String: Any])?["localizations"] as? [String: Any]
+        let unit = (localizations?["en"] as? [String: Any])?["stringUnit"] as? [String: Any]
+        return unit?["value"] as? String
+    }
+
     /// Coach-plan wire tokens.
     ///
     /// `MuscleGroup` and `Equipment` raw values are persisted in day rows, persisted in the

@@ -172,6 +172,9 @@
     "%@ sent you some warmth — a friend is thinking of you." : {
 
     },
+    "%@ total" : {
+
+    },
     "%@ wants to join %@" : {
       "localizations" : {
         "en" : {
@@ -696,16 +699,6 @@
         }
       }
     },
-    "%lld ingredient%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld ingredient%2$@"
-          }
-        }
-      }
-    },
     "%lld items" : {
 
     },
@@ -893,20 +886,7 @@
     "%lld selected" : {
 
     },
-    "%lld serving%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld serving%2$@"
-          }
-        }
-      }
-    },
     "%lld serving(s)" : {
-
-    },
-    "%lld servings" : {
 
     },
     "%lld servings · %lld ingredients" : {
@@ -3584,6 +3564,9 @@
     "Fernlet will contact %@ and replace this recipe's imported ingredients and nutrition with whatever the page says now. Your photo and notes are kept." : {
 
     },
+    "Fernlet will contact the source page and replace this recipe's imported ingredients and nutrition with whatever the page says now. Your photo and notes are kept." : {
+
+    },
     "Fernlet will hide every cycle surface and stop reading your cycle data. Your entries are kept — turn this back on any time to see them again.\n\nYour daily score may change: Fernlet will stop softening it around your cycle. Anything you've saved in Apple Health stays in Apple Health." : {
 
     },
@@ -3850,6 +3833,9 @@
       }
     },
     "From recipe" : {
+
+    },
+    "From your recipe." : {
 
     },
     "Fur shininess: +%@ (estimate)." : {
@@ -4439,6 +4425,9 @@
     "In Friends & Blocks, swipe a person or open their card to Report or Block them. During a session, tap the ••• beside someone in the People list to block them there and then. Blocking hides their content from you and yours from them." : {
 
     },
+    "In ^[%lld week](inflect: true)" : {
+
+    },
     "In a friend's shop, tap the ••• on any item and choose “Report item.” The item is hidden from you right away and its sender is blocked on your device." : {
 
     },
@@ -4666,6 +4655,9 @@
 
     },
     "Last time: %@" : {
+
+    },
+    "Last week" : {
 
     },
     "Last: %@" : {
@@ -4971,12 +4963,22 @@
     "Makes" : {
 
     },
-    "Makes %lld serving%@: P %lldg · C %lldg · F %lldg%@" : {
+    "Makes ^[%lld serving](inflect: true): P %lldg · C %lldg · F %lldg" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Makes %1$lld serving%2$@: P %3$lldg · C %4$lldg · F %5$lldg%6$@"
+            "value" : "Makes ^[%1$lld serving](inflect: true): P %2$lldg · C %3$lldg · F %4$lldg"
+          }
+        }
+      }
+    },
+    "Makes ^[%lld serving](inflect: true): P %lldg · C %lldg · F %lldg · %lld cal" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Makes ^[%1$lld serving](inflect: true): P %2$lldg · C %3$lldg · F %4$lldg · %5$lld cal"
           }
         }
       }
@@ -5003,6 +5005,9 @@
 
     },
     "Marks the current set done and starts your rest timer." : {
+
+    },
+    "Matched from your foods." : {
 
     },
     "Matched items" : {
@@ -6463,6 +6468,9 @@
     "Re-import from source" : {
 
     },
+    "Re-import from the source page?" : {
+
+    },
     "Read plan" : {
 
     },
@@ -6818,6 +6826,9 @@
     "Replace the journal backup with this iPhone's journal?" : {
 
     },
+    "Replace this ingredient in %@." : {
+
+    },
     "Replaces a backup this iPhone can't open." : {
       "comment" : "Accessibility hint for Start a new backup on a Sealed backup (journal or intimate logs)."
     },
@@ -6903,15 +6914,8 @@
     "Reset timer" : {
 
     },
-    "Reset to %lld serving%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Reset to %1$lld serving%2$@"
-          }
-        }
-      }
+    "Reset to ^[%lld serving](inflect: true)" : {
+
     },
     "Rest" : {
 
@@ -7167,25 +7171,11 @@
     "Says the next exercise, and when a rest or a hold ends." : {
 
     },
-    "Scaled from %lld serving%@ for this view only — your saved recipe is unchanged, and logging still records one serving." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Scaled from %1$lld serving%2$@ for this view only — your saved recipe is unchanged, and logging still records one serving."
-          }
-        }
-      }
+    "Scaled from ^[%lld serving](inflect: true) for this view only — your saved recipe is unchanged, and logging still records one serving." : {
+
     },
-    "Scaled from %lld serving%@ — amounts below adjust to match. Logging still records one serving." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Scaled from %1$lld serving%2$@ — amounts below adjust to match. Logging still records one serving."
-          }
-        }
-      }
+    "Scaled from ^[%lld serving](inflect: true) — amounts below adjust to match. Logging still records one serving." : {
+
     },
     "Scaling isn't available for imported recipes — their ingredient amounts are free text." : {
 
@@ -9940,6 +9930,9 @@
     "^[%lld concert](inflect: true)" : {
       "comment" : "Silly stat headline: showers, as concerts"
     },
+    "^[%lld ingredient](inflect: true)" : {
+
+    },
     "^[%lld ingredient](inflect: true) not counted in this estimate" : {
 
     },
@@ -9963,10 +9956,16 @@
         }
       }
     },
+    "^[%lld serving](inflect: true)" : {
+
+    },
     "^[%lld step](inflect: true)" : {
       "comment" : "Silly stat headline: lifetime steps"
     },
     "^[%lld tasks](inflect: true)" : {
+
+    },
+    "^[%lld week](inflect: true) ago" : {
 
     },
     "a little high" : {
@@ -10706,6 +10705,210 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "food.ingredientRow.summary" : {
+      "comment" : "A collapsed recipe-ingredient row: the amount and its unit, then grams of protein (P), carbs (C) and fat (F).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@ · P%3$@g C%4$@g F%5$@g"
+          }
+        }
+      }
+    },
+    "food.ingredientRow.summary.calories" : {
+      "comment" : "A collapsed recipe-ingredient row with calories shown: the amount and its unit, grams of protein (P), carbs (C) and fat (F), then calories.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@ · P%3$@g C%4$@g F%5$@g · %6$lld cal"
+          }
+        }
+      }
+    },
+    "food.ingredientRow.summary.unconverted" : {
+      "comment" : "A collapsed recipe-ingredient row whose amount has no gram conversion. The arguments are the amount and its unit or portion word, shown as saved.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@ · Conversion unavailable"
+          }
+        }
+      }
+    },
+    "food.mealNote.barcodeScan" : {
+      "comment" : "Note under a meal logged by scanning a product's barcode",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Logged from a barcode scan."
+          }
+        }
+      }
+    },
+    "food.mealNote.correctedManually" : {
+      "comment" : "Note under a meal the person adjusted after logging it",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Corrected manually after quick logging."
+          }
+        }
+      }
+    },
+    "food.mealNote.enteredByHand" : {
+      "comment" : "Note under a meal whose protein, carbs and fat the person typed in",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Entered by hand."
+          }
+        }
+      }
+    },
+    "food.mealNote.estimatedLocally" : {
+      "comment" : "Note under a meal whose nutrition Fernlet estimated on the phone from what the person typed",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Estimated locally from the description. Add API lookup later for branded meals."
+          }
+        }
+      }
+    },
+    "food.mealNote.labelScan" : {
+      "comment" : "Note under a meal logged by photographing a nutrition label",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Logged from a nutrition label scan."
+          }
+        }
+      }
+    },
+    "food.mealNote.loggedAsOneMeal" : {
+      "comment" : "Note under a meal Fernlet logged as one dish from what the person typed",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Logged as one meal from your description."
+          }
+        }
+      }
+    },
+    "food.mealNote.loggedFromSavedProduct" : {
+      "comment" : "Note under a meal logged from a packaged product saved from the web",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Logged from saved product."
+          }
+        }
+      }
+    },
+    "food.mealNote.loggedFromSavedRecipe" : {
+      "comment" : "Note under a logged meal that came from one of the person's recipes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Logged from saved recipe."
+          }
+        }
+      }
+    },
+    "food.mealNote.nutrientNudge" : {
+      "comment" : "Note under a food logged from the suggestion that a nutrient has been low lately",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Added from a gentle nutrient nudge."
+          }
+        }
+      }
+    },
+    "food.mealNote.seededDemo" : {
+      "comment" : "Note under a sample meal in the app's demo data",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Seeded demo meal."
+          }
+        }
+      }
+    },
+    "food.mealNote.selectedFromCatalog" : {
+      "comment" : "Note under a meal the person picked from the food search list",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Selected from the food catalog."
+          }
+        }
+      }
+    },
+    "food.mealNote.urlRecipe" : {
+      "comment" : "Note under a meal logged from a recipe saved from a web page",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Logged from URL recipe."
+          }
+        }
+      }
+    },
+    "food.mealNote.urlRecipeNoMacros" : {
+      "comment" : "Note under a meal logged from a web recipe whose page gave no nutrition",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Logged from URL recipe. Macros not available."
+          }
+        }
+      }
+    },
+    "food.recipeNote.createdFromMealLogging" : {
+      "comment" : "The starting note on a recipe the person saved while logging a meal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Created from meal logging."
           }
         }
       }
@@ -11791,6 +11994,78 @@
         }
       }
     },
+    "recipe.substitution.unresolvedOriginal" : {
+      "comment" : "Stands in for the name of a recipe ingredient being swapped when its food can't be found, on the swap preview's 'Was' line.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "this ingredient"
+          }
+        }
+      }
+    },
+    "recipeDetail.reimport.deleted" : {
+      "comment" : "Inline line when a web recipe was deleted while its re-import was running.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This recipe was deleted, so there's nothing to refresh."
+          }
+        }
+      }
+    },
+    "recipeDetail.reimport.refreshed" : {
+      "comment" : "Inline line after a web recipe was re-imported. The argument is the source website's host name, e.g. 'example.com'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Refreshed from %@. Your photo and notes are kept."
+          }
+        }
+      }
+    },
+    "recipeDetail.reimport.refreshed.noHost" : {
+      "comment" : "Inline line after a web recipe was re-imported from a source link with no host name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Refreshed from the source page. Your photo and notes are kept."
+          }
+        }
+      }
+    },
+    "recipeDetail.reimport.refreshing" : {
+      "comment" : "Inline line on a web recipe's page while it is re-imported. The argument is the source website's host name, e.g. 'example.com'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Refreshing from %@..."
+          }
+        }
+      }
+    },
+    "recipeDetail.reimport.refreshing.noHost" : {
+      "comment" : "Inline line on a web recipe's page while it is re-imported from a source link with no host name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Refreshing from the source page..."
+          }
+        }
+      }
+    },
     "recipeImport.error.aiBudgetExhaustedNotQueued" : {
       "comment" : "Shown when a pasted recipe link needs on-device AI, today's AI budget is spent, AND the link could not be saved for a retry tomorrow — so, unlike the usual resting message, it asks the person to paste it again.",
       "extractionState" : "extracted_with_value",
@@ -12362,7 +12637,7 @@
     "~%lld min" : {
 
     },
-    "· %lld servings" : {
+    "· ^[%lld serving](inflect: true)" : {
 
     },
     "“%@” and any photo attached to it are removed from this device. Fernlet can't undo this." : {

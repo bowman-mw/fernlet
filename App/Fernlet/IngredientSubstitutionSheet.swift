@@ -40,7 +40,18 @@ struct IngredientSubstitutionSheet: View {
     /// Guards the save button against a double-tap firing `onSaveFork` twice before the sheet tears down.
     @State private var didSave = false
 
-    private var originalName: String { originalFoodItem?.name ?? "this ingredient" }
+    /// The swapped-out food's name for the preview's "Was" line, or a localized stand-in while it is
+    /// unresolved. The picker's sentence does not splice this in: it has a whole sentence per case.
+    private var originalName: String {
+        originalFoodItem?.name ?? String(localized: "recipe.substitution.unresolvedOriginal", defaultValue: "this ingredient",
+                                         comment: "Stands in for the name of a recipe ingredient being swapped when its food can't be found, on the swap preview's 'Was' line.")
+    }
+
+    /// The picker's opening sentence, naming the ingredient when its food is known.
+    private var replaceSentence: Text {
+        guard let name = originalFoodItem?.name else { return Text("Replace this ingredient in \(recipe.name).") }
+        return Text("Replace \(name) in \(recipe.name).")
+    }
 
     var body: some View {
         NavigationStack {
@@ -123,7 +134,7 @@ struct IngredientSubstitutionSheet: View {
     private var pickerBody: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Replace \(originalName) in \(recipe.name).")
+                replaceSentence
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
