@@ -166,7 +166,10 @@ states the value in effect on the goal card. Evidence and options:
 intake against those days, never the nominal window (2026-10-16): an unlogged day is unknown, not
 zero, and a first day of logging is no gap. The fraction is the owner's dial; at its value of `1.0`
 the window must be full, so the gaps that feed the food score, the Home nudge and the AI prompt need
-a full week (or fortnight) of data behind them.
+a full week (or fortnight) of data behind them. A tracked nutrient's ``NutrientReference/name`` is
+frozen English, because the analyzer copies it into each ``NutrientGap/nutrientName`` and that rides
+the persisted derived signals; screens draw ``NutrientReference/displayName`` and
+``NutrientGap/displayedName``, which localize from the nutrient's key (2026-10-20).
 
 - ``UserNutritionProfile``
 - ``UserNutritionPreferences``

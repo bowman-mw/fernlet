@@ -185,8 +185,10 @@ enum RecipeShareText {
         }
     }
 
+    /// The notes under their heading. A note Fernlet wrote (``StoredFoodNote``) is shared in the
+    /// sender's language, as the recipe page draws it; the person's own notes go verbatim.
     private static func notesBlock(_ notes: String, style: Style) -> [String] {
-        let trimmed = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = StoredFoodNote.displayedRecipeNotes(notes).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
         return [sectionTitle(.notes, style), trimmed]
     }

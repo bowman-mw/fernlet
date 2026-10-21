@@ -135,7 +135,9 @@ struct BarcodeScanView: View {
                     // Camera access was denied (or the scanner otherwise went unavailable) — drop
                     // to the still-photo fallback with a gentle hint instead of a dead viewfinder.
                     liveScannerUnavailable = true
-                    detectionNotice = "Camera access looks off — you can turn it on in Settings, or snap or choose a photo of the barcode below."
+                    detectionNotice = String(localized: "barcode.notice.cameraOff",
+                                             defaultValue: "Camera access looks off — you can turn it on in Settings, or snap or choose a photo of the barcode below.",
+                                             comment: "Barcode scanner: camera permission is off. Offers the photo fallback below the line.")
                 }
             )
             .ignoresSafeArea()
@@ -345,7 +347,9 @@ struct BarcodeScanView: View {
             if let payload {
                 deliver(payload)
             } else {
-                detectionNotice = "Fernlet couldn't spot a barcode in that photo — try moving closer so the code fills the frame."
+                detectionNotice = String(localized: "barcode.notice.noBarcodeInPhoto",
+                                          defaultValue: "Fernlet couldn't spot a barcode in that photo — try moving closer so the code fills the frame.",
+                                          comment: "Barcode scanner: a snapped or chosen photo showed no readable barcode")
                 FernletFeedback.system.play(.caveat)
             }
         }
@@ -693,7 +697,7 @@ struct BarcodeNotFoundView: View {
             if scanResult == nil, let prefilledScan {
                 scanResult = prefilledScan
                 if trimmedName.isEmpty, let servingSize = prefilledScan.servingSize, servingSize.isEmpty == false {
-                    name = "Scanned item (\(servingSize))"
+                    name = ScannedItemName.prefill(servingSize: servingSize)
                 }
             }
         }
@@ -805,7 +809,7 @@ struct BarcodeNotFoundView: View {
                 // The user's own scan replaces Open Food Facts' numbers, so the save is theirs.
                 onlineImport = nil
                 if trimmedName.isEmpty, let servingSize = result.servingSize, servingSize.isEmpty == false {
-                    name = "Scanned item (\(servingSize))"
+                    name = ScannedItemName.prefill(servingSize: servingSize)
                 }
             }
         }
@@ -1050,7 +1054,9 @@ struct BarcodeNotFoundView: View {
         )
         guard let item = store.saveCustomIngredient(input) else {
             // Recovery: tell the user rather than swallowing the failed save silently.
-            reportSaveFailure("Fernlet couldn't save that food — give it a name and try again.")
+            reportSaveFailure(String(localized: "barcode.rememberFood.saveFailed",
+                                     defaultValue: "Fernlet couldn't save that food — give it a name and try again.",
+                                     comment: "Barcode name-it screen: remembering the scanned food failed"))
             FernletAuditLog.log(
                 "barcode.rememberFood.failed",
                 context: ["reason": "saveCustomIngredient returned nil"]
@@ -1259,7 +1265,8 @@ private struct RememberedConfirmationView: View {
 /// A macro ring tile: a tinted progress-style ring with the grams count inside and a colored label
 /// beneath. Grams only — this tile never renders or computes calories.
 private struct MacroRingTile: View {
-    var label: String
+    /// The macro's name. `LocalizedStringKey`: as a `String` "Protein" / "Carbs" / "Fat" were drawn verbatim.
+    var label: LocalizedStringKey
     var grams: Int
     var tint: Color
 
@@ -1294,7 +1301,7 @@ private struct MacroRingTile: View {
         .padding(.horizontal, 12)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 18))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(label): \(grams) grams")
+        .accessibilityLabel(Text("\(Text(label)): \(grams) grams"))
     }
 }
 

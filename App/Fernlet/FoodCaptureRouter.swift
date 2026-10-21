@@ -288,9 +288,11 @@ struct CaptureChooserSheet: View {
         .background(Color.parchment)
     }
 
+    /// One chooser target. Title and subtitle are `LocalizedStringKey`: as `String` all three rows,
+    /// and the meal row's AI-off explanation, were drawn verbatim and never reached the catalog.
     private func chooserRow(
-        title: String,
-        subtitle: String,
+        title: LocalizedStringKey,
+        subtitle: LocalizedStringKey,
         icon: String,
         action: @escaping () -> Void,
         disabled: Bool = false

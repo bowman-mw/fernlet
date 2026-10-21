@@ -348,3 +348,100 @@ struct MealBuilder {
         return false
     }
 }
+
+/// The English notes Fernlet itself writes onto a logged meal or a recipe, and the localized line a
+/// screen draws for each (Spanish round step 2, 2026-10-20).
+///
+/// A meal's `note` and a recipe's `notes` are stored text, synced and read back later, and the stored
+/// bytes are also matched: `MealRow` tells a seeded demo meal by its exact note, and a legacy row's
+/// component breakdown is read out of the ``matchedFromFoodSelectionPrefix`` note. So every note
+/// below stays the English it was written in, on every device and in every language, and is never
+/// localized at write time; a screen swaps an exact stored note for its localized line at draw time,
+/// the way `Workout.displayedNotes` draws a plan completion's note. A note the person typed, or one
+/// edited away from the default, draws as stored.
+///
+/// The writers are `MealBuilder`, `MealResolutionService`, `FoodPlanning`, the meal correction in
+/// `FernletStore` and the demo seed in the app, and `DiaryStore`, `SavedRecipeService` and
+/// `MealParser` in FernletKit. The two notes that carry a component list ("Matched locally from food
+/// selection: …", "Corrected components: …") are never drawn as stored: a row with components draws
+/// its breakdown and a "From your recipe" / "Matched from your foods" line instead.
+///
+/// Display only: what this returns is never persisted, exported, matched or put in a prompt. Pinned
+/// by `LocalizationBoundaryTests.frozenStoredFoodNotes`.
+nonisolated enum StoredFoodNote {
+    /// The note the demo seed writes, which `MealRow` matches to hide the row's provenance tag.
+    static let seededDemoMeal = "Seeded demo meal."
+
+    /// The frozen start of the note `MealBuilder.mealFromIngredients` writes ahead of its component list.
+    static let matchedFromFoodSelectionPrefix = "Matched locally from food selection: "
+
+    /// Every meal note drawn through ``displayedMealNote(_:)``: the frozen English and its display line.
+    private static let mealNotes: [(frozen: String, display: LocalizedStringResource)] = [
+        ("Logged from saved recipe.", LocalizedStringResource("food.mealNote.loggedFromSavedRecipe",
+            defaultValue: "Logged from saved recipe.", comment: "Note under a logged meal that came from one of the person's recipes")),
+        ("Logged as one meal from your description.", LocalizedStringResource("food.mealNote.loggedAsOneMeal",
+            defaultValue: "Logged as one meal from your description.", comment: "Note under a meal Fernlet logged as one dish from what the person typed")),
+        ("Entered by hand.", LocalizedStringResource("food.mealNote.enteredByHand",
+            defaultValue: "Entered by hand.", comment: "Note under a meal whose protein, carbs and fat the person typed in")),
+        ("Corrected manually after quick logging.", LocalizedStringResource("food.mealNote.correctedManually",
+            defaultValue: "Corrected manually after quick logging.", comment: "Note under a meal the person adjusted after logging it")),
+        ("Seeded demo meal.", LocalizedStringResource("food.mealNote.seededDemo",
+            defaultValue: "Seeded demo meal.", comment: "Note under a sample meal in the app's demo data")),
+        ("Logged from saved product.", LocalizedStringResource("food.mealNote.loggedFromSavedProduct",
+            defaultValue: "Logged from saved product.", comment: "Note under a meal logged from a packaged product saved from the web")),
+        ("Selected from the food catalog.", LocalizedStringResource("food.mealNote.selectedFromCatalog",
+            defaultValue: "Selected from the food catalog.", comment: "Note under a meal the person picked from the food search list")),
+        ("Logged from a barcode scan.", LocalizedStringResource("food.mealNote.barcodeScan",
+            defaultValue: "Logged from a barcode scan.", comment: "Note under a meal logged by scanning a product's barcode")),
+        ("Logged from a nutrition label scan.", LocalizedStringResource("food.mealNote.labelScan",
+            defaultValue: "Logged from a nutrition label scan.", comment: "Note under a meal logged by photographing a nutrition label")),
+        ("Added from a gentle nutrient nudge.", LocalizedStringResource("food.mealNote.nutrientNudge",
+            defaultValue: "Added from a gentle nutrient nudge.", comment: "Note under a food logged from the suggestion that a nutrient has been low lately")),
+        ("Logged from URL recipe.", LocalizedStringResource("food.mealNote.urlRecipe",
+            defaultValue: "Logged from URL recipe.", comment: "Note under a meal logged from a recipe saved from a web page")),
+        ("Logged from URL recipe. Macros not available.", LocalizedStringResource("food.mealNote.urlRecipeNoMacros",
+            defaultValue: "Logged from URL recipe. Macros not available.", comment: "Note under a meal logged from a web recipe whose page gave no nutrition")),
+        ("Estimated locally from the description. Add API lookup later for branded meals.",
+         LocalizedStringResource("food.mealNote.estimatedLocally",
+            defaultValue: "Estimated locally from the description. Add API lookup later for branded meals.",
+            comment: "Note under a meal whose nutrition Fernlet estimated on the phone from what the person typed")),
+    ]
+
+    /// Every recipe note drawn through ``displayedRecipeNotes(_:)``: the one a recipe saved from a
+    /// meal log starts with (`MealBuilder.createRecipe`).
+    private static let recipeNotes: [(frozen: String, display: LocalizedStringResource)] = [
+        ("Created from meal logging.", LocalizedStringResource("food.recipeNote.createdFromMealLogging",
+            defaultValue: "Created from meal logging.", comment: "The starting note on a recipe the person saved while logging a meal")),
+    ]
+
+    /// The frozen meal notes, in table order (for the boundary pin).
+    static var frozenMealNotes: [String] { mealNotes.map(\.frozen) }
+
+    /// The frozen recipe notes, in table order (for the boundary pin).
+    static var frozenRecipeNotes: [String] { recipeNotes.map(\.frozen) }
+
+    /// The catalog key `frozen` draws through, or nil when it is not a note Fernlet writes.
+    static func displayKey(forStoredNote frozen: String) -> String? {
+        (mealNotes + recipeNotes).first { $0.frozen == frozen }?.display.key
+    }
+
+    /// The line a meal row draws for a stored `note`: the localized line for a note Fernlet wrote,
+    /// else the note exactly as stored.
+    static func displayedMealNote(_ note: String) -> String {
+        guard let row = mealNotes.first(where: { $0.frozen == note }) else { return note }
+        return String(localized: row.display)
+    }
+
+    /// The notes a recipe screen draws for stored `notes`, by the same rule as ``displayedMealNote(_:)``.
+    static func displayedRecipeNotes(_ notes: String) -> String {
+        guard let row = recipeNotes.first(where: { $0.frozen == notes }) else { return notes }
+        return String(localized: row.display)
+    }
+
+    /// The notes to SAVE when an editor seeded with ``displayedRecipeNotes(_:)`` comes back as `typed`:
+    /// the stored English while the person left the drawn text alone, else what they typed. Opening and
+    /// saving a recipe on a translated device never stores the translation.
+    static func savedRecipeNotes(editing typed: String, stored: String) -> String {
+        typed == displayedRecipeNotes(stored) ? stored : typed
+    }
+}
