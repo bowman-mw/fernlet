@@ -40,6 +40,22 @@ struct LanguagePackTests {
         }
     }
 
+    @Test func everyPackFillsItsScreenTermsInTheFormTheScreensNormalizeTo() {
+        for pack in LanguagePack.all {
+            #expect(!pack.clinicalStems.isEmpty, "\(pack.language): no clinical-language terms")
+            #expect(!pack.blockedNameStems.isEmpty, "\(pack.language): no blocked name terms")
+            let terms = pack.clinicalStems + pack.clinicalWholeWords + pack.blockedNameStems + pack.blockedNameWholeWords
+            for term in terms {
+                // Both screens strip every separator, so a term must be lowercase letters and digits.
+                #expect(!term.isEmpty && term.allSatisfy { ($0.isLetter || $0.isNumber) && $0.isASCII && !$0.isUppercase },
+                        "\(pack.language): \"\(term)\" cannot match normalized text")
+            }
+            // A whole word that is also a stem would be read twice; one list says how a term matches.
+            #expect(Set(pack.clinicalStems).isDisjoint(with: pack.clinicalWholeWords))
+            #expect(Set(pack.blockedNameStems).isDisjoint(with: pack.blockedNameWholeWords))
+        }
+    }
+
     @Test func noPackShadowsAnEnglishUnitOrReadsAConnectorAsAUnit() {
         for pack in LanguagePack.all {
             #expect(Set(pack.unitSpellings.keys).isDisjoint(with: RecipeUnit.englishSpellings.keys), "\(pack.language)")

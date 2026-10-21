@@ -12,7 +12,10 @@
 // happen to contain a blocked substring (the "Scunthorpe problem"). That is an accepted tradeoff: the
 // listing gate only WARNS and keeps the item unlisted with an editable, dismissible notice (never a silent
 // drop), so a false positive is recoverable by renaming. The list errs toward terms unlikely to appear
-// innocently in a short cosmetic item name. English-only for v1.
+// innocently in a short cosmetic item name. English here, plus every `LanguagePack`'s terms (Spanish
+// since localization plan §5.4), all applied to every name whatever the interface language — a
+// listing is shown to friends whose language may not be the seller's. A short term that sits inside
+// ordinary words is matched as a whole word only ("puta" is inside "reputation").
 
 import Foundation
 
@@ -36,7 +39,13 @@ public nonisolated enum ItemNameModeration {
         "pedophile", "nazi"
     ]
 
-    nonisolated private static let normalizedBlockedTerms: [String] = blockedTerms.map(normalize)
+    /// ``blockedTerms`` plus every ``LanguagePack``'s blocked stems, normalized once.
+    nonisolated private static let normalizedBlockedTerms: [String] =
+        (blockedTerms + LanguagePack.all.flatMap(\.blockedNameStems)).map(normalize)
+
+    /// Every ``LanguagePack``'s blocked whole words, matched against the name's folded words.
+    nonisolated private static let blockedWholeWords: Set<String> =
+        Set(LanguagePack.all.flatMap(\.blockedNameWholeWords))
 
     /// Whether `name` is allowed to be LISTED for sale. Empty/whitespace names are allowed (they fall back
     /// to the slot label and carry no offensive content).
@@ -44,11 +53,13 @@ public nonisolated enum ItemNameModeration {
         !containsBlockedTerm(name)
     }
 
-    /// True if the (normalized) text contains a blocked term as a substring.
+    /// True if the (normalized) text contains a blocked term as a substring, or one of its folded
+    /// words is a blocked whole word.
     public static func containsBlockedTerm(_ text: String) -> Bool {
         let normalized = normalize(text)
         guard !normalized.isEmpty else { return false }
-        return normalizedBlockedTerms.contains { !$0.isEmpty && normalized.contains($0) }
+        if normalizedBlockedTerms.contains(where: { !$0.isEmpty && normalized.contains($0) }) { return true }
+        return words(of: text).contains { blockedWholeWords.contains($0) }
     }
 
     /// Coerce a (possibly untrusted, e.g. wire-received) name into a safe shape WITHOUT throwing: drop
@@ -104,9 +115,20 @@ public nonisolated enum ItemNameModeration {
     /// words down to their plain ASCII letters before matching, which `.diacriticInsensitive` alone does not.
     /// Normalization can only widen coverage.
     nonisolated static func normalize(_ value: String) -> String {
+        String(folded(value).unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) })
+    }
+
+    /// `value`'s words after the same folding as ``normalize(_:)`` — so "put@" reads "puta" — split at
+    /// every character that is not a letter or digit, for the whole-word terms. A word spelled with
+    /// separators inside it ("p.u.t.a") is not one word here; the substring list is what catches those.
+    nonisolated static func words(of value: String) -> [String] {
+        folded(value).split { !($0.isLetter || $0.isNumber) }.map(String.init)
+    }
+
+    /// NFKC-folded, lowercased, diacritic- and width-folded with `locale: nil`, then leetspeak-folded.
+    nonisolated private static func folded(_ value: String) -> String {
         let compatible = value.precomposedStringWithCompatibilityMapping
         let folded = compatible.folding(options: [.diacriticInsensitive, .caseInsensitive, .widthInsensitive], locale: nil)
-        let deLeet = String(folded.map { leetMap[$0] ?? $0 })
-        return String(deLeet.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) })
+        return String(folded.lowercased().map { leetMap[$0] ?? $0 })
     }
 }

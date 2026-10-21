@@ -2,7 +2,7 @@
 //  LanguagePack.swift
 //  FernletDomainModel
 //
-//  One language's MATCHING vocabulary, in one place (localization plan §5.2).
+//  One language's MATCHING vocabulary, in one place (localization plan §5.2, §5.4).
 //
 //  Every table here is a matching input mapped onto the frozen English the engines already
 //  understand — never display text, never translated copy. A pack does not change what Fernlet
@@ -10,7 +10,8 @@
 //
 //  The packs are data. The engines that read them: `RecipeUnit.normalized` (and through it every
 //  unit reader), `RecipeWebImporter`'s recipe line reader, `MealItemSplitter`, and
-//  `FoodItemSearch.matchVariants`. The app target's Settings search keeps its own per-language
+//  `FoodItemSearch.matchVariants` — while the language is an input language — and, in every language
+//  at once, the two keyword screens: `DiagnosticLanguage` and `ItemNameModeration`. The app target's Settings search keeps its own per-language
 //  synonyms, because its keys are the app's screens, and AIContext keeps the prompt style
 //  (`AIPromptLanguage`).
 //
@@ -53,6 +54,15 @@ public nonisolated struct LanguagePack: Sendable {
     public let joinedDishNames: [String]
     /// How a plural reaches its singular, tried in order (``singularForms(of:)``).
     public let pluralRules: [PluralRule]
+    /// Clinical-language stems matched as a substring of the separator-free text (`DiagnosticLanguage`).
+    public let clinicalStems: [String]
+    /// Clinical words matched only as a whole word, because as substrings they sit inside ordinary
+    /// words ("toc" in "tocino").
+    public let clinicalWholeWords: Set<String>
+    /// Blocked item-name stems matched as a substring of the normalized name (`ItemNameModeration`).
+    public let blockedNameStems: [String]
+    /// Blocked item-name words matched only as a whole word ("puta" sits inside "reputation").
+    public let blockedNameWholeWords: Set<String>
 
     /// The pack for `language`, or nil for English (whose words are the engines' own tables).
     public static func pack(for language: FernletLanguage) -> LanguagePack? {
@@ -63,7 +73,8 @@ public nonisolated struct LanguagePack: Sendable {
     }
 
     /// Every pack, in ``FernletLanguage`` order — for the screens that hold in every language at
-    /// once (clinical language, moderation), whatever the interface language.
+    /// once (clinical language, moderation), whatever the interface language: a person can journal in
+    /// Spanish in an English app.
     public static let all: [LanguagePack] = FernletLanguage.allCases.compactMap(pack(for:))
 
     /// The singular forms `word` may be the plural of, by ``pluralRules`` in order, each once.

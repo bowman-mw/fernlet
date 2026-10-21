@@ -12,7 +12,8 @@
 import Foundation
 
 extension LanguagePack {
-    /// Spanish: the units, connectors and plural rules of typed Spanish food text.
+    /// Spanish: the units, connectors and plural rules of typed Spanish food text, and the Spanish
+    /// terms of the clinical-language and moderation screens (`LanguagePack+SpanishScreens.swift`).
     static let spanish = LanguagePack(
         language: .spanish,
         unitSpellings: spanishUnitSpellings,
@@ -35,7 +36,11 @@ extension LanguagePack {
             PluralRule(suffix: "es", after: "lnrdjy", minimumStemLength: 2),
             // manzanas → manzana, huevos → huevo, tomates → tomate
             PluralRule(suffix: "s", after: "aeiou")
-        ]
+        ],
+        clinicalStems: spanishClinicalStems,
+        clinicalWholeWords: spanishClinicalWholeWords,
+        blockedNameStems: spanishBlockedNameStems,
+        blockedNameWholeWords: spanishBlockedNameWholeWords
     )
 
     /// Spanish unit words and their abbreviations → the unit token each means. Matching inputs only:

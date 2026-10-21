@@ -1039,7 +1039,11 @@ English token, so a pack changes what Fernlet reads, never what it stores or sho
 `cup`). The food engines read the packs of ``InputLanguages/current`` (English plus the app's
 language): ``RecipeUnit/normalized(_:languages:)`` over ``RecipeUnit/englishSpellings`` (the one unit
 table; the recipe line reader builds its unit words from ``RecipeUnit/spellings(languages:)``),
-``MealItemSplitter``, and ``FoodItemSearch/matchVariants(for:)``. A new language is a
+``MealItemSplitter``, and ``FoodItemSearch/matchVariants(for:)``. The two keyword screens read every
+pack at once, whatever the interface language (``LanguagePack/all``): ``DiagnosticLanguage`` adds each
+pack's clinical stems and whole words (and folds accents), and ``ItemNameModeration`` each pack's
+blocked stems and whole words — the privacy policy's clinical-language claim holds in Spanish too. A
+new language is a
 `LanguagePack+<Language>.swift` and one line in ``LanguagePack/pack(for:)``; `LanguagePackTests`
 checks every pack is filled and folded.
 
