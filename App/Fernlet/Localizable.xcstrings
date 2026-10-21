@@ -179,6 +179,9 @@
         }
       }
     },
+    "%@ wants to join an activity" : {
+
+    },
     "%@ · %@" : {
       "localizations" : {
         "en" : {
@@ -566,6 +569,9 @@
         }
       }
     },
+    "%lld cm" : {
+
+    },
     "%lld coins" : {
 
     },
@@ -673,9 +679,21 @@
     "%lld hearts are tucked away for %@ — delivered when they next open Fernlet." : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld hearts are tucked away for %2$@ — delivered when they next open Fernlet."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "A heart is tucked away for %2$@ — delivered when they next open Fernlet."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$lld hearts are tucked away for %2$@ — delivered when they next open Fernlet."
+                }
+              }
+            }
           }
         }
       }
@@ -834,10 +852,48 @@
 
     },
     "%lld people connected" : {
-
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld person connected"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld people connected"
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "%lld photos stayed on this phone. No one else was in the session when you took them." : {
-
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld photo stayed on this phone. No one else was in the session when you took it."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld photos stayed on this phone. No one else was in the session when you took them."
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "%lld pieces of equipment" : {
 
@@ -904,7 +960,26 @@
       }
     },
     "%lld shots left" : {
-
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld shot left"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld shots left"
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "%lld spaces saved." : {
 
@@ -1105,16 +1180,7 @@
     "1 logged" : {
 
     },
-    "1 person connected" : {
-
-    },
-    "1 photo stayed on this phone. No one else was in the session when you took it." : {
-
-    },
     "1 planned" : {
-
-    },
-    "1 shot left" : {
 
     },
     "2" : {
@@ -1181,9 +1247,6 @@
 
     },
     "A gentler day" : {
-
-    },
-    "A heart is tucked away for %@ — delivered when they next open Fernlet." : {
 
     },
     "A kind, safe space" : {
@@ -1865,6 +1928,9 @@
     "Blocked" : {
 
     },
+    "Blocked since" : {
+
+    },
     "Blocking %@ will hide their content from you and yours from them, and drop them from this session." : {
 
     },
@@ -1962,6 +2028,9 @@
 
     },
     "Camera access is off" : {
+
+    },
+    "Camera off" : {
 
     },
     "Camera unavailable" : {
@@ -2260,6 +2329,9 @@
     "Connected" : {
 
     },
+    "Connecting to %@..." : {
+
+    },
     "Connecting to %@…" : {
 
     },
@@ -2395,6 +2467,12 @@
 
     },
     "Could not send that heart just now." : {
+
+    },
+    "Couldn't Save Photo" : {
+
+    },
+    "Couldn't Save Photos" : {
 
     },
     "Couldn't add this plan" : {
@@ -3346,7 +3424,32 @@
     "Expired" : {
 
     },
-    "Expires %@" : {
+    "Expires in %lld days" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Expires in %lld day"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Expires in %lld days"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Expires in %lld h" : {
+
+    },
+    "Expires in %lld min" : {
 
     },
     "Explains how body signals are estimated" : {
@@ -3539,6 +3642,9 @@
 
     },
     "Fernlet quietly compares your recent heart rate variability and resting heart rate with your own usual range from the last several weeks — never anyone else's numbers. Days you moved a lot, marked yourself sick, or showed signs of coming down with something are taken into account so a hard workout doesn't read as a hard week." : {
+
+    },
+    "Fernlet recipe" : {
 
     },
     "Fernlet records metadata only: which feature asked, where the call went, when, how it turned out, and the names of the fields that were sent — never your words, your entries, or the model's reply." : {
@@ -3806,6 +3912,9 @@
 
     },
     "Friends nearby see this name." : {
+
+    },
+    "Friends since" : {
 
     },
     "Friends tab" : {
@@ -4651,6 +4760,9 @@
     "Last heartbeat" : {
 
     },
+    "Last seen" : {
+
+    },
     "Last seen %@" : {
 
     },
@@ -5414,6 +5526,9 @@
 
     },
     "No fields were recorded for this call." : {
+
+    },
+    "No film left" : {
 
     },
     "No film remaining" : {
@@ -6877,6 +6992,9 @@
     "Reporting %@ for this photo blocks them and deletes the photo from this phone." : {
 
     },
+    "Reporting hides this item and blocks the sender on your device. Your report is also signed by your device and shared with friends you meet in person — including the person reported — so several reports of the same item can be counted together." : {
+
+    },
     "Reports are handled on your device — there is no server that sees your data. A report of a person, a message or a photo stays on your phone. Reports of shop items also travel to friends you meet in person, signed by your device, so several people reporting the same item can be counted together; the person you reported is one of the friends who may receive it. They are never uploaded anywhere. When the same item is reported enough, it can no longer be sold; a maker whose items are repeatedly reported loses their shop for a while." : {
 
     },
@@ -7030,6 +7148,9 @@
     "Reviews and imports a Fernlet workout plan file." : {
 
     },
+    "Revoked" : {
+
+    },
     "Rework today's plan" : {
 
     },
@@ -7162,6 +7283,9 @@
     "Saved to Photos" : {
 
     },
+    "Saved web recipe" : {
+
+    },
     "Saving" : {
 
     },
@@ -7180,6 +7304,12 @@
       "isCommentAutoGenerated" : true
     },
     "Say hello" : {
+
+    },
+    "Saying hello to %@..." : {
+
+    },
+    "Saying hello to %@…" : {
 
     },
     "Says the next exercise, and when a rest or a hold ends." : {
@@ -7334,6 +7464,9 @@
     "Sell" : {
 
     },
+    "Send good vibes" : {
+
+    },
     "Send good vibes to %@" : {
 
     },
@@ -7360,10 +7493,16 @@
         }
       }
     },
+    "Sending..." : {
+
+    },
     "Sent %@ some good vibes." : {
 
     },
     "Sent in Messages." : {
+
+    },
+    "Sent just now" : {
 
     },
     "Sent to" : {
@@ -8224,6 +8363,9 @@
       "comment" : "Location editor, Weights I have: how to use the kettlebell size chips"
     },
     "Tap to log it again with today's time." : {
+
+    },
+    "Tap to shoot" : {
 
     },
     "Taps you can feel, and the few sounds Fernlet makes." : {
@@ -9244,6 +9386,9 @@
     "Wind camera first" : {
 
     },
+    "Wind to arm" : {
+
+    },
     "Wind to open the viewfinder" : {
 
     },
@@ -9511,7 +9656,26 @@
 
     },
     "You're hosting the maximum of %lld activities. End one to start another." : {
-
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You're hosting the maximum of %lld activity. End it to start another."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You're hosting the maximum of %lld activities. End one to start another."
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "You're keeping %lld of %lld shared photos. Once it's full, the oldest quietly make room for new ones — save any you'd like to keep." : {
       "localizations" : {
@@ -10041,6 +10205,174 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "a little low"
+          }
+        }
+      }
+    },
+    "activities.duration.oneDay" : {
+      "comment" : "Activity length chip on the Start an activity form: the activity ends one day from now",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "1 day"
+          }
+        }
+      }
+    },
+    "activities.duration.sevenDays" : {
+      "comment" : "Activity length chip on the Start an activity form: the activity ends seven days from now",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "7 days"
+          }
+        }
+      }
+    },
+    "activities.duration.threeDays" : {
+      "comment" : "Activity length chip on the Start an activity form: the activity ends three days from now",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "3 days"
+          }
+        }
+      }
+    },
+    "activities.duration.twoHours" : {
+      "comment" : "Activity length chip on the Start an activity form: the activity ends two hours from now",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "2 hours"
+          }
+        }
+      }
+    },
+    "activities.host.nameRefused" : {
+      "comment" : "Under the activity name field when the typed name is not allowed to be shared with people nearby",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That name can't be shared — try another."
+          }
+        }
+      }
+    },
+    "activities.joined.hostedBy" : {
+      "comment" : "A joined activity's subtitle. %@ is the host's name. May be followed by ' · ' and the activity type and place.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hosted by %@"
+          }
+        }
+      }
+    },
+    "activities.joined.noHostName" : {
+      "comment" : "A joined activity's subtitle when the host's name is not known. May be followed by ' · ' and the activity type and place.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Joined"
+          }
+        }
+      }
+    },
+    "activities.type.coffee" : {
+      "comment" : "Activity type chip and label: meeting for coffee",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Coffee"
+          }
+        }
+      }
+    },
+    "activities.type.hangout" : {
+      "comment" : "Activity type chip and label: spending time together, no set plan",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hangout"
+          }
+        }
+      }
+    },
+    "activities.type.meal" : {
+      "comment" : "Activity type chip and label: sharing a meal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Meal"
+          }
+        }
+      }
+    },
+    "activities.type.other" : {
+      "comment" : "Activity type chip and label: any other kind of activity",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Other"
+          }
+        }
+      }
+    },
+    "activities.type.study" : {
+      "comment" : "Activity type chip and label: studying together",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Study"
+          }
+        }
+      }
+    },
+    "activities.type.walk" : {
+      "comment" : "Activity type chip and label: going for a walk together",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Walk"
+          }
+        }
+      }
+    },
+    "activities.type.workout" : {
+      "comment" : "Activity type chip and label: exercising together",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Workout"
           }
         }
       }
@@ -11556,6 +11888,269 @@
         }
       }
     },
+    "friends.awayHearts.backlogFull" : {
+      "comment" : "After tapping Send when several saved hearts are already waiting for this friend. %@ is the friend's first name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A few hearts are already waiting for %@ — they'll arrive first."
+          }
+        }
+      }
+    },
+    "friends.awayHearts.dailyLimitReached" : {
+      "comment" : "After tapping Send once today's hearts for this friend are used up. %@ is the friend's first name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ has had all of today's hearts from you — send another tomorrow."
+          }
+        }
+      }
+    },
+    "friends.awayHearts.queueFailed" : {
+      "comment" : "After tapping Send for a friend who isn't nearby, when the heart could not be saved",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couldn't tuck that heart away just now."
+          }
+        }
+      }
+    },
+    "friends.awayHearts.queued" : {
+      "comment" : "After tapping Send for a friend who isn't nearby: the heart is saved for later delivery. %@ is the friend's first name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your heart is tucked away for %@ — it'll be delivered while you're apart."
+          }
+        }
+      }
+    },
+    "friends.awayHearts.queuedWithProblem" : {
+      "comment" : "After tapping Send for a friend who isn't nearby while delivery is failing. %1$@ is the friend's first name; %2$@ is a whole sentence saying what is wrong.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@'s heart is tucked away and safe. %2$@"
+          }
+        }
+      }
+    },
+    "friends.awayHearts.rateLimited" : {
+      "comment" : "After tapping Send again within a few minutes. %@ is the friend's first name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You just sent %@ some warmth — hearts settle for a few minutes."
+          }
+        }
+      }
+    },
+    "friends.awayHearts.row.incomingUnreachable" : {
+      "comment" : "Under a friend's heart button when checking for hearts sent to you keeps failing. %@ is a date, e.g. 'Oct 20, 2026'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet hasn't been able to check for hearts since %@ — yours still send."
+          }
+        }
+      }
+    },
+    "friends.awayHearts.row.noAccount" : {
+      "comment" : "Under a friend's heart button when hearts delivered while apart need an iCloud sign-in",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hearts can't travel while you're apart until this iPhone is signed in to iCloud."
+          }
+        }
+      }
+    },
+    "friends.awayHearts.row.storageUnavailable" : {
+      "comment" : "Under a friend's heart button when Fernlet's own heart records cannot be read right now, so no heart can be sent or saved",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet couldn't reach its own notes just now — unlock and reopen to send hearts."
+          }
+        }
+      }
+    },
+    "friends.awayHearts.row.uploadFailing" : {
+      "comment" : "Under a friend's heart button when saved hearts have not uploaded yet. %@ is a date, e.g. 'Oct 20, 2026'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hearts sent since %@ haven't reached the drop-off yet — Fernlet keeps trying."
+          }
+        }
+      }
+    },
+    "friends.awayHearts.settings.incomingUnreachable" : {
+      "comment" : "Under the deliver-hearts-while-apart setting when checking for hearts sent to you keeps failing. %@ is a date, e.g. 'Oct 20, 2026'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hearts sent to you since %@ haven't been picked up yet. Fernlet keeps trying."
+          }
+        }
+      }
+    },
+    "friends.awayHearts.settings.noAccount" : {
+      "comment" : "Under the deliver-hearts-while-apart setting when this iPhone is not signed in to iCloud",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Not signed in to iCloud — hearts can't be delivered yet."
+          }
+        }
+      }
+    },
+    "friends.awayHearts.settings.storageUnavailable" : {
+      "comment" : "Under the deliver-hearts-while-apart setting when Fernlet's own heart records cannot be read right now",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet couldn't read its saved hearts just now. Unlock and reopen, and it will retry."
+          }
+        }
+      }
+    },
+    "friends.awayHearts.settings.uploadFailing" : {
+      "comment" : "Under the deliver-hearts-while-apart setting when saved hearts have not uploaded yet. %@ is a date, e.g. 'Oct 20, 2026'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hearts sent since %@ haven't reached the drop-off yet. Fernlet keeps trying."
+          }
+        }
+      }
+    },
+    "friends.awayHearts.undeliverable" : {
+      "comment" : "Under a friend's heart button and under the deliver-hearts-while-apart setting: saved hearts that expired before delivery. %lld is how many.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "A heart couldn't be delivered before it expired."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld hearts couldn't be delivered before they expired."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "friends.filter.all" : {
+      "comment" : "Friends & Blocks segment: show everyone you have met",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "All"
+          }
+        }
+      }
+    },
+    "friends.filter.blocked" : {
+      "comment" : "Friends & Blocks segment: show only people you have blocked",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Blocked"
+          }
+        }
+      }
+    },
+    "friends.filter.friends" : {
+      "comment" : "Friends & Blocks segment: show only current friends",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Friends"
+          }
+        }
+      }
+    },
+    "friends.nearby.connected" : {
+      "comment" : "A nearby-friend row's status once the two phones are connected",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Connected"
+          }
+        }
+      }
+    },
+    "friends.nearby.connecting" : {
+      "comment" : "A nearby-friend row's status while the connection is being set up",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Connecting…"
+          }
+        }
+      }
+    },
+    "friends.nearby.exchangingIdentity" : {
+      "comment" : "A nearby-friend row's status while the two phones confirm who each other is",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Exchanging identity…"
+          }
+        }
+      }
+    },
     "friends.nearby.holdStill" : {
       "comment" : "A nearby-friend row's status once the two phones are within the 15 cm connect distance, while the connection settles (under a second). Pairs with a light haptic tick.",
       "extractionState" : "extracted_with_value",
@@ -11564,6 +12159,42 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Close enough — hold still…"
+          }
+        }
+      }
+    },
+    "friends.nearby.moveCloser" : {
+      "comment" : "A nearby-friend row's status while the phones are too far apart to connect. %lld is the distance in centimetres.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Move closer — %lld cm away"
+          }
+        }
+      }
+    },
+    "friends.nearby.tapPhones" : {
+      "comment" : "A nearby-friend row's status before the phones are close: bring them together to connect",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tap phones together to connect"
+          }
+        }
+      }
+    },
+    "friends.nearby.tapToConfirm" : {
+      "comment" : "A nearby-friend row's status when a tap on this phone completes the connection",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tap to confirm connection"
           }
         }
       }
@@ -13534,6 +14165,54 @@
         }
       }
     },
+    "recipeShare.review.duplicateName" : {
+      "comment" : "Warning on the shared-recipe import review when one of your recipes has the same name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You already have a recipe with this name."
+          }
+        }
+      }
+    },
+    "recipeShare.review.duplicateSavedName" : {
+      "comment" : "Warning on the shared-recipe import review when one of your saved web recipes has the same name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You already have a saved recipe with this name."
+          }
+        }
+      }
+    },
+    "recipeShare.review.duplicateSource" : {
+      "comment" : "Warning on the shared-recipe import review when you already saved a recipe from the same web page",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You already saved this recipe from the same page — importing keeps your saved copy, photo, and notes."
+          }
+        }
+      }
+    },
+    "recipeShare.review.macros" : {
+      "comment" : "A shared recipe's total macros on the import review. P, C and F abbreviate protein, carbohydrate and fat; each number is grams.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Macros: P %1$lldg · C %2$lldg · F %3$lldg"
+          }
+        }
+      }
+    },
     "recipeShareText.ingredients" : {
       "comment" : "Heading above the ingredient list in a recipe shared as text.",
       "extractionState" : "extracted_with_value",
@@ -13724,6 +14403,66 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "shop.purchase.alreadyOwned" : {
+      "comment" : "Alert when trying to buy an item from a friend's shop that is already in your closet. %@ is the item's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You already own “%@”."
+          }
+        }
+      }
+    },
+    "shop.purchase.bought" : {
+      "comment" : "Alert after buying an item in a friend's shop. %@ is the item's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Added “%@” to your closet."
+          }
+        }
+      }
+    },
+    "shop.purchase.insufficientCoins" : {
+      "comment" : "Alert when there are not enough coins to buy an item in a friend's shop. %@ is the item's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Not enough coins for “%@” yet — keep showing up!"
+          }
+        }
+      }
+    },
+    "shop.purchase.unavailable" : {
+      "comment" : "Alert when an item in a friend's shop can no longer be bought. %@ is the item's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "“%@” is no longer available."
+          }
+        }
+      }
+    },
+    "shop.report.thanks" : {
+      "comment" : "Alert after reporting an item in a friend's shop: what happened, and who the signed report is shared with",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Thanks for letting us know. We've hidden this item and blocked its sender on your device. Your report is signed by your device and travels to friends you meet in person, including the person you reported."
           }
         }
       }

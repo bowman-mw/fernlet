@@ -8,13 +8,29 @@ import FernletProximityUI
 
 /// The segment filter for the trusted-peer list: everyone, active friends, or blocked peers.
 ///
-/// Backing model for the `HubSectionPicker` at the top of ``FriendListView``; the raw value doubles
-/// as the visible segment title.
+/// Backing model for the `HubSectionPicker` at the top of ``FriendListView``. Nothing stores or sends
+/// a filter, so the segment title is plain display copy (``title``); the raw value is only the
+/// segment's identity.
 private enum FriendListFilter: String, CaseIterable, Identifiable {
     case all = "All"
     case friends = "Friends"
     case blocked = "Blocked"
     var id: String { rawValue }
+
+    /// The segment's title. Resolved here because `HubSectionPicker` draws a `String` verbatim.
+    var title: String {
+        switch self {
+        case .all:
+            String(localized: "friends.filter.all", defaultValue: "All",
+                   comment: "Friends & Blocks segment: show everyone you have met")
+        case .friends:
+            String(localized: "friends.filter.friends", defaultValue: "Friends",
+                   comment: "Friends & Blocks segment: show only current friends")
+        case .blocked:
+            String(localized: "friends.filter.blocked", defaultValue: "Blocked",
+                   comment: "Friends & Blocks segment: show only people you have blocked")
+        }
+    }
 }
 
 /// The "Friends & Blocks" management screen: every trusted proximity peer, searchable and
@@ -170,7 +186,7 @@ struct FriendListView: View {
         HubSectionPicker(
             sections: FriendListFilter.allCases,
             selection: $filter
-        ) { $0.rawValue }
+        ) { $0.title }
         .listRowInsets(EdgeInsets())
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
@@ -679,11 +695,11 @@ struct FriendListView: View {
                         .fernletWrappingText()
                         .accessibilityIdentifier("friends.awayProblem")
                 } else {
-                    Text(pendingDrops > 0
-                         ? (pendingDrops == 1
-                            ? "A heart is tucked away for \(firstName) — delivered when they next open Fernlet."
-                            : "\(pendingDrops) hearts are tucked away for \(firstName) — delivered when they next open Fernlet.")
-                         : "Not together right now — a heart sent now is delivered while you're apart.")
+                    // One count-bearing key, its English "A heart is …" / "%lld hearts are …" forms
+                    // authored as plural variations in the catalog, not an `== 1` branch here.
+                    (pendingDrops > 0
+                     ? Text("\(pendingDrops) hearts are tucked away for \(firstName) — delivered when they next open Fernlet.")
+                     : Text("Not together right now — a heart sent now is delivered while you're apart."))
                         .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                         .multilineTextAlignment(.center)
@@ -713,7 +729,7 @@ struct FriendListView: View {
         }
 
         if let status = heartStatusText {
-            Text(status)
+            status
                 .font(.fernlet(.bubble))
                 .foregroundStyle(Color.moss)
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -732,29 +748,7 @@ struct FriendListView: View {
     private func recordAwayOutcome(_ outcome: HeartDropService.QueueOutcome, firstName: String) {
         // The away line set below is this haptic's visual twin, whichever way the queue answered.
         FernletFeedback.system.play(Self.awayHeartEvent(for: outcome))
-        switch outcome {
-        case .queued:
-            // The heart IS saved, so say so — but never alongside a delivery promise the service is
-            // currently unable to keep.
-            if let problem = awayDeliveryProblemText {
-                awayStatus = "\(firstName)'s heart is tucked away and safe. \(problem)"
-            } else {
-                awayStatus = "Your heart is tucked away for \(firstName) — it'll be delivered while you're apart."
-            }
-        case .rateLimited:
-            awayStatus = "You just sent \(firstName) some warmth — hearts settle for a few minutes."
-        case .dailyLimitReached:
-            // Distinct from `.rateLimited` on purpose: the wait is until tomorrow, and the
-            // five-minute copy would be a lie the user would sit through and disbelieve.
-            awayStatus = "\(firstName) has had all of today's hearts from you — send another tomorrow."
-        case .backlogFull:
-            awayStatus = "A few hearts are already waiting for \(firstName) — they'll arrive first."
-        case .storageUnavailable:
-            // Track A nothing-silent: the heart was REFUSED (not saved), so no "tucked away".
-            awayStatus = "Fernlet couldn't reach its own notes just now — unlock and reopen to send hearts."
-        case .disabled, .failed:
-            awayStatus = "Couldn't tuck that heart away just now."
-        }
+        awayStatus = AwayHeartsCopy.queueLine(for: outcome, firstName: firstName, problem: awayDeliveryProblemText)
     }
 
     /// What a tap that tucks a heart away feels like (report B21): the in-session heart's soft
@@ -778,23 +772,26 @@ struct FriendListView: View {
     /// The presence pipeline's status line. Names go through `SessionHeartStatusCopy.shownRecipient`:
     /// the state carries the trust-vault name, which is the fingerprint for a friend kept before
     /// their name arrived. `.failed`'s sentence is the manager's, built on
-    /// `PresenceManager.firstName(of:in:)`, which applies the same rule.
-    private var heartStatusText: String? {
+    /// `PresenceManager.firstName(of:in:)`, which applies the same rule, and already resolved in this
+    /// device's language (`FernletSocialCopy.Presence`), so it is drawn verbatim; the other three are
+    /// this view's own keys.
+    private var heartStatusText: Text? {
         switch store.presenceManager.heartSendState {
         case .idle:
             nil
         case .connecting(let recipientName):
-            "Connecting to \(SessionHeartStatusCopy.shownRecipient(recipientName))..."
+            Text("Connecting to \(SessionHeartStatusCopy.shownRecipient(recipientName))...")
         case .verifying(let recipientName):
-            "Saying hello to \(SessionHeartStatusCopy.shownRecipient(recipientName))..."
+            Text("Saying hello to \(SessionHeartStatusCopy.shownRecipient(recipientName))...")
         case .sent(let recipientName):
-            "Sent \(SessionHeartStatusCopy.shownRecipient(recipientName)) some good vibes."
+            Text("Sent \(SessionHeartStatusCopy.shownRecipient(recipientName)) some good vibes.")
         case .failed(let message):
-            message
+            Text(verbatim: message)
         }
     }
 
-    private func detailRow(_ label: String, value: String) -> some View {
+    /// One "label … value" line of the detail card: the label is copy, the value a formatted date.
+    private func detailRow(_ label: LocalizedStringKey, value: String) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text(label)
                 .font(.fernlet(.labelSmall))
@@ -964,7 +961,9 @@ struct SendGoodVibesLabel: View {
         )
     }
 
-    private var label: String {
+    /// A key, not a `String`: `Text(String)` is the verbatim overload, which kept all three out of
+    /// the catalog.
+    private var label: LocalizedStringKey {
         switch state {
         case .ready, .notNearby: "Send good vibes"
         case .sending: "Sending..."
@@ -1007,13 +1006,17 @@ private extension Date {
     }
 }
 
-/// Copy for "away hearts are not being delivered right now", in ONE place.
+/// Copy for "away hearts are not being delivered right now", in ONE place, and the line a tap that
+/// tucks a heart away answers with.
 ///
 /// Two surfaces answer the same question — a friend's row ("will this heart reach them?") and the
 /// Settings toggle ("I turned this on, is it working?") — and the review round that added
 /// `HeartDropService.DeliveryProblem` exists precisely because the app used to promise delivery it
 /// wasn't making. Two hand-written mappings would drift into two different explanations of the same
-/// condition, and a view's private computed cannot be tested; this can.
+/// condition, and a view's private computed cannot be tested; this can. Every line is a whole
+/// sentence key resolved in this device's language; the undelivered count is ONE key whose English
+/// "A heart couldn't …" / "%lld hearts couldn't …" forms are plural variations in the catalog, not
+/// an `== 1` branch here.
 enum AwayHeartsCopy {
     /// Friend-scoped: read directly under a heart button, so it speaks about hearts travelling.
     static func friendRowLine(for problem: HeartDropService.DeliveryProblem?) -> String? {
@@ -1021,17 +1024,21 @@ enum AwayHeartsCopy {
         case nil:
             return nil
         case .noAccount:
-            return "Hearts can't travel while you're apart until this iPhone is signed in to iCloud."
+            return String(localized: "friends.awayHearts.row.noAccount",
+                          defaultValue: "Hearts can't travel while you're apart until this iPhone is signed in to iCloud.",
+                          comment: "Under a friend's heart button when hearts delivered while apart need an iCloud sign-in")
         case .uploadFailing(let since):
-            return "Hearts sent since \(dayLabel(since)) haven't reached the drop-off yet — Fernlet keeps trying."
+            return String(localized: "friends.awayHearts.row.uploadFailing",
+                          defaultValue: "Hearts sent since \(dayLabel(since)) haven't reached the drop-off yet — Fernlet keeps trying.",
+                          comment: "Under a friend's heart button when saved hearts have not uploaded yet. %@ is a date, e.g. 'Oct 20, 2026'.")
         case .undeliverable(let count):
-            return count == 1
-                ? "A heart couldn't be delivered before it expired."
-                : "\(count) hearts couldn't be delivered before they expired."
+            return undeliverable(count)
         case .storageUnavailable:
-            return "Fernlet couldn't reach its own notes just now — unlock and reopen to send hearts."
+            return storageUnavailableRowLine
         case .incomingUnreachable(let since):
-            return "Fernlet hasn't been able to check for hearts since \(dayLabel(since)) — yours still send."
+            return String(localized: "friends.awayHearts.row.incomingUnreachable",
+                          defaultValue: "Fernlet hasn't been able to check for hearts since \(dayLabel(since)) — yours still send.",
+                          comment: "Under a friend's heart button when checking for hearts sent to you keeps failing. %@ is a date, e.g. 'Oct 20, 2026'.")
         }
     }
 
@@ -1041,18 +1048,83 @@ enum AwayHeartsCopy {
         case nil:
             return nil
         case .noAccount:
-            return "Not signed in to iCloud — hearts can't be delivered yet."
+            return String(localized: "friends.awayHearts.settings.noAccount",
+                          defaultValue: "Not signed in to iCloud — hearts can't be delivered yet.",
+                          comment: "Under the deliver-hearts-while-apart setting when this iPhone is not signed in to iCloud")
         case .uploadFailing(let since):
-            return "Hearts sent since \(dayLabel(since)) haven't reached the drop-off yet. Fernlet keeps trying."
+            return String(localized: "friends.awayHearts.settings.uploadFailing",
+                          defaultValue: "Hearts sent since \(dayLabel(since)) haven't reached the drop-off yet. Fernlet keeps trying.",
+                          comment: "Under the deliver-hearts-while-apart setting when saved hearts have not uploaded yet. %@ is a date, e.g. 'Oct 20, 2026'.")
         case .undeliverable(let count):
-            return count == 1
-                ? "A heart couldn't be delivered before it expired."
-                : "\(count) hearts couldn't be delivered before they expired."
+            return undeliverable(count)
         case .storageUnavailable:
-            return "Fernlet couldn't read its saved hearts just now. Unlock and reopen, and it will retry."
+            return String(localized: "friends.awayHearts.settings.storageUnavailable",
+                          defaultValue: "Fernlet couldn't read its saved hearts just now. Unlock and reopen, and it will retry.",
+                          comment: "Under the deliver-hearts-while-apart setting when Fernlet's own heart records cannot be read right now")
         case .incomingUnreachable(let since):
-            return "Hearts sent to you since \(dayLabel(since)) haven't been picked up yet. Fernlet keeps trying."
+            return String(localized: "friends.awayHearts.settings.incomingUnreachable",
+                          defaultValue: "Hearts sent to you since \(dayLabel(since)) haven't been picked up yet. Fernlet keeps trying.",
+                          comment: "Under the deliver-hearts-while-apart setting when checking for hearts sent to you keeps failing. %@ is a date, e.g. 'Oct 20, 2026'.")
         }
+    }
+
+    /// The line a tap that tucks a heart away for a friend who is not nearby answers with.
+    ///
+    /// - Parameters:
+    ///   - outcome: What the drop-off queue did with the heart.
+    ///   - firstName: The friend's first name, through `PeerNameDisplay.firstName`.
+    ///   - problem: The friend-row delivery problem line (``friendRowLine(for:)``) when delivery is
+    ///     currently failing: the heart IS saved, so the line says so, but never alongside a
+    ///     delivery promise the service cannot keep.
+    /// - Returns: The resolved line.
+    static func queueLine(for outcome: HeartDropService.QueueOutcome, firstName: String, problem: String?) -> String {
+        switch outcome {
+        case .queued:
+            guard let problem else {
+                return String(localized: "friends.awayHearts.queued",
+                              defaultValue: "Your heart is tucked away for \(firstName) — it'll be delivered while you're apart.",
+                              comment: "After tapping Send for a friend who isn't nearby: the heart is saved for later delivery. %@ is the friend's first name.")
+            }
+            return String(localized: "friends.awayHearts.queuedWithProblem",
+                          defaultValue: "\(firstName)'s heart is tucked away and safe. \(problem)",
+                          comment: "After tapping Send for a friend who isn't nearby while delivery is failing. %1$@ is the friend's first name; %2$@ is a whole sentence saying what is wrong.")
+        case .rateLimited:
+            return String(localized: "friends.awayHearts.rateLimited",
+                          defaultValue: "You just sent \(firstName) some warmth — hearts settle for a few minutes.",
+                          comment: "After tapping Send again within a few minutes. %@ is the friend's first name.")
+        case .dailyLimitReached:
+            // Distinct from `.rateLimited` on purpose: the wait is until tomorrow, and the
+            // five-minute copy would be a lie the user would sit through and disbelieve.
+            return String(localized: "friends.awayHearts.dailyLimitReached",
+                          defaultValue: "\(firstName) has had all of today's hearts from you — send another tomorrow.",
+                          comment: "After tapping Send once today's hearts for this friend are used up. %@ is the friend's first name.")
+        case .backlogFull:
+            return String(localized: "friends.awayHearts.backlogFull",
+                          defaultValue: "A few hearts are already waiting for \(firstName) — they'll arrive first.",
+                          comment: "After tapping Send when several saved hearts are already waiting for this friend. %@ is the friend's first name.")
+        case .storageUnavailable:
+            // Track A nothing-silent: the heart was REFUSED (not saved), so no "tucked away".
+            return storageUnavailableRowLine
+        case .disabled, .failed:
+            return String(localized: "friends.awayHearts.queueFailed", defaultValue: "Couldn't tuck that heart away just now.",
+                          comment: "After tapping Send for a friend who isn't nearby, when the heart could not be saved")
+        }
+    }
+
+    /// Fernlet's own heart records cannot be read: the friend row's problem line, and the answer to
+    /// a tap the store refused for the same reason.
+    private static var storageUnavailableRowLine: String {
+        String(localized: "friends.awayHearts.row.storageUnavailable",
+               defaultValue: "Fernlet couldn't reach its own notes just now — unlock and reopen to send hearts.",
+               comment: "Under a friend's heart button when Fernlet's own heart records cannot be read right now, so no heart can be sent or saved")
+    }
+
+    /// The undelivered-hearts line both surfaces share. One count-bearing key: English reads
+    /// "A heart couldn't be delivered before it expired." at one through its plural variation.
+    private static func undeliverable(_ count: Int) -> String {
+        String(localized: "friends.awayHearts.undeliverable",
+               defaultValue: "\(count) hearts couldn't be delivered before they expired.",
+               comment: "Under a friend's heart button and under the deliver-hearts-while-apart setting: saved hearts that expired before delivery. %lld is how many.")
     }
 
     private static func dayLabel(_ date: Date) -> String {

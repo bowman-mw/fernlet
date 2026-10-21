@@ -466,10 +466,15 @@ on nothing, has reached no sealed store since plan step A0.5.10): the walled
 rules (nothing here imports CloudKit, and CloudKitSync never imports this module): the dead-drop's
 CloudKit transport is injected by the app. `BackgroundRefreshBoundaryTests` forbids the companion
 refresh handler from importing it, and `TransportNeutralityBoundaryTests` and the P9 acceptance
-battery's zero-lists scan it for MultipeerConnectivity. Its one string catalog holds the camera's
-hold-failure line, resolved through `FernletSocialCopy` with `bundle: .module`; every other string it
-holds is a token, a file name, an audit event or presence's English status copy and diagnostics,
-which no catalog carries. Code-owned (`.github/CODEOWNERS`): the ban store's file, which holds a
+battery's zero-lists scan it for MultipeerConnectivity. Its one string catalog holds every sentence
+the module hands a person, resolved through `FernletSocialCopy` with `bundle: .module` (Spanish
+round, 2026-10-20): the camera's two capture refusals on `meshError`, the session roster's "Friend
+of …" vouch label, Group Activities' `activityError` lines, presence's heart sentences
+(`PresenceManager.heartSendState`'s `failed(message:)`) and the recipe share's failed status line,
+each a whole sentence with its names as placeholders and its counts plural-ruled in the catalog.
+Every other string it holds is a token, a file name, an audit event or a developer diagnostic
+(presence's and the recipe share's debug-tools logs), which no catalog carries — and every
+`PayloadSummary` title, which rides signed canonical bytes, stays frozen English. Code-owned (`.github/CODEOWNERS`): the ban store's file, which holds a
 keychain service whose self-ban row outlives every wipe by design, and a hash domain; the report
 relay and the canonical bytes, whose bytes every relayed report's signature covers; the activity
 manager and its payloads, whose bytes every grant, roster and activity ledger covers; the JSON

@@ -91,9 +91,10 @@ struct FriendShopView: View {
                     // Disclosure (L21): the row we relay is SIGNED by this device and goes to friends
                     // we meet in person — including the person reported, who is the only party that
                     // can act on it as a self-ban. Saying only "on your device" understated that.
-                    feedback = "Thanks for letting us know. We've hidden this item and blocked its sender on "
-                        + "your device. Your report is signed by your device and travels to friends you meet "
-                        + "in person, including the person you reported."
+                    feedback = String(
+                        localized: "shop.report.thanks",
+                        defaultValue: "Thanks for letting us know. We've hidden this item and blocked its sender on your device. Your report is signed by your device and travels to friends you meet in person, including the person you reported.",
+                        comment: "Alert after reporting an item in a friend's shop: what happened, and who the signed report is shared with")
                 }
             }
             Button("Cancel", role: .cancel) { reportTarget = nil }
@@ -101,9 +102,8 @@ struct FriendShopView: View {
             // Disclosure (L21): stated BEFORE the report is made, because the report is not
             // anonymous and not device-local — it is signed and handed to friends met in person,
             // the person reported among them.
-            Text("Reporting hides this item and blocks the sender on your device. Your report is also "
-                 + "signed by your device and shared with friends you meet in person — including the "
-                 + "person reported — so several reports of the same item can be counted together.")
+            // ONE literal: `+` between literals builds a `String`, which `Text` draws verbatim.
+            Text("Reporting hides this item and blocks the sender on your device. Your report is also signed by your device and shared with friends you meet in person — including the person reported — so several reports of the same item can be counted together.")
         }
     }
 
@@ -295,13 +295,18 @@ struct FriendShopView: View {
         FernletFeedback.system.play(Self.purchaseEvent(for: result))
         switch result {
         case .bought:
-            feedback = "Added “\(label)” to your closet."
+            feedback = String(localized: "shop.purchase.bought", defaultValue: "Added “\(label)” to your closet.",
+                              comment: "Alert after buying an item in a friend's shop. %@ is the item's name.")
         case .alreadyOwned:
-            feedback = "You already own “\(label)”."
+            feedback = String(localized: "shop.purchase.alreadyOwned", defaultValue: "You already own “\(label)”.",
+                              comment: "Alert when trying to buy an item from a friend's shop that is already in your closet. %@ is the item's name.")
         case .insufficientCoins:
-            feedback = "Not enough coins for “\(label)” yet — keep showing up!"
+            feedback = String(localized: "shop.purchase.insufficientCoins",
+                              defaultValue: "Not enough coins for “\(label)” yet — keep showing up!",
+                              comment: "Alert when there are not enough coins to buy an item in a friend's shop. %@ is the item's name.")
         case .unavailable:
-            feedback = "“\(label)” is no longer available."
+            feedback = String(localized: "shop.purchase.unavailable", defaultValue: "“\(label)” is no longer available.",
+                              comment: "Alert when an item in a friend's shop can no longer be bought. %@ is the item's name.")
         }
     }
 

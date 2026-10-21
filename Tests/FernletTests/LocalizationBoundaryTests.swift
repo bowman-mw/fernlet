@@ -1378,6 +1378,50 @@ struct LocalizationBoundaryTests {
         )
     }
 
+    /// The Group Activities type tokens a host's phone SENDS (Spanish round, 2026-10-20).
+    ///
+    /// `ActivityTypeOption`'s chip label used to be its raw value ("Walk") and the token the
+    /// lowercased label, so the chip could not localize, and the RECEIVING phone drew the sender's
+    /// token capitalized — a Spanish phone read "Walk". It is forked: the raw value is the token,
+    /// these exact spellings, which every build since Group Activities (2026-07-12) has written into
+    /// `ActivityDescriptor.activityTypeToken`. That field rides the descriptor's canonical bytes, so
+    /// the signed join tokens and roster snapshots bind it through the `activityParamsHash`, and it is
+    /// kept in the hosted and joined sidecars. A respelled token is a word an older phone no longer
+    /// recognizes (it would draw the raw English as an unknown type) and a descriptor whose hash no
+    /// longer matches what was pinned at join. Localize `displayName`, never the token.
+    @MainActor @Test func frozenActivityTypeTokens() {
+        let tokens = ActivityTypeOption.allCases.map(\.token)
+        #expect(
+            tokens == ["walk", "coffee", "meal", "study", "workout", "hangout", "other"],
+            """
+            ActivityTypeOption tokens changed (now \(tokens)). They are the wire word every activity \
+            descriptor carries, inside its canonical bytes and the device-local sidecars. Localize \
+            `displayName`; never the token.
+            """
+        )
+        #expect(ActivityTypeOption.allCases.map(\.rawValue) == tokens, "the raw value IS the token")
+    }
+
+    /// The receiving side of the activity-type fork: a known token draws this device's word, and an
+    /// unknown one (a newer build's type, or any word a peer sends) draws as received, sanitized and
+    /// not re-cased — never dropped, never matched loosely.
+    @MainActor @Test func receivedActivityTypeTokensDrawThroughTheDisplayName() throws {
+        for option in ActivityTypeOption.allCases {
+            #expect(ActivityTypeOption.displayName(forToken: option.token) == option.displayName)
+        }
+        #expect(ActivityTypeOption.displayName(forToken: "boardGames") == "boardGames",
+                "an unknown token is drawn as sent")
+        #expect(ActivityTypeOption.displayName(forToken: "Walk") == "Walk",
+                "matching is exact: the token is the sender's frozen spelling")
+        #expect(ActivityTypeOption.displayName(forToken: "bad\u{200B}word") == "badword",
+                "an unknown token is still sanitized before it is drawn")
+        let source = try RepoRoot.source("App/Fernlet/ActivitiesView.swift")
+        #expect(source.contains("ActivityTypeOption.displayName(forToken: type)"),
+                "the activity subtitle draws the received type through the fork")
+        #expect(!source.contains(".capitalized"),
+                "nothing in ActivitiesView re-cases a received word for display")
+    }
+
     // MARK: - C. The widget cross-process contract
 
     /// The app-side companion-state raw values, frozen here once and reused by parts B and C so the
@@ -2711,6 +2755,32 @@ struct LocalizationBoundaryTests {
         ForkedMember(path: "App/Fernlet/DuressRecoveryCeremonyViews.swift",
                      declaration: "let title: LocalizedStringKey",
                      role: "CeremonyButton, every step's advance button"),
+        // Friends lane, Spanish round (2026-10-20): `String` members drawn with `Text(_:)`, the
+        // verbatim overload, so none of their literals reached the catalog.
+        ForkedMember(path: "App/Fernlet/FriendListView.swift",
+                     declaration: "private var label: LocalizedStringKey {",
+                     role: "SendGoodVibesLabel's Send good vibes / Sending... / Sent just now"),
+        ForkedMember(path: "App/Fernlet/FriendListView.swift",
+                     declaration: "private func detailRow(_ label: LocalizedStringKey, value: String) -> some View {",
+                     role: "the friend detail card's Friends since / Last seen / Revoked / Blocked since / Reported"),
+        ForkedMember(path: "App/Fernlet/FriendListView.swift",
+                     declaration: "private var heartStatusText: Text? {",
+                     role: "the Friends list's presence heart status line"),
+        ForkedMember(path: "App/Fernlet/DisposableCameraView.swift",
+                     declaration: "private var presenceHeartStatusText: Text? {",
+                     role: "the in-person camera's presence heart status line"),
+        ForkedMember(path: "App/Fernlet/DisposableCameraView.swift",
+                     declaration: "private func shutterCaption(canShoot: Bool) -> LocalizedStringKey {",
+                     role: "the caption under the camera's shutter"),
+        ForkedMember(path: "App/Fernlet/ConnectView.swift",
+                     declaration: "private func headerButtonLabel(_ title: LocalizedStringKey) -> some View {",
+                     role: "the Friends header's Activities and Friends pills"),
+        ForkedMember(path: "App/Fernlet/Proximity/UI/ProximityRecipeShareReviewSheet.swift",
+                     declaration: "private var recipeKindLabel: LocalizedStringKey {",
+                     role: "the shared-recipe review's Fernlet recipe / Saved web recipe label"),
+        ForkedMember(path: "FernletKit/Sources/FernletProximityUI/FriendPhotoReviewSheet.swift",
+                     declaration: "_ title: LocalizedStringKey,",
+                     role: "photoSaveFailureAlert's caller-supplied title (Couldn't Save Photo / Photos)"),
     ]
 
     /// The members this round forked are still forked.
@@ -2855,6 +2925,26 @@ struct LocalizationBoundaryTests {
                      source: "CeremonyButton.title in both flows, forked String → LocalizedStringKey"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Return the key",
                      source: "CeremonyButton.title in the custodian flow, forked String → LocalizedStringKey"),
+        // Friends lane, Spanish round (2026-10-20): each measured absent before its fork.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Send good vibes",
+                     source: "SendGoodVibesLabel.label, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Friends since",
+                     source: "FriendListView.detailRow's label, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Tap to shoot",
+                     source: "DisposableCameraView.shutterCaption, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Saying hello to %@…",
+                     source: "DisposableCameraView.presenceHeartStatusText, forked String → Text"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Fernlet recipe",
+                     source: "ProximityRecipeShareReviewSheet.recipeKindLabel, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Couldn't Save Photo",
+                     source: "photoSaveFailureAlert's title, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Expires in %lld min",
+                     source: "ActivitiesView's ExpiryLabel, \"Expires \" + a separately built phrase → one key"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletSocial/Localizable.xcstrings", key: "presence.heart.cooldown",
+                     source: "PresenceManager's heart sentences, English literal → FernletSocialCopy.Presence"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletProximityUI/Localizable.xcstrings",
+                     key: "proximity.review.deleteConfirm.message",
+                     source: "the photo review's Delete all confirmation, English literal → FernletProximityUICopy"),
     ] + ["sedentary", "light", "moderate", "active", "veryActive"].map {
         HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings", key: "activityLevel.\($0)",
                      source: "ActivityLevel.label, literal → String(localized:bundle: .module) (2026-10-19)")
@@ -3045,6 +3135,35 @@ struct LocalizationBoundaryTests {
         // Workout setup's Days-per-week stepper, which spliced an English "s" into its key.
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
                      key: "%lld days a week", source: "Workout setup's days-per-week stepper"),
+        // Friends lane, Spanish round (2026-10-20). The two hearts counts, the camera's two session
+        // counts and the photos-kept notice were `== 1` branches between two English sentences ("A
+        // heart is …" / "%lld hearts are …"); each is now ONE key whose English `one` form keeps the
+        // wording it had at one. The rest were bare `%lld`s.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "%lld hearts are tucked away for %@ — delivered when they next open Fernlet.",
+                     source: "a friend's heart row: hearts waiting at the drop-off"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "friends.awayHearts.undeliverable",
+                     source: "AwayHeartsCopy's undelivered-hearts line (friend row and Settings)"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "%lld people connected", source: "the in-person camera's session count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "%lld shots left", source: "the in-person camera's film count"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "%lld photos stayed on this phone. No one else was in the session when you took them.",
+                     source: "RoutedShareRefusalCopy.photoKeptNotice, the camera's photos-kept notice"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "Expires in %lld days", source: "an activity card's expiry label"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "You're hosting the maximum of %lld activities. End one to start another.",
+                     source: "the Start an activity form at the host cap"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletSocial/Localizable.xcstrings",
+                     key: "activities.error.hostLimit", source: "Group Activities' host-cap error"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletSocial/Localizable.xcstrings",
+                     key: "proximity.camera.photoLimitReached", source: "the in-person camera's photo-cap alert"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletProximityUI/Localizable.xcstrings",
+                     key: "proximity.review.deleteConfirm.title",
+                     source: "the photo review's delete confirmation title (two or more pictures)"),
     ]
 
     /// Every count-bearing key carries real plural variations.
