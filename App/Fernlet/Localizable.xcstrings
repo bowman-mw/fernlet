@@ -1266,9 +1266,6 @@
     "A small record of being." : {
 
     },
-    "A soft tap on each turn of the breath, in First aid › Slow breathing." : {
-
-    },
     "A soft tap when a log lands, and a firmer one for results and timers." : {
 
     },
@@ -7764,6 +7761,9 @@
     "Snap a photo when you log a meal and it'll show up here as a polaroid." : {
 
     },
+    "Soft taps as you breathe in and one as you breathe out, in First aid › Slow breathing." : {
+
+    },
     "Some cycle entries on this iPhone can't be opened, so your cycle backup is paused. Nothing in iCloud was changed." : {
 
     },
@@ -9991,9 +9991,6 @@
         }
       }
     },
-    "a soft tap on each turn" : {
-
-    },
     "as of %@" : {
 
     },
@@ -11894,6 +11891,9 @@
           }
         }
       }
+    },
+    "soft taps in, one tap out" : {
+      "comment" : "Under the breathing screen's Haptics switch: what the haptics feel like. Several soft taps while breathing in, a single tap as the breath goes out, nothing while holding."
     },
     "sourdough toast" : {
 

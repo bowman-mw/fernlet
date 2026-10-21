@@ -250,13 +250,6 @@ private final class PlayedLog {
         #expect(!unlock.contains("FernletFeedback.system.play("), "an imperative cue on the unlock screen")
     }
 
-    /// The companion has no haptic yet (report B5, not built): a calm-idle pet plays nothing, and the
-    /// petting governor's settled period is never rewarded.
-    @Test func aCalmCompanionPlaysNothing() throws {
-        let source = try RepoRoot.source("App/Fernlet/HomeView.swift")
-        let start = try #require(source.range(of: "private func interactWithCompanion() {"))
-        let end = try #require(source.range(of: "\n    }\n", range: start.upperBound..<source.endIndex))
-        let pet = source[start.lowerBound..<end.upperBound]
-        #expect(!pet.contains("FernletFeedback") && !pet.contains("fernletFeedback"))
-    }
+    // The companion's pet (report B5) is `CalmHomeStudioFeedbackTests.aCalmIdlePetPlaysNothing`: a
+    // calm-idle pet plays nothing, through the real petting governor.
 }

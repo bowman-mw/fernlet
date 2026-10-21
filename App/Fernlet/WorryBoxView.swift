@@ -288,6 +288,22 @@ private struct TuckIntoBoxView: View {
             .frame(width: 230, height: 250)
         }
         .onAppear(perform: runSequence)
+        // `.task`, not a detached sleep: it is cancelled when the tuck gives way to the
+        // confirmation, so a cue can never land after the lid it belongs to.
+        .task { await feelLidClose() }
+    }
+
+    /// The lid's `pace`, felt as the lid meets the box (report B2) — the physical moment of
+    /// letting go, for someone whose eyes may already be closed. Haptics only: the Worry Box is
+    /// private, so it never sounds.
+    private func feelLidClose() async {
+        do {
+            try await Task.sleep(for: WorryTuckTiming.lidCueDelay(reduceMotion: reduceMotion))
+        } catch {
+            // The tuck ended first (the entry view went away): no late tap.
+            return
+        }
+        FernletFeedback.system.play(.pace)
     }
 
     private var box: some View {
@@ -342,7 +358,7 @@ private struct TuckIntoBoxView: View {
         guard !reduceMotion else {
             // Reduce Motion: one short crossfade to the sealed state instead of the sinking note,
             // the swinging lid, and the blooming glow.
-            withAnimation(.easeInOut(duration: 0.35)) {
+            withAnimation(.easeInOut(duration: WorryTuckTiming.reducedMotionCrossfade)) {
                 tucked = true
                 lidClosed = true
                 sealGlow = true
@@ -350,8 +366,40 @@ private struct TuckIntoBoxView: View {
             return
         }
         withAnimation(.easeIn(duration: 0.9)) { tucked = true }
-        withAnimation(.spring(response: 0.55, dampingFraction: 0.62).delay(1.05)) { lidClosed = true }
+        withAnimation(
+            .spring(response: WorryTuckTiming.lidSpringResponse, dampingFraction: WorryTuckTiming.lidSpringDamping)
+                .delay(WorryTuckTiming.lidSpringDelay)
+        ) { lidClosed = true }
         withAnimation(.easeOut(duration: 0.9).delay(1.7)) { sealGlow = true }
+    }
+}
+
+/// The tuck theater's clock (``TuckIntoBoxView``), named once so the lid's haptic lands with the
+/// lid and is retimed with it under Reduce Motion (report B2, §3.7).
+enum WorryTuckTiming {
+    /// When the lid's spring starts, in seconds into the full ~2.2 s tuck.
+    static let lidSpringDelay = 1.05
+    /// The lid spring's response (SwiftUI's undamped period), in seconds.
+    static let lidSpringResponse = 0.55
+    /// The lid spring's damping fraction: under-damped, so the lid settles with a small bounce.
+    static let lidSpringDamping = 0.62
+    /// Reduce Motion's one crossfade to the sealed state, in seconds, inside its 600 ms tuck.
+    static let reducedMotionCrossfade = 0.35
+
+    /// How long after the spring starts the lid first meets the box: the first zero of an
+    /// under-damped spring released from rest, `(π − atan(√(1−ζ²)/ζ)) / ω_d` with
+    /// `ω_d = 2π/response · √(1−ζ²)` — about a quarter second for this spring.
+    static var lidSpringContact: Double {
+        let damping = lidSpringDamping
+        let ratio = (1 - damping * damping).squareRoot()
+        let dampedFrequency = 2 * Double.pi / lidSpringResponse * ratio
+        return (Double.pi - atan(ratio / damping)) / dampedFrequency
+    }
+
+    /// When the lid's `pace` plays, measured from the tuck's start: as the lid first meets the box,
+    /// or, under Reduce Motion, as the crossfade settles on the closed box.
+    static func lidCueDelay(reduceMotion: Bool) -> Duration {
+        .seconds(reduceMotion ? reducedMotionCrossfade : lidSpringDelay + lidSpringContact)
     }
 }
 
@@ -621,6 +669,9 @@ struct WorryBoxView: View {
         do {
             try worryBox.addWorry(composeText)
             composeText = ""
+            // B2: the seal landed. The field clearing and the worry joining the list below are
+            // its visual twin; the words are never part of the cue.
+            FernletFeedback.system.play(.done)
             isComposeFocused = false
             composeError = nil
         } catch {
@@ -739,6 +790,9 @@ struct WorryBoxView: View {
         commitPendingRelease()
         emberLifted = false
         releaseError = nil
+        // B2: felt as the ember starts to lift, at the tap. The permanent delete that follows the
+        // "Keep it" window stays silent: by then nobody is acting (report §3.8).
+        FernletFeedback.system.play(.pace)
         withAnimation(.easeOut(duration: 0.3)) { releasingWorry = worry }
         withAnimation(.easeOut(duration: 1.1)) { emberLifted = true }
         emberTask = Task { @MainActor in
@@ -824,8 +878,11 @@ struct WorryBoxView: View {
 
     /// Keeps the worry: cancels the pending delete and slides the row back into the list.
     private func keepPendingRelease() {
+        guard pendingRelease != nil else { return }
         pendingReleaseTask?.cancel()
         pendingReleaseTask = nil
+        // B2: the worry is back in the box, felt in place as the row slides back into the list.
+        FernletFeedback.system.play(.logged)
         withAnimation(.easeOut(duration: 0.35)) { pendingRelease = nil }
     }
 

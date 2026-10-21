@@ -288,8 +288,11 @@ struct CreationStudioView: View {
     private var slotPicker: some View {
         FlowLayout(spacing: 8) {
             ForEach(ItemSlot.allCases) { candidate in
-                Button(candidate.label) { slot = candidate }
-                    .buttonStyle(ChipButtonStyle(selected: slot == candidate))
+                Button(candidate.label) {
+                    if slot != candidate { FernletFeedback.system.play(.tick) }
+                    slot = candidate
+                }
+                .buttonStyle(ChipButtonStyle(selected: slot == candidate))
             }
         }
         .onChange(of: slot) { oldSlot, newSlot in
@@ -334,7 +337,7 @@ struct CreationStudioView: View {
 
     private var undoButton: some View {
         Button {
-            undo()
+            undoTapped()
         } label: {
             Label("Undo", systemImage: "arrow.uturn.backward")
                 .font(.fernlet(.label))
@@ -348,6 +351,7 @@ struct CreationStudioView: View {
 
     private var mirrorButton: some View {
         Button {
+            FernletFeedback.system.play(.tick)
             isSymmetric.toggle()
         } label: {
             Label("Mirror", systemImage: isSymmetric ? "square.righthalf.filled" : "rectangle.split.2x1")
@@ -368,7 +372,7 @@ struct CreationStudioView: View {
             cols: slot.gridCols,
             rows: slot.gridRows,
             palette: palette,
-            onStrokeBegan: { pushUndoSnapshot() },
+            onStrokeBegan: { beginStroke() },
             onStrokeCancelled: { cancelStroke() },
             onPaintCell: { x, y in paintCell(x: x, y: y) }
         )
@@ -442,7 +446,7 @@ struct CreationStudioView: View {
 
     private var eraserSwatch: some View {
         Button {
-            selectedColor = ItemGridTexture.transparent
+            chooseColor(ItemGridTexture.transparent)
         } label: {
             ZStack {
                 // A checker fill reads as "transparent / erase" — it can never blend into the card.
@@ -479,7 +483,7 @@ struct CreationStudioView: View {
 
     private func swatch(index: Int, hex: String) -> some View {
         Button {
-            selectedColor = index
+            chooseColor(index)
         } label: {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(Color(itemHex: hex) ?? .gray)
@@ -561,7 +565,12 @@ struct CreationStudioView: View {
         Button(role: .destructive) {
             // Snapshot before blanking so Clear is a single undoable step; guard skips a no-op snapshot on
             // an already-blank canvas.
-            if !isCanvasBlank { pushUndoSnapshot() }
+            if !isCanvasBlank {
+                pushUndoSnapshot()
+                // Clear is undoable, so it is a change to the drawing rather than a loss: `moved`,
+                // with the blank grid as its twin. A blank canvas has nothing to clear.
+                FernletFeedback.system.play(.moved)
+            }
             pixels = Self.blankPixels(for: slot)
         } label: {
             // `terracottaInk`, the destructive TEXT token: plain `terracotta` measured 4.16:1 here and
@@ -754,14 +763,36 @@ struct CreationStudioView: View {
         if undoStack.count > Self.maxUndoSteps { undoStack.removeFirst() }
     }
 
+    /// The Undo button: a tick as the last stroke comes back off the canvas.
+    private func undoTapped() {
+        guard !undoStack.isEmpty else { return }
+        FernletFeedback.system.play(.tick)
+        undo()
+    }
+
     private func undo() {
         guard let previous = undoStack.popLast() else { return }
         pixels = previous
     }
 
+    /// A stroke (or a single dab) started: snapshot for undo, and ONE tick under the finger (report
+    /// C6). Never per cell: a drag samples dozens of cells a second, and a tick on each would be a
+    /// buzz. The canvas reports this once per stroke (`ZoomablePixelCanvas`).
+    private func beginStroke() {
+        pushUndoSnapshot()
+        FernletFeedback.system.play(.tick)
+    }
+
+    /// A palette pick (a colour or the eraser): a tick when it changes the brush.
+    private func chooseColor(_ color: Int) {
+        if selectedColor != color { FernletFeedback.system.play(.tick) }
+        selectedColor = color
+    }
+
     /// A zoom/pan interrupted a stroke mid-drag: pop the snapshot that stroke pushed in `onStrokeBegan`
     /// back into `pixels`, so a staggered-pinch stray dab is reverted rather than left painted. Reuses the
-    /// undo machinery — the interrupted stroke's snapshot is exactly the top of the stack.
+    /// undo machinery — the interrupted stroke's snapshot is exactly the top of the stack. Silent: the
+    /// person didn't ask for it, and the stroke's start already ticked.
     private func cancelStroke() {
         undo()
     }
@@ -833,11 +864,14 @@ struct CreationStudioView: View {
         guard canSell, isShareable else {
             // Toggled off (or not sellable): make sure it isn't listed, then leave.
             if canSell { store.unlistCustomItem(id: itemID) }
+            FernletFeedback.system.play(.done)
             leaveStudio()
             return
         }
 
-        switch store.listCustomItemForSale(id: itemID, price: price) {
+        let outcome = store.listCustomItemForSale(id: itemID, price: price)
+        FernletFeedback.system.play(Self.saveFeedbackEvent(for: outcome))
+        switch outcome {
         case .listed:
             leaveStudio()
         case .nameFlagged:
@@ -848,6 +882,16 @@ struct CreationStudioView: View {
             leaveStudio()              // not your design (unreachable — `canSell` guards); item saved, just unlisted
         case .storeBanned(let remainingSeconds):
             shopAlert = .storeBanned(remainingSeconds: remainingSeconds)
+        }
+    }
+
+    /// What "Save to closet" feels like once the shop has answered (report B16): `done` when the
+    /// studio closes on a saved item, `caveat` when a refused listing keeps the person here — the
+    /// item IS saved, unlisted, and the alert says why. Felt at once, before the alert or the pop.
+    static func saveFeedbackEvent(for outcome: FernletStore.ShopListingResult) -> FernletFeedbackEvent {
+        switch outcome {
+        case .listed, .notAllowed: .done
+        case .nameFlagged, .capReached, .storeBanned: .caveat
         }
     }
 

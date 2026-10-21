@@ -198,6 +198,8 @@ struct AmbientCardsView: View {
     /// Accepting an offer opens the matching tool and consumes today's offer (the walk has no
     /// in-app tool — accepting it is simply a warm send-off).
     private func acceptGentleOffer(_ kind: GentleOfferKind) {
+        // The yes landed (the card leaves until tomorrow); felt at the tap, before any sheet opens.
+        FernletFeedback.system.play(.logged)
         store.dismissGentleOffer()
         switch kind {
         case .breathing:
