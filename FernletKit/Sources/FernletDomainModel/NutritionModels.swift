@@ -1698,11 +1698,20 @@ public nonisolated struct FoodSelectionPlan: Equatable {
 /// Normalizes separators ("&", commas, semicolons, "plus", most "with" clauses) to " and " — but
 /// keeps "with" attached when it introduces a quantity modifier of the preceding food ("burger
 /// with 2 patties") — then splits and trims, falling back to the whole description.
+///
+/// In an active ``LanguagePack``'s language its connectors split the same way (Spanish "y" like
+/// "and", "con" like "with", "con doble queso" kept attached), except inside a dish whose NAME
+/// carries one ("chili con carne", ``LanguagePack/joinedDishNames``).
 public nonisolated enum MealItemSplitter {
-    public static func items(from description: String) -> [String] {
+    /// Stands in for a space inside a protected dish name while the connectors are split, then
+    /// turns back into one. A private-use scalar: nothing a person types contains it.
+    private static let protectedSpace = "\u{E000}"
+
+    public static func items(from description: String, languages: InputLanguages = .current) -> [String] {
         let trimmed = description.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else { return [] }
-        let normalized = trimmed
+        let packs = languages.packs
+        let normalized = splittingPackConnectors(protectingDishNames(in: trimmed, packs: packs), packs: packs)
             .replacingOccurrences(of: " & ", with: " and ")
             .replacingOccurrences(of: ",", with: " and ")
             .replacingOccurrences(of: ";", with: " and ")
@@ -1717,9 +1726,52 @@ public nonisolated enum MealItemSplitter {
             )
         let pieces = normalized
             .components(separatedBy: " and ")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters)) }
+            .map {
+                $0.replacingOccurrences(of: protectedSpace, with: " ")
+                    .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+            }
             .filter { $0.count >= 3 }
         return pieces.isEmpty ? [trimmed] : pieces
+    }
+
+    /// `text` with each word gap inside the packs' ``LanguagePack/joinedDishNames`` replaced by
+    /// ``protectedSpace``, so no connector splits "chili con carne".
+    private static func protectingDishNames(in text: String, packs: [LanguagePack]) -> String {
+        var protected = text
+        // R2: bounded by the packs' dish names, a handful.
+        for name in packs.flatMap(\.joinedDishNames) {
+            let words = name.split(separator: " ").map { NSRegularExpression.escapedPattern(for: String($0)) }
+            let pattern = #"\b"# + words.map { "(\($0))" }.joined(separator: #"\s+"#) + #"\b"#
+            let template = (1...words.count).map { "$\($0)" }.joined(separator: protectedSpace)
+            protected = protected.replacingOccurrences(
+                of: pattern, with: template, options: [.regularExpression, .caseInsensitive]
+            )
+        }
+        return protected
+    }
+
+    /// `text` with each pack's joiners ("y") and companions ("con", unless a modifier or a numeral
+    /// follows) turned into " and ", the separator ``items(from:languages:)`` splits on.
+    private static func splittingPackConnectors(_ text: String, packs: [LanguagePack]) -> String {
+        var split = text
+        // R2: bounded by the active packs.
+        for pack in packs {
+            let joiners = pack.mealJoiners.map(NSRegularExpression.escapedPattern(for:)).joined(separator: "|")
+            let companions = pack.mealCompanions.map(NSRegularExpression.escapedPattern(for:)).joined(separator: "|")
+            let modifiers = pack.companionModifiers.map(NSRegularExpression.escapedPattern(for:)).joined(separator: "|")
+            if !joiners.isEmpty {
+                split = split.replacingOccurrences(
+                    of: #"\s+(?:"# + joiners + #")\s+"#, with: " and ", options: [.regularExpression, .caseInsensitive]
+                )
+            }
+            if !companions.isEmpty {
+                split = split.replacingOccurrences(
+                    of: #"\s+(?:"# + companions + #")\s+(?!(?:\d"# + (modifiers.isEmpty ? "" : "|" + modifiers) + #")\b)"#,
+                    with: " and ", options: [.regularExpression, .caseInsensitive]
+                )
+            }
+        }
+        return split
     }
 }
 
@@ -2080,7 +2132,8 @@ public nonisolated enum RecipeStepSanitizer {
     }
 }
 
-/// The canonical recipe units, with `normalized(_:)` mapping user/USDA spellings onto them.
+/// The canonical recipe units, with `normalized(_:languages:)` mapping user/USDA spellings — and,
+/// in an active ``LanguagePack``'s language, that language's unit words — onto them.
 ///
 /// Un-normalizable unit strings return nil and are treated as incompatible — quantity math never
 /// silently mixes units (see ``GroceryAggregation``'s merge rules).
@@ -2129,43 +2182,62 @@ public nonisolated enum RecipeUnit: String, CaseIterable, Identifiable, Sendable
         }
     }
 
-    public static func normalized(_ unit: String) -> RecipeUnit? {
-        switch unit.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
-        case "mg", "milligram", "milligrams":
-            return .milligram
-        case "g", "gram", "grams":
-            return .gram
-        case "kg", "kilogram", "kilograms":
-            return .kilogram
-        case "ml", "milliliter", "milliliters", "millilitre", "millilitres":
-            return .milliliter
-        case "oz", "ounce", "ounces":
-            return .ounce
-        case "lb", "lbs", "pound", "pounds":
-            return .pound
-        case "fl oz", "floz", "fluid ounce", "fluid ounces", "us fluid ounce", "us fluid ounces":
-            return .fluidOunce
-        case "l", "liter", "liters", "litre", "litres":
-            return .liter
-        case "cup", "cups":
-            return .cup
-        case "tbsp", "tablespoon", "tablespoons":
-            return .tablespoon
-        case "tsp", "teaspoon", "teaspoons":
-            return .teaspoon
-        case "glass", "glasses":
-            return .glass
-        case "slice", "slices":
-            return .slice
-        case "piece", "pieces":
-            return .piece
-        case "each", "unit", "units", "item", "items":
-            return .each
-        case "serving", "servings":
-            return .serving
-        default:
-            return nil
+    /// The unit `unit` spells, or nil when no active language spells a unit that way (an
+    /// un-normalizable unit is incompatible — see the type's doc).
+    ///
+    /// English first, through ``englishSpellings``, so every persisted and shared token round-trips in
+    /// every language; then each active ``LanguagePack``'s spellings (``InputLanguages/current``:
+    /// "tazas", "Cucharadita", "cda."), folded and with one trailing period dropped.
+    public static func normalized(_ unit: String, languages: InputLanguages = .current) -> RecipeUnit? {
+        let word = unit.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let english = englishSpellings[word] { return english }
+        let packs = languages.packs
+        guard !packs.isEmpty, !word.isEmpty else { return nil }
+        let folded = LanguagePack.folded(word.hasSuffix(".") ? String(word.dropLast()) : word)
+        // R2: bounded by the active packs.
+        for pack in packs {
+            if let unit = pack.unitSpellings[folded] { return unit }
         }
+        return nil
+    }
+
+    /// Every English spelling ``normalized(_:languages:)`` reads, with the unit it means: the persisted
+    /// tokens, the spellings USDA and recipe pages print, and the plural abbreviations "tbsps" / "tsps"
+    /// that the recipe line reader used to fold in a table of its own. FROZEN English matching inputs
+    /// (`LocalizationBoundaryTests.frozenRecipeUnitTokens`).
+    ///
+    /// The ONE English unit table (localization plan §5.2 consolidated the copies): the recipe line
+    /// reader takes its unit words from ``spellings(languages:)``, which is this plus the active packs.
+    public static let englishSpellings: [String: RecipeUnit] = [
+        "mg": .milligram, "milligram": .milligram, "milligrams": .milligram,
+        "g": .gram, "gram": .gram, "grams": .gram,
+        "kg": .kilogram, "kilogram": .kilogram, "kilograms": .kilogram,
+        "ml": .milliliter, "milliliter": .milliliter, "milliliters": .milliliter,
+        "millilitre": .milliliter, "millilitres": .milliliter,
+        "oz": .ounce, "ounce": .ounce, "ounces": .ounce,
+        "lb": .pound, "lbs": .pound, "pound": .pound, "pounds": .pound,
+        "fl oz": .fluidOunce, "floz": .fluidOunce, "fluid ounce": .fluidOunce, "fluid ounces": .fluidOunce,
+        "us fluid ounce": .fluidOunce, "us fluid ounces": .fluidOunce,
+        "l": .liter, "liter": .liter, "liters": .liter, "litre": .liter, "litres": .liter,
+        "cup": .cup, "cups": .cup,
+        "tbsp": .tablespoon, "tbsps": .tablespoon, "tablespoon": .tablespoon, "tablespoons": .tablespoon,
+        "tsp": .teaspoon, "tsps": .teaspoon, "teaspoon": .teaspoon, "teaspoons": .teaspoon,
+        "glass": .glass, "glasses": .glass,
+        "slice": .slice, "slices": .slice,
+        "piece": .piece, "pieces": .piece,
+        "each": .each, "unit": .each, "units": .each, "item": .each, "items": .each,
+        "serving": .serving, "servings": .serving
+    ]
+
+    /// Every spelling ``normalized(_:languages:)`` reads in `languages`: ``englishSpellings`` plus each
+    /// active pack's, English winning a clash (a test pins that none exists).
+    public static func spellings(languages: InputLanguages = .current) -> [String: RecipeUnit] {
+        var all = englishSpellings
+        // R2: bounded by the active packs and their tables.
+        for pack in languages.packs {
+            all.merge(pack.unitSpellings) { english, _ in english }
+        }
+        return all
     }
 }
 

@@ -2,7 +2,8 @@ import Foundation
 import FernletDomainModel
 
 /// The person's night: when the companion gets sleepy and when it wakes, as minutes after local
-/// midnight.
+/// midnight. The first ``windDownMinutes`` after bedtime are the sleepy wind-down; after that the
+/// companion is asleep until the wake time.
 ///
 /// Device-local and set in Settings (`CompanionEmotionPreferences` in the app); ``standard`` is the
 /// window used until the person picks their own. A bedtime after midnight (01:00) works the same as
@@ -20,6 +21,10 @@ public nonisolated struct CompanionSleepWindow: Equatable, Sendable {
     public let bedtimeMinute: Int
     /// When the companion wakes, in minutes after local midnight (0..<1440).
     public let wakeMinute: Int
+
+    /// How long the companion stays sleepy after bedtime before it falls asleep (owner decision
+    /// 2026-10-21). A window no longer than this is sleepy throughout and never asleep.
+    public static let windDownMinutes = 30
 
     /// Both minutes are folded into 0..<1440, so a caller can never build an out-of-range window.
     public init(bedtimeMinute: Int, wakeMinute: Int) {
@@ -40,10 +45,28 @@ public nonisolated struct CompanionSleepWindow: Equatable, Sendable {
         Self.folded(minuteOfDay - wakeMinute)
     }
 
-    /// Whether a local minute of the day falls inside the sleep window.
+    /// Whether a local minute of the day falls inside the sleep window — the sleepy wind-down and
+    /// the asleep night together (``isPastWindDown(atMinute:)`` tells them apart).
     public func isAsleep(atMinute minuteOfDay: Int) -> Bool {
         guard !isEmpty else { return false }
         return minutesSinceWake(minuteOfDay) >= awakeMinutes
+    }
+
+    /// Minutes since the most recent bedtime for a local minute of the day (0..<1440).
+    public func minutesSinceBedtime(_ minuteOfDay: Int) -> Int {
+        Self.folded(minuteOfDay - bedtimeMinute)
+    }
+
+    /// Whether a local minute of the day is inside the window AND at least ``windDownMinutes`` after
+    /// bedtime: the companion has fallen asleep.
+    public func isPastWindDown(atMinute minuteOfDay: Int) -> Bool {
+        guard isAsleep(atMinute: minuteOfDay) else { return false }
+        return minutesSinceBedtime(minuteOfDay) >= Self.windDownMinutes
+    }
+
+    /// The local minute of the day the companion falls asleep: ``windDownMinutes`` after bedtime.
+    public var fallsAsleepMinute: Int {
+        Self.folded(bedtimeMinute + Self.windDownMinutes)
     }
 
     private static func folded(_ minute: Int) -> Int {
@@ -152,9 +175,12 @@ public nonisolated struct CompanionEmotionInputs: Equatable, Sendable {
 /// The cases are listed in precedence order, and ``CompanionEmotionEngine/precedence`` is the same
 /// order spelled out as the explicit table the engine walks.
 public nonisolated enum CompanionEmotionRule: String, CaseIterable, Sendable {
+    /// Past the bedtime wind-down: asleep. Outranks even the unwell flag, because an asleep
+    /// companion shows nothing of the day (``CompanionEmotion/hidesTheDay``).
+    case asleep
     /// Today is marked unwell. No emotion: the sick face is the whole story.
     case unwell
-    /// Inside the person's sleep window.
+    /// Inside the person's sleep window, during the wind-down before the companion falls asleep.
     case bedtime
     /// A gentle day, and a friend's heart is glowing or the companion was just petted.
     case held
@@ -184,6 +210,7 @@ public nonisolated enum CompanionEmotionRule: String, CaseIterable, Sendable {
     /// What the rule shows when it fires — nil for ``unwell``, whose face is the state's own.
     public var emotion: CompanionEmotion? {
         switch self {
+        case .asleep: .asleep
         case .unwell: nil
         case .bedtime: .sleepy
         case .held: .comforted
@@ -220,23 +247,26 @@ public nonisolated struct CompanionEmotionMoment: Equatable, Sendable {
 ///
 /// | # | Rule | Shows | Fires when |
 /// |---|---|---|---|
-/// | 1 | `unwell` | — (the sick face) | today is marked unwell |
-/// | 2 | `bedtime` | sleepy | inside the sleep window |
-/// | 3 | `held` | comforted | gentle day, and a heart is glowing or the companion was just petted |
-/// | 4 | `hardDay` | sad | today's latest entry is tagged hard |
-/// | 5 | `tiredDay` | tired | today's latest entry is tagged tired |
-/// | 6 | `tense` | frazzled | body signals read tense, band thriving or okay |
-/// | 7 | `petted` | playful | petted in the last few minutes, day not gentle |
-/// | 8 | `hunger` | hungry | cues on, waking hours, band not resting, no meal for a while |
-/// | 9 | `thirst` | thirsty | cues on, waking hours, band not resting, water behind pace |
-/// | 10 | `heart` | loved | a friend's heart is glowing, day not gentle |
-/// | 11 | `brightDay` | happy | today's latest entry is tagged bright or good |
-/// | 12 | `lowBand` | tired | band tired or resting |
-/// | 13 | `calmBody` | calm | body signals read calm, band thriving or okay, day not gentle |
-/// | 14 | `thriving` | happy | band thriving, day not gentle |
+/// | 1 | `asleep` | asleep | inside the sleep window, past the 30-minute wind-down |
+/// | 2 | `unwell` | — (the sick face) | today is marked unwell |
+/// | 3 | `bedtime` | sleepy | inside the sleep window (the wind-down) |
+/// | 4 | `held` | comforted | gentle day, and a heart is glowing or the companion was just petted |
+/// | 5 | `hardDay` | sad | today's latest entry is tagged hard |
+/// | 6 | `tiredDay` | tired | today's latest entry is tagged tired |
+/// | 7 | `tense` | frazzled | body signals read tense, band thriving or okay |
+/// | 8 | `petted` | playful | petted in the last few minutes, day not gentle |
+/// | 9 | `hunger` | hungry | cues on, waking hours, band not resting, no meal for a while |
+/// | 10 | `thirst` | thirsty | cues on, waking hours, band not resting, water behind pace |
+/// | 11 | `heart` | loved | a friend's heart is glowing, day not gentle |
+/// | 12 | `brightDay` | happy | today's latest entry is tagged bright or good |
+/// | 13 | `lowBand` | tired | band tired or resting |
+/// | 14 | `calmBody` | calm | body signals read calm, band thriving or okay, day not gentle |
+/// | 15 | `thriving` | happy | band thriving, day not gentle |
 /// | — | — | — | otherwise: the plain state face |
 ///
-/// Why this order: the unwell flag outranks everything; bedtime outranks the day (nobody is nudged
+/// Why this order: asleep outranks everything, the unwell flag included, because an asleep
+/// companion shows nothing of the day (owner decision 2026-10-21: "Tomorrow is a new day"); the
+/// unwell flag outranks everything else, the sleepy wind-down among it; bedtime outranks the day (nobody is nudged
 /// about food at night); what the person SAID about the day (hard, tired) outranks every signal the
 /// app infers; the body's reading outranks a pet; a pet is answered at once; needs outrank a
 /// friend's warmth; and the plain band comes last, so a morning with nothing logged yet shows
@@ -265,7 +295,7 @@ public enum CompanionEmotionEngine {
     /// The precedence table, highest first. The engine walks it top to bottom and the first rule
     /// that fires decides; `CompanionEmotionEngineTests` pins it row by row.
     public static let precedence: [CompanionEmotionRule] = [
-        .unwell, .bedtime, .held, .hardDay, .tiredDay, .tense, .petted,
+        .asleep, .unwell, .bedtime, .held, .hardDay, .tiredDay, .tense, .petted,
         .hunger, .thirst, .heart, .brightDay, .lowBand, .calmBody, .thriving
     ]
 
@@ -289,6 +319,7 @@ public enum CompanionEmotionEngine {
         let cuesOpen = inputs.appetiteCuesEnabled && inputs.state != .resting
             && isInCueWindow(inputs.sleepWindow, clock: clock)
         switch rule {
+        case .asleep: return inputs.sleepWindow.isPastWindDown(atMinute: clock.minuteOfDay)
         case .unwell: return inputs.state == .sick
         case .bedtime: return inputs.sleepWindow.isAsleep(atMinute: clock.minuteOfDay)
         case .held: return gentle && (isHeartGlowing(inputs, clock) || isPetted(inputs, clock))
@@ -322,7 +353,7 @@ public enum CompanionEmotionEngine {
     /// as it was then; nothing renders them.
     ///
     /// After local midnight the next day has not happened yet, so only the clock is known: the
-    /// timeline shows *sleepy* inside the sleep window and nothing otherwise, and ends at the next
+    /// timeline shows *sleepy* in the wind-down, *asleep* after it, and nothing otherwise, and ends at the next
     /// wake time. A moment is always emitted AT that midnight, because a reader scopes each moment to
     /// the day it falls on (the widget never lets one day's emotion leak into the next). Pass
     /// ``CompanionEmotionInputs/widgetSafe`` inputs for anything that leaves the app.
@@ -374,6 +405,8 @@ public enum CompanionEmotionEngine {
             dayStart, wake, nextDayStart, nextWake,
             instant(minute: window.bedtimeMinute, of: dayStart, calendar: calendar),
             instant(minute: window.bedtimeMinute, of: nextDayStart, calendar: calendar),
+            instant(minute: window.fallsAsleepMinute, of: dayStart, calendar: calendar),
+            instant(minute: window.fallsAsleepMinute, of: nextDayStart, calendar: calendar),
             wake.addingTimeInterval(TimeInterval(cueMinutes * 60)),
             inputs.heartGlowUntil, inputs.playfulUntil
         ]
@@ -386,9 +419,12 @@ public enum CompanionEmotionEngine {
 
     // MARK: - Rule helpers
 
-    /// What the clock alone says once the day has rolled over: sleepy inside the window, else nothing.
+    /// What the clock alone says once the day has rolled over: asleep past the wind-down, sleepy
+    /// during it, else nothing.
     static func clockOnlyEmotion(_ window: CompanionSleepWindow, at instant: Date, calendar: Calendar) -> CompanionEmotion? {
-        window.isAsleep(atMinute: EmotionClock.minuteOfDay(instant, calendar: calendar)) ? .sleepy : nil
+        let minute = EmotionClock.minuteOfDay(instant, calendar: calendar)
+        if window.isPastWindDown(atMinute: minute) { return .asleep }
+        return window.isAsleep(atMinute: minute) ? .sleepy : nil
     }
 
     /// Waking hours, minus the quiet evening before bedtime.

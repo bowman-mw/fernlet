@@ -14,6 +14,7 @@
 //                                  (FernletDomainModel/CompanionEmotion.swift, `isWidgetPublishable`)
 //   - `WidgetEmotionTimeline`      mirrors the day-scoped lookup `CompanionEmotionEngine.emotion(in:at:)`
 //   - `WidgetSnapshot`             mirrors Fernlet/WidgetBridge.swift `WidgetSnapshot`
+//   - `WidgetCompanionLook`        mirrors Fernlet/WidgetBridge.swift `WidgetSnapshot.CompanionLook`
 //   - `PendingWidgetAction`        mirrors Fernlet/WidgetBridge.swift `PendingWidgetAction`
 //   - `WidgetDayKey`               mirrors FernletFoundation.FernletDate.dayKey ("yyyy-MM-dd", en_US_POSIX)
 //   - JSON codecs                  mirror the app-group queue convention (iso8601 dates, sorted keys)
@@ -76,7 +77,7 @@ enum WidgetCompanionState: String {
 ///
 /// The raw values are the persisted contract, exactly as the app writes them into each
 /// `EmotionMoment.emotionRaw`; an unknown raw value decodes to nil and the widget draws the plain
-/// state face. Only six of the app's eleven emotions ever reach this process — the body-signal
+/// state face. Only seven of the app's twelve emotions ever reach this process — the body-signal
 /// (`calm`, `frazzled`), friend-heart (`loved`, `comforted`) and petting (`playful`) ones stay in
 /// the app, so they have no case here. `LocalizationBoundaryTests` pins this list against the app's
 /// `isWidgetPublishable` set.
@@ -85,8 +86,18 @@ enum WidgetCompanionEmotion: String {
     case sad
     case tired
     case sleepy
+    /// Fast asleep after the bedtime wind-down (owner decision 2026-10-21) — see ``hidesTheDay``.
+    case asleep
     case hungry
     case thirsty
+
+    /// Whether this emotion hides how the day went — the twin of the app's
+    /// `CompanionEmotion.hidesTheDay`. True only for ``asleep``: every family then draws the neutral
+    /// night colour, writes and speaks "Asleep" with no state, drops the care reading, and the Lock
+    /// Screen may draw it (it says nothing about the day).
+    var hidesTheDay: Bool {
+        self == .asleep
+    }
 
     /// The emotion's localized standalone name ("Sleepy") — the display fork of the frozen token.
     ///
@@ -102,6 +113,8 @@ enum WidgetCompanionEmotion: String {
                             comment: "Companion feeling: low on energy")
         case .sleepy: String(localized: "companionEmotion.sleepy", defaultValue: "Sleepy",
                              comment: "Companion feeling during the person's bedtime hours")
+        case .asleep: String(localized: "companionEmotion.asleep", defaultValue: "Asleep",
+                             comment: "Companion feeling once it has fallen asleep for the night. Says nothing about how the day went")
         case .hungry: String(localized: "companionEmotion.hungry", defaultValue: "Hungry",
                              comment: "Companion feeling when no meal has been logged in a while")
         case .thirsty: String(localized: "companionEmotion.thirsty", defaultValue: "Thirsty",
@@ -120,6 +133,8 @@ enum WidgetCompanionEmotion: String {
                             comment: "Follows the companion's state: 'Tired, feeling tired'")
         case .sleepy: String(localized: "companionEmotion.feeling.sleepy", defaultValue: "feeling sleepy",
                              comment: "Follows the companion's state: 'Okay, feeling sleepy'")
+        case .asleep: String(localized: "companionEmotion.feeling.asleep", defaultValue: "fast asleep",
+                             comment: "The companion's feeling once asleep. Never spoken after a state: an asleep companion is read as 'Asleep' alone")
         case .hungry: String(localized: "companionEmotion.feeling.hungry", defaultValue: "feeling hungry",
                              comment: "Follows the companion's state: 'Okay, feeling hungry'")
         case .thirsty: String(localized: "companionEmotion.feeling.thirsty", defaultValue: "feeling thirsty",
@@ -153,9 +168,34 @@ enum WidgetEmotionTimeline {
     }
 }
 
+/// The person's companion look, as the widget draws it: the app's `CompanionAppearance` reduced to
+/// the four values a widget-sized companion can show.
+///
+/// Byte-identical twin of the app-side `WidgetSnapshot.CompanionLook` (App/Fernlet/WidgetBridge.swift):
+/// the JSON keys are the contract. The two raw strings are the app's FROZEN `CompanionBodyStyle` and
+/// `CompanionAccessory` tokens — never translated, never shown; an unknown token (a newer app's
+/// cosmetic) falls back to the round body and no topper rather than failing the decode. A colour
+/// is a resolved `#RRGGBB`, or nil when the slot follows the companion's state.
+struct WidgetCompanionLook: Codable, Equatable {
+    /// The app's `CompanionBodyStyle` token: "circle", "softBlob", "pear" or "puddle".
+    var bodyStyleRaw: String
+    /// The body's fixed colour, or nil to wear the state's colour (the app's default).
+    var bodyColorHex: String?
+    /// The app's `CompanionAccessory` token: "none", "sprout", "flower" or "glasses".
+    var accessoryRaw: String
+    /// The topper's fixed colour, or nil to wear the state's colour.
+    var accessoryColorHex: String?
+
+    /// The plain companion: a round body in the state's colour with a fern sprout — the app's
+    /// `CompanionAppearance.standard`, used before the app has published a look.
+    static let standard = WidgetCompanionLook(bodyStyleRaw: "circle", bodyColorHex: nil,
+                                              accessoryRaw: "sprout", accessoryColorHex: "#72A364")
+}
+
 /// The benign outbound snapshot the app mirrors into the app-group container.
 ///
-/// PRIVACY: wellness score + water + macro grams + the companion's state and emotion tokens ONLY —
+/// PRIVACY: wellness score + water + macro grams + the companion's state and emotion tokens, name and
+/// look ONLY —
 /// never journal text, cycle, stress, or intimacy data. The emotion timeline can reflect the day's
 /// journal mood TAG, the meal and water logging gaps and the bedtime window; the body-signal emotions
 /// never enter it. Written by the app's `WidgetSnapshotMirror` on every snapshot save and read back by
@@ -190,6 +230,11 @@ struct WidgetSnapshot: Codable, Equatable {
     /// The companion's emotions across the day (app side: `CompanionEmotionEngine.timeline`).
     /// ADDITIVE (2026-09-24) and optional: a file an older app wrote simply has no emotions.
     var companionEmotionTimeline: [EmotionMoment]? = nil
+    /// The companion's name; nil when it has none. ADDITIVE (2026-10-21) and optional. Carried here
+    /// even by a family that does not draw it, so the optimistic water bump's re-encode keeps it.
+    var companionName: String? = nil
+    /// The person's companion look; nil draws ``WidgetCompanionLook/standard``. ADDITIVE (2026-10-21).
+    var companionLook: WidgetCompanionLook? = nil
 
     var companionState: WidgetCompanionState? { WidgetCompanionState(rawValue: companionStateRaw) }
 

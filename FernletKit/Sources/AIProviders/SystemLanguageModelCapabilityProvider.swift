@@ -22,8 +22,8 @@ public struct SystemLanguageModelCapabilityProvider: AIDeviceCapabilityProviding
     public init() {}
 
     /// The device's current rung availability: the on-device Foundation model probed live via
-    /// `isOnDeviceModelAvailable`; Private Cloud Compute and external providers pinned `false`
-    /// until their iOS 27 APIs exist.
+    /// `isOnDeviceModelAvailable` (which includes the app-language gate, ``OnDeviceModelLanguage``);
+    /// Private Cloud Compute and external providers pinned `false` until their iOS 27 APIs exist.
     public var capability: AIDeviceCapability {
         AIDeviceCapability(
             onDeviceFoundationModels: Self.isOnDeviceModelAvailable,
@@ -39,16 +39,32 @@ public struct SystemLanguageModelCapabilityProvider: AIDeviceCapabilityProviding
         Self.onDeviceModelAvailability
     }
 
-    /// `true` when the default `SystemLanguageModel` reports `.available` — the canonical
-    /// availability probe (``FoodSelectionAvailability`` delegates here); `false` on incapable
-    /// hardware or SDKs without `FoundationModels`.
+    /// `true` when the default `SystemLanguageModel` reports `.available` AND supports the app's
+    /// language (``OnDeviceModelLanguage``) — the canonical availability probe
+    /// (``FoodSelectionAvailability`` delegates here); `false` on incapable hardware, SDKs without
+    /// `FoundationModels`, or an app language the model lacks.
     static var isOnDeviceModelAvailable: Bool {
         onDeviceModelAvailability == .available
     }
 
+    /// The model's availability for this app: ``systemModelAvailability``, then the language gate.
+    static var onDeviceModelAvailability: OnDeviceModelAvailability {
+        availability(model: systemModelAvailability, appLanguageSupported: OnDeviceModelLanguage.supportsAppLanguage)
+    }
+
+    /// The language gate over a model availability: a ready model that does not support the app's
+    /// language is `.languageNotSupported`; every other answer passes through unchanged. Pure, so a
+    /// test can pin it without a model.
+    nonisolated static func availability(
+        model: OnDeviceModelAvailability, appLanguageSupported: Bool
+    ) -> OnDeviceModelAvailability {
+        guard model == .available, !appLanguageSupported else { return model }
+        return .languageNotSupported
+    }
+
     /// The default `SystemLanguageModel`'s availability, its unavailable reason mapped one to one; an
     /// SDK without `FoundationModels` is a device that cannot run the model.
-    static var onDeviceModelAvailability: OnDeviceModelAvailability {
+    static var systemModelAvailability: OnDeviceModelAvailability {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
             switch SystemLanguageModel.default.availability {

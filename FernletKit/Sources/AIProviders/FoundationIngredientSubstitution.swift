@@ -29,6 +29,24 @@ import FoundationModels
 /// world-knowledge → catalog handoff without `FoundationModels`.
 public enum FoundationIngredientSubstitutionModel {
 
+    /// The substitution instructions — then, outside English, the line saying the recipe may be in
+    /// the app's language: food names stay English, because the caller resolves each one against the
+    /// English catalog; each reason, which the person reads, is written in their language.
+    nonisolated static func instructions(for payload: IngredientSubstitutionPayload) -> String {
+        AIPromptLanguage.joined(
+            """
+            You help a home cook swap one ingredient in a recipe for another.
+            You are given the recipe name and the single ingredient to replace.
+            Using general culinary knowledge, name the best few real, common foods that could stand in for
+            it in THIS dish, best first (e.g. butter -> olive oil or coconut oil; buttermilk -> yogurt).
+            Output food NAMES only — plain grocery-store food names a cook could buy.
+            Give each pick a short, friendly reason (a few words). Never invent a food that does not exist.
+            Do not output any quantities, measurements, or nutrition numbers.
+            """,
+            payload.promptLanguage.inputInstruction(keepingEnglish: "food names", writingInLanguage: "each reason")
+        )
+    }
+
     /// Runs the substitution model for one ingredient. `resolve` maps a model-proposed food name to local
     /// catalog candidates (the caller backs it with `FoodCatalog.candidates(for:)`); the first match for
     /// each name is bound. Returns the bound suggestions (ordered as the model ranked them), or `nil` when
@@ -44,15 +62,7 @@ public enum FoundationIngredientSubstitutionModel {
             guard let destination = gate.dispatch(tier: .standard, userInvoked: true) else { return nil }
             let auditKind = payload.payloadKind
             let auditFields = payload.includedFieldNames
-            let instructions = """
-            You help a home cook swap one ingredient in a recipe for another.
-            You are given the recipe name and the single ingredient to replace.
-            Using general culinary knowledge, name the best few real, common foods that could stand in for
-            it in THIS dish, best first (e.g. butter -> olive oil or coconut oil; buttermilk -> yogurt).
-            Output food NAMES only — plain grocery-store food names a cook could buy.
-            Give each pick a short, friendly reason (a few words). Never invent a food that does not exist.
-            Do not output any quantities, measurements, or nutrition numbers.
-            """
+            let instructions = Self.instructions(for: payload)
             let prompt = """
             Recipe: \(payload.recipeName)
             Replace this ingredient: \(payload.ingredientToReplace)

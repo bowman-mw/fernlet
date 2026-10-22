@@ -21,7 +21,7 @@
 
 <!--
   GENERATED PAGE — do not edit this prose in isolation.
-  Source of truth: Docs/Privacy-Policy.md (effective October 20, 2026).
+  Source of truth: Docs/Privacy-Policy.md (effective October 21, 2026).
   The same text is pinned in three places and they must always match:
     1. Docs/Privacy-Policy.md               (source)
     2. App/Fernlet/PrivacyPolicyView.swift  (in-app copy)
@@ -43,6 +43,9 @@
   a lift that stopped progressing; age and resting heart rate for heart-rate zones), adds heart rate to the
   read list and describes the opt-in live heart rate during guided cardio, held in memory only; §2 lists the
   workout details and workout settings Fernlet stores.
+  Revised 2026-10-21 (DRAFT for the owner's review, companion widgets): §3 the companion falls asleep after the
+  bedtime wind-down — seven feelings on the Home Screen widget, and asleep, which says nothing about the day,
+  the one feeling the Lock Screen may show.
 -->
 
 <nav id="nav">
@@ -68,7 +71,7 @@
   <div class="eyebrow">Privacy policy</div>
   <h1>What Fernlet knows about you.</h1>
   <div class="policy-meta">
-    <span>Effective October 20, 2026</span>
+    <span>Effective October 21, 2026</span>
     <span>Michael Bowman Olay</span>
     <a href="mailto:fernletapp@gmail.com">fernletapp@gmail.com</a>
   </div>
@@ -162,7 +165,7 @@
       <p><strong>Heart rate during guided cardio (off by default).</strong> If you turn on "Heart rate during cardio", and Fernlet's workout sharing with Apple Health is on, each guided cardio part starts an Apple Health workout session that reads your heart rate live from a heart-rate sensor paired with your iPhone. Fernlet shows the latest reading against the part's target zone — on the workout screen, and on the Lock Screen and in the Dynamic Island while the run lasts — and, if you also turn on "Zone nudges", gives a light tap when it has stayed outside the zone for half a minute. Fernlet holds the reading in memory only: it is never saved to your records, never synced, and never included in an export, and Fernlet writes no heart-rate value to Apple Health. When the cardio ends, the session's own workout record is discarded, so the run appears in Apple Health once, as the workout you log; Apple Health keeps the heart-rate readings your sensor recorded, as it does for any workout app. Both switches are kept on this device and never synced.</p>
       <p>Health data accessed through HealthKit is used only on the device that read it, to compute your companion's state, your derived trends, your nutrition targets, and your workout suggestions. It is <strong>never</strong> used for advertising, never sold, and never shared with us or any third party. Your daily wellbeing score, your companion's state, the coins you earn for an active day, and today's training readiness are Fernlet's own results, worked out partly from these readings; if you use iCloud sync they sync with the rest of your app data, while the readings themselves never do. Deleting Fernlet does not delete samples Fernlet wrote to Apple Health — remove those in the Health app if you wish.</p>
       <p><strong>Workout suggestions.</strong> Fernlet's workout planner uses these readings too, on your device. Your sleep, resting heart rate and heart-rate variability over the last few days set today's training readiness — whether today suits light, moderate or hard training — which shapes the workout Fernlet suggests. When a lift stops progressing, your sleep over the last two weeks (from your own sleep log first, then Apple Health) is one of the things Fernlet checks before suggesting what to change. And your age and resting heart rate set the heart-rate zones guided cardio aims for, unless you enter your own maximum heart rate.</p>
-      <p><strong>Your companion's feelings.</strong> Your companion also shows how it feels right now — happy, sad, tired, sleepy, hungry, thirsty and a few more. Fernlet works each feeling out on your device, moment to moment, from things the app already holds: the mood tag on today's journal entry or check-in, how long it has been since you logged a meal or some water, the bedtime you set, a friend's heart, a recent pet, and — only if you turned on "Notice body tension" — that reading. A feeling is never saved to your records, never synced to iCloud, never shown to friends (they still see only thriving, okay or struggling), and never included in an export. The Home Screen widget can show six of these feelings (happy, sad, tired, sleepy, hungry and thirsty); to do that, the app keeps a short list of today's feelings in the file it shares with the widget on your device, which <strong>Delete Everything</strong> removes. Lock Screen widgets show only your companion's daily state, never a feeling. You can turn the hunger and thirst cues off, and set your companion's bedtime, in Settings → Appearance → Companion feelings; those settings are kept on this device and never synced.</p>
+      <p><strong>Your companion's feelings.</strong> Your companion also shows how it feels right now — happy, sad, tired, sleepy, hungry, thirsty and a few more. Fernlet works each feeling out on your device, moment to moment, from things the app already holds: the mood tag on today's journal entry or check-in, how long it has been since you logged a meal or some water, the bedtime you set, a friend's heart, a recent pet, and — only if you turned on "Notice body tension" — that reading. A feeling is never saved to your records, never synced to iCloud, never shown to friends (they still see only thriving, okay or struggling), and never included in an export. The Home Screen widget can show seven of these feelings (happy, sad, tired, sleepy, asleep, hungry and thirsty); to do that, the app keeps a short list of today's feelings in the file it shares with the widget on your device, which <strong>Delete Everything</strong> removes. Lock Screen widgets show only your companion's daily state, never a feeling, except asleep, which shows nothing about your day. You can turn the hunger and thirst cues off, and set your companion's bedtime, in Settings → Appearance → Companion feelings; those settings are kept on this device and never synced.</p>
     </section>
 
     <section>

@@ -1055,6 +1055,32 @@ struct LocalizationBoundaryTests {
         #expect(WorkoutSplit.savingDefaultPlanName("Upper workout") == nil, "the frozen spelling is matched exactly")
     }
 
+    /// An activity plan's one step DRAWS in the user's language and stays stored as the frozen English
+    /// default (2026-10-21).
+    ///
+    /// The plan sheet saves an activity plan's `exercises` as the type's `defaultName`, and completing the
+    /// plan copies it onto the logged row. `displayedExerciseLines` swaps exactly that line on an activity
+    /// row of that type; another type's default, a typed line and every strength row's lines draw as stored.
+    @Test func storedActivityPlanStepsDrawThroughTheDisplayHelper() {
+        for type in WorkoutActivityType.allCases {
+            let planned = PlannedWorkout(name: type.defaultName, split: .workout, source: .user, mode: .activity,
+                                         activityType: type, exercises: type.defaultName, notes: "", duration: 30)
+            #expect(planned.displayedExerciseLines == [type.displayName], "a \(type) plan's step draws localized")
+            let completion = planned.completedWorkout
+            #expect(completion.displayedExerciseLines == [type.displayName], "...and so does its completion's")
+            #expect(completion.exercises == type.defaultName, "completing a plan stores its step unchanged")
+        }
+        let cycling = WorkoutActivityType.cycling, running = WorkoutActivityType.running
+        let mixed = PlannedWorkout(name: "Ride", split: .workout, source: .user, mode: .activity, activityType: cycling,
+                                   exercises: "\(cycling.defaultName)\n\(running.defaultName)\nEasy spin",
+                                   notes: "", duration: nil)
+        #expect(mixed.displayedExerciseLines == [cycling.displayName, running.defaultName, "Easy spin"],
+                "only the row's own type's default swaps")
+        let strength = PlannedWorkout(name: "Legs", split: .lower, source: .user,
+                                      exercises: "\(running.defaultName)\nSquat - 3 x 5", notes: "", duration: nil)
+        #expect(strength.displayedExerciseLines == strength.exerciseLines, "a strength plan's lines are the user's")
+    }
+
     /// Every site that DRAWS a workout's or plan's name reads `displayedName`, and every name field
     /// seeded from one saves back through `savedName(editing:)` (2026-10-19).
     ///
@@ -1081,6 +1107,9 @@ struct LocalizationBoundaryTests {
             ("App/Fernlet/JournalView.swift", "Text(workout.displayedName)", 1, "the Journal day's Movement rows"),
             ("App/Fernlet/AmbientCards.swift", "workout.displayedName.trimmingCharacters", 1, "the Remember this one? card"),
             ("App/Fernlet/CoachPlanReviewView.swift", "resolved.before.displayedName", 4, "the coach-plan diff's workout titles"),
+            ("App/Fernlet/MoveView.swift", "plannedWorkout.displayedExerciseLines", 1, "PlannedWorkoutRow's step preview"),
+            ("App/Fernlet/MoveView.swift", "workout.displayedExerciseLines", 2, "WorkoutRow's exercise rows"),
+            ("App/Fernlet/CoachPlanReviewView.swift", ".displayedExerciseLines", 3, "the coach-plan diff's before and after lines"),
             ("App/Fernlet/CoachPlanImporter.swift", "\\(found.workout.displayedName)\\\"", 2, "the coach-plan review's skipped-change lines"),
             ("App/Fernlet/ExchangeIntentService.swift", "name = workout.displayedName", 1, "the Shortcuts planned-workout picker"),
         ]
@@ -1335,24 +1364,39 @@ struct LocalizationBoundaryTests {
     /// of the English lines a recipe page publishes, and the count words decide that a line binds
     /// "each" — matching inputs, never display text.
     @Test func frozenRecipeImportUnitWords() {
+        // The English unit table both `RecipeUnit.normalized` and the importer's line reader take
+        // their words from (localization plan §5.2 consolidated the importer's own regex list and its
+        // "tbsps"/"tsps" fold table into it).
         #expect(
-            RecipeWebImporter.unitAlternatives == [
-                #"fluid\s+ounces?"#, #"extra\s+large"#, #"extra\s+small"#, "milliliters?", "millilitres?",
-                "tablespoons?", "kilograms?", "milligrams?", "teaspoons?", #"fl\s*oz"#, "glass(?:es)?", "ounces?",
-                "pounds?", "liters?", "litres?", "grams?", "slices?", "pieces?", "cloves?", "medium", "large",
-                "small", "whole", "tbsps?", "tsps?", "cups?", "each", "lbs?", "mg", "kg", "ml", "oz", "g", "l"
+            RecipeUnit.englishSpellings.keys.sorted() == [
+                "cup", "cups", "each", "fl oz", "floz", "fluid ounce", "fluid ounces", "g", "glass",
+                "glasses", "gram", "grams", "item", "items", "kg", "kilogram", "kilograms", "l", "lb", "lbs",
+                "liter", "liters", "litre", "litres", "mg", "milligram", "milligrams", "milliliter",
+                "milliliters", "millilitre", "millilitres", "ml", "ounce", "ounces", "oz", "piece", "pieces",
+                "pound", "pounds", "serving", "servings", "slice", "slices", "tablespoon", "tablespoons",
+                "tbsp", "tbsps", "teaspoon", "teaspoons", "tsp", "tsps", "unit", "units",
+                "us fluid ounce", "us fluid ounces"
             ],
             """
-            The importer's unit alternatives changed. They are matched against the English ingredient \
-            lines recipe pages publish, LONGEST FIRST — a short unit placed before a longer one that \
-            starts the same way ("g" before "grams") takes the wrong word again.
+            The English unit spellings changed. They are matched against the English ingredient lines \
+            recipe pages publish and the units USDA prints; a renamed spelling stops reading a unit, \
+            and the importer's line reader is built from this same table.
             """
         )
         #expect(RecipeWebImporter.countWords == [
             "clove", "cloves", "extra large", "extra small", "large", "medium", "small", "whole"
         ])
-        #expect(RecipeWebImporter.unitSpellingFolds == ["tbsps": "tbsp", "tsps": "tsp"],
-                "plural abbreviations read out of English recipe lines — matching inputs, never display text")
+        // The reader tries LONGEST FIRST — a short unit placed before a longer one that starts the same
+        // way ("g" before "grams") takes the wrong word again — and still reads every word the old
+        // hand-kept list did.
+        let english = RecipeWebImporter.unitAlternatives(languages: .englishOnly)
+        let lengths = english.map { $0.replacingOccurrences(of: #"\s+"#, with: " ").count }
+        #expect(lengths == lengths.sorted(by: >))
+        for word in ["fluid ounces", "extra large", "milliliters", "tablespoons", "fl oz", "floz", "glasses",
+                     "pounds", "litres", "cloves", "medium", "whole", "tbsps", "tsps", "cups", "lbs", "g", "l"] {
+            #expect(english.contains(NSRegularExpression.escapedPattern(for: word)
+                .replacingOccurrences(of: " ", with: #"\s+"#)), "the line reader lost \(word)")
+        }
     }
 
     /// The notes Fernlet itself writes onto a meal or a recipe (Spanish round step 2, 2026-10-20).
@@ -1781,11 +1825,11 @@ struct LocalizationBoundaryTests {
 
     /// The app-side emotion raw values (2026-09-24), frozen once for parts B and C.
     static let frozenCompanionEmotionRawValues = [
-        "happy", "sad", "tired", "sleepy", "hungry", "thirsty", "loved", "comforted", "playful", "calm", "frazzled"
+        "happy", "sad", "tired", "sleepy", "asleep", "hungry", "thirsty", "loved", "comforted", "playful", "calm", "frazzled"
     ]
 
     /// The emotions the widget snapshot may carry — the `WidgetCompanionEmotion` mirror, one-for-one.
-    static let frozenWidgetEmotionRawValues = ["happy", "sad", "tired", "sleepy", "hungry", "thirsty"]
+    static let frozenWidgetEmotionRawValues = ["happy", "sad", "tired", "sleepy", "asleep", "hungry", "thirsty"]
 
     /// Repo-relative path of the app-side `CompanionEmotion` declaration.
     static let companionEmotionPath = "FernletKit/Sources/FernletDomainModel/CompanionEmotion.swift"
@@ -1902,7 +1946,7 @@ struct LocalizationBoundaryTests {
 
     /// Every emotion's display pair — `displayName` and `feelingPhrase` — is a localized fork keyed
     /// `companionEmotion.<token>` / `companionEmotion.feeling.<token>`, in the domain module's
-    /// catalog and, for the publishable six, in the widget's catalog too.
+    /// catalog and, for the publishable seven, in the widget's catalog too.
     ///
     /// The source half proves the fork exists; the catalog half proves the sync harvested it, which
     /// is the step a `String` parameter or a missing `bundle:` silently skips.
@@ -3673,6 +3717,11 @@ struct LocalizationBoundaryTests {
     /// form, and every language with more than two (Russian, Polish, Arabic, Welsh) is stuck
     /// agreeing in the wrong number forever. English is already wrong at "1 coins".
     static let pluralRuledKeys: [HarvestedKey] = [
+        // Widget redesign (2026-10-21): the water card's target line. Its spoken twin,
+        // `widget.water.progress`, carries two numbers and plurals the second through a
+        // substitution, which this one-count check does not read.
+        HarvestedKey(catalog: "App/FernletWidgets/Localizable.xcstrings", key: "widget.water.ofTarget",
+                     source: "the water widget's target line"),
         HarvestedKey(catalog: "FernletKit/Sources/FernletUI/Localizable.xcstrings",
                      key: "ui.coins.balance",
                      source: "the coin pill's spoken balance"),
@@ -6511,6 +6560,10 @@ struct LocalizationBoundaryTests {
         MasculineDefault(
             path: "App/Fernlet/FernletStore.swift", line: "let address = self?.effectiveUserProfile.sex.termOfAddress ?? .masculine",
             reason: "The store owns the cue director, so it outlives every schedule; the fallback cannot run, and reads as an unanswered profile."),
+        MasculineDefault(
+            path: "FernletKit/Sources/AIContext/AIPromptLanguage.swift",
+            line: "if address == .masculine { return \"When a word describes the person, use its masculine form.\" }",
+            reason: "A comparison, not a default: the prompt line spells out the term the caller passed, which every prose call site reads from effectiveUserProfile.sex."),
     ]
 
     /// No `.masculine` in shipping code but the pinned ones, each with its reason.

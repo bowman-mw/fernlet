@@ -365,7 +365,12 @@ struct ActivitiesView: View {
                                                       label: @escaping (T) -> String) -> some View {
         FlowLayout(spacing: 8) {
             ForEach(options) { option in
-                Button(label(option)) { onSelect(option) }
+                Button(label(option)) {
+                    // B6: a real change ticks, through the shared helper; the caller still stores it.
+                    var choice = selected
+                    FernletFeedback.system.select(option, in: &choice)
+                    onSelect(choice)
+                }
                     .buttonStyle(ChipButtonStyle(selected: option == selected))
             }
         }

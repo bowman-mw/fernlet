@@ -963,7 +963,7 @@ struct WorkoutSheet: View {
     private var kindChips: some View {
         FlowLayout(spacing: 8) {
             ForEach(WorkoutMode.allCases) { mode in
-                Button { logMode = mode } label: { kindChipLabel(mode) }
+                Button { FernletFeedback.system.select(mode, in: &logMode) } label: { kindChipLabel(mode) }
                     .buttonStyle(ChipButtonStyle(selected: logMode == mode))
                     .accessibilityIdentifier("workout.kind.\(mode.rawValue)")
             }
@@ -2386,7 +2386,7 @@ struct WorkoutSuggestionSheet: View {
                 // `displayWord` is the localized token-free half; `.localizedCapitalized` raises it
                 // for a standalone chip using the USER's locale rules (Turkish dotless i included),
                 // which `String.capitalized` does not.
-                Button(intensity.displayWord.localizedCapitalized) { energy = intensity }
+                Button(intensity.displayWord.localizedCapitalized) { FernletFeedback.system.select(intensity, in: &energy) }
                     .buttonStyle(ChipButtonStyle(selected: energy == intensity))
             }
         }
@@ -2676,9 +2676,9 @@ struct WorkoutRow: View {
 
     /// The logged exercise lines, the target summary, and any note.
     @ViewBuilder private var detailLines: some View {
-        if !workout.exerciseLines.isEmpty {
+        if !workout.displayedExerciseLines.isEmpty {
             VStack(spacing: 8) {
-                ForEach(Array(workout.exerciseLines.enumerated()), id: \.offset) { _, exercise in
+                ForEach(Array(workout.displayedExerciseLines.enumerated()), id: \.offset) { _, exercise in
                     WorkoutExerciseRow(exercise: exercise)
                 }
             }
@@ -2867,7 +2867,7 @@ struct EditWorkoutSheet: View {
         SheetField("Intensity") {
             FlowLayout(spacing: 8) {
                 ForEach(WorkoutIntensity.allCases) { level in
-                    Button(level.displayWord.localizedCapitalized) { intensity = level }
+                    Button(level.displayWord.localizedCapitalized) { FernletFeedback.system.select(level, in: &intensity) }
                         .buttonStyle(ChipButtonStyle(selected: intensity == level))
                         .accessibilityIdentifier("workout.edit.intensity.\(level.rawValue)")
                 }
@@ -4592,11 +4592,10 @@ struct PlannedWorkoutRow: View {
     /// Held here rather than at each call site so both the Move root and the day detail inherit it.
     @State private var pendingDestructiveAction: DestructiveConfirmation?
 
+    /// The plan's lines as drawn: an activity plan's one step reads in the user's language
+    /// (``PlannedWorkout/displayedExerciseLines``), never as its stored English default.
     private var stepLines: [String] {
-        plannedWorkout.exercises
-            .components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+        plannedWorkout.displayedExerciseLines
     }
 
     /// The complete button, or the faded dot a future day shows in its place.
@@ -4968,7 +4967,7 @@ struct WorkoutPlanSheet: View {
         SheetField("Split") {
             FlowLayout(spacing: 8) {
                 ForEach(strengthSplits) { option in
-                    Button(option.title) { split = option }
+                    Button(option.title) { FernletFeedback.system.select(option, in: &split) }
                         .buttonStyle(ChipButtonStyle(selected: split == option))
                 }
             }
@@ -4985,7 +4984,7 @@ struct WorkoutPlanSheet: View {
             FlowLayout(spacing: 8) {
                 ForEach(WorkoutMode.allCases) { mode in
                     Button(mode.label) {
-                        logMode = mode
+                        FernletFeedback.system.select(mode, in: &logMode)
                         if mode == .activity {
                             split = .workout
                         } else if split == .workout {

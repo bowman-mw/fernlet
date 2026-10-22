@@ -36,6 +36,7 @@ struct CompanionEmotionGalleryTests {
         Frame(name: "sad", state: .okay, emotion: .sad, gentleDay: true),
         Frame(name: "tired", state: .tired, emotion: .tired),
         Frame(name: "sleepy", state: .okay, emotion: .sleepy),
+        Frame(name: "asleep", state: .sick, emotion: .asleep),
         Frame(name: "hungry", state: .okay, emotion: .hungry),
         Frame(name: "thirsty", state: .okay, emotion: .thirsty),
         Frame(name: "loved", state: .okay, emotion: .loved),

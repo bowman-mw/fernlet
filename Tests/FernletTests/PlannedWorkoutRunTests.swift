@@ -521,6 +521,33 @@ import FernletFoundation
         #expect(store.settings.workoutProgression == ladder, "a plan's run never climbs the generated ladder")
     }
 
+    /// A plan removed during its run logs once, even when the finish is seen again after a rework
+    /// emptied the completed-session set (a run-state file that failed to clear brings it back): the
+    /// run is filed under its own session id, and the second sighting finds that row (2026-10-21).
+    @Test func aPlanRemovedDuringTheRunLogsOnceWhenItsFinishIsSeenAgain() throws {
+        let directory = uniqueAppGroupDirectory()
+        let planned = Self.plan(["Bench press - 1 x 5 @ 135 lb"], source: .user)
+        let store = makeTestStore(appGroupDirectory: directory)
+        store.planWorkout(planned, date: store.todayKey)
+        _ = Self.commitGenerated(named: "Push", in: store)
+        _ = try Self.startedRun(of: planned, in: store)
+        store.deletePlannedWorkout(planned, date: store.todayKey)
+        store.guidedMarkSetDone()
+        let finished = try #require(store.guidedRunState)
+        let first = store.day.workouts.filter { $0.isPlanRun }
+        #expect(first.count == 1)
+        #expect(first.first?.id == finished.sessionID, "filed under the run's own session id")
+
+        #expect(store.reworkTodaysGuidedPlan(), "a plan's run never pins the generated plan")
+        #expect(!store.guidedCompletedSessionIDs.contains(finished.sessionID), "the rework emptied the set")
+        #expect(GuidedWorkoutRunStateStore(directory: directory).write(finished))
+        store.reconcileGuidedRunFromAppGroup()
+
+        #expect(store.day.workouts.filter { $0.isPlanRun }.count == 1, "the finish seen again logs nothing more")
+        #expect(store.guidedCompletedSessionIDs.contains(finished.sessionID))
+        store.clearGuidedRun()
+    }
+
     @Test func plannedExercisesRoundTripsAndIsAbsentWhenUnset() throws {
         var workout = Workout(
             name: "Coach push", type: .upper, exercises: "Bench press - 1 x 5 @ 135 lb", rpe: nil, notes: "",

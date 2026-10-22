@@ -398,7 +398,8 @@ final class LaunchPreparationService {
     private func makeDaySummaryText(for day: FernletDay, store: FernletStore) async -> String? {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *), isFoundationModelAvailable, store.settings.aiStatus != .off {
-            return await foundationModelsDaySummary(for: day, gate: store.aiGate)
+            let language = AIPromptLanguage.forApp(addressing: store.effectiveUserProfile.sex.termOfAddress)
+            return await foundationModelsDaySummary(for: day, gate: store.aiGate, language: language)
         }
         #endif
         // Spec: leave the day-summary slot empty when Foundation Models is unavailable.
@@ -525,11 +526,33 @@ final class LaunchPreparationService {
         return trimmed
     }
 
+    /// The day summary's session instructions — then, outside English, the line saying which
+    /// language to write in and how to address the person (``AIPromptLanguage/replyInstruction``):
+    /// the summary is stored and drawn on the day review, so it is in the person's language.
+    /// Outside the `#if` so a test can pin the English bytes and the Spanish line on any host.
+    nonisolated static func daySummaryInstructions(for payload: DaySummaryPayload) -> String {
+        AIPromptLanguage.joined(
+            "You write brief warm wellness day summaries for a companion app called Fernlet. Under 50 words. No advice. No lists. Warm observation only.",
+            payload.promptLanguage.replyInstruction
+        )
+    }
+
+    /// The companion thought's session instructions, with the reply-language line outside English
+    /// (see ``daySummaryInstructions(for:)``): the thought is drawn on Home.
+    nonisolated static func thoughtInstructions(for payload: CompanionThoughtPayload) -> String {
+        AIPromptLanguage.joined(
+            "You write one-sentence gentle observations for a wellness companion called Fernlet. Under 20 words. No advice. Just warm noticing. You have honest behavioral context about the user — use it to write something that resonates, not something generic.",
+            payload.promptLanguage.replyInstruction
+        )
+    }
+
     #if canImport(FoundationModels)
     /// Day summary is an AMBIENT/background task (`standard` tier, runs at launch) → `userInvoked:
     /// false`. In the sleepy band it takes the deterministic path (an empty slot, per spec).
     @available(iOS 26.0, *)
-    private func foundationModelsDaySummary(for day: FernletDay, gate: FernletAIGate) async -> String? {
+    private func foundationModelsDaySummary(
+        for day: FernletDay, gate: FernletAIGate, language: AIPromptLanguage
+    ) async -> String? {
         let sleep = day.sleep
         let sleepHours = sleep?.hours
         let payload = DaySummaryPayload(
@@ -543,7 +566,8 @@ final class LaunchPreparationService {
             // live). The change is byte-neutral today for the same reason.
             sleepQualityLabel: sleep.map { $0.quality.rawValue.lowercased() },
             sleepHours: sleepHours,
-            journalTagLabel: day.journals.last?.tag.rawValue.lowercased()
+            journalTagLabel: day.journals.last?.tag.rawValue.lowercased(),
+            promptLanguage: language
         )
         let auditKind = payload.payloadKind; let auditFields = payload.includedFieldNames
 
@@ -569,9 +593,7 @@ final class LaunchPreparationService {
         Tone: warm, calm, non-judgmental. A single short paragraph. No lists. No advice. Just warm observation.
         """
         do {
-            let session = LanguageModelSession(
-                instructions: "You write brief warm wellness day summaries for a companion app called Fernlet. Under 50 words. No advice. No lists. Warm observation only."
-            )
+            let session = LanguageModelSession(instructions: Self.daySummaryInstructions(for: payload))
             let response = try await session.respond(to: prompt)
             let text = Self.boundedDaySummary(response.content)
             await AIAuditLog.shared.record(
@@ -611,7 +633,8 @@ final class LaunchPreparationService {
         let payload = CompanionThoughtPayload(
             signalSummaries: Array(signalSummaries),
             journalTagLabel: journalTag.isEmpty ? nil : journalTag,
-            filteredMemorySummary: filteredMemory
+            filteredMemorySummary: filteredMemory,
+            promptLanguage: AIPromptLanguage.forApp(addressing: store.effectiveUserProfile.sex.termOfAddress)
         )
         let auditKind = payload.payloadKind; let auditFields = payload.includedFieldNames
         let auditMemoryChars = filteredMemory.count
@@ -632,9 +655,7 @@ final class LaunchPreparationService {
         Write only the observation — no quotes, no attribution. Warm and honest.
         """
         do {
-            let session = LanguageModelSession(
-                instructions: "You write one-sentence gentle observations for a wellness companion called Fernlet. Under 20 words. No advice. Just warm noticing. You have honest behavioral context about the user — use it to write something that resonates, not something generic."
-            )
+            let session = LanguageModelSession(instructions: Self.thoughtInstructions(for: payload))
             let response = try await session.respond(to: prompt)
             let text = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
             await AIAuditLog.shared.record(

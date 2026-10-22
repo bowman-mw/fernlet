@@ -8,7 +8,7 @@ import Foundation
 ///
 /// The state is the day's wellbeing BAND (body colour, breath, posture) and is persisted on every
 /// ``DailyHealthScore``. The emotion is a separate, momentary layer on top of it: *sleepy* at
-/// bedtime, *hungry* when no meal has been logged in a while, *sad* on a day the person tagged hard,
+/// bedtime and *asleep* once the wind-down is over, *hungry* when no meal has been logged in a while, *sad* on a day the person tagged hard,
 /// *loved* when a friend's heart arrived. `FernletScoring.CompanionEmotionEngine` derives it from
 /// inputs the app already holds, as a pure function of those inputs and the clock.
 ///
@@ -35,6 +35,9 @@ public nonisolated enum CompanionEmotion: String, CaseIterable, Sendable {
     case sad
     case tired
     case sleepy
+    /// Fast asleep, past the bedtime wind-down (owner decision 2026-10-21). The one emotion that
+    /// outranks even the unwell flag, because it hides the day entirely (``hidesTheDay``).
+    case asleep
     case hungry
     case thirsty
     case loved
@@ -54,6 +57,8 @@ public nonisolated enum CompanionEmotion: String, CaseIterable, Sendable {
                             comment: "Companion feeling: low on energy")
         case .sleepy: String(localized: "companionEmotion.sleepy", defaultValue: "Sleepy", bundle: .module,
                              comment: "Companion feeling during the person's bedtime hours")
+        case .asleep: String(localized: "companionEmotion.asleep", defaultValue: "Asleep", bundle: .module,
+                             comment: "Companion feeling once it has fallen asleep for the night. Says nothing about how the day went")
         case .hungry: String(localized: "companionEmotion.hungry", defaultValue: "Hungry", bundle: .module,
                              comment: "Companion feeling when no meal has been logged in a while")
         case .thirsty: String(localized: "companionEmotion.thirsty", defaultValue: "Thirsty", bundle: .module,
@@ -85,6 +90,8 @@ public nonisolated enum CompanionEmotion: String, CaseIterable, Sendable {
                             bundle: .module, comment: "Follows the companion's state: 'Tired, feeling tired'")
         case .sleepy: String(localized: "companionEmotion.feeling.sleepy", defaultValue: "feeling sleepy",
                              bundle: .module, comment: "Follows the companion's state: 'Okay, feeling sleepy'")
+        case .asleep: String(localized: "companionEmotion.feeling.asleep", defaultValue: "fast asleep",
+                             bundle: .module, comment: "The companion's feeling once asleep. Never spoken after a state: an asleep companion is read as 'Asleep' alone")
         case .hungry: String(localized: "companionEmotion.feeling.hungry", defaultValue: "feeling hungry",
                              bundle: .module, comment: "Follows the companion's state: 'Okay, feeling hungry'")
         case .thirsty: String(localized: "companionEmotion.feeling.thirsty", defaultValue: "feeling thirsty",
@@ -117,12 +124,24 @@ public nonisolated enum CompanionEmotion: String, CaseIterable, Sendable {
     ///   be a stale echo of something that already happened.
     ///
     /// The widget's hand-copied `WidgetCompanionEmotion` mirrors exactly the publishable cases:
-    /// happy, sad, tired, sleepy, hungry and thirsty.
+    /// happy, sad, tired, sleepy, asleep, hungry and thirsty. ``asleep`` is the clock alone, like
+    /// ``sleepy``, so it carries nothing the snapshot did not already.
     public var isWidgetPublishable: Bool {
         switch self {
         case .calm, .frazzled, .playful, .loved, .comforted: false
-        case .happy, .sad, .tired, .sleepy, .hungry, .thirsty: true
+        case .happy, .sad, .tired, .sleepy, .asleep, .hungry, .thirsty: true
         }
+    }
+
+    /// Whether this emotion hides how the day went (owner decision 2026-10-21: "when the companion
+    /// is asleep, there shouldn't be any hint of how the previous day went. Tomorrow is a new day").
+    ///
+    /// True only for ``asleep``. Every render honours it: the body wears a neutral night colour
+    /// instead of the state's, the posture and breath stop following the band, the spoken status is
+    /// "Asleep" with no state before it, and a widget drops the state word and the care bar. Because
+    /// nothing of the day shows, it is also the one emotion the Lock Screen may draw.
+    public var hidesTheDay: Bool {
+        self == .asleep
     }
 
     /// Whether the face reads as happy: bright or smiling eyes and a smile.
@@ -134,19 +153,46 @@ public nonisolated enum CompanionEmotion: String, CaseIterable, Sendable {
     public var isHappyLooking: Bool {
         switch self {
         case .happy, .playful, .loved, .calm: true
-        case .sad, .tired, .sleepy, .hungry, .thirsty, .comforted, .frazzled: false
+        case .sad, .tired, .sleepy, .asleep, .hungry, .thirsty, .comforted, .frazzled: false
         }
     }
 
-    /// The companion's spoken status: the state alone ("Okay"), or the state and the emotion
-    /// ("Okay, feeling sleepy").
+    /// The companion's spoken status: the state alone ("Okay"), the state and the emotion
+    /// ("Okay, feeling sleepy"), or — for an emotion that ``hidesTheDay`` — the emotion alone
+    /// ("Asleep"), so the voice says no more about the day than the drawing does.
     ///
     /// Built only from the two display forks — never a `rawValue`, which is a frozen token and would
     /// be read aloud untranslated.
     public static func accessibilityValue(state: CompanionState, emotion: CompanionEmotion?) -> String {
         guard let emotion else { return state.displayName }
+        guard !emotion.hidesTheDay else { return emotion.displayName }
         return String(localized: "companionEmotion.stateAndFeeling",
                       defaultValue: "\(state.displayName), \(emotion.feelingPhrase)", bundle: .module,
                       comment: "The companion's spoken status: its state, then its feeling. Example: 'Okay, feeling sleepy'")
+    }
+}
+
+extension CompanionAccessory {
+    /// Whether the companion is wearing this accessory right now.
+    ///
+    /// Glasses come off when the companion is tired, sick, sleepy or asleep, and stay on when it is
+    /// resting (owner decision 2026-10-21) — a tired face behind a pair of glasses reads as neither.
+    /// A tired FEELING on a resting band (the engine's low-band rule) keeps them on, because the band
+    /// is resting. Every other accessory is always worn. The widget's hand-copied
+    /// `WidgetCompanionTopper.isWorn(state:emotion:)` is the twin; keep the two identical.
+    ///
+    /// Declared here, beside ``CompanionEmotion``, rather than with the persisted accessory itself:
+    /// `CompanionModels.swift` holds the synced appearance, and `CompanionEmotionPrivacyTests` keeps
+    /// every persisted-model file free of the emotion type.
+    ///
+    /// - Parameters:
+    ///   - state: The day's band.
+    ///   - emotion: The feeling drawn over it, or nil.
+    /// - Returns: Whether to draw the accessory.
+    public func isWorn(state: CompanionState, emotion: CompanionEmotion?) -> Bool {
+        guard self == .glasses else { return self != .none }
+        if emotion == .sleepy || emotion == .asleep { return false }
+        if state == .tired || state == .sick { return false }
+        return !(emotion == .tired && state != .resting)
     }
 }

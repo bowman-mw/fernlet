@@ -76,6 +76,19 @@ case: strings that reach a model must stay in one stable language, or the model'
 per device locale with nothing to catch it. Where a human-readable name is genuinely needed, add a
 separate display property in the UI layer and leave the token alone.
 
+### Prompt language (localization plan §5.1)
+
+Instructions stay English. What follows the app's language is a line ``AIPromptLanguage`` appends:
+a prose prompt (day summary, companion thought, journal memory line) answers in the app's language,
+with tú and the person's grammatical gender for Spanish; a catalog prompt (dish decomposition,
+candidate selection, ingredient substitution, the workout adjuster) reads the person's language but
+keeps every field code matches in English. Each payload carries its ``AIPromptLanguage`` and appends
+its ``AIPromptLanguage/includedFieldNames`` (`promptLanguage`, and `termOfAddress` when an address is
+sent) to its own, so the audit log names what was added. In English every line is nil and every
+field list unchanged. Whether the model may work in the app's language at all is decided in
+`AIProviders`' `OnDeviceModelLanguage`, which reports ``OnDeviceModelAvailability/languageNotSupported``
+and so routes every call site to its deterministic path.
+
 ## Topics
 
 ### Typed payloads (the de-identification contract)
@@ -93,6 +106,10 @@ separate display property in the UI layer and leave the token alone.
 - ``WebPageNutritionExtractionPayload``
 - ``RecipeExtractionPayload``
 - ``JournalSummaryPayload``
+
+### Prompt language
+
+- ``AIPromptLanguage``
 
 ### Dispatch gate and routing
 

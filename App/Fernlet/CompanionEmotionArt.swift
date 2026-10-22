@@ -88,7 +88,7 @@ struct CompanionExpression: Equatable {
 
     /// The settled pose's face: content and droopy-happy, or soothed on a gentle or unwell day.
     static func settledFace(state: CompanionState, emotion: CompanionEmotion?, gentleDay: Bool) -> CompanionExpression {
-        let gentle: Set<CompanionEmotion> = [.comforted, .sad, .tired, .sleepy]
+        let gentle: Set<CompanionEmotion> = [.comforted, .sad, .tired, .sleepy, .asleep]
         if gentleDay || state == .sick || emotion.map(gentle.contains) == true {
             return CompanionExpression(leftEye: .closed, rightEye: .closed, mouth: .softSmile, blush: 0.34)
         }
@@ -106,6 +106,7 @@ struct CompanionExpression: Equatable {
         case .sad: CompanionExpression(leftEye: .glossy, rightEye: .glossy, mouth: .frown, blush: 0, sympatheticBrows: true)
         case .tired: CompanionExpression(leftEye: .drooped, rightEye: .drooped, mouth: .flat, blush: 0)
         case .sleepy: CompanionExpression(leftEye: .closed, rightEye: .closed, mouth: .yawn, blush: 0)
+        case .asleep: CompanionExpression(leftEye: .closed, rightEye: .closed, mouth: .softSmile, blush: 0)
         case .hungry, .thirsty: CompanionExpression(leftEye: .lookingUp, rightEye: .lookingUp, mouth: .open, blush: 0)
         case .frazzled: stateFace(state)
         }
@@ -123,9 +124,11 @@ struct CompanionExpression: Equatable {
 
 extension CompanionEmotion {
     /// The breath period for this emotion, from the state's own: slower when sleepy, tired, sad or
-    /// soothed, quicker when playful, happy or frazzled.
+    /// soothed, quicker when playful, happy or frazzled. Asleep ignores the state's breath entirely —
+    /// one slow sleeping rhythm whatever the day was (``CompanionEmotion/hidesTheDay``).
     func breathTempo(from base: Double) -> Double {
         switch self {
+        case .asleep: 4.2
         case .sleepy: max(base, 3.6)
         case .tired: base * 1.25
         case .sad: base * 1.2

@@ -4473,7 +4473,12 @@ final class FernletStore {
     /// text crosses as a typed `JournalSummaryPayload` value, never a store handle (the S3 wall).
     private func requestJournalMemorySummary(memoryID: UUID, entryText: String) {
         guard settings.aiStatus != .off else { return }
-        let payload = JournalSummaryPayload(entryText: entryText)
+        // The memory line is read by the person: written in the app's language, with their term of
+        // address for a language that genders words about them (localization plan §5.1).
+        let payload = JournalSummaryPayload(
+            entryText: entryText,
+            promptLanguage: AIPromptLanguage.forApp(addressing: effectiveUserProfile.sex.termOfAddress)
+        )
         guard !payload.entryText.isEmpty else { return }
         let gate = aiGate
         let summarizer = journalMemorySummarizer
@@ -5258,7 +5263,9 @@ final class FernletStore {
     ///
     /// A planned workout's run whose planned row was removed mid-run logs here too, as a plain guided
     /// run with no plan id, but it stays that plan's run (``Workout/isPlanRun``, by the plan's lines
-    /// it keeps): no name backstop against the generated plan, and no step up its rep ladder.
+    /// it keeps): no name backstop against the generated plan, and no step up its rep ladder. Its
+    /// durable backstop is its id instead: the row is filed under the run's session id, which
+    /// `logPlannedRun` finds when the finish is seen again.
     private func finishGuidedRunLogging(_ state: GuidedWorkoutRunState) {
         guard !guidedCompletedSessionIDs.contains(state.sessionID) else { return }
         // A planned workout's run completes its planned row, as "log it" does (`PlannedWorkoutRun.swift`).
@@ -5279,6 +5286,9 @@ final class FernletStore {
         // workout keeps (`GuidedRunDuration`); nil for a run persisted before it recorded a start.
         let timing = GuidedRunDuration.minutes(startedAt: state.startedAt, finishedAt: state.finishedAt)
         var workout = Workout(
+            // A plan's run is filed under its own session id, which `logPlannedRun` checks so a finish
+            // seen again after a rework or a relaunch emptied the completed set logs nothing more.
+            id: isPlanRun ? state.sessionID : UUID(),
             name: state.title, type: type, mode: mode,
             activityType: GuidedRunTimedLog.activityType(
                 for: state, sport: settings.workoutProfile.sport, region: Locale.current.region?.identifier
@@ -5570,7 +5580,8 @@ final class FernletStore {
     ) async -> [IngredientSubstitutionSuggestion]? {
         let payload = IngredientSubstitutionPayload(
             recipeName: recipeName,
-            ingredientToReplace: ingredientName
+            ingredientToReplace: ingredientName,
+            promptLanguage: AIPromptLanguage.forApp()
         )
         let catalog = foodCatalog
         return (try? await FoundationIngredientSubstitutionModel.suggest(
@@ -7329,8 +7340,16 @@ final class FernletStore {
             ),
             dateKey: todayKey,
             computedAt: Date(),
-            companionEmotionTimeline: widgetEmotionTimeline()
+            companionEmotionTimeline: widgetEmotionTimeline(),
+            companionName: widgetCompanionName,
+            companionLook: WidgetSnapshot.CompanionLook(appearance: settings.companionAppearance)
         )
+    }
+
+    /// The companion's name for the widget: trimmed, and nil when the person never gave it one.
+    private var widgetCompanionName: String? {
+        let name = settings.companionName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? nil : name
     }
 
     /// The snapshot the widget is rendering right now, read back off the app-group file — or `nil`

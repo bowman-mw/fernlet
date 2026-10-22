@@ -28,7 +28,8 @@ struct AIStatusPresentationTests {
         (.deviceNotEligible, .notAvailableOnThisIPhone),
         (.appleIntelligenceNotEnabled, .turnOnAppleIntelligence),
         (.modelNotReady, .gettingReady),
-        (.unavailable, .notAvailableRightNow)
+        (.unavailable, .notAvailableRightNow),
+        (.languageNotSupported, .notAvailableInThisLanguage)
     ]
 
     /// The store's row on an incapable iPhone, read through an injected fake provider: the intent and
@@ -62,7 +63,8 @@ struct AIStatusPresentationTests {
     /// The person's own "Off" is true on every device, capable or not.
     @Test func offWinsOnEveryDevice() {
         let availabilities: [OnDeviceModelAvailability] = [
-            .available, .deviceNotEligible, .appleIntelligenceNotEnabled, .modelNotReady, .unavailable
+            .available, .deviceNotEligible, .appleIntelligenceNotEnabled, .modelNotReady, .unavailable,
+            .languageNotSupported
         ]
         for availability in availabilities {
             let presentation = AIStatusPresentation(effective: .off, availability: availability)

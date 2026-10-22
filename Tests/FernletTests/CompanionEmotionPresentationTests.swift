@@ -12,7 +12,7 @@ import FernletScoring
 struct CompanionEmotionPresentationTests {
 
     /// The emotions a gentle day (tagged hard or tired, or a trend that needs gentleness) can show.
-    static let gentleEmotions: Set<CompanionEmotion> = [.sad, .tired, .sleepy, .comforted]
+    static let gentleEmotions: Set<CompanionEmotion> = [.sad, .tired, .sleepy, .asleep, .comforted]
 
     // MARK: - Faces
 
@@ -59,7 +59,7 @@ struct CompanionEmotionPresentationTests {
 
     /// Every emotion draws its own face (hungry and thirsty share one and differ by motif).
     @Test func everyEmotionHasItsOwnFace() {
-        let distinct: [CompanionEmotion] = [.happy, .playful, .loved, .calm, .comforted, .sad, .tired, .sleepy, .hungry]
+        let distinct: [CompanionEmotion] = [.happy, .playful, .loved, .calm, .comforted, .sad, .tired, .sleepy, .asleep, .hungry]
         let faces = distinct.map { CompanionExpression.resolve(state: .okay, emotion: $0, settled: false, gentleDay: false) }
         for (index, face) in faces.enumerated() {
             let twins = faces.indices.filter { faces[$0] == face && $0 != index }.map { distinct[$0] }
@@ -69,16 +69,64 @@ struct CompanionEmotionPresentationTests {
                 "sad is sad WITH the person: brows lifted in sympathy")
     }
 
+    // MARK: - Glasses (owner decision 2026-10-21)
+
+    /// Glasses come off when the companion is tired, sick, sleepy or asleep, and stay on when it is
+    /// resting; every other accessory is always worn, and `.none` never is.
+    @Test func glassesComeOffWhenTiredSickSleepyOrAsleep() {
+        let glasses = CompanionAccessory.glasses
+        #expect(glasses.isWorn(state: .thriving, emotion: nil))
+        #expect(glasses.isWorn(state: .okay, emotion: .happy))
+        #expect(glasses.isWorn(state: .okay, emotion: .hungry))
+        #expect(glasses.isWorn(state: .resting, emotion: nil))
+        #expect(glasses.isWorn(state: .resting, emotion: .tired), "the low-band tired feeling on a resting day keeps them on")
+        #expect(!glasses.isWorn(state: .tired, emotion: nil))
+        #expect(!glasses.isWorn(state: .tired, emotion: .tired))
+        #expect(!glasses.isWorn(state: .okay, emotion: .tired), "a day tagged tired takes them off")
+        #expect(!glasses.isWorn(state: .sick, emotion: nil))
+        #expect(!glasses.isWorn(state: .okay, emotion: .sleepy))
+        #expect(!glasses.isWorn(state: .resting, emotion: .sleepy))
+        #expect(!glasses.isWorn(state: .thriving, emotion: .asleep))
+        let states: [CompanionState] = [.thriving, .okay, .tired, .resting, .sick]
+        let emotions: [CompanionEmotion?] = [nil] + CompanionEmotion.allCases.map { Optional($0) }
+        for state in states {
+            for emotion in emotions {
+                #expect(CompanionAccessory.sprout.isWorn(state: state, emotion: emotion))
+                #expect(CompanionAccessory.flower.isWorn(state: state, emotion: emotion))
+                #expect(!CompanionAccessory.none.isWorn(state: state, emotion: emotion))
+            }
+        }
+    }
+
     // MARK: - The spoken status
 
     @Test func theSpokenStatusReadsTheStateThenTheFeeling() {
         #expect(CompanionEmotion.accessibilityValue(state: .okay, emotion: .sleepy) == "Okay, feeling sleepy")
         #expect(CompanionEmotion.accessibilityValue(state: .tired, emotion: .hungry) == "Tired, feeling hungry")
         #expect(CompanionEmotion.accessibilityValue(state: .thriving, emotion: nil) == "Thriving")
-        for emotion in CompanionEmotion.allCases {
+        for emotion in CompanionEmotion.allCases where !emotion.hidesTheDay {
             let value = CompanionEmotion.accessibilityValue(state: .okay, emotion: emotion)
             #expect(value.hasPrefix("Okay, ") && value.hasSuffix(emotion.feelingPhrase), "\(emotion) reads \"\(value)\"")
         }
+    }
+
+    // MARK: - Asleep hides the day (owner decision 2026-10-21)
+
+    /// Asleep is the only emotion that hides the day, and it says nothing about it: spoken alone,
+    /// whatever the state, and drawn with the same face on every band.
+    @Test func asleepSaysNothingAboutTheDay() {
+        #expect(CompanionEmotion.allCases.filter(\.hidesTheDay) == [.asleep])
+        for state in [CompanionState.thriving, .okay, .tired, .resting, .sick] {
+            #expect(CompanionEmotion.accessibilityValue(state: state, emotion: .asleep) == "Asleep",
+                    "an asleep companion on a \(state) day speaks its state")
+            let face = CompanionExpression.resolve(state: state, emotion: .asleep, settled: false, gentleDay: false)
+            #expect(face == CompanionExpression.resolve(state: .okay, emotion: .asleep, settled: false, gentleDay: false),
+                    "the asleep face changes with the band")
+            #expect(face.leftEye == .closed && !face.isHappyLooking)
+        }
+        #expect(CompanionEmotion.asleep.breathTempo(from: CompanionState.sick.animationTempo)
+                == CompanionEmotion.asleep.breathTempo(from: CompanionState.thriving.animationTempo),
+                "the sleeping breath follows the band")
     }
 
     // MARK: - The store's inputs
@@ -132,7 +180,7 @@ struct CompanionEmotionPresentationTests {
 
     // MARK: - The widget snapshot
 
-    /// The published timeline covers the store's own day, carries only the six publishable tokens,
+    /// The published timeline covers the store's own day, carries only the seven publishable tokens,
     /// includes the bedtime transition, and survives the app-group file's round trip exactly.
     @Test func theWidgetTimelineIsPublishableAndRoundTrips() throws {
         let store = makeTestStore(date: Self.testDay)
@@ -169,7 +217,8 @@ struct CompanionEmotionPresentationTests {
     /// The widget's half, read off disk because the extension links no FernletKit product and has no
     /// test target: the provider adds a timeline entry at every emotion transition, its lookup is the
     /// app's day-scoped rule character for character, and the Lock Screen keeps the state face (the
-    /// owner's answer, 2026-09-24: "State face only").
+    /// owner's answer, 2026-09-24: "State face only") — except asleep, which hides the day and so may
+    /// show there (2026-10-21).
     @Test func theWidgetFollowsTheAppsTimelineRulesAndTheLockScreenDecision() throws {
         let bundle = try RepoRoot.source("App/FernletWidgets/FernletWidgetsBundle.swift")
         let models = try RepoRoot.source("App/FernletWidgets/WidgetSharedModels.swift")
@@ -185,8 +234,14 @@ struct CompanionEmotionPresentationTests {
                 "the widget's lookup and the app's twin no longer scope a moment to its own day the same way")
         #expect(bundle.contains("static let lockScreenShowsEmotion = false"),
                 "the Lock Screen now draws feelings — the owner chose the state face only (2026-09-24)")
-        #expect(bundle.components(separatedBy: "FernletWidgetEmotionPolicy.lockScreenShowsEmotion ? entry.currentCompanionEmotion : nil").count == 3,
-                "both Lock Screen families must route their emotion through the policy")
+        let views = try RepoRoot.source("App/FernletWidgets/CompanionWidgetViews.swift")
+        #expect(views.components(separatedBy: "FernletWidgetEmotionPolicy.lockScreenEmotion(entry.currentCompanionEmotion)").count == 2,
+                "the Lock Screen face must route its emotion through the policy (the rectangular card was retired 2026-10-21)")
+        let policy = try #require(CompanionEmotionPrivacyTests.body(of: "static func lockScreenEmotion(", in: bundle),
+                                  "the Lock Screen emotion policy is gone")
+        #expect(policy.contains("emotion.hidesTheDay || lockScreenShowsEmotion ? emotion : nil"),
+                "the Lock Screen may draw only a feeling that hides the day, unless the owner opens it up")
+        #expect(models.contains("self == .asleep"), "the widget's hidesTheDay no longer means asleep alone")
     }
 
     /// An older file with no emotion key decodes, and draws no emotion.
