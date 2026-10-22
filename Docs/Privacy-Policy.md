@@ -256,10 +256,11 @@ moment, from things the app already holds: the mood tag on today's journal entry
 long it has been since you logged a meal or some water, the bedtime you set, a friend's heart, a
 recent pet, and — only if you turned on "Notice body tension" — that reading. A feeling is never
 saved to your records, never synced to iCloud, never shown to friends (they still see only thriving,
-okay or struggling), and never included in an export. The Home Screen widget can show six of these
-feelings (happy, sad, tired, sleepy, hungry and thirsty); to do that, the app keeps a short list of
+okay or struggling), and never included in an export. The Home Screen widget can show seven of these
+feelings (happy, sad, tired, sleepy, asleep, hungry and thirsty); to do that, the app keeps a short list of
 today's feelings in the file it shares with the widget on your device, which **Delete Everything**
-removes. Lock Screen widgets show only your companion's daily state, never a feeling. You can turn
+removes. Lock Screen widgets show only your companion's daily state, never a feeling, except
+asleep, which shows nothing about your day. You can turn
 the hunger and thirst cues off, and set your companion's bedtime, in Settings → Appearance →
 Companion feelings; those settings are kept on this device and never synced.
 

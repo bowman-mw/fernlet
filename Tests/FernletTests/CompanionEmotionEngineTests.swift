@@ -41,7 +41,7 @@ struct CompanionEmotionEngineTests {
     /// place it has to be argued for, together with the DocC table in `FernletScoring.md`.
     @Test func precedenceTableIsPinnedRowByRow() {
         let expected: [(CompanionEmotionRule, CompanionEmotion?)] = [
-            (.unwell, nil), (.bedtime, .sleepy), (.held, .comforted), (.hardDay, .sad),
+            (.asleep, .asleep), (.unwell, nil), (.bedtime, .sleepy), (.held, .comforted), (.hardDay, .sad),
             (.tiredDay, .tired), (.tense, .frazzled), (.petted, .playful), (.hunger, .hungry),
             (.thirst, .thirsty), (.heart, .loved), (.brightDay, .happy), (.lowBand, .tired),
             (.calmBody, .calm), (.thriving, .happy)
@@ -66,8 +66,9 @@ struct CompanionEmotionEngineTests {
         let heart = Self.at(20)
         let pet = Self.at(13, 3)
         let scenarios: [(CompanionEmotionRule, CompanionEmotionInputs, Date)] = [
+            (.asleep, Self.base(), Self.at(23, 30)),
             (.unwell, Self.with { $0.state = .sick }, Self.at(13)),
-            (.bedtime, Self.base(), Self.at(23)),
+            (.bedtime, Self.base(), Self.at(22, 45)),
             (.held, Self.with { $0.latestJournalTag = .hard; $0.heartGlowUntil = heart }, Self.at(13)),
             (.hardDay, Self.with { $0.latestJournalTag = .hard }, Self.at(13)),
             (.tiredDay, Self.with { $0.latestJournalTag = .tired }, Self.at(13)),
@@ -99,9 +100,12 @@ struct CompanionEmotionEngineTests {
         let heart = Self.at(20)
         let pet = Self.at(13, 3)
         let cases: [(String, CompanionEmotionInputs, Date, CompanionEmotion?)] = [
-            ("sick over bedtime", Self.with { $0.state = .sick }, Self.at(23), nil),
+            ("asleep over sick", Self.with { $0.state = .sick }, Self.at(23, 30), .asleep),
+            ("asleep over a hard day", Self.with { $0.latestJournalTag = .hard }, Self.at(2), .asleep),
+            ("asleep over a glowing heart", Self.with { $0.heartGlowUntil = Self.at(23, 59) }, Self.at(23, 30), .asleep),
+            ("sick over the wind-down", Self.with { $0.state = .sick }, Self.at(22, 45), nil),
             ("sick over hunger", Self.with { $0.state = .sick; $0.lastMealAt = Self.at(6) }, Self.at(13), nil),
-            ("bedtime over a hard day", Self.with { $0.latestJournalTag = .hard }, Self.at(23, 30), .sleepy),
+            ("the wind-down over a hard day", Self.with { $0.latestJournalTag = .hard }, Self.at(22, 40), .sleepy),
             ("hard + heart is held", Self.with { $0.latestJournalTag = .hard; $0.heartGlowUntil = heart }, Self.at(13), .comforted),
             ("hard + pet is held", Self.with { $0.latestJournalTag = .hard; $0.playfulUntil = pet }, Self.at(13), .comforted),
             ("tired tag + heart is held", Self.with { $0.latestJournalTag = .tired; $0.heartGlowUntil = heart }, Self.at(13), .comforted),
@@ -139,9 +143,10 @@ struct CompanionEmotionEngineTests {
 
     // MARK: - Tone invariants over the whole grid
 
-    /// Every combination of the discrete inputs at seven times of day, against the tone rules:
-    /// sick shows nothing, bedtime shows sleepy, a gentle or unwell day never looks happy, sad only
-    /// mirrors a hard tag, and appetite cues respect the switch, the band and the clock.
+    /// Every combination of the discrete inputs at eight times of day, against the tone rules:
+    /// asleep past the wind-down whatever the day, sick shows nothing otherwise, the wind-down shows
+    /// sleepy, a gentle or unwell day never looks happy, sad only mirrors a hard tag, and appetite
+    /// cues respect the switch, the band and the clock.
     @Test func toneInvariantsHoldAcrossTheWholeInputGrid() {
         var checked = 0
         for inputs in Self.grid() {
@@ -153,7 +158,7 @@ struct CompanionEmotionEngineTests {
         #expect(checked > 100_000, "the grid shrank to \(checked) cells — the invariants are checking less")
     }
 
-    static let gridTimes: [Date] = [at(3), at(7, 30), at(10, 30), at(13), at(17, 30), at(21, 30), at(23, 30)]
+    static let gridTimes: [Date] = [at(3), at(7, 30), at(10, 30), at(13), at(17, 30), at(21, 30), at(22, 45), at(23, 30)]
 
     /// Every discrete input combination, built without nested-loop depth: one flat index decoded.
     static func grid() -> [CompanionEmotionInputs] {
@@ -182,8 +187,11 @@ struct CompanionEmotionEngineTests {
         let emotion = Self.emotion(inputs, time)
         let minute = calendar.component(.hour, from: time) * 60 + calendar.component(.minute, from: time)
         let asleep = inputs.sleepWindow.isAsleep(atMinute: minute)
-        if inputs.state == .sick { #expect(emotion == nil, "sick must outrank every emotion: \(inputs)") }
-        if inputs.state != .sick && asleep { #expect(emotion == .sleepy, "bedtime must show sleepy: \(inputs)") }
+        let pastWindDown = inputs.sleepWindow.isPastWindDown(atMinute: minute)
+        if pastWindDown { #expect(emotion == .asleep, "past the wind-down must show asleep, whatever the day: \(inputs)") }
+        if !pastWindDown && inputs.state == .sick { #expect(emotion == nil, "sick must outrank every waking emotion: \(inputs)") }
+        if !pastWindDown && inputs.state != .sick && asleep { #expect(emotion == .sleepy, "the wind-down must show sleepy: \(inputs)") }
+        if emotion == .asleep { #expect(pastWindDown, "asleep outside the night: \(inputs)") }
         if inputs.isGentleDay || inputs.state == .sick {
             #expect(emotion?.isHappyLooking != true, "happy-looking \(String(describing: emotion)) on a gentle/unwell day: \(inputs)")
         }
@@ -224,6 +232,28 @@ struct CompanionEmotionEngineTests {
         #expect(window.awakeMinutes == 16 * 60)
     }
 
+    /// The first 30 minutes after bedtime are the sleepy wind-down; asleep runs from there to the
+    /// wake time, across midnight, and a window no longer than the wind-down never falls asleep.
+    @Test func theWindDownComesBeforeAsleep() {
+        let window = CompanionSleepWindow.standard
+        #expect(CompanionSleepWindow.windDownMinutes == 30)
+        #expect(window.fallsAsleepMinute == 23 * 60)
+        #expect(!window.isPastWindDown(atMinute: 22 * 60 + 30))
+        #expect(!window.isPastWindDown(atMinute: 22 * 60 + 59))
+        #expect(window.isPastWindDown(atMinute: 23 * 60))
+        #expect(window.isPastWindDown(atMinute: 2 * 60))
+        #expect(window.isPastWindDown(atMinute: 6 * 60 + 59))
+        #expect(!window.isPastWindDown(atMinute: 7 * 60))
+        #expect(!window.isPastWindDown(atMinute: 13 * 60))
+        let late = CompanionSleepWindow(bedtimeMinute: 23 * 60 + 45, wakeMinute: 7 * 60)
+        #expect(late.fallsAsleepMinute == 15, "a wind-down that crosses midnight wraps")
+        #expect(!late.isPastWindDown(atMinute: 5) && late.isPastWindDown(atMinute: 15))
+        let short = CompanionSleepWindow(bedtimeMinute: 6 * 60 + 40, wakeMinute: 7 * 60)
+        #expect((0..<1_440).allSatisfy { !short.isPastWindDown(atMinute: $0) }, "a 20-minute night never falls asleep")
+        let empty = CompanionSleepWindow(bedtimeMinute: 8 * 60, wakeMinute: 8 * 60)
+        #expect((0..<1_440).allSatisfy { !empty.isPastWindDown(atMinute: $0) })
+    }
+
     @Test func anEmptyWindowIsNeverSleepyAndFoldingKeepsMinutesInRange() {
         let empty = CompanionSleepWindow(bedtimeMinute: 8 * 60, wakeMinute: 8 * 60)
         #expect(empty.isEmpty && empty.awakeMinutes == 1_440)
@@ -234,14 +264,14 @@ struct CompanionEmotionEngineTests {
 
     // MARK: - Timeline
 
-    /// A lunch-at-12:30 okay day: hungry from 17:00, quiet from 21:00, sleepy from 22:30, sleepy again
-    /// AT midnight (a new day's own moment), and nothing from the next wake.
+    /// A lunch-at-12:30 okay day: hungry from 17:00, quiet from 21:00, sleepy from 22:30, asleep from
+    /// 23:00, asleep again AT midnight (a new day's own moment), and nothing from the next wake.
     @Test func timelineMarksEachTransition() {
         let inputs = Self.with { $0.lastMealAt = Self.at(12, 30) }
         let timeline = CompanionEmotionEngine.timeline(for: inputs, dayContaining: Self.at(13), calendar: Self.calendar)
         let expected: [(Date, CompanionEmotion?)] = [
-            (Self.at(0), .sleepy), (Self.at(7), nil), (Self.at(17), .hungry), (Self.at(21), nil),
-            (Self.at(22, 30), .sleepy), (Self.at(0, day: 25), .sleepy), (Self.at(7, day: 25), nil)
+            (Self.at(0), .asleep), (Self.at(7), nil), (Self.at(17), .hungry), (Self.at(21), nil),
+            (Self.at(22, 30), .sleepy), (Self.at(23), .asleep), (Self.at(0, day: 25), .asleep), (Self.at(7, day: 25), nil)
         ]
         #expect(timeline.map(\.at) == expected.map(\.0))
         #expect(timeline.map(\.emotion) == expected.map(\.1))
@@ -296,14 +326,15 @@ struct CompanionEmotionEngineTests {
         }
     }
 
-    /// After midnight only the clock is known: sleepy until the next wake, then nothing — and a
-    /// moment is never read on a later day than its own.
+    /// After midnight only the clock is known: asleep (or sleepy, inside a wind-down that crosses
+    /// midnight) until the next wake, then nothing — and a moment is never read on a later day than
+    /// its own.
     @Test func timelineCarriesOnlyTheClockAcrossMidnight() {
         let inputs = Self.with { $0.latestJournalTag = .hard; $0.heartGlowUntil = Self.at(12, day: 25) }
         let timeline = CompanionEmotionEngine.timeline(for: inputs, dayContaining: Self.at(12), calendar: Self.calendar)
         let lookup = { (time: Date) in CompanionEmotionEngine.emotion(in: timeline, at: time, calendar: Self.calendar) }
         #expect(lookup(Self.at(22)) == .comforted)
-        #expect(lookup(Self.at(2, day: 25)) == .sleepy)
+        #expect(lookup(Self.at(2, day: 25)) == .asleep)
         #expect(lookup(Self.at(8, day: 25)) == nil, "yesterday's comfort leaked into a new day")
         #expect(lookup(Self.at(12, day: 26)) == nil)
         let late = CompanionSleepWindow(bedtimeMinute: 60, wakeMinute: 9 * 60)
@@ -311,7 +342,8 @@ struct CompanionEmotionEngineTests {
                                                       dayContaining: Self.at(12), calendar: Self.calendar)
         #expect(CompanionEmotionEngine.emotion(in: lateDay, at: Self.at(23, 50), calendar: Self.calendar) == .sad)
         #expect(CompanionEmotionEngine.emotion(in: lateDay, at: Self.at(0, 30, day: 25), calendar: Self.calendar) == nil)
-        #expect(CompanionEmotionEngine.emotion(in: lateDay, at: Self.at(1, 30, day: 25), calendar: Self.calendar) == .sleepy)
+        #expect(CompanionEmotionEngine.emotion(in: lateDay, at: Self.at(1, 15, day: 25), calendar: Self.calendar) == .sleepy)
+        #expect(CompanionEmotionEngine.emotion(in: lateDay, at: Self.at(1, 30, day: 25), calendar: Self.calendar) == .asleep)
     }
 
     /// The widget is built from `widgetSafe` inputs, so the body-signal and petting emotions can

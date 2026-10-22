@@ -646,6 +646,30 @@
     "bottles today" : {
 
     },
+    "companionEmotion.asleep" : {
+      "comment" : "Companion feeling once it has fallen asleep for the night. Says nothing about how the day went",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Asleep"
+          }
+        }
+      }
+    },
+    "companionEmotion.feeling.asleep" : {
+      "comment" : "The companion's feeling once asleep. Never spoken after a state: an asleep companion is read as 'Asleep' alone",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "fast asleep"
+          }
+        }
+      }
+    },
     "companionEmotion.feeling.happy" : {
       "comment" : "Follows the companion's state: 'Okay, feeling happy'",
       "extractionState" : "extracted_with_value",

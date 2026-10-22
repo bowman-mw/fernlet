@@ -1781,11 +1781,11 @@ struct LocalizationBoundaryTests {
 
     /// The app-side emotion raw values (2026-09-24), frozen once for parts B and C.
     static let frozenCompanionEmotionRawValues = [
-        "happy", "sad", "tired", "sleepy", "hungry", "thirsty", "loved", "comforted", "playful", "calm", "frazzled"
+        "happy", "sad", "tired", "sleepy", "asleep", "hungry", "thirsty", "loved", "comforted", "playful", "calm", "frazzled"
     ]
 
     /// The emotions the widget snapshot may carry — the `WidgetCompanionEmotion` mirror, one-for-one.
-    static let frozenWidgetEmotionRawValues = ["happy", "sad", "tired", "sleepy", "hungry", "thirsty"]
+    static let frozenWidgetEmotionRawValues = ["happy", "sad", "tired", "sleepy", "asleep", "hungry", "thirsty"]
 
     /// Repo-relative path of the app-side `CompanionEmotion` declaration.
     static let companionEmotionPath = "FernletKit/Sources/FernletDomainModel/CompanionEmotion.swift"
@@ -1902,7 +1902,7 @@ struct LocalizationBoundaryTests {
 
     /// Every emotion's display pair — `displayName` and `feelingPhrase` — is a localized fork keyed
     /// `companionEmotion.<token>` / `companionEmotion.feeling.<token>`, in the domain module's
-    /// catalog and, for the publishable six, in the widget's catalog too.
+    /// catalog and, for the publishable seven, in the widget's catalog too.
     ///
     /// The source half proves the fork exists; the catalog half proves the sync harvested it, which
     /// is the step a `String` parameter or a missing `bundle:` silently skips.

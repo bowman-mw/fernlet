@@ -172,6 +172,16 @@ enum FernletWidgetPalette {
     /// background where the deep-brown `ink` would vanish.
     static let leaf = Color(red: 0.420, green: 0.620, blue: 0.384)     // #6B9E62
 
+    /// The asleep companion's body colour: a neutral taupe no state wears, so the night says nothing
+    /// about the day (owner decision 2026-10-21). The twin of the app's `softTaupe`.
+    static let night = Color(red: 0.721, green: 0.658, blue: 0.572)  // #B8A892
+
+    /// The body colour for a state and the emotion drawn over it: the neutral ``night`` colour while
+    /// the emotion hides the day (asleep), else the state's mood colour.
+    static func body(_ state: WidgetCompanionState?, _ emotion: WidgetCompanionEmotion?) -> Color {
+        emotion?.hidesTheDay == true ? night : mood(state)
+    }
+
     // Mood colours (9a). The Lock Screen tints/monochromes these away — the EXPRESSION carries the mood.
     static func mood(_ state: WidgetCompanionState?) -> Color {
         switch state {
@@ -193,8 +203,10 @@ enum FernletWidgetPalette {
 /// one would read the persistence format aloud and would stay English after translation. With an
 /// emotion the value reads "Okay, feeling sleepy". A day-gated `nil` state has no mood to report:
 /// the glyph is the neutral face (or, after midnight, the clock's sleepy face), so it says so rather
-/// than implying yesterday's state still holds.
+/// than implying yesterday's state still holds. An emotion that hides the day (asleep) is spoken
+/// alone, "Asleep", so the voice says no more about the day than the drawing does.
 private func companionMoodValue(_ state: WidgetCompanionState?, _ emotion: WidgetCompanionEmotion? = nil) -> Text {
+    if let emotion, emotion.hidesTheDay { return Text(emotion.displayName) }
     guard let state else {
         guard let emotion else { return Text("No mood yet today") }
         return Text(emotion.displayName)
@@ -214,6 +226,14 @@ private func companionMoodValue(_ state: WidgetCompanionState?, _ emotion: Widge
 enum FernletWidgetEmotionPolicy {
     /// Whether the Lock Screen accessory families draw the emotion. `false` = the state face only.
     static let lockScreenShowsEmotion = false
+
+    /// The emotion a Lock Screen family may draw: one that hides the day (asleep) always — it says
+    /// nothing about how the day went, which is the whole reason the Lock Screen is state-only — and
+    /// any other only when ``lockScreenShowsEmotion`` allows it.
+    static func lockScreenEmotion(_ emotion: WidgetCompanionEmotion?) -> WidgetCompanionEmotion? {
+        guard let emotion else { return nil }
+        return emotion.hidesTheDay || lockScreenShowsEmotion ? emotion : nil
+    }
 }
 
 // MARK: - Companion glyph (9a): a blob silhouette with the FACE as negative space
@@ -257,6 +277,12 @@ private struct CompanionGlyph: View {
                     Self.eraseEmotionFace(for: emotion, in: layer)
                 } else {
                     Self.eraseFace(for: state, in: layer)
+                }
+
+                // 3) asleep: a small "z" floats beside the body, drawn in the body's own colour so a
+                //    single-tint Lock Screen keeps it
+                if emotion == .asleep {
+                    Self.drawAsleepZ(in: layer, fill: fill)
                 }
             }
         }
@@ -369,6 +395,7 @@ private struct CompanionGlyph: View {
         case .sad:     eraseSadFace(eraser)
         case .tired:   eraseTiredFace(eraser)
         case .sleepy:  eraseSleepyFace(eraser)
+        case .asleep:  eraseAsleepFace(eraser)
         case .hungry:  eraseHungryFace(eraser)
         case .thirsty: eraseThirstyFace(eraser)
         }
@@ -418,6 +445,32 @@ private struct CompanionGlyph: View {
             p.addArc(center: CGPoint(x: 72, y: 28), radius: 8.5,
                      startAngle: .degrees(60), endAngle: .degrees(290), clockwise: false)
         }, width: 4)
+    }
+
+    private static func eraseAsleepFace(_ e: FaceEraser) {
+        e.stroke({ p in                       // closed lids, curving down
+            p.move(to: CGPoint(x: 30, y: 51))
+            p.addQuadCurve(to: CGPoint(x: 44, y: 51), control: CGPoint(x: 37, y: 57))
+        }, width: 5)
+        e.stroke({ p in
+            p.move(to: CGPoint(x: 56, y: 51))
+            p.addQuadCurve(to: CGPoint(x: 70, y: 51), control: CGPoint(x: 63, y: 57))
+        }, width: 5)
+        e.stroke({ p in                       // a small, soft sleeping mouth
+            p.move(to: CGPoint(x: 45, y: 64))
+            p.addQuadCurve(to: CGPoint(x: 55, y: 64), control: CGPoint(x: 50, y: 67))
+        }, width: 4)
+    }
+
+    /// The asleep companion's "z", outside the body's top-right edge (the blob is the circle in
+    /// (8, 10, 84, 84), so this corner is clear of it). Drawn, not erased: there is no body there.
+    private static func drawAsleepZ(in ctx: GraphicsContext, fill: Color) {
+        var z = Path()
+        z.move(to: CGPoint(x: 82, y: 3))
+        z.addLine(to: CGPoint(x: 93, y: 3))
+        z.addLine(to: CGPoint(x: 82, y: 14))
+        z.addLine(to: CGPoint(x: 93, y: 14))
+        ctx.stroke(z, with: .color(fill), style: StrokeStyle(lineWidth: 3.4, lineCap: .round, lineJoin: .round))
     }
 
     private static func eraseHungryFace(_ e: FaceEraser) {
@@ -605,7 +658,7 @@ private struct SmallCompanionView: View {
                 HStack(alignment: .top) {
                     CompanionGlyph(state: entry.currentDayCompanionState,
                                    emotion: entry.currentCompanionEmotion,
-                                   fill: FernletWidgetPalette.mood(entry.currentDayCompanionState))
+                                   fill: FernletWidgetPalette.body(entry.currentDayCompanionState, entry.currentCompanionEmotion))
                         .frame(width: 52, height: 52)
                         // systemSmall never writes the mood down — the face IS the reading, so this
                         // element is the only place it can be heard.
@@ -663,9 +716,11 @@ private struct SmallCompanionView: View {
 private struct MediumCompanionView: View {
     let entry: FernletCompanionEntry
 
-    /// The state's written name, or the companion's own name when the day has no state yet.
+    /// The state's written name, or the companion's own name when the day has no state yet — or,
+    /// while the emotion hides the day (asleep), the emotion's name and no state at all.
     private var stateLabel: String {
-        entry.currentDayCompanionState?.displayName ?? String(localized: "Fernlet")
+        if let emotion = entry.currentCompanionEmotion, emotion.hidesTheDay { return emotion.displayName }
+        return entry.currentDayCompanionState?.displayName ?? String(localized: "Fernlet")
     }
 
     var body: some View {
@@ -673,14 +728,14 @@ private struct MediumCompanionView: View {
             HStack(alignment: .center, spacing: 14) {
                 CompanionGlyph(state: entry.currentDayCompanionState,
                                emotion: entry.currentCompanionEmotion,
-                               fill: FernletWidgetPalette.mood(entry.currentDayCompanionState))
+                               fill: FernletWidgetPalette.body(entry.currentDayCompanionState, entry.currentCompanionEmotion))
                     .frame(width: 84, height: 84)
                     .accessibilityHidden(true)      // the words beside it say the same thing
                 VStack(alignment: .leading, spacing: 3) {
                     Text(stateLabel)
                         .font(.system(size: 20, weight: .bold))
                         .foregroundStyle(FernletWidgetPalette.ink)
-                    if let emotion = entry.currentCompanionEmotion {
+                    if let emotion = entry.currentCompanionEmotion, !emotion.hidesTheDay {
                         Text(emotion.displayName)
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(FernletWidgetPalette.inkSoft)
@@ -791,10 +846,10 @@ private struct CircularCompanionView: View {
             .accessibilityValue(companionMoodValue(entry.currentDayCompanionState, lockScreenEmotion))
     }
 
-    /// The emotion this Lock Screen family may draw — none under the privacy-forward default
-    /// (``FernletWidgetEmotionPolicy``).
+    /// The emotion this Lock Screen family may draw — only one that hides the day (asleep) under the
+    /// privacy-forward default (``FernletWidgetEmotionPolicy``).
     private var lockScreenEmotion: WidgetCompanionEmotion? {
-        FernletWidgetEmotionPolicy.lockScreenShowsEmotion ? entry.currentCompanionEmotion : nil
+        FernletWidgetEmotionPolicy.lockScreenEmotion(entry.currentCompanionEmotion)
     }
 }
 
@@ -815,14 +870,15 @@ private struct RectangularCompanionView: View {
     /// (see ``WidgetCompanionState/displayName``). With no current-day state there is no mood to
     /// name, so the companion's own name stands in, exactly as the glyph falls back to a neutral face.
     private var moodLabel: String {
-        entry.currentDayCompanionState?.displayName ?? String(localized: "Fernlet")
+        if let emotion = lockScreenEmotion, emotion.hidesTheDay { return emotion.displayName }
+        return entry.currentDayCompanionState?.displayName ?? String(localized: "Fernlet")
     }
 
-    /// The emotion this Lock Screen family may draw — none under the privacy-forward default
-    /// (``FernletWidgetEmotionPolicy``). The written label stays the state either way: the Lock
-    /// Screen never spells a feeling out.
+    /// The emotion this Lock Screen family may draw — only one that hides the day (asleep) under the
+    /// privacy-forward default (``FernletWidgetEmotionPolicy``). The written label stays the state
+    /// otherwise: the Lock Screen never spells out a feeling that tells how the day went.
     private var lockScreenEmotion: WidgetCompanionEmotion? {
-        FernletWidgetEmotionPolicy.lockScreenShowsEmotion ? entry.currentCompanionEmotion : nil
+        FernletWidgetEmotionPolicy.lockScreenEmotion(entry.currentCompanionEmotion)
     }
 
     var body: some View {

@@ -77,6 +77,24 @@ struct CompanionView: View {
         emotion == .frazzled && !settled
     }
 
+    /// Whether the emotion hides how the day went (``CompanionEmotion/hidesTheDay`` — asleep).
+    private var hidesTheDay: Bool {
+        emotion?.hidesTheDay == true
+    }
+
+    /// The band the body is posed in: the state's own, or — while the emotion hides the day — the
+    /// steady middle band, so the slump, the breath's depth and the resting dip say nothing about
+    /// how the day went. Only the pose reads it; the colour goes neutral separately (`colorState`).
+    private var posedState: CompanionState {
+        hidesTheDay ? .okay : state
+    }
+
+    /// The state every `.state` colour slot follows, or nil while the emotion hides the day — a nil
+    /// state resolves those slots to a neutral night taupe instead.
+    private var colorState: CompanionState? {
+        hidesTheDay ? nil : state
+    }
+
     private var showsCalmAccent: Bool {
         emotion == .calm && !settled
     }
@@ -111,15 +129,15 @@ struct CompanionView: View {
         // calm slow it — see `CompanionEmotion.breathTempo`), and the settled pose slows it into
         // a longer, softer cycle (~6.6s). The sine period is 2·tempo.
         let tempo: Double = if settled {
-            max(state.animationTempo, 3.3)
+            max(posedState.animationTempo, 3.3)
         } else if let emotion {
-            emotion.breathTempo(from: state.animationTempo)
+            emotion.breathTempo(from: posedState.animationTempo)
         } else {
             state.animationTempo
         }
         let breath = (sin(elapsed * .pi / tempo) + 1) / 2
         let petBounce = interactionLevel.isMultiple(of: 2) ? 0.0 : -size * 0.060
-        let bodyColor = appearance.resolvedBodyColor(for: state)
+        let bodyColor = appearance.resolvedBodyColor(for: colorState)
         figure(elapsed: elapsed, breath: breath, petBounce: petBounce, bodyColor: bodyColor)
     }
 
@@ -130,7 +148,8 @@ struct CompanionView: View {
         ZStack {
             CompanionBaseLayers(
                 appearance: appearance,
-                state: state,
+                state: posedState,
+                colorState: colorState,
                 size: size,
                 breath: breath,
                 petBounce: petBounce,
@@ -140,7 +159,7 @@ struct CompanionView: View {
 
             CompanionFaceLayers(
                 face: face,
-                state: state,
+                state: posedState,
                 size: size,
                 facePetBounce: settled ? size * 0.05 : petBounce
             )
@@ -190,7 +209,10 @@ struct CompanionView: View {
 /// state and no clock — so the hero body stays one readable unit.
 private struct CompanionBaseLayers: View {
     let appearance: CompanionAppearance
+    /// The band the body is posed in (``CompanionView``'s `posedState`).
     let state: CompanionState
+    /// The state the `.state` colour slots follow; nil wears the neutral night colour.
+    let colorState: CompanionState?
     let size: CGFloat
     let breath: Double
     let petBounce: CGFloat
@@ -202,7 +224,7 @@ private struct CompanionBaseLayers: View {
             if appearance.sideItem != .none {
                 CompanionSideItemView(
                     item: appearance.sideItem,
-                    color: appearance.resolvedSideItemColor(for: state),
+                    color: appearance.resolvedSideItemColor(for: colorState),
                     size: size
                 )
                 .offset(x: size * 0.58, y: size * 0.28)
@@ -226,14 +248,14 @@ private struct CompanionBaseLayers: View {
 
             CompanionAccessoryView(
                 accessory: appearance.accessory,
-                color: appearance.resolvedAccessoryColor(for: state),
+                color: appearance.resolvedAccessoryColor(for: colorState),
                 size: size
             )
             .offset(y: petBounce)
 
             CompanionClothingView(
                 clothing: appearance.clothing,
-                color: appearance.resolvedClothingColor(for: state),
+                color: appearance.resolvedClothingColor(for: colorState),
                 size: size
             )
             .offset(y: petBounce)
@@ -641,10 +663,11 @@ struct CompanionMotes: View {
     }
 }
 
-/// A single drifting "z" for the settled pose — rises, drifts, and fades on a slow loop.
+/// A single drifting "z" — rises, drifts, and fades on a slow loop.
 ///
-/// A serif glyph with a slight rotation drift, overlaid by ``CompanionView`` only while the
-/// pet-cooldown `settled` flag is on: content and sleepy-happy, not asleep.
+/// A serif glyph with a slight rotation drift. ``CompanionView`` overlays it for the pet-cooldown
+/// `settled` pose (content and sleepy-happy), and ``CompanionEmotionMotif`` draws it as the asleep
+/// emotion's motif.
 struct CompanionDriftingZ: View {
     var size: CGFloat
     var elapsed: TimeInterval
@@ -935,26 +958,34 @@ struct CompanionSideItemView: View {
     }
 }
 
+/// Each colour slot resolved for a state, or for nil — the night, when the emotion hides the day
+/// (``CompanionEmotion/hidesTheDay``) and a slot that follows the state wears a neutral taupe instead.
+/// A custom hex or a fixed named colour is the person's own choice and says nothing about the day,
+/// so those keep their colour through the night.
 private extension CompanionAppearance {
-    func resolvedBodyColor(for state: CompanionState) -> Color {
+    func resolvedBodyColor(for state: CompanionState?) -> Color {
         color(hex: bodyCustomColorHex, fallback: bodyColor, state: state)
     }
 
-    func resolvedAccessoryColor(for state: CompanionState) -> Color {
+    func resolvedAccessoryColor(for state: CompanionState?) -> Color {
         color(hex: accessoryCustomColorHex, fallback: accessoryColor, state: state)
     }
 
-    func resolvedClothingColor(for state: CompanionState) -> Color {
+    func resolvedClothingColor(for state: CompanionState?) -> Color {
         color(hex: clothingCustomColorHex, fallback: clothingColor, state: state)
     }
 
-    func resolvedSideItemColor(for state: CompanionState) -> Color {
+    func resolvedSideItemColor(for state: CompanionState?) -> Color {
         color(hex: sideItemCustomColorHex, fallback: sideItemColor, state: state)
     }
 
-    private func color(hex: String?, fallback: CompanionAssetColor, state: CompanionState) -> Color {
+    private func color(hex: String?, fallback: CompanionAssetColor, state: CompanionState?) -> Color {
         if let hex, let color = Color(fernletHex: hex) {
             return color
+        }
+        guard let state else {
+            // A fixed slot ignores the state it is handed; only `.state` needs a night colour.
+            return fallback == .state ? .softTaupe : fallback.color(for: .okay)
         }
         return fallback.color(for: state)
     }

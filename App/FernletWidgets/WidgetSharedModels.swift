@@ -76,7 +76,7 @@ enum WidgetCompanionState: String {
 ///
 /// The raw values are the persisted contract, exactly as the app writes them into each
 /// `EmotionMoment.emotionRaw`; an unknown raw value decodes to nil and the widget draws the plain
-/// state face. Only six of the app's eleven emotions ever reach this process — the body-signal
+/// state face. Only seven of the app's twelve emotions ever reach this process — the body-signal
 /// (`calm`, `frazzled`), friend-heart (`loved`, `comforted`) and petting (`playful`) ones stay in
 /// the app, so they have no case here. `LocalizationBoundaryTests` pins this list against the app's
 /// `isWidgetPublishable` set.
@@ -85,8 +85,18 @@ enum WidgetCompanionEmotion: String {
     case sad
     case tired
     case sleepy
+    /// Fast asleep after the bedtime wind-down (owner decision 2026-10-21) — see ``hidesTheDay``.
+    case asleep
     case hungry
     case thirsty
+
+    /// Whether this emotion hides how the day went — the twin of the app's
+    /// `CompanionEmotion.hidesTheDay`. True only for ``asleep``: every family then draws the neutral
+    /// night colour, writes and speaks "Asleep" with no state, drops the care reading, and the Lock
+    /// Screen may draw it (it says nothing about the day).
+    var hidesTheDay: Bool {
+        self == .asleep
+    }
 
     /// The emotion's localized standalone name ("Sleepy") — the display fork of the frozen token.
     ///
@@ -102,6 +112,8 @@ enum WidgetCompanionEmotion: String {
                             comment: "Companion feeling: low on energy")
         case .sleepy: String(localized: "companionEmotion.sleepy", defaultValue: "Sleepy",
                              comment: "Companion feeling during the person's bedtime hours")
+        case .asleep: String(localized: "companionEmotion.asleep", defaultValue: "Asleep",
+                             comment: "Companion feeling once it has fallen asleep for the night. Says nothing about how the day went")
         case .hungry: String(localized: "companionEmotion.hungry", defaultValue: "Hungry",
                              comment: "Companion feeling when no meal has been logged in a while")
         case .thirsty: String(localized: "companionEmotion.thirsty", defaultValue: "Thirsty",
@@ -120,6 +132,8 @@ enum WidgetCompanionEmotion: String {
                             comment: "Follows the companion's state: 'Tired, feeling tired'")
         case .sleepy: String(localized: "companionEmotion.feeling.sleepy", defaultValue: "feeling sleepy",
                              comment: "Follows the companion's state: 'Okay, feeling sleepy'")
+        case .asleep: String(localized: "companionEmotion.feeling.asleep", defaultValue: "fast asleep",
+                             comment: "The companion's feeling once asleep. Never spoken after a state: an asleep companion is read as 'Asleep' alone")
         case .hungry: String(localized: "companionEmotion.feeling.hungry", defaultValue: "feeling hungry",
                              comment: "Follows the companion's state: 'Okay, feeling hungry'")
         case .thirsty: String(localized: "companionEmotion.feeling.thirsty", defaultValue: "feeling thirsty",
