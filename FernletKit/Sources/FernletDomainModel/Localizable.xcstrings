@@ -2661,6 +2661,12 @@
             "state" : "new",
             "value" : "Asleep"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dormido"
+          }
         }
       }
     },
@@ -2708,6 +2714,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "fast asleep"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "está profundamente dormido"
           }
         }
       }

@@ -36,7 +36,14 @@
       }
     },
     "%lld percent" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld por ciento"
+          }
+        }
+      }
     },
     "%lld × %@" : {
       "comment" : "Live Activity: last time's sets × reps for this lift, e.g. '3 × 8'. Reps are as logged ('8', '8-10').",
@@ -177,7 +184,14 @@
       }
     },
     "Care score" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Puntuación de cuidado"
+          }
+        }
+      }
     },
     "Cooking" : {
       "localizations" : {
@@ -932,7 +946,14 @@
       }
     },
     "Today's water, with a button to add a bottle." : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El agua de hoy, con un botón para agregar una botella."
+          }
+        }
+      }
     },
     "Took 15 seconds off your rest." : {
       "comment" : "Siri / Shortcuts: spoken after '−15 s' shortened the rest.",
@@ -1060,7 +1081,14 @@
       }
     },
     "Your companion, as you dressed it, and how its day is going." : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu compañero, con la ropa que le pusiste, y cómo va su día."
+          }
+        }
+      }
     },
     "Your rest is already at its 10-minute limit." : {
       "comment" : "Spoken when '+15 s' did nothing because the rest is already 10 minutes long (Siri, Shortcuts, and VoiceOver in the runner).",
@@ -1139,6 +1167,12 @@
             "state" : "new",
             "value" : "Asleep"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dormido"
+          }
         }
       }
     },
@@ -1150,6 +1184,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "fast asleep"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "está profundamente dormido"
           }
         }
       }
@@ -1576,6 +1616,12 @@
             "state" : "new",
             "value" : "%1$@ · %2$@"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ · %2$@"
+          }
         }
       }
     },
@@ -1587,6 +1633,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Sleeping soundly."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Durmiendo profundamente."
           }
         }
       }
@@ -1600,6 +1652,12 @@
             "state" : "new",
             "value" : "A brand-new day."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un día recién estrenado."
+          }
         }
       }
     },
@@ -1611,6 +1669,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Just pottering about."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dando vueltas sin prisa."
           }
         }
       }
@@ -1624,6 +1688,12 @@
             "state" : "new",
             "value" : "Winding down now."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ya me voy relajando."
+          }
         }
       }
     },
@@ -1635,6 +1705,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Taking the morning slowly."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tomándome la mañana con calma."
           }
         }
       }
@@ -1648,6 +1724,12 @@
             "state" : "new",
             "value" : "Having a quiet nap."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tomando una siesta tranquila."
+          }
         }
       }
     },
@@ -1659,6 +1741,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Snuggling in for the night."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Acurrucándome para la noche."
           }
         }
       }
@@ -1672,6 +1760,12 @@
             "state" : "new",
             "value" : "Curled up a while longer."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Acurrucado un ratito más."
+          }
         }
       }
     },
@@ -1683,6 +1777,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Tucked in with a blanket."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Arropado con una mantita."
           }
         }
       }
@@ -1696,6 +1796,12 @@
             "state" : "new",
             "value" : "Resting up for tomorrow."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Descansando para mañana."
+          }
         }
       }
     },
@@ -1707,6 +1813,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Taking it gently today."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy voy con calma."
           }
         }
       }
@@ -1720,6 +1832,12 @@
             "state" : "new",
             "value" : "The sun found me this afternoon."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El sol me encontró esta tarde."
+          }
         }
       }
     },
@@ -1731,6 +1849,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Getting cozy for the night."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Poniéndome cómodo para la noche."
           }
         }
       }
@@ -1744,6 +1868,12 @@
             "state" : "new",
             "value" : "Woke up feeling light today."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy desperté ligero."
+          }
         }
       }
     },
@@ -1755,6 +1885,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "A slow sort of day."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un día más bien lento."
           }
         }
       }
@@ -1768,6 +1904,12 @@
             "state" : "new",
             "value" : "Ready for a long rest."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Listo para un largo descanso."
+          }
         }
       }
     },
@@ -1779,6 +1921,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Still a little sleepy. That's okay."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Todavía con un poco de sueño. Está bien."
           }
         }
       }
@@ -1800,6 +1948,24 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "of %lld bottles"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "de %lld botella"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "de %lld botellas"
                 }
               }
             }
@@ -1832,6 +1998,34 @@
                     "stringUnit" : {
                       "state" : "translated",
                       "value" : "%arg bottles"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$lld de %#@target@"
+          },
+          "substitutions" : {
+            "target" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%arg botella"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%arg botellas"
                     }
                   }
                 }

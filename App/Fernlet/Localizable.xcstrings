@@ -15828,7 +15828,14 @@
       }
     },
     "Not available in this language" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No disponible en este idioma"
+          }
+        }
+      }
     },
     "Not available on this iPhone" : {
       "localizations" : {
