@@ -6853,6 +6853,10 @@ final class FernletStore {
         // when, and the number it said — some of them Health-derived. Plain `UserDefaults` removals,
         // like the petting state above; the in-memory tally goes with them.
         SillyStatsCompanionPacer.clearPersistentState()
+        // The stamp book (`fernlet.sillyStats.stamps`, `…stampBookStartDay`): which stats have
+        // appeared and on what day — a dated trail of the diary this wipe destroys, and partly
+        // Health-derived, so device-local. Cleared like the milestone ledger; plain removals.
+        SillyStampStore.clearPersistentState()
         sillyStats.clear()
 
         // The device-local AI audit log (Ladder §7.2) — a per-device ledger of AI-call metadata, never
@@ -7185,6 +7189,9 @@ final class FernletStore {
     private func handleAfterSnapshotSave(didPersist: Bool) {
         rebuildDerivedSignals()
         reconcileMilestones(days: [todayKey: day])
+        // A silly stat that just appeared earns its stamp now, not at the next launch (debounced,
+        // and inert once every stat has its stamp).
+        sillyStats.scheduleRetally(store: self)
         guard didPersist else { return }
         // Mirror the benign widget snapshot on the same flush path every mutation funnels through
         // (SnapshotSaveCoordinator.schedule()/flushPending() → performSnapshotSave → here).

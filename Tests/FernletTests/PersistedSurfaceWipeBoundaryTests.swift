@@ -207,6 +207,10 @@ struct PersistedSurfaceWipeBoundaryTests {
         "fernlet.sillyStats.lastMentionKind": .cleared(token: "SillyStatsCompanionPacer.clearPersistentState"),
         "fernlet.sillyStats.nextMentionDay": .cleared(token: "SillyStatsCompanionPacer.clearPersistentState"),
         "fernlet.sillyStats.lastMentionValues": .cleared(token: "SillyStatsCompanionPacer.clearPersistentState"),
+        // The silly stats' stamp book (2026-10-22): which stats have appeared and on what day — a
+        // dated trail of the diary, partly Health-derived, so device-local — and the book's first day.
+        "fernlet.sillyStats.stamps": .cleared(token: "SillyStampStore.clearPersistentState"),
+        "fernlet.sillyStats.stampBookStartDay": .cleared(token: "SillyStampStore.clearPersistentState"),
         // The plaintext half of the Health capability ledger. The live record is a keychain row now;
         // this defaults key is the legacy copy the ledger drains, and `clear` removes it directly.
         "fernlet.healthkit.requested-capabilities": .cleared(token: "HealthCapabilityRequestLedger.clear"),

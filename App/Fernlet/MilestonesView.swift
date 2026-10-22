@@ -169,7 +169,8 @@ struct MilestonesView: View {
         .buttonStyle(.plain)
     }
 
-    /// The way into the silly stats, pushed inside this sheet's stack like the keepsake shelf.
+    /// The way into the silly stats and their stamp book, pushed inside this sheet's stack like the
+    /// keepsake shelf.
     private var sillyStatsLink: some View {
         NavigationLink {
             SillyStatsList(store: store)
@@ -179,7 +180,7 @@ struct MilestonesView: View {
             HStack(spacing: 8) {
                 Image(systemName: "face.smiling")
                     .font(.footnote.weight(.semibold))
-                Text("Silly stats")
+                Text("Silly stats and stamps")
                     .font(.fernlet(.label))
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.forward")

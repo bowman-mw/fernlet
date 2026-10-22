@@ -4,7 +4,8 @@
 //
 //  The silly stats page (a large sheet from the Home card, or pushed from Milestones) and the Home
 //  card itself. Only stats with something behind them show; the rest stay hidden until life gets
-//  around to them, with no list of what is missing — nothing here is a goal.
+//  around to them, with no list of what is missing — nothing here is a goal. The stamp book
+//  (`SillyStampViews`) sits at the top of the page once a stat has earned its stamp.
 //
 
 import SwiftUI
@@ -35,7 +36,8 @@ struct SillyStatsView: View {
     }
 }
 
-/// The revealed stat cards, refreshed from the diary and Apple Health each time they appear.
+/// The stamp book and the revealed stat cards, refreshed from the diary and Apple Health each time
+/// they appear.
 ///
 /// Used by the sheet and by the push from Milestones.
 struct SillyStatsList: View {
@@ -45,6 +47,9 @@ struct SillyStatsList: View {
         let stats = store.sillyStats
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
+                if !stats.stamps.isEmpty {
+                    SillyStampBookCard(stamps: stats.stamps)
+                }
                 if stats.revealed.isEmpty {
                     Text("Nothing silly to report yet. Stats turn up on their own as you log — no hurry.")
                         .font(.fernlet(.body))

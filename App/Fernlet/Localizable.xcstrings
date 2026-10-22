@@ -176,6 +176,17 @@
         }
       }
     },
+    "%@ has begun." : {
+      "comment" : "Banner line under a new silly stats stamp; the value is the silly stat's title, which just appeared for the first time",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Empezó “%@”."
+          }
+        }
+      }
+    },
     "%@ instead of %@" : {
       "comment" : "A saved swap: the first argument is planned wherever the second would be",
       "localizations" : {
@@ -594,6 +605,22 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
+    "%@, %@, earned %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@, earned %3$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@, %2$@, obtenido el %3$@"
           }
         }
       }
@@ -2227,12 +2254,56 @@
         }
       }
     },
+    "A banana! Now I have something to measure with." : {
+      "comment" : "Companion line when the Top Banana stamp is earned (first banana)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Un plátano! Ya tengo con qué medir."
+          }
+        }
+      }
+    },
+    "A cookie! Respect." : {
+      "comment" : "Companion line when the Crumb Goblin stamp is earned (first cookie)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Una galleta! Respeto."
+          }
+        }
+      }
+    },
     "A couple of readings looked close. Pick the one that fits." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Hay un par de lecturas parecidas. Elige la que corresponda."
+          }
+        }
+      }
+    },
+    "A cup! I'm starting a tower." : {
+      "comment" : "Companion line when the Bean Counter stamp is earned (first coffee or tea)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Una taza! Voy a empezar una torre."
+          }
+        }
+      }
+    },
+    "A feature film of dreams. I'd watch it." : {
+      "comment" : "Companion line when the Opening Night stamp is earned (two hours of dream sleep)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un largometraje de sueños. Yo lo vería."
           }
         }
       }
@@ -2297,6 +2368,17 @@
         }
       }
     },
+    "A grand tour has begun. A small one, so far." : {
+      "comment" : "Companion line when the Wheels and Waves stamp is earned (first stretch of swimming or cycling)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Empezó una gran vuelta. Pequeñita, por ahora."
+          }
+        }
+      }
+    },
     "A kind, safe space" : {
       "localizations" : {
         "es" : {
@@ -2340,6 +2422,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Un ritmo al que aún podrías hablar."
+          }
+        }
+      }
+    },
+    "A pat! I'm counting those, you know." : {
+      "comment" : "Companion line when the Good Bean stamp is earned (first pat)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Una caricia! Las estoy contando, ¿eh?"
           }
         }
       }
@@ -2461,6 +2554,17 @@
         }
       }
     },
+    "A shower concert! Encore!" : {
+      "comment" : "Companion line when the Encore stamp is earned (first shower)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Un concierto en la ducha! ¡Otra, otra!"
+          }
+        }
+      }
+    },
     "A small daily care companion built around privacy, local control, and enoughness." : {
       "localizations" : {
         "es" : {
@@ -2514,6 +2618,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Un toque cuando termina un descanso o un ejercicio por tiempo. Los sonidos son discretos, respetan el interruptor de tono/silencio y suenan sobre tu música sin pausarla. La pantalla se mantiene encendida durante el entrenamiento. Si bloqueas el celular, el final de un descanso o de un ejercicio por tiempo te llega como notificación si las notificaciones de Fernlet están permitidas, y el entrenamiento espera en ese paso hasta que vuelvas a abrir Fernlet."
+          }
+        }
+      }
+    },
+    "A whole koala day of sleep. Very eucalyptus." : {
+      "comment" : "Companion line when the Eucalyptus Dreams stamp is earned (20 hours of sleep, one koala's day)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un día de koala entero de sueño. Muy eucalipto."
           }
         }
       }
@@ -3622,6 +3737,17 @@
         }
       }
     },
+    "An egg! The hens have been notified." : {
+      "comment" : "Companion line when the Sunny Side Up stamp is earned (first egg)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Un huevo! Ya les avisé a las gallinas."
+          }
+        }
+      }
+    },
     "Analyzing" : {
       "localizations" : {
         "es" : {
@@ -4256,6 +4382,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Ser un dispositivo de recuperación"
+          }
+        }
+      }
+    },
+    "Bean Counter" : {
+      "comment" : "Silly stats stamp name, earned when Coffee Tower first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Contador de granos"
           }
         }
       }
@@ -6588,6 +6725,17 @@
         }
       }
     },
+    "Crumb Goblin" : {
+      "comment" : "Silly stats stamp name, earned when Cookies Per Day first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Duende de las migas"
+          }
+        }
+      }
+    },
     "Crypto format census (test-only view)" : {
       "localizations" : {
         "es" : {
@@ -8347,6 +8495,17 @@
         }
       }
     },
+    "Encore" : {
+      "comment" : "Silly stats stamp name, earned when Shower Concerts first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Otra, otra!"
+          }
+        }
+      }
+    },
     "Encrypt & back up" : {
       "localizations" : {
         "es" : {
@@ -8735,6 +8894,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Errores"
+          }
+        }
+      }
+    },
+    "Eucalyptus Dreams" : {
+      "comment" : "Silly stats stamp name, earned when Koala Days (sleep) first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sueños de eucalipto"
           }
         }
       }
@@ -10198,6 +10368,17 @@
         }
       }
     },
+    "Floss Boss" : {
+      "comment" : "Silly stats stamp name, earned when Floss Rope first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hilo de oro"
+          }
+        }
+      }
+    },
     "Floss Rope" : {
       "comment" : "Silly stat title: floss used, laid end to end",
       "localizations" : {
@@ -10205,6 +10386,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Cuerda de hilo dental"
+          }
+        }
+      }
+    },
+    "Floss! I'm saving the string." : {
+      "comment" : "Companion line when the Floss Boss stamp is earned (first floss)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Hilo dental! Voy a guardar el hilo."
           }
         }
       }
@@ -10890,6 +11082,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Bien"
+          }
+        }
+      }
+    },
+    "Good Bean" : {
+      "comment" : "Silly stats stamp name, earned the first time the companion is petted; 'good bean' is an affectionate nickname",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Puro cariño"
           }
         }
       }
@@ -11671,6 +11874,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Horas dormidas, en días de koala de 20 horas."
+          }
+        }
+      }
+    },
+    "House Special" : {
+      "comment" : "Silly stats stamp name, earned when a homemade recipe becomes the Signature Dish",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Especialidad de la casa"
           }
         }
       }
@@ -15026,6 +15240,34 @@
         }
       }
     },
+    "New stamp: %@" : {
+      "comment" : "Banner when a silly stats stamp is earned; the value is the stamp's name",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nuevo sello: %@"
+          }
+        }
+      }
+    },
+    "New stamp: %@. %@ has begun." : {
+      "comment" : "Spoken by VoiceOver when a silly stats stamp is earned; the values are the stamp's name and the silly stat's title",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "New stamp: %1$@. %2$@ has begun."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nuevo sello: %1$@. Empezó “%2$@”."
+          }
+        }
+      }
+    },
     "New to Fernlet" : {
       "localizations" : {
         "es" : {
@@ -16741,6 +16983,17 @@
         }
       }
     },
+    "Opening Night" : {
+      "comment" : "Silly stats stamp name, earned when Dream Cinema (dream sleep) first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Noche de estreno"
+          }
+        }
+      }
+    },
     "Opens %@ straight away" : {
       "localizations" : {
         "es" : {
@@ -16842,6 +17095,16 @@
         }
       }
     },
+    "Opens your stamp book." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre tu álbum de sellos."
+          }
+        }
+      }
+    },
     "Optional" : {
       "localizations" : {
         "es" : {
@@ -16936,6 +17199,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Otros músculos que trabaja"
+          }
+        }
+      }
+    },
+    "Outlived a Gastrotrich" : {
+      "comment" : "Silly stats stamp name, earned after three days together; a gastrotrich is a tiny creature that lives about three days",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Le ganamos a un gastrotrico"
           }
         }
       }
@@ -17648,6 +17922,17 @@
         }
       }
     },
+    "Piano Mover" : {
+      "comment" : "Silly stats stamp name, earned when Total Tonnage (weight lifted) first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cargador de pianos"
+          }
+        }
+      }
+    },
     "Pick a code you have not used as your passcode. Fernlet will not accept the same one for both." : {
       "localizations" : {
         "es" : {
@@ -17735,6 +18020,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Gráfico de pizza"
+          }
+        }
+      }
+    },
+    "Pizza! I've started you a pie chart." : {
+      "comment" : "Companion line when the Slice of Life stamp is earned (first pizza)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Pizza! Ya te empecé un gráfico de pizza."
           }
         }
       }
@@ -20499,6 +20795,17 @@
         }
       }
     },
+    "Rubber Duck" : {
+      "comment" : "Silly stats stamp name, earned when Bathtub Index (water drunk) first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Patito de goma"
+          }
+        }
+      }
+    },
     "Run a media at-rest conversion pass?" : {
       "localizations" : {
         "es" : {
@@ -22387,6 +22694,16 @@
         }
       }
     },
+    "Silly stats and stamps" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estadísticas absurdas y sellos"
+          }
+        }
+      }
+    },
     "Six tiles on Home" : {
       "localizations" : {
         "es" : {
@@ -22578,6 +22895,17 @@
         }
       }
     },
+    "Slice of Life" : {
+      "comment" : "Silly stats stamp name, earned when Pizza Pie Chart first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Rebanada de vida"
+          }
+        }
+      }
+    },
     "Slices eaten, eight to a pizza." : {
       "comment" : "Silly stat: how pizza is counted",
       "localizations" : {
@@ -22605,6 +22933,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Respiración lenta"
+          }
+        }
+      }
+    },
+    "Small Step" : {
+      "comment" : "Silly stats stamp name, earned when the walk to the Moon first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un pequeño paso"
           }
         }
       }
@@ -22986,6 +23325,17 @@
         }
       }
     },
+    "Stairs! Up and up we go." : {
+      "comment" : "Companion line when the Up and Up stamp is earned (first stair workout)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Escaleras! Arriba y más arriba."
+          }
+        }
+      }
+    },
     "Stairway to Somewhere" : {
       "comment" : "Silly stat title: height climbed on a stair machine",
       "localizations" : {
@@ -22993,6 +23343,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Escalera a ninguna parte"
+          }
+        }
+      }
+    },
+    "Stamp book" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Álbum de sellos"
           }
         }
       }
@@ -23238,6 +23598,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Empezar entrenamiento"
+          }
+        }
+      }
+    },
+    "Starting Line" : {
+      "comment" : "Silly stats stamp name, earned when Brush Marathon first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Línea de salida"
           }
         }
       }
@@ -23710,6 +24081,17 @@
         }
       }
     },
+    "Sunny Side Up" : {
+      "comment" : "Silly stats stamp name, earned when Egg-onomics first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Huevo estrellado"
+          }
+        }
+      }
+    },
     "Swap" : {
       "localizations" : {
         "es" : {
@@ -24021,6 +24403,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Trabaja: %@"
+          }
+        }
+      }
+    },
+    "Teeth, brushed. The marathon begins." : {
+      "comment" : "Companion line when the Starting Line stamp is earned (first tooth brushing)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dientes cepillados. Empieza el maratón."
           }
         }
       }
@@ -25306,6 +25699,17 @@
         }
       }
     },
+    "Three days! We've outlived a gastrotrich." : {
+      "comment" : "Companion line when the Outlived a Gastrotrich stamp is earned (three days together)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Tres días! Le ganamos a un gastrotrico."
+          }
+        }
+      }
+    },
     "Three songs per shower. Assumed, obviously." : {
       "comment" : "Silly stat: how shower concerts are counted",
       "localizations" : {
@@ -25313,6 +25717,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Tres canciones por ducha. Calculadas a ojo, claro."
+          }
+        }
+      }
+    },
+    "Three times! It's a house special now." : {
+      "comment" : "Companion line when the House Special stamp is earned (a homemade recipe logged three times)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Tres veces! Ya es la especialidad de la casa."
           }
         }
       }
@@ -25380,6 +25795,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Se acabó el tiempo. Toca Siguiente cuando estés ^[listo](inflect: true); nada avanza solo."
+          }
+        }
+      }
+    },
+    "To Step or Not to Step" : {
+      "comment" : "Silly stats stamp name, earned when steps reach one Hamlet; a play on Hamlet's famous line",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Caminar o no caminar"
           }
         }
       }
@@ -25570,6 +25996,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Quité 15 segundos a tu descanso."
+          }
+        }
+      }
+    },
+    "Top Banana" : {
+      "comment" : "Silly stats stamp name, earned when Bananas for Scale first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Plátano jefe"
           }
         }
       }
@@ -26177,6 +26614,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "No me siento bien"
+          }
+        }
+      }
+    },
+    "Up and Up" : {
+      "comment" : "Silly stats stamp name, earned when Stairway to Somewhere first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cada vez más alto"
           }
         }
       }
@@ -26792,6 +27240,17 @@
         }
       }
     },
+    "Water! I'm filling a very small bathtub." : {
+      "comment" : "Companion line when the Rubber Duck stamp is earned (first water logged)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Agua! Estoy llenando una bañera muy pequeñita."
+          }
+        }
+      }
+    },
     "We found the backup key from your other device. To keep your encrypted backups in sync across devices, this device can switch to it. Backups made only on this device may need to be re-uploaded." : {
       "localizations" : {
         "es" : {
@@ -26835,6 +27294,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Lo haremos juntos. Ve al ritmo que te siente bien."
+          }
+        }
+      }
+    },
+    "We're a tenth of a percent of the way to the Moon." : {
+      "comment" : "Companion line when the Small Step stamp is earned (walked 0.1% of the way to the Moon)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ya llevamos una milésima del camino a la Luna."
           }
         }
       }
@@ -27123,6 +27593,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Qué se incluye"
+          }
+        }
+      }
+    },
+    "Wheels and Waves" : {
+      "comment" : "Silly stats stamp name, earned when Grand Tours (swims and rides) first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ruedas y olas"
           }
         }
       }
@@ -27885,6 +28366,17 @@
         }
       }
     },
+    "You lifted things! The pianos are nervous." : {
+      "comment" : "Companion line when the Piano Mover stamp is earned (first weights logged)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Levantaste cosas! Los pianos están nerviosos."
+          }
+        }
+      }
+    },
     "You marked yourself unwell — this can wait for another day. Rest counts too." : {
       "localizations" : {
         "es" : {
@@ -28246,6 +28738,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Has dormido ^[%@ día](inflect: true) de koala. Los koalas lo aprueban."
+          }
+        }
+      }
+    },
+    "You've walked a whole Hamlet. Bravo." : {
+      "comment" : "Companion line when the To Step or Not to Step stamp is earned (as many steps as Hamlet has words)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Caminaste un Hamlet entero. ¡Bravo!"
           }
         }
       }

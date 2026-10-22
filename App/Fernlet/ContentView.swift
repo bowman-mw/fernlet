@@ -129,6 +129,8 @@ struct ContentView: View {
     /// and by the `.workout` route (3b·AX3: the sheet opens `.large` when the kind chips can no
     /// longer fit the medium detent).
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// Read by the silly-stats stamp banner: it fades in place of sliding down under Reduce Motion.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(store: FernletStore, healthKitService: HealthKitService) {
         self.store = store
@@ -654,6 +656,9 @@ struct ContentView: View {
             PetInteractionGovernor.clearPersistentState()
             // Same for the silly stats' companion pacing: every seeded run starts with a mention due.
             SillyStatsCompanionPacer.clearPersistentState()
+            // And with an empty stamp book, which the launch refresh begins afresh from the seed.
+            SillyStampStore.clearPersistentState()
+            store.sillyStats.clear()
         }
         // Period log suite: cycle sharing OFF (the shipped default) whatever an earlier suite left
         // in this simulator's keychain. Before the sheet hook below presents anything.
@@ -874,6 +879,10 @@ struct ContentView: View {
             // up it rests on the keyboard instead of hiding behind it with the bar.
             .overlay(alignment: .bottom) { mealLogToastOverlay }
             .animation(.spring(response: 0.34, dampingFraction: 0.86), value: mealLogNotification?.id)
+            // A silly-stats stamp earned just now: a banner at the TOP, clear of the meal toast a
+            // cookie's log raises at the bottom.
+            .overlay(alignment: .top) { sillyStampBannerOverlay }
+            .animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.36, dampingFraction: 0.86), value: shownStampBanner)
             .fernletKeyboardOverlap($keyboardOverlap)
             .tint(Color.moss)
             .background(sceneBackground.ignoresSafeArea())
@@ -1982,6 +1991,65 @@ struct ContentView: View {
             .padding(.bottom, 8 + mealLogToastLift)
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
+    }
+
+    /// The stamp banner on screen: the first one waiting, held back while the launch screen, a root
+    /// sheet or the disposable camera covers the tabs, so a banner is never spent where nobody can
+    /// see it. A held banner stays queued and shows when the cover lifts.
+    private var shownStampBanner: SillyStatKind? {
+        guard launcher.isDone, !rootSheetIsCoveringTabs, !isDisposableCameraSessionActive else { return nil }
+        return store.sillyStats.pendingStampBanners.first
+    }
+
+    /// The top banner slot for a stamp earned just now (``SillyStampBanner``). Slides down from the
+    /// top, or fades under Reduce Motion. Claims only its own frame, like the meal toast, so the
+    /// page beneath stays reachable.
+    @ViewBuilder
+    private var sillyStampBannerOverlay: some View {
+        if let kind = shownStampBanner {
+            SillyStampBanner(kind: kind) { openStampBook(from: kind) }
+                .frame(maxWidth: 560)
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                .id(kind)
+                .task(id: kind) { await presentStampBanner(kind) }
+        }
+    }
+
+    /// Speaks the stamp banner for VoiceOver, holds it for its window, then lets the next one show.
+    ///
+    /// Cancelled when a sheet covers the banner before its window ends; the stamp then stays queued
+    /// and the banner (with its announcement) comes back when the sheet closes.
+    private func presentStampBanner(_ kind: SillyStatKind) async {
+        // Spoken once a closing sheet has settled — and when a meal toast is up, after that toast's
+        // own sentence, since an announcement cuts off the one before it. A reasoned pause, like
+        // `TaskConfirmation.sheetSettle`; the owner's VoiceOver device pass is where it is heard.
+        let pause = mealLogNotification == nil ? TaskConfirmation.sheetSettle : TaskConfirmation.sheetSettle + Self.stampAfterMealToastPause
+        // Read at post time, not at view construction: VoiceOver can be turned on mid-session. The
+        // banner opens the stamp book, so an assistive user gets the action window.
+        let window = FernletDismissalWindow.system.window(
+            standard: .seconds(4),
+            assistive: FernletDismissalWindow.assistiveActionWindow)
+        do {
+            try await Task.sleep(for: pause)
+            FernletAnnouncer.system.announce(.status, resolved: SillyStampCopy.announcement(for: kind))
+            try await Task.sleep(for: window)
+        } catch {
+            // Covered by a sheet, or the app is going away: the banner stays queued.
+            return
+        }
+        store.sillyStats.bannerShown(kind)
+    }
+
+    /// How long the stamp's announcement waits behind the meal toast's ("Meal logged. Undo is at
+    /// the bottom of the screen.") — about the time that sentence takes to speak.
+    static let stampAfterMealToastPause: Duration = .seconds(3)
+
+    /// The stamp banner's tap: opens the silly stats page, where the stamp book is.
+    private func openStampBook(from kind: SillyStatKind) {
+        store.sillyStats.bannerShown(kind)
+        activeSheet = .sillyStats
     }
 
     /// The toast's "Undo": removes the just-logged meal(s) from the day they were logged to — for

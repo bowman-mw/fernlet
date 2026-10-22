@@ -895,6 +895,12 @@ struct HomeView: View {
     }
 
     private var ambientThought: String {
+        // A silly-stats stamp earned just now: the companion marks it, until a journal entry comes
+        // after it. Not on a rest, sick or needs-gentleness day, when it keeps silly stats to itself.
+        if let line = store.sillyStats.stampLine(todayKey: store.todayKey, latestJournal: store.day.journals.last?.date),
+           !SillyStatsService.isQuietDay(signals: store.derivedSignals) {
+            return line
+        }
         // One whole sentence per mood (`HomeCopy`), never the mood chip's label lowercased into an
         // English sentence: a translation has to agree the word with the sentence around it.
         if let last = store.day.journals.last {
@@ -936,6 +942,8 @@ struct HomeView: View {
         playfulUntil = Date().addingTimeInterval(Self.playfulBeat)
         let response = petGovernor.registerPet()
         if let cue = Self.petFeedbackEvent(for: response) { FernletFeedback.system.play(cue) }
+        // The first pat ever begins Pats Given, and so earns its stamp.
+        store.sillyStats.scheduleRetally(store: store)
         switch response {
         case .bounce:
             performPetBounce(settling: false)
