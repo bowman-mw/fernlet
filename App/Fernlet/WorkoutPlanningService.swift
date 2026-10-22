@@ -220,7 +220,10 @@ final class WorkoutPlanningService {
                 preferences: preferences
             )
             guard candidates.isEmpty == false else { continue }
-            let payload = WorkoutAdjustmentPayload(request: trimmed, currentExercises: currentNames, candidateCount: candidates.count)
+            let payload = WorkoutAdjustmentPayload(
+                request: trimmed, currentExercises: currentNames, candidateCount: candidates.count,
+                promptLanguage: AIPromptLanguage.forApp()
+            )
             do {
                 if let adjusted = try await FoundationWorkoutAdjustmentModel.adjust(
                     payload, candidates: candidates,

@@ -99,7 +99,15 @@ persists nothing — every entry point returns a value to an app-side caller, wh
 Capability rungs beyond the on-device model (Private Cloud Compute, BYOK) are iOS 27 APIs and
 report unavailable via ``SystemLanguageModelCapabilityProvider``, the single slot-in point for them.
 The same provider maps the system model's unavailable reason (not eligible, Apple Intelligence off,
-not ready) onto `OnDeviceModelAvailability` for the app's Settings row.
+not ready) onto `OnDeviceModelAvailability` for the app's Settings row, and applies the language gate,
+``OnDeviceModelLanguage`` (localization plan §5.1): a ready model that does not support the app's
+language is `languageNotSupported`, so every call site takes its deterministic path. Each provider's
+instructions append the line its payload's `AIPromptLanguage` gives — the reply language for the
+journal memory line, the "keep these fields English" line for food selection, substitution and the
+adjuster — and are byte-identical in English. `RecipeWebImporter`'s ingredient-line reader takes its
+unit words from `RecipeUnit.spellings(languages:)` (FernletDomainModel's one unit table) plus the
+active language packs' count words and connectors, so a Spanish recipe page's "2 tazas de harina"
+reads as 2 cups of "harina".
 
 Note: three further AI files (`FoundationDishDecomposition`, `FoodProductWebImporter`,
 `LaunchPreparationService`) still live in the app target — they need app-side helpers a package
@@ -137,3 +145,4 @@ their helpers are extracted.
 ### Device capability
 
 - ``SystemLanguageModelCapabilityProvider``
+- ``OnDeviceModelLanguage``

@@ -1364,24 +1364,39 @@ struct LocalizationBoundaryTests {
     /// of the English lines a recipe page publishes, and the count words decide that a line binds
     /// "each" — matching inputs, never display text.
     @Test func frozenRecipeImportUnitWords() {
+        // The English unit table both `RecipeUnit.normalized` and the importer's line reader take
+        // their words from (localization plan §5.2 consolidated the importer's own regex list and its
+        // "tbsps"/"tsps" fold table into it).
         #expect(
-            RecipeWebImporter.unitAlternatives == [
-                #"fluid\s+ounces?"#, #"extra\s+large"#, #"extra\s+small"#, "milliliters?", "millilitres?",
-                "tablespoons?", "kilograms?", "milligrams?", "teaspoons?", #"fl\s*oz"#, "glass(?:es)?", "ounces?",
-                "pounds?", "liters?", "litres?", "grams?", "slices?", "pieces?", "cloves?", "medium", "large",
-                "small", "whole", "tbsps?", "tsps?", "cups?", "each", "lbs?", "mg", "kg", "ml", "oz", "g", "l"
+            RecipeUnit.englishSpellings.keys.sorted() == [
+                "cup", "cups", "each", "fl oz", "floz", "fluid ounce", "fluid ounces", "g", "glass",
+                "glasses", "gram", "grams", "item", "items", "kg", "kilogram", "kilograms", "l", "lb", "lbs",
+                "liter", "liters", "litre", "litres", "mg", "milligram", "milligrams", "milliliter",
+                "milliliters", "millilitre", "millilitres", "ml", "ounce", "ounces", "oz", "piece", "pieces",
+                "pound", "pounds", "serving", "servings", "slice", "slices", "tablespoon", "tablespoons",
+                "tbsp", "tbsps", "teaspoon", "teaspoons", "tsp", "tsps", "unit", "units",
+                "us fluid ounce", "us fluid ounces"
             ],
             """
-            The importer's unit alternatives changed. They are matched against the English ingredient \
-            lines recipe pages publish, LONGEST FIRST — a short unit placed before a longer one that \
-            starts the same way ("g" before "grams") takes the wrong word again.
+            The English unit spellings changed. They are matched against the English ingredient lines \
+            recipe pages publish and the units USDA prints; a renamed spelling stops reading a unit, \
+            and the importer's line reader is built from this same table.
             """
         )
         #expect(RecipeWebImporter.countWords == [
             "clove", "cloves", "extra large", "extra small", "large", "medium", "small", "whole"
         ])
-        #expect(RecipeWebImporter.unitSpellingFolds == ["tbsps": "tbsp", "tsps": "tsp"],
-                "plural abbreviations read out of English recipe lines — matching inputs, never display text")
+        // The reader tries LONGEST FIRST — a short unit placed before a longer one that starts the same
+        // way ("g" before "grams") takes the wrong word again — and still reads every word the old
+        // hand-kept list did.
+        let english = RecipeWebImporter.unitAlternatives(languages: .englishOnly)
+        let lengths = english.map { $0.replacingOccurrences(of: #"\s+"#, with: " ").count }
+        #expect(lengths == lengths.sorted(by: >))
+        for word in ["fluid ounces", "extra large", "milliliters", "tablespoons", "fl oz", "floz", "glasses",
+                     "pounds", "litres", "cloves", "medium", "whole", "tbsps", "tsps", "cups", "lbs", "g", "l"] {
+            #expect(english.contains(NSRegularExpression.escapedPattern(for: word)
+                .replacingOccurrences(of: " ", with: #"\s+"#)), "the line reader lost \(word)")
+        }
     }
 
     /// The notes Fernlet itself writes onto a meal or a recipe (Spanish round step 2, 2026-10-20).
@@ -6545,6 +6560,10 @@ struct LocalizationBoundaryTests {
         MasculineDefault(
             path: "App/Fernlet/FernletStore.swift", line: "let address = self?.effectiveUserProfile.sex.termOfAddress ?? .masculine",
             reason: "The store owns the cue director, so it outlives every schedule; the fallback cannot run, and reads as an unanswered profile."),
+        MasculineDefault(
+            path: "FernletKit/Sources/AIContext/AIPromptLanguage.swift",
+            line: "if address == .masculine { return \"When a word describes the person, use its masculine form.\" }",
+            reason: "A comparison, not a default: the prompt line spells out the term the caller passed, which every prose call site reads from effectiveUserProfile.sex."),
     ]
 
     /// No `.masculine` in shipping code but the pinned ones, each with its reason.

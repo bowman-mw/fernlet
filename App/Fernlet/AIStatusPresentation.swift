@@ -26,6 +26,8 @@ enum AIStatusPresentation: Equatable {
     case gettingReady
     /// The model is unavailable for a reason this build does not name.
     case notAvailableRightNow
+    /// The model is ready but does not support the language the app is running in.
+    case notAvailableInThisLanguage
 
     /// The presentation for an effective status on a device with the given availability. The person's
     /// own "Off" wins, since it is true on every device; otherwise a device that cannot run the model
@@ -41,6 +43,7 @@ enum AIStatusPresentation: Equatable {
         case .appleIntelligenceNotEnabled: self = .turnOnAppleIntelligence
         case .modelNotReady: self = .gettingReady
         case .unavailable: self = .notAvailableRightNow
+        case .languageNotSupported: self = .notAvailableInThisLanguage
         }
     }
 
@@ -55,6 +58,7 @@ enum AIStatusPresentation: Equatable {
         case .turnOnAppleIntelligence: "Turn on Apple Intelligence"
         case .gettingReady: "Getting ready"
         case .notAvailableRightNow: "Not available right now"
+        case .notAvailableInThisLanguage: "Not available in this language"
         }
     }
 
@@ -65,7 +69,8 @@ enum AIStatusPresentation: Equatable {
         switch self {
         case .status(.ready): .retryAvailable
         case .status(.sleepy), .status(.resting): .aiResting
-        case .status(.off), .notAvailableOnThisIPhone, .turnOnAppleIntelligence, .gettingReady, .notAvailableRightNow:
+        case .status(.off), .notAvailableOnThisIPhone, .turnOnAppleIntelligence, .gettingReady, .notAvailableRightNow,
+             .notAvailableInThisLanguage:
             .aiUnavailable
         }
     }

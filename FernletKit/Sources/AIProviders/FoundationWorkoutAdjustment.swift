@@ -145,6 +145,24 @@ public enum WorkoutAdjustmentCandidateBuilder {
 /// in `AIAuditLog`; session errors are audited and rethrown. A `nil` result leaves the original
 /// session intact. MainActor by the module's default isolation.
 public enum FoundationWorkoutAdjustmentModel {
+    /// The adjuster's instructions — then, outside English, the line saying the request may be in the
+    /// app's language while reps stay in the English forms shown, because `WorkoutTimedSessions`
+    /// reads "30 sec" back by its English unit word. The output carries no prose, so no reply
+    /// language and no term of address are sent.
+    nonisolated static func instructions(for payload: WorkoutAdjustmentPayload) -> String {
+        AIPromptLanguage.joined(
+            """
+            You adjust a strength workout to fit a person's request, e.g. "swap the squat", \
+            "I only have 30 minutes", "no barbell today", "go easier on my knee".
+            Rebuild the session as 3–6 exercises chosen ONLY from the numbered candidate list, using \
+            candidateNumber values. Keep what already works; change only what the request asks for. \
+            For a shorter session, return fewer exercises. Honour any equipment the person rules out.
+            Give realistic sets (2–6) and reps (e.g. "5", "8-12", or "30 sec").
+            """,
+            payload.promptLanguage.inputInstruction(keepingEnglish: "reps")
+        )
+    }
+
     /// Adjusts a session's exercises to honour a natural-language request, constrained to the
     /// candidate list (equipment- and injury-filtered). Returns nil when the model is unavailable
     /// or produces nothing usable, leaving the original session intact.
@@ -166,14 +184,7 @@ public enum FoundationWorkoutAdjustmentModel {
             let auditKind = payload.payloadKind
             let auditFields = payload.includedFieldNames
 
-            let instructions = """
-            You adjust a strength workout to fit a person's request, e.g. "swap the squat", \
-            "I only have 30 minutes", "no barbell today", "go easier on my knee".
-            Rebuild the session as 3–6 exercises chosen ONLY from the numbered candidate list, using \
-            candidateNumber values. Keep what already works; change only what the request asks for. \
-            For a shorter session, return fewer exercises. Honour any equipment the person rules out.
-            Give realistic sets (2–6) and reps (e.g. "5", "8-12", or "30 sec").
-            """
+            let instructions = Self.instructions(for: payload)
             let prompt = """
             Current session:
             \(currentLines.joined(separator: "\n"))

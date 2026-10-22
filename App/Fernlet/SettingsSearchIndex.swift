@@ -19,10 +19,13 @@
 // semantic catalog keys (`settings.search.title.*`, `settings.search.breadcrumb.*`), never a key
 // built from the token at runtime, so rewording a token can never orphan a translation. The search
 // synonyms stay English: matching vocabulary is per-language curation, not translation (Spanish
-// round, 2026-10-20).
+// round, 2026-10-20) — so each language beyond English curates its own in `SettingsSearchSynonyms`,
+// keyed by the frozen title and matched while that language is an input language (localization
+// plan §5, Phase 3).
 
 import Foundation
 import SwiftUI
+import FernletDomainModel
 
 /// Every addressable destination reachable from the Settings hub.
 ///
@@ -91,6 +94,9 @@ nonisolated struct SettingsSearchEntry: Identifiable {
     let displayBreadcrumb: LocalizedStringResource
     /// `title` + `keywords`, normalized once at construction.
     let searchableTokens: [String]
+    /// Each language's ``SettingsSearchSynonyms`` for this entry, normalized once at construction;
+    /// matched only while that language is an input language.
+    let synonymTokens: [FernletLanguage: [String]]
 
     init(title: String, display: LocalizedStringResource, keywords: [String],
          breadcrumb: SettingsSearchBreadcrumb, route: SettingsRoute) {
@@ -101,6 +107,16 @@ nonisolated struct SettingsSearchEntry: Identifiable {
         self.displayTitle = display
         self.displayBreadcrumb = breadcrumb.display
         self.searchableTokens = SettingsSearchIndex.tokens(in: ([title] + keywords).joined(separator: " "))
+        self.synonymTokens = Dictionary(uniqueKeysWithValues: FernletLanguage.allCases.map { language in
+            let synonyms = SettingsSearchSynonyms.table(for: language)[title, default: []]
+            return (language, SettingsSearchIndex.tokens(in: synonyms.joined(separator: " ")))
+        })
+    }
+
+    /// The tokens a query is matched against in `languages`: the frozen English ones, then each active
+    /// language's synonyms.
+    func matchableTokens(in languages: InputLanguages) -> [String] {
+        searchableTokens + languages.languages.flatMap { synonymTokens[$0] ?? [] }
     }
 
     // Stable and unique across the catalog (no two entries share route + breadcrumb + title), so
@@ -133,10 +149,14 @@ nonisolated struct SettingsSearchBreadcrumb: Sendable {
 /// deliberately self-contained, with no food-catalog import. `SettingsSearchIndexTests` asserts
 /// every ``SettingsRoute`` case has at least one entry.
 nonisolated enum SettingsSearchIndex {
-    /// Prefix-AND match over `title + keywords`: an entry is returned iff every query token is a
-    /// prefix of (or equal to) some searchable token. Empty/whitespace queries return nothing (the
-    /// caller keeps showing the Form). Catalog order is preserved so results are stable.
-    static func results(for query: String) -> [SettingsSearchEntry] {
+    /// Prefix-AND match over `title + keywords` and, for each active language, the entry's
+    /// ``SettingsSearchSynonyms``: an entry is returned iff every query token is a prefix of (or equal
+    /// to) some matchable token. Empty/whitespace queries return nothing (the caller keeps showing the
+    /// Form). Catalog order is preserved so results are stable.
+    ///
+    /// - Parameter languages: The input languages (English plus the app's language by default), so a
+    ///   Spanish interface finds "Modo oscuro" and an English one reads exactly what it always did.
+    static func results(for query: String, languages: InputLanguages = .current) -> [SettingsSearchEntry] {
         let queryTokens = tokens(in: query)
         guard !queryTokens.isEmpty else { return [] }
         return entries.filter { entry in
@@ -149,8 +169,9 @@ nonisolated enum SettingsSearchIndex {
                 return false
             }
             #endif
+            let tokens = entry.matchableTokens(in: languages)
             return queryTokens.allSatisfy { queryToken in
-                entry.searchableTokens.contains { $0 == queryToken || $0.hasPrefix(queryToken) }
+                tokens.contains { $0 == queryToken || $0.hasPrefix(queryToken) }
             }
         }
     }

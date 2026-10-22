@@ -933,9 +933,20 @@ public nonisolated enum FoodItemSearch {
     /// `eggs*` doesn't). Each form is applied as an equality-or-prefix match by the scorer and as a
     /// `form*` prefix term by FTS, so the two paths stay in lockstep: a food token passes iff some
     /// variant is a prefix of it, exactly what `form*` matches in the index.
+    ///
+    /// In an active ``LanguagePack``'s language its plural rules add their singulars too (Spanish
+    /// "limones" → "limon", "nueces" → "nuez"), so a Spanish plural the alias table does not know
+    /// still reaches a singular catalog name. English alone returns exactly what it always did.
     nonisolated public static func matchVariants(for token: String) -> [String] {
-        guard let stem = singularStem(token), stem != token else { return [token] }
-        return [token, stem]
+        var forms = [token]
+        if let stem = singularStem(token), stem != token { forms.append(stem) }
+        // R2: bounded by the active packs and their few rules.
+        for pack in InputLanguages.current.packs {
+            for form in pack.singularForms(of: token) where form.count >= 3 && !forms.contains(form) {
+                forms.append(form)
+            }
+        }
+        return forms
     }
 
     /// Conservative singular stem for a regular English plural. Only the two suffixes needed to reach

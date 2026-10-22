@@ -118,7 +118,7 @@ final class MealResolutionService {
             // Primary (M1): model decomposes the dish from world knowledge, catalog supplies macros.
             do {
                 if let resolved = try await FoundationDishDecompositionModel.decompose(
-                    MealDecompositionPayload(mealDescription: description, fallbackMealType: type),
+                    MealDecompositionPayload(mealDescription: description, fallbackMealType: type, promptLanguage: .forApp()),
                     catalog: host.foodCatalog,
                     gate: gate
                 ) {
@@ -137,7 +137,7 @@ final class MealResolutionService {
             let candidates = host.foodCatalog.candidates(for: description)
             do {
                 if let plan = try await FoundationFoodSelectionModel.resolve(
-                    FoodSelectionPayload(mealDescription: description, candidates: candidates, fallbackMealType: type),
+                    FoodSelectionPayload(mealDescription: description, candidates: candidates, fallbackMealType: type, promptLanguage: .forApp()),
                     gate: gate
                 ), let resolution = builtResolution(
                     from: plan,

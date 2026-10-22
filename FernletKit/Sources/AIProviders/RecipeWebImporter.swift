@@ -1060,22 +1060,26 @@ public enum RecipeWebImporter {
     // MARK: - Ingredient parsing
 
     /// The unit words the line parser reads after a leading amount, LONGEST FIRST, as regex
-    /// alternatives. Order matters twice: an alternation takes its first match, so "grams" must be
-    /// tried before "g" and "large" before "l"; and the pattern requires a word end after the unit, so
-    /// "g" can no longer take the first letter of "garlic" (before F11, "2 large eggs" read as 2 liters
-    /// of "arge eggs" and "1 lemon" as a liter of "emon"). FROZEN English matching inputs.
-    nonisolated static let unitAlternatives = [
-        #"fluid\s+ounces?"#, #"extra\s+large"#, #"extra\s+small"#, "milliliters?", "millilitres?",
-        "tablespoons?", "kilograms?", "milligrams?", "teaspoons?", #"fl\s*oz"#, "glass(?:es)?", "ounces?",
-        "pounds?", "liters?", "litres?", "grams?", "slices?", "pieces?", "cloves?", "medium", "large",
-        "small", "whole", "tbsps?", "tsps?", "cups?", "each", "lbs?", "mg", "kg", "ml", "oz", "g", "l"
-    ]
-
-    /// Plural abbreviations ``unitAlternatives`` matches ("tbsps?", "tsps?") that
-    /// `RecipeUnit.normalized` does not spell, each mapped to the spelling it does (fix round 1,
-    /// u3-L-U3-3: "2 tbsps olive oil" was read as a bare count — two 100 g servings of oil). FROZEN
-    /// English matching inputs, compared after lowercasing and collapsing inner whitespace.
-    nonisolated static let unitSpellingFolds: [String: String] = ["tbsps": "tbsp", "tsps": "tsp"]
+    /// alternatives: every spelling `RecipeUnit.normalized` reads in `languages`
+    /// (`RecipeUnit.spellings(languages:)` — the one unit table, localization plan §5.2) plus the
+    /// count words (``countWords`` and each active pack's), a space inside one matching any run of
+    /// whitespace.
+    ///
+    /// Order matters twice: an alternation takes its first match, so "grams" must be tried before "g"
+    /// and "large" before "l"; and the pattern requires a word end after the unit, so "g" can no
+    /// longer take the first letter of "garlic" (before F11, "2 large eggs" read as 2 liters of "arge
+    /// eggs" and "1 lemon" as a liter of "emon"). Longest first by characters, then alphabetical, so
+    /// the order is total. Before the consolidation this was a hand-kept regex list and the plural
+    /// abbreviations "tbsps"/"tsps" had a fold table of their own (fix round 1, u3-L-U3-3); both now
+    /// come from `RecipeUnit.englishSpellings`.
+    nonisolated static func unitAlternatives(languages: InputLanguages = .current) -> [String] {
+        let words = Set(RecipeUnit.spellings(languages: languages).keys)
+            .union(countWords)
+            .union(languages.packs.flatMap(\.countWords))
+        return words
+            .sorted { $0.count != $1.count ? $0.count > $1.count : $0 < $1 }
+            .map { NSRegularExpression.escapedPattern(for: $0).replacingOccurrences(of: " ", with: #"\s+"#) }
+    }
 
     /// Unicode vulgar fractions recipe pages write amounts with ("½ cup butter", "1½ cups flour"), and
     /// the ASCII fraction each folds to before a line is read. ICU's `\d` matches none of them (they
@@ -1107,9 +1111,11 @@ public enum RecipeWebImporter {
     /// ``unitAlternatives`` that must END there (whitespace, a comma, the line's end, or a period then
     /// one of those — "2 tbsp. butter"), then the food name, cleaned. nil when there is no leading
     /// amount, no name, or a unit word the reader matched but cannot use.
-    nonisolated static func parseIngredientLine(_ text: String) -> ParsedIngredientLine? {
+    nonisolated static func parseIngredientLine(
+        _ text: String, languages: InputLanguages = .current
+    ) -> ParsedIngredientLine? {
         let s = foldingVulgarFractions(text).trimmingCharacters(in: .whitespacesAndNewlines)
-        let units = unitAlternatives.joined(separator: "|")
+        let units = unitAlternatives(languages: languages).joined(separator: "|")
         let pattern = #"^(\d+\s+\d+/\d+|\d+/\d+|\d+(?:\.\d+)?)\s*(?:("# + units + #")\.?(?=[\s,]|$))?[\s,]*(.+)$"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
               let match = regex.firstMatch(in: s, range: NSRange(s.startIndex..<s.endIndex, in: s)),
@@ -1126,10 +1132,10 @@ public enum RecipeWebImporter {
         }
 
         guard let nRange = Range(match.range(at: 3), in: s) else { return nil }
-        let name = cleanFoodName(String(s[nRange]))
+        let name = cleanFoodName(String(s[nRange]), languages: languages)
         guard name.count >= 3 else { return nil }
 
-        guard let (unit, reading) = resolveUnit(unitStr) else { return nil }
+        guard let (unit, reading) = resolveUnit(unitStr, languages: languages) else { return nil }
         return ParsedIngredientLine(quantity: quantity, unit: unit, name: name, unitReading: reading)
     }
 
@@ -1180,20 +1186,28 @@ public enum RecipeWebImporter {
         return num / den
     }
 
-    /// The unit token a parsed unit word binds, and how it was read: a `RecipeUnit` spelling (after
-    /// collapsing inner whitespace and ``unitSpellingFolds``) is stated; a ``countWords`` word binds
-    /// "each" as a count; no word at all is a bare count ("1 lemon"), tried as "each" and then as one
-    /// serving. nil for a word the unit pattern matched but neither list reads — such a line is left
-    /// out and counted, never read as a bare count (fix round 1, u3-L-U3-3).
-    nonisolated private static func resolveUnit(_ unitString: String) -> (String, ParsedIngredientLine.UnitReading)? {
+    /// The unit token a parsed unit word binds, and how it was read: a `RecipeUnit` spelling in
+    /// `languages` (after collapsing inner whitespace) is stated; a count word (``countWords`` or an
+    /// active pack's) binds "each" as a count; no word at all is a bare count ("1 lemon"), tried as
+    /// "each" and then as one serving. nil for a word the unit pattern matched but neither list reads
+    /// — such a line is left out and counted, never read as a bare count (fix round 1, u3-L-U3-3).
+    nonisolated private static func resolveUnit(
+        _ unitString: String, languages: InputLanguages
+    ) -> (String, ParsedIngredientLine.UnitReading)? {
         let word = unitString.lowercased().split(whereSeparator: \.isWhitespace).joined(separator: " ")
         guard !word.isEmpty else { return (RecipeUnit.serving.rawValue, .bareCount) }
-        if let unit = RecipeUnit.normalized(unitSpellingFolds[word] ?? word) { return (unit.rawValue, .stated) }
-        if countWords.contains(word) { return (RecipeUnit.each.rawValue, .countWord) }
+        if let unit = RecipeUnit.normalized(word, languages: languages) { return (unit.rawValue, .stated) }
+        let folded = LanguagePack.folded(word)
+        if countWords.contains(word) || languages.packs.contains(where: { $0.countWords.contains(folded) }) {
+            return (RecipeUnit.each.rawValue, .countWord)
+        }
         return nil
     }
 
-    nonisolated private static func cleanFoodName(_ text: String) -> String {
+    /// The food name a line's text after its amount and unit names: no parenthetical notes, nothing
+    /// after a comma, and no leading preparation word or connector — English "of", and each active
+    /// pack's ``LanguagePack/quantityConnectors`` ("2 tazas de harina" names "harina").
+    nonisolated private static func cleanFoodName(_ text: String, languages: InputLanguages) -> String {
         var s = text
         // Strip parenthetical notes: "(optional)", "(about 2 cups)"
         s = s.replacingOccurrences(of: #"\s*\([^)]*\)"#, with: "", options: .regularExpression)
@@ -1203,6 +1217,7 @@ public enum RecipeWebImporter {
         let prefixes = ["fresh ", "frozen ", "chopped ", "diced ", "sliced ", "minced ",
                         "grated ", "shredded ", "cooked ", "uncooked ", "raw ",
                         "dried ", "canned ", "packed ", "of "]
+            + languages.packs.flatMap(\.quantityConnectors).map { $0 + " " }
         for prefix in prefixes where s.lowercased().hasPrefix(prefix) {
             s = String(s.dropFirst(prefix.count))
         }

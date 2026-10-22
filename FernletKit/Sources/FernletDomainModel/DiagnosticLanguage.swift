@@ -47,22 +47,33 @@ public nonisolated enum DiagnosticLanguage {
     /// word is not caught when spelled with separators inside it, which ``patterns`` would catch.
     nonisolated public static let wholeWordPatterns: Set<String> = ["manic"]
 
-    /// `patterns` pre-normalized once (they are compile-time constants), so `contains`
-    /// only has to normalize the varying input text per call — not every pattern.
-    private nonisolated static let normalizedPatterns: [String] = patterns.map(normalize)
+    /// ``patterns`` plus every ``LanguagePack``'s clinical stems, pre-normalized once (they are
+    /// compile-time constants), so `contains` only has to normalize the varying input text per call —
+    /// not every pattern.
+    ///
+    /// Every language's terms apply to every text, whatever the interface language (localization plan
+    /// §5.4): the privacy policy says clinical language is filtered, and a person can journal in
+    /// Spanish in an English app. `patterns` itself stays the English list.
+    private nonisolated static let normalizedPatterns: [String] =
+        (patterns + LanguagePack.all.flatMap(\.clinicalStems)).map(normalize)
+
+    /// ``wholeWordPatterns`` plus every ``LanguagePack``'s clinical whole words ("toc", "tdah",
+    /// "regla"), as one set.
+    private nonisolated static let allWholeWordPatterns: Set<String> =
+        wholeWordPatterns.union(LanguagePack.all.flatMap(\.clinicalWholeWords))
 
     /// Returns `true` if the supplied text contains clinical/diagnostic language.
     ///
     /// IMPORTANT — this is **best-effort defense-in-depth, not a guarantee.** A keyword screen can
-    /// always be evaded (synonyms, novel phrasing, foreign-language terms) and intentionally
+    /// always be evaded (synonyms, novel phrasing, a language without a ``LanguagePack``) and intentionally
     /// over-matches (e.g. "period of time", "bicycle") because a silent over-reject is fail-safe for a
     /// privacy gate. The load-bearing guarantees elsewhere are: on-device inference (Apple Foundation
     /// Models — a bypass never causes network egress), the typed `AIContextPayload` allowlist (only the
     /// declared fields can reach a prompt), and the `S3BoundaryTests` grep-wall. Do not treat this
     /// classifier as a hard boundary.
     ///
-    /// Matching normalizes BOTH the input and each ``patterns`` entry down to lowercase alphanumerics
-    /// before the substring test, so trivial separator-injection evasions ("d e p r e s s i o n", "self.harm",
+    /// Matching normalizes BOTH the input and each pattern down to lowercase, diacritic-folded
+    /// alphanumerics before the substring test ("depresión" reads "depresion"), so trivial separator-injection evasions ("d e p r e s s i o n", "self.harm",
     /// "self_harm", "selfharm", "p.t.s.d", "bi-polar") are still caught. Normalization can only widen
     /// coverage; it never lets a previously-caught term slip through. (It can occasionally manufacture a
     /// false positive when stripping spaces fuses short tokens — e.g. "taco cdr" → contains "ocd" — which
@@ -74,15 +85,22 @@ public nonisolated enum DiagnosticLanguage {
         return containsWholeWord(text)
     }
 
-    /// Whether any ``wholeWordPatterns`` entry is one of `text`'s words (lowercased, split on every
-    /// character that is not a letter or digit).
+    /// Whether any whole-word pattern (``wholeWordPatterns`` and every pack's) is one of `text`'s
+    /// words (folded, split on every character that is not a letter or digit).
     private static func containsWholeWord(_ text: String) -> Bool {
-        let words = text.lowercased().split { !($0.isLetter || $0.isNumber) }
-        return words.contains { wholeWordPatterns.contains(String($0)) }
+        let words = folded(text).split { !($0.isLetter || $0.isNumber) }
+        return words.contains { allWholeWordPatterns.contains(String($0)) }
     }
 
-    /// Lowercase + drop every non-alphanumeric character (whitespace, punctuation, separators).
+    /// Folded (lowercase, diacritics dropped, the locale-independent rules) and stripped of every
+    /// non-alphanumeric character (whitespace, punctuation, separators). The diacritic fold is what
+    /// lets an unaccented stem catch an accented word; like every other step it only widens coverage.
     private static func normalize(_ value: String) -> String {
-        String(value.lowercased().unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) })
+        String(folded(value).unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) })
+    }
+
+    /// Lowercase and diacritic-folded with `locale: nil`, so the screen reads the same on every device.
+    private static func folded(_ value: String) -> String {
+        value.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil).lowercased()
     }
 }

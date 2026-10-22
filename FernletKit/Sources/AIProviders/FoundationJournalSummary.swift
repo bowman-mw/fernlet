@@ -47,8 +47,16 @@ public enum FoundationJournalSummaryModel {
         return nil
     }
 
-    /// The session instructions: paraphrase, stay brief, never quote, never label.
-    private static let instructions = """
+    /// The session instructions: paraphrase, stay brief, never quote, never label — then, outside
+    /// English, the line saying which language to write the memory in and how to address the person
+    /// (``AIPromptLanguage/replyInstruction``). The memory list is read by the person, so the line is
+    /// in their language.
+    nonisolated static func instructions(for payload: JournalSummaryPayload) -> String {
+        AIPromptLanguage.joined(baseInstructions, payload.promptLanguage.replyInstruction)
+    }
+
+    /// The English instructions every language shares.
+    nonisolated private static let baseInstructions = """
     You write one short line for a private memory list in a gentle wellness app called Fernlet.
     Given a journal entry, say in your own new words what the entry was about, in under 15 words.
     Never quote the entry and never reuse its phrases; paraphrase instead.
@@ -87,7 +95,7 @@ public enum FoundationJournalSummaryModel {
         to payload: JournalSummaryPayload,
         destination: AIDestination
     ) async throws -> String? {
-        let session = LanguageModelSession(instructions: instructions)
+        let session = LanguageModelSession(instructions: instructions(for: payload))
         do {
             let response = try await session.respond(
                 to: prompt(for: payload),

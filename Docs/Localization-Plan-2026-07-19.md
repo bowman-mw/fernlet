@@ -579,6 +579,54 @@ substitution at query time; no DB rebuild; the FTS `tags` column stays untouched
   (`ItemNameModeration.swift:15,26-31`) — add es/fr/de lists (the homoglyph/leetspeak folding
   `:72-87` is language-neutral and reusable).
 
+> **Phase 3 for Spanish (2026-10-21, branch `claude/spanish-engines`).** Four of the five pieces,
+> each its own commit with tests; the owner set §5.3 aside for now.
+> - **The structure is per language, so the next language changes no engine.** `FernletLanguage`
+>   (FernletDomainModel) names the languages by frozen ISO code, and `FernletLanguage.app` is the one
+>   the main bundle resolved (app-supported by construction). Each language beyond English has one
+>   `LanguagePack` of matching vocabulary — `LanguagePack+Spanish.swift` (units, connectors, protected
+>   dish names, plural rules) and `LanguagePack+SpanishScreens.swift` (clinical and moderation terms) —
+>   plus a Settings search table (`SettingsSearchSynonyms+Spanish.swift`) and a two-line prompt style
+>   in `AIPromptLanguage`. French or German is a new case, new files of the same shape and one
+>   registry line each; `LanguagePackTests` fails until the pack is filled and folded.
+> - **Which languages are read.** Food text, units and Settings search follow `InputLanguages`:
+>   English always, plus the app's language. Spanish input is therefore dormant until the app runs in
+>   Spanish, and an English interface reads exactly what it did before (a Spanish connector sits inside
+>   "chili con carne"; one line widens it to the device's languages if wanted). The clinical-language
+>   and moderation screens instead apply every pack at once, whatever the interface language.
+> - **§5.1 done.** `OnDeviceModelLanguage` (AIProviders) is the one gate: the system model must support
+>   the app's language (`supportsLocale`; English always), or the capability provider reports
+>   `languageNotSupported`, every call site takes its deterministic path and Settings says "Not
+>   available in this language". Prose prompts (day summary, companion thought, journal memory line)
+>   append "Write your reply in Spanish", the glossary's register (neutral Latin American, tú) and the
+>   person's grammatical gender from the profile's Sex answer, as a grammatical instruction. Catalog
+>   prompts (dish decomposition, candidate selection, ingredient substitution, the adjuster) append
+>   "the person may write in Spanish; always write <matched fields> in English" and name the display
+>   fields to write in Spanish. Each payload carries its `AIPromptLanguage` and names `promptLanguage`
+>   / `termOfAddress` in the audit log. In English every prompt and audit row is byte-identical.
+>   Recipe and product import prompts are unchanged: they extract a page's own text.
+> - **§5.2 done for units, connectors and plurals.** `RecipeUnit.normalized` reads
+>   `RecipeUnit.englishSpellings` — the one English unit table; the importer's hand-kept regex list
+>   and its `tbsps`/`tsps` fold table are folded into it — then the active packs ("tazas", "cda.",
+>   "porción"); the importer's line reader builds its alternatives from that table and drops a pack's
+>   amount connector ("2 tazas de harina"). `MealItemSplitter` splits at "y" and "con" (kept before a
+>   modifier or numeral, never inside a protected dish name), and `FoodItemSearch.matchVariants` adds
+>   the Spanish singulars (-es, -ces → -z, -s). The keyword macro estimator, `classifyMealType`,
+>   `WholeDescriptionFoodProbe`'s number words and `DishTemplateLexicon` stay English.
+> - **§5.3 not done (owner's call, 2026-10-21).** Without the alias table a Spanish food query only
+>   matches a catalog row whose USDA name carries the Spanish word; the AI decomposition above is what
+>   carries a Spanish meal to the English catalog.
+> - **§5.4 done.** `DiagnosticLanguage` folds accents and adds every pack's stems and whole words
+>   ("toc", "regla" and "autista" only as whole words), so the privacy policy's claim holds for Spanish
+>   text; `ItemNameModeration` adds every pack's stems and a whole-word pass ("puta" is inside
+>   "reputation").
+> - **Settings search.** Matching stays on the frozen English tokens; `SettingsSearchSynonyms` adds a
+>   per-language table keyed by the frozen title, whose first Spanish synonym is each row's drafted
+>   Spanish title.
+> - **Owed:** the owner's review of every Spanish list (they are matching inputs a native speaker
+>   should check, not copy), and a device pass with Apple Intelligence in Spanish once the drafts are
+>   switched on.
+
 ---
 
 ## 6. Phase 4 — Regional food data packs (the "USDA equivalents" answer)
