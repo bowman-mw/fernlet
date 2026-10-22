@@ -29,6 +29,14 @@ extension ExerciseHowToCatalog {
             highKnees,
             medicineBallSlam,
             squatJump,
+            stationaryBike,
+            recumbentBike,
+            elliptical,
+            rowingMachine,
+            stairClimber,
+            easyWalk,
+            marchingOnTheSpot,
+            jumpingJack,
         ]
     }
 
@@ -419,6 +427,186 @@ extension ExerciseHowToCatalog {
                             bundle: .module, comment: "Squat jump: the one common mistake to avoid, as a short phrase"),
             easier: String(localized: "exercise.squatJump.easier", defaultValue: "Do bodyweight squats, rising onto your toes at the top.",
                            bundle: .module, comment: "Squat jump: an easier version, as a short instruction")
+        )
+    }
+
+    static var stationaryBike: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Stationary bike", keyStem: "stationaryBike",
+            displayName: String(localized: "exercise.stationaryBike.name", defaultValue: "Stationary bike",
+                                bundle: .module, comment: "Exercise name shown on screen (cardio machine exercise)"),
+            cues: [
+                String(localized: "exercise.stationaryBike.cue1", defaultValue: "Set the seat so your knee stays slightly bent at the bottom.",
+                       bundle: .module, comment: "Stationary bike: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.stationaryBike.cue2", defaultValue: "Strap your feet in and sit tall with relaxed shoulders.",
+                       bundle: .module, comment: "Stationary bike: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.stationaryBike.cue3", defaultValue: "Pedal at an easy pace you could still talk at.",
+                       bundle: .module, comment: "Stationary bike: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.stationaryBike.cue4", defaultValue: "Add resistance slowly, keeping your knees in line with your feet.",
+                       bundle: .module, comment: "Stationary bike: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.stationaryBike.mistake", defaultValue: "Setting the seat too low, so the knees stay sharply bent.",
+                            bundle: .module, comment: "Stationary bike: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.stationaryBike.easier", defaultValue: "Lower the resistance, or use a recumbent bike for back support.",
+                           bundle: .module, comment: "Stationary bike: an easier version, as a short instruction")
+        )
+    }
+
+    static var recumbentBike: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Recumbent bike", keyStem: "recumbentBike",
+            displayName: String(localized: "exercise.recumbentBike.name", defaultValue: "Recumbent bike",
+                                bundle: .module, comment: "Exercise name shown on screen (cardio machine exercise)"),
+            cues: [
+                String(localized: "exercise.recumbentBike.cue1", defaultValue: "Slide the seat so each knee stays slightly bent when extended.",
+                       bundle: .module, comment: "Recumbent bike: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.recumbentBike.cue2", defaultValue: "Sit back against the backrest and strap your feet in.",
+                       bundle: .module, comment: "Recumbent bike: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.recumbentBike.cue3", defaultValue: "Pedal at a gentle pace where you can still talk.",
+                       bundle: .module, comment: "Recumbent bike: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.recumbentBike.cue4", defaultValue: "Rest your hands lightly on the handles and relax your shoulders.",
+                       bundle: .module, comment: "Recumbent bike: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.recumbentBike.mistake", defaultValue: "Sitting too close to the pedals, so the knees bend sharply.",
+                            bundle: .module, comment: "Recumbent bike: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.recumbentBike.easier", defaultValue: "Pedal slowly with little or no resistance.",
+                           bundle: .module, comment: "Recumbent bike: an easier version, as a short instruction")
+        )
+    }
+
+    static var elliptical: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Elliptical", keyStem: "elliptical",
+            displayName: String(localized: "exercise.elliptical.name", defaultValue: "Elliptical",
+                                bundle: .module, comment: "Exercise name shown on screen (cardio machine exercise)"),
+            cues: [
+                String(localized: "exercise.elliptical.cue1", defaultValue: "Step on carefully, holding the fixed handles for balance.",
+                       bundle: .module, comment: "Elliptical: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.elliptical.cue2", defaultValue: "Stand tall with your whole foot on the pedals.",
+                       bundle: .module, comment: "Elliptical: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.elliptical.cue3", defaultValue: "Glide at an easy pace you could still talk at.",
+                       bundle: .module, comment: "Elliptical: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.elliptical.cue4", defaultValue: "Push and pull the moving handles gently to use your arms.",
+                       bundle: .module, comment: "Elliptical: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.elliptical.mistake", defaultValue: "Leaning hard on the handles, which takes the work off your legs.",
+                            bundle: .module, comment: "Elliptical: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.elliptical.easier", defaultValue: "Lower the resistance and keep your hands on the fixed handles.",
+                           bundle: .module, comment: "Elliptical: an easier version, as a short instruction")
+        )
+    }
+
+    static var rowingMachine: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Rowing machine", keyStem: "rowingMachine",
+            displayName: String(localized: "exercise.rowingMachine.name", defaultValue: "Rowing machine",
+                                bundle: .module, comment: "Exercise name shown on screen (cardio machine exercise)"),
+            cues: [
+                String(localized: "exercise.rowingMachine.cue1", defaultValue: "Strap your feet in across the widest part of each foot.",
+                       bundle: .module, comment: "Rowing machine: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.rowingMachine.cue2", defaultValue: "Push with your legs first, then lean back slightly.",
+                       bundle: .module, comment: "Rowing machine: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.rowingMachine.cue3", defaultValue: "Finish by pulling the handle to your lower ribs.",
+                       bundle: .module, comment: "Rowing machine: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.rowingMachine.cue4", defaultValue: "Reverse the order to return: arms, then body, then legs.",
+                       bundle: .module, comment: "Rowing machine: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.rowingMachine.cue5", defaultValue: "Row at an easy pace you could still talk at.",
+                       bundle: .module, comment: "Rowing machine: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.rowingMachine.mistake", defaultValue: "Pulling with the arms first instead of driving with the legs.",
+                            bundle: .module, comment: "Rowing machine: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.rowingMachine.easier", defaultValue: "Take shorter, slower strokes with the resistance set low.",
+                           bundle: .module, comment: "Rowing machine: an easier version, as a short instruction")
+        )
+    }
+
+    static var stairClimber: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Stair climber", keyStem: "stairClimber",
+            displayName: String(localized: "exercise.stairClimber.name", defaultValue: "Stair climber",
+                                bundle: .module, comment: "Exercise name shown on screen (cardio machine exercise)"),
+            cues: [
+                String(localized: "exercise.stairClimber.cue1", defaultValue: "Hold the rails to step on and start slowly.",
+                       bundle: .module, comment: "Stair climber: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.stairClimber.cue2", defaultValue: "Stand tall and place your whole foot on each step.",
+                       bundle: .module, comment: "Stair climber: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.stairClimber.cue3", defaultValue: "Climb at a steady pace you could still talk at.",
+                       bundle: .module, comment: "Stair climber: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.stairClimber.cue4", defaultValue: "Use the rails for balance only, not to hold your weight.",
+                       bundle: .module, comment: "Stair climber: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.stairClimber.mistake", defaultValue: "Hunching over the rails and leaning your weight on them.",
+                            bundle: .module, comment: "Stair climber: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.stairClimber.easier", defaultValue: "Choose a slower step rate, or use the elliptical instead.",
+                           bundle: .module, comment: "Stair climber: an easier version, as a short instruction")
+        )
+    }
+
+    static var easyWalk: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Easy walk", keyStem: "easyWalk",
+            displayName: String(localized: "exercise.easyWalk.name", defaultValue: "Easy walk",
+                                bundle: .module, comment: "Exercise name shown on screen (exercise)"),
+            cues: [
+                String(localized: "exercise.easyWalk.cue1", defaultValue: "Walk tall with your eyes on the path ahead.",
+                       bundle: .module, comment: "Easy walk: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.easyWalk.cue2", defaultValue: "Let your arms swing naturally with each step.",
+                       bundle: .module, comment: "Easy walk: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.easyWalk.cue3", defaultValue: "Land gently on your heel and roll through your foot.",
+                       bundle: .module, comment: "Easy walk: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.easyWalk.cue4", defaultValue: "Keep a relaxed pace you could easily talk at.",
+                       bundle: .module, comment: "Easy walk: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.easyWalk.mistake", defaultValue: "Looking down at your phone or feet, which rounds the shoulders.",
+                            bundle: .module, comment: "Easy walk: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.easyWalk.easier", defaultValue: "Walk for less time, or take a shorter, flatter route.",
+                           bundle: .module, comment: "Easy walk: an easier version, as a short instruction")
+        )
+    }
+
+    static var marchingOnTheSpot: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Marching on the spot", keyStem: "marchingOnTheSpot",
+            displayName: String(localized: "exercise.marchingOnTheSpot.name", defaultValue: "Marching on the spot",
+                                bundle: .module, comment: "Exercise name shown on screen (exercise)"),
+            cues: [
+                String(localized: "exercise.marchingOnTheSpot.cue1", defaultValue: "Stand tall with your feet hip-width apart.",
+                       bundle: .module, comment: "Marching on the spot: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.marchingOnTheSpot.cue2", defaultValue: "Lift one knee, then the other, in a steady rhythm.",
+                       bundle: .module, comment: "Marching on the spot: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.marchingOnTheSpot.cue3", defaultValue: "Swing your arms in time with your legs.",
+                       bundle: .module, comment: "Marching on the spot: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.marchingOnTheSpot.cue4", defaultValue: "Keep a comfortable pace you could easily talk at.",
+                       bundle: .module, comment: "Marching on the spot: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.marchingOnTheSpot.mistake", defaultValue: "Leaning back or stomping down hard with each step.",
+                            bundle: .module, comment: "Marching on the spot: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.marchingOnTheSpot.easier", defaultValue: "Lift your knees lower, or march sitting on a sturdy chair.",
+                           bundle: .module, comment: "Marching on the spot: an easier version, as a short instruction")
+        )
+    }
+
+    static var jumpingJack: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Jumping jack", keyStem: "jumpingJack",
+            displayName: String(localized: "exercise.jumpingJack.name", defaultValue: "Jumping jack",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.jumpingJack.cue1", defaultValue: "Stand tall with your feet together and arms by your sides.",
+                       bundle: .module, comment: "Jumping jack: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.jumpingJack.cue2", defaultValue: "Jump your feet out wide as your arms sweep overhead.",
+                       bundle: .module, comment: "Jumping jack: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.jumpingJack.cue3", defaultValue: "Jump back to the start, bringing your arms down.",
+                       bundle: .module, comment: "Jumping jack: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.jumpingJack.cue4", defaultValue: "Land softly on the balls of your feet.",
+                       bundle: .module, comment: "Jumping jack: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.jumpingJack.cue5", defaultValue: "Keep a steady rhythm you could still talk through.",
+                       bundle: .module, comment: "Jumping jack: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.jumpingJack.mistake", defaultValue: "Landing hard on flat feet with stiff knees.",
+                            bundle: .module, comment: "Jumping jack: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.jumpingJack.easier", defaultValue: "Step one foot out at a time, or march on the spot.",
+                           bundle: .module, comment: "Jumping jack: an easier version, as a short instruction")
         )
     }
 }

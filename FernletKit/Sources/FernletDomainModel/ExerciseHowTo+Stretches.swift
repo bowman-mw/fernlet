@@ -29,6 +29,14 @@ extension ExerciseHowToCatalog {
             calfStretch,
             threadTheNeedle,
             supineTwist,
+            neckSideStretch,
+            cobraStretch,
+            kneeToChestStretch,
+            pigeonStretch,
+            seatedHamstringStretch,
+            wristCircles,
+            upperBackFoamRoll,
+            legSwings,
         ]
     }
 
@@ -437,6 +445,198 @@ extension ExerciseHowToCatalog {
                             bundle: .module, comment: "Supine twist: the one common mistake to avoid, as a short phrase"),
             easier: String(localized: "exercise.supineTwist.easier", defaultValue: "Let your knees fall only partway, resting them on a pillow.",
                            bundle: .module, comment: "Supine twist: an easier version, as a short instruction")
+        )
+    }
+
+    static var neckSideStretch: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Neck side stretch", keyStem: "neckSideStretch",
+            displayName: String(localized: "exercise.neckSideStretch.name", defaultValue: "Neck side stretch",
+                                bundle: .module, comment: "Exercise name shown on screen (a stretch)"),
+            cues: [
+                String(localized: "exercise.neckSideStretch.cue1", defaultValue: "Sit or stand tall with your shoulders relaxed and low.",
+                       bundle: .module, comment: "Neck side stretch: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.neckSideStretch.cue2", defaultValue: "Slowly tip one ear toward that shoulder.",
+                       bundle: .module, comment: "Neck side stretch: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.neckSideStretch.cue3", defaultValue: "Ease in gently, with no bouncing and never into pain.",
+                       bundle: .module, comment: "Neck side stretch: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.neckSideStretch.cue4", defaultValue: "Feel a light stretch along the side of your neck.",
+                       bundle: .module, comment: "Neck side stretch: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.neckSideStretch.cue5", defaultValue: "Breathe slowly, lift your head back to center, then switch sides.",
+                       bundle: .module, comment: "Neck side stretch: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.neckSideStretch.mistake", defaultValue: "Pulling your head down with your hand to go deeper.",
+                            bundle: .module, comment: "Neck side stretch: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.neckSideStretch.easier", defaultValue: "Tip your head only a little, keeping the stretch very light.",
+                           bundle: .module, comment: "Neck side stretch: an easier version, as a short instruction")
+        )
+    }
+
+    static var cobraStretch: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Cobra stretch", keyStem: "cobraStretch",
+            displayName: String(localized: "exercise.cobraStretch.name", defaultValue: "Cobra stretch",
+                                bundle: .module, comment: "Exercise name shown on screen (a stretch)"),
+            cues: [
+                String(localized: "exercise.cobraStretch.cue1", defaultValue: "Lie face down with your hands under your shoulders.",
+                       bundle: .module, comment: "Cobra stretch: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.cobraStretch.cue2", defaultValue: "Press gently to lift your chest, hips staying on the floor.",
+                       bundle: .module, comment: "Cobra stretch: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.cobraStretch.cue3", defaultValue: "Rise slowly with no bouncing, and never into pain.",
+                       bundle: .module, comment: "Cobra stretch: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.cobraStretch.cue4", defaultValue: "Feel a gentle stretch across your belly and chest.",
+                       bundle: .module, comment: "Cobra stretch: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.cobraStretch.cue5", defaultValue: "Breathe slowly, then lower yourself down with control.",
+                       bundle: .module, comment: "Cobra stretch: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.cobraStretch.mistake", defaultValue: "Pushing up too high, so the lower back pinches.",
+                            bundle: .module, comment: "Cobra stretch: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.cobraStretch.easier", defaultValue: "Rest on your forearms, elbows under your shoulders.",
+                           bundle: .module, comment: "Cobra stretch: an easier version, as a short instruction")
+        )
+    }
+
+    static var kneeToChestStretch: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Knee-to-chest stretch", keyStem: "kneeToChestStretch",
+            displayName: String(localized: "exercise.kneeToChestStretch.name", defaultValue: "Knee-to-chest stretch",
+                                bundle: .module, comment: "Exercise name shown on screen (a stretch)"),
+            cues: [
+                String(localized: "exercise.kneeToChestStretch.cue1", defaultValue: "Lie on your back with your knees bent and feet flat.",
+                       bundle: .module, comment: "Knee-to-chest stretch: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.kneeToChestStretch.cue2", defaultValue: "Hold behind your knees and draw them gently toward your chest.",
+                       bundle: .module, comment: "Knee-to-chest stretch: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.kneeToChestStretch.cue3", defaultValue: "Ease in slowly, with no bouncing and never into pain.",
+                       bundle: .module, comment: "Knee-to-chest stretch: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.kneeToChestStretch.cue4", defaultValue: "Feel a gentle stretch through your lower back and hips.",
+                       bundle: .module, comment: "Knee-to-chest stretch: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.kneeToChestStretch.cue5", defaultValue: "Breathe slowly and let your back relax into the floor.",
+                       bundle: .module, comment: "Knee-to-chest stretch: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.kneeToChestStretch.mistake", defaultValue: "Lifting your head and shoulders to pull the knees in harder.",
+                            bundle: .module, comment: "Knee-to-chest stretch: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.kneeToChestStretch.easier", defaultValue: "Bring one knee in at a time, keeping the other foot down.",
+                           bundle: .module, comment: "Knee-to-chest stretch: an easier version, as a short instruction")
+        )
+    }
+
+    static var pigeonStretch: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Pigeon stretch", keyStem: "pigeonStretch",
+            displayName: String(localized: "exercise.pigeonStretch.name", defaultValue: "Pigeon stretch",
+                                bundle: .module, comment: "Exercise name shown on screen (a stretch)"),
+            cues: [
+                String(localized: "exercise.pigeonStretch.cue1", defaultValue: "From hands and knees, bring one knee forward behind that wrist.",
+                       bundle: .module, comment: "Pigeon stretch: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.pigeonStretch.cue2", defaultValue: "Slide the other leg straight back behind you.",
+                       bundle: .module, comment: "Pigeon stretch: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.pigeonStretch.cue3", defaultValue: "Lower your hips slowly with no bouncing, never into pain.",
+                       bundle: .module, comment: "Pigeon stretch: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.pigeonStretch.cue4", defaultValue: "Feel the stretch deep in the hip of the bent leg.",
+                       bundle: .module, comment: "Pigeon stretch: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.pigeonStretch.cue5", defaultValue: "Breathe slowly, then switch sides.",
+                       bundle: .module, comment: "Pigeon stretch: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.pigeonStretch.mistake", defaultValue: "Forcing the front shin flat across, which can strain the knee.",
+                            bundle: .module, comment: "Pigeon stretch: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.pigeonStretch.easier", defaultValue: "Rest your hip on a cushion, or do the figure-four stretch instead.",
+                           bundle: .module, comment: "Pigeon stretch: an easier version, as a short instruction")
+        )
+    }
+
+    static var seatedHamstringStretch: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Seated hamstring stretch", keyStem: "seatedHamstringStretch",
+            displayName: String(localized: "exercise.seatedHamstringStretch.name", defaultValue: "Seated hamstring stretch",
+                                bundle: .module, comment: "Exercise name shown on screen (a stretch)"),
+            cues: [
+                String(localized: "exercise.seatedHamstringStretch.cue1", defaultValue: "Sit tall with one leg straight and the other knee bent.",
+                       bundle: .module, comment: "Seated hamstring stretch: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.seatedHamstringStretch.cue2", defaultValue: "Hinge forward from your hips, reaching toward your foot.",
+                       bundle: .module, comment: "Seated hamstring stretch: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.seatedHamstringStretch.cue3", defaultValue: "Ease in slowly, with no bouncing and never into pain.",
+                       bundle: .module, comment: "Seated hamstring stretch: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.seatedHamstringStretch.cue4", defaultValue: "Feel the stretch along the back of the straight leg.",
+                       bundle: .module, comment: "Seated hamstring stretch: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.seatedHamstringStretch.cue5", defaultValue: "Breathe slowly, then switch legs.",
+                       bundle: .module, comment: "Seated hamstring stretch: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.seatedHamstringStretch.mistake", defaultValue: "Rounding your back to reach your toes.",
+                            bundle: .module, comment: "Seated hamstring stretch: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.seatedHamstringStretch.easier", defaultValue: "Sit on a folded towel and loop a strap around your foot.",
+                           bundle: .module, comment: "Seated hamstring stretch: an easier version, as a short instruction")
+        )
+    }
+
+    static var wristCircles: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Wrist circles", keyStem: "wristCircles",
+            displayName: String(localized: "exercise.wristCircles.name", defaultValue: "Wrist circles",
+                                bundle: .module, comment: "Exercise name shown on screen (a stretch)"),
+            cues: [
+                String(localized: "exercise.wristCircles.cue1", defaultValue: "Hold your arms in front with your hands loose.",
+                       bundle: .module, comment: "Wrist circles: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.wristCircles.cue2", defaultValue: "Make small, slow circles with your wrists, growing them gradually.",
+                       bundle: .module, comment: "Wrist circles: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.wristCircles.cue3", defaultValue: "Switch direction halfway through.",
+                       bundle: .module, comment: "Wrist circles: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.wristCircles.cue4", defaultValue: "Feel your wrists and forearms loosen and warm up.",
+                       bundle: .module, comment: "Wrist circles: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.wristCircles.cue5", defaultValue: "Breathe easily and keep each circle smooth, never into pain.",
+                       bundle: .module, comment: "Wrist circles: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.wristCircles.mistake", defaultValue: "Rushing the circles or forcing the wrists to their limit.",
+                            bundle: .module, comment: "Wrist circles: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.wristCircles.easier", defaultValue: "Make smaller circles with your elbows resting on a table.",
+                           bundle: .module, comment: "Wrist circles: an easier version, as a short instruction")
+        )
+    }
+
+    static var upperBackFoamRoll: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Upper back foam roll", keyStem: "upperBackFoamRoll",
+            displayName: String(localized: "exercise.upperBackFoamRoll.name", defaultValue: "Upper back foam roll",
+                                bundle: .module, comment: "Exercise name shown on screen (a stretch)"),
+            cues: [
+                String(localized: "exercise.upperBackFoamRoll.cue1", defaultValue: "Lie back with the foam roller under your upper back.",
+                       bundle: .module, comment: "Upper back foam roll: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.upperBackFoamRoll.cue2", defaultValue: "Rest your head in your hands, knees bent and feet flat.",
+                       bundle: .module, comment: "Upper back foam roll: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.upperBackFoamRoll.cue3", defaultValue: "Roll slowly along your upper back, never your lower back or neck.",
+                       bundle: .module, comment: "Upper back foam roll: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.upperBackFoamRoll.cue4", defaultValue: "Pause on a tight spot and feel it ease, never into pain.",
+                       bundle: .module, comment: "Upper back foam roll: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.upperBackFoamRoll.cue5", defaultValue: "Breathe slowly and let your upper back relax over the roller.",
+                       bundle: .module, comment: "Upper back foam roll: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.upperBackFoamRoll.mistake", defaultValue: "Rolling the lower back or neck instead of the upper back.",
+                            bundle: .module, comment: "Upper back foam roll: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.upperBackFoamRoll.easier", defaultValue: "Stand with the roller between your upper back and a wall.",
+                           bundle: .module, comment: "Upper back foam roll: an easier version, as a short instruction")
+        )
+    }
+
+    static var legSwings: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Leg swings", keyStem: "legSwings",
+            displayName: String(localized: "exercise.legSwings.name", defaultValue: "Leg swings",
+                                bundle: .module, comment: "Exercise name shown on screen (a stretch)"),
+            cues: [
+                String(localized: "exercise.legSwings.cue1", defaultValue: "Stand sideways next to a wall, holding it for balance.",
+                       bundle: .module, comment: "Leg swings: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.legSwings.cue2", defaultValue: "Swing your outside leg forward and back, smooth and controlled.",
+                       bundle: .module, comment: "Leg swings: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.legSwings.cue3", defaultValue: "Start small and let the swings grow, never into pain.",
+                       bundle: .module, comment: "Leg swings: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.legSwings.cue4", defaultValue: "Feel your hamstrings and hips loosen as you swing.",
+                       bundle: .module, comment: "Leg swings: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.legSwings.cue5", defaultValue: "Breathe steadily, keep your torso tall, then switch legs.",
+                       bundle: .module, comment: "Leg swings: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.legSwings.mistake", defaultValue: "Rocking the upper body to kick the leg higher.",
+                            bundle: .module, comment: "Leg swings: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.legSwings.easier", defaultValue: "Make smaller, slower swings while holding a sturdy chair.",
+                           bundle: .module, comment: "Leg swings: an easier version, as a short instruction")
         )
     }
 }

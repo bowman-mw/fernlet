@@ -109,7 +109,7 @@ struct ExerciseDemonstrationTests {
     @Test func theMappingDecodesAndNamesEveryCatalogExerciseByItsFrozenName() throws {
         let mapping = try Self.committedMapping()
         let names = try Self.catalogRows().map(\.name)
-        #expect(names.count == 118, "the catalog changed size: add the new exercise's Gym Visual IDs")
+        #expect(names.count == 177, "the catalog changed size: add the new exercise's Gym Visual IDs")
         #expect(Set(mapping.keys) == Set(names),
                 "unmapped: \(Set(names).subtracting(mapping.keys).sorted()); not in the catalog: \(Set(mapping.keys).subtracting(names).sorted())")
         for (name, ids) in mapping {
@@ -119,9 +119,9 @@ struct ExerciseDemonstrationTests {
         let both = mapping.values.filter { $0.gifMale != nil && $0.gifFemale != nil }.count
         let maleOnly = mapping.values.filter { $0.gifMale != nil && $0.gifFemale == nil }.count
         let femaleOnly = mapping.values.filter { $0.gifMale == nil && $0.gifFemale != nil }.count
-        #expect(both == 105)
-        #expect(maleOnly == 9)
-        #expect(femaleOnly == 4)
+        #expect(both == 159)
+        #expect(maleOnly == 13)
+        #expect(femaleOnly == 5)
     }
 
     /// The committed file holds Gym Visual IDs and nothing else: GIF IDs of 6 or 7 digits,
@@ -139,7 +139,7 @@ struct ExerciseDemonstrationTests {
                 seen.append(still)
             }
         }
-        #expect(seen.count == 446 && Set(seen).count == seen.count, "an ID is shared or the mapping lost rows")
+        #expect(seen.count == 672 && Set(seen).count == seen.count, "an ID is shared or the mapping lost rows")
         #expect(Set(Self.flaggedIDs).isSubset(of: seen), "a flagged ID left the mapping")
         let raw = try RepoRoot.source(Self.mappingPath)
         for key in ["gifMale", "gifFemale", "illustrationMale", "illustrationFemale"] {

@@ -127,10 +127,12 @@ struct WorkoutProgressionTests {
         #expect(lift.reps == "13")
         let suggested = lift.guidance?.prescription?.suggested
         #expect(suggested == 25)
+        // The Gym Visual expansion (2026-10-21) added the Dumbbell front squat as the squat's own next
+        // rung — the same pattern outranks the step to a lunge (Bulgarian split squat).
         let harder = lift.guidance?.harderVariation
-        #expect(harder == "Bulgarian split squat")
+        #expect(harder == "Dumbbell front squat")
         #expect(planned.suggestion.notes.contains(
-            "If you'd like a harder step for Goblet squat, Bulgarian split squat works the same muscles"))
+            "If you'd like a harder step for Goblet squat, Dumbbell front squat works the same muscles"))
         // Below the heaviest pair nothing is offered.
         let lighter = try plan(template: Self.squatOnly, location: garage(),
                                history: [key(squat.name): [session(28, 15, reps: 12, target: 12)]])

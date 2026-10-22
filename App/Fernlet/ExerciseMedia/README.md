@@ -27,7 +27,7 @@ Name each file by its Gym Visual ID, exactly as the mapping spells it, leading z
 
 The IDs are in `App/Fernlet/ExerciseDemonstrations.json`, keyed by the exercise's catalog name,
 with `gifMale`, `gifFemale`, `illustrationMale` and `illustrationFemale` (null where Gym Visual has
-no such version). GIF IDs are 6 digits (one is 7); illustration IDs are 4 digits (one is 5).
+no such version). GIF IDs are 6 digits (six are 7); illustration IDs are 4 digits (six are 5).
 
 Extensions are lowercase. Put the files directly in this folder, not in a subfolder. Any other
 file name is ignored by the app and fails `ExerciseDemonstrationTests`, which checks what sits here,

@@ -114,7 +114,8 @@ struct GuidedWorkoutRunStoreTests {
             location: .fullGym, context: "", split: split, rotationIndex: 0
         )
         let s = try #require(planned.sessions.first)
-        let line = "Intervals - 8 × 1 min hard / 1 min easy"
+        // A full gym's rower takes the intervals (``WorkoutCardioMachines``); the clause is the same.
+        let line = "Rowing machine - 8 × 1 min hard / 1 min easy"
         #expect(s.exercises.contains { $0.name == line && $0.sets == 0 }, "the interval line is in the plan")
         #expect(WorkoutSessionTime.seconds(of: s.exercises, goal: goal) >= 16 * 60, "eight two-minute rounds")
         commitPlan(store, s)

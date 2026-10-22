@@ -38,6 +38,9 @@ public nonisolated enum WorkoutSessionBlocks {
     public static let activationHoldSeconds = 20
     /// Movements the cool-down holds, at most (each one-sided move is two steps).
     static let coolDownMoves = 4
+    /// Mobility rows that are moving warm-up drills, not holds: the cool-down never ends a session
+    /// on them. Where they join the warm-up is the owner's call (2026-10-21).
+    public static let warmUpDrills: Set<String> = ["Leg swings", "Wrist circles"]
 
     /// The owner's warm-up flow, in their order: touch the toes, lunge, back up to the toes, the
     /// inner-thigh side lunge, back into the lunge, the lying leg stretch — then all of that again for
@@ -89,7 +92,7 @@ public nonisolated enum WorkoutSessionBlocks {
     /// not stretched yet (then overall overlap, then name), so a leg day ends on hamstrings, quads
     /// and glutes rather than four hamstring stretches.
     static func coolDown(worked: Set<MuscleGroup>, feasible: [ExerciseTarget]) -> [PrescribedExercise] {
-        var remaining = feasible.filter { $0.modality == .mobility }
+        var remaining = feasible.filter { $0.modality == .mobility && !warmUpDrills.contains($0.name) }
         var covered: Set<MuscleGroup> = []
         var picked: [ExerciseTarget] = []
         for _ in 0..<coolDownMoves {

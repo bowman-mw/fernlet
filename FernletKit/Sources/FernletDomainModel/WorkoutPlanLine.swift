@@ -20,6 +20,9 @@ public nonisolated enum WorkoutPlanLine {
     /// or `line` unchanged — a lift line ("Bench press - 3 x 8"), a typed line, anything else.
     public static func displayed(_ line: String) -> String {
         if let fixed = fixedLine(line) { return fixed }
+        if let machine = WorkoutCardioMachines.machine(in: line), let drawn = machineLine(line, machine: machine) {
+            return drawn
+        }
         guard let range = line.range(of: " - ") else { return line }
         let head = String(line[..<range.lowerBound])
         let tail = line[range.upperBound...]
@@ -32,6 +35,29 @@ public nonisolated enum WorkoutPlanLine {
                           comment: "A line of a workout plan: drills for the person's sport. Arguments: the sport as they typed it, then minutes.")
         }
         return timedLine(head, minutes: minutes) ?? line
+    }
+
+    /// A cardio line naming a machine (``WorkoutCardioMachines``), with the machine's name in the user's
+    /// language: "Rowing machine - 20 min", "… - 20 min easy" or "… - 8 × 1 min hard / 1 min easy". Nil
+    /// for any other clause — a typed "Rowing machine - 20 min 5 km" is drawn as written.
+    static func machineLine(_ line: String, machine: String) -> String? {
+        guard let range = line.range(of: " - ") else { return nil }
+        let clause = String(line[range.upperBound...])
+        let name = ExerciseHowToCatalog.displayName(for: machine)
+        if clause == "8 × 1 min hard / 1 min easy" {
+            return String(localized: "workoutPlanLine.machineIntervals", defaultValue: "\(name) - 8 × 1 min hard / 1 min easy",
+                          bundle: .module,
+                          comment: "A line of a workout plan: eight rounds of one hard minute and one easy minute on a cardio machine. The argument is the machine, e.g. Rowing machine.")
+        }
+        let easy = WorkoutCardioMachines.isEasy(clause: clause)
+        let minutesText = easy ? String(clause.dropLast(WorkoutCardioMachines.easyMark.count + 1)) : clause
+        guard minutesText.hasSuffix(" min"), let minutes = Int(minutesText.dropLast(4)), minutes > 0 else { return nil }
+        if easy {
+            return String(localized: "workoutPlanLine.machineEasy", defaultValue: "\(name) - \(minutes) min, easy", bundle: .module,
+                          comment: "A line of a workout plan: an easy session on a cardio machine. Arguments: the machine (e.g. Stationary bike), then minutes.")
+        }
+        return String(localized: "workoutPlanLine.machine", defaultValue: "\(name) - \(minutes) min", bundle: .module,
+                      comment: "A line of a workout plan: a session on a cardio machine. Arguments: the machine (e.g. Rowing machine), then minutes.")
     }
 
     /// The tail of the sport-prep conditioning line ("Basketball drills / conditioning - 15 min").

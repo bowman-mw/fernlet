@@ -41,6 +41,22 @@ extension ExerciseHowToCatalog {
             kettlebellDeadlift,
             lateralBandWalk,
             clamshell,
+            boxSquat,
+            wallSit,
+            dumbbellFrontSquat,
+            pistolSquatToBox,
+            smithMachineSquat,
+            splitSquat,
+            sideLunge,
+            walkingLunge,
+            dumbbellSingleLegRomanianDeadlift,
+            bodyweightSingleLegDeadlift,
+            bodyweightGoodMorning,
+            dumbbellGluteBridge,
+            dumbbellHipThrust,
+            bandPullThrough,
+            singleLegCalfRaise,
+            dumbbellSingleLegCalfRaise,
         ]
     }
 
@@ -715,6 +731,380 @@ extension ExerciseHowToCatalog {
                             bundle: .module, comment: "Clamshell: the one common mistake to avoid, as a short phrase"),
             easier: String(localized: "exercise.clamshell.easier", defaultValue: "Lift the knee a smaller distance.",
                            bundle: .module, comment: "Clamshell: an easier version, as a short instruction")
+        )
+    }
+
+    static var boxSquat: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Box squat", keyStem: "boxSquat",
+            displayName: String(localized: "exercise.boxSquat.name", defaultValue: "Box squat",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.boxSquat.cue1", defaultValue: "Stand just in front of a sturdy box or bench.",
+                       bundle: .module, comment: "Box squat: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.boxSquat.cue2", defaultValue: "Set your feet a little wider than your hips.",
+                       bundle: .module, comment: "Box squat: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.boxSquat.cue3", defaultValue: "Sit back until you lightly touch the box, chest tall.",
+                       bundle: .module, comment: "Box squat: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.boxSquat.cue4", defaultValue: "Push through your whole foot to stand back up.",
+                       bundle: .module, comment: "Box squat: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.boxSquat.mistake", defaultValue: "Dropping onto the box and rocking back to get up.",
+                            bundle: .module, comment: "Box squat: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.boxSquat.easier", defaultValue: "Use a higher box, or hold a wall or rail for balance.",
+                           bundle: .module, comment: "Box squat: an easier version, as a short instruction")
+        )
+    }
+
+    static var wallSit: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Wall sit", keyStem: "wallSit",
+            displayName: String(localized: "exercise.wallSit.name", defaultValue: "Wall sit",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.wallSit.cue1", defaultValue: "Lean your back flat against a wall.",
+                       bundle: .module, comment: "Wall sit: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.wallSit.cue2", defaultValue: "Walk your feet forward and slide down the wall.",
+                       bundle: .module, comment: "Wall sit: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.wallSit.cue3", defaultValue: "Stop with your knees above your ankles, thighs near level.",
+                       bundle: .module, comment: "Wall sit: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.wallSit.cue4", defaultValue: "Feel it in the front of your thighs.",
+                       bundle: .module, comment: "Wall sit: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.wallSit.cue5", defaultValue: "Breathe slowly and steadily, then slide back up to finish.",
+                       bundle: .module, comment: "Wall sit: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.wallSit.mistake", defaultValue: "Letting the knees drift forward past the toes.",
+                            bundle: .module, comment: "Wall sit: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.wallSit.easier", defaultValue: "Stay higher up the wall, and hold for less time.",
+                           bundle: .module, comment: "Wall sit: an easier version, as a short instruction")
+        )
+    }
+
+    static var dumbbellFrontSquat: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Dumbbell front squat", keyStem: "dumbbellFrontSquat",
+            displayName: String(localized: "exercise.dumbbellFrontSquat.name", defaultValue: "Dumbbell front squat",
+                                bundle: .module, comment: "Exercise name shown on screen (dumbbell exercise)"),
+            cues: [
+                String(localized: "exercise.dumbbellFrontSquat.cue1", defaultValue: "Rest a dumbbell on each shoulder, elbows pointing forward.",
+                       bundle: .module, comment: "Dumbbell front squat: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.dumbbellFrontSquat.cue2", defaultValue: "Stand with your feet about shoulder-width apart.",
+                       bundle: .module, comment: "Dumbbell front squat: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.dumbbellFrontSquat.cue3", defaultValue: "Sit straight down, keeping your chest and elbows up.",
+                       bundle: .module, comment: "Dumbbell front squat: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.dumbbellFrontSquat.cue4", defaultValue: "Push through your whole foot to stand back up.",
+                       bundle: .module, comment: "Dumbbell front squat: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.dumbbellFrontSquat.mistake", defaultValue: "Letting the elbows drop so the chest tips forward.",
+                            bundle: .module, comment: "Dumbbell front squat: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.dumbbellFrontSquat.easier", defaultValue: "Do goblet squats with one weight held at your chest.",
+                           bundle: .module, comment: "Dumbbell front squat: an easier version, as a short instruction")
+        )
+    }
+
+    static var pistolSquatToBox: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Pistol squat to box", keyStem: "pistolSquatToBox",
+            displayName: String(localized: "exercise.pistolSquatToBox.name", defaultValue: "Pistol squat to box",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.pistolSquatToBox.cue1", defaultValue: "Stand on one leg just in front of a box.",
+                       bundle: .module, comment: "Pistol squat to box: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.pistolSquatToBox.cue2", defaultValue: "Reach your arms and your free leg forward.",
+                       bundle: .module, comment: "Pistol squat to box: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.pistolSquatToBox.cue3", defaultValue: "Sit back slowly on one leg until you touch the box.",
+                       bundle: .module, comment: "Pistol squat to box: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.pistolSquatToBox.cue4", defaultValue: "Keep your knee in line with your toes.",
+                       bundle: .module, comment: "Pistol squat to box: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.pistolSquatToBox.cue5", defaultValue: "Push through your whole foot to stand, then switch legs.",
+                       bundle: .module, comment: "Pistol squat to box: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.pistolSquatToBox.mistake", defaultValue: "Dropping onto the box instead of lowering with control.",
+                            bundle: .module, comment: "Pistol squat to box: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.pistolSquatToBox.easier", defaultValue: "Use a higher box, or do box squats on both legs.",
+                           bundle: .module, comment: "Pistol squat to box: an easier version, as a short instruction")
+        )
+    }
+
+    static var smithMachineSquat: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Smith machine squat", keyStem: "smithMachineSquat",
+            displayName: String(localized: "exercise.smithMachineSquat.name", defaultValue: "Smith machine squat",
+                                bundle: .module, comment: "Exercise name shown on screen (machine exercise)"),
+            cues: [
+                String(localized: "exercise.smithMachineSquat.cue1", defaultValue: "Set the safety stops just below your lowest squat depth.",
+                       bundle: .module, comment: "Smith machine squat: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.smithMachineSquat.cue2", defaultValue: "Rest the bar across your upper back, feet slightly forward.",
+                       bundle: .module, comment: "Smith machine squat: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.smithMachineSquat.cue3", defaultValue: "Turn the bar to lift it off its hooks.",
+                       bundle: .module, comment: "Smith machine squat: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.smithMachineSquat.cue4", defaultValue: "Squat down and up as the bar slides along its rails.",
+                       bundle: .module, comment: "Smith machine squat: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.smithMachineSquat.cue5", defaultValue: "Turn the bar back onto the hooks when you finish.",
+                       bundle: .module, comment: "Smith machine squat: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.smithMachineSquat.mistake", defaultValue: "Letting the heels lift or the knees cave inward.",
+                            bundle: .module, comment: "Smith machine squat: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.smithMachineSquat.easier", defaultValue: "Use just the bar and stop higher, or do bodyweight squats.",
+                           bundle: .module, comment: "Smith machine squat: an easier version, as a short instruction")
+        )
+    }
+
+    static var splitSquat: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Split squat", keyStem: "splitSquat",
+            displayName: String(localized: "exercise.splitSquat.name", defaultValue: "Split squat",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.splitSquat.cue1", defaultValue: "Stand in a long stride, one foot forward, one back.",
+                       bundle: .module, comment: "Split squat: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.splitSquat.cue2", defaultValue: "Rise onto the ball of your back foot.",
+                       bundle: .module, comment: "Split squat: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.splitSquat.cue3", defaultValue: "Lower straight down until your back knee nearly touches the floor.",
+                       bundle: .module, comment: "Split squat: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.splitSquat.cue4", defaultValue: "Push through your front foot to rise, feet staying put.",
+                       bundle: .module, comment: "Split squat: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.splitSquat.cue5", defaultValue: "Finish your reps, then switch legs.",
+                       bundle: .module, comment: "Split squat: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.splitSquat.mistake", defaultValue: "Letting the front heel lift as you lower.",
+                            bundle: .module, comment: "Split squat: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.splitSquat.easier", defaultValue: "Hold a wall or chair for balance, and lower only partway.",
+                           bundle: .module, comment: "Split squat: an easier version, as a short instruction")
+        )
+    }
+
+    static var sideLunge: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Side lunge", keyStem: "sideLunge",
+            displayName: String(localized: "exercise.sideLunge.name", defaultValue: "Side lunge",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.sideLunge.cue1", defaultValue: "Stand tall with your feet together, hands at your chest.",
+                       bundle: .module, comment: "Side lunge: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.sideLunge.cue2", defaultValue: "Take a wide step out to one side.",
+                       bundle: .module, comment: "Side lunge: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.sideLunge.cue3", defaultValue: "Sit your hips back over that foot, other leg straight.",
+                       bundle: .module, comment: "Side lunge: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.sideLunge.cue4", defaultValue: "Keep both feet flat and your chest tall.",
+                       bundle: .module, comment: "Side lunge: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.sideLunge.cue5", defaultValue: "Push off the bent leg to bring your feet back together.",
+                       bundle: .module, comment: "Side lunge: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.sideLunge.mistake", defaultValue: "Letting the bent knee drift inward or the heel lift.",
+                            bundle: .module, comment: "Side lunge: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.sideLunge.easier", defaultValue: "Take a shorter step and lower only partway.",
+                           bundle: .module, comment: "Side lunge: an easier version, as a short instruction")
+        )
+    }
+
+    static var walkingLunge: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Walking lunge", keyStem: "walkingLunge",
+            displayName: String(localized: "exercise.walkingLunge.name", defaultValue: "Walking lunge",
+                                bundle: .module, comment: "Exercise name shown on screen (dumbbell exercise)"),
+            cues: [
+                String(localized: "exercise.walkingLunge.cue1", defaultValue: "Hold dumbbells at your sides and stand tall.",
+                       bundle: .module, comment: "Walking lunge: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.walkingLunge.cue2", defaultValue: "Step forward and lower until your back knee nearly touches down.",
+                       bundle: .module, comment: "Walking lunge: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.walkingLunge.cue3", defaultValue: "Keep your front knee in line with your toes.",
+                       bundle: .module, comment: "Walking lunge: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.walkingLunge.cue4", defaultValue: "Push through your front foot and bring your back foot forward.",
+                       bundle: .module, comment: "Walking lunge: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.walkingLunge.cue5", defaultValue: "Carry on into the next lunge with the other leg.",
+                       bundle: .module, comment: "Walking lunge: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.walkingLunge.mistake", defaultValue: "Rushing forward so you wobble from side to side.",
+                            bundle: .module, comment: "Walking lunge: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.walkingLunge.easier", defaultValue: "Skip the weights, or do reverse lunges in place.",
+                           bundle: .module, comment: "Walking lunge: an easier version, as a short instruction")
+        )
+    }
+
+    static var dumbbellSingleLegRomanianDeadlift: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Dumbbell single-leg Romanian deadlift", keyStem: "dumbbellSingleLegRomanianDeadlift",
+            displayName: String(localized: "exercise.dumbbellSingleLegRomanianDeadlift.name", defaultValue: "Dumbbell single-leg Romanian deadlift",
+                                bundle: .module, comment: "Exercise name shown on screen (dumbbell exercise)"),
+            cues: [
+                String(localized: "exercise.dumbbellSingleLegRomanianDeadlift.cue1", defaultValue: "Hold a dumbbell in the hand opposite your standing leg.",
+                       bundle: .module, comment: "Dumbbell single-leg Romanian deadlift: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.dumbbellSingleLegRomanianDeadlift.cue2", defaultValue: "Soften your standing knee and hinge forward at the hips.",
+                       bundle: .module, comment: "Dumbbell single-leg Romanian deadlift: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.dumbbellSingleLegRomanianDeadlift.cue3", defaultValue: "Let your free leg reach back as your chest lowers.",
+                       bundle: .module, comment: "Dumbbell single-leg Romanian deadlift: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.dumbbellSingleLegRomanianDeadlift.cue4", defaultValue: "Keep your hips square to the floor and your back flat.",
+                       bundle: .module, comment: "Dumbbell single-leg Romanian deadlift: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.dumbbellSingleLegRomanianDeadlift.cue5", defaultValue: "Squeeze your glutes to stand tall, then switch sides.",
+                       bundle: .module, comment: "Dumbbell single-leg Romanian deadlift: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.dumbbellSingleLegRomanianDeadlift.mistake", defaultValue: "Letting the free hip open up so the body twists.",
+                            bundle: .module, comment: "Dumbbell single-leg Romanian deadlift: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.dumbbellSingleLegRomanianDeadlift.easier", defaultValue: "Do the bodyweight single-leg deadlift, holding a wall for balance.",
+                           bundle: .module, comment: "Dumbbell single-leg Romanian deadlift: an easier version, as a short instruction")
+        )
+    }
+
+    static var bodyweightSingleLegDeadlift: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Bodyweight single-leg deadlift", keyStem: "bodyweightSingleLegDeadlift",
+            displayName: String(localized: "exercise.bodyweightSingleLegDeadlift.name", defaultValue: "Bodyweight single-leg deadlift",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.bodyweightSingleLegDeadlift.cue1", defaultValue: "Stand on one leg with a soft bend in the knee.",
+                       bundle: .module, comment: "Bodyweight single-leg deadlift: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.bodyweightSingleLegDeadlift.cue2", defaultValue: "Hinge forward at the hips, hands reaching toward the floor.",
+                       bundle: .module, comment: "Bodyweight single-leg deadlift: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.bodyweightSingleLegDeadlift.cue3", defaultValue: "Lift your free leg behind you as your chest lowers.",
+                       bundle: .module, comment: "Bodyweight single-leg deadlift: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.bodyweightSingleLegDeadlift.cue4", defaultValue: "Keep your hips level and your back flat.",
+                       bundle: .module, comment: "Bodyweight single-leg deadlift: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.bodyweightSingleLegDeadlift.cue5", defaultValue: "Squeeze your glutes to stand, then switch legs.",
+                       bundle: .module, comment: "Bodyweight single-leg deadlift: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.bodyweightSingleLegDeadlift.mistake", defaultValue: "Rounding the back to reach the floor.",
+                            bundle: .module, comment: "Bodyweight single-leg deadlift: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.bodyweightSingleLegDeadlift.easier", defaultValue: "Hold a wall or chair for balance, and hinge only partway.",
+                           bundle: .module, comment: "Bodyweight single-leg deadlift: an easier version, as a short instruction")
+        )
+    }
+
+    static var bodyweightGoodMorning: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Bodyweight good morning", keyStem: "bodyweightGoodMorning",
+            displayName: String(localized: "exercise.bodyweightGoodMorning.name", defaultValue: "Bodyweight good morning",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.bodyweightGoodMorning.cue1", defaultValue: "Stand with feet hip-width apart, hands lightly behind your head.",
+                       bundle: .module, comment: "Bodyweight good morning: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.bodyweightGoodMorning.cue2", defaultValue: "Soften your knees and keep your back flat.",
+                       bundle: .module, comment: "Bodyweight good morning: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.bodyweightGoodMorning.cue3", defaultValue: "Push your hips back and tip your chest forward.",
+                       bundle: .module, comment: "Bodyweight good morning: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.bodyweightGoodMorning.cue4", defaultValue: "Stop when you feel a stretch in your hamstrings.",
+                       bundle: .module, comment: "Bodyweight good morning: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.bodyweightGoodMorning.cue5", defaultValue: "Drive your hips forward to stand tall again.",
+                       bundle: .module, comment: "Bodyweight good morning: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.bodyweightGoodMorning.mistake", defaultValue: "Rounding the back or bending the knees into a squat.",
+                            bundle: .module, comment: "Bodyweight good morning: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.bodyweightGoodMorning.easier", defaultValue: "Slide your hands down your thighs, and hinge only partway.",
+                           bundle: .module, comment: "Bodyweight good morning: an easier version, as a short instruction")
+        )
+    }
+
+    static var dumbbellGluteBridge: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Dumbbell glute bridge", keyStem: "dumbbellGluteBridge",
+            displayName: String(localized: "exercise.dumbbellGluteBridge.name", defaultValue: "Dumbbell glute bridge",
+                                bundle: .module, comment: "Exercise name shown on screen (dumbbell exercise)"),
+            cues: [
+                String(localized: "exercise.dumbbellGluteBridge.cue1", defaultValue: "Lie on your back, knees bent, feet flat near your hips.",
+                       bundle: .module, comment: "Dumbbell glute bridge: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.dumbbellGluteBridge.cue2", defaultValue: "Rest a dumbbell across your hips and hold it steady.",
+                       bundle: .module, comment: "Dumbbell glute bridge: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.dumbbellGluteBridge.cue3", defaultValue: "Push through your heels and lift your hips.",
+                       bundle: .module, comment: "Dumbbell glute bridge: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.dumbbellGluteBridge.cue4", defaultValue: "Squeeze your glutes at the top, then lower slowly.",
+                       bundle: .module, comment: "Dumbbell glute bridge: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.dumbbellGluteBridge.mistake", defaultValue: "Lifting with the lower back instead of the glutes.",
+                            bundle: .module, comment: "Dumbbell glute bridge: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.dumbbellGluteBridge.easier", defaultValue: "Use a lighter dumbbell, or do the glute bridge with no weight.",
+                           bundle: .module, comment: "Dumbbell glute bridge: an easier version, as a short instruction")
+        )
+    }
+
+    static var dumbbellHipThrust: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Dumbbell hip thrust", keyStem: "dumbbellHipThrust",
+            displayName: String(localized: "exercise.dumbbellHipThrust.name", defaultValue: "Dumbbell hip thrust",
+                                bundle: .module, comment: "Exercise name shown on screen (dumbbell exercise)"),
+            cues: [
+                String(localized: "exercise.dumbbellHipThrust.cue1", defaultValue: "Sit with your upper back against the edge of a bench.",
+                       bundle: .module, comment: "Dumbbell hip thrust: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.dumbbellHipThrust.cue2", defaultValue: "Hold a dumbbell on your hips, feet flat and hip-width apart.",
+                       bundle: .module, comment: "Dumbbell hip thrust: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.dumbbellHipThrust.cue3", defaultValue: "Drive through your heels to lift your hips.",
+                       bundle: .module, comment: "Dumbbell hip thrust: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.dumbbellHipThrust.cue4", defaultValue: "Finish with your knees, hips and shoulders in a line.",
+                       bundle: .module, comment: "Dumbbell hip thrust: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.dumbbellHipThrust.cue5", defaultValue: "Keep your chin tucked and lower with control.",
+                       bundle: .module, comment: "Dumbbell hip thrust: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.dumbbellHipThrust.mistake", defaultValue: "Letting the knees fall inward as the hips rise.",
+                            bundle: .module, comment: "Dumbbell hip thrust: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.dumbbellHipThrust.easier", defaultValue: "Use a lighter dumbbell, or do glute bridges on the floor.",
+                           bundle: .module, comment: "Dumbbell hip thrust: an easier version, as a short instruction")
+        )
+    }
+
+    static var bandPullThrough: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Band pull-through", keyStem: "bandPullThrough",
+            displayName: String(localized: "exercise.bandPullThrough.name", defaultValue: "Band pull-through",
+                                bundle: .module, comment: "Exercise name shown on screen (resistance band exercise)"),
+            cues: [
+                String(localized: "exercise.bandPullThrough.cue1", defaultValue: "Anchor the band low behind you and face away from it.",
+                       bundle: .module, comment: "Band pull-through: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.bandPullThrough.cue2", defaultValue: "Hold it between your legs and walk out until it pulls.",
+                       bundle: .module, comment: "Band pull-through: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.bandPullThrough.cue3", defaultValue: "Push your hips back, letting the band draw your hands through.",
+                       bundle: .module, comment: "Band pull-through: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.bandPullThrough.cue4", defaultValue: "Squeeze your glutes to bring your hips forward and stand tall.",
+                       bundle: .module, comment: "Band pull-through: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.bandPullThrough.mistake", defaultValue: "Squatting down and pulling with the arms instead of hinging.",
+                            bundle: .module, comment: "Band pull-through: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.bandPullThrough.easier", defaultValue: "Use a lighter band, or stand closer to the anchor.",
+                           bundle: .module, comment: "Band pull-through: an easier version, as a short instruction")
+        )
+    }
+
+    static var singleLegCalfRaise: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Single-leg calf raise", keyStem: "singleLegCalfRaise",
+            displayName: String(localized: "exercise.singleLegCalfRaise.name", defaultValue: "Single-leg calf raise",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.singleLegCalfRaise.cue1", defaultValue: "Stand on one foot, holding a wall or rail for balance.",
+                       bundle: .module, comment: "Single-leg calf raise: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.singleLegCalfRaise.cue2", defaultValue: "Rise as high as you can onto your toes.",
+                       bundle: .module, comment: "Single-leg calf raise: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.singleLegCalfRaise.cue3", defaultValue: "Pause at the top, then lower your heel slowly.",
+                       bundle: .module, comment: "Single-leg calf raise: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.singleLegCalfRaise.cue4", defaultValue: "Finish your reps, then switch feet.",
+                       bundle: .module, comment: "Single-leg calf raise: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.singleLegCalfRaise.mistake", defaultValue: "Rolling onto the outer edge of the foot as you rise.",
+                            bundle: .module, comment: "Single-leg calf raise: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.singleLegCalfRaise.easier", defaultValue: "Do calf raises on both feet, or rise only partway.",
+                           bundle: .module, comment: "Single-leg calf raise: an easier version, as a short instruction")
+        )
+    }
+
+    static var dumbbellSingleLegCalfRaise: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Dumbbell single-leg calf raise", keyStem: "dumbbellSingleLegCalfRaise",
+            displayName: String(localized: "exercise.dumbbellSingleLegCalfRaise.name", defaultValue: "Dumbbell single-leg calf raise",
+                                bundle: .module, comment: "Exercise name shown on screen (dumbbell exercise)"),
+            cues: [
+                String(localized: "exercise.dumbbellSingleLegCalfRaise.cue1", defaultValue: "Stand with the ball of one foot on a step edge.",
+                       bundle: .module, comment: "Dumbbell single-leg calf raise: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.dumbbellSingleLegCalfRaise.cue2", defaultValue: "Hold a dumbbell on that side, other hand on a wall.",
+                       bundle: .module, comment: "Dumbbell single-leg calf raise: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.dumbbellSingleLegCalfRaise.cue3", defaultValue: "Let your heel sink below the step for a gentle stretch.",
+                       bundle: .module, comment: "Dumbbell single-leg calf raise: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.dumbbellSingleLegCalfRaise.cue4", defaultValue: "Rise as high as you can, then lower slowly.",
+                       bundle: .module, comment: "Dumbbell single-leg calf raise: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.dumbbellSingleLegCalfRaise.cue5", defaultValue: "Finish your reps, then switch sides.",
+                       bundle: .module, comment: "Dumbbell single-leg calf raise: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.dumbbellSingleLegCalfRaise.mistake", defaultValue: "Bouncing at the bottom instead of moving smoothly.",
+                            bundle: .module, comment: "Dumbbell single-leg calf raise: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.dumbbellSingleLegCalfRaise.easier", defaultValue: "Do it on flat ground, or do single-leg calf raises with no weight.",
+                           bundle: .module, comment: "Dumbbell single-leg calf raise: an easier version, as a short instruction")
         )
     }
 }

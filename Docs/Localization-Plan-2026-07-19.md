@@ -413,6 +413,16 @@ purpose) are closed at their source, resolved in `FernletSocialCopy.Presence` un
   guided editor's rest note is one sentence per goal instead of a lowercased goal name spliced in.
   Pinned by `theMoveLaneSplicedCopyStaysWholeKeys`.
 
+**Addendum (2026-10-21, Gym Visual expansion and machine cardio).** The catalog grows from 118 to 177
+exercises (the owner's picks from the Gym Visual shortlist). Their names stay frozen English tokens like the
+first 118, and each new `exercise.<keyStem>.` key (name, cues, mistake, easier) carries es, fr and de machine
+drafts marked `needs_review`, as the 889 before them did. The planner's cardio lines now name the location's
+machine ("Rowing machine - 20 min easy", `WorkoutCardioMachines`): the line stays frozen English plan text and
+draws through three new en-only domain keys (`workoutPlanLine.machine`, `.machineEasy`, `.machineIntervals`)
+that put the machine's localized name in front. The Log sheet's minutes field for timed cardio adds en-only
+app keys ("Minutes", its "20" prompt, "distance, level, notes"). Those six keys need Spanish drafts on
+`claude/spanish-switch-on` before Spanish ships.
+
 ---
 
 ## 4. Phase 2 — Translation pass (es / fr / de)

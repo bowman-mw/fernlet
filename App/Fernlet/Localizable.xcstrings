@@ -2432,6 +2432,9 @@
     "2" : {
 
     },
+    "20" : {
+
+    },
     "250" : {
 
     },
@@ -16020,6 +16023,9 @@
           }
         }
       }
+    },
+    "Minutes" : {
+
     },
     "Mirror" : {
       "localizations" : {
@@ -37403,6 +37409,9 @@
           }
         }
       }
+    },
+    "distance, level, notes" : {
+
     },
     "duress.ceremony.done.destroyed" : {
       "comment" : "Recovery-device ceremony, last screen when the recovery device refused and asked for the data to be let go. 'Settings → App lock' names the screen.",

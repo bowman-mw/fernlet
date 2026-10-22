@@ -1272,7 +1272,8 @@ struct WorkoutSheet: View {
         if draft.exercise?.inputKind != .strength || !logsBySet {
             WorkoutExerciseBuilder(
                 selectedExercise: $draft.exercise, sets: $draft.sets, reps: $draft.reps, weight: $draft.weight,
-                speed: $draft.speed, incline: $draft.incline, details: $draft.details, resetToken: $draft.resetToken,
+                speed: $draft.speed, incline: $draft.incline, minutes: $draft.minutes, details: $draft.details,
+                resetToken: $draft.resetToken,
                 mode: logMode, showAddButton: false, showsPicker: false, onAdd: addDraftExercise
             )
         }
@@ -1680,8 +1681,9 @@ enum WorkoutSheetRules {
             let load = loadSegment(in: trimmed)
             let weight = load?.value ?? ""
             let treadmill = exercise.inputKind == .treadmill ? treadmillFields(in: trimmed) : nil
+            let timed = exercise.inputKind == .timed ? firstMatch(in: trimmed, pattern: #"-\s*(\d{1,3})\s*min\b"#) : nil
             var details = trimmed.replacingOccurrences(of: exercise.name, with: "")
-            let consumed = [setRep.fullMatch, load?.text] + (treadmill?.consumed ?? [])
+            let consumed = [setRep.fullMatch, load?.text, timed?.fullMatch] + (treadmill?.consumed ?? [])
             for match in consumed.compactMap({ $0 }) {
                 details = details.replacingOccurrences(of: match, with: "")
             }
@@ -1697,7 +1699,8 @@ enum WorkoutSheetRules {
                     WorkoutMeasurementEntry.speedEntry(fromStored: $0.speed.isEmpty ? weight : $0.speed, imperial: imperial)
                 } ?? "",
                 incline: treadmill?.incline ?? "",
-                details: details
+                details: details,
+                minutes: timed?.groups.first ?? ""
             )
         }
     }
@@ -3712,6 +3715,8 @@ struct WorkoutExerciseEntry: Identifiable, Equatable {
     var speed: String
     var incline: String
     var details: String
+    /// Free-text minutes for a `.timed` cardio row ("20"), written as " - 20 min" after its name.
+    var minutes = ""
     /// The structured record of a lift entered set by set in the Log sheet (idea 6); nil for every
     /// free-text row. When set, the row's line is the record's own ``ExerciseResult/loggedLine``, so
     /// the readable log and the record cannot disagree.
@@ -3743,6 +3748,7 @@ struct WorkoutExerciseEntry: Identifiable, Equatable {
         let cleanSpeed = speed.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanIncline = incline.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanDetails = details.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanMinutes = minutes.trimmingCharacters(in: .whitespacesAndNewlines)
 
         switch exercise.inputKind {
         case .strength:
@@ -3759,6 +3765,10 @@ struct WorkoutExerciseEntry: Identifiable, Equatable {
                 parts.append("\(WorkoutMeasurementEntry.storedSpeed(fromEntry: cleanSpeed, imperial: imperial)) mph")
             }
             if !cleanIncline.isEmpty { parts.append("\(cleanIncline)% incline") }
+        case .timed:
+            // The planner's own cardio shape ("Rowing machine - 20 min"), so the history and the
+            // logged duration read it the same way.
+            if !cleanMinutes.isEmpty { parts.append("- \(cleanMinutes) min") }
         case .none:
             break
         }
@@ -3802,6 +3812,8 @@ struct WorkoutExerciseDraft {
     var speed = ""
     /// Free-text treadmill incline; kept only for `.treadmill` exercises.
     var incline = ""
+    /// Free-text minutes; kept only for `.timed` cardio exercises.
+    var minutes = ""
     /// Free-text notes, kept for every input kind.
     var details = ""
     /// Bumped on every ``clear()`` so ``WorkoutExerciseBuilder`` resets its internal picker state.
@@ -3827,7 +3839,8 @@ struct WorkoutExerciseDraft {
             weight: exercise.inputKind == .strength ? weight : "",
             speed: exercise.inputKind == .treadmill ? speed : "",
             incline: exercise.inputKind == .treadmill ? incline : "",
-            details: details
+            details: details,
+            minutes: exercise.inputKind == .timed ? minutes : ""
         )
     }
 
@@ -3853,6 +3866,7 @@ struct WorkoutExerciseDraft {
         weight = ""
         speed = ""
         incline = ""
+        minutes = ""
         details = ""
         resetToken += 1
     }
@@ -3897,6 +3911,7 @@ struct WorkoutExerciseBuilder: View {
     @Binding var weight: String
     @Binding var speed: String
     @Binding var incline: String
+    @Binding var minutes: String
     @Binding var details: String
     @Binding var resetToken: Int
     /// Catalog keys. Both sheets show the builder only while the Kind is strength, so they take these
@@ -3991,6 +4006,20 @@ struct WorkoutExerciseBuilder: View {
         }
     }
 
+    /// Minutes / details — the timed cardio fields (the exercise bike, rower, elliptical, a walk).
+    @ViewBuilder private var timedFields: some View {
+        SheetField("Minutes", namesControl: true) {
+            TextField("20", text: $minutes, prompt: .fieldPrompt("20"))
+                .keyboardType(.numberPad)
+                .sheetTextInput(font: .fernlet(.label))
+        }
+
+        SheetField("Details") {
+            TextField("distance, level, notes", text: $details, prompt: .fieldPrompt("distance, level, notes"))
+                .sheetTextInput()
+        }
+    }
+
     /// The Add button, disabled until an exercise is chosen.
     private var addButton: some View {
         Button(action: onAdd) {
@@ -4032,6 +4061,8 @@ struct WorkoutExerciseBuilder: View {
                 if showsStrengthFields { strengthFields }
             case .treadmill:
                 treadmillFields
+            case .timed:
+                timedFields
             case .none:
                 EmptyView()
             }
@@ -4418,6 +4449,8 @@ struct EditablePlannedExerciseRow: View {
                     editableField("Speed", text: $entry.speed, keyboard: .decimalPad)
                     editableField("Incline", text: $entry.incline, keyboard: .decimalPad)
                 }
+            case .timed:
+                editableField("Minutes", text: $entry.minutes, keyboard: .numberPad)
             case .none:
                 EmptyView()
             }
@@ -5569,7 +5602,8 @@ struct WorkoutPlanSheet: View {
                          back: planBackLabel, onButton: commitPlannedLift) {
                 WorkoutExerciseBuilder(
                     selectedExercise: $draft.exercise, sets: $draft.sets, reps: $draft.reps, weight: $draft.weight,
-                    speed: $draft.speed, incline: $draft.incline, details: $draft.details, resetToken: $draft.resetToken,
+                    speed: $draft.speed, incline: $draft.incline, minutes: $draft.minutes, details: $draft.details,
+                    resetToken: $draft.resetToken,
                     mode: logMode, showAddButton: false, autofocusSearch: true, historyStore: store, onAdd: addDraftExercise
                 )
             }

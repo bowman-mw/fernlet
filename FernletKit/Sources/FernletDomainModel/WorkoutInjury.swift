@@ -110,12 +110,20 @@ public nonisolated enum BodyArea: String, Codable, CaseIterable, Identifiable, S
 
     /// Whether `exercise` loads this area: it works one of the area's muscles (only its primary
     /// muscles count when `primaryOnly`), uses one of its patterns, or — for a spine area — is a
-    /// barbell squat, hinge, lunge or carry.
+    /// squat, hinge, lunge or carry with a bar on the body (``carriesABar(_:)``).
     public func isLoaded(by exercise: ExerciseTarget, primaryOnly: Bool) -> Bool {
         let worked = primaryOnly ? exercise.primaryMuscles : exercise.primaryMuscles.union(exercise.secondaryMuscles)
         if !worked.isDisjoint(with: muscles) { return true }
         if movements.contains(exercise.movementPattern) { return true }
-        return bearsAxialLoad && exercise.equipment == .barbell && Self.axialPatterns.contains(exercise.movementPattern)
+        return bearsAxialLoad && Self.carriesABar(exercise) && Self.axialPatterns.contains(exercise.movementPattern)
+    }
+
+    /// Whether a bar rests on the body: a barbell lift, or a Smith machine one. The owner counts the
+    /// Smith machine as supported (2026-10-21): its rows are machine rows, so a mild area treats them
+    /// as the guided variant, not the heavy end. Its bar still sits on the spine, so a spine area
+    /// still counts a Smith squat as loading it, as it counts a back squat.
+    static func carriesABar(_ exercise: ExerciseTarget) -> Bool {
+        exercise.equipment == .barbell || exercise.requiredGear.contains(.smithMachine)
     }
 
     /// The areas the setup sheet had a chip for before the picker (Shoulders, Elbows, Wrists, Lower
@@ -199,7 +207,8 @@ public nonisolated struct InjuryLimits: Equatable, Sendable {
     }
 
     /// The heavy end of a pattern, left out for a mild area: a barbell lift, an advanced movement
-    /// (a dip, a pull-up, a front squat), or a jump or throw.
+    /// (a dip, a pull-up, a front squat), or a jump or throw. A Smith machine row is a machine row,
+    /// so it is the supported end, not this one (2026-10-21).
     public static func isHeavyLoading(_ exercise: ExerciseTarget) -> Bool {
         exercise.equipment == .barbell || exercise.difficulty == .advanced || exercise.modality == .power
     }

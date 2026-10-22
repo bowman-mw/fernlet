@@ -26,6 +26,12 @@ extension ExerciseHowToCatalog {
             suitcaseCarry,
             deadBug,
             singleLegStance,
+            crunch,
+            curlUp,
+            lyingLegRaise,
+            hangingKneeRaise,
+            kneePlank,
+            bentKneeSidePlank,
         ]
     }
 
@@ -350,6 +356,142 @@ extension ExerciseHowToCatalog {
                             bundle: .module, comment: "Single-leg stance: the one common mistake to avoid, as a short phrase"),
             easier: String(localized: "exercise.singleLegStance.easier", defaultValue: "Rest a hand on the wall, or touch the lifted toes down.",
                            bundle: .module, comment: "Single-leg stance: an easier version, as a short instruction")
+        )
+    }
+
+    static var crunch: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Crunch", keyStem: "crunch",
+            displayName: String(localized: "exercise.crunch.name", defaultValue: "Crunch",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.crunch.cue1", defaultValue: "Lie on your back, knees bent, feet flat on the floor.",
+                       bundle: .module, comment: "Crunch: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.crunch.cue2", defaultValue: "Rest your fingertips lightly behind your head, elbows wide.",
+                       bundle: .module, comment: "Crunch: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.crunch.cue3", defaultValue: "Curl your shoulders off the floor using your stomach.",
+                       bundle: .module, comment: "Crunch: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.crunch.cue4", defaultValue: "Pause briefly, then lower slowly.",
+                       bundle: .module, comment: "Crunch: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.crunch.mistake", defaultValue: "Pulling on the head and neck to lift yourself up.",
+                            bundle: .module, comment: "Crunch: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.crunch.easier", defaultValue: "Cross your arms on your chest, and lift only a little.",
+                           bundle: .module, comment: "Crunch: an easier version, as a short instruction")
+        )
+    }
+
+    static var curlUp: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Curl-up", keyStem: "curlUp",
+            displayName: String(localized: "exercise.curlUp.name", defaultValue: "Curl-up",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.curlUp.cue1", defaultValue: "Lie on your back, knees bent, arms straight by your sides.",
+                       bundle: .module, comment: "Curl-up: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.curlUp.cue2", defaultValue: "Curl your head and shoulders up, sliding your hands forward.",
+                       bundle: .module, comment: "Curl-up: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.curlUp.cue3", defaultValue: "Lift only until your shoulder blades clear the floor.",
+                       bundle: .module, comment: "Curl-up: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.curlUp.cue4", defaultValue: "Lower slowly, keeping your neck relaxed.",
+                       bundle: .module, comment: "Curl-up: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.curlUp.mistake", defaultValue: "Jerking up with the neck instead of curling with the stomach.",
+                            bundle: .module, comment: "Curl-up: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.curlUp.easier", defaultValue: "Curl up a smaller distance, and rest between reps.",
+                           bundle: .module, comment: "Curl-up: an easier version, as a short instruction")
+        )
+    }
+
+    static var lyingLegRaise: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Lying leg raise", keyStem: "lyingLegRaise",
+            displayName: String(localized: "exercise.lyingLegRaise.name", defaultValue: "Lying leg raise",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.lyingLegRaise.cue1", defaultValue: "Lie on your back with your arms flat by your sides.",
+                       bundle: .module, comment: "Lying leg raise: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.lyingLegRaise.cue2", defaultValue: "Press your lower back gently into the floor.",
+                       bundle: .module, comment: "Lying leg raise: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.lyingLegRaise.cue3", defaultValue: "Lift your straight legs together until they point at the ceiling.",
+                       bundle: .module, comment: "Lying leg raise: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.lyingLegRaise.cue4", defaultValue: "Lower them slowly, stopping before your lower back lifts.",
+                       bundle: .module, comment: "Lying leg raise: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.lyingLegRaise.mistake", defaultValue: "Letting the lower back arch off the floor as the legs lower.",
+                            bundle: .module, comment: "Lying leg raise: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.lyingLegRaise.easier", defaultValue: "Bend your knees, or lower one leg at a time.",
+                           bundle: .module, comment: "Lying leg raise: an easier version, as a short instruction")
+        )
+    }
+
+    static var hangingKneeRaise: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Hanging knee raise", keyStem: "hangingKneeRaise",
+            displayName: String(localized: "exercise.hangingKneeRaise.name", defaultValue: "Hanging knee raise",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.hangingKneeRaise.cue1", defaultValue: "Hang from a bar with straight arms, shoulders pulled down.",
+                       bundle: .module, comment: "Hanging knee raise: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.hangingKneeRaise.cue2", defaultValue: "Brace your stomach so your body stays still.",
+                       bundle: .module, comment: "Hanging knee raise: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.hangingKneeRaise.cue3", defaultValue: "Bring your knees up toward your chest, curling your hips.",
+                       bundle: .module, comment: "Hanging knee raise: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.hangingKneeRaise.cue4", defaultValue: "Lower your legs slowly without swinging.",
+                       bundle: .module, comment: "Hanging knee raise: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.hangingKneeRaise.mistake", defaultValue: "Swinging the body to throw the knees up.",
+                            bundle: .module, comment: "Hanging knee raise: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.hangingKneeRaise.easier", defaultValue: "Do lying leg raises on the floor, with your knees bent.",
+                           bundle: .module, comment: "Hanging knee raise: an easier version, as a short instruction")
+        )
+    }
+
+    static var kneePlank: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Knee plank", keyStem: "kneePlank",
+            displayName: String(localized: "exercise.kneePlank.name", defaultValue: "Knee plank",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.kneePlank.cue1", defaultValue: "Rest on your forearms and knees, elbows under your shoulders.",
+                       bundle: .module, comment: "Knee plank: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.kneePlank.cue2", defaultValue: "Keep a straight line from your head to your knees.",
+                       bundle: .module, comment: "Knee plank: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.kneePlank.cue3", defaultValue: "Pull your belly button in and squeeze your glutes gently.",
+                       bundle: .module, comment: "Knee plank: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.kneePlank.cue4", defaultValue: "Feel it in your stomach, not your lower back.",
+                       bundle: .module, comment: "Knee plank: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.kneePlank.cue5", defaultValue: "Breathe slowly and steadily the whole time.",
+                       bundle: .module, comment: "Knee plank: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.kneePlank.mistake", defaultValue: "Pushing the hips up high or letting them sag.",
+                            bundle: .module, comment: "Knee plank: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.kneePlank.easier", defaultValue: "Hold for less time, and rest between short holds.",
+                           bundle: .module, comment: "Knee plank: an easier version, as a short instruction")
+        )
+    }
+
+    static var bentKneeSidePlank: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Bent-knee side plank", keyStem: "bentKneeSidePlank",
+            displayName: String(localized: "exercise.bentKneeSidePlank.name", defaultValue: "Bent-knee side plank",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.bentKneeSidePlank.cue1", defaultValue: "Lie on your side, elbow under your shoulder, knees bent.",
+                       bundle: .module, comment: "Bent-knee side plank: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.bentKneeSidePlank.cue2", defaultValue: "Lift your hips until you're straight from head to knees.",
+                       bundle: .module, comment: "Bent-knee side plank: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.bentKneeSidePlank.cue3", defaultValue: "Keep your hips stacked, not rolling forward or back.",
+                       bundle: .module, comment: "Bent-knee side plank: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.bentKneeSidePlank.cue4", defaultValue: "Feel it along the side of your waist.",
+                       bundle: .module, comment: "Bent-knee side plank: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.bentKneeSidePlank.cue5", defaultValue: "Breathe steadily the whole time, then switch sides.",
+                       bundle: .module, comment: "Bent-knee side plank: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.bentKneeSidePlank.mistake", defaultValue: "Letting the hips sink back toward the floor.",
+                            bundle: .module, comment: "Bent-knee side plank: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.bentKneeSidePlank.easier", defaultValue: "Hold for less time, or rest your top hand on the floor.",
+                           bundle: .module, comment: "Bent-knee side plank: an easier version, as a short instruction")
         )
     }
 }
