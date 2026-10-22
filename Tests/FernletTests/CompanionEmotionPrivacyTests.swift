@@ -35,7 +35,13 @@ struct CompanionEmotionPrivacyTests {
         "App/Fernlet/HomeView.swift",
         "App/Fernlet/WidgetBridge.swift",
         "App/FernletWidgets/FernletWidgetsBundle.swift",
-        "App/FernletWidgets/WidgetSharedModels.swift"
+        "App/FernletWidgets/WidgetSharedModels.swift",
+        // 2026-10-21 widget redesign: the simplified companion draws the feeling's face, the views
+        // pass the entry's feeling to it, and the thought card picks its line by the bedtime feelings.
+        // All three only READ the widget's own `WidgetCompanionEmotion`; none persists or sends it.
+        "App/FernletWidgets/WidgetCompanionFigure.swift",
+        "App/FernletWidgets/CompanionWidgetViews.swift",
+        "App/FernletWidgets/WidgetThoughtLines.swift"
     ]
 
     /// The shipping roots scanned — every target the app ships.

@@ -10,7 +10,8 @@
 import AppIntents
 import WidgetKit
 
-/// The companion widget's interactive "+1" button: logs one bottle of water without opening the app.
+/// The water widget's "+" button, its Lock Screen circle and its Control Center control: logs one
+/// bottle of water without opening the app.
 ///
 /// Runs in the WIDGET process (a plain `AppIntent`, unlike the Live Activity intents), so it never
 /// touches the diary directly. Instead it appends a ``PendingWidgetAction`` row — stamped with the
@@ -40,7 +41,10 @@ struct WaterPlusOneIntent: AppIntent {
         // overwrites away on its next publish; leaving the widget truthful lets the user tap again.
         guard queued else { return .result() }
         WidgetSnapshotStore().applyOptimisticWaterPlusOne(dayKey: dayKey)
+        // Every surface that shows the count: both widgets and the Control Center control.
         WidgetCenter.shared.reloadTimelines(ofKind: FernletWidgetKind.companion)
+        WidgetCenter.shared.reloadTimelines(ofKind: FernletWidgetKind.water)
+        ControlCenter.shared.reloadControls(ofKind: FernletWidgetKind.waterControl)
         return .result()
     }
 }

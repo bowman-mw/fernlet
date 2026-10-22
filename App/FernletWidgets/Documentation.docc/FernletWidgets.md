@@ -1,10 +1,10 @@
 # ``FernletWidgets``
 
-The WidgetKit extension that puts Fernlet's companion widget — and the guided-workout and cooking-mode Live Activities — on the Home Screen, Lock Screen, and Dynamic Island.
+The WidgetKit extension that puts Fernlet's companion and water widgets, the water control, and the guided-workout and cooking-mode Live Activities on the Home Screen, Lock Screen, Control Center and Dynamic Island.
 
 ## Overview
 
-FernletWidgets is a `com.apple.widgetkit-extension` app extension. Its `@main` entry point, ``FernletWidgetsBundle``, registers three surfaces: ``FernletCompanionWidget`` (systemSmall and systemMedium cards plus circular and rectangular Lock Screen accessories showing the companion's mood and today's water, with an interactive "+1" button), ``WorkoutLiveActivity`` (the guided workout: the rest timer between sets with "−15 s" / "+15 s" beside "Skip rest", the hold countdown of a timed step — a warm-up stretch, a plank — with its side, a guided cardio segment's countdown with its pace in words and its round and its heart-rate cue — the live reading against the part's target zone with a calm word, or the talk test without one, worded by ``WorkoutActivityZoneText`` — and a lift's weight, range and last time's numbers, shown and never edited, formatted in the reader's locale by ``WorkoutActivityLoadText``; a lift's lighter warm-up sets read "Warm-up 1 of 3", and "1/3" in the compact Island, spoken in words), and ``CookingLiveActivity`` (the step-by-step cooking walker). The companion widget renders the mood as a glyph whose face is negative space — a filled blob with the expression punched out — so it survives the Lock Screen's monochrome/tinted rendering, and the whole widget is marked `privacySensitive` because the companion state encodes wellbeing (including sickness).
+FernletWidgets is a `com.apple.widgetkit-extension` app extension. Its `@main` entry point, ``FernletWidgetsBundle``, registers five surfaces. ``FernletCompanionWidget`` (design round 2, 2026-10-21) shows the person's own companion as a simplified drawing (``CompanionFigure``: their body shape, colour and topper, the face cut out of the body): the small card adds the state word, the companion's name and Home's twelve-segment care bar (``WidgetCareBar``); the medium card sets the companion beside one of the widget's own lines (``WidgetThoughtLines``, chosen by state and time of day, the bedtime slots following the person's own bedtime); the Lock Screen circle is the face alone (the rectangular card was retired). ``FernletWaterWidget`` is the small water card — a bottle filling toward the person's own target, the count, and a "+" button, the rest of the tile opening Water where a mis-tap can be undone — and a Lock Screen "+1" circle; ``FernletWaterControl`` puts the same "+1 water" in Control Center and on the Action button. All three water surfaces log through ``WaterPlusOneIntent``. Colours follow the widget's appearance (``WidgetTheme``, light and dark) and the app's fonts are copied into the extension (``WidgetFont``). The other two are ``WorkoutLiveActivity`` (the guided workout: the rest timer between sets with "−15 s" / "+15 s" beside "Skip rest", the hold countdown of a timed step — a warm-up stretch, a plank — with its side, a guided cardio segment's countdown with its pace in words and its round and its heart-rate cue — the live reading against the part's target zone with a calm word, or the talk test without one, worded by ``WorkoutActivityZoneText`` — and a lift's weight, range and last time's numbers, shown and never edited, formatted in the reader's locale by ``WorkoutActivityLoadText``; a lift's lighter warm-up sets read "Warm-up 1 of 3", and "1/3" in the compact Island, spoken in words), and ``CookingLiveActivity`` (the step-by-step cooking walker). The companion widget renders the mood as a glyph whose face is negative space — a filled blob with the expression punched out — so it survives the Lock Screen's monochrome/tinted rendering, and the whole widget is marked `privacySensitive` because the companion state encodes wellbeing (including sickness).
 
 **Emotions** (owner decision 2026-09-24). The Home Screen families also draw the companion's momentary feeling — happy, sad, tired, sleepy, asleep, hungry or thirsty (``WidgetCompanionEmotion``) — as its own negative-space face over the state's fill colour; the medium card writes it out beside the state. The app publishes the whole day's feelings at once as the snapshot's `companionEmotionTimeline` (one moment per change, from local midnight through the next wake time, on whole seconds), and ``FernletCompanionProvider`` adds a timeline entry at every upcoming moment, so the companion turns sleepy at bedtime, falls asleep thirty minutes later, or turns hungry at the hunger onset with the app closed. *Asleep* (owner decision 2026-10-21) hides the day: the body wears a neutral night colour (`FernletWidgetPalette.night`), the written and spoken status is "Asleep" alone, and no state or feeling about the day shows. ``WidgetEmotionTimeline`` reads a moment only on its own local day — the twin of the app's `CompanionEmotionEngine.emotion(in:at:)` — so a stale snapshot never draws yesterday's feeling, while the sleepy night the app computed past midnight still applies. The Lock Screen accessories draw the STATE face only (``FernletWidgetEmotionPolicy``, the privacy-forward default the owner confirmed on 2026-09-24): a sad or hungry face there would tell anyone who glances at the phone how the day went. Asleep is the one exception, because it says nothing about the day. The body-signal, friend-heart and petting feelings never reach this process at all.
 
@@ -29,9 +29,39 @@ Two rendering rules recur throughout: countdowns are always drawn from a fixed, 
 - ``FernletCompanionProvider``
 - ``FernletCompanionEntry``
 - ``FernletCompanionWidgetView``
+- ``CompanionSmallView``
+- ``CompanionThoughtView``
+- ``CompanionLockView``
+- ``PlaceholderView``
+- ``WidgetThoughtLines``
+- ``WidgetThoughtSlot``
 - ``FernletWidgetPalette``
 - ``FernletWidgetEmotionPolicy``
+- ``FernletWidgetLink``
+
+### The simplified companion
+
+- ``CompanionFigure``
+- ``WidgetCompanionLook``
+- ``WidgetCompanionBody``
+- ``WidgetCompanionTopper``
+- ``WidgetCompanionFaces``
+- ``WidgetTopperArt``
+
+### Water
+
+- ``FernletWaterWidget``
+- ``WaterSmallView``
+- ``WaterLockView``
+- ``FernletWaterControl``
+- ``WaterControlValueProvider``
 - ``WaterPlusOneIntent``
+
+### Theme
+
+- ``WidgetTheme``
+- ``WidgetFont``
+- ``WidgetCareBar``
 
 ### App-group bridge
 

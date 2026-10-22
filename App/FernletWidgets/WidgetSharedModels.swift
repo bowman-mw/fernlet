@@ -14,6 +14,7 @@
 //                                  (FernletDomainModel/CompanionEmotion.swift, `isWidgetPublishable`)
 //   - `WidgetEmotionTimeline`      mirrors the day-scoped lookup `CompanionEmotionEngine.emotion(in:at:)`
 //   - `WidgetSnapshot`             mirrors Fernlet/WidgetBridge.swift `WidgetSnapshot`
+//   - `WidgetCompanionLook`        mirrors Fernlet/WidgetBridge.swift `WidgetSnapshot.CompanionLook`
 //   - `PendingWidgetAction`        mirrors Fernlet/WidgetBridge.swift `PendingWidgetAction`
 //   - `WidgetDayKey`               mirrors FernletFoundation.FernletDate.dayKey ("yyyy-MM-dd", en_US_POSIX)
 //   - JSON codecs                  mirror the app-group queue convention (iso8601 dates, sorted keys)
@@ -167,9 +168,34 @@ enum WidgetEmotionTimeline {
     }
 }
 
+/// The person's companion look, as the widget draws it: the app's `CompanionAppearance` reduced to
+/// the four values a widget-sized companion can show.
+///
+/// Byte-identical twin of the app-side `WidgetSnapshot.CompanionLook` (App/Fernlet/WidgetBridge.swift):
+/// the JSON keys are the contract. The two raw strings are the app's FROZEN `CompanionBodyStyle` and
+/// `CompanionAccessory` tokens — never translated, never shown; an unknown token (a newer app's
+/// cosmetic) falls back to the round body and no topper rather than failing the decode. A colour
+/// is a resolved `#RRGGBB`, or nil when the slot follows the companion's state.
+struct WidgetCompanionLook: Codable, Equatable {
+    /// The app's `CompanionBodyStyle` token: "circle", "softBlob", "pear" or "puddle".
+    var bodyStyleRaw: String
+    /// The body's fixed colour, or nil to wear the state's colour (the app's default).
+    var bodyColorHex: String?
+    /// The app's `CompanionAccessory` token: "none", "sprout", "flower" or "glasses".
+    var accessoryRaw: String
+    /// The topper's fixed colour, or nil to wear the state's colour.
+    var accessoryColorHex: String?
+
+    /// The plain companion: a round body in the state's colour with a fern sprout — the app's
+    /// `CompanionAppearance.standard`, used before the app has published a look.
+    static let standard = WidgetCompanionLook(bodyStyleRaw: "circle", bodyColorHex: nil,
+                                              accessoryRaw: "sprout", accessoryColorHex: "#72A364")
+}
+
 /// The benign outbound snapshot the app mirrors into the app-group container.
 ///
-/// PRIVACY: wellness score + water + macro grams + the companion's state and emotion tokens ONLY —
+/// PRIVACY: wellness score + water + macro grams + the companion's state and emotion tokens, name and
+/// look ONLY —
 /// never journal text, cycle, stress, or intimacy data. The emotion timeline can reflect the day's
 /// journal mood TAG, the meal and water logging gaps and the bedtime window; the body-signal emotions
 /// never enter it. Written by the app's `WidgetSnapshotMirror` on every snapshot save and read back by
@@ -204,6 +230,11 @@ struct WidgetSnapshot: Codable, Equatable {
     /// The companion's emotions across the day (app side: `CompanionEmotionEngine.timeline`).
     /// ADDITIVE (2026-09-24) and optional: a file an older app wrote simply has no emotions.
     var companionEmotionTimeline: [EmotionMoment]? = nil
+    /// The companion's name; nil when it has none. ADDITIVE (2026-10-21) and optional. Carried here
+    /// even by a family that does not draw it, so the optimistic water bump's re-encode keeps it.
+    var companionName: String? = nil
+    /// The person's companion look; nil draws ``WidgetCompanionLook/standard``. ADDITIVE (2026-10-21).
+    var companionLook: WidgetCompanionLook? = nil
 
     var companionState: WidgetCompanionState? { WidgetCompanionState(rawValue: companionStateRaw) }
 

@@ -33,7 +33,9 @@
 //  workout suggestions as a use of Health data, adds heart rate to the read list and describes the
 //  opt-in live heart rate during guided cardio, held in memory only; "What Fernlet stores on your
 //  device" lists the workout details and workout settings — the full account is the maintainer note in
-//  Docs/Privacy-Policy.md).
+//  Docs/Privacy-Policy.md); revised 2026-10-21, a DRAFT for the owner's review (companion widgets: the
+//  companion falls asleep after the bedtime wind-down — seven feelings on the Home Screen widget, and
+//  asleep, which says nothing about the day, the one feeling the Lock Screen may show).
 //  Any material change to the policy must update the effective date below AND in Docs/Privacy-Policy.md AND
 //  Site/privacy/index.html, and be surfaced in the app per the policy's own terms.
 //
@@ -52,7 +54,7 @@ struct PrivacyPolicyView: View {
     // MARK: - Publication facts (keep in lockstep with Docs/Privacy-Policy.md)
     private static let developerName = "Michael Bowman Olay"
     private static let supportEmail: String? = "fernletapp@gmail.com"
-    private static let effectiveDate = "October 20, 2026"
+    private static let effectiveDate = "October 21, 2026"
 
     private static var contactClause: String {
         if let supportEmail { return "contact \(supportEmail)" }

@@ -3673,6 +3673,11 @@ struct LocalizationBoundaryTests {
     /// form, and every language with more than two (Russian, Polish, Arabic, Welsh) is stuck
     /// agreeing in the wrong number forever. English is already wrong at "1 coins".
     static let pluralRuledKeys: [HarvestedKey] = [
+        // Widget redesign (2026-10-21): the water card's target line. Its spoken twin,
+        // `widget.water.progress`, carries two numbers and plurals the second through a
+        // substitution, which this one-count check does not read.
+        HarvestedKey(catalog: "App/FernletWidgets/Localizable.xcstrings", key: "widget.water.ofTarget",
+                     source: "the water widget's target line"),
         HarvestedKey(catalog: "FernletKit/Sources/FernletUI/Localizable.xcstrings",
                      key: "ui.coins.balance",
                      source: "the coin pill's spoken balance"),

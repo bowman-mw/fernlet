@@ -417,7 +417,11 @@ struct FernletApp: App {
                 guard !shouldOpenPrivacyDataForUITest else { return }
                 await loader.startIfNeeded(healthKitService: healthKitService)
             }
-            .onOpenURL { _ = FernletMessagesRecipeImportRequest.request(from: $0) }
+            .onOpenURL { url in
+                // A widget tap lands on Home or Water; anything else is a Messages card.
+                if FernletWidgetLinkRouter.open(url) { return }
+                _ = FernletMessagesRecipeImportRequest.request(from: url)
+            }
             // Relock on background and on device lock
             .onChange(of: scenePhase) { _, newPhase in handleScenePhaseChange(newPhase) }
             #if canImport(UIKit)

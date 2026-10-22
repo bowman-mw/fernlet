@@ -51,7 +51,7 @@ struct WidgetSnapshotContentEqualityTests {
     /// should be reading it.
     static let contentFields = [
         "companionStateRaw", "score", "bottleCount", "hydrationTarget", "macroSummary", "dateKey",
-        "companionEmotionTimeline"
+        "companionEmotionTimeline", "companionName", "companionLook"
     ]
 
     /// The fields stamped at construction that no widget family renders. A difference in one of
@@ -86,7 +86,10 @@ struct WidgetSnapshotContentEqualityTests {
             companionEmotionTimeline: [
                 WidgetSnapshot.EmotionMoment(at: Date(timeIntervalSince1970: 1_780_000_000), emotionRaw: "sleepy"),
                 WidgetSnapshot.EmotionMoment(at: Date(timeIntervalSince1970: 1_780_025_200), emotionRaw: nil)
-            ]
+            ],
+            companionName: "Pip",
+            companionLook: WidgetSnapshot.CompanionLook(bodyStyleRaw: "pear", bodyColorHex: nil,
+                                                        accessoryRaw: "sprout", accessoryColorHex: "#72A364")
         )
     }
 
@@ -119,7 +122,11 @@ struct WidgetSnapshotContentEqualityTests {
         // seconds), which is what keeps an unchanged day from reloading on every refresh.
         Flip(field: "companionEmotionTimeline", apply: {
             $0.companionEmotionTimeline?[1].emotionRaw = "hungry"
-        })
+        }),
+        // The name and the look are drawn on every family (2026-10-21): a rename or a new topper is a
+        // change a person sees.
+        Flip(field: "companionName", apply: { $0.companionName = "Moss" }),
+        Flip(field: "companionLook", apply: { $0.companionLook?.accessoryRaw = "glasses" })
     ]
 
     // MARK: - The thesis
@@ -188,7 +195,7 @@ struct WidgetSnapshotContentEqualityTests {
             construction, rendered by nothing → no reload), and the one that is missing has to be \
             put on a side before this passes.
             """)
-        #expect(fields.count == 8, "MEASURED 2026-09-24: seven content fields (the emotion timeline joined) and one metadata field")
+        #expect(fields.count == 10, "MEASURED 2026-10-21: nine content fields (the name and look joined) and one metadata field")
 
         let macroFields = Mirror(reflecting: WidgetSnapshot.MacroSummary(protein: 0, carbs: 0, fat: 0))
             .children.compactMap(\.label)

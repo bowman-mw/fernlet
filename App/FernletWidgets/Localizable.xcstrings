@@ -1,22 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    " of %lld" : {
-
-    },
-    "%@ · %lld of %lld bottles" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ · %2$lld of %3$lld bottles"
-          }
-        }
-      }
-    },
-    "%lld" : {
-
-    },
     "%lld bpm · aim %lld–%lld" : {
       "comment" : "Guided cardio, Live Activity and runner: the live heart rate in beats per minute and the target range to aim for, e.g. '118 bpm · aim 110–125'. Gentle: 'aim', never a limit.",
       "localizations" : {
@@ -39,25 +23,8 @@
         }
       }
     },
-    "%lld of %lld bottles" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld of %2$lld bottles"
-          }
-        }
-      }
-    },
-    "%lld of %lld bottles today" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld of %2$lld bottles today"
-          }
-        }
-      }
+    "%lld percent" : {
+
     },
     "%lld × %@" : {
       "comment" : "Live Activity: last time's sets × reps for this lift, e.g. '3 × 8'. Reps are as logged ('8', '8-10').",
@@ -90,9 +57,6 @@
           }
         }
       }
-    },
-    "+1" : {
-
     },
     "+15 s" : {
       "comment" : "Workout rest button: adds 15 seconds to the rest timer. 's' abbreviates seconds.",
@@ -162,6 +126,9 @@
           }
         }
       }
+    },
+    "Care score" : {
+
     },
     "Cooking" : {
 
@@ -362,9 +329,6 @@
     "Open Fernlet to pick it back up" : {
 
     },
-    "Open Fernlet to say hi" : {
-
-    },
     "Paused" : {
 
     },
@@ -529,6 +493,9 @@
     "That was the last set — your workout is finished." : {
 
     },
+    "Today's water, with a button to add a bottle." : {
+
+    },
     "Took 15 seconds off your rest." : {
       "comment" : "Siri / Shortcuts: spoken after '−15 s' shortened the rest.",
       "localizations" : {
@@ -596,7 +563,7 @@
     "You're resting right now, so there's no set to finish yet." : {
 
     },
-    "Your companion's mood and today's water, at a glance." : {
+    "Your companion, as you dressed it, and how its day is going." : {
 
     },
     "Your rest is already at its 10-minute limit." : {
@@ -642,9 +609,6 @@
           }
         }
       }
-    },
-    "bottles today" : {
-
     },
     "companionEmotion.asleep" : {
       "comment" : "Companion feeling once it has fallen asleep for the night. Says nothing about how the day went",
@@ -943,6 +907,280 @@
     },
     "to meet your companion" : {
 
+    },
+    "widget.caption.nameAndWord" : {
+      "comment" : "Under the companion's thought on the medium widget: its name, then its state word. Example: 'Pip · Thriving'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "widget.thought.asleep" : {
+      "comment" : "The companion's line on the thought widget while it is asleep. Says nothing about how the day went",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sleeping soundly."
+          }
+        }
+      }
+    },
+    "widget.thought.freshDay" : {
+      "comment" : "The companion's line on the thought widget before the app has worked out today's state",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A brand-new day."
+          }
+        }
+      }
+    },
+    "widget.thought.okay.afternoon" : {
+      "comment" : "Companion's line on the thought widget: an okay day, afternoon",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Just pottering about."
+          }
+        }
+      }
+    },
+    "widget.thought.okay.bedtime" : {
+      "comment" : "Companion's line on the thought widget: an okay day, at bedtime",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Winding down now."
+          }
+        }
+      }
+    },
+    "widget.thought.okay.morning" : {
+      "comment" : "Companion's line on the thought widget: an okay day, morning",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Taking the morning slowly."
+          }
+        }
+      }
+    },
+    "widget.thought.resting.afternoon" : {
+      "comment" : "Companion's line on the thought widget: a resting day, afternoon",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Having a quiet nap."
+          }
+        }
+      }
+    },
+    "widget.thought.resting.bedtime" : {
+      "comment" : "Companion's line on the thought widget: a resting day, at bedtime",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Snuggling in for the night."
+          }
+        }
+      }
+    },
+    "widget.thought.resting.morning" : {
+      "comment" : "Companion's line on the thought widget: a resting day, morning",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Curled up a while longer."
+          }
+        }
+      }
+    },
+    "widget.thought.sick.afternoon" : {
+      "comment" : "Companion's line on the thought widget: an unwell day, afternoon",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tucked in with a blanket."
+          }
+        }
+      }
+    },
+    "widget.thought.sick.bedtime" : {
+      "comment" : "Companion's line on the thought widget: an unwell day, at bedtime",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Resting up for tomorrow."
+          }
+        }
+      }
+    },
+    "widget.thought.sick.morning" : {
+      "comment" : "Companion's line on the thought widget: an unwell day, morning. Never suggests exercise",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Taking it gently today."
+          }
+        }
+      }
+    },
+    "widget.thought.thriving.afternoon" : {
+      "comment" : "Companion's line on the thought widget: a thriving day, afternoon",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The sun found me this afternoon."
+          }
+        }
+      }
+    },
+    "widget.thought.thriving.bedtime" : {
+      "comment" : "Companion's line on the thought widget: a thriving day, at bedtime",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Getting cozy for the night."
+          }
+        }
+      }
+    },
+    "widget.thought.thriving.morning" : {
+      "comment" : "Companion's line on the thought widget: a thriving day, morning",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Woke up feeling light today."
+          }
+        }
+      }
+    },
+    "widget.thought.tired.afternoon" : {
+      "comment" : "Companion's line on the thought widget: a tired day, afternoon",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A slow sort of day."
+          }
+        }
+      }
+    },
+    "widget.thought.tired.bedtime" : {
+      "comment" : "Companion's line on the thought widget: a tired day, at bedtime",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ready for a long rest."
+          }
+        }
+      }
+    },
+    "widget.thought.tired.morning" : {
+      "comment" : "Companion's line on the thought widget: a tired day, morning. Gentle, never a nudge",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Still a little sleepy. That's okay."
+          }
+        }
+      }
+    },
+    "widget.water.ofTarget" : {
+      "comment" : "Under today's bottle count on the water widget: the day's target. Plural on the target ('of 1 bottle')",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "of %lld bottle"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "of %lld bottles"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "widget.water.progress" : {
+      "comment" : "Today's water against the day's target, spoken by VoiceOver and shown on the Control Center control. The noun follows the TARGET ('1 of 1 bottle', '2 of 4 bottles')",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld of %#@target@"
+          },
+          "substitutions" : {
+            "target" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg bottle"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg bottles"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "−15 s" : {
       "comment" : "Workout rest button: takes 15 seconds off the rest timer. '−' is a minus sign; 's' abbreviates seconds.",

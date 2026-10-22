@@ -730,6 +730,8 @@ struct ContentView: View {
             switch target {
             case .meal: activeSheet = .meal
             case .journal: activeSheet = .journal
+            case .water: activeSheet = .water
+            case .home: selectedTab = .home
             case .trainerPrepareSummary: openTrainerExport(.prepareSummary)
             case .trainerCopySummaryAndPrompt: openTrainerExport(.copySummaryAndPrompt)
             case .trainerPastePlan: openTrainerExport(.pastePlan)
