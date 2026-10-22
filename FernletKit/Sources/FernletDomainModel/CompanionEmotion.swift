@@ -171,3 +171,28 @@ public nonisolated enum CompanionEmotion: String, CaseIterable, Sendable {
                       comment: "The companion's spoken status: its state, then its feeling. Example: 'Okay, feeling sleepy'")
     }
 }
+
+extension CompanionAccessory {
+    /// Whether the companion is wearing this accessory right now.
+    ///
+    /// Glasses come off when the companion is tired, sick, sleepy or asleep, and stay on when it is
+    /// resting (owner decision 2026-10-21) — a tired face behind a pair of glasses reads as neither.
+    /// A tired FEELING on a resting band (the engine's low-band rule) keeps them on, because the band
+    /// is resting. Every other accessory is always worn. The widget's hand-copied
+    /// `WidgetCompanionTopper.isWorn(state:emotion:)` is the twin; keep the two identical.
+    ///
+    /// Declared here, beside ``CompanionEmotion``, rather than with the persisted accessory itself:
+    /// `CompanionModels.swift` holds the synced appearance, and `CompanionEmotionPrivacyTests` keeps
+    /// every persisted-model file free of the emotion type.
+    ///
+    /// - Parameters:
+    ///   - state: The day's band.
+    ///   - emotion: The feeling drawn over it, or nil.
+    /// - Returns: Whether to draw the accessory.
+    public func isWorn(state: CompanionState, emotion: CompanionEmotion?) -> Bool {
+        guard self == .glasses else { return self != .none }
+        if emotion == .sleepy || emotion == .asleep { return false }
+        if state == .tired || state == .sick { return false }
+        return !(emotion == .tired && state != .resting)
+    }
+}

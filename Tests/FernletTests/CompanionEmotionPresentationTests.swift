@@ -69,6 +69,35 @@ struct CompanionEmotionPresentationTests {
                 "sad is sad WITH the person: brows lifted in sympathy")
     }
 
+    // MARK: - Glasses (owner decision 2026-10-21)
+
+    /// Glasses come off when the companion is tired, sick, sleepy or asleep, and stay on when it is
+    /// resting; every other accessory is always worn, and `.none` never is.
+    @Test func glassesComeOffWhenTiredSickSleepyOrAsleep() {
+        let glasses = CompanionAccessory.glasses
+        #expect(glasses.isWorn(state: .thriving, emotion: nil))
+        #expect(glasses.isWorn(state: .okay, emotion: .happy))
+        #expect(glasses.isWorn(state: .okay, emotion: .hungry))
+        #expect(glasses.isWorn(state: .resting, emotion: nil))
+        #expect(glasses.isWorn(state: .resting, emotion: .tired), "the low-band tired feeling on a resting day keeps them on")
+        #expect(!glasses.isWorn(state: .tired, emotion: nil))
+        #expect(!glasses.isWorn(state: .tired, emotion: .tired))
+        #expect(!glasses.isWorn(state: .okay, emotion: .tired), "a day tagged tired takes them off")
+        #expect(!glasses.isWorn(state: .sick, emotion: nil))
+        #expect(!glasses.isWorn(state: .okay, emotion: .sleepy))
+        #expect(!glasses.isWorn(state: .resting, emotion: .sleepy))
+        #expect(!glasses.isWorn(state: .thriving, emotion: .asleep))
+        let states: [CompanionState] = [.thriving, .okay, .tired, .resting, .sick]
+        let emotions: [CompanionEmotion?] = [nil] + CompanionEmotion.allCases.map { Optional($0) }
+        for state in states {
+            for emotion in emotions {
+                #expect(CompanionAccessory.sprout.isWorn(state: state, emotion: emotion))
+                #expect(CompanionAccessory.flower.isWorn(state: state, emotion: emotion))
+                #expect(!CompanionAccessory.none.isWorn(state: state, emotion: emotion))
+            }
+        }
+    }
+
     // MARK: - The spoken status
 
     @Test func theSpokenStatusReadsTheStateThenTheFeeling() {

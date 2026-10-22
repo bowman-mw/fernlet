@@ -148,6 +148,7 @@ struct CompanionView: View {
         ZStack {
             CompanionBaseLayers(
                 appearance: appearance,
+                accessory: appearance.accessory.isWorn(state: state, emotion: emotion) ? appearance.accessory : .none,
                 state: posedState,
                 colorState: colorState,
                 size: size,
@@ -209,6 +210,9 @@ struct CompanionView: View {
 /// state and no clock — so the hero body stays one readable unit.
 private struct CompanionBaseLayers: View {
     let appearance: CompanionAppearance
+    /// The accessory drawn this frame: the appearance's own, or `.none` while it is taken off
+    /// (glasses come off when tired, sick, sleepy or asleep — `CompanionAccessory.isWorn`).
+    let accessory: CompanionAccessory
     /// The band the body is posed in (``CompanionView``'s `posedState`).
     let state: CompanionState
     /// The state the `.state` colour slots follow; nil wears the neutral night colour.
@@ -247,7 +251,7 @@ private struct CompanionBaseLayers: View {
                 .offset(x: -size * 0.12, y: -size * 0.20 + petBounce)
 
             CompanionAccessoryView(
-                accessory: appearance.accessory,
+                accessory: accessory,
                 color: appearance.resolvedAccessoryColor(for: colorState),
                 size: size
             )
