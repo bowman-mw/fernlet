@@ -7334,8 +7334,16 @@ final class FernletStore {
             ),
             dateKey: todayKey,
             computedAt: Date(),
-            companionEmotionTimeline: widgetEmotionTimeline()
+            companionEmotionTimeline: widgetEmotionTimeline(),
+            companionName: widgetCompanionName,
+            companionLook: WidgetSnapshot.CompanionLook(appearance: settings.companionAppearance)
         )
+    }
+
+    /// The companion's name for the widget: trimmed, and nil when the person never gave it one.
+    private var widgetCompanionName: String? {
+        let name = settings.companionName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? nil : name
     }
 
     /// The snapshot the widget is rendering right now, read back off the app-group file — or `nil`

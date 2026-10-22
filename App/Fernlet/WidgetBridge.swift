@@ -50,6 +50,17 @@ struct WidgetSnapshot: Codable, Equatable {
         var emotionRaw: String?
     }
 
+    /// The person's companion as the widget draws it (owner decision 2026-10-21): body shape and
+    /// topper as their FROZEN `CompanionBodyStyle` / `CompanionAccessory` tokens, and each colour as
+    /// a resolved `#RRGGBB`, or nil where the slot follows the state. Built by
+    /// `init(appearance:)`; byte-identical to the widget's `WidgetCompanionLook` (same JSON keys).
+    struct CompanionLook: Codable, Equatable {
+        var bodyStyleRaw: String
+        var bodyColorHex: String?
+        var accessoryRaw: String
+        var accessoryColorHex: String?
+    }
+
     var companionStateRaw: String
     var score: Double
     var bottleCount: Int
@@ -66,6 +77,14 @@ struct WidgetSnapshot: Codable, Equatable {
     /// "emotion now": a now-value would change on the clock alone, and ``contentEquals(_:)`` would
     /// then either reload the widget on every background refresh or have to ignore it.
     var companionEmotionTimeline: [EmotionMoment]? = nil
+    /// The companion's name, as the person gave it at onboarding; nil when it has none. The small
+    /// card writes it under the state, the thought card beside it.
+    ///
+    /// ADDITIVE (2026-10-21) and optional, like the timeline: an older file decodes without it.
+    var companionName: String? = nil
+    /// The person's companion look (``CompanionLook``); nil draws the plain companion. ADDITIVE
+    /// (2026-10-21) and optional.
+    var companionLook: CompanionLook? = nil
 }
 
 // MARK: - Content vs. metadata
@@ -118,6 +137,8 @@ extension WidgetSnapshot {
     /// | `macroSummary` | content | compared WHOLE; no family renders it today, but it is data the snapshot promises and a change in it is a real change |
     /// | `dateKey` | content | what `WidgetDayGate.snapshotReflectsDay` checks — the most important change there is |
     /// | `companionEmotionTimeline` | content | the faces the widget draws through the day; time-stable (built from local midnight on whole seconds), so an unchanged day compares equal |
+    /// | `companionName` | content | written on the small and thought cards |
+    /// | `companionLook` | content | the body, colour and topper every family draws |
     /// | `computedAt` | **metadata** | stamped at construction, rendered by nothing |
     ///
     /// `WidgetSnapshotContentEqualityTests` pins that table — the field COUNT through `Mirror`, the
@@ -140,6 +161,8 @@ extension WidgetSnapshot {
             && macroSummary == other.macroSummary
             && dateKey == other.dateKey
             && companionEmotionTimeline == other.companionEmotionTimeline
+            && companionName == other.companionName
+            && companionLook == other.companionLook
     }
 }
 
@@ -464,14 +487,28 @@ struct PendingWidgetActionQueue {
 /// @MainActor: driven exclusively from the store's main-actor save path.
 @MainActor
 final class WidgetSnapshotMirror {
+    /// The companion widget's kind — twin of the extension's `FernletWidgetKind.companion`.
     static let widgetKind = "FernletCompanion"
+    /// The water widget's kind — twin of `FernletWidgetKind.water`.
+    static let waterWidgetKind = "FernletWater"
+    /// The water control's kind — twin of `FernletWidgetKind.waterControl`.
+    static let waterControlKind = "FernletWaterControl"
 
     private let fileStore: WidgetSnapshotFileStore
     private let reloadTimelines: () -> Void
 
     init(directory: URL? = nil, reloadTimelines: (() -> Void)? = nil) {
         self.fileStore = WidgetSnapshotFileStore(directory: directory)
-        self.reloadTimelines = reloadTimelines ?? { WidgetCenter.shared.reloadTimelines(ofKind: Self.widgetKind) }
+        self.reloadTimelines = reloadTimelines ?? { Self.reloadEverySurface() }
+    }
+
+    /// Reloads every surface that renders the snapshot: both widgets and the Control Center control.
+    /// One function so a new surface is added in one place, and the Siri water intent reloads the same
+    /// set the mirror does.
+    static func reloadEverySurface() {
+        WidgetCenter.shared.reloadTimelines(ofKind: widgetKind)
+        WidgetCenter.shared.reloadTimelines(ofKind: waterWidgetKind)
+        ControlCenter.shared.reloadControls(ofKind: waterControlKind)
     }
 
     /// Writes the snapshot and reloads the widget timelines; a failed write skips the reload

@@ -1764,6 +1764,18 @@
         }
       }
     },
+    "companionEmotion.asleep" : {
+      "comment" : "Companion feeling once it has fallen asleep for the night. Says nothing about how the day went",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Asleep"
+          }
+        }
+      }
+    },
     "companionEmotion.calm" : {
       "comment" : "Companion feeling when opt-in body signals read calm",
       "extractionState" : "extracted_with_value",
@@ -1784,6 +1796,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Comforted"
+          }
+        }
+      }
+    },
+    "companionEmotion.feeling.asleep" : {
+      "comment" : "The companion's feeling once asleep. Never spoken after a state: an asleep companion is read as 'Asleep' alone",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "fast asleep"
           }
         }
       }

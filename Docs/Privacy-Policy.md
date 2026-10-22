@@ -69,13 +69,19 @@
      preference, injuries and the avoid lists, and an optional maximum heart rate, which is kept on
      the device only (UserDefaults `fernlet.workoutCues.maxHeartRate`: never synced, cleared by
      Delete Everything). New disclosures of processing on the device and of fields kept with
-     workouts and settings; nothing new leaves the device and no promise is weakened under §13). Before
+     workouts and settings; nothing new leaves the device and no promise is weakened under §13), and
+     2026-10-21 (DRAFT for the owner's review — companion widgets: §3 the companion falls asleep after
+     the bedtime wind-down, so the Home Screen widget can show seven feelings, asleep among them, and
+     asleep is the one feeling the Lock Screen may show, because it says nothing about the day. The
+     widget's file also carries the companion's name and how it is dressed, both already kept by the
+     app. A disclosure of processing on the device; nothing new leaves the device and no promise is
+     weakened under §13). Before
      submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
      (2) keep it in sync with the in-app copy in App/Fernlet/PrivacyPolicyView.swift (Settings →
      Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
      the effective date in all three. -->
 
-**Effective date:** October 20, 2026
+**Effective date:** October 21, 2026
 **Developer:** Michael Bowman Olay
 **Contact:** fernletapp@gmail.com
 
@@ -256,10 +262,11 @@ moment, from things the app already holds: the mood tag on today's journal entry
 long it has been since you logged a meal or some water, the bedtime you set, a friend's heart, a
 recent pet, and — only if you turned on "Notice body tension" — that reading. A feeling is never
 saved to your records, never synced to iCloud, never shown to friends (they still see only thriving,
-okay or struggling), and never included in an export. The Home Screen widget can show six of these
-feelings (happy, sad, tired, sleepy, hungry and thirsty); to do that, the app keeps a short list of
+okay or struggling), and never included in an export. The Home Screen widget can show seven of these
+feelings (happy, sad, tired, sleepy, asleep, hungry and thirsty); to do that, the app keeps a short list of
 today's feelings in the file it shares with the widget on your device, which **Delete Everything**
-removes. Lock Screen widgets show only your companion's daily state, never a feeling. You can turn
+removes. Lock Screen widgets show only your companion's daily state, never a feeling, except
+asleep, which shows nothing about your day. You can turn
 the hunger and thirst cues off, and set your companion's bedtime, in Settings → Appearance →
 Companion feelings; those settings are kept on this device and never synced.
 

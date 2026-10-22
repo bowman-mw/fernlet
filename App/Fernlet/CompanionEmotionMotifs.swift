@@ -2,8 +2,8 @@ import SwiftUI
 import FernletDomainModel
 import FernletUI
 
-/// The one small motif each emotion adds beside the companion: a twinkle, a moon, a thought bubble,
-/// a heart, a tear.
+/// The one small motif each emotion adds beside the companion: a twinkle, a moon, a drifting "z", a
+/// thought bubble, a heart, a tear.
 ///
 /// Presentation only, drawn by ``CompanionView``'s accent layer above the equipped items. Every
 /// motif is vector (shapes plus, for the sleepy "z", the same serif glyph the settled pose already
@@ -39,6 +39,9 @@ struct CompanionEmotionMotif: View {
         case .sleepy:
             CompanionMoonAndZ(size: size, elapsed: elapsed)
                 .offset(x: size * 0.40, y: -size * 0.40)
+        case .asleep:
+            CompanionDriftingZ(size: size, elapsed: elapsed)
+                .offset(x: size * 0.34, y: -size * 0.30)
         case .hungry, .thirsty:
             CompanionThoughtBubble(content: emotion == .hungry ? .apple : .droplet, size: size, elapsed: elapsed)
                 .offset(x: size * 0.46, y: -size * 0.44)

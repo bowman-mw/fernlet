@@ -29,7 +29,7 @@ Pinned by `JournalScoringParityTests`.
 
 **Companion emotions** (owner decision 2026-09-24) are a presentation LAYER over the state, never
 a new state. ``CompanionEmotionEngine`` derives the companion's momentary feeling — happy, sad, tired,
-sleepy, hungry, thirsty, loved, comforted, playful, calm or a little frazzled (the `CompanionEmotion`
+sleepy, asleep, hungry, thirsty, loved, comforted, playful, calm or a little frazzled (the `CompanionEmotion`
 tokens live in `FernletDomainModel`) — as a pure function of ``CompanionEmotionInputs`` (today's
 band, the latest journal tag, the mood trend, the last meal, the water, a friend's heart, the opt-in
 body signals, a recent pet, the person's ``CompanionSleepWindow``) and a caller-supplied instant. The
@@ -37,20 +37,26 @@ first rule of ``CompanionEmotionEngine/precedence`` that fires decides:
 
 | # | Rule | Shows | Fires when |
 |---|---|---|---|
-| 1 | `unwell` | — (the sick face) | today is marked unwell |
-| 2 | `bedtime` | sleepy | inside the sleep window |
-| 3 | `held` | comforted | gentle day, and a heart is glowing or the companion was just petted |
-| 4 | `hardDay` | sad | today's latest entry is tagged hard |
-| 5 | `tiredDay` | tired | today's latest entry is tagged tired |
-| 6 | `tense` | frazzled | body signals read tense, band thriving or okay |
-| 7 | `petted` | playful | petted in the last few minutes, day not gentle |
-| 8 | `hunger` | hungry | cues on, waking hours, band not resting, no meal for a while |
-| 9 | `thirst` | thirsty | cues on, waking hours, band not resting, water behind pace |
-| 10 | `heart` | loved | a friend's heart is glowing, day not gentle |
-| 11 | `brightDay` | happy | today's latest entry is tagged bright or good |
-| 12 | `lowBand` | tired | band tired or resting |
-| 13 | `calmBody` | calm | body signals read calm, band thriving or okay, day not gentle |
-| 14 | `thriving` | happy | band thriving, day not gentle |
+| 1 | `asleep` | asleep | inside the sleep window, past the 30-minute wind-down |
+| 2 | `unwell` | — (the sick face) | today is marked unwell |
+| 3 | `bedtime` | sleepy | inside the sleep window (the wind-down) |
+| 4 | `held` | comforted | gentle day, and a heart is glowing or the companion was just petted |
+| 5 | `hardDay` | sad | today's latest entry is tagged hard |
+| 6 | `tiredDay` | tired | today's latest entry is tagged tired |
+| 7 | `tense` | frazzled | body signals read tense, band thriving or okay |
+| 8 | `petted` | playful | petted in the last few minutes, day not gentle |
+| 9 | `hunger` | hungry | cues on, waking hours, band not resting, no meal for a while |
+| 10 | `thirst` | thirsty | cues on, waking hours, band not resting, water behind pace |
+| 11 | `heart` | loved | a friend's heart is glowing, day not gentle |
+| 12 | `brightDay` | happy | today's latest entry is tagged bright or good |
+| 13 | `lowBand` | tired | band tired or resting |
+| 14 | `calmBody` | calm | body signals read calm, band thriving or okay, day not gentle |
+| 15 | `thriving` | happy | band thriving, day not gentle |
+
+*Asleep* (owner decision 2026-10-21) begins ``CompanionSleepWindow/windDownMinutes`` (30) after
+bedtime and lasts until the wake time. It sits above even the unwell flag because an asleep companion
+shows nothing of the day: renders draw it in a neutral night colour with no state word or care bar
+(`CompanionEmotion.hidesTheDay`), and it is the one emotion the Lock Screen may draw.
 
 A *gentle day* (``CompanionEmotionInputs/isGentleDay``) — tagged hard or tired, or no entry yet and a
 mood trend that needs gentleness — never yields a happy-looking emotion; sad only ever mirrors a day

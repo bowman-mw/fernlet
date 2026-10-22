@@ -120,7 +120,7 @@ struct LogWaterIntent: AppIntent {
             if store.applyOptimisticWaterPlusOne(dayKey: dayKey) { bumped = true }
         }
         if bumped {
-            WidgetCenter.shared.reloadTimelines(ofKind: WidgetSnapshotMirror.widgetKind)
+            WidgetSnapshotMirror.reloadEverySurface()
         }
     }
 
@@ -304,6 +304,10 @@ nonisolated enum PendingIntentSheet {
     enum Target: String {
         case meal
         case journal
+        /// The Water sheet — a tap on the water widget, where a mis-tapped bottle can be undone.
+        case water
+        /// Home, with no sheet — a tap on the companion widget.
+        case home
         case trainerPrepareSummary
         case trainerCopySummaryAndPrompt
         case trainerPastePlan

@@ -1810,11 +1810,11 @@ struct LocalizationBoundaryTests {
 
     /// The app-side emotion raw values (2026-09-24), frozen once for parts B and C.
     static let frozenCompanionEmotionRawValues = [
-        "happy", "sad", "tired", "sleepy", "hungry", "thirsty", "loved", "comforted", "playful", "calm", "frazzled"
+        "happy", "sad", "tired", "sleepy", "asleep", "hungry", "thirsty", "loved", "comforted", "playful", "calm", "frazzled"
     ]
 
     /// The emotions the widget snapshot may carry — the `WidgetCompanionEmotion` mirror, one-for-one.
-    static let frozenWidgetEmotionRawValues = ["happy", "sad", "tired", "sleepy", "hungry", "thirsty"]
+    static let frozenWidgetEmotionRawValues = ["happy", "sad", "tired", "sleepy", "asleep", "hungry", "thirsty"]
 
     /// Repo-relative path of the app-side `CompanionEmotion` declaration.
     static let companionEmotionPath = "FernletKit/Sources/FernletDomainModel/CompanionEmotion.swift"
@@ -1931,7 +1931,7 @@ struct LocalizationBoundaryTests {
 
     /// Every emotion's display pair — `displayName` and `feelingPhrase` — is a localized fork keyed
     /// `companionEmotion.<token>` / `companionEmotion.feeling.<token>`, in the domain module's
-    /// catalog and, for the publishable six, in the widget's catalog too.
+    /// catalog and, for the publishable seven, in the widget's catalog too.
     ///
     /// The source half proves the fork exists; the catalog half proves the sync harvested it, which
     /// is the step a `String` parameter or a missing `bundle:` silently skips.
@@ -3702,6 +3702,11 @@ struct LocalizationBoundaryTests {
     /// form, and every language with more than two (Russian, Polish, Arabic, Welsh) is stuck
     /// agreeing in the wrong number forever. English is already wrong at "1 coins".
     static let pluralRuledKeys: [HarvestedKey] = [
+        // Widget redesign (2026-10-21): the water card's target line. Its spoken twin,
+        // `widget.water.progress`, carries two numbers and plurals the second through a
+        // substitution, which this one-count check does not read.
+        HarvestedKey(catalog: "App/FernletWidgets/Localizable.xcstrings", key: "widget.water.ofTarget",
+                     source: "the water widget's target line"),
         HarvestedKey(catalog: "FernletKit/Sources/FernletUI/Localizable.xcstrings",
                      key: "ui.coins.balance",
                      source: "the coin pill's spoken balance"),
