@@ -371,18 +371,23 @@ struct ExerciseHowToTests {
         }
     }
 
-    // MARK: - The es/fr/de drafts stay dormant
+    // MARK: - Only the switched-on languages reach the app bundle
 
-    /// The domain catalog carries Spanish, French and German drafts of every exercise string, all
-    /// marked `needs_review` and none reviewed yet. They stay out of sight only while the app itself
-    /// ships English alone: a package's resource bundle resolves to the language the MAIN bundle
-    /// resolved to, so with no non-English entry in any app-target catalog (no `es.lproj`, `fr.lproj`
-    /// or `de.lproj` in the app or an extension) and no `CFBundleAllowMixedLocalizations`, a device
-    /// set to Spanish still draws the English defaults. Either change turns the drafts on in that
-    /// language, unreviewed, beside English everywhere else. Turning a language on app-wide is a later
-    /// phase (Docs/Localization-Plan-2026-07-19.md §4): have the drafts reviewed first, then update
-    /// this test.
-    @Test func theDraftTranslationsStayDormantWhileTheAppShipsOnlyEnglish() throws {
+    /// The languages the app is switched on in. Spanish joined English on the
+    /// `claude/spanish-switch-on` branch (Spanish round, 2026-10-21): every app-target catalog now
+    /// carries `es`, so the app bundle has an `es.lproj` and a device set to Spanish draws Spanish —
+    /// the owner's in-app review of the drafts. It merges to `main` only when the owner says Spanish
+    /// is ready (Docs/Localization-Plan-2026-07-19.md §4).
+    static let switchedOnLanguages: Set<String> = ["en", "es"]
+
+    /// The domain catalog carries Spanish, French and German drafts of every exercise string. Only a
+    /// language the APP is switched on in can show: a package's resource bundle resolves to the
+    /// language the MAIN bundle resolved to, so with no `fr` or `de` entry in any app-target catalog
+    /// (no `fr.lproj` / `de.lproj` in the app or an extension) and no
+    /// `CFBundleAllowMixedLocalizations`, a device set to French or German still draws English.
+    /// Either change turns that language's unreviewed drafts on beside English everywhere else; add
+    /// a language to ``switchedOnLanguages`` only together with its reviewed translation.
+    @Test func onlyTheSwitchedOnLanguagesReachTheAppBundle() throws {
         let catalogs = Self.appFiles { $0.pathExtension == "xcstrings" }
         #expect(catalogs.count >= 6, "found \(catalogs.count) app-target catalogs; the scan lost its root")
         for catalog in catalogs {
@@ -392,7 +397,7 @@ struct ExerciseHowToTests {
             for case let entry as [String: Any] in strings.values {
                 languages.formUnion((entry["localizations"] as? [String: Any])?.keys.map { $0 } ?? [])
             }
-            let others = languages.subtracting(["en"]).sorted()
+            let others = languages.subtracting(Self.switchedOnLanguages).sorted()
             #expect(others.isEmpty, "\(catalog.path) carries \(others): that compiles a lproj into an app bundle and turns the unreviewed exercise drafts on in that language")
         }
         let plists = Self.appFiles { $0.lastPathComponent == "Info.plist" }
@@ -405,6 +410,11 @@ struct ExerciseHowToTests {
         }
         let project = try RepoRoot.source("App/Fernlet.xcodeproj/project.pbxproj")
         #expect(!project.contains("AllowMixedLocalizations"), "a target's build settings allow mixed localizations")
+        // The switch is really on: the app's own catalog carries the Spanish drafts.
+        let app = try JSONSerialization.jsonObject(with: Data(contentsOf: RepoRoot.url("App/Fernlet/Localizable.xcstrings"))) as? [String: Any]
+        let appStrings = app?["strings"] as? [String: Any] ?? [:]
+        let spanish = appStrings.values.filter { (($0 as? [String: Any])?["localizations"] as? [String: Any])?["es"] != nil }.count
+        #expect(spanish > 3000, "the app catalog carries only \(spanish) Spanish entries; the switch-on lost its drafts")
         // What this protects is really there: the drafts are in the domain catalog.
         let domain = try Self.catalogStrings()
         let bench = (domain["exercise.benchPress.name"] as? [String: Any])?["localizations"] as? [String: Any]

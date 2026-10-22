@@ -10,6 +10,12 @@
             "state" : "new",
             "value" : "None of the selected pictures could be saved."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo guardar ninguna de las fotos seleccionadas."
+          }
         }
       }
     },
@@ -21,6 +27,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Done"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "OK"
           }
         }
       }
@@ -34,6 +46,12 @@
             "state" : "new",
             "value" : "Friends stay on your list for good vibes and future hangouts. This is just for you — they won't be notified either way."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tus amigos se quedan en tu lista para la buena vibra y los próximos encuentros. Es solo para ti: no se les avisará, elijas lo que elijas."
+          }
         }
       }
     },
@@ -45,6 +63,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Keep"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Conservar"
           }
         }
       }
@@ -58,6 +82,12 @@
             "state" : "new",
             "value" : "Keeping"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se queda"
+          }
         }
       }
     },
@@ -69,6 +99,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Keep as friends?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Conservar como amigos?"
           }
         }
       }
@@ -82,6 +118,12 @@
             "state" : "new",
             "value" : "Nice hangout!"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Qué buen rato!"
+          }
         }
       }
     },
@@ -94,6 +136,12 @@
             "state" : "new",
             "value" : "Also save kept photos to Photos"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Guardar también las conservadas en Fotos"
+          }
         }
       }
     },
@@ -105,6 +153,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Couldn't save your choice. Nothing was lost. Try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo guardar tu elección. No se perdió nada. Inténtalo de nuevo."
           }
         }
       }
@@ -129,6 +183,24 @@
               }
             }
           }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Eliminar %lld foto"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Eliminar las %lld"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -141,6 +213,12 @@
             "state" : "new",
             "value" : "They'll be removed from this phone. Friends keep their own copies."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se eliminarán de este teléfono. Tus amigos conservan sus propias copias."
+          }
         }
       }
     },
@@ -152,6 +230,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Delete this shared picture?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Eliminar esta foto compartida?"
           }
         }
       }
@@ -176,6 +260,24 @@
               }
             }
           }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "¿Eliminar %lld foto compartida?"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "¿Eliminar %lld fotos compartidas?"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -187,6 +289,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Delete it"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Eliminarla"
           }
         }
       }
@@ -200,6 +308,12 @@
             "state" : "new",
             "value" : "Ending the session..."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Terminando la sesión..."
+          }
         }
       }
     },
@@ -211,6 +325,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Nothing from this session is saved until you choose. Photos you don't keep are deleted from this phone."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se guarda nada de esta sesión hasta que elijas. Las fotos que no conserves se eliminan de este teléfono."
           }
         }
       }
@@ -224,6 +344,12 @@
             "state" : "new",
             "value" : "Keep selected"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Conservar seleccionadas"
+          }
         }
       }
     },
@@ -235,6 +361,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Keeping isn't possible right now because your saved photos can't be read. You can delete these, or choose later."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ahora no se pueden conservar porque Fernlet no puede leer tus fotos guardadas. Puedes eliminar estas o decidir más tarde."
           }
         }
       }
@@ -248,6 +380,12 @@
             "state" : "new",
             "value" : "Not now"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ahora no"
+          }
         }
       }
     },
@@ -259,6 +397,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Report…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Reportar…"
           }
         }
       }
@@ -272,6 +416,12 @@
             "state" : "new",
             "value" : "Saving to Photos..."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Guardando en Fotos..."
+          }
         }
       }
     },
@@ -283,6 +433,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Photos hidden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fotos ocultas"
           }
         }
       }
@@ -296,6 +452,12 @@
             "state" : "new",
             "value" : "Double-tap to keep or not keep."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Toca dos veces para elegir si la conservas."
+          }
         }
       }
     },
@@ -308,6 +470,12 @@
             "state" : "new",
             "value" : "Photo from %@"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Foto de %@"
+          }
         }
       }
     },
@@ -319,6 +487,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Review pictures"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Revisar fotos"
           }
         }
       }
@@ -343,6 +517,24 @@
               }
             }
           }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld foto no se pudo abrir y se eliminó."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld fotos no se pudieron abrir y se eliminaron."
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -354,6 +546,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "None of the selected pictures could be saved. They may be corrupted — try choosing different ones."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo guardar ninguna de las fotos seleccionadas. Puede que estén dañadas: intenta elegir otras."
           }
         }
       }
@@ -367,6 +565,12 @@
             "state" : "new",
             "value" : "This picture couldn't be saved. It may be corrupted."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo guardar esta foto. Puede que esté dañada."
+          }
         }
       }
     },
@@ -379,6 +583,12 @@
             "state" : "new",
             "value" : "Could not save to your photo library. Please try again."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo guardar en tu fototeca. Inténtalo de nuevo."
+          }
         }
       }
     },
@@ -389,6 +599,12 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "OK"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
             "value" : "OK"
           }
         }
@@ -403,6 +619,12 @@
             "state" : "new",
             "value" : "Open Settings"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abrir Configuración"
+          }
         }
       }
     },
@@ -414,6 +636,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Fernlet needs access to your Photo Library to save photos. Open Settings to grant access."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet necesita acceso a tu fototeca para guardar fotos. Abre Configuración para darle acceso."
           }
         }
       }

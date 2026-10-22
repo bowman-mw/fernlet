@@ -10,6 +10,12 @@
             "state" : "new",
             "value" : "age"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "edad"
+          }
         }
       }
     },
@@ -21,6 +27,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "height"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "altura"
           }
         }
       }
@@ -34,6 +46,12 @@
             "state" : "new",
             "value" : "sex"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "sexo"
+          }
         }
       }
     },
@@ -45,6 +63,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "weight"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "peso"
           }
         }
       }
@@ -58,6 +82,12 @@
             "state" : "new",
             "value" : "Fernlet could not clear cached HealthKit values, so it did not disable HealthKit. Please try again."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo borrar los valores de Salud que guardó en caché, así que no desactivó la integración con Salud. Inténtalo de nuevo."
+          }
         }
       }
     },
@@ -69,6 +99,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Health data is not available on this device."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los datos de Salud no están disponibles en este dispositivo."
           }
         }
       }
@@ -82,6 +118,12 @@
             "state" : "new",
             "value" : "Those height and weight values do not look right, so Fernlet did not save them to Health."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Esos valores de estatura y peso no parecen correctos, así que Fernlet no los guardó en Salud."
+          }
         }
       }
     },
@@ -93,6 +135,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Fernlet could not create the HealthKit type for %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo crear el tipo de HealthKit para %@."
           }
         }
       }
@@ -106,6 +154,12 @@
             "state" : "new",
             "value" : "Sharing with Apple Health is turned off in Fernlet, so nothing was saved to Health. You can turn it on in Settings › Health."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet tiene desactivado compartir con Salud, así que no guardó nada ahí. Puedes activarlo en Configuración › Salud."
+          }
         }
       }
     },
@@ -117,6 +171,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Updated Health access for %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se actualizó el acceso a Salud (%@)."
           }
         }
       }
@@ -130,6 +190,12 @@
             "state" : "new",
             "value" : "No body profile data was available from Health. Manual settings will be used."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Salud no tenía datos del perfil corporal. Se usarán los valores que ingresaste a mano."
+          }
         }
       }
     },
@@ -141,6 +207,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Health profile update was unavailable. Manual settings will be used. %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo actualizar el perfil desde Salud. Se usarán los valores que ingresaste a mano. %@"
           }
         }
       }
@@ -154,6 +226,12 @@
             "state" : "new",
             "value" : "Imported body profile from Health."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se importó el perfil corporal desde Salud."
+          }
         }
       }
     },
@@ -165,6 +243,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Updated ^[%1$lld field](inflect: true) from Health. Manual settings remain for %2$@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet actualizó ^[%1$lld dato](inflect: true) desde Salud. Para %2$@ se mantienen los valores que ingresaste a mano."
           }
         }
       }
@@ -178,6 +262,12 @@
             "state" : "new",
             "value" : "Updated body profile from Health."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se actualizó el perfil corporal desde Salud."
+          }
         }
       }
     },
@@ -189,6 +279,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ update was unavailable. Manual app entries remain available. %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@: la actualización no estuvo disponible. Lo que registras a mano en la app sigue disponible. %2$@"
           }
         }
       }
@@ -202,6 +298,12 @@
             "state" : "new",
             "value" : "Updated %@ data from Health."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se actualizaron los datos de %@ desde Salud."
+          }
         }
       }
     },
@@ -213,6 +315,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Health data is not available on this device."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los datos de Salud no están disponibles en este dispositivo."
           }
         }
       }
@@ -226,6 +334,12 @@
             "state" : "new",
             "value" : "Intimate logging is available at 16 and older. Fernlet checks your age range with Apple — see Settings › Intimacy."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El registro íntimo está disponible a partir de los 16 años. Fernlet verifica tu rango de edad con Apple: consulta Configuración › Intimidad."
+          }
         }
       }
     },
@@ -237,6 +351,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Could not update height or weight in Health. %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo actualizar la altura o el peso en Salud. %@"
           }
         }
       }
@@ -250,6 +370,12 @@
             "state" : "new",
             "value" : "To revoke %@ access, open Settings > Privacy & Security > Health > Fernlet. iOS does not allow apps to revoke Health permissions directly."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Para revocar este acceso (%@), abre Configuración > Privacidad y seguridad > Salud > Fernlet. iOS no permite que las apps revoquen los permisos de Salud directamente."
+          }
         }
       }
     },
@@ -261,6 +387,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "activity context"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "contexto de actividad"
           }
         }
       }
@@ -274,6 +406,12 @@
             "state" : "new",
             "value" : "Read steps, active energy, and exercise minutes for daily activity context."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lee los pasos, la energía activa y los minutos de ejercicio, como contexto de tu actividad diaria."
+          }
         }
       }
     },
@@ -285,6 +423,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Activity context"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Contexto de actividad"
           }
         }
       }
@@ -298,6 +442,12 @@
             "state" : "new",
             "value" : "body context"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "contexto del cuerpo"
+          }
         }
       }
     },
@@ -309,6 +459,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Read sleep, resting heart rate, heart rate variability, respiratory rate, and sleeping wrist temperature for recovery-aware companion context."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lee el sueño, la frecuencia cardiaca en reposo, la variabilidad de la frecuencia cardiaca, la frecuencia respiratoria y la temperatura de la muñeca mientras duermes, para que tu compañero tenga en cuenta tu recuperación."
           }
         }
       }
@@ -322,6 +478,12 @@
             "state" : "new",
             "value" : "Body context"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Contexto del cuerpo"
+          }
         }
       }
     },
@@ -333,6 +495,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "body profile"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "perfil corporal"
           }
         }
       }
@@ -346,6 +514,12 @@
             "state" : "new",
             "value" : "Read age, biological sex, height, and weight from Apple Health. Fernlet can write height and weight changes back when Health access allows it."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lee tu edad, sexo biológico, altura y peso de Salud. Fernlet puede guardar en Salud los cambios de altura y peso cuando el acceso a Salud lo permite."
+          }
         }
       }
     },
@@ -357,6 +531,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Body profile"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Perfil corporal"
           }
         }
       }
@@ -370,6 +550,12 @@
             "state" : "new",
             "value" : "cycle tracking"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "seguimiento del ciclo"
+          }
         }
       }
     },
@@ -381,6 +567,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Read and write cycle observations like menstrual flow, basal body temperature, cervical mucus, intermenstrual bleeding, and ovulation test results."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lee y escribe observaciones del ciclo, como el flujo menstrual, la temperatura corporal basal, el moco cervical, el sangrado intermenstrual y los resultados de las pruebas de ovulación."
           }
         }
       }
@@ -394,6 +586,12 @@
             "state" : "new",
             "value" : "Cycle tracking"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Seguimiento del ciclo"
+          }
         }
       }
     },
@@ -405,6 +603,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "intimate logging"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "registro íntimo"
           }
         }
       }
@@ -418,6 +622,12 @@
             "state" : "new",
             "value" : "Read and write sexual activity only when explicitly enabled."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lee y escribe la actividad sexual solo cuando se activa expresamente."
+          }
         }
       }
     },
@@ -430,6 +640,12 @@
             "state" : "new",
             "value" : "Intimate logging"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Registro íntimo"
+          }
         }
       }
     },
@@ -440,6 +656,12 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "mindfulness"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
             "value" : "mindfulness"
           }
         }
@@ -454,6 +676,12 @@
             "state" : "new",
             "value" : "Write mindful sessions completed in Fernlet to Apple Health."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Guarda en Salud las sesiones de mindfulness que completas en Fernlet."
+          }
         }
       }
     },
@@ -464,6 +692,12 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "Mindfulness"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
             "value" : "Mindfulness"
           }
         }
@@ -478,6 +712,12 @@
             "state" : "new",
             "value" : "workout logging"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "registro de entrenamientos"
+          }
         }
       }
     },
@@ -490,6 +730,12 @@
             "state" : "new",
             "value" : "Read and write workouts in Apple Health so Fernlet and Apple Fitness stay in sync."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lee y guarda entrenamientos en Salud para que Fernlet y Fitness estén sincronizados."
+          }
         }
       }
     },
@@ -501,6 +747,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Workout logging"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Registro de entrenamientos"
           }
         }
       }

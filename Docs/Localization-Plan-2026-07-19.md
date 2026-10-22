@@ -442,9 +442,10 @@ purpose) are closed at their source, resolved in `FernletSocialCopy.Presence` un
 > Spanish still draws the English defaults. Measured, not assumed: with an English-only main bundle,
 > a bundle holding only `es`/`fr` resolved to English (default value) under `AppleLanguages (fr, en)`,
 > `Locale.current` was `en_FR`, and the same bundles resolved French once mixed localizations were
-> allowed. `ExerciseHowToTests.theDraftTranslationsStayDormantWhileTheAppShipsOnlyEnglish` pins
-> those preconditions. `knownRegions` already lists de/es/fr (Phase 1), but that is project metadata
-> and puts nothing in the bundle.
+> allowed. `ExerciseHowToTests.onlyTheSwitchedOnLanguagesReachTheAppBundle` (formerly
+> `theDraftTranslationsStayDormantWhileTheAppShipsOnlyEnglish`) pins those preconditions for every
+> language not switched on. `knownRegions` already lists de/es/fr (Phase 1), but that is project
+> metadata and puts nothing in the bundle.
 >
 > **Held back:** the how-to sheet's own labels ("Common mistake", "Stop if you feel sharp pain.",
 > "How to do %@", …) live in the APP catalog, and any es/fr/de entry there compiles a lproj into the
@@ -461,6 +462,18 @@ purpose) are closed at their source, resolved in `FernletSocialCopy.Presence` un
 > the main bundle a French localization too (one `fr` entry in `App/Fernlet/Localizable.xcstrings`,
 > reverted afterwards).
 
+> **Spanish switched on, on its own branch (2026-10-21).** `claude/spanish-switch-on`, stacked on the
+> round's integration branch, carries the Spanish drafts in every catalog: 4,822 `needs_review`
+> plus the owner's approvals as `translated` (an approval counts only for the exact draft it saw),
+> from three drafting passes over every key (`Docs/Localization-es-Glossary.md` throughout). The
+> app bundle therefore gains `es.lproj` and a device set to Spanish runs Fernlet in Spanish for the
+> owner's in-app review; French and German stay dormant (`onlyTheSwitchedOnLanguagesReachTheAppBundle`).
+> The integration branch itself ships English only and can merge first. Measured before the
+> switch: every Spanish value with COUNT agreement markup (67) is drawn where inflection happens at
+> creation (`Text`, `AttributedString(localized:)`); the addressed path (`AddressedCopy` /
+> `AddressedText`, inflection applied afterwards with the profile's term) keeps gender but drops
+> plural agreement ("3 comida"), so copy on that path uses catalog plural variations instead.
+>
 > **Spanish round started (2026-10-20).** The owner speaks Spanish and is the native reviewer.
 > Decided with the owner:
 > - **Variant:** one base `es`, neutral Spanish leaning Latin American where a word must be chosen

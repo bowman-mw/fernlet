@@ -10,6 +10,12 @@
             "state" : "new",
             "value" : "Browse your library"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Explorar tu biblioteca"
+          }
         }
       }
     },
@@ -21,6 +27,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Browse your recipes"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Explorar tus recetas"
           }
         }
       }
@@ -34,6 +46,12 @@
             "state" : "new",
             "value" : "Browse your workouts"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Explorar tus entrenamientos"
+          }
         }
       }
     },
@@ -45,6 +63,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Review in Fernlet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Revisar en Fernlet"
           }
         }
       }
@@ -58,6 +82,12 @@
             "state" : "new",
             "value" : "Share ↗"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Compartir ↗"
+          }
         }
       }
     },
@@ -68,6 +98,12 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "⌁  FERNLET"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
             "value" : "⌁  FERNLET"
           }
         }
@@ -82,6 +118,12 @@
             "state" : "new",
             "value" : "Notes included"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Incluye notas"
+          }
         }
       }
     },
@@ -93,6 +135,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Opens in Fernlet on iPhone"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se abre en Fernlet para iPhone"
           }
         }
       }
@@ -106,6 +154,12 @@
             "state" : "new",
             "value" : "Fernlet plan"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Plan de Fernlet"
+          }
         }
       }
     },
@@ -117,6 +171,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Fernlet recipe"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Receta de Fernlet"
           }
         }
       }
@@ -130,6 +190,12 @@
             "state" : "new",
             "value" : "Selected"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Seleccionado"
+          }
         }
       }
     },
@@ -140,6 +206,12 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "Fernlet: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
             "value" : "Fernlet: %@"
           }
         }
@@ -154,6 +226,12 @@
             "state" : "new",
             "value" : "FERNLET RECIPE"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "RECETA DE FERNLET"
+          }
         }
       }
     },
@@ -165,6 +243,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "FERNLET WORKOUT"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ENTRENAMIENTO DE FERNLET"
           }
         }
       }
@@ -178,6 +262,12 @@
             "state" : "new",
             "value" : "Fernlet couldn't open this recipe for review."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo abrir esta receta para revisarla."
+          }
         }
       }
     },
@@ -189,6 +279,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Fernlet couldn't open this workout plan for review."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo abrir este plan de entrenamiento para revisarlo."
           }
         }
       }
@@ -202,6 +298,12 @@
             "state" : "new",
             "value" : "Fernlet couldn't prepare this item for review."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo preparar este elemento para revisarlo."
+          }
         }
       }
     },
@@ -213,6 +315,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Fernlet couldn't prepare this recipe for review."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo preparar esta receta para revisarla."
           }
         }
       }
@@ -226,6 +334,12 @@
             "state" : "new",
             "value" : "Fernlet couldn't prepare this workout plan for review."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo preparar este plan de entrenamiento para revisarlo."
+          }
         }
       }
     },
@@ -237,6 +351,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Shows the full bounded Fernlet Messages catalog."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Muestra todo el catálogo limitado de Fernlet para Mensajes."
           }
         }
       }
@@ -250,6 +370,12 @@
             "state" : "new",
             "value" : "Adds the selected Fernlet item to this Messages conversation."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Agrega el elemento de Fernlet seleccionado a esta conversación de Mensajes."
+          }
         }
       }
     },
@@ -261,6 +387,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Opens Fernlet to review this item before saving it."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre Fernlet para revisar este elemento antes de guardarlo."
           }
         }
       }
@@ -274,6 +406,12 @@
             "state" : "new",
             "value" : "No item was saved or imported."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No se guardó ni se importó nada."
+          }
         }
       }
     },
@@ -285,6 +423,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "The message data is unsupported or invalid."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los datos del mensaje no son compatibles o no son válidos."
           }
         }
       }
@@ -298,6 +442,12 @@
             "state" : "new",
             "value" : "This Fernlet item can't be opened"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Este elemento de Fernlet no se puede abrir"
+          }
         }
       }
     },
@@ -309,6 +459,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Recipes"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Recetas"
           }
         }
       }
@@ -322,6 +478,12 @@
             "state" : "new",
             "value" : "Workouts"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Entrenamientos"
+          }
         }
       }
     },
@@ -333,6 +495,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Fernlet couldn't read the Messages transport check."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo leer la prueba de transporte de Mensajes."
           }
         }
       }
@@ -346,6 +514,12 @@
             "state" : "new",
             "value" : "Fernlet couldn't prepare the Messages transport check."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo preparar la prueba de transporte de Mensajes."
+          }
         }
       }
     },
@@ -357,6 +531,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "The Messages transport check is too large."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La prueba de transporte de Mensajes es demasiado grande."
           }
         }
       }
@@ -370,6 +550,12 @@
             "state" : "new",
             "value" : "Choose a date in Fernlet"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Elige una fecha en Fernlet"
+          }
         }
       }
     },
@@ -381,6 +567,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Fernlet recipe"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Receta de Fernlet"
           }
         }
       }
@@ -394,6 +586,12 @@
             "state" : "new",
             "value" : "Fernlet recipe · note included"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Receta de Fernlet · incluye nota"
+          }
         }
       }
     },
@@ -405,6 +603,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Scheduled %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Programado para el %@"
           }
         }
       }
@@ -418,6 +622,12 @@
             "state" : "new",
             "value" : "Fernlet workout plan"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Plan de entrenamiento de Fernlet"
+          }
         }
       }
     },
@@ -429,6 +639,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Fernlet workout plan · %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Plan de entrenamiento de Fernlet · %@"
           }
         }
       }
@@ -453,6 +669,24 @@
               }
             }
           }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld ingrediente"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld ingredientes"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -464,6 +698,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Note: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nota: %@"
           }
         }
       }
@@ -477,6 +717,12 @@
             "state" : "new",
             "value" : "Parts: %1$@\n%2$@"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Partes: %1$@\n%2$@"
+          }
         }
       }
     },
@@ -488,6 +734,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%@ · No recipe note"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ · Sin nota de la receta"
           }
         }
       }
@@ -508,6 +760,24 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%lld servings"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld porción"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld porciones"
                 }
               }
             }
@@ -535,6 +805,24 @@
               }
             }
           }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld paso"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld pasos"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -546,6 +834,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%@ · Note included"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ · Incluye nota"
           }
         }
       }
@@ -559,6 +853,12 @@
             "state" : "new",
             "value" : "Search recipes"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Buscar recetas"
+          }
         }
       }
     },
@@ -570,6 +870,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Search workout plans"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Buscar planes de entrenamiento"
           }
         }
       }
@@ -583,6 +889,12 @@
             "state" : "new",
             "value" : "Fernlet couldn't read your Messages catalog. Open Fernlet and try again."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo leer tu catálogo de Mensajes. Abre Fernlet e inténtalo de nuevo."
+          }
         }
       }
     },
@@ -594,6 +906,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Choose a recipe to share."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Elige una receta para compartir."
           }
         }
       }
@@ -607,6 +925,12 @@
             "state" : "new",
             "value" : "Choose a workout plan to share."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Elige un plan de entrenamiento para compartir."
+          }
         }
       }
     },
@@ -618,6 +942,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Open Fernlet to prepare items for Messages."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre Fernlet para preparar elementos para Mensajes."
           }
         }
       }
@@ -631,6 +961,12 @@
             "state" : "new",
             "value" : "Fernlet couldn't insert this item."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo insertar este elemento."
+          }
         }
       }
     },
@@ -642,6 +978,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Open Fernlet to review this item."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre Fernlet para revisar este elemento."
           }
         }
       }
@@ -655,6 +997,12 @@
             "state" : "new",
             "value" : "Opening Fernlet for review…"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abriendo Fernlet para revisar…"
+          }
         }
       }
     },
@@ -666,6 +1014,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Recipe inserted."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Receta insertada."
           }
         }
       }
@@ -679,6 +1033,12 @@
             "state" : "new",
             "value" : "This recipe is too large for a Messages card. Export a Fernlet recipe file instead."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Esta receta es demasiado grande para una tarjeta de Mensajes. En su lugar, exporta un archivo de receta de Fernlet."
+          }
         }
       }
     },
@@ -690,6 +1050,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Fernlet shared storage isn't available."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El almacenamiento compartido de Fernlet no está disponible."
           }
         }
       }
@@ -703,6 +1069,12 @@
             "state" : "new",
             "value" : "Workout plan inserted."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Plan de entrenamiento insertado."
+          }
         }
       }
     },
@@ -714,6 +1086,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "This plan is too large for Messages. Use Export workout plan in Shortcuts or Files."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Este plan es demasiado grande para Mensajes. Usa “Exportar plan de entrenamiento” en Atajos o Archivos."
           }
         }
       }
@@ -727,6 +1105,12 @@
             "state" : "new",
             "value" : "Share a Fernlet recipe"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Compartir una receta de Fernlet"
+          }
         }
       }
     },
@@ -738,6 +1122,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Share a Fernlet workout"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Compartir un entrenamiento de Fernlet"
           }
         }
       }
@@ -751,6 +1141,12 @@
             "state" : "new",
             "value" : "Share a recipe"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Compartir una receta"
+          }
         }
       }
     },
@@ -762,6 +1158,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Share a workout"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Compartir un entrenamiento"
           }
         }
       }
@@ -786,6 +1188,24 @@
               }
             }
           }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld entrenamiento"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld entrenamientos"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -797,6 +1217,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%@ · Notes included"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ · Incluye notas"
           }
         }
       }

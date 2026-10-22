@@ -10,6 +10,12 @@
             "state" : "new",
             "value" : "Unlock Fernlet"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Desbloquear Fernlet"
+          }
         }
       }
     },
@@ -21,6 +27,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Password must be 8-64 characters"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La contraseña debe tener entre 8 y 64 caracteres"
           }
         }
       }
@@ -34,6 +46,12 @@
             "state" : "new",
             "value" : "PIN must be exactly 4 digits"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El PIN debe tener exactamente 4 dígitos"
+          }
         }
       }
     },
@@ -45,6 +63,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "PIN must be exactly 6 digits"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El PIN debe tener exactamente 6 dígitos"
           }
         }
       }
@@ -58,6 +82,12 @@
             "state" : "new",
             "value" : "Set up a recovery device before choosing this response."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Configura un dispositivo de recuperación antes de elegir esta respuesta."
+          }
         }
       }
     },
@@ -69,6 +99,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Your recovery device holds the key from before this app lock. Set it up again before choosing this."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu dispositivo de recuperación tiene la clave de antes de este bloqueo de la app. Vuelve a configurarlo antes de elegir esta opción."
           }
         }
       }
@@ -82,6 +118,12 @@
             "state" : "new",
             "value" : "Your duress code must be different from your passcode."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu código de coacción tiene que ser distinto de tu código."
+          }
         }
       }
     },
@@ -93,6 +135,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Enter your passcode again to change this."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Vuelve a ingresar tu código para cambiar esto."
           }
         }
       }
@@ -106,6 +154,12 @@
             "state" : "new",
             "value" : "Your duress code can't be typed on that kind of lock. Remove or change your duress code first."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu código de coacción no se puede ingresar con ese tipo de bloqueo. Primero quita o cambia tu código de coacción."
+          }
         }
       }
     },
@@ -117,6 +171,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Change your duress response before removing your recovery device."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cambia la respuesta de tu código de coacción antes de quitar tu dispositivo de recuperación."
           }
         }
       }
@@ -130,6 +190,12 @@
             "state" : "new",
             "value" : "That recovery device's code wasn't valid. Scan it again."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El código de ese dispositivo de recuperación no era válido. Escanéalo de nuevo."
+          }
         }
       }
     },
@@ -142,6 +208,12 @@
             "state" : "new",
             "value" : "That key doesn't match this phone's sealed data, so it wasn't installed."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Esa clave no coincide con los datos sellados de este teléfono, así que no se instaló."
+          }
         }
       }
     },
@@ -153,6 +225,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "This phone has no recovery device set up."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Este teléfono no tiene un dispositivo de recuperación configurado."
           }
         }
       }

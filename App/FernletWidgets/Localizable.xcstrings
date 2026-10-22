@@ -9,6 +9,12 @@
             "state" : "new",
             "value" : "%1$lld bpm · aim %2$lld–%3$lld"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$lld lpm · ideal %2$lld–%3$lld"
+          }
         }
       }
     },
@@ -20,11 +26,24 @@
             "state" : "new",
             "value" : "%1$lld bpm · aim %2$lld–%3$lld · %4$@"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$lld lpm · ideal %2$lld–%3$lld · %4$@"
+          }
         }
       }
     },
     "%lld percent" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld por ciento"
+          }
+        }
+      }
     },
     "%lld × %@" : {
       "comment" : "Live Activity: last time's sets × reps for this lift, e.g. '3 × 8'. Reps are as logged ('8', '8-10').",
@@ -77,6 +96,12 @@
             "state" : "new",
             "value" : "Add 15 seconds of rest"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Agregar 15 segundos de descanso"
+          }
         }
       }
     },
@@ -87,6 +112,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Added 15 seconds to your rest."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Agregué 15 segundos a tu descanso."
           }
         }
       }
@@ -99,11 +130,24 @@
             "state" : "new",
             "value" : "Adds 15 seconds to your current rest, up to 10 minutes in all."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Agrega 15 segundos a tu descanso actual, hasta 10 minutos en total."
+          }
         }
       }
     },
     "Adds one bottle of water to today's Fernlet diary." : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Agrega una botella de agua al registro de hoy en Fernlet."
+          }
+        }
+      }
     },
     "Aim: a few words at a time" : {
       "comment" : "Guided cardio, Live Activity: the talk test for an interval's hard part (heart-rate zone 4), shown when there is no live heart rate. Short — it shares a line with the countdown.",
@@ -112,6 +156,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Aim: a few words at a time"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ideal: pocas palabras a la vez"
           }
         }
       }
@@ -124,20 +174,54 @@
             "state" : "new",
             "value" : "Aim: talk in short sentences"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ideal: hablar en frases cortas"
+          }
         }
       }
     },
     "Care score" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Puntuación de cuidado"
+          }
+        }
+      }
     },
     "Cooking" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cocinando"
+          }
+        }
+      }
     },
     "Couldn't update your workout just now — please try again in a moment." : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo actualizar tu entrenamiento justo ahora. Inténtalo de nuevo en un momento."
+          }
+        }
+      }
     },
     "Done set" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Terminar serie"
+          }
+        }
+      }
     },
     "Easy pace" : {
       "comment" : "Workout Live Activity, guided cardio: an easy steady segment (easy cardio, an easy walk).",
@@ -146,6 +230,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Easy pace"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ritmo suave"
           }
         }
       }
@@ -158,11 +248,24 @@
             "state" : "new",
             "value" : "Easy · round %1$lld of %2$lld"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Suave · ronda %1$lld de %2$lld"
+          }
         }
       }
     },
     "Ends the current rest early and moves to your next set." : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Termina antes el descanso actual y pasa a tu próxima serie."
+          }
+        }
+      }
     },
     "Exercise %lld of %lld" : {
       "localizations" : {
@@ -171,20 +274,54 @@
             "state" : "new",
             "value" : "Exercise %1$lld of %2$lld"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ejercicio %1$lld de %2$lld"
+          }
         }
       }
     },
     "Fernlet" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet"
+          }
+        }
+      }
     },
     "Fernlet companion" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Compañero de Fernlet"
+          }
+        }
+      }
     },
     "Finish" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Terminar"
+          }
+        }
+      }
     },
     "Finish workout" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Terminar entrenamiento"
+          }
+        }
+      }
     },
     "Hard pace" : {
       "comment" : "Workout Live Activity, guided cardio: a hard steady segment.",
@@ -193,6 +330,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Hard pace"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ritmo intenso"
           }
         }
       }
@@ -205,6 +348,12 @@
             "state" : "new",
             "value" : "Hard · round %1$lld of %2$lld"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Intenso · ronda %1$lld de %2$lld"
+          }
         }
       }
     },
@@ -216,17 +365,44 @@
             "state" : "new",
             "value" : "Heart rate %1$lld, aiming for %2$lld to %3$lld, %4$@"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Frecuencia cardiaca %1$lld, ideal entre %2$lld y %3$lld, %4$@"
+          }
         }
       }
     },
     "Hold" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mantén"
+          }
+        }
+      }
     },
     "Hold %@" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mantén %@"
+          }
+        }
+      }
     },
     "In progress" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "En curso"
+          }
+        }
+      }
     },
     "Last time: %@" : {
       "comment" : "Live Activity: what this lift was last time, e.g. 'Last time: 3 × 8 @ 100 lb'. Same words as the workout editor's recall line.",
@@ -236,14 +412,34 @@
             "state" : "new",
             "value" : "Last time: %@"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Última vez: %@"
+          }
         }
       }
     },
     "Left side · hold %@" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lado izquierdo · mantén %@"
+          }
+        }
+      }
     },
     "Log a bottle of water" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Registrar una botella de agua"
+          }
+        }
+      }
     },
     "Longer rest" : {
       "comment" : "Voice Control name for the '+15 s' rest button, in plain words.",
@@ -253,11 +449,24 @@
             "state" : "new",
             "value" : "Longer rest"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Descanso más largo"
+          }
         }
       }
     },
     "Marks the current set done and starts your rest timer." : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marca la serie actual como hecha e inicia tu temporizador de descanso."
+          }
+        }
+      }
     },
     "Minus 15" : {
       "comment" : "Voice Control short name for the '−15 s' rest button.",
@@ -266,6 +475,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Minus 15"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Menos 15"
           }
         }
       }
@@ -278,20 +493,54 @@
             "state" : "new",
             "value" : "Minus 15 seconds"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Menos 15 segundos"
+          }
         }
       }
     },
     "Moves to the next step of the recipe you're cooking." : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pasa al siguiente paso de la receta que estás cocinando."
+          }
+        }
+      }
     },
     "Next" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Siguiente"
+          }
+        }
+      }
     },
     "Next cooking step" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Siguiente paso de la receta"
+          }
+        }
+      }
     },
     "Next up · %@" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Después · %@"
+          }
+        }
+      }
     },
     "Next up · %@ · Set %lld of %lld" : {
       "localizations" : {
@@ -300,11 +549,24 @@
             "state" : "new",
             "value" : "Next up · %1$@ · Set %2$lld of %3$lld"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Después · %1$@ · Serie %2$lld de %3$lld"
+          }
         }
       }
     },
     "No mood yet today" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aún sin estado de ánimo hoy"
+          }
+        }
+      }
     },
     "No workout is running, so there's no rest to change." : {
       "comment" : "Siri / Shortcuts: spoken when '+15 s' or '−15 s' ran with no guided workout in progress.",
@@ -314,23 +576,64 @@
             "state" : "new",
             "value" : "No workout is running, so there's no rest to change."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No hay ningún entrenamiento en curso, así que no hay descanso que cambiar."
+          }
         }
       }
     },
     "No workout is running, so there's no rest to skip." : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No hay ningún entrenamiento en curso, así que no hay descanso que omitir."
+          }
+        }
+      }
     },
     "No workout is running, so there's no set to finish." : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No hay ningún entrenamiento en curso, así que no hay serie que terminar."
+          }
+        }
+      }
     },
     "Open Fernlet" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre Fernlet"
+          }
+        }
+      }
     },
     "Open Fernlet to pick it back up" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre Fernlet para retomarlo"
+          }
+        }
+      }
     },
     "Paused" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "En pausa"
+          }
+        }
+      }
     },
     "Plus 15" : {
       "comment" : "Voice Control short name for the '+15 s' rest button.",
@@ -339,6 +642,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Plus 15"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Más 15"
           }
         }
       }
@@ -351,26 +660,74 @@
             "state" : "new",
             "value" : "Plus 15 seconds"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Más 15 segundos"
+          }
         }
       }
     },
     "Repeat cooking step" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Repetir paso de la receta"
+          }
+        }
+      }
     },
     "Rest" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Descanso"
+          }
+        }
+      }
     },
     "Rest skipped — your workout is finished." : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Descanso omitido: tu entrenamiento terminó."
+          }
+        }
+      }
     },
     "Rest skipped. Your next set is up." : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Descanso omitido. Sigue tu próxima serie."
+          }
+        }
+      }
     },
     "Restarts the timer on the current cooking step." : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Reinicia el temporizador del paso actual de la receta."
+          }
+        }
+      }
     },
     "Right side · hold %@" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lado derecho · mantén %@"
+          }
+        }
+      }
     },
     "Round %lld of %lld" : {
       "comment" : "Workout Live Activity, guided cardio: an interval part's round when its pace has no name.",
@@ -379,6 +736,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Round %1$lld of %2$lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ronda %1$lld de %2$lld"
           }
         }
       }
@@ -390,6 +753,12 @@
             "state" : "new",
             "value" : "Set %1$lld of %2$lld"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Serie %1$lld de %2$lld"
+          }
         }
       }
     },
@@ -399,6 +768,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Set %1$lld of %2$lld · %3$@ reps"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Serie %1$lld de %2$lld · %3$@ reps"
           }
         }
       }
@@ -410,14 +785,34 @@
             "state" : "new",
             "value" : "Set %1$lld of %2$lld · hold %3$@"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Serie %1$lld de %2$lld · mantén %3$@"
+          }
         }
       }
     },
     "Set done. Resting now." : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Serie terminada. Ahora toca descansar."
+          }
+        }
+      }
     },
     "Set done. Your next exercise is up." : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Serie terminada. Sigue tu próximo ejercicio."
+          }
+        }
+      }
     },
     "Shorter rest" : {
       "comment" : "Voice Control name for the '−15 s' rest button, in plain words.",
@@ -427,11 +822,24 @@
             "state" : "new",
             "value" : "Shorter rest"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Descanso más corto"
+          }
         }
       }
     },
     "Skip rest" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Omitir descanso"
+          }
+        }
+      }
     },
     "Steady pace" : {
       "comment" : "Workout Live Activity, guided cardio: a steady-state segment.",
@@ -440,6 +848,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Steady pace"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ritmo constante"
           }
         }
       }
@@ -450,6 +864,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Step %1$lld of %2$lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Paso %1$lld de %2$lld"
           }
         }
       }
@@ -462,6 +882,12 @@
             "state" : "new",
             "value" : "Suggested weight %@"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Peso sugerido %@"
+          }
         }
       }
     },
@@ -473,11 +899,24 @@
             "state" : "new",
             "value" : "Take 15 seconds off the rest"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Quitar 15 segundos al descanso"
+          }
         }
       }
     },
     "Take it at your own pace" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hazlo a tu ritmo"
+          }
+        }
+      }
     },
     "Takes 15 seconds off your current rest, always leaving at least 5 seconds." : {
       "comment" : "Shortcuts: description of the 'Take 15 seconds off the rest' action.",
@@ -487,14 +926,34 @@
             "state" : "new",
             "value" : "Takes 15 seconds off your current rest, always leaving at least 5 seconds."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Quita 15 segundos a tu descanso actual y siempre deja al menos 5 segundos."
+          }
         }
       }
     },
     "That was the last set — your workout is finished." : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Esa fue la última serie: tu entrenamiento terminó."
+          }
+        }
+      }
     },
     "Today's water, with a button to add a bottle." : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El agua de hoy, con un botón para agregar una botella."
+          }
+        }
+      }
     },
     "Took 15 seconds off your rest." : {
       "comment" : "Siri / Shortcuts: spoken after '−15 s' shortened the rest.",
@@ -503,6 +962,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Took 15 seconds off your rest."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Quité 15 segundos a tu descanso."
           }
         }
       }
@@ -515,6 +980,12 @@
             "state" : "new",
             "value" : "Warm-up %1$lld of %2$lld"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Calentamiento %1$lld de %2$lld"
+          }
         }
       }
     },
@@ -526,11 +997,24 @@
             "state" : "new",
             "value" : "Warm-up %1$lld of %2$lld · %3$@ reps"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Calentamiento %1$lld de %2$lld · %3$@ reps"
+          }
         }
       }
     },
     "Water" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Agua"
+          }
+        }
+      }
     },
     "Weight %@" : {
       "comment" : "VoiceOver, Live Activity: the weight the lifter picked for this set, e.g. 'Weight 110 pounds'.",
@@ -540,11 +1024,24 @@
             "state" : "new",
             "value" : "Weight %@"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Peso %@"
+          }
         }
       }
     },
     "Workout" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Entrenamiento"
+          }
+        }
+      }
     },
     "You're not resting right now, so there's no rest to change." : {
       "comment" : "Siri / Shortcuts: spoken when '+15 s' or '−15 s' ran during a set rather than a rest.",
@@ -554,17 +1051,44 @@
             "state" : "new",
             "value" : "You're not resting right now, so there's no rest to change."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ahora no estás descansando, así que no hay descanso que cambiar."
+          }
         }
       }
     },
     "You're not resting right now, so there's nothing to skip." : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ahora no estás descansando, así que no hay nada que omitir."
+          }
+        }
+      }
     },
     "You're resting right now, so there's no set to finish yet." : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ahora estás descansando, así que todavía no hay serie que terminar."
+          }
+        }
+      }
     },
     "Your companion, as you dressed it, and how its day is going." : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu compañero, con la ropa que le pusiste, y cómo va su día."
+          }
+        }
+      }
     },
     "Your rest is already at its 10-minute limit." : {
       "comment" : "Spoken when '+15 s' did nothing because the rest is already 10 minutes long (Siri, Shortcuts, and VoiceOver in the runner).",
@@ -573,6 +1097,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Your rest is already at its 10-minute limit."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu descanso ya está en su límite de 10 minutos."
           }
         }
       }
@@ -585,6 +1115,12 @@
             "state" : "new",
             "value" : "Your rest is nearly over, so there's nothing to take off."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu descanso está por terminar, así que no hay nada que quitar."
+          }
         }
       }
     },
@@ -596,6 +1132,12 @@
             "state" : "new",
             "value" : "a little high"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "un poco arriba"
+          }
         }
       }
     },
@@ -606,6 +1148,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "a little low"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "un poco abajo"
           }
         }
       }
@@ -619,6 +1167,12 @@
             "state" : "new",
             "value" : "Asleep"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dormido"
+          }
         }
       }
     },
@@ -630,6 +1184,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "fast asleep"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "está profundamente dormido"
           }
         }
       }
@@ -643,6 +1203,12 @@
             "state" : "new",
             "value" : "feeling happy"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "se siente feliz"
+          }
         }
       }
     },
@@ -654,6 +1220,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "feeling hungry"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "tiene hambre"
           }
         }
       }
@@ -667,6 +1239,12 @@
             "state" : "new",
             "value" : "feeling sad"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "se siente triste"
+          }
         }
       }
     },
@@ -678,6 +1256,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "feeling sleepy"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tiene sueño"
           }
         }
       }
@@ -691,6 +1275,12 @@
             "state" : "new",
             "value" : "feeling thirsty"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "tiene sed"
+          }
         }
       }
     },
@@ -702,6 +1292,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "feeling tired"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "se siente cansado"
           }
         }
       }
@@ -715,6 +1311,12 @@
             "state" : "new",
             "value" : "Happy"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Feliz"
+          }
         }
       }
     },
@@ -726,6 +1328,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Hungry"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Con hambre"
           }
         }
       }
@@ -739,6 +1347,12 @@
             "state" : "new",
             "value" : "Sad"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Triste"
+          }
         }
       }
     },
@@ -750,6 +1364,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Sleepy"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Con sueño"
           }
         }
       }
@@ -775,6 +1395,12 @@
             "state" : "new",
             "value" : "Thirsty"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Con sed"
+          }
         }
       }
     },
@@ -786,6 +1412,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Tired"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cansado"
           }
         }
       }
@@ -799,6 +1431,12 @@
             "state" : "new",
             "value" : "Okay"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bien"
+          }
         }
       }
     },
@@ -810,6 +1448,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Resting"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Descansando"
           }
         }
       }
@@ -823,6 +1467,12 @@
             "state" : "new",
             "value" : "Sick"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Enfermo"
+          }
         }
       }
     },
@@ -834,6 +1484,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Thriving"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Radiante"
           }
         }
       }
@@ -847,6 +1503,12 @@
             "state" : "new",
             "value" : "Tired"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cansado"
+          }
         }
       }
     },
@@ -857,6 +1519,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "in range"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "en rango"
           }
         }
       }
@@ -869,6 +1537,12 @@
             "state" : "new",
             "value" : "last time %@"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "la última vez %@"
+          }
         }
       }
     },
@@ -879,6 +1553,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "last time %1$lld by %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "la última vez %1$lld por %2$@"
           }
         }
       }
@@ -891,6 +1571,12 @@
             "state" : "new",
             "value" : "last time %1$lld by %2$@ at %3$@"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "la última vez %1$lld por %2$@ con %3$@"
+          }
         }
       }
     },
@@ -902,11 +1588,24 @@
             "state" : "new",
             "value" : "range %1$@ to %2$@"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "rango de %1$@ a %2$@"
+          }
         }
       }
     },
     "to meet your companion" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "para conocer a tu compañero"
+          }
+        }
+      }
     },
     "widget.caption.nameAndWord" : {
       "comment" : "Under the companion's thought on the medium widget: its name, then its state word. Example: 'Pip · Thriving'",
@@ -915,6 +1614,12 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
             "value" : "%1$@ · %2$@"
           }
         }
@@ -929,6 +1634,12 @@
             "state" : "new",
             "value" : "Sleeping soundly."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Durmiendo profundamente."
+          }
         }
       }
     },
@@ -940,6 +1651,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "A brand-new day."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un día recién estrenado."
           }
         }
       }
@@ -953,6 +1670,12 @@
             "state" : "new",
             "value" : "Just pottering about."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dando vueltas sin prisa."
+          }
         }
       }
     },
@@ -964,6 +1687,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Winding down now."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ya me voy relajando."
           }
         }
       }
@@ -977,6 +1706,12 @@
             "state" : "new",
             "value" : "Taking the morning slowly."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tomándome la mañana con calma."
+          }
         }
       }
     },
@@ -988,6 +1723,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Having a quiet nap."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tomando una siesta tranquila."
           }
         }
       }
@@ -1001,6 +1742,12 @@
             "state" : "new",
             "value" : "Snuggling in for the night."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Acurrucándome para la noche."
+          }
         }
       }
     },
@@ -1012,6 +1759,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Curled up a while longer."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Acurrucado un ratito más."
           }
         }
       }
@@ -1025,6 +1778,12 @@
             "state" : "new",
             "value" : "Tucked in with a blanket."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Arropado con una mantita."
+          }
         }
       }
     },
@@ -1036,6 +1795,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Resting up for tomorrow."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Descansando para mañana."
           }
         }
       }
@@ -1049,6 +1814,12 @@
             "state" : "new",
             "value" : "Taking it gently today."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy voy con calma."
+          }
         }
       }
     },
@@ -1060,6 +1831,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "The sun found me this afternoon."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El sol me encontró esta tarde."
           }
         }
       }
@@ -1073,6 +1850,12 @@
             "state" : "new",
             "value" : "Getting cozy for the night."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Poniéndome cómodo para la noche."
+          }
         }
       }
     },
@@ -1084,6 +1867,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Woke up feeling light today."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy desperté ligero."
           }
         }
       }
@@ -1097,6 +1886,12 @@
             "state" : "new",
             "value" : "A slow sort of day."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un día más bien lento."
+          }
         }
       }
     },
@@ -1109,6 +1904,12 @@
             "state" : "new",
             "value" : "Ready for a long rest."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Listo para un largo descanso."
+          }
         }
       }
     },
@@ -1120,6 +1921,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Still a little sleepy. That's okay."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Todavía con un poco de sueño. Está bien."
           }
         }
       }
@@ -1141,6 +1948,24 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "of %lld bottles"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "de %lld botella"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "de %lld botellas"
                 }
               }
             }
@@ -1173,6 +1998,34 @@
                     "stringUnit" : {
                       "state" : "translated",
                       "value" : "%arg bottles"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$lld de %#@target@"
+          },
+          "substitutions" : {
+            "target" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%arg botella"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%arg botellas"
                     }
                   }
                 }

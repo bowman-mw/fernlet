@@ -10,6 +10,12 @@
             "state" : "new",
             "value" : "The quiet helper is resting for today. I'll try this recipe again tomorrow."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El ayudante silencioso descansa por hoy. Mañana vuelvo a intentarlo con esta receta."
+          }
         }
       }
     },
@@ -21,6 +27,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "The page did not return readable HTML."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La página no devolvió HTML legible."
           }
         }
       }
@@ -34,6 +46,12 @@
             "state" : "new",
             "value" : "Could not fetch that recipe page."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo cargar esa página de receta."
+          }
         }
       }
     },
@@ -45,6 +63,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "The extracted recipe was missing a name or ingredients."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "A la receta extraída le faltaba el nombre o los ingredientes."
           }
         }
       }
@@ -58,6 +82,12 @@
             "state" : "new",
             "value" : "Pasteboard does not contain a valid URL."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El portapapeles no contiene una URL válida."
+          }
         }
       }
     },
@@ -70,6 +100,12 @@
             "state" : "new",
             "value" : "On-device recipe extraction is not available on this device."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La extracción de recetas en el dispositivo no está disponible aquí."
+          }
         }
       }
     },
@@ -81,6 +117,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "No recipe could be extracted from that page."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo extraer ninguna receta de esa página."
           }
         }
       }

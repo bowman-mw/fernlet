@@ -14,10 +14,24 @@
       }
     },
     "Fernlet Recipe" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Receta de Fernlet"
+          }
+        }
+      }
     },
     "Fernlet Workout Plan" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Plan de entrenamiento de Fernlet"
+          }
+        }
+      }
     },
     "NSCameraUsageDescription" : {
       "extractionState" : "manual",
@@ -26,6 +40,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fernlet uses your camera to scan barcodes and nutrition labels, photograph meals, take progress photos, and take photos during sessions with friends."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet usa la cámara para escanear códigos de barras e información nutricional, fotografiar comidas, tomar fotos de progreso y tomar fotos en sesiones con amigos."
           }
         }
       }
@@ -38,6 +58,12 @@
             "state" : "translated",
             "value" : "Fernlet uses Face ID to unlock your private health data."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet usa Face ID para desbloquear tus datos privados de salud."
+          }
         }
       }
     },
@@ -48,6 +74,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fernlet reads selected Health data only when you enable it — including workouts, body metrics, sleep, recovery, heart rate during guided cardio, and (optionally) cycle data — to give you a complete, on-device picture of your wellbeing."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet lee los datos de Salud que elijas solo cuando lo activas (entrenamientos, medidas del cuerpo, sueño, recuperación, frecuencia cardiaca durante el cardio guiado y, si quieres, datos del ciclo) para darte una imagen completa de tu bienestar, sin salir de tu dispositivo."
           }
         }
       }
@@ -60,6 +92,12 @@
             "state" : "translated",
             "value" : "Fernlet writes the workouts and health observations you explicitly log into Apple Health, so they appear in Apple Fitness and across your devices."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet guarda en Salud los entrenamientos y los datos de salud que registras tú, para que aparezcan en Fitness y en todos tus dispositivos."
+          }
         }
       }
     },
@@ -70,6 +108,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fernlet connects directly with nearby friends to share recipes and, during a session you start, photos, short-lived messages and hearts. A session may continue in the background."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet se conecta directamente con amigos cerca para compartir recetas y, durante una sesión que inicias tú, fotos, mensajes que duran poco y corazones. Una sesión puede seguir en segundo plano."
           }
         }
       }
@@ -82,6 +126,12 @@
             "state" : "translated",
             "value" : "Fernlet uses your approximate location only to check the weather for gentle recovery prompts, when you turn that on."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet usa tu ubicación aproximada solo para consultar el clima y sugerirte un descanso con calma, cuando activas esa opción."
+          }
         }
       }
     },
@@ -93,6 +143,12 @@
             "state" : "translated",
             "value" : "Fernlet uses Ultra Wideband to measure the distance to a nearby friend while you connect."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet usa la banda ultraancha para medir la distancia a un amigo cercano mientras se conectan."
+          }
         }
       }
     },
@@ -103,6 +159,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fernlet saves the shared pictures you choose after a friend session."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet guarda las fotos compartidas que elijas después de una sesión con amigos."
           }
         }
       }

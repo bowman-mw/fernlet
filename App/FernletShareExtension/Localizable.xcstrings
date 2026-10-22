@@ -10,6 +10,12 @@
             "state" : "new",
             "value" : "Fernlet could not find a recipe URL in this share."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no encontró la URL de una receta en lo que compartiste."
+          }
         }
       }
     },
@@ -22,6 +28,12 @@
             "state" : "new",
             "value" : "Fernlet can only import web recipe URLs."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet solo puede importar URL de recetas web."
+          }
         }
       }
     },
@@ -33,6 +45,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "That link is too long for Fernlet to import."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ese enlace es demasiado largo para que Fernlet lo importe."
           }
         }
       }
