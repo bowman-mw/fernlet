@@ -308,7 +308,11 @@ plan's `exercises` holds the same `defaultName` and is drawn as the plan row's f
 completed row's exercise line, and `WorkoutPlanSource.completionNote` ("Completed from user plan.")
 is persisted as a completed row's notes and drawn verbatim. Both are stored text read back as
 tokens (`reconstructPlannedWorkout` matches the note), so each needs the same draw-time mapping
-rather than a localized write.
+rather than a localized write. *(Both closed: the note draws through `Workout.displayedNotes` (2026-10-20),
+and the step through `Workout.displayedExerciseLines` / `PlannedWorkout.displayedExerciseLines` (2026-10-21) on
+the plan row, the logged row and the coach-plan diff, pinned by `storedActivityPlanStepsDrawThroughTheDisplayHelper`
+and `theDrawnWorkoutNameSitesReadTheDisplayHelper`. The guided run of an activity plan still shows the stored
+line, because its step text is what the run logs back.)*
 
 **Addendum (2026-10-20, exercise display names and how-to text, D-L2):** `ExerciseTarget.name` stays
 the frozen identity. `ExerciseHowToCatalog` (FernletDomainModel) holds, for each of the 118 catalog
@@ -360,7 +364,8 @@ sentences (idea 16).
   "5.5 mph" are stored exactly as before.
 - **Still English, on purpose:** the plan TEXT's lift lines and calibration tags ("(test set)"), the
   Live Activity's exercise names (idea 3's lane), the coach-plan importer's reason sentences, the
-  "Location N" a blank rename is repaired to, and an activity plan's `exercises` default name.
+  "Location N" a blank rename is repaired to, and an activity plan's `exercises` default name (still stored
+  in English; drawn localized since 2026-10-21, see the §3.4 residual above).
   Pinned by `WorkoutCopyLocalizationTests`.
 
 **Addendum (2026-10-20, Group Activities type token, Spanish round friends lane):** an activity's

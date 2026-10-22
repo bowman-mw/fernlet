@@ -241,16 +241,16 @@ struct CoachPlanReviewView: View {
             }
 
             if resolved.action == .delete {
-                beforeAfterBlock(title: resolved.before.displayedName, lines: resolved.before.exerciseLines,
+                beforeAfterBlock(title: resolved.before.displayedName, lines: resolved.before.displayedExerciseLines,
                                  struck: true, tint: Color.slate)
             } else if exercisesChanged {
-                beforeAfterBlock(title: resolved.before.displayedName, lines: resolved.before.exerciseLines,
+                beforeAfterBlock(title: resolved.before.displayedName, lines: resolved.before.displayedExerciseLines,
                                  struck: false, tint: Color.slate)
                 Image(systemName: "arrow.down")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(Color.slate)
                 beforeAfterBlock(title: after?.displayedName ?? resolved.before.displayedName,
-                                 lines: after?.exerciseLines ?? [], struck: false, tint: Color.bark)
+                                 lines: after?.displayedExerciseLines ?? [], struck: false, tint: Color.bark)
             } else {
                 // Nothing moved in the prescription — name the workout once and list what did change.
                 Text(resolved.before.displayedName)

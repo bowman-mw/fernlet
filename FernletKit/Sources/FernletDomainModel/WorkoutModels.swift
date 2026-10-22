@@ -93,6 +93,16 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
             .filter { !$0.isEmpty }
     }
 
+    /// The exercise lines a screen DRAWS for this row: ``exerciseLines``, except that a completed
+    /// activity plan's step still holding its type's frozen ``WorkoutActivityType/defaultName`` ("Pool
+    /// Swim") is drawn in the user's language.
+    ///
+    /// Display only, on the same terms as ``displayedName``: category inference, the exports, the
+    /// exchange file and every exercise-history reader keep reading ``exerciseLines``.
+    public var displayedExerciseLines: [String] {
+        StoredWorkoutName.displayedLines(exerciseLines, mode: mode, activityType: activityType)
+    }
+
     /// The name a screen DRAWS for this row: ``name``, unless it is still a frozen English default,
     /// which is drawn in the user's language instead.
     ///
@@ -352,6 +362,16 @@ public nonisolated struct PlannedWorkout: Identifiable, Codable, Equatable {
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+    }
+
+    /// The prescription lines a screen DRAWS for this plan: ``exerciseLines``, except that an activity
+    /// plan's one step, which the plan sheet saves as the type's frozen
+    /// ``WorkoutActivityType/defaultName``, is drawn in the user's language.
+    ///
+    /// Display only, on the same terms as ``Workout/displayedExerciseLines``: the coach-plan change
+    /// check, the guided run, the exports and ``completedWorkout`` keep reading ``exercises``.
+    public var displayedExerciseLines: [String] {
+        StoredWorkoutName.displayedLines(exerciseLines, mode: mode, activityType: activityType)
     }
 
     /// The name a screen DRAWS for this plan: ``name``, unless it is still a frozen English default
@@ -636,6 +656,17 @@ nonisolated enum StoredWorkoutName {
             return fallback.displayName
         }
         return name
+    }
+
+    /// The exercise lines to draw for a row stored as `lines`. An activity plan saves its one step as
+    /// the type's frozen ``WorkoutActivityType/defaultName`` (a completed plan copies it), so for an
+    /// activity row a line equal to that default is drawn as the type's
+    /// ``WorkoutActivityType/displayName``; every other line, and every line of a strength row, is
+    /// drawn exactly as stored.
+    static func displayedLines(_ lines: [String], mode: WorkoutMode,
+                               activityType: WorkoutActivityType?) -> [String] {
+        guard mode == .activity, let activityType else { return lines }
+        return lines.map { $0 == activityType.defaultName ? activityType.displayName : $0 }
     }
 }
 

@@ -1055,6 +1055,32 @@ struct LocalizationBoundaryTests {
         #expect(WorkoutSplit.savingDefaultPlanName("Upper workout") == nil, "the frozen spelling is matched exactly")
     }
 
+    /// An activity plan's one step DRAWS in the user's language and stays stored as the frozen English
+    /// default (2026-10-21).
+    ///
+    /// The plan sheet saves an activity plan's `exercises` as the type's `defaultName`, and completing the
+    /// plan copies it onto the logged row. `displayedExerciseLines` swaps exactly that line on an activity
+    /// row of that type; another type's default, a typed line and every strength row's lines draw as stored.
+    @Test func storedActivityPlanStepsDrawThroughTheDisplayHelper() {
+        for type in WorkoutActivityType.allCases {
+            let planned = PlannedWorkout(name: type.defaultName, split: .workout, source: .user, mode: .activity,
+                                         activityType: type, exercises: type.defaultName, notes: "", duration: 30)
+            #expect(planned.displayedExerciseLines == [type.displayName], "a \(type) plan's step draws localized")
+            let completion = planned.completedWorkout
+            #expect(completion.displayedExerciseLines == [type.displayName], "...and so does its completion's")
+            #expect(completion.exercises == type.defaultName, "completing a plan stores its step unchanged")
+        }
+        let cycling = WorkoutActivityType.cycling, running = WorkoutActivityType.running
+        let mixed = PlannedWorkout(name: "Ride", split: .workout, source: .user, mode: .activity, activityType: cycling,
+                                   exercises: "\(cycling.defaultName)\n\(running.defaultName)\nEasy spin",
+                                   notes: "", duration: nil)
+        #expect(mixed.displayedExerciseLines == [cycling.displayName, running.defaultName, "Easy spin"],
+                "only the row's own type's default swaps")
+        let strength = PlannedWorkout(name: "Legs", split: .lower, source: .user,
+                                      exercises: "\(running.defaultName)\nSquat - 3 x 5", notes: "", duration: nil)
+        #expect(strength.displayedExerciseLines == strength.exerciseLines, "a strength plan's lines are the user's")
+    }
+
     /// Every site that DRAWS a workout's or plan's name reads `displayedName`, and every name field
     /// seeded from one saves back through `savedName(editing:)` (2026-10-19).
     ///
@@ -1081,6 +1107,9 @@ struct LocalizationBoundaryTests {
             ("App/Fernlet/JournalView.swift", "Text(workout.displayedName)", 1, "the Journal day's Movement rows"),
             ("App/Fernlet/AmbientCards.swift", "workout.displayedName.trimmingCharacters", 1, "the Remember this one? card"),
             ("App/Fernlet/CoachPlanReviewView.swift", "resolved.before.displayedName", 4, "the coach-plan diff's workout titles"),
+            ("App/Fernlet/MoveView.swift", "plannedWorkout.displayedExerciseLines", 1, "PlannedWorkoutRow's step preview"),
+            ("App/Fernlet/MoveView.swift", "workout.displayedExerciseLines", 2, "WorkoutRow's exercise rows"),
+            ("App/Fernlet/CoachPlanReviewView.swift", ".displayedExerciseLines", 3, "the coach-plan diff's before and after lines"),
             ("App/Fernlet/CoachPlanImporter.swift", "\\(found.workout.displayedName)\\\"", 2, "the coach-plan review's skipped-change lines"),
             ("App/Fernlet/ExchangeIntentService.swift", "name = workout.displayedName", 1, "the Shortcuts planned-workout picker"),
         ]
