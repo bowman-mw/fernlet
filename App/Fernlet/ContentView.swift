@@ -823,7 +823,7 @@ struct ContentView: View {
             } else {
                 LaunchScreen(
                     statusMessage: launcher.statusMessage,
-                    companionState: store.companionState,
+                    companionState: store.liveCompanionState,
                     companionAppearance: store.settings.companionAppearance,
                     showsCompanion: true
                 )

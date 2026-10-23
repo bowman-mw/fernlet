@@ -7335,9 +7335,11 @@ final class FernletStore {
     /// - Returns: The snapshot.
     func currentWidgetSnapshot() -> WidgetSnapshot {
         let macros = macroTotals
+        // The live pair: gold hearts lift what the widget shows, as they lift the World Home
+        // (`FernletStore+GoldHearts.swift`); the saved day score never sees the boost.
         return WidgetSnapshot(
-            companionStateRaw: companionState.rawValue,
-            score: score,
+            companionStateRaw: liveCompanionState.rawValue,
+            score: liveCareScore,
             bottleCount: day.bottleCount,
             hydrationTarget: settings.hydrationTarget,
             macroSummary: WidgetSnapshot.MacroSummary(

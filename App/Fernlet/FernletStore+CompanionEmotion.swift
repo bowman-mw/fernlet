@@ -20,14 +20,16 @@ import FernletSocial
 /// Nothing here is stored: every value is read fresh and handed to the pure `CompanionEmotionEngine`.
 extension FernletStore {
 
-    /// When the newest received heart stops glowing (24 hours after it arrived), or nil when no heart
-    /// is on record.
+    /// When the gold hearts stop glowing: the latest expiry among the hearts given in person that are
+    /// gold right now (12 hours after each arrived, at most two; `GoldHeartRules`), or nil when none
+    /// is. The companion feels loved until then (World build: the "loved" window follows the gold
+    /// hearts, so a dead-drop heart picked up later no longer starts it).
     ///
-    /// Returned even once it has passed — the engine asks `now < until`. Read on the foreground Home
-    /// path only, never by the widget path. Presentation only — hearts never feed `score` (spec §10).
+    /// The engine asks `now < until`. Hearts never feed `score`; the gold boost lives only in
+    /// `liveCareScore` (`FernletStore+GoldHearts.swift`).
     var heartGlowUntil: Date? {
-        guard let newest = heartLedger.receivedHearts.map(\.receivedAt).max() else { return nil }
-        return newest.addingTimeInterval(HeartGlowMath.decayWindow)
+        let inPerson = heartLedger.receivedHearts.filter { $0.deliveredInPerson == true }.map(\.receivedAt)
+        return GoldHeartRules.glowEnds(inPerson, at: Date())
     }
 
     /// Whether today is a gentle day for the companion — tagged hard or tired, or no entry yet and a
