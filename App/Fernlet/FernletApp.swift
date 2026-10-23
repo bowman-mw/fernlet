@@ -478,7 +478,9 @@ struct FernletApp: App {
     /// loader-phase switch (launch screen / ready content / failure view).
     @ViewBuilder
     private var content: some View {
-        if shouldOpenPrivacyDataForUITest {
+        if UITestSupport.shouldOpenWorldMapHarness {
+            worldMapHarnessContent
+        } else if shouldOpenPrivacyDataForUITest {
             privacyDataTestContent
         } else {
             switch loader.phase {
@@ -518,6 +520,15 @@ struct FernletApp: App {
                 .transition(.opacity)
             }
         }
+    }
+
+    /// DEBUG-only: `FERNLET_UI_TEST_WORLD_MAP_HARNESS=1` renders the World map seam on its own
+    /// (`WorldMapHarnessView`) with no store load. Empty in Release, where the flag is always false.
+    @ViewBuilder
+    private var worldMapHarnessContent: some View {
+        #if DEBUG
+        WorldMapHarnessView()
+        #endif
     }
 
     /// DEBUG-only: `FERNLET_UI_TEST_OPEN_PRIVACY_DATA=1` renders the Privacy Data settings screen

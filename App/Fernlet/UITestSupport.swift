@@ -120,6 +120,27 @@ enum UITestSupport {
     /// moderation alert) is unreachable from a UI test.
     static var shouldSeedStudioCanvas: Bool { env["FERNLET_UI_TEST_SEED_STUDIO_CANVAS"] == "1" }
 
+    /// `FERNLET_UI_TEST_WORLD_MAP_HARNESS=1` — render the World map seam on its own
+    /// (`WorldMapHarnessView`: fixture fog and a fixture trail, no store load, no location), for the
+    /// World app plan's step 1a screenshots. Consumed by `FernletApp`.
+    static var shouldOpenWorldMapHarness: Bool { env["FERNLET_UI_TEST_WORLD_MAP_HARNESS"] == "1" }
+
+    /// `FERNLET_UI_TEST_WORLD_MAP_PLAIN=1` — the harness draws the plain (offline) base map instead of
+    /// Apple's.
+    static var worldMapHarnessPlain: Bool { env["FERNLET_UI_TEST_WORLD_MAP_PLAIN"] == "1" }
+
+    /// `FERNLET_UI_TEST_WORLD_MAP_PHASE=dawn|day|dusk|night` — the harness's fixed time of day (the
+    /// live clock when absent or unreadable).
+    static var worldMapHarnessPhase: CompanionDayPhase? {
+        switch env["FERNLET_UI_TEST_WORLD_MAP_PHASE"] {
+        case "dawn": .dawn
+        case "day": .day
+        case "dusk": .dusk
+        case "night": .night
+        default: nil
+        }
+    }
+
     /// `FERNLET_MESH_CONTINUATION=refused|expired|endedBySystem` — seed `FernletStore`'s
     /// background-continuation projection at launch, so the Friends tab renders P8 item 7's card.
     ///
@@ -205,6 +226,9 @@ enum UITestSupport {
     static var shouldOpenDayEditSheet: Bool { false }
     static var shouldOpenCustomize: Bool { false }
     static var shouldSeedStudioCanvas: Bool { false }
+    static var shouldOpenWorldMapHarness: Bool { false }
+    static var worldMapHarnessPlain: Bool { false }
+    static var worldMapHarnessPhase: CompanionDayPhase? { nil }
     static var seededMeshContinuationCard: MeshContinuationCardKind? { nil }
     static var seededHeldSessionPhotoCount: Int? { nil }
     static func seedHeldSessionPhotosIfRequested(on photos: MeshSessionPhotos) {}

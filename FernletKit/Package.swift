@@ -39,7 +39,7 @@ let package = Package(
         // repository beside it (an umbrella names its own targets only, so it carries no remote one).
         // An extension that needs only a portable exchange boundary links `FernletExchange` directly,
         // avoiding the app's wider module graph.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "WebScrapingKit", "FernletDomainModel", "FernletExchange", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway", "FernletLock", "FernletLockUI", "AppServices", "FernletUI", "FernletProximityUI", "FernletConnections", "FernletSocial"]),
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "WebScrapingKit", "FernletDomainModel", "FernletExchange", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway", "FernletLock", "FernletLockUI", "AppServices", "FernletUI", "FernletProximityUI", "FernletConnections", "FernletSocial", "WorldMapStore"]),
         .library(name: "FernletExchange", targets: ["FernletExchange"]),
         // The Mac-ready set, each module named: FernletFoundation, FernletCrypto and FernletDomainModel,
         // which a Mac host of Fernlet's (workstream B, the Coach app) needs. Each is named rather than
@@ -97,6 +97,13 @@ let package = Package(
         // from off-main parsing paths alike.
         .target(
             name: "WebScrapingKit"
+        ),
+        // World build only (branch world-ui, never main): the live-map Home's geometry and, from later
+        // steps, its device-only location stores. Pure Foundation for now. NOT a dependency of
+        // CloudKitSync, AIProviders, AIContext, FernletSocial or FernletConnections, so the strict
+        // build (Scripts/spm-wall-check.sh) fails any of them that imports it.
+        .target(
+            name: "WorldMapStore"
         ),
         // Layer 1 — the portable domain value types (nutrition/workout/wellbeing/
         // companion + settings aggregate, WorkoutProgram, FoodItemSearch). Color
