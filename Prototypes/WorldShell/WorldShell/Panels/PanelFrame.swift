@@ -17,7 +17,6 @@ struct PanelFrame<Content: View>: View {
                 Text(kind.title)
                     .font(.system(size: metrics.pt(16), weight: .bold, design: .rounded))
                     .foregroundStyle(FernColors.woodLabel)
-                    .shadow(color: FernColors.ink, radius: 0, x: 0, y: 1)
                     .accessibilityAddTraits(.isHeader)
                 Spacer()
                 GameCloseButton(action: onClose)

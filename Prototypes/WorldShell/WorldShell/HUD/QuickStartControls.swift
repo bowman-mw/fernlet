@@ -100,7 +100,7 @@ struct QuickStartCard: View {
     private func note(_ text: String) -> some View {
         Text(text)
             .font(.system(size: metrics.pt(11.5)))
-            .foregroundStyle(FernColors.rgb(0x7A5A3A))
+            .foregroundStyle(FernColors.noteInk)
             .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -117,7 +117,7 @@ struct QuickStartCard: View {
             .multilineTextAlignment(.leading)
             Spacer(minLength: 0)
         }
-        .foregroundStyle(primary ? Color.white : FernColors.speechInk)
+        .foregroundStyle(primary ? FernColors.onTeal : FernColors.speechInk)
         .padding(EdgeInsets(top: metrics.pt(6), leading: metrics.pt(8), bottom: metrics.pt(6), trailing: metrics.pt(8)))
         .background(primary ? FernColors.teal : FernColors.paper, in: RoundedRectangle(cornerRadius: metrics.pt(8)))
         .overlay(RoundedRectangle(cornerRadius: metrics.pt(8)).strokeBorder(FernColors.ink, lineWidth: metrics.pt(2)))

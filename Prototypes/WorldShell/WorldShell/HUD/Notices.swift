@@ -37,7 +37,7 @@ struct BannerView: View {
                 .overlay(Circle().strokeBorder(FernColors.ink, lineWidth: metrics.pt(2)))
             VStack(alignment: .leading, spacing: 1) {
                 Text(banner.title).font(.system(size: metrics.pt(13), weight: .bold, design: .rounded)).foregroundStyle(FernColors.ink)
-                Text(banner.subtitle).font(.system(size: metrics.pt(11))).foregroundStyle(FernColors.rgb(0x7A5A3A))
+                Text(banner.subtitle).font(.system(size: metrics.pt(11))).foregroundStyle(FernColors.noteInk)
             }
             Spacer(minLength: 0)
         }
@@ -76,9 +76,9 @@ struct WalkBar: View {
             Spacer(minLength: 0)
             Button("End", action: onEnd)
                 .font(.system(size: metrics.pt(12), weight: .bold))
-                .foregroundStyle(FernColors.woodLabel)
+                .foregroundStyle(Color.white)
                 .padding(EdgeInsets(top: metrics.pt(4), leading: metrics.pt(10), bottom: metrics.pt(4), trailing: metrics.pt(10)))
-                .background(FernColors.rgb(0xB05A3E), in: RoundedRectangle(cornerRadius: metrics.pt(6)))
+                .background(FernColors.endButton, in: RoundedRectangle(cornerRadius: metrics.pt(6)))
                 .overlay(RoundedRectangle(cornerRadius: metrics.pt(6)).strokeBorder(FernColors.ink, lineWidth: metrics.pt(2)))
         }
         .padding(EdgeInsets(top: metrics.pt(5), leading: metrics.pt(10), bottom: metrics.pt(5), trailing: metrics.pt(6)))

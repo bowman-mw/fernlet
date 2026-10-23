@@ -5,6 +5,9 @@ import SwiftUI
 ///
 /// The hearts are HealthBar's twelve segments, two to a heart, so nothing is lost (design page,
 /// answer "Hearts fit one line"). VoiceOver hears today's sentence, "Care score 58 percent".
+///
+/// It sits on a cream plate like the clock and coins, so the P / C / F letters are solid ink on
+/// cream (11:1) wherever the map is, with no text shadow.
 struct StatusBarLeft: View {
     let careScore: Double
     let goldHearts: Int
@@ -32,10 +35,10 @@ struct StatusBarLeft: View {
                         PixelSpriteView(sprite: index < water ? PixelSprites.drop : PixelSprites.emptyDrop)
                     }
                 }
-                .padding(.top, metrics.pt(2))
+                .padding(.top, metrics.pt(1))
             }
-            .padding(metrics.pt(2))
-            .shadow(color: FernColors.ink.opacity(0.35), radius: 0, x: 0, y: 1)
+            .padding(EdgeInsets(top: metrics.pt(4), leading: metrics.pt(5), bottom: metrics.pt(4), trailing: metrics.pt(5)))
+            .gamePlate(cornerRadius: metrics.pt(6), border: metrics.pt(2))
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
@@ -75,9 +78,7 @@ private struct MacroPip: View {
         HStack(spacing: metrics.pt(2)) {
             Text(letter)
                 .font(.system(size: metrics.pt(9), weight: .heavy, design: .monospaced))
-                .foregroundStyle(FernColors.woodLabel)
-                .shadow(color: FernColors.ink, radius: 0, x: 1, y: 1)
-                .shadow(color: FernColors.ink, radius: 0, x: -1, y: 0)
+                .foregroundStyle(FernColors.ink)
                 .frame(width: metrics.pt(8))
             ZStack(alignment: .leading) {
                 Rectangle().fill(FernColors.gameCream.opacity(0.85))

@@ -37,6 +37,28 @@ every screen and base map.
 `Screenshots/00-home-vs-mockup.jpg` shows the mockup's Home and the shell's Home side by side at the
 same width. The mockup half is rendered from the design page's own HTML at 402 pt.
 
+## Text you can read
+
+There's no shadow or outline on any text (owner, 2026-10-23). The mockup's offset text shadows on
+wood made labels hard to read. Every label is now one solid colour that clears WCAG AA 4.5:1
+against what's directly behind it. The pairs are listed in `Art/FernColors.swift`:
+
+- **Item bar names and panel titles:** bark `#3A2414` on wood, 5.2:1. The selected item-bar slot
+  is lighter wood rather than darker, 7.3:1.
+- **Status bar:** the hearts, P / C / F bars and drops sit on a cream plate like the clock and
+  coins, so the letters are ink on cream, 11:1.
+- **Text over the map:** every piece sits on its own cream plate, including the offline credit.
+- **Two other fixes found while checking:** the quick-start card's teal row now uses dark text
+  (6.4:1; white was 2.3:1), and the walk bar's End is white on a darker rust (6.2:1; it was 4.3:1).
+
+Under **Increase Contrast** the label colours darken, and the wood lightens a step. Every label
+then clears 7:1, the target FernletUI's high-contrast palette uses. The colours are dynamic
+`UIColor`s keyed on `accessibilityContrast`, the same mechanism FernletUI uses. Drop shadows stay
+on shapes only: the plates, prints, sprites and map marks.
+
+The item bar draws its wood and outline in its background, so the raised Log disc sits on top of
+the bar's border with its own full 3 pt ring.
+
 ## What's real and what's fixture
 
 | Piece | In the shell |
@@ -137,6 +159,9 @@ shared "iPhone 17". To run it on a phone:
 | `13-customize-glasses.jpg` | Customize (also opened by holding the companion), with the pixel preview in round glasses |
 | `14-photo-wall.jpg` | The full photo wall the strip opens |
 | `15-sick-day-one.jpg` | Day one on a sick day at dawn: the blanket, no history, and "Resting counts today" |
+| `16-text-before-after.jpg` | Before and after removing text shadows: item bar, a panel title plate, the status bars |
+| `17-log-disc-before-after.jpg` | Close-up of the Log disc: before, the bar's outline crossed it; after, it sits on top |
+| `18-increase-contrast.jpg` | The same title plate, item bar and status bars, standard and with Increase Contrast |
 
 ## Known differences and limits
 

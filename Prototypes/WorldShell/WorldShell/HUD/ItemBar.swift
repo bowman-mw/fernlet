@@ -3,6 +3,10 @@ import SwiftUI
 /// The item bar: today's tabs as a wooden game bar. Food, Move, Log (raised, in the centre),
 /// Friends, Private and Settings, each with its name small under the icon (answer 9), so Voice
 /// Control can say any of them.
+///
+/// The bar's wood, edges and outline are all drawn in its background, so the raised Log disc sits
+/// on top of the bar's border, as a child paints over its parent's border in the mockup. Names are
+/// solid bark on wood (5.2:1), with no shadow.
 struct ItemBar: View {
     let open: PanelKind?
     let action: (PanelKind) -> Void
@@ -45,8 +49,8 @@ struct ItemBar: View {
                     RoundedRectangle(cornerRadius: radius)
                         .fill(Color(.sRGB, red: 0.157, green: 0.078, blue: 0.031, opacity: 0.35)).offset(y: border)
                 }
+                .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(FernColors.ink, lineWidth: border))
         }
-        .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(FernColors.ink, lineWidth: border))
     }
 
     /// One slot: the pixel icon (Log's on a raised cream disc) over its small name.
@@ -70,14 +74,13 @@ struct ItemBar: View {
             Text(item.name)
                 .font(.system(size: metrics.pt(9), weight: .heavy))
                 .foregroundStyle(FernColors.woodLabel)
-                .shadow(color: FernColors.ink, radius: 0, x: 0, y: 1)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, minHeight: metrics.pt(52))
         .background {
             if open == item.kind && item.kind != .log {
-                RoundedRectangle(cornerRadius: metrics.pt(8)).fill(FernColors.woodDark)
+                RoundedRectangle(cornerRadius: metrics.pt(8)).fill(FernColors.woodSelected)
             }
         }
         .contentShape(Rectangle())
