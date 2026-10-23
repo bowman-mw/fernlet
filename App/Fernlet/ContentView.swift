@@ -1012,7 +1012,7 @@ struct ContentView: View {
                         stressService: stressService,
                         isActive: !rootSheetIsCoveringTabs,
                         onMealsLogged: mealLogReporter,
-                        presentation: panel == .log ? .quickLog : .page
+                        presentation: panel == .log ? .quickLog : .today
                     )
                 }
             }

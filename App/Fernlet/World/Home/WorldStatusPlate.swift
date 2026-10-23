@@ -47,22 +47,7 @@ struct WorldStatusPlate: View {
 
     /// Six hearts (four at the largest sizes), then the gold hearts.
     private var hearts: some View {
-        let count = isLarge ? 4 : 6, scale = theme.scale(accessibilitySize: isLarge)
-        return HStack(spacing: 2) {
-            ForEach(0..<count, id: \.self) { index in
-                WorldSpriteView(sprite: WorldSprites.heart, scale: scale, variant: .heart(fill(at: index, of: count)))
-            }
-            ForEach(0..<status.goldHearts, id: \.self) { _ in
-                WorldSpriteView(sprite: WorldSprites.heart, scale: scale, variant: .heart(.gold))
-            }
-        }
-    }
-
-    /// Full, half or empty for heart `index` of `count` (at four hearts, a third or two counts as half).
-    private func fill(at index: Int, of count: Int) -> WorldHeartFill {
-        let amount = status.heartFill(at: index, of: count)
-        if amount >= 1 { return .full }
-        return amount > 0 ? .half : .empty
+        WorldHeartRow(status: status, count: isLarge ? 4 : 6, scale: theme.scale(accessibilitySize: isLarge))
     }
 
     /// The protein, carbs and fat bars, in the one set of data colours.
@@ -126,8 +111,10 @@ struct WorldStatusPlate: View {
         }
     }
 
-    /// What VoiceOver reads for the whole plate.
-    private var spokenSummary: String {
+    /// The care score as VoiceOver says it, with the gold hearts' lift when there is one: "Care score
+    /// 58 percent. Lifted to 67 percent by 1 gold heart from friends." The plate and the Today card
+    /// both say this.
+    static func spokenCare(_ status: WorldStatus) -> String {
         let care = String(localized: "worldStatus.a11y.care", defaultValue: "Care score \(status.carePercent) percent",
                           comment: "World Home status plate, VoiceOver: the care score, as Home's health bar says it")
         let goldHearts = String(localized: "worldStatus.a11y.goldHearts", defaultValue: "\(status.goldHearts) gold hearts from friends",
@@ -135,6 +122,11 @@ struct WorldStatusPlate: View {
         let gold = status.goldHearts == 0 ? "" : " " + String(
             localized: "worldStatus.a11y.gold", defaultValue: "Lifted to \(status.livePercent) percent by \(goldHearts).",
             comment: "World Home status plate, VoiceOver: the care score with the gold hearts' lift; the second part is 'N gold hearts from friends'")
+        return "\(care).\(gold)"
+    }
+
+    /// What VoiceOver reads for the whole plate.
+    private var spokenSummary: String {
         let macros = String(
             localized: "worldStatus.a11y.macros",
             defaultValue: "Protein \(status.protein.grams) of \(status.protein.target) grams, carbs \(status.carbs.grams) of \(status.carbs.target), fat \(status.fat.grams) of \(status.fat.target).",
@@ -143,6 +135,6 @@ struct WorldStatusPlate: View {
                              comment: "World Home status plate, VoiceOver: bottles of water today. Plural on the number")
         let water = String(localized: "worldStatus.a11y.water", defaultValue: "Water: \(bottles), target \(status.bottleTarget).",
                            comment: "World Home status plate, VoiceOver: water today ('6 bottles') and the day's bottle target")
-        return "\(care).\(gold) \(macros) \(water)"
+        return "\(Self.spokenCare(status)) \(macros) \(water)"
     }
 }

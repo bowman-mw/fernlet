@@ -21,9 +21,12 @@ import FernletUI
 /// The World Home moves Home's cards off the map into panels; drawing them with this same view keeps
 /// every card's data and behaviour identical (design page "Same data, new look").
 nonisolated enum HomePresentation: Equatable, Sendable {
-    /// The whole Home page: header, photo wall and every card in the person's Home order. The World
-    /// Home's Today panel shows this until step 4's Today panel replaces it.
+    /// The whole Home page: header, photo wall and every card in the person's Home order.
     case page
+    /// The World Today panel (design `b1-today`, draft 2, in the one design language): the companion
+    /// card on top, the gold hearts card while one lasts, then every card in the person's Home order
+    /// except the companion (it lives on the map) and Quick log (the Log panel), then Arrange Today.
+    case today
     /// Only the Quick log and mood cards: the item bar's Log panel.
     case quickLog
 
@@ -31,6 +34,7 @@ nonisolated enum HomePresentation: Equatable, Sendable {
     func widgets(from order: [HomeWidget]) -> [HomeWidget] {
         switch self {
         case .page: order
+        case .today: TodayLayout.shown(order)
         case .quickLog: [.quickLog]
         }
     }
@@ -82,6 +86,8 @@ struct HomeView: View {
     @State private var isCompanionThoughtVisible = true
     @State private var companionTapThought: String?
     @State private var isCompanionSheetPresented = false
+    /// Arrange Today, open over the Today panel (World build).
+    @State private var isArrangingToday = false
     @State private var companionPetCount = 0
     @State private var companionTapCount = 0
     @State private var isCompanionJumping = false
@@ -125,26 +131,25 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 16) {
-                    if presentation == .page {
-                        homeHeader
-                        // 3a·AX3: the photowall and thought bubble give way entirely at accessibility
-                        // sizes — the strip is decorative (hit-testing already disabled), and the grid
-                        // starting above the tab bar is the promise that matters.
-                        if !dynamicTypeSize.isAccessibilitySize {
-                            photowallStrip
-                        }
-                    }
-                    ForEach(presentation.widgets(from: store.settings.homeWidgets)) { widget in
-                        homeWidget(widget)
-                    }
-                }
-                .padding(20)
-                .fernletTabBarBottomClearance()
+                cardStack
+                    .padding(20)
+                    .fernletTabBarBottomClearance()
             }
             .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
-            .background(Color.parchment)
+            // In a World panel, the panel's dotted page (the stack paints its own background otherwise).
+            .background {
+                if presentation == .page { Color.parchment } else { WorldPageBackground().ignoresSafeArea() }
+            }
             .navigationTitle("")
+        }
+        // Today's cards in the one design language; the sheets below keep their own look.
+        .environment(\.fernletFramedLook, framedLook)
+        .fullScreenCover(isPresented: $isArrangingToday) {
+            WorldPanelFrame(panel: .today, title: String(localized: "worldToday.arrange.title", defaultValue: "Arrange Today",
+                                                         comment: "World Today panel: the title of the card layout editor"),
+                            closesWithDone: true, onClose: { isArrangingToday = false }) {
+                WorldTodayEditor(store: store)
+            }
         }
         .sheet(isPresented: $isCompanionSheetPresented) {
             CompanionCustomizationSheet(
@@ -204,6 +209,57 @@ struct HomeView: View {
         .onChange(of: store.isPeriodTrackingVisible) { _, _ in
             scheduleRecentPeriodActivityRefresh()
         }
+    }
+
+    /// Every section this Home draws, top to bottom.
+    private var cardStack: some View {
+        VStack(spacing: 16) {
+            if presentation == .page {
+                homeHeader
+                // 3a·AX3: the photowall and thought bubble give way entirely at accessibility
+                // sizes — the strip is decorative (hit-testing already disabled), and the grid
+                // starting above the tab bar is the promise that matters.
+                if !dynamicTypeSize.isAccessibilitySize {
+                    photowallStrip
+                }
+            }
+            if presentation == .today { todayHead }
+            ForEach(presentation.widgets(from: store.settings.homeWidgets)) { widget in
+                homeWidget(widget)
+            }
+            if presentation == .today { arrangeTodayButton }
+        }
+    }
+
+    /// The Today panel's top: the companion card, then the gold hearts card while one lasts.
+    @ViewBuilder
+    private var todayHead: some View {
+        TodayCompanionCard(store: store, isActive: isActive) { isCompanionSheetPresented = true }
+        if store.goldHeartCount() > 0, let until = store.goldHeartsEnd() {
+            TodayGoldHeartsCard(status: WorldStatus.current(store: store, date: Date()), until: until)
+        }
+    }
+
+    /// The one design language, on the Today panel only (each other panel opts in with its redesign).
+    private var framedLook: FernletFramedLook? {
+        presentation == .today ? WorldTheme.framedLook : nil
+    }
+
+    /// Arrange Today, at the bottom of the Today panel: the layout editor (design `b1-today-editor`).
+    private var arrangeTodayButton: some View {
+        Button { isArrangingToday = true } label: {
+            HStack(spacing: 8) {
+                WorldSpriteView(sprite: WorldSprites.grip, scale: 2, tint: WorldPalette.mossInk)
+                Text("Arrange Today")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(WorldPalette.mossInk)
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("world.today.arrange")
     }
 
     // MARK: - Milestones entry card
@@ -368,7 +424,8 @@ struct HomeView: View {
                 totals: store.macroTotals,
                 targets: store.nutritionTargets,
                 showCalories: store.settings.showCalories,
-                fiberIntake: store.micronutrientTotals.fiber
+                fiberIntake: store.micronutrientTotals.fiber,
+                framedBars: presentation == .today
             )
         case .hygiene:
             HygieneCard(store: store, activeSheet: $activeSheet)
@@ -723,11 +780,7 @@ struct HomeView: View {
                 activeSheet = .firstAid(nil)
             } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: "heart.circle")
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(Color.moss)
-                        .frame(width: 34, height: 34)
-                        .background(Color.moss.opacity(0.14), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    firstAidIcon
                     VStack(alignment: .leading, spacing: 3) {
                         Text("First aid")
                             .font(.fernlet(.headerMedium))
@@ -740,9 +793,7 @@ struct HomeView: View {
                             .fernletWrappingText()
                     }
                     Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(Color.moss)
+                    firstAidChevron
                 }
                 .contentShape(Rectangle())
             }
@@ -763,13 +814,19 @@ struct HomeView: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.moss.opacity(0.10))
+            RoundedRectangle(cornerRadius: framedLook == nil ? 16 : FernletFramedLook.cardRadius, style: .continuous)
+                .fill(framedLook?.sage ?? Color.moss.opacity(0.10))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.moss.opacity(0.22), lineWidth: 1)
+            RoundedRectangle(cornerRadius: framedLook == nil ? 16 : FernletFramedLook.cardRadius, style: .continuous)
+                .strokeBorder(framedLook?.ink ?? Color.moss.opacity(0.22), lineWidth: framedLook == nil ? 1 : FernletFramedLook.frameWidth)
         )
+        .background {
+            if let framedLook {
+                RoundedRectangle(cornerRadius: FernletFramedLook.cardRadius, style: .continuous)
+                    .fill(framedLook.shadow).offset(y: 3)
+            }
+        }
         // Padding included: this is what makes the card's margin and the header-to-chips gap open
         // First aid again. Declared on the padded container, so the chips' and the header's own
         // button frames win their taps first.
@@ -777,20 +834,55 @@ struct HomeView: View {
         .onTapGesture { activeSheet = .firstAid(nil) }
     }
 
+    /// The First Aid card's icon: the pixel first-aid tile in the framed look, the moss symbol otherwise.
+    @ViewBuilder
+    private var firstAidIcon: some View {
+        if let framedLook {
+            WorldIconTile(sprite: WorldSprites.aid, look: framedLook)
+        } else {
+            Image(systemName: "heart.circle")
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(Color.moss)
+                .frame(width: 34, height: 34)
+                .background(Color.moss.opacity(0.14), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        }
+    }
+
+    /// The First Aid card's chevron: pixel in the framed look.
+    @ViewBuilder
+    private var firstAidChevron: some View {
+        if let framedLook {
+            WorldChevron(look: framedLook)
+        } else {
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(Color.moss)
+        }
+    }
+
     /// One chip inside the First Aid card — its own button straight to `tool`.
     private func firstAidChip(_ icon: String, _ label: LocalizedStringKey, tool: FirstAidTool) -> some View {
         Button {
             activeSheet = .firstAid(tool)
         } label: {
-            HStack(spacing: 5) {
-                Image(systemName: icon).font(.system(size: 11, weight: .semibold))
+            let chip = HStack(spacing: 5) {
+                if let framedLook, let pixel = WorldCardIcons.icon(forSymbol: icon) {
+                    WorldSpriteView(sprite: pixel.sprite, scale: 2, tint: pixel.tinted ? framedLook.text : nil)
+                } else {
+                    Image(systemName: icon).font(.system(size: 11, weight: .semibold))
+                }
                 Text(label).font(.fernlet(.labelSmall))
             }
-            .foregroundStyle(Color.moss)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(Color.cream, in: Capsule())
-            .overlay(Capsule().stroke(Color.moss.opacity(0.18), lineWidth: 1))
+            if let framedLook {
+                chip.foregroundStyle(framedLook.text).fernletFramed(framedLook)
+            } else {
+                chip
+                    .foregroundStyle(Color.moss)
+                    .background(Color.cream, in: Capsule())
+                    .overlay(Capsule().stroke(Color.moss.opacity(0.18), lineWidth: 1))
+            }
         }
         .buttonStyle(.plain)
         .fernletTapTarget(minWidth: 0)
@@ -1155,13 +1247,42 @@ struct HomeView: View {
                     Spacer()
                     todayGoalLine
                 }
-                HealthBar(state: store.companionState, value: store.score, heartGlow: store.heartGlow)
+                if presentation == .today {
+                    todayHearts
+                } else {
+                    HealthBar(state: store.companionState, value: store.score, heartGlow: store.heartGlow)
+                }
                 unwellRow
             }
             // FLOW-18: the Today card's inner padding halved (16 → 8), countered at the call site
-            // so the shared `FernletCard` keeps its 16pt everywhere else.
-            .padding(-FernletMetrics.spaceSm)
+            // so the shared `FernletCard` keeps its 16pt everywhere else. The framed look keeps its
+            // own 14/15 pt: halving it put the title against the frame.
+            .padding(framedLook == nil ? -FernletMetrics.spaceSm : 0)
         }
+    }
+
+    /// The Today panel's care score (design language): Home's date line, then the status plate's
+    /// hearts and the score, spoken as the plate speaks it.
+    private var todayHearts: some View {
+        let status = WorldStatus.current(store: store, date: Date())
+        let large = dynamicTypeSize.isAccessibilitySize
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(verbatim: FernletDate.niceDate())
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(WorldPalette.dim)
+            // The score sits beside the hearts, or under them at accessibility sizes.
+            let layout = large ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout(spacing: 8))
+            layout {
+                WorldHeartRow(status: status, count: large ? 4 : 6, scale: WorldTheme.pixel.scale(accessibilitySize: large))
+                Text(verbatim: String(localized: "worldToday.careScore", defaultValue: "Care score \(status.carePercent)%",
+                                      comment: "World Today panel, Today card: the care score beside its hearts"))
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(WorldPalette.dim)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: WorldStatusPlate.spokenCare(status)))
+        .accessibilityIdentifier("world.today.hearts")
     }
 
     /// The trailing goal line on the Today card. The weekday is already in the page header, and
@@ -1204,9 +1325,13 @@ struct HomeView: View {
         } label: {
             HStack(spacing: 10) {
                 if !dynamicTypeSize.isAccessibilitySize {
-                    Image(systemName: isUnwell ? "bandage.fill" : "bandage")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.dustyRose)
+                    if framedLook != nil {
+                        WorldSpriteView(sprite: WorldSprites.bandage, scale: 2)
+                    } else {
+                        Image(systemName: isUnwell ? "bandage.fill" : "bandage")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Color.dustyRose)
+                    }
                 }
                 VStack(alignment: .leading, spacing: 1) {
                     Text("I'm unwell today")
@@ -1222,18 +1347,28 @@ struct HomeView: View {
                 }
                 Spacer(minLength: 8)
                 if isUnwell {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Color.dustyRose)
+                    if let framedLook {
+                        WorldSpriteView(sprite: WorldSprites.check, scale: 2, tint: framedLook.text)
+                    } else {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Color.dustyRose)
+                    }
                 }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .background(
-                Color.dustyRose.opacity(isUnwell ? 0.18 : 0.10),
+                framedLook?.rose ?? Color.dustyRose.opacity(isUnwell ? 0.18 : 0.10),
                 in: RoundedRectangle(cornerRadius: 12, style: .continuous)
             )
+            .overlay {
+                if let framedLook {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(framedLook.ink, lineWidth: FernletFramedLook.frameWidth)
+                }
+            }
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -2223,29 +2358,45 @@ struct HealthBar: View {
 struct HomeActionWidget: View {
     var widget: HomeWidget
     var action: () -> Void
+    /// The World Today panel's framed look, when it is set (pixel icon tile and chevron).
+    @Environment(\.fernletFramedLook) private var look
+
+    /// The card's icon: a pixel tile in the framed look, the moss symbol otherwise.
+    @ViewBuilder
+    private var icon: some View {
+        if let look, let pixel = WorldCardIcons.icon(for: widget) {
+            WorldIconTile(sprite: pixel.sprite, tinted: pixel.tinted, look: look)
+        } else {
+            Image(systemName: widget.systemImage)
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(Color.moss)
+                .frame(width: 36, height: 36)
+                .background(Color.moss.opacity(0.12), in: Circle())
+        }
+    }
 
     var body: some View {
         Button(action: action) {
             FernletCard {
                 HStack(spacing: 12) {
-                    Image(systemName: widget.systemImage)
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(Color.moss)
-                        .frame(width: 36, height: 36)
-                        .background(Color.moss.opacity(0.12), in: Circle())
+                    icon
                     VStack(alignment: .leading, spacing: 3) {
                         Text(widget.title)
                             .font(.fernlet(.headerMedium))
-                            .foregroundStyle(Color.bark)
+                            .foregroundStyle(look?.text ?? Color.bark)
                         actionSubtitle
                             .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
+                            .foregroundStyle(look == nil ? Color.slate : WorldPalette.dim)
                             .fernletWrappingText()
                     }
                     Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(Color.slate)
+                    if let look {
+                        WorldChevron(look: look)
+                    } else {
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(Color.slate)
+                    }
                 }
             }
         }
@@ -2367,19 +2518,33 @@ struct MacroCard: View {
     /// The day's fiber intake in grams, when the logged meals carry micronutrients. Nil ⇒ the footer
     /// names the value as a target rather than implying it was eaten.
     var fiberIntake: Double? = nil
+    /// The World Today panel's form (design language): the three macros as framed bars, the status
+    /// plate's bars made larger, in place of the rings.
+    var framedBars = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         FernletCard {
             VStack(alignment: .leading, spacing: 14) {
                 SectionLabel(title)
-                macroFigures
+                if framedBars {
+                    MacroBars(totals: totals, targets: targets)
+                } else {
+                    macroFigures
+                }
                 HStack {
                     if showCalories {
                         Label("\(totals.calories) / \(targets.calories) cal", systemImage: "flame")
                         Spacer()
                     }
-                    Label(fiberFooter, systemImage: "leaf")
+                    if framedBars {
+                        HStack(spacing: 8) {
+                            WorldSpriteView(sprite: WorldSprites.leaf, scale: 2)
+                            Text(verbatim: fiberFooter)
+                        }
+                    } else {
+                        Label(fiberFooter, systemImage: "leaf")
+                    }
                 }
                 .font(.fernlet(.stat))
                 .foregroundStyle(Color.slate)
@@ -2440,6 +2605,58 @@ struct MacroCard: View {
         let grams = Int(min(max(intake, 0), maxDisplayableFiber).rounded())
         return String(localized: "macros.fiber.intake", defaultValue: "Fiber \(grams)g of \(target)g",
                       comment: "Macros card footer: fiber eaten today out of the daily target, in grams, e.g. 'Fiber 18g of 30g'. The first number is what was eaten.")
+    }
+}
+
+/// The three macros as framed bars (World Today panel, design language): the name, a bar in the one
+/// set of data colours in a 2-pt ink frame, and "76 of 93 g". Each row is one VoiceOver element that
+/// says the same sentence as Home's ring ("Protein, 76 of 93 grams").
+struct MacroBars: View {
+    var totals: MacroTotals
+    var targets: NutritionTargets
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            row(String(localized: "macros.protein", defaultValue: "Protein",
+                       comment: "Macro ring label under the protein figure (Home, Food and a journal day)."),
+                current: totals.protein, goal: targets.protein, colour: WorldPalette.protein)
+            row(String(localized: "macros.carbs", defaultValue: "Carbs",
+                       comment: "Macro ring label under the carbohydrate figure (Home, Food and a journal day)."),
+                current: totals.carbs, goal: targets.carbs, colour: WorldPalette.carbs)
+            row(String(localized: "macros.fat", defaultValue: "Fat",
+                       comment: "Macro ring label under the fat figure (Home, Food and a journal day)."),
+                current: totals.fat, goal: targets.fat, colour: WorldPalette.fat)
+        }
+    }
+
+    /// One macro: name, framed bar, amount.
+    private func row(_ name: String, current: Int, goal: Int, colour: Color) -> some View {
+        let fraction = goal > 0 ? min(1, max(0, Double(current) / Double(goal))) : 0
+        let amount = String(localized: "macros.bar.amount", defaultValue: "\(current) of \(goal) g",
+                            comment: "World Today panel, macro bars: grams eaten of the day's target, after the bar")
+        let spoken = String(localized: "macros.bar.a11y", defaultValue: "\(name), \(current) of \(goal) grams",
+                            comment: "World Today panel, macro bars, VoiceOver: one macro's name, then grams eaten of the target")
+        return HStack(spacing: 10) {
+            Text(verbatim: name)
+                .font(.fernlet(.body))
+                .foregroundStyle(WorldPalette.bark)
+                .frame(minWidth: 82, alignment: .leading)
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    WorldPalette.paperShade
+                    colour.frame(width: proxy.size.width * fraction)
+                }
+            }
+            .frame(height: 10)
+            .padding(2)
+            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(WorldPalette.ink, lineWidth: 2))
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+            Text(verbatim: amount)
+                .font(.fernlet(.bodySmall).monospacedDigit())
+                .foregroundStyle(WorldPalette.dim)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: spoken))
     }
 }
 

@@ -22,6 +22,11 @@ extension FernletStore {
         heartLedger.goldHeartArrivals(at: date).count
     }
 
+    /// When the last gold heart showing at `date` fades, or nil when none is.
+    func goldHeartsEnd(at date: Date = Date()) -> Date? {
+        GoldHeartRules.glowEnds(heartLedger.goldHeartArrivals(at: date), at: date)
+    }
+
     /// Today's care score with the gold-heart boost, 0...1. Display only; never saved.
     var liveCareScore: Double {
         GoldHeartRules.boosted(score: score, goldHearts: goldHeartCount())

@@ -42,6 +42,10 @@ struct WorldSpriteView: View {
     /// Points per sprite pixel (whole numbers keep the art crisp).
     var scale: CGFloat = 3
     var variant: WorldSpriteVariant = .plain
+    /// A one-colour icon's ink (✕, chevrons, plus): every pixel in this colour, which follows Dark
+    /// Mode. Batch 2 build note: one-colour pixel icons take the ink token, never a fixed hex, or they
+    /// vanish on dark paper.
+    var tint: Color? = nil
 
     var body: some View {
         Canvas { context, _ in
@@ -49,7 +53,7 @@ struct WorldSpriteView: View {
                 for (x, key) in row.enumerated() where key != "." {
                     guard let base = sprite.palette[key] else { continue }
                     let rect = CGRect(x: CGFloat(x) * scale, y: CGFloat(y) * scale, width: scale, height: scale)
-                    context.fill(Path(rect), with: .color(WorldPalette.rgb(variant.colour(for: key, column: x) ?? base)))
+                    context.fill(Path(rect), with: .color(tint ?? WorldPalette.rgb(variant.colour(for: key, column: x) ?? base)))
                 }
             }
         }

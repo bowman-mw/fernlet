@@ -653,7 +653,7 @@ struct SettingsSheet: View {
             }
             .padding(14)
             .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-            homeWidgetsSection
+            todayPanelSection
         }
     }
 
@@ -826,118 +826,38 @@ struct SettingsSheet: View {
         )
     }
 
-    /// The Home-widget layout card, on the Appearance page since the 2026-08-21 hub restructure
-    /// (the old Layout & shortcuts page became ``QuickLogShortcutsEditor``; widgets are how Home
-    /// looks, so they moved in with Appearance).
+    /// The Today panel's row on the Appearance page (World build, design `b1-today-editor`, approved
+    /// 2026-10-23): "Cards and their order" opens Arrange Today (``WorldTodayEditor``), which replaced
+    /// the Home widgets editor here. The stored order and its ids are unchanged.
     ///
     /// NOTE: quick-log editing lives in ``QuickLogShortcutsEditor`` and edits the STORED array —
     /// never a visibility-filtered one (the destructive-filtering record lives on that type).
-    private var homeWidgetsSection: some View {
+    private var todayPanelSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            SectionLabel("Home widgets")
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Choose what appears on the main page and put the widgets in the order you want. Your companion always stays on Home — you can move it, but not remove it.")
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-
-                ForEach(Array(store.settings.homeWidgets.enumerated()), id: \.element.id) { index, widget in
-                    homeWidgetLayoutRow(widget, index: index)
-                }
-
-                FlowLayout(spacing: 8) {
-                    ForEach(availableHomeWidgets) { widget in
-                        Button {
-                            addHomeWidget(widget)
-                        } label: {
-                            Label(widget.title, systemImage: widget.systemImage)
-                        }
-                        .buttonStyle(ChipButtonStyle(selected: false))
-                    }
-                }
-
-                Button("Reset home widgets") { resetHomeWidgets() }
-                .buttonStyle(.plain)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.moss)
-            }
-            .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-        }
-        .onAppear {
-            store.setHomeWidgets(store.settings.homeWidgets)
-        }
-    }
-
-    private var availableHomeWidgets: [HomeWidget] {
-        HomeWidget.allCases.filter { !store.settings.homeWidgets.contains($0) }
-    }
-
-    private func homeWidgetLayoutRow(_ widget: HomeWidget, index: Int) -> some View {
-        HStack(spacing: 10) {
-            reorderControls(
-                name: widget.title,
-                canMoveUp: index > 0,
-                canMoveDown: index < store.settings.homeWidgets.count - 1
-            ) { offset in
-                moveHomeWidget(from: index, by: offset)
-            }
-
-            Label(widget.title, systemImage: widget.systemImage)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.bark)
-                // Without the priority the fixed chevron/remove frames squeezed the label until
-                // "Companion" broke mid-word as "Companio / n" at accessibility sizes.
-                .fernletWrappingText()
-                .layoutPriority(1)
-
-            Spacer(minLength: 4)
-
-            // The companion is the surface the whole app is built around, so it stays pinned:
-            // reorderable, but never one stray tap away from being gone.
-            if widget != .companion {
-                Button {
-                    removeHomeWidget(widget)
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
+            SectionLabel("Today panel")
+            NavigationLink {
+                WorldTodayEditor(store: store)
+                    .navigationTitle(Text("Arrange Today"))
+                    .background { WorldPageBackground().ignoresSafeArea() }
+            } label: {
+                HStack {
+                    Text("Cards and their order")
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.bark)
+                        .fernletWrappingText()
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.medium))
                         .foregroundStyle(Color.slate)
+                        .accessibilityHidden(true)
                 }
-                .buttonStyle(.plain)
-                .fernletIconButton("Remove \(widget.title) from Home")
-                // Voice Control: one X per widget row; the widget's name is what tells them apart.
-                .accessibilityInputLabels([Text("Remove \(widget.title)")])
+                .padding(14)
+                .frame(minHeight: 44)
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
             }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("settings.todayPanel")
         }
-        .padding(10)
-        .background(Color.parchment.opacity(0.65), in: RoundedRectangle(cornerRadius: 12))
-    }
-
-    /// The stacked move-up / move-down controls shared by the widget and quick-log rows.
-    ///
-    /// 44pt targets with spoken labels: the old 28×24pt chevrons were both under the minimum target
-    /// and announced by VoiceOver as "chevron.up". An unavailable end-of-list arrow is hidden rather
-    /// than greyed — colour alone was the only signal that it did nothing.
-    private func reorderControls(
-        name: String,
-        canMoveUp: Bool,
-        canMoveDown: Bool,
-        move: @escaping (Int) -> Void
-    ) -> some View {
-        VStack(spacing: 0) {
-            Button { move(-1) } label: { Image(systemName: "chevron.up") }
-                .fernletIconButton("Move \(name) up")
-                .disabled(!canMoveUp)
-                .opacity(canMoveUp ? 1 : 0)
-                .accessibilityHidden(!canMoveUp)
-
-            Button { move(1) } label: { Image(systemName: "chevron.down") }
-                .fernletIconButton("Move \(name) down")
-                .disabled(!canMoveDown)
-                .opacity(canMoveDown ? 1 : 0)
-                .accessibilityHidden(!canMoveDown)
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(Color.slate)
     }
 
     /// One Appearance chip: a choice on a custom control, so a tick when it changes the mode (the
@@ -945,40 +865,6 @@ struct SettingsSheet: View {
     private func chooseAppearanceMode(_ mode: FernletAppearanceMode) {
         if appearanceMode != mode { FernletFeedback.system.play(.tick) }
         appearanceMode = mode
-    }
-
-    // Every layout change below plays `moved` (report B13) when it really changes the list, and the
-    // list redrawing in its new order is the visual twin. A no-op — Reset on the default layout —
-    // says nothing.
-
-    private func addHomeWidget(_ widget: HomeWidget) {
-        var widgets = store.settings.homeWidgets
-        guard !widgets.contains(widget) else { return }
-        widgets.append(widget)
-        FernletFeedback.system.play(.moved)
-        store.setHomeWidgets(widgets)
-    }
-
-    private func removeHomeWidget(_ widget: HomeWidget) {
-        var widgets = store.settings.homeWidgets
-        guard widgets.contains(widget) else { return }
-        widgets.removeAll { $0 == widget }
-        FernletFeedback.system.play(.moved)
-        store.setHomeWidgets(widgets)
-    }
-
-    private func moveHomeWidget(from index: Int, by offset: Int) {
-        let destination = index + offset
-        var widgets = store.settings.homeWidgets
-        guard widgets.indices.contains(index), widgets.indices.contains(destination) else { return }
-        widgets.swapAt(index, destination)
-        FernletFeedback.system.play(.moved)
-        store.setHomeWidgets(widgets)
-    }
-
-    private func resetHomeWidgets() {
-        if store.settings.homeWidgets != HomeWidget.defaultWidgets { FernletFeedback.system.play(.moved) }
-        store.setHomeWidgets(HomeWidget.defaultWidgets)
     }
 
     private var memoriesTab: some View {

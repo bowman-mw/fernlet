@@ -92,6 +92,14 @@ struct WorldMapCompanion: View {
                                sleepWindow: CompanionEmotionPreferences.sleepWindow())
     }
 
+    /// Whether the companion is asleep at `date` (its feeling hides the day), for the Today panel's
+    /// companion card, so the card and the map sleep together. Only the yes or no leaves this file.
+    static func isAsleep(store: FernletStore, at date: Date) -> Bool {
+        store.companionEmotion(at: date, bodySignal: nil, playfulUntil: nil,
+                               appetiteCuesEnabled: CompanionEmotionPreferences.appetiteCuesEnabled(),
+                               sleepWindow: CompanionEmotionPreferences.sleepWindow())?.hidesTheDay == true
+    }
+
     /// One pet, answered as Home answers it: the governor decides, its cue plays (nothing while
     /// settled), and the first pat ever begins Pats Given.
     private func pet() {

@@ -3975,6 +3975,16 @@
         }
       }
     },
+    "Arrange Today" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ordenar Hoy"
+          }
+        }
+      }
+    },
     "Arrive back in the room, one gentle sense at a time." : {
       "localizations" : {
         "es" : {
@@ -4981,6 +4991,16 @@
         }
       }
     },
+    "Cards and their order" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tarjetas y su orden"
+          }
+        }
+      }
+    },
     "Care" : {
       "localizations" : {
         "es" : {
@@ -5376,6 +5396,7 @@
       }
     },
     "Choose what appears on the main page and put the widgets in the order you want. Your companion always stays on Home — you can move it, but not remove it." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -7882,6 +7903,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Arrastra para pintar · pellizca para hacer zoom"
+          }
+        }
+      }
+    },
+    "Drag to reorder. Hidden cards stay one tap away in Settings." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Arrastra para reordenar. Las tarjetas ocultas siguen en Ajustes."
           }
         }
       }
@@ -11076,6 +11107,16 @@
         }
       }
     },
+    "Gold hearts" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Corazones dorados"
+          }
+        }
+      }
+    },
     "Good" : {
       "localizations" : {
         "es" : {
@@ -11817,6 +11858,7 @@
       }
     },
     "Home widgets" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -14938,6 +14980,16 @@
         }
       }
     },
+    "Move down" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bajar"
+          }
+        }
+      }
+    },
     "Move step %lld down" : {
       "localizations" : {
         "es" : {
@@ -14954,6 +15006,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Subir el paso %lld"
+          }
+        }
+      }
+    },
+    "Move up" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Subir"
           }
         }
       }
@@ -19456,6 +19518,7 @@
       }
     },
     "Remove %@ from Home" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -20246,6 +20309,7 @@
       }
     },
     "Reset home widgets" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -24735,6 +24799,16 @@
         }
       }
     },
+    "The companion lives on the map, and Quick log moved to Log, so neither is in this list." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El compañero vive en el mapa y el Registro rápido pasó a Registrar, así que no están en esta lista."
+          }
+        }
+      }
+    },
     "The connection to %@ dropped while sending, so they may not have it. You can try again." : {
       "comment" : "Why a recipe share may not have arrived: the connection dropped partway through sending. %@ is the person's name.",
       "localizations" : {
@@ -25826,6 +25900,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Clave de hoy: %@"
+          }
+        }
+      }
+    },
+    "Today panel" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Panel Hoy"
           }
         }
       }
@@ -39497,6 +39581,42 @@
         }
       }
     },
+    "macros.bar.a11y" : {
+      "comment" : "World Today panel, macro bars, VoiceOver: one macro's name, then grams eaten of the target",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$lld of %3$lld grams"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@, %2$lld de %3$lld gramos"
+          }
+        }
+      }
+    },
+    "macros.bar.amount" : {
+      "comment" : "World Today panel, macro bars: grams eaten of the day's target, after the bar",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld g"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$lld de %2$lld g"
+          }
+        }
+      }
+    },
     "macros.carbs" : {
       "comment" : "Macro ring label under the carbohydrate figure (Home, Food and a journal day).",
       "extractionState" : "extracted_with_value",
@@ -47935,6 +48055,78 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "P"
+          }
+        }
+      }
+    },
+    "worldToday.arrange.title" : {
+      "comment" : "World Today panel: the title of the card layout editor",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Arrange Today"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ordenar Hoy"
+          }
+        }
+      }
+    },
+    "worldToday.careScore" : {
+      "comment" : "World Today panel, Today card: the care score beside its hearts",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Care score %lld%%"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Puntuación de cuidado: %lld %%"
+          }
+        }
+      }
+    },
+    "worldToday.companion.line" : {
+      "comment" : "World Today panel, companion card: the companion's state, then how else to customize it (holding it on the map)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ · or hold it on the map"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ · o mantenlo pulsado en el mapa"
+          }
+        }
+      }
+    },
+    "worldToday.gold.line" : {
+      "comment" : "World Today panel, gold hearts card: the care score a friend's in-person heart lifts it to, and the time the lift ends",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Time with friends lifts your care score to %1$lld%% until %2$@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El tiempo con amigos sube tu puntuación de cuidado al %1$lld %% hasta las %2$@."
           }
         }
       }
