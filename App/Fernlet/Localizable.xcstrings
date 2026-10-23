@@ -47641,6 +47641,60 @@
         }
       }
     },
+    "worldPhotos.hint" : {
+      "comment" : "World Home: what tapping the photo wall does, for VoiceOver",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Opens the shared album in Friends."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre el álbum compartido en Amigos."
+          }
+        }
+      }
+    },
+    "worldPhotos.inputLabel" : {
+      "comment" : "World Home: a short name Voice Control can use for the photo wall",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Photos"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fotos"
+          }
+        }
+      }
+    },
+    "worldPhotos.label" : {
+      "comment" : "World Home: the friend photos in the top right, for VoiceOver",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Photo wall"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Muro de fotos"
+          }
+        }
+      }
+    },
     "worldStatus.a11y.bottles" : {
       "comment" : "World Home status plate, VoiceOver: bottles of water today. Plural on the number",
       "localizations" : {

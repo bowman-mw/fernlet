@@ -31,7 +31,7 @@
  },
  {
   "rule": "A1-COMBINE-LABEL",
-  "path": "App/Fernlet/HomeView.swift",
+  "path": "App/Fernlet/CompanionCustomizationSheet.swift",
   "line_contains": ".accessibilityLabel(\"\\(Text(slot)): \\(value)\")",
   "reason": "Adds the CAPTION-TO-VALUE relation. The fragments are a slot caption and a value drawn one above the other; `.combine` speaks them as two unlinked items in one breath, and the widget slot rows stack several of them, so a user hears four captions and four values with no way to pair them. The colon is what carries the pairing in speech. `Text(slot)` rather than `slot` is deliberate and commented at the site: a `LocalizedStringKey` cannot be interpolated into another `LocalizedStringKey`, but a `Text` carries its own lookup."
  },

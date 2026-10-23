@@ -147,6 +147,9 @@ struct SillyStampCell: View {
 /// The banner for a stamp earned just now: the stamp, "New stamp: Crumb Goblin" and "Cookies Per
 /// Day has begun." Tapping it opens the silly stats page, where the stamp book is.
 ///
+/// World build: drawn in the pixel language (design `b1-stamp-banner`): a paper plate in a 3-pt ink
+/// frame with a solid drop shadow, the stamp's pixel art (``WorldStampArt``) on a gold disc.
+///
 /// Purely presentational. ``ContentView`` decides when it shows (never over a sheet), how long it
 /// stays (``FernletDismissalWindow``), and speaks it for VoiceOver — the banner appears with no
 /// focus change, so the announcement is how a VoiceOver user hears of it. The stamp thumps down
@@ -158,31 +161,33 @@ struct SillyStampBanner: View {
     @State private var hasLanded = false
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
         let settled = hasLanded || reduceMotion
         Button(action: onOpen) {
             HStack(alignment: .center, spacing: 12) {
-                SillyStampBadge(kind: kind, diameter: 44)
+                WorldSpriteView(sprite: WorldStampArt.sprite(for: kind), scale: 4)
+                    .frame(width: 44, height: 44)
+                    .background(WorldPalette.rgb(0xF2C14E), in: Circle())
+                    .overlay(Circle().strokeBorder(WorldPalette.ink, lineWidth: 3))
                     .scaleEffect(settled ? 1 : 1.4)
                     .opacity(settled ? 1 : 0)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(verbatim: SillyStampCopy.bannerTitle(for: kind))
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.bark)
+                        .font(WorldType.bannerTitle)
+                        .foregroundStyle(WorldPalette.bark)
                         .fernletWrappingText()
                     Text(verbatim: SillyStampCopy.bannerDetail(for: kind))
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
+                        .font(WorldType.bannerDetail)
+                        .foregroundStyle(WorldPalette.bark)
                         .fernletWrappingText()
                 }
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(EdgeInsets(top: 9, leading: 9, bottom: 9, trailing: 14))
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.cream, in: shape)
-            .overlay(shape.stroke(Color.goldenrod.opacity(0.45), lineWidth: 1))
-            .shadow(color: Color.bark.opacity(0.14), radius: 14, x: 0, y: 6)
+            .background(WorldPalette.paper, in: shape)
+            .overlay(shape.strokeBorder(WorldPalette.ink, lineWidth: 3))
+            .background { shape.fill(WorldPalette.ink.opacity(0.35)).offset(y: 4) }
             .contentShape(shape)
         }
         .buttonStyle(.plain)

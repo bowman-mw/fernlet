@@ -3203,7 +3203,7 @@ struct LocalizationBoundaryTests {
         ForkedMember(path: "App/Fernlet/DestructiveConfirmation.swift",
                      declaration: "let label: LocalizedStringKey",
                      role: "the second destructive outcome's button"),
-        ForkedMember(path: "App/Fernlet/HomeView.swift",
+        ForkedMember(path: "App/Fernlet/CompanionCustomizationSheet.swift",
                      declaration: "slot: LocalizedStringKey,",
                      role: "the wardrobe selector row's uppercase slot caption"),
         // Spanish round step 2, Home lane (2026-10-20): the same T2-1 class on Home and the calm

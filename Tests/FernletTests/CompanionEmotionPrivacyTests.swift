@@ -41,7 +41,10 @@ struct CompanionEmotionPrivacyTests {
         // All three only READ the widget's own `WidgetCompanionEmotion`; none persists or sends it.
         "App/FernletWidgets/WidgetCompanionFigure.swift",
         "App/FernletWidgets/CompanionWidgetViews.swift",
-        "App/FernletWidgets/WidgetThoughtLines.swift"
+        "App/FernletWidgets/WidgetThoughtLines.swift",
+        // World build step 3: the map's companion reads the feeling, as Home's does, for its sleeping
+        // pose and its VoiceOver value. It neither persists nor sends it.
+        "App/Fernlet/World/Home/WorldMapCompanion.swift"
     ]
 
     /// The shipping roots scanned — every target the app ships.

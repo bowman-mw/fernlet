@@ -48,6 +48,12 @@ nonisolated enum WorldType {
         Font.custom(FernletFontName.dmSansMedium, size: large ? 22 : 16, relativeTo: .caption).weight(.bold)
     }
 
+    /// The companion's speech bubble (14 pt DM Sans).
+    static let speech = Font.custom(FernletFontName.dmSans, size: 14, relativeTo: .subheadline)
+    /// A banner's title (16 pt DM Sans, bold) and its line under it (13.5 pt).
+    static let bannerTitle = Font.custom(FernletFontName.dmSansMedium, size: 16, relativeTo: .headline).weight(.bold)
+    static let bannerDetail = Font.custom(FernletFontName.dmSans, size: 13.5, relativeTo: .subheadline)
+
     /// The largest the status plate's letters grow: the plate sits on the map, so its text follows the
     /// approved design's fixed steps rather than growing without bound.
     static let plateTextCap = DynamicTypeSize.xLarge

@@ -910,7 +910,10 @@ struct ContentView: View {
         TabView(selection: $selectedTab) {
             // World build (plan step 1b): Home is the live map; the four other tabs are full-screen
             // panels in the approved frame. Same pages, same tab gates, same @State lifetimes.
-            WorldMapHome(store: store, isFrontmost: isWorldMapFrontmost) { openWorldPanel(.today) }
+            WorldMapHome(store: store, isFrontmost: isWorldMapFrontmost,
+                         bodySignal: HomeView.companionBodySignal(enabled: store.settings.stressAwarenessEnabled,
+                                                                  assessment: stressService.assessment),
+                         onOpen: openWorldPanel)
                 .tabPage(.home)
             WorldPanelFrame(panel: .food, onClose: closeWorldPanel) {
                 FoodView(store: store, onMealsLogged: mealLogReporter, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .food))
@@ -962,9 +965,10 @@ struct ContentView: View {
         // bar this style would otherwise draw beneath the floating one.
     }
 
-    /// Whether the World map is what the person sees: Home, no panel over it, no root sheet.
+    /// Whether the World map is what the person sees: launch done, Home, no panel over it, no root sheet.
+    /// The companion's first line and the location updates wait for the launch screen to lift.
     private var isWorldMapFrontmost: Bool {
-        selectedTab == .home && worldOverlay == nil && !rootSheetIsCoveringTabs
+        launcher.isDone && selectedTab == .home && worldOverlay == nil && !rootSheetIsCoveringTabs
     }
 
     /// The item bar, over the map only (every panel covers it), behind the keyboard, 26 pt off the
@@ -1907,13 +1911,20 @@ struct ContentView: View {
     private var sillyStampBannerOverlay: some View {
         if let kind = shownStampBanner {
             SillyStampBanner(kind: kind) { openStampBook(from: kind) }
-                .frame(maxWidth: 560)
+                .frame(maxWidth: 352)
                 .padding(.horizontal, 16)
-                .padding(.top, 8)
+                .padding(.top, stampBannerTop)
                 .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                 .id(kind)
                 .task(id: kind) { await presentStampBanner(kind) }
         }
+    }
+
+    /// How far below the top the stamp banner drops: under the status plate over the map (design
+    /// `b1-stamp-banner`), under the wooden title plate in a panel.
+    private var stampBannerTop: CGFloat {
+        guard isWorldMapFrontmost else { return 72 }
+        return dynamicTypeSize.isAccessibilitySize ? 150 : 112
     }
 
     /// Speaks the stamp banner for VoiceOver, holds it for its window, then lets the next one show.
