@@ -67,7 +67,7 @@ nonisolated enum FernletWidgetLinkRouter {
 
     /// Where a widget link lands, or nil when the URL is not one.
     static func target(of url: URL) -> PendingIntentSheet.Target? {
-        guard url.scheme == "fernlet", url.host == host else { return nil }
+        guard url.scheme == "fernlet-world", url.host == host else { return nil }
         switch url.path {
         case "/home": return .home
         case "/water": return .water

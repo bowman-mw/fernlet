@@ -51,7 +51,7 @@ protocol AppGroupRunStatePersistable: Codable {
 struct AppGroupRunStateStore<State: AppGroupRunStatePersistable> {
     /// Documented duplicate of `fernletAppGroupIdentifier` — see file header.
     /// (Computed, not stored: generic types cannot carry static stored properties.)
-    private static var appGroupIdentifier: String { "group.MBO.Fernlet" }
+    private static var appGroupIdentifier: String { "group.MBO.Fernlet.World" }
 
     /// Where every run-state persistence failure is named (R7: no silent `try?`).
     /// (Computed over the file-scope constant: generic types cannot carry static stored properties.)

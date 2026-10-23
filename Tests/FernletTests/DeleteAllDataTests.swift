@@ -61,7 +61,7 @@ struct DeleteAllDataTests {
     /// The survival twin of `guidedRunInFlightDoesNotSurviveTheWipe`: the wipe must reach THIS
     /// store's app-group state and no one else's.
     ///
-    /// All four co-tenants of `<group.MBO.Fernlet>/FernletWidgets/` were on one process-wide path
+    /// All four co-tenants of `<group.MBO.Fernlet.World>/FernletWidgets/` were on one process-wide path
     /// while `resetAll` cleared the two run files and `deleteAllData` also cleared the widget queue —
     /// and unlike the earlier rounds this one was demonstrably LIVE: `GuidedWorkoutRunStoreTests`
     /// reads the guided file through a real store, so a wipe here landed in the middle of it.

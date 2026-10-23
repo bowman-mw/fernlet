@@ -61,7 +61,7 @@ public struct SharedRecipeImportRecord: Codable, Identifiable, Equatable {
 /// The App-Group file queue that carries recipe URLs from the share extension into the app.
 ///
 /// Persistence is a single JSON array of ``SharedRecipeImportRecord`` at
-/// `SharedRecipeImports/PendingRecipeURLs.json` inside the `group.MBO.Fernlet` container (falling
+/// `SharedRecipeImports/PendingRecipeURLs.json` inside the `group.MBO.Fernlet.World` container (falling
 /// back to Application Support, then tmp, when the group container is unavailable — e.g. unit
 /// tests). Every read and write goes through `NSFileCoordinator`, because two processes touch the
 /// file: `ShareViewController` appends via its own writer while the app may be draining. Writes are
@@ -89,7 +89,7 @@ public struct SharedRecipeImportRecord: Codable, Identifiable, Equatable {
 /// difference is the corrupt-file policy: this side aborts a mutation to preserve records it cannot
 /// parse; the extension replaces the file rather than failing the user's share.
 public struct SharedRecipeImportQueue {
-    static let appGroupIdentifier = "group.MBO.Fernlet"
+    static let appGroupIdentifier = "group.MBO.Fernlet.World"
 
     /// R3: the cap on how many queued imports the app will ever carry, applied where the external
     /// input enters (``records()`` and the read half of `modifyRecords`). The file is written by a

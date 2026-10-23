@@ -1,7 +1,7 @@
 // WidgetBridge.swift
 // Fernlet
 //
-// App side of the FernletWidgets bridge (two JSON files in the group.MBO.Fernlet container):
+// App side of the FernletWidgets bridge (two JSON files in the group.MBO.Fernlet.World container):
 //
 //   OUT  FernletWidgets/WidgetSnapshot.json        — benign snapshot the widget renders, written by
 //        `WidgetSnapshotMirror` from the SnapshotSaveCoordinator after-save hook + at store-ready,
@@ -188,7 +188,7 @@ struct PendingWidgetAction: Codable, Identifiable, Equatable {
 enum WidgetBridgeFiles {
     /// Documented duplicate of SharedRecipeImportQueue.appGroupIdentifier (and the share-extension
     /// writer's copy) — keep all literals identical.
-    static let appGroupIdentifier = "group.MBO.Fernlet"
+    static let appGroupIdentifier = "group.MBO.Fernlet.World"
 
     static func containerDirectory(fileManager: FileManager = .default) -> URL {
         let base = fileManager.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier)

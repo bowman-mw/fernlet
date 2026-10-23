@@ -146,7 +146,7 @@ which is the composer's. It lives here rather than in the extension's view contr
 
 ### The App Group documents
 
-Three coordinated files in the `group.MBO.Fernlet` container, all written atomically with
+Three coordinated files in the `group.MBO.Fernlet.World` container, all written atomically with
 `.completeFileProtection` and read through `NSFileCoordinator`, because two processes touch them:
 
 - ``FernletMessagesCatalogFileStore`` — `FernletMessages/MessagesCatalog.json`, the bounded,
@@ -163,7 +163,7 @@ Three coordinated files in the `group.MBO.Fernlet` container, all written atomic
   it once its review is presented. Twenty records, seven days, 384 KiB each; expired records are
   purged at launch and before every enqueue.
 
-The extension hands off with ``FernletMessagesInboxLink`` — `fernlet://messages/recipe?id=<uuid>` or
+The extension hands off with ``FernletMessagesInboxLink`` — `fernlet-world://messages/recipe?id=<uuid>` or
 `…/workout?id=<uuid>` — which carries an **opaque inbox identifier and nothing else**: never a
 packet, never a title, so the deep link leaks nothing a URL log could keep.
 

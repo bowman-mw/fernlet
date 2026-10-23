@@ -20,7 +20,7 @@
 //   - JSON codecs                  mirror the app-group queue convention (iso8601 dates, sorted keys)
 //
 // Keep the values literally identical when touching either side — the shared JSON files in the
-// `group.MBO.Fernlet` container are the only contract between the two processes.
+// `group.MBO.Fernlet.World` container are the only contract between the two processes.
 
 import Foundation
 import os
@@ -31,7 +31,7 @@ private let widgetBridgeLog = Logger(subsystem: "com.fernlet", category: "widget
 
 /// The shared app-group id — documented duplicate of the app/share-extension constants (see the file
 /// header). Every cross-process file in this target lives under this container.
-let fernletAppGroupIdentifier = "group.MBO.Fernlet"
+let fernletAppGroupIdentifier = "group.MBO.Fernlet.World"
 
 /// Raw-value mirror of the app's `CompanionState`.
 ///
@@ -304,7 +304,7 @@ enum WidgetDayGate {
 /// contract, so keep both sides literally identical. When the app-group container is unavailable
 /// (e.g. tests) it degrades to the temporary directory rather than crashing.
 enum WidgetBridgeFiles {
-    /// The `FernletWidgets/` directory inside the shared `group.MBO.Fernlet` container.
+    /// The `FernletWidgets/` directory inside the shared `group.MBO.Fernlet.World` container.
     static func containerDirectory(fileManager: FileManager = .default) -> URL {
         let base = fileManager.containerURL(forSecurityApplicationGroupIdentifier: fernletAppGroupIdentifier)
             ?? URL(fileURLWithPath: NSTemporaryDirectory())

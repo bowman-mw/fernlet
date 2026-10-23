@@ -60,7 +60,7 @@ struct SharedRecipeImportRecord: Codable, Identifiable, Equatable {
 /// with the shared URL, and the main app later reads the same file through `SharedRecipeImportQueue`
 /// (in the `AppServices` module), draining it via `FernletStore.processSharedRecipeImportQueue()`
 /// on launch and each foreground. The file is a single JSON array of ``SharedRecipeImportRecord``
-/// at `SharedRecipeImports/PendingRecipeURLs.json` inside the `group.MBO.Fernlet` container.
+/// at `SharedRecipeImports/PendingRecipeURLs.json` inside the `group.MBO.Fernlet.World` container.
 ///
 /// **DELIBERATE TWIN — keep in sync with `SharedRecipeImportQueue` in
 /// `FernletKit/Sources/AppServices/SharedRecipeImportQueue.swift`.** Same file path, same container
@@ -86,7 +86,7 @@ struct SharedRecipeImportRecord: Codable, Identifiable, Equatable {
 struct SharedRecipeImportQueueWriter {
     /// The shared container identifier; must match the extension and app entitlements and the
     /// app-side `SharedRecipeImportQueue.appGroupIdentifier`.
-    static let appGroupIdentifier = "group.MBO.Fernlet"
+    static let appGroupIdentifier = "group.MBO.Fernlet.World"
 
     /// Max queued imports kept on disk; the OLDEST are dropped when a share exceeds it.
     ///

@@ -206,7 +206,7 @@ struct FernletPersistenceTests {
         )
 
         #expect(localController.activeStoreDescription?.cloudKitContainerOptions == nil)
-        #expect(cloudController.activeStoreDescription?.cloudKitContainerOptions?.containerIdentifier == "iCloud.MBO.Fernlet")
+        #expect(cloudController.activeStoreDescription?.cloudKitContainerOptions?.containerIdentifier == "iCloud.MBO.Fernlet.World")
     }
 
     // MARK: - Test 7

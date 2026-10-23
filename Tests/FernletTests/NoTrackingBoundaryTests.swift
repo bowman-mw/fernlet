@@ -442,7 +442,7 @@ struct NoTrackingBoundaryTests {
 
     /// The one iCloud container the app may use — the user's own private Apple container. A different
     /// identifier would mean sync had been repointed at somebody else's CloudKit container.
-    private static let allowedICloudContainers: Set<String> = ["iCloud.MBO.Fernlet"]
+    private static let allowedICloudContainers: Set<String> = ["iCloud.MBO.Fernlet.World"]
 
     // MARK: - Enforcement
 

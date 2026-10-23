@@ -263,7 +263,7 @@ extension CloudKitRecordDatabase {
 public final class CloudKitDataService {
     /// The app's CloudKit container identifier — the same container ``PersistenceController``
     /// mirrors into and ``HeartDropCloudTransport`` defaults to.
-    nonisolated public static let containerIdentifier = "iCloud.MBO.Fernlet"
+    nonisolated public static let containerIdentifier = "iCloud.MBO.Fernlet.World"
     /// The default record zone, always scanned alongside every other zone the database reports
     /// (the NSPersistentCloudKitContainer mirror writes into its own zone).
     nonisolated public static let appZoneID = CKRecordZone.default().zoneID

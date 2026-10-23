@@ -83,14 +83,14 @@ Fernlet** appeared 1.2–1.4 s after the tap (UI-test polling) with a 1-recipe, 
 100-recipe catalog near the 1 MiB cap, before and after; the extension's own launch dominates — so it
 is hardening, not a proven cause: it takes the coordinated catalog read, the one step on that path
 that can wait on another process, off it. **Review in Fernlet** enqueues the validated packet into the App Group review inbox and opens
-`fernlet://messages/recipe?id=…` (or `/workout`) — a link that carries an opaque inbox identifier
+`fernlet-world://messages/recipe?id=…` (or `/workout`) — a link that carries an opaque inbox identifier
 and nothing else. Nothing is imported here: the containing app presents the review, applies the
 replay ledger and the calendar and safety checks, and saves only when the person confirms.
 
 A card minted by this extension belongs to Fernlet, so a recipient without Fernlet gets Messages'
 standard install prompt for Fernlet itself — the property that made an `MSMessage` card the wrong
 transport for the separate Coach app, and the right one here. Messages matches the card to
-`MSMessageExtensionBalloonPlugin:3RTUPF8FFH:MBO.Fernlet.MessagesExtension`, so the prompt also appears
+`MSMessageExtensionBalloonPlugin:3RTUPF8FFH:MBO.Fernlet.World.MessagesExtension`, so the prompt also appears
 on any device whose Fernlet has no such extension — a build older than 24 (the first TestFlight build
 to carry it) — and on an iPad or a Mac, since the extension is iPhone-only. That prompt is empty while
 Fernlet has no public App Store page, and a `data:` URL gets no browser fallback (Apple loads only an

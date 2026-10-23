@@ -71,7 +71,7 @@ public nonisolated struct FernletMessagesInboxTarget: Equatable, Sendable {
 /// The app-owned URI shapes the Messages extension can ask its containing application to open.
 /// Every link carries only an opaque inbox identifier, never a packet or user-visible title.
 public nonisolated enum FernletMessagesInboxLink {
-    public static let scheme = "fernlet"
+    public static let scheme = "fernlet-world"
     public static let host = "messages"
     public static let recipePath = "/recipe"
     public static let workoutPlanPath = "/workout"

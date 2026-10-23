@@ -541,7 +541,7 @@ final class FernletStore {
     /// quarantined — by any other live store's wipe. Production always resolves to the unchanged
     /// `com.fernlet.heartdrop`.
     @ObservationIgnored nonisolated let heartDropKeychainService: String
-    /// THIS store's app-group root — the shared `<group.MBO.Fernlet>/FernletWidgets/` directory
+    /// THIS store's app-group root — the shared `<group.MBO.Fernlet.World>/FernletWidgets/` directory
     /// holding the guided-run and cooking-run state files, the inbound widget-action queue and the
     /// widget snapshot. NIL means the real container, which is what production always passes.
     ///
@@ -552,7 +552,7 @@ final class FernletStore {
     /// concurrently-live store — and `GuidedWorkoutRunStoreTests` reads that very file.
     @ObservationIgnored nonisolated let appGroupDirectory: URL?
     /// Optional direct Messages-catalog directory for tests. Production resolves the distinct
-    /// `<group.MBO.Fernlet>/FernletMessages/` directory only when the catalog is activated.
+    /// `<group.MBO.Fernlet.World>/FernletMessages/` directory only when the catalog is activated.
     @ObservationIgnored nonisolated let messagesCatalogDirectory: URL?
     /// Defaults suite backing THIS store's device-local AI-call counter. `.standard` in production.
     ///
@@ -768,7 +768,7 @@ final class FernletStore {
     ///
     /// THIS store's queue file, pinned at init from `sharedRecipeImportQueueFileURL:`. Nil — what
     /// production always passes — means the real
-    /// `<group.MBO.Fernlet>/SharedRecipeImports/PendingRecipeURLs.json`. That is a DIFFERENT app-group
+    /// `<group.MBO.Fernlet.World>/SharedRecipeImports/PendingRecipeURLs.json`. That is a DIFFERENT app-group
     /// subdirectory from `appGroupDirectory`'s `FernletWidgets/`, and the seam is a file rather than a
     /// directory because the queue owns exactly one.
     ///

@@ -115,7 +115,7 @@ func uniqueNarrativeBufferScope() -> PendingNarrativeStorageScope {
 
 /// A fresh, never-shared app-group root for ONE test store — the guided-run and cooking-run state
 /// files, the inbound widget-action queue, and the widget snapshot, which are all co-tenants of the
-/// real `<group.MBO.Fernlet>/FernletWidgets/` directory.
+/// real `<group.MBO.Fernlet.World>/FernletWidgets/` directory.
 ///
 /// `resetAll` clears both run files and `deleteAllData` clears the queue, so on the production
 /// container any wiping test destroyed them for every concurrently-live store. That one was LIVE,

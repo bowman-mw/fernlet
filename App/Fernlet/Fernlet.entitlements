@@ -15,7 +15,7 @@
 	<true/>
 	<key>com.apple.developer.icloud-container-identifiers</key>
 	<array>
-		<string>iCloud.MBO.Fernlet</string>
+		<string>iCloud.MBO.Fernlet.World</string>
 	</array>
 	<!-- CloudDocuments and the ubiquity container below stay although the app opens no document
 	     container: the iCloud-availability check reads FileManager.ubiquityIdentityToken
@@ -29,13 +29,13 @@
 	</array>
 	<key>com.apple.developer.ubiquity-container-identifiers</key>
 	<array>
-		<string>iCloud.MBO.Fernlet</string>
+		<string>iCloud.MBO.Fernlet.World</string>
 	</array>
 	<key>com.apple.developer.weatherkit</key>
 	<true/>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.MBO.Fernlet</string>
+		<string>group.MBO.Fernlet.World</string>
 	</array>
 	<key>com.apple.security.hardened-process</key>
 	<true/>
