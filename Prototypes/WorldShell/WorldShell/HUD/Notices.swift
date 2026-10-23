@@ -4,21 +4,22 @@ import SwiftUI
 struct ToastView: View {
     let toast: ShellToast
     let onAction: (ToastAction) -> Void
+    @Environment(\.shellMetrics) private var metrics
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: metrics.pt(10)) {
             Text(toast.message)
-                .font(.footnote)
+                .font(.system(size: metrics.pt(12.5)))
                 .foregroundStyle(FernColors.parchment)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if let action = toast.action {
                 Button(action.label) { onAction(action) }
-                    .font(.footnote.weight(.bold))
+                    .font(.system(size: metrics.pt(12.5), weight: .bold))
                     .foregroundStyle(FernColors.toastAction)
             }
         }
-        .padding(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
-        .background(FernColors.toast, in: RoundedRectangle(cornerRadius: 14))
+        .padding(EdgeInsets(top: metrics.pt(10), leading: metrics.pt(12), bottom: metrics.pt(10), trailing: metrics.pt(12)))
+        .background(FernColors.toast, in: RoundedRectangle(cornerRadius: metrics.pt(14)))
         .accessibilityElement(children: .combine)
     }
 }
@@ -26,22 +27,23 @@ struct ToastView: View {
 /// A pixel banner under the status bar: a new stamp, or a change of ride.
 struct BannerView: View {
     let banner: ShellBanner
+    @Environment(\.shellMetrics) private var metrics
 
     var body: some View {
-        HStack(spacing: 8) {
-            PixelSpriteView(sprite: sprite, scale: banner.badge == .cookie || banner.badge == .star ? 3 : 2)
-                .frame(width: 36, height: 36)
+        HStack(spacing: metrics.pt(8)) {
+            PixelSpriteView(sprite: sprite, scale: metrics.pixel + (banner.badge == .cookie || banner.badge == .star ? 1 : 0))
+                .frame(width: metrics.pt(36), height: metrics.pt(36))
                 .background(FernColors.carbs, in: Circle())
-                .overlay(Circle().strokeBorder(FernColors.ink, lineWidth: 2))
+                .overlay(Circle().strokeBorder(FernColors.ink, lineWidth: metrics.pt(2)))
             VStack(alignment: .leading, spacing: 1) {
-                Text(banner.title).font(.system(size: 13, weight: .bold, design: .rounded)).foregroundStyle(FernColors.ink)
-                Text(banner.subtitle).font(.caption2).foregroundStyle(FernColors.rgb(0x7A5A3A))
+                Text(banner.title).font(.system(size: metrics.pt(13), weight: .bold, design: .rounded)).foregroundStyle(FernColors.ink)
+                Text(banner.subtitle).font(.system(size: metrics.pt(11))).foregroundStyle(FernColors.rgb(0x7A5A3A))
             }
             Spacer(minLength: 0)
         }
-        .padding(EdgeInsets(top: 6, leading: 6, bottom: 6, trailing: 10))
-        .frame(width: 280)
-        .gamePlate(cornerRadius: 10)
+        .padding(EdgeInsets(top: metrics.pt(6), leading: metrics.pt(6), bottom: metrics.pt(6), trailing: metrics.pt(10)))
+        .frame(width: metrics.pt(280))
+        .gamePlate(cornerRadius: metrics.pt(10), border: metrics.pt(3))
         .accessibilityElement(children: .combine)
     }
 
@@ -61,45 +63,51 @@ struct WalkBar: View {
     let kilometres: String
     let hike: Bool
     let onEnd: () -> Void
+    @Environment(\.shellMetrics) private var metrics
 
     var body: some View {
-        HStack(spacing: 8) {
-            Text("\(kilometres) km").font(.system(size: 14, weight: .bold, design: .monospaced)).foregroundStyle(FernColors.ink)
+        HStack(spacing: metrics.pt(8)) {
+            Text("\(kilometres) km").font(.system(size: metrics.pt(14), weight: .bold, design: .monospaced)).foregroundStyle(FernColors.ink)
             VStack(alignment: .leading, spacing: 0) {
-                Text(hike ? "Oak Park loop" : "Walking together").font(.caption.weight(.semibold))
-                Text("Precise location on for this walk").font(.caption2.weight(.semibold)).foregroundStyle(FernColors.walkBlue)
+                Text(hike ? "Oak Park loop" : "Walking together").font(.system(size: metrics.pt(12), weight: .semibold))
+                Text("Precise location on for this walk").font(.system(size: metrics.pt(10.5), weight: .semibold)).foregroundStyle(FernColors.walkBlue)
             }
             .foregroundStyle(FernColors.speechInk)
             Spacer(minLength: 0)
             Button("End", action: onEnd)
-                .font(.footnote.weight(.bold))
+                .font(.system(size: metrics.pt(12), weight: .bold))
                 .foregroundStyle(FernColors.woodLabel)
-                .padding(EdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10))
-                .background(FernColors.rgb(0xB05A3E), in: RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(FernColors.ink, lineWidth: 2))
+                .padding(EdgeInsets(top: metrics.pt(4), leading: metrics.pt(10), bottom: metrics.pt(4), trailing: metrics.pt(10)))
+                .background(FernColors.rgb(0xB05A3E), in: RoundedRectangle(cornerRadius: metrics.pt(6)))
+                .overlay(RoundedRectangle(cornerRadius: metrics.pt(6)).strokeBorder(FernColors.ink, lineWidth: metrics.pt(2)))
         }
-        .padding(EdgeInsets(top: 5, leading: 10, bottom: 5, trailing: 6))
-        .gamePlate(cornerRadius: 8)
+        .padding(EdgeInsets(top: metrics.pt(5), leading: metrics.pt(10), bottom: metrics.pt(5), trailing: metrics.pt(6)))
+        .gamePlate(cornerRadius: metrics.pt(8), border: metrics.pt(2))
     }
 }
 
 /// The companion's speech bubble: crisp text in a pixel-edged bubble with a tail toward it.
 struct SpeechBubbleView: View {
     let text: String
+    @Environment(\.shellMetrics) private var metrics
 
     var body: some View {
         VStack(spacing: 0) {
             Text(text)
-                .font(.system(size: 12))
+                .font(.system(size: metrics.pt(11.5)))
                 .foregroundStyle(FernColors.speechInk)
                 .multilineTextAlignment(.leading)
-                .padding(EdgeInsets(top: 5, leading: 8, bottom: 5, trailing: 8))
-                .frame(maxWidth: 180)
+                .padding(EdgeInsets(top: metrics.pt(5), leading: metrics.pt(8), bottom: metrics.pt(5), trailing: metrics.pt(8)))
+                .frame(maxWidth: metrics.pt(170))
                 .fixedSize(horizontal: false, vertical: true)
-                .background(FernColors.rgb(0xFFFBEF), in: RoundedRectangle(cornerRadius: 3))
-                .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(FernColors.ink, lineWidth: 2))
-                .shadow(color: FernColors.ink.opacity(0.35), radius: 0, x: 0, y: 2)
-            Triangle().fill(FernColors.ink).frame(width: 10, height: 7)
+                .background {
+                    RoundedRectangle(cornerRadius: metrics.pt(3)).fill(FernColors.rgb(0xFFFBEF))
+                        .background {
+                            RoundedRectangle(cornerRadius: metrics.pt(3)).fill(FernColors.ink.opacity(0.35)).offset(y: metrics.pt(2))
+                        }
+                }
+                .overlay(RoundedRectangle(cornerRadius: metrics.pt(3)).strokeBorder(FernColors.ink, lineWidth: metrics.pt(2)))
+            Triangle().fill(FernColors.ink).frame(width: metrics.pt(10), height: metrics.pt(7))
         }
         .accessibilityLabel(text)
     }

@@ -56,6 +56,8 @@ final class WorldShellModel {
     private(set) var decoyTraces: [[GeoPoint]] = []
     private(set) var rideTraces: [(kind: RouteReplay.Kind, points: [GeoPoint])] = []
     private(set) var lifted: Set<HexCell> = []
+    /// Whether the launch zoom has been corrected from the first real viewport.
+    @ObservationIgnored var zoomCalibrated = false
     @ObservationIgnored private var ticker: Task<Void, Never>?
     @ObservationIgnored private var noticeTasks: [String: Task<Void, Never>] = [:]
 
@@ -63,7 +65,7 @@ final class WorldShellModel {
         let start = options.spot ?? .home
         spot = start
         companionPosition = start.location
-        camera = WorldCamera(center: start.location, distance: 3_000)
+        camera = WorldCamera(center: start.location, distance: 1_700)
         careState = options.state ?? .okay
         level = options.level ?? .month
         phaseOverride = options.phase
@@ -118,7 +120,9 @@ final class WorldShellModel {
     // MARK: Fog
 
     /// Rebuilds the lifted cells from the fixture's history, this session's walks and rides, and
-    /// where you stand. A decoy session lifts only where you stand and its own walks.
+    /// where you stand. A decoy session lifts only where you stand and its own walks. The radii are
+    /// the mockup's (home 125, where you stand 70, trails 32, walks 40, drives 16 and rides 26 of
+    /// its units, at 1.4 m each).
     func recomputeFog() {
         let grid = WorldFixtures.grid
         var cells = Set<HexCell>()
@@ -127,15 +131,15 @@ final class WorldShellModel {
             for sample in Polyline(points).samples(every: grid.radius * 0.6) { lift(sample, metres) }
         }
         if decoy {
-            for trace in decoyTraces { lift(along: trace, 45) }
+            for trace in decoyTraces { lift(along: trace, 56) }
         } else {
-            if level != .dayOne { lift(FixtureSpot.home.location, 140) }
-            for trail in level.savedTrails { lift(along: trail, 50) }
+            if level != .dayOne { lift(FixtureSpot.home.location, 175) }
+            for trail in level.savedTrails { lift(along: trail, 45) }
             for known in FixtureSpot.allCases where level.visits(to: known) > 0 { lift(known.location, 70) }
-            for trace in sessionTraces { lift(along: trace, 45) }
-            for ride in rideTraces { lift(along: ride.points, ride.kind == .car ? 0 : 30) }
+            for trace in sessionTraces { lift(along: trace, 56) }
+            for ride in rideTraces { lift(along: ride.points, ride.kind == .car ? 22 : 36) }
         }
-        lift(companionPosition, 70)
+        lift(companionPosition, 98)
         lifted = cells
     }
 

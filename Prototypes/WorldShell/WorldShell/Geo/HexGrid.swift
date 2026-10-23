@@ -8,7 +8,7 @@ nonisolated struct HexCell: Hashable, Sendable {
 
 /// The fog's coarse hexagon grid, laid flat on the ground around a fixed origin.
 ///
-/// Cells are about 60 m across, so the fog says "you've been round here", never which door you
+/// Cells are about 30 m across, so the fog says "you've been round here", never which door you
 /// went in (design page: "Home shows only coarse fog"). Pure geometry over ``GeoPoint``s: no map
 /// type, so phase 2 keeps every lifted cell exactly where it was.
 nonisolated struct HexGrid: Sendable {

@@ -29,9 +29,12 @@ nonisolated struct PixelSprite: Sendable {
 /// same-coloured pixels in a row. Decorative by default; callers name what it means.
 struct PixelSpriteView: View {
     let sprite: PixelSprite
-    var scale: CGFloat = 2
+    /// Points per sprite pixel; nil uses the shell's (``ShellMetrics/pixel``).
+    var scale: CGFloat?
+    @Environment(\.shellMetrics) private var metrics
 
     var body: some View {
+        let scale = self.scale ?? metrics.pixel
         Canvas { context, _ in
             for (y, row) in sprite.rows.enumerated() {
                 let letters = Array(row)

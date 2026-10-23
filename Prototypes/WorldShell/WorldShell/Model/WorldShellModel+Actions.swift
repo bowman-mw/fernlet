@@ -82,10 +82,28 @@ extension WorldShellModel {
         camera.revision += 1
     }
 
+    /// Metres across the screen at launch: the mockup shows about 420–450 m.
+    static let targetWidthMetres = 435.0
+
     /// Records the base map's visible area.
     func report(_ newViewport: MapViewport) {
         guard newViewport != viewport else { return }
         viewport = newViewport
+        calibrateZoom(to: newViewport)
+    }
+
+    /// Once, at launch: sets the camera height so the screen spans ``targetWidthMetres``. How much
+    /// a camera height shows depends on the base map and the screen, so the first real viewport
+    /// (centred where the camera asked, not MapKit's opening view) is used to correct it.
+    private func calibrateZoom(to shown: MapViewport) {
+        guard !zoomCalibrated else { return }
+        let centre = shown.center
+        guard centre.distance(to: camera.center) < 300 else { return }
+        let metresAcross = shown.width * WebMercator.earthCircumference * cos(centre.latitude * .pi / 180)
+        guard metresAcross > 50, metresAcross < 50_000 else { return }
+        zoomCalibrated = true
+        camera.distance = min(7_000, max(300, camera.distance * Self.targetWidthMetres / metresAcross))
+        camera.revision += 1
     }
 
     // MARK: Panels

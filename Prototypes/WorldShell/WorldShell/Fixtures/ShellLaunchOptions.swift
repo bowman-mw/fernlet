@@ -8,7 +8,9 @@ import Foundation
 /// `-shellPhase` (dawn, day, dusk, night), `-shellState` (thriving … sick), `-shellLevel`
 /// (dayOne, month, year), `-shellMap` (appleMuted, plain), `-shellPanel` (today, food, move, log,
 /// friends, privacy, settings, wall, customize), `-shellQuickStart YES`, `-shellUnlockPrivate YES`,
-/// `-shellWalk YES` (start the walk replay at launch), `-shellOutfit` (glasses …).
+/// `-shellWalk YES` (start the walk replay at launch), `-shellOutfit` (glasses …), and
+/// `-shellRideSeconds` (with `-shellRide bike`: get off the bike after that many seconds, so the
+/// self-logged ride can be screenshotted).
 nonisolated struct ShellLaunchOptions: Sendable {
     var spot: FixtureSpot?
     var ride: CompanionRide?
@@ -22,6 +24,7 @@ nonisolated struct ShellLaunchOptions: Sendable {
     var unlockPrivate = false
     var walk = false
     var outfit: Outfit?
+    var rideSeconds: Double?
 
     /// Reads the options from `defaults` (the launch arguments, by default).
     init(defaults: UserDefaults = .standard) {
@@ -38,6 +41,7 @@ nonisolated struct ShellLaunchOptions: Sendable {
         unlockPrivate = defaults.bool(forKey: "shellUnlockPrivate")
         walk = defaults.bool(forKey: "shellWalk")
         outfit = value("shellOutfit").flatMap(Outfit.init(rawValue:))
+        rideSeconds = value("shellRideSeconds").flatMap(Double.init)
     }
 }
 
@@ -46,6 +50,9 @@ extension WorldShellModel {
     func apply(_ options: ShellLaunchOptions) {
         if let outfit = options.outfit { self.outfit = outfit }
         if let ride = options.ride, ride != .onFoot { changeRide(to: ride) }
+        if let seconds = options.rideSeconds, options.ride != nil {
+            schedule("launchRide", after: max(1, seconds)) { [weak self] in self?.changeRide(to: .onFoot) }
+        }
         if options.walk { startWalk(hike: spot == .trail) }
         panel = options.panel
         quickStartOpen = options.quickStart

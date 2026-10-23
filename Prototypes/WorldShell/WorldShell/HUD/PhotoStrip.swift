@@ -5,21 +5,22 @@ import SwiftUI
 struct PhotoStrip: View {
     let photos: [FixturePhoto]
     let action: () -> Void
+    @Environment(\.shellMetrics) private var metrics
 
-    /// Each print's left edge and tilt, from the design page's strip.
+    /// Each print's left edge and tilt, from the design page's strip (300 pt mockup).
     private let layout: [(x: CGFloat, angle: Double)] = [(0, -6), (36, 4), (74, -3), (112, 5)]
 
     var body: some View {
         Button(action: action) {
             ZStack(alignment: .topLeading) {
                 ForEach(Array(photos.prefix(4).enumerated()), id: \.element.id) { index, photo in
-                    PhotoPrint(photo: photo, width: 50)
+                    PhotoPrint(photo: photo, width: metrics.pt(50))
                         .rotationEffect(.degrees(layout[index].angle))
-                        .offset(x: layout[index].x)
+                        .offset(x: metrics.pt(layout[index].x))
                         .zIndex(Double(index))
                 }
             }
-            .frame(width: 170, height: 66, alignment: .topLeading)
+            .frame(width: metrics.pt(170), height: metrics.pt(66), alignment: .topLeading)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Photo wall")
@@ -53,8 +54,10 @@ struct PhotoPrint: View {
         }
         .padding(EdgeInsets(top: width * 0.06, leading: width * 0.06, bottom: caption ? 6 : width * 0.18, trailing: width * 0.06))
         .frame(width: width)
-        .background(FernColors.rgb(0xFFFDF8), in: RoundedRectangle(cornerRadius: 2))
-        .shadow(color: FernColors.ink.opacity(0.3), radius: 2, x: 0, y: 2)
+        .background {
+            RoundedRectangle(cornerRadius: 2).fill(FernColors.rgb(0xFFFDF8))
+                .shadow(color: FernColors.ink.opacity(0.3), radius: 2, x: 0, y: 2)
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Photo: \(photo.id)")
     }

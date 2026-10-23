@@ -113,8 +113,9 @@ nonisolated struct FixturePhoto: Identifiable, Sendable {
 
 /// The shell's fixed fixture data that doesn't depend on a control.
 nonisolated enum WorldFixtures {
-    /// The fog grid's origin, near the park's east gate.
-    static let grid = HexGrid(origin: GeoPoint(45.5200, -122.6230), radius: 35)
+    /// The fog grid, its origin near the park's east gate. A 17.5 m radius is the mockup's cell
+    /// (12.5 of its units at 1.4 m each), so at the mockup's zoom the cells keep its size on screen.
+    static let grid = HexGrid(origin: GeoPoint(45.5200, -122.6230), radius: 17.5)
 
     /// Friend photos for the wall, picked "fresh each launch" in the app; fixed here.
     static let friendPhotos: [FixturePhoto] = [

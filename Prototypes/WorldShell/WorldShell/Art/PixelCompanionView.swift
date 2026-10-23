@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// The companion on the map: the pixel sprite at 2× (40 × 44 pt), breathing at its state's tempo.
+/// The companion on the map: the pixel sprite at the shell's pixel size (3 pt per pixel, 60 × 66 pt,
+/// on iPhone 17), breathing at its state's tempo.
 ///
 /// Breathing swaps between two frames every `breathTempo` seconds, so the pixels stay crisp
 /// instead of scaling (Reduce Motion holds the first frame, as `CompanionView` pauses its clock).
@@ -14,16 +15,17 @@ struct PixelCompanionView: View {
     var settled = false
     var facingLeft = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.shellMetrics) private var metrics
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: state.breathTempo)) { timeline in
             let beat = Int(timeline.date.timeIntervalSinceReferenceDate / state.breathTempo)
             let pose = CompanionPose(breathIn: !reduceMotion && !walking && beat % 2 == 1,
                                      walking: walking, step: reduceMotion ? 0 : step, settled: settled)
-            PixelGridView(grid: PixelCompanionPainter.paint(state: state, ride: ride, outfit: outfit, pose: pose), scale: 2)
+            PixelGridView(grid: PixelCompanionPainter.paint(state: state, ride: ride, outfit: outfit, pose: pose), scale: metrics.pixel)
                 .scaleEffect(x: facingLeft ? -1 : 1, y: 1)
         }
-        .frame(width: 40, height: 44)
+        .frame(width: CGFloat(PixelGrid.width) * metrics.pixel, height: CGFloat(PixelGrid.height) * metrics.pixel)
         .accessibilityHidden(true)
     }
 }

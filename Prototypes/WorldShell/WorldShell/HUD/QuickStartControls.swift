@@ -6,19 +6,24 @@ struct QuickStartButton: View {
     let spot: FixtureSpot?
     let expanded: Bool
     let action: () -> Void
+    @Environment(\.shellMetrics) private var metrics
 
     var body: some View {
+        let radius = metrics.pt(8), edge = metrics.pt(2)
         Button(action: action) {
             PixelSpriteView(sprite: QuickStart.buttonIcon(at: spot))
-                .frame(width: 42, height: 42)
+                .frame(width: metrics.pt(42), height: metrics.pt(42))
                 .background {
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: radius)
                         .fill(expanded ? FernColors.rgb(0x4FA6B8) : FernColors.teal)
-                        .overlay(alignment: .bottom) { FernColors.tealShade.frame(height: 3).padding(.horizontal, 3).padding(.bottom, 2) }
-                        .overlay(alignment: .top) { FernColors.tealLight.frame(height: 2).padding(.horizontal, 4).padding(.top, 2) }
+                        .overlay(alignment: .bottom) { FernColors.tealShade.frame(height: metrics.pt(3)).padding(.horizontal, edge + 1).padding(.bottom, edge) }
+                        .overlay(alignment: .top) { FernColors.tealLight.frame(height: edge).padding(.horizontal, edge * 2).padding(.top, edge) }
+                        .background {
+                            RoundedRectangle(cornerRadius: radius)
+                                .fill(Color(.sRGB, red: 0.08, green: 0.16, blue: 0.2, opacity: 0.4)).offset(y: edge)
+                        }
                 }
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(FernColors.tealDark, lineWidth: 2))
-                .shadow(color: Color(.sRGB, red: 0.08, green: 0.16, blue: 0.2, opacity: 0.4), radius: 0, x: 0, y: 2)
+                .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(FernColors.tealDark, lineWidth: edge))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(spot.map { "Quick start at \($0.label)" } ?? "Walk together")
@@ -26,16 +31,33 @@ struct QuickStartButton: View {
     }
 }
 
+/// The plate beside the blue button naming the known place you're standing at.
+struct HerePlate: View {
+    let spot: FixtureSpot
+    @Environment(\.shellMetrics) private var metrics
+
+    var body: some View {
+        Text("At \(spot.label)")
+            .font(.system(size: metrics.pt(11.5), weight: .bold, design: .rounded))
+            .foregroundStyle(FernColors.ink)
+            .padding(EdgeInsets(top: metrics.pt(2), leading: metrics.pt(7), bottom: metrics.pt(2), trailing: metrics.pt(7)))
+            .background(FernColors.gameCream.opacity(0.95), in: RoundedRectangle(cornerRadius: metrics.pt(6)))
+            .overlay(RoundedRectangle(cornerRadius: metrics.pt(6)).strokeBorder(FernColors.ink, lineWidth: metrics.pt(2)))
+            .accessibilityHidden(true)
+    }
+}
+
 /// The small "back to Fernlet" button, shown once you've panned the map away.
 struct RecentreButton: View {
     let action: () -> Void
+    @Environment(\.shellMetrics) private var metrics
 
     var body: some View {
         Button(action: action) {
             PixelSpriteView(sprite: PixelSprites.crosshair)
-                .frame(width: 34, height: 34)
-                .background(FernColors.slate, in: RoundedRectangle(cornerRadius: 7))
-                .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(FernColors.ink, lineWidth: 2))
+                .frame(width: metrics.pt(34), height: metrics.pt(34))
+                .background(FernColors.slate, in: RoundedRectangle(cornerRadius: metrics.pt(7)))
+                .overlay(RoundedRectangle(cornerRadius: metrics.pt(7)).strokeBorder(FernColors.ink, lineWidth: metrics.pt(2)))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Back to Fernlet")
@@ -50,47 +72,55 @@ struct QuickStartCard: View {
     let gentle: Bool
     let onPick: (QuickStartOption) -> Void
     let onClose: () -> Void
+    @Environment(\.shellMetrics) private var metrics
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: metrics.pt(6)) {
             HStack {
                 Text(spot?.label ?? "Go for a walk")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .font(.system(size: metrics.pt(14), weight: .bold, design: .rounded))
                     .foregroundStyle(FernColors.ink)
                 Spacer()
                 GameCloseButton(action: onClose)
             }
             if gentle {
-                Text("Resting counts today. These are here if you want them.").font(.caption).foregroundStyle(FernColors.rgb(0x7A5A3A))
+                note("Resting counts today. These are here if you want them.")
             }
-            Text(QuickStart.seenLine(for: spot, level: level)).font(.caption).foregroundStyle(FernColors.rgb(0x7A5A3A))
+            note(QuickStart.seenLine(for: spot, level: level))
             ForEach(Array(QuickStart.options(at: spot, level: level).enumerated()), id: \.element.id) { index, option in
                 Button { onPick(option) } label: { row(option, primary: index == 0) }
                     .buttonStyle(.plain)
             }
         }
-        .padding(8)
-        .frame(width: 252)
-        .gamePlate(cornerRadius: 10)
+        .padding(metrics.pt(8))
+        .frame(width: metrics.pt(232))
+        .gamePlate(cornerRadius: metrics.pt(10), border: metrics.pt(3))
+    }
+
+    private func note(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: metrics.pt(11.5)))
+            .foregroundStyle(FernColors.rgb(0x7A5A3A))
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     /// One option: the pixel icon in a teal tile, the title and a line under it.
     private func row(_ option: QuickStartOption, primary: Bool) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: metrics.pt(8)) {
             PixelSpriteView(sprite: option.icon)
-                .frame(width: 30, height: 30)
-                .background(primary ? FernColors.tealDark.opacity(0.35) : FernColors.teal, in: RoundedRectangle(cornerRadius: 6))
+                .frame(width: metrics.pt(30), height: metrics.pt(30))
+                .background(primary ? FernColors.tealDark.opacity(0.35) : FernColors.teal, in: RoundedRectangle(cornerRadius: metrics.pt(6)))
             VStack(alignment: .leading, spacing: 1) {
-                Text(option.title).font(.footnote.weight(.semibold))
-                Text(option.subtitle).font(.caption2).opacity(0.85).fixedSize(horizontal: false, vertical: true)
+                Text(option.title).font(.system(size: metrics.pt(12.5), weight: .semibold))
+                Text(option.subtitle).font(.system(size: metrics.pt(11))).opacity(0.85).fixedSize(horizontal: false, vertical: true)
             }
             .multilineTextAlignment(.leading)
             Spacer(minLength: 0)
         }
         .foregroundStyle(primary ? Color.white : FernColors.speechInk)
-        .padding(EdgeInsets(top: 6, leading: 8, bottom: 6, trailing: 8))
-        .background(primary ? FernColors.teal : FernColors.paper, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(FernColors.ink, lineWidth: 2))
+        .padding(EdgeInsets(top: metrics.pt(6), leading: metrics.pt(8), bottom: metrics.pt(6), trailing: metrics.pt(8)))
+        .background(primary ? FernColors.teal : FernColors.paper, in: RoundedRectangle(cornerRadius: metrics.pt(8)))
+        .overlay(RoundedRectangle(cornerRadius: metrics.pt(8)).strokeBorder(FernColors.ink, lineWidth: metrics.pt(2)))
         .contentShape(Rectangle())
     }
 }
@@ -98,15 +128,16 @@ struct QuickStartCard: View {
 /// The game look's ✕ button for cards and panels.
 struct GameCloseButton: View {
     let action: () -> Void
+    @Environment(\.shellMetrics) private var metrics
 
     var body: some View {
         Button(action: action) {
             Text("✕")
-                .font(.system(size: 13, weight: .heavy))
+                .font(.system(size: metrics.pt(12), weight: .heavy))
                 .foregroundStyle(FernColors.ink)
-                .frame(width: 30, height: 26)
-                .background(FernColors.paper, in: RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(FernColors.ink, lineWidth: 2))
+                .frame(width: metrics.pt(26), height: metrics.pt(24))
+                .background(FernColors.paper, in: RoundedRectangle(cornerRadius: metrics.pt(6)))
+                .overlay(RoundedRectangle(cornerRadius: metrics.pt(6)).strokeBorder(FernColors.ink, lineWidth: metrics.pt(2)))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Close")

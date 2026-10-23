@@ -27,7 +27,7 @@ struct WorldMapStack: View {
                 }
                 if model.baseMap == .plain {
                     Text(PlainBaseMap().creditText ?? "")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(FernColors.speechInk.opacity(0.8))
                         .padding(EdgeInsets(top: 1, leading: 5, bottom: 1, trailing: 5))
                         .background(FernColors.gameCream.opacity(0.7), in: RoundedRectangle(cornerRadius: 4))

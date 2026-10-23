@@ -27,12 +27,12 @@ nonisolated struct RouteReplay: Sendable {
         }
     }
 
-    /// How far around each point the fog lifts: a car lifts only the cells it passes through.
+    /// How far around each point the fog lifts (the mockup's radii): a car lifts only a thin line.
     var liftRadius: Double {
         switch kind {
-        case .walk, .hike: 45
-        case .bike: 30
-        case .car: 0
+        case .walk, .hike: 56
+        case .bike: 36
+        case .car: 22
         }
     }
 

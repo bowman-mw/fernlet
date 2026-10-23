@@ -122,8 +122,7 @@ struct CustomizePanel: View {
         ShellCard {
             HStack(alignment: .top, spacing: 12) {
                 PixelCompanionView(state: model.careState, ride: .onFoot, outfit: model.outfit)
-                    .scaleEffect(1.5)
-                    .frame(width: 60, height: 66)
+                    .frame(width: 72, height: 76)
                     .background(FernColors.fog, in: RoundedRectangle(cornerRadius: 10))
                 VStack(alignment: .leading, spacing: 4) {
                     Text("On the map").font(.subheadline.weight(.semibold))

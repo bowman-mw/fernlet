@@ -21,7 +21,10 @@ struct ItemBar: View {
         Slot(kind: .privacy, name: "Private", icon: PixelSprites.diary), Slot(kind: .settings, name: "Settings", icon: PixelSprites.gear),
     ]
 
+    @Environment(\.shellMetrics) private var metrics
+
     var body: some View {
+        let border = metrics.pt(3), radius = metrics.pt(12)
         HStack(spacing: 0) {
             ForEach(items) { item in
                 Button { action(item.kind) } label: { label(for: item) }
@@ -31,44 +34,50 @@ struct ItemBar: View {
                     .accessibilityAddTraits(open == item.kind ? .isSelected : [])
             }
         }
-        .padding(.horizontal, 3)
-        .frame(height: 64)
+        .padding(.horizontal, metrics.pt(3))
+        .frame(height: metrics.barHeight)
         .background {
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: radius)
                 .fill(FernColors.wood)
-                .overlay(alignment: .top) { FernColors.woodLight.frame(height: 3).padding(.horizontal, 8).padding(.top, 3) }
-                .overlay(alignment: .bottom) { FernColors.woodDark.frame(height: 3).padding(.horizontal, 8).padding(.bottom, 3) }
+                .overlay(alignment: .top) { FernColors.woodLight.frame(height: border).padding(.horizontal, radius * 0.7).padding(.top, border) }
+                .overlay(alignment: .bottom) { FernColors.woodDark.frame(height: border).padding(.horizontal, radius * 0.7).padding(.bottom, border) }
+                .background {
+                    RoundedRectangle(cornerRadius: radius)
+                        .fill(Color(.sRGB, red: 0.157, green: 0.078, blue: 0.031, opacity: 0.35)).offset(y: border)
+                }
         }
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(FernColors.ink, lineWidth: 3))
-        .shadow(color: Color(.sRGB, red: 0.157, green: 0.078, blue: 0.031, opacity: 0.35), radius: 0, x: 0, y: 3)
+        .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(FernColors.ink, lineWidth: border))
     }
 
     /// One slot: the pixel icon (Log's on a raised cream disc) over its small name.
     @ViewBuilder
     private func label(for item: Slot) -> some View {
-        VStack(spacing: 3) {
+        let disc = metrics.pt(50), lift = metrics.pt(10)
+        VStack(spacing: metrics.pt(3)) {
             if item.kind == .log {
                 PixelSpriteView(sprite: item.icon)
-                    .frame(width: 50, height: 50)
-                    .background(FernColors.gameCream, in: Circle())
-                    .overlay(Circle().strokeBorder(FernColors.ink, lineWidth: 3))
-                    .shadow(color: FernColors.ink.opacity(0.35), radius: 0, x: 0, y: 3)
-                    .offset(y: -10)
-                    .padding(.bottom, -10)
+                    .frame(width: disc, height: disc)
+                    .background {
+                        Circle().fill(FernColors.gameCream)
+                            .background { Circle().fill(FernColors.ink.opacity(0.35)).offset(y: metrics.pt(3)) }
+                    }
+                    .overlay(Circle().strokeBorder(FernColors.ink, lineWidth: metrics.pt(3)))
+                    .offset(y: -lift)
+                    .padding(.bottom, -lift)
             } else {
                 PixelSpriteView(sprite: item.icon)
             }
             Text(item.name)
-                .font(.system(size: 10, weight: .heavy))
+                .font(.system(size: metrics.pt(9), weight: .heavy))
                 .foregroundStyle(FernColors.woodLabel)
                 .shadow(color: FernColors.ink, radius: 0, x: 0, y: 1)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
-        .frame(maxWidth: .infinity, minHeight: 52)
+        .frame(maxWidth: .infinity, minHeight: metrics.pt(52))
         .background {
             if open == item.kind && item.kind != .log {
-                RoundedRectangle(cornerRadius: 8).fill(FernColors.woodDark)
+                RoundedRectangle(cornerRadius: metrics.pt(8)).fill(FernColors.woodDark)
             }
         }
         .contentShape(Rectangle())

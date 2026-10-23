@@ -19,6 +19,24 @@ for a few days. It is not part of the Fernlet app, and nothing here ships.
   the shipping floor of 0.68; that's acceptable for a prototype. The project builds with Swift 6,
   `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` and warnings as errors, like the watch shells.
 
+## Size: the mockup's proportions on any phone
+
+The design page draws its phone 300 pt wide. The shell scales every mockup size by the screen's
+width ÷ 300 (`Art/ShellMetrics.swift`), which is 1.34 on iPhone 17 and 1.25 on a 375 pt phone.
+The scale comes from the actual width, so it is not hard-coded.
+
+Pixel art steps in whole points per sprite pixel, so it stays crisp: 3 pt where the mockup used 2.
+At that size the companion is 60 × 66 pt, the hearts and drops grow to match, and the Log disc is
+67 pt. Only a screen narrower than 360 pt would fall back to 2 pt.
+
+The map opens at about 435 m across the screen, as the mockup does. The fog uses the mockup's own
+sizes, converted at its 1.4 m per unit: 17.5 m cells, 175 m lifted around home, and 56 m either
+side of a walk. The first viewport the base map reports sets the opening zoom, so it matches on
+every screen and base map.
+
+`Screenshots/00-home-vs-mockup.jpg` shows the mockup's Home and the shell's Home side by side at the
+same width. The mockup half is rendered from the design page's own HTML at 402 pt.
+
 ## What's real and what's fixture
 
 | Piece | In the shell |
@@ -26,9 +44,9 @@ for a few days. It is not part of the Fernlet app, and nothing here ships.
 | Base map | **Real.** Apple's map through SwiftUI `Map`, styled `.standard(emphasis: .muted, pointsOfInterest: .excludingAll)`, north-up and flat. Night switches it to the dark style. MapKit draws the "Apple Maps" logo and the "Legal" link itself. The shell lifts them above the item bar with a bottom safe-area inset and cuts a small clear patch in the fog and the wash so they're never covered. |
 | Map seam | **Real.** `Map/WorldBaseMap.swift` is the protocol a base map conforms to. Only `Map/AppleMutedBaseMap.swift` imports MapKit. A base map reports what's visible as a `MapViewport` in normalised Web Mercator, and Fernlet's layers place themselves from that alone. `PlainBaseMap` is a second conformer with no tiles: the offline look of answer 30, and proof that the layers don't depend on Apple. For phase 2, add a MapLibre conformer and a `BaseMapKind` case. |
 | Coordinates | **Real types, fixture values.** Every layer stores `GeoPoint`, which is plain latitude and longitude, never a MapKit type. |
-| Hex fog | **Real drawing, fixture history.** The hexagons are about 60 m across (35 m radius), on a grid laid on the ground (`Geo/HexGrid.swift`). Lifted cells come from fixtures: around home, along saved trails, at known places, and along this session's walks and rides. Frontier cells are lighter. |
+| Hex fog | **Real drawing, fixture history.** The hexagons are about 30 m across (17.5 m radius, the mockup's size relative to the screen), on a grid laid on the ground (`Geo/HexGrid.swift`). Lifted cells come from fixtures: around home, along saved trails, at known places, and along this session's walks and rides. Frontier cells are lighter. |
 | Trails | **Fixture.** Saved routes are drawn as solid lines. This session's walks are drawn as dotted footsteps. |
-| Companion | **Real art, fixture state.** A 20 × 22 pixel sprite at 2×, with no blue dot. Its colours, breath tempo, low-energy eyes and mouth heights are copied from the shipping `CompanionState` (`ModelColors.swift`, `CompanionVectorAssets.swift`). It breathes by swapping two frames at the state's tempo, and Reduce Motion holds one frame. Tap to pet: it hops and a heart rises. Pet again within 3 s for the settled pose. Hold for 0.45 s to customise. Riding in the car or on the bike it uses the design page's car and bike sprites. The Today panel uses a crisp vector port of `CompanionView`. |
+| Companion | **Real art, fixture state.** A 20 × 22 pixel sprite at 3 pt per pixel (60 × 66 pt), with no blue dot. Its colours, breath tempo, low-energy eyes and mouth heights are copied from the shipping `CompanionState` (`ModelColors.swift`, `CompanionVectorAssets.swift`). It breathes by swapping two frames at the state's tempo, and Reduce Motion holds one frame. Tap to pet: it hops and a heart rises. Pet again within 3 s for the settled pose. Hold for 0.45 s to customise. Riding in the car or on the bike it uses the design page's car and bike sprites. The Today panel uses a crisp vector port of `CompanionView`. |
 | Markers | **Fixture.** A star on the noodle bar (starred after three meals), a flag at the saved trail's start, and your own lunch photo and hike photo where they were taken. Friends' photos never go on the map. |
 | Status bar, left | **Fixture numbers, real rules.** Six hearts with halves (HealthBar's 12 segments, two per heart), then up to 2 gold hearts. Protein, carbs and fat bars against 90 / 230 / 65 g. Eight water drops. It's one button that opens Today. VoiceOver reads "Care score 58 percent…". |
 | Status bar, right | **Real clock, fixture coins.** The clock shows the real time, with the sky phase from the shipping hour mapping (`CompanionDayPhase`). Choosing a fixture time of day shows the page's sample time instead. Coins come from "Time with Fernlet". There's no day badge. |
@@ -103,13 +121,14 @@ shared "iPhone 17". To run it on a phone:
 
 | File | State |
 | --- | --- |
+| `00-home-vs-mockup.jpg` | The design page's Home (left) and the shell's Home (right), both at 402 pt wide |
 | `01-home-day.jpg` | Home at midday, a month in: hearts 58% plus 1 gold, macros, 4 of 8 drops, clock and coins, the photo strip, the fog lifted around home and along the saved route, "At Home space" and the blue button, Apple's credit above the bar |
 | `02-today-panel.jpg` | The Today panel the hearts open, in Home's order |
 | `03-quickstart-gym.jpg` | Quick start at Riverside Gym |
 | `04-quickstart-noodle-year.jpg` | Quick start at the noodle bar, a year in (2 gold hearts, 1,180 coins, three saved routes) |
 | `05-walk-replay.jpg` | A walk together being replayed: the walk bar, the dotted trace, the fog lifting |
 | `06-car-dusk.jpg` | Riding along in a car at dusk: quick starts and the strip paused, a thin line of fog lifted |
-| `07-bike-ride-logged.jpg` | Back on foot after a ride: "Bike ride logged" with Undo, and the "Wheels and Waves" stamp |
+| `07-bike-ride-logged.jpg` | Back on foot after a ride: "Bike ride logged" with Undo, and the "Wheels and Waves" stamp (`-shellRide bike -shellRideSeconds 45`) |
 | `08-decoy.jpg` | A decoy session: no history, no pins, and only Walk together |
 | `09-night-trail.jpg` | Night at the trail start: dark muted map, dark fog, moon in the clock, the hike offered |
 | `10-offline-plain.jpg` | The same layers on no map at all (offline look, and the seam's second base map) |

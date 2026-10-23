@@ -7,22 +7,24 @@ struct PanelFrame<Content: View>: View {
     let kind: PanelKind
     let onClose: () -> Void
     @ViewBuilder let content: Content
+    @Environment(\.shellMetrics) private var metrics
 
     var body: some View {
+        let border = metrics.pt(3), radius = metrics.pt(12)
         VStack(spacing: 0) {
-            HStack(spacing: 6) {
+            HStack(spacing: metrics.pt(6)) {
                 PixelSpriteView(sprite: kind.icon)
                 Text(kind.title)
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .font(.system(size: metrics.pt(16), weight: .bold, design: .rounded))
                     .foregroundStyle(FernColors.woodLabel)
                     .shadow(color: FernColors.ink, radius: 0, x: 0, y: 1)
                     .accessibilityAddTraits(.isHeader)
                 Spacer()
                 GameCloseButton(action: onClose)
             }
-            .padding(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 6))
+            .padding(EdgeInsets(top: metrics.pt(6), leading: metrics.pt(12), bottom: metrics.pt(6), trailing: metrics.pt(6)))
             .background(FernColors.wood)
-            .overlay(alignment: .bottom) { FernColors.ink.frame(height: 3) }
+            .overlay(alignment: .bottom) { FernColors.ink.frame(height: border) }
             // Short panels hug their content; long ones scroll.
             ViewThatFits(in: .vertical) {
                 inner
@@ -30,9 +32,12 @@ struct PanelFrame<Content: View>: View {
             }
         }
         .background(FernColors.parchment)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(FernColors.ink, lineWidth: 3))
-        .shadow(color: Color(.sRGB, red: 0.157, green: 0.078, blue: 0.031, opacity: 0.3), radius: 0, x: 0, y: 4)
+        .clipShape(RoundedRectangle(cornerRadius: radius))
+        .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(FernColors.ink, lineWidth: border))
+        .background {
+            RoundedRectangle(cornerRadius: radius)
+                .fill(Color(.sRGB, red: 0.157, green: 0.078, blue: 0.031, opacity: 0.3)).offset(y: metrics.pt(4))
+        }
         .frame(maxHeight: .infinity, alignment: .top)
     }
 

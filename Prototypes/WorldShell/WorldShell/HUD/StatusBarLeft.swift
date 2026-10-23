@@ -13,27 +13,28 @@ struct StatusBarLeft: View {
     let fat: Int
     let water: Int
     let action: () -> Void
+    @Environment(\.shellMetrics) private var metrics
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: metrics.pt(3)) {
                 HStack(spacing: 1) {
                     ForEach(0..<6, id: \.self) { index in PixelSpriteView(sprite: heart(at: index)) }
                     ForEach(0..<min(2, goldHearts), id: \.self) { _ in PixelSpriteView(sprite: PixelSprites.goldHeart) }
                 }
-                HStack(spacing: 6) {
+                HStack(spacing: metrics.pt(6)) {
                     MacroPip(letter: "P", value: protein, target: WorldFixtures.macroTargets.protein, color: FernColors.protein)
                     MacroPip(letter: "C", value: carbs, target: WorldFixtures.macroTargets.carbs, color: FernColors.carbs)
                     MacroPip(letter: "F", value: fat, target: WorldFixtures.macroTargets.fat, color: FernColors.fat)
                 }
-                HStack(spacing: 2) {
+                HStack(spacing: metrics.pt(2)) {
                     ForEach(0..<8, id: \.self) { index in
                         PixelSpriteView(sprite: index < water ? PixelSprites.drop : PixelSprites.emptyDrop)
                     }
                 }
-                .padding(.top, 2)
+                .padding(.top, metrics.pt(2))
             }
-            .padding(2)
+            .padding(metrics.pt(2))
             .shadow(color: FernColors.ink.opacity(0.35), radius: 0, x: 0, y: 1)
         }
         .buttonStyle(.plain)
@@ -61,27 +62,30 @@ struct StatusBarLeft: View {
 }
 
 /// One macro bar: a pixel letter and a short framed bar filled to today's share of the target.
+/// The mockup's bar is 32 × 7 pt inside a 2 pt border; here it scales with the screen.
 private struct MacroPip: View {
     let letter: String
     let value: Int
     let target: Int
     let color: Color
+    @Environment(\.shellMetrics) private var metrics
 
     var body: some View {
-        HStack(spacing: 2) {
+        let width = metrics.pt(32), border = metrics.pt(2)
+        HStack(spacing: metrics.pt(2)) {
             Text(letter)
-                .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                .font(.system(size: metrics.pt(9), weight: .heavy, design: .monospaced))
                 .foregroundStyle(FernColors.woodLabel)
                 .shadow(color: FernColors.ink, radius: 0, x: 1, y: 1)
                 .shadow(color: FernColors.ink, radius: 0, x: -1, y: 0)
-                .frame(width: 8)
+                .frame(width: metrics.pt(8))
             ZStack(alignment: .leading) {
                 Rectangle().fill(FernColors.gameCream.opacity(0.85))
-                Rectangle().fill(color).frame(width: 30 * min(1, Double(value) / Double(max(1, target))))
+                Rectangle().fill(color).frame(width: width * min(1, Double(value) / Double(max(1, target))))
             }
-            .frame(width: 30, height: 5)
-            .overlay(Rectangle().strokeBorder(FernColors.ink, lineWidth: 2).padding(-2))
-            .padding(2)
+            .frame(width: width, height: metrics.pt(7))
+            .overlay(Rectangle().strokeBorder(FernColors.ink, lineWidth: border).padding(-border))
+            .padding(border)
         }
     }
 }
