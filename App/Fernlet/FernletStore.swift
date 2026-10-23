@@ -748,6 +748,14 @@ final class FernletStore {
     /// The World map's fog: whether readings lift it, the lifted cells, and the decoy rule
     /// (`WorldFogKeeper`). Lazy, so a store that never shows the map never reads the vault.
     @ObservationIgnored private(set) lazy var worldFog = WorldFogKeeper(vault: worldMapVault)
+    /// The World map's location (`WorldLocationSource`), following the permission the person gave.
+    /// Lazy, so nothing asks CoreLocation for anything until the map is on screen; every reading goes
+    /// to ``worldFog``, which decides whether it lifts the fog.
+    @ObservationIgnored private(set) lazy var worldLocation: WorldLocationSource = {
+        let source = WorldLocationSource()
+        source.onFix = { [weak self] fix in self?.worldFog.handle(fix) }
+        return source
+    }()
     /// Recipe ids whose web-image download is currently in flight. Guards the entry to
     /// ``fetchRecipeWebImageIfNeeded(for:)`` so the paste-import fire-and-forget task and the
     /// detail's first-open task — both of which can hold the same not-yet-attempted recipe copy —

@@ -131,6 +131,13 @@ enum UITestSupport {
 
     /// `FERNLET_UI_TEST_WORLD_MAP_PHASE=dawn|day|dusk|night` — the harness's fixed time of day (the
     /// live clock when absent or unreadable).
+    /// `FERNLET_UI_TEST_WORLD_PANEL=today|food|move|log|friends|personal|settings` — open that World
+    /// panel once the launch finishes (World app screenshots; a panel is only reachable by a tap).
+    /// Consumed by `ContentView`'s launch hand-over, beside ``initialSheet``.
+    static var initialWorldPanel: WorldPanel? {
+        env["FERNLET_UI_TEST_WORLD_PANEL"].flatMap(WorldPanel.init(rawValue:))
+    }
+
     static var worldMapHarnessPhase: CompanionDayPhase? {
         switch env["FERNLET_UI_TEST_WORLD_MAP_PHASE"] {
         case "dawn": .dawn
@@ -229,6 +236,7 @@ enum UITestSupport {
     static var shouldOpenWorldMapHarness: Bool { false }
     static var worldMapHarnessPlain: Bool { false }
     static var worldMapHarnessPhase: CompanionDayPhase? { nil }
+    static var initialWorldPanel: WorldPanel? { nil }
     static var seededMeshContinuationCard: MeshContinuationCardKind? { nil }
     static var seededHeldSessionPhotoCount: Int? { nil }
     static func seedHeldSessionPhotosIfRequested(on photos: MeshSessionPhotos) {}

@@ -13,6 +13,8 @@ struct WorldMapStack<Overlay: View>: View {
     @Binding var camera: WorldCamera
     let ground: WorldGround
     let phase: CompanionDayPhase
+    /// Whether Dark Mode is on: the map and the fog go dark with it, as they do at night.
+    var darkMode = false
     /// How far up from the bottom the base map keeps its own credit (above the item bar).
     let creditInset: CGFloat
     /// Drawn over the map in the same coordinate space; receives the current viewport.
@@ -22,14 +24,14 @@ struct WorldMapStack<Overlay: View>: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .topLeading) {
-                BaseMapLayer(kind: kind, camera: $camera, darkStyle: phase.isDarkMap, bottomInset: creditInset) { reported in
+                BaseMapLayer(kind: kind, camera: $camera, darkStyle: isDark, bottomInset: creditInset) { reported in
                     guard reported.isUsable else { return }
                     viewport = reported
                 }
                 .accessibilityHidden(true)
                 if let viewport {
                     Group {
-                        WorldGroundLayer(viewport: viewport, ground: ground, darkStyle: phase.isDarkMap)
+                        WorldGroundLayer(viewport: viewport, ground: ground, darkStyle: isDark)
                         WorldSkyWash(phase: phase)
                     }
                     .mask { WorldMapCreditClearance(bottomInset: creditInset, active: kind == .appleMuted) }
@@ -39,11 +41,16 @@ struct WorldMapStack<Overlay: View>: View {
         }
         .ignoresSafeArea()
     }
+
+    /// Whether the map draws dark: at night, or in Dark Mode.
+    private var isDark: Bool { phase.isDarkMap || darkMode }
 }
 
 /// A mask with one small hole over the base map's own credit, so Fernlet's fog and wash never cover
 /// Apple's "Maps" logo and "Legal" link (MapKit terms: they stay visible). The hole sits just above the
-/// item bar, where the bottom inset puts the credit. With no credit to keep clear, it masks nothing.
+/// item bar, where the bottom inset puts the credit, a little larger than the credit and feathered, so
+/// the fog thins around it instead of stopping at a hard box. With no credit to keep clear, it masks
+/// nothing.
 struct WorldMapCreditClearance: View {
     let bottomInset: CGFloat
     let active: Bool
@@ -51,13 +58,17 @@ struct WorldMapCreditClearance: View {
     var body: some View {
         GeometryReader { proxy in
             Path { path in
-                path.addRect(CGRect(origin: .zero, size: proxy.size))
+                // Past the edges, so the feathering never thins the fog along the screen's sides.
+                path.addRect(CGRect(origin: .zero, size: proxy.size).insetBy(dx: -12, dy: -12))
                 if active {
-                    path.addRoundedRect(in: CGRect(x: 4, y: proxy.size.height - bottomInset - 34, width: 150, height: 36),
-                                        cornerSize: CGSize(width: 8, height: 8))
+                    // The map ignores the safe area, so the inset alone places the credit: its
+                    // bottom edge sits on the inset, inside MapKit's own small margin.
+                    path.addRoundedRect(in: CGRect(x: 2, y: proxy.size.height - bottomInset - 40, width: 128, height: 44),
+                                        cornerSize: CGSize(width: 10, height: 10))
                 }
             }
             .fill(style: FillStyle(eoFill: true))
+            .blur(radius: active ? 3 : 0)
         }
     }
 }

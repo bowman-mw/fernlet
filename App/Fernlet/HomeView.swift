@@ -16,6 +16,26 @@ import FernletDomainModel
 import FernletUI
 #endif
 
+/// What a `HomeView` draws (World build, branch `world-ui`).
+///
+/// The World Home moves Home's cards off the map into panels; drawing them with this same view keeps
+/// every card's data and behaviour identical (design page "Same data, new look").
+nonisolated enum HomePresentation: Equatable, Sendable {
+    /// The whole Home page: header, photo wall and every card in the person's Home order. The World
+    /// Home's Today panel shows this until step 4's Today panel replaces it.
+    case page
+    /// Only the Quick log and mood cards: the item bar's Log panel.
+    case quickLog
+
+    /// The cards to draw, from the person's Home order.
+    func widgets(from order: [HomeWidget]) -> [HomeWidget] {
+        switch self {
+        case .page: order
+        case .quickLog: [.quickLog]
+        }
+    }
+}
+
 /// The Home tab: the companion hero and the user-configurable dashboard feed.
 ///
 /// Renders the header, the photowall strip (friend polaroids + the companion's thought bubble),
@@ -54,6 +74,9 @@ struct HomeView: View {
     /// The meal-logged toast, for the ambient cards' one-tap meal chips (forgotten favorites and the
     /// nutrient nudge's "add it"), which log in place and are confirmed like every other meal log.
     var onMealsLogged: MealLogReporter = .none
+    /// What this Home draws (World build): the whole page, or only the Quick log and mood cards for
+    /// the item bar's Log panel. The same cards either way, so the panels show exactly Home's data.
+    var presentation: HomePresentation = .page
     @State private var hasRecentPeriodEvent = false
     @State private var didLoadRecentPeriodActivity = false
     @State private var isCompanionThoughtVisible = true
@@ -103,14 +126,16 @@ struct HomeView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    homeHeader
-                    // 3a·AX3: the photowall and thought bubble give way entirely at accessibility
-                    // sizes — the strip is decorative (hit-testing already disabled), and the grid
-                    // starting above the tab bar is the promise that matters.
-                    if !dynamicTypeSize.isAccessibilitySize {
-                        photowallStrip
+                    if presentation == .page {
+                        homeHeader
+                        // 3a·AX3: the photowall and thought bubble give way entirely at accessibility
+                        // sizes — the strip is decorative (hit-testing already disabled), and the grid
+                        // starting above the tab bar is the promise that matters.
+                        if !dynamicTypeSize.isAccessibilitySize {
+                            photowallStrip
+                        }
                     }
-                    ForEach(store.settings.homeWidgets) { widget in
+                    ForEach(presentation.widgets(from: store.settings.homeWidgets)) { widget in
                         homeWidget(widget)
                     }
                 }

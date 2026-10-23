@@ -37597,6 +37597,150 @@
         }
       }
     },
+    "itemBar.a11y" : {
+      "comment" : "World Home: the item bar's name for VoiceOver",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Item bar"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Barra de objetos"
+          }
+        }
+      }
+    },
+    "itemBar.food" : {
+      "comment" : "World Home item bar: meals, recipes and nutrition",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Food"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Comida"
+          }
+        }
+      }
+    },
+    "itemBar.friends" : {
+      "comment" : "World Home item bar: in-person friends and shared photos",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Friends"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Amigos"
+          }
+        }
+      }
+    },
+    "itemBar.log" : {
+      "comment" : "World Home item bar: the raised middle button, Quick log",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Log"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Registrar"
+          }
+        }
+      }
+    },
+    "itemBar.move" : {
+      "comment" : "World Home item bar: workouts and movement",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Move"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Moverse"
+          }
+        }
+      }
+    },
+    "itemBar.private" : {
+      "comment" : "World Home item bar: the locked area — journal, cycle, intimacy, worry box",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Private"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Privado"
+          }
+        }
+      }
+    },
+    "itemBar.settings" : {
+      "comment" : "World Home item bar: Settings. Keep it short; it shares the bar with five others (Spanish: Ajustes)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Settings"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ajustes"
+          }
+        }
+      }
+    },
+    "itemBar.today" : {
+      "comment" : "World Home: Today, opened from the status plate",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Today"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy"
+          }
+        }
+      }
+    },
     "journal.dailyPrompt.body.1" : {
       "comment" : "Journal sheet: the daily inspiration prompt (a body check-in), a gentle question the user may start an entry from",
       "extractionState" : "extracted_with_value",
@@ -47439,6 +47583,304 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Has sido constante con %@ — puedes seguir así, salvo que algo haya cambiado."
+          }
+        }
+      }
+    },
+    "worldPanel.close" : {
+      "comment" : "World Home: the ✕ on a panel's title plate, which returns to the map",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Close"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cerrar"
+          }
+        }
+      }
+    },
+    "worldPanel.settings" : {
+      "comment" : "World Home: the title plate of the Settings panel",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Settings"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Configuración"
+          }
+        }
+      }
+    },
+    "worldPanel.today" : {
+      "comment" : "World Home: the title plate of the Today panel (Home's cards)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Today"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy"
+          }
+        }
+      }
+    },
+    "worldStatus.a11y.bottles" : {
+      "comment" : "World Home status plate, VoiceOver: bottles of water today. Plural on the number",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld bottle"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld bottles"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld botella"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld botellas"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "worldStatus.a11y.care" : {
+      "comment" : "World Home status plate, VoiceOver: the care score, as Home's health bar says it",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Care score %lld percent"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Puntuación de cuidado: %lld por ciento"
+          }
+        }
+      }
+    },
+    "worldStatus.a11y.gold" : {
+      "comment" : "World Home status plate, VoiceOver: the care score with the gold hearts' lift; the second part is 'N gold hearts from friends'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lifted to %1$lld percent by %2$@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sube al %1$lld por ciento gracias a %2$@."
+          }
+        }
+      }
+    },
+    "worldStatus.a11y.goldHearts" : {
+      "comment" : "World Home status plate, VoiceOver: how many gold hearts friends gave in person. Plural on the number",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld gold heart from friends"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld gold hearts from friends"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld corazón dorado de amigos"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld corazones dorados de amigos"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "worldStatus.a11y.macros" : {
+      "comment" : "World Home status plate, VoiceOver: today's macros against their targets",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Protein %1$lld of %2$lld grams, carbs %3$lld of %4$lld, fat %5$lld of %6$lld."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Proteína %1$lld de %2$lld gramos, carbohidratos %3$lld de %4$lld, grasa %5$lld de %6$lld."
+          }
+        }
+      }
+    },
+    "worldStatus.a11y.water" : {
+      "comment" : "World Home status plate, VoiceOver: water today ('6 bottles') and the day's bottle target",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Water: %1$@, target %2$lld."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Agua: %1$@, objetivo %2$lld."
+          }
+        }
+      }
+    },
+    "worldStatus.carbs" : {
+      "comment" : "World Home status plate: the letter before the carbs bar (Spanish: C)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "C"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "C"
+          }
+        }
+      }
+    },
+    "worldStatus.fat" : {
+      "comment" : "World Home status plate: the letter before the fat bar (Spanish: G, grasa)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "F"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "G"
+          }
+        }
+      }
+    },
+    "worldStatus.hint" : {
+      "comment" : "World Home: what tapping the status plate does, for VoiceOver",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Opens Today"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre Hoy"
+          }
+        }
+      }
+    },
+    "worldStatus.inputLabel" : {
+      "comment" : "World Home: a short name Voice Control can use for the status plate",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hearts"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Corazones"
+          }
+        }
+      }
+    },
+    "worldStatus.protein" : {
+      "comment" : "World Home status plate: the letter before the protein bar (Spanish: P)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "P"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "P"
           }
         }
       }

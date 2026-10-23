@@ -1,36 +1,58 @@
 import SwiftUI
 import UIKit
 
-/// The World Home's colours: the pixel world's palette, ported from the World Shell prototype's
-/// `FernColors` (`Prototypes/WorldShell/WorldShell/Art/FernColors.swift`) and the design page
-/// "A World for Fernlet" (v9).
+/// The World Home's colours in the approved design language (`b1-language`, World Review Batch 1, draft
+/// 3; owner, 2026-10-23): wood for navigation only, paper framed in ink for every container, parchment
+/// with a faint dot grid for pages, and one set of data colours.
 ///
-/// This is the one look behind the theme seam. The owner chose the original pixel world on
-/// 2026-10-23; the seam stays as structure, but no other look is built (World app plan,
-/// `~/.claude/plans/serene-wibbling-flamingo.md`).
+/// Every token follows Dark Mode and Increase Contrast with the design page's own values (its `.dk` and
+/// `.hc` phone tokens), through a dynamic `UIColor` as FernletUI's palette does. This is the one look
+/// behind the theme seam; no other look is built.
 ///
-/// **Text gets no shadow or outline anywhere** (owner, 2026-10-23). Every label is one solid colour
-/// that clears WCAG AA 4.5:1 against what is directly behind it, and the label colours follow
-/// Increase Contrast to clear 7:1, the target FernletUI's high-contrast palette uses. Measured pairs
-/// are noted beside each token.
+/// **Text gets no shadow or outline anywhere** (owner, 2026-10-23); every label is one solid colour.
 nonisolated enum WorldPalette {
-    // MARK: The app family (shipping light values)
+    // MARK: Materials
 
-    static let parchment = rgb(0xF5EFDF)
-    static let cream = rgb(0xFBF7EE)
-    static let bark = rgb(0x3D2E1E)
+    /// Frames and outlines.
+    static let ink = adaptive(light: 0x4A2E1C, dark: 0x120A04)
+    /// Text on wood and on paper: 5.2:1 on wood, 11:1 on paper; darker under Increase Contrast.
+    static let bark = adaptive(light: 0x3A2414, dark: 0xFFF1CF, lightHC: 0x2A1808, darkHC: 0xFFF8E4)
+    /// Every container's face (the status plate, cards, chips, fields, buttons).
+    static let paper = adaptive(light: 0xFFF6E2, dark: 0x3A2E22)
+    /// A lighter paper for buttons and fields on paper.
+    static let paperLight = adaptive(light: 0xFFFBF0, dark: 0x45372A)
+    /// The shade under a container's bottom edge.
+    static let paperShade = adaptive(light: 0xEFDDB8, dark: 0x2A2017)
+    /// Navigation only: the item bar and title plates.
+    static let wood = adaptive(light: 0xC98E54, dark: 0x6E4424, lightHC: 0xD9A56E, darkHC: 0x5A361B)
+    static let woodHigh = adaptive(light: 0xE0AE74, dark: 0x8A5A32)
+    static let woodLow = adaptive(light: 0xA86E3C, dark: 0x4E2F17)
+    /// The item bar's selected slot: lighter wood, so its label still clears AA.
+    static let woodSelected = adaptive(light: 0xDDA86C, dark: 0x8E5C34, lightHC: 0xE9C08E, darkHC: 0x7A4C28)
+    /// Pages: parchment.
+    static let page = adaptive(light: 0xF5EFDF, dark: 0x1C1E1B)
+    /// The page's faint dot grid.
+    static let pageDot = Color(UIColor { @Sendable trait in
+        trait.userInterfaceStyle == .dark
+            ? UIColor(red: 1, green: 241 / 255, blue: 207 / 255, alpha: 0.05)
+            : UIColor(red: 74 / 255, green: 46 / 255, blue: 28 / 255, alpha: 0.07)
+    })
+    /// Secondary text on paper.
+    static let dim = adaptive(light: 0x6B5C4A, dark: 0xC9BFAE, lightHC: 0x4E4030, darkHC: 0xE2D8C6)
+    /// The moss of section squares and switches.
+    static let moss = adaptive(light: 0x5E844D, dark: 0x7FB069)
 
-    // MARK: The game family (design page)
+    // MARK: Data colours (one set everywhere)
 
-    /// Plate borders and text on cream plates: 11.0:1 on the cream plate; 14.9:1 under Increase Contrast.
-    static let ink = adaptive(0x4A2E1C, increasedContrast: 0x2A1A10)
-    static let gameCream = rgb(0xFFF1CF)
-    static let gameCreamShade = rgb(0xE2C893)
-    /// Small text on cream plates (the offline map note): 14.1:1; higher under Increase Contrast.
-    static let speechInk = adaptive(0x3A2414, increasedContrast: 0x2A1A10)
+    static let protein = rgb(0x5E844D)
+    static let carbs = rgb(0xD2973B)
+    static let fat = rgb(0xB8543D)
+    /// An empty macro bar.
+    static let barEmpty = adaptive(light: 0xF3E2BD, dark: 0x2A2017)
 
     // MARK: The ground (map layers)
 
+    static let gameCream = rgb(0xFFF1CF)
     static let fog = rgb(0xEFE8DA)
     static let fogShade = rgb(0xE6DDC8)
     static let fogEdge = rgb(0xD9CFBC)
@@ -47,12 +69,13 @@ nonisolated enum WorldPalette {
               blue: Double(hex & 0xFF) / 255, opacity: 1)
     }
 
-    /// A colour that follows Increase Contrast, the way FernletUI's tokens do: the trait's
-    /// `accessibilityContrast` picks the value. The provider is `@Sendable` because UIKit may resolve
-    /// it off the main actor.
-    static func adaptive(_ normal: UInt32, increasedContrast: UInt32) -> Color {
+    /// A colour that follows Dark Mode and Increase Contrast, the way FernletUI's tokens do. The
+    /// provider is `@Sendable` because UIKit may resolve it off the main actor.
+    static func adaptive(light: UInt32, dark: UInt32, lightHC: UInt32? = nil, darkHC: UInt32? = nil) -> Color {
         Color(UIColor { @Sendable trait in
-            uiColor(trait.accessibilityContrast == .high ? increasedContrast : normal)
+            let high = trait.accessibilityContrast == .high
+            if trait.userInterfaceStyle == .dark { return uiColor(high ? darkHC ?? dark : dark) }
+            return uiColor(high ? lightHC ?? light : light)
         })
     }
 

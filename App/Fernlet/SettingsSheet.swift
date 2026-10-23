@@ -63,6 +63,9 @@ struct SettingsSheet: View {
     /// describes them: the memory headings' feeling names and the AI section's companion line.
     @Environment(\.fernletTermOfAddress) private var termOfAddress
     @Bindable var store: FernletStore
+    /// World build: set when Settings shows in a World panel, which closes through its own ✕, so the
+    /// sheet's Done button steps aside and a finished delete closes the panel; nil in a sheet.
+    var onClose: (() -> Void)? = nil
     @Environment(FernletLockService.self) private var lockService
     @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
     /// System / Light / Dark. The app root reads the same key and hands ``FernletAppearanceMode``'s
@@ -163,12 +166,14 @@ struct SettingsSheet: View {
                 // search field left exactly one row visible at accessibility text sizes, and every
                 // other sheet closes from its chrome.
                 .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { dismiss() }
-                            .font(.fernlet(.label))
-                            .foregroundStyle(Color.moss)
-                            .disabled(deleteFlow.isDeleting)
-                            .accessibilityIdentifier("settings.done")
+                    if onClose == nil {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { dismiss() }
+                                .font(.fernlet(.label))
+                                .foregroundStyle(Color.moss)
+                                .disabled(deleteFlow.isDeleting)
+                                .accessibilityIdentifier("settings.done")
+                        }
                     }
                 }
         }
@@ -187,7 +192,7 @@ struct SettingsSheet: View {
         .destructiveConfirmation($pendingDestructiveAction)
         // Success ("Done") dismisses the sheet — the visit is over; failure keeps it put for a retry.
         .deleteEverythingAlerts(deleteFlow, successButtonTitle: "Done", successButtonRole: nil) {
-            dismiss()
+            if let onClose { onClose() } else { dismiss() }
         }
         // The typed-gate confirm (artboard 5e). The offer and iCloud claims are computed at
         // presentation time; nothing mutates until the sheet's armed confirm calls `runWipe`.
