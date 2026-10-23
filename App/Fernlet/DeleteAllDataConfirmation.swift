@@ -430,6 +430,9 @@ nonisolated enum DeleteAllStoreNames {
         "your day summaries": LocalizedStringResource(
             "deleteAll.store.daySummaries", defaultValue: "your day summaries",
             comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your map history": LocalizedStringResource(
+            "deleteAll.store.mapHistory", defaultValue: "your map history",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. The World map's record of where the person has been (its uncovered fog). Keep it lowercase unless it is a name."),
         "your Worry Box notes": LocalizedStringResource(
             "deleteAll.store.worryBoxNotes", defaultValue: "your Worry Box notes",
             comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),

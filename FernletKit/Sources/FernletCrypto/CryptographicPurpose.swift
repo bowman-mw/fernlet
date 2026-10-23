@@ -437,6 +437,16 @@ public nonisolated enum FernletCryptoPurpose {
         /// times, plus the answered tombstones that refuse a re-delivery. The durable truth the
         /// review is rebuilt from after a process kill.
         public static let privatePendingSessionPhotoIndexV1 = CryptographicPurpose("fernlet.private-media.pending-session-photo.index.aead.v1")
+        /// **World build only (branch `world-ui`).** The World Home's lifted fog cells, sealed under the
+        /// `WorldMapStore` vault's when-unlocked device key (`WorldMapVault`): a coarse record of where
+        /// someone has been, kept on this iPhone only. Its own domain, so a fog file can never open as
+        /// any other map file, or as anything else sealed in the app.
+        public static let worldMapFogV1 = CryptographicPurpose("fernlet.world-map.fog.aead.v1")
+        /// **World build only.** The World map's locked-phone buffer: cells lifted while the phone is
+        /// locked (a walk with the screen off, Always mode's visits), sealed under the vault's
+        /// after-first-unlock buffer key and drained into the fog store on the next unlock. Separate
+        /// from ``worldMapFogV1`` so a buffer file moved into the store's name cannot open as the store.
+        public static let worldMapPendingV1 = CryptographicPurpose("fernlet.world-map.pending.aead.v1")
         public static let mealPhotoV2 = CryptographicPurpose("fernlet.private-media.meal-photo.aead.v2")
         public static let recipePhotoV2 = CryptographicPurpose("fernlet.private-media.recipe-photo.aead.v2")
         public static let progressPhotoV2 = CryptographicPurpose("fernlet.private-media.progress-photo.aead.v2")

@@ -124,6 +124,8 @@ struct CryptographicDomainSeparationTests {
         Domain("AEAD.privatePendingSessionPhotoImageV1", FernletCryptoPurpose.AEAD.privatePendingSessionPhotoImageV1),
         Domain("AEAD.privatePendingSessionPhotoThumbnailV1", FernletCryptoPurpose.AEAD.privatePendingSessionPhotoThumbnailV1),
         Domain("AEAD.privatePendingSessionPhotoIndexV1", FernletCryptoPurpose.AEAD.privatePendingSessionPhotoIndexV1),
+        Domain("AEAD.worldMapFogV1", FernletCryptoPurpose.AEAD.worldMapFogV1),
+        Domain("AEAD.worldMapPendingV1", FernletCryptoPurpose.AEAD.worldMapPendingV1),
         Domain("AEAD.mealPhotoV2", FernletCryptoPurpose.AEAD.mealPhotoV2),
         Domain("AEAD.recipePhotoV2", FernletCryptoPurpose.AEAD.recipePhotoV2),
         Domain("AEAD.progressPhotoV2", FernletCryptoPurpose.AEAD.progressPhotoV2),

@@ -99,11 +99,13 @@ let package = Package(
             name: "WebScrapingKit"
         ),
         // World build only (branch world-ui, never main): the live-map Home's geometry and, from later
-        // steps, its device-only location stores. Pure Foundation for now. NOT a dependency of
+        // steps, its device-only location stores (sealed with FernletCrypto's purposes, keyed through
+        // FernletFoundation's keychain helpers). NOT a dependency of
         // CloudKitSync, AIProviders, AIContext, FernletSocial or FernletConnections, so the strict
         // build (Scripts/spm-wall-check.sh) fails any of them that imports it.
         .target(
-            name: "WorldMapStore"
+            name: "WorldMapStore",
+            dependencies: ["FernletCrypto", "FernletFoundation"]
         ),
         // Layer 1 — the portable domain value types (nutrition/workout/wellbeing/
         // companion + settings aggregate, WorkoutProgram, FoodItemSearch). Color

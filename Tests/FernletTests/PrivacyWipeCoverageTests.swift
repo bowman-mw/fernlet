@@ -174,6 +174,10 @@ struct PrivacyWipeCoverageTests {
         // This device's AI day summaries (2026-10-15): the persisted score history never carries them,
         // so they live in their own device-local file, which the wipe removes.
         "deviceDaySummaryStore.clearAll",
+        // The World map's sealed location history and both its keys (World build, 2026-10-23), and its
+        // two device-only settings.
+        "worldFog.clearAll",
+        "WorldMapPreferences.clearAll",
         "worryBoxResetHook",
         "BarcodeServingMemory.clearAll",
         "RecentActivityTypeMemory.clearAll",
@@ -1130,7 +1134,7 @@ struct PrivacyWipeCoverageTests {
         "com.fernlet.healthkit-anchors", "com.fernlet.private-media", "com.fernlet.narrative-buffer",
         "com.fernlet.heartdrop", "com.fernlet.identity", "com.fernlet.moderation",
         "com.fernlet.device-binding", "com.fernlet.mesh-session",
-        "com.fernlet.mesh-routed"
+        "com.fernlet.mesh-routed", "com.fernlet.world-map"
     ]
 
     /// `com.fernlet.*` keychain SERVICE literals in `source`, found by anchoring on the binding that

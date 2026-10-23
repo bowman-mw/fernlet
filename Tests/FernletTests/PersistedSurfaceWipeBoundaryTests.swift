@@ -192,6 +192,9 @@ struct PersistedSurfaceWipeBoundaryTests {
         "ageAssuranceRecord": .cleared(token: "ageAssurance.clear"),
         "fernlet.ai.quota.pair": .cleared(token: "aiCallQuotaStore.reset"),
         "fernlet.weather.requestBudget": .cleared(token: "WeatherKitService.shared.clearRequestHistory"),
+        // The World map's two device-only settings (World build, 2026-10-23).
+        "fernlet.worldMap.uncoverAsYouGo": .cleared(token: "WorldMapPreferences.clearAll"),
+        "fernlet.worldMap.alwaysLowPower": .cleared(token: "WorldMapPreferences.clearAll"),
         "fernlet.barcodeLastServings.v1": .cleared(token: "BarcodeServingMemory.clearAll"),
         // The companion petting state, all four keys. `clearPersistentState()` existed long before
         // anything on a shipping path called it — see the header.

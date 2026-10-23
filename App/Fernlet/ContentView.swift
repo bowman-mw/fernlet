@@ -1717,6 +1717,11 @@ struct ContentView: View {
         lockService.installDuressPurgeHook { [store] in
             Task { _ = await store.deleteAllData(includingHealthKitSamples: true) }
         }
+        // The recovery lock keeps the recoverable corpus but not where someone has been: the World
+        // map's sealed location history and its keys go (design page answer 16; World build only).
+        lockService.installRecoveryLockPurgeHook { [store] in
+            if !store.worldFog.clearAll() { FernletAuditLog.log("worldMap.recoveryLockPurge.incomplete") }
+        }
         // The other half of the duress-recovery custody story, and the one that is NOT a duress path
         // at all: "Delete everything" regenerates this device's proximity identity while deliberately
         // keeping the app lock, and the recovery blob is sealed with the OLD identity key mixed into

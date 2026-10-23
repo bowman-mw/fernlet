@@ -1151,6 +1151,27 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         duressPurgeHook = hook
     }
 
+    /// The recovery lock's location-history purge (World build, branch `world-ui`): run on the main
+    /// actor after the decoy is on screen when ``DuressMode/recoveryLock`` fires. The recovery lock
+    /// deliberately keeps the sealed corpus it can recover, but the World map's fog and walk lines are
+    /// not part of that promise; design page answer 16 deletes them, as the silent wipe does.
+    ///
+    /// Set-once through ``installRecoveryLockPurgeHook(_:)``, for the same reason as
+    /// ``duressPurgeHook``.
+    @ObservationIgnored public private(set) var recoveryLockPurgeHook: (@MainActor () -> Void)?
+
+    /// Installs the recovery lock's location-history purge. Called exactly once, from the app's launch
+    /// wiring; a second install is refused and recorded.
+    ///
+    /// - Parameter hook: The purge, run on the main actor after the decoy is on screen.
+    public func installRecoveryLockPurgeHook(_ hook: @escaping @MainActor () -> Void) {
+        guard recoveryLockPurgeHook == nil else {
+            FernletAuditLog.log("lock.recoveryLockPurgeHook.reinstallRefused")
+            return
+        }
+        recoveryLockPurgeHook = hook
+    }
+
     /// Combine mirror of ``state`` for subscribers outside the Observation system.
     public var statePublisher: AnyPublisher<FernletLockState, Never> { stateSubject.eraseToAnyPublisher() }
 
@@ -3074,6 +3095,9 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         // After the decoy is on screen, never before: the purge is a background errand and the user
         // in front of the coercer must see an ordinary unlock, not a pause.
         if case .silentWipe = mode { duressPurgeHook?() }
+        // The recovery lock keeps the recoverable corpus, but not where someone has been: the World
+        // map's location history goes (design page answer 16; World build only).
+        if case .recoveryLock = mode { recoveryLockPurgeHook?() }
     }
 
     /// Spends one throwaway scrypt derivation so a duress unlock costs the same two derivations a

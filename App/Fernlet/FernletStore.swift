@@ -22,6 +22,7 @@ import PrivateMediaStore
 import PrivateStoreCore
 import PeriodContextBridge
 import StoreCore
+import WorldMapStore
 import DiaryStore
 import HealthKitGateway
 import AppServices
@@ -237,6 +238,8 @@ final class FernletStore {
             // fail-closed on the engaging edge — the page's own refusal is the second half.
             if duressSessionActive { clearPhase3Evidence() }
             #endif
+            // The World map's fog follows the decoy on the same flag: history hidden, nothing written.
+            worldFog.setDecoy(duressSessionActive)
         }
     }
     /// One-shot request to show the "Turn on Nearby Friends?" prompt (set when the user keeps
@@ -738,6 +741,13 @@ final class FernletStore {
     /// initializer (tests, previews) defaults to a fresh in-memory store, and the launch path
     /// (`FernletStore.load`) passes `FileDeviceDaySummaryStore.production`.
     @ObservationIgnored let deviceDaySummaryStore: any DeviceDaySummaryStoring
+    /// The World map's sealed, device-only location history (World build; `WorldMapVault`). The test
+    /// initializer defaults to an ephemeral vault (a temporary folder, in-memory keys); the launch path
+    /// uses the production one. Reached for the wipe through ``worldFog`` (`resetAll`).
+    @ObservationIgnored let worldMapVault: WorldMapVault
+    /// The World map's fog: whether readings lift it, the lifted cells, and the decoy rule
+    /// (`WorldFogKeeper`). Lazy, so a store that never shows the map never reads the vault.
+    @ObservationIgnored private(set) lazy var worldFog = WorldFogKeeper(vault: worldMapVault)
     /// Recipe ids whose web-image download is currently in flight. Guards the entry to
     /// ``fetchRecipeWebImageIfNeeded(for:)`` so the paste-import fire-and-forget task and the
     /// detail's first-open task — both of which can hold the same not-yet-attempted recipe copy —
@@ -878,7 +888,7 @@ final class FernletStore {
     /// Every repository/service/defaults parameter is an injection seam; nil means production
     /// default. Prefer `FernletStore.load` at app launch — it does the slow work off the first
     /// frame.
-    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, appGroupDirectory: URL? = nil, messagesCatalogDirectory: URL? = nil, sharedRecipeImportQueueFileURL: URL? = nil, photoDocumentsDirectory: URL? = nil, proximitySupportDirectory: URL? = nil, heartDropKeychainService: String? = nil, aiQuotaDefaults: UserDefaults = .standard, foodSearchCorrectionDefaults: UserDefaults = .standard, deviceHealthResidueStore: (any DeviceHealthResidueStoring)? = nil, deviceDaySummaryStore: (any DeviceDaySummaryStoring)? = nil) {
+    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, appGroupDirectory: URL? = nil, messagesCatalogDirectory: URL? = nil, sharedRecipeImportQueueFileURL: URL? = nil, photoDocumentsDirectory: URL? = nil, proximitySupportDirectory: URL? = nil, heartDropKeychainService: String? = nil, aiQuotaDefaults: UserDefaults = .standard, foodSearchCorrectionDefaults: UserDefaults = .standard, deviceHealthResidueStore: (any DeviceHealthResidueStoring)? = nil, deviceDaySummaryStore: (any DeviceDaySummaryStoring)? = nil, worldMapVault: WorldMapVault? = nil) {
         // Assigned FIRST: the own-photo corpora, the escrow coordinator and the launch key migration
         // all read it, and the migration kicks off at the end of this initializer.
         self.photoDocumentsDirectory = photoDocumentsDirectory ?? Self.defaultPhotoDocumentsDirectory
@@ -886,6 +896,7 @@ final class FernletStore {
         // tests' and previews' path; the launch path hands in the production file.
         self.deviceHealthResidueStore = deviceHealthResidueStore ?? InMemoryDeviceHealthResidueStore()
         self.deviceDaySummaryStore = deviceDaySummaryStore ?? InMemoryDeviceDaySummaryStore()
+        self.worldMapVault = worldMapVault ?? WorldMapVault.ephemeral()
         self.proximitySupportRoot = proximitySupportDirectory ?? FernletProximityStorage.productionDirectory
         self.heartDropKeychainService = heartDropKeychainService ?? HeartDropStorageScope.production.keychainService
         self.appGroupDirectory = appGroupDirectory
@@ -1042,6 +1053,7 @@ final class FernletStore {
         // `FernletStore.load` passes the production files unless a test hands them in.
         self.deviceHealthResidueStore = deviceHealthResidueStore
         self.deviceDaySummaryStore = deviceDaySummaryStore
+        self.worldMapVault = WorldMapVault.production()
         self.proximitySupportRoot = FernletProximityStorage.productionDirectory
         self.heartDropKeychainService = HeartDropStorageScope.production.keychainService
         // nil / `.standard` = the REAL app-group container and the real defaults. Never a unique
@@ -7071,6 +7083,12 @@ final class FernletStore {
         if !deviceDaySummaryStore.clearAll() {
             incompleteStores.append("your day summaries")
         }
+        // The World map's sealed location history (fog cells and its locked-phone buffer) and both of
+        // its device keys, plus its two device-only settings. World build only.
+        if !worldFog.clearAll() {
+            incompleteStores.append("your map history")
+        }
+        WorldMapPreferences.clearAll()
         // Worry Box notes are the app's most sensitive free-text data and a no-lock user has no
         // other bulk-wipe path — purge the sealed rows + the device-local let-go count. `!= true`
         // like the funnel's sealed hooks: a nil (unwired) hook or a failed row delete must surface,

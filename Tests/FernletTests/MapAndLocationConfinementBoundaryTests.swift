@@ -10,8 +10,9 @@ import Testing
 ///   reports, which is what lets phase 2 swap in MapLibre, and what keeps Apple's map service to one
 ///   documented destination (`Docs/No-Tracking-Wall.md` §4a, "Apple Maps (MapKit)").
 /// - **CoreLocation** (and `CoreLocationUI`, and `WeatherKit`, whose API carries `CLLocation`) only in
-///   `WeatherKitService.swift`, where weather has always asked for a coarse fix. Step 5a of the plan adds
-///   the World location source here, in the same commit as its file.
+///   `WeatherKitService.swift`, where weather has always asked for a coarse fix, and
+///   `WorldLocationSource.swift`, the World map's location (plan step 5a), whose readings leave the file as
+///   plain `GeoPoint`s.
 ///
 /// The watch build's planned MapKit route card (`WorkoutRouteMapView.swift`) and GPS recorder join these
 /// lists when main is merged into `world-ui`. A stale entry (a listed file that no longer imports the
@@ -32,7 +33,10 @@ struct MapAndLocationConfinementBoundaryTests {
     /// The only files that may import a map module.
     static let mapFiles: Set<String> = ["App/Fernlet/World/Map/AppleMutedBaseMap.swift"]
     /// The only files that may import a location module.
-    static let locationFiles: Set<String> = ["FernletKit/Sources/AppServices/WeatherKitService.swift"]
+    static let locationFiles: Set<String> = [
+        "FernletKit/Sources/AppServices/WeatherKitService.swift",
+        "App/Fernlet/World/WorldLocationSource.swift",
+    ]
 
     @Test func mapKitIsConfinedToTheAppleBaseMap() throws {
         let importers = try Self.files(importingAnyOf: Self.mapModules)
