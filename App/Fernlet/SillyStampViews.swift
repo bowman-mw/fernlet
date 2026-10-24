@@ -2,83 +2,68 @@
 //  SillyStampViews.swift
 //  Fernlet
 //
-//  The stamps as drawn: the stamp itself, the stamp book at the top of the silly stats page, and the
-//  banner that says a stamp was just earned. In the app only — a stamp never raises a notification.
+//  The stamps as drawn: the stamp itself, the Silly stamps card in the Stamp book, and the banner that
+//  says a stamp was just earned. In the app only — a stamp never raises a notification.
 //
 
 import SwiftUI
 import FernletUI
 import FernletFoundation
 
-/// A stamp: the stat's emoji inside a round, inked rim with a perforated edge, tilted a little as if
-/// pressed by hand.
+/// A stamp (design `b2-stamp-art`, approved 2026-10-24): the stat's pixel art (``WorldStampArt``) on a
+/// gold disc in a 3-pt ink ring once earned; before that, a faded silhouette of the art in a dashed ring.
 ///
-/// Decorative — the name beside it carries the meaning — so it is hidden from VoiceOver. Drawn
-/// rather than laid out for the reason ``SillyStatsHomeCard``'s emoji is: the accessibility audit
-/// reports a bare emoji `Text` as clipped. Grows with the user's text size.
+/// Decorative — the name beside it carries the meaning — so it is hidden from VoiceOver. The gold disc
+/// keeps its colour in both appearances, so a one-colour ink stamp (Encore's note) stays ink on it.
 struct SillyStampBadge: View {
     let kind: SillyStatKind
-    /// The diameter at the default text size.
-    var diameter: CGFloat = 56
-    @ScaledMetric(relativeTo: .body) private var scale: CGFloat = 1
+    var earned = true
+    /// The disc's diameter.
+    var diameter: CGFloat = 54
+    /// Points per sprite pixel.
+    var scale: CGFloat = 3
 
     var body: some View {
-        let side = diameter * min(max(scale, 0.8), 2.2)
-        let palette = Self.palette(for: kind)
-        ZStack {
-            Circle().fill(Color.parchment)
-            Circle().fill(palette.fill.opacity(0.16))
-            Circle().strokeBorder(palette.ink, style: StrokeStyle(lineWidth: max(1.5, side * 0.04), dash: [side * 0.07, side * 0.05]))
-            Circle().inset(by: side * 0.12).strokeBorder(palette.ink.opacity(0.5), lineWidth: 1)
-            Canvas { context, size in
-                let glyph = context.resolve(Text(verbatim: SillyStampCopy.emoji(for: kind)).font(.system(size: size.width * 0.4)))
-                context.draw(glyph, at: CGPoint(x: size.width / 2, y: size.height / 2))
+        let sprite = WorldStampArt.sprite(for: kind)
+        Group {
+            if earned {
+                WorldSpriteView(sprite: sprite, scale: scale, tint: StampBookArt.discTint(for: sprite))
+                    .frame(width: diameter, height: diameter)
+                    .background(WorldPalette.rgb(StampBookArt.stampGold), in: Circle())
+                    .overlay(Circle().strokeBorder(WorldPalette.ink, lineWidth: 3))
+            } else {
+                WorldSpriteView(sprite: sprite, scale: scale, tint: WorldPalette.rgb(StampBookArt.silhouette))
+                    .frame(width: diameter, height: diameter)
+                    .overlay(Circle().strokeBorder(WorldPalette.ink.opacity(0.25), style: StrokeStyle(lineWidth: 2, dash: [5, 4])))
             }
         }
-        .frame(width: side, height: side)
-        .rotationEffect(.degrees(Self.tilt(for: kind)))
-        // Paper and ink in both appearances, like a real stamp on a dark page: the dark palette's
-        // fills lost the darker emoji (the paw prints all but vanished on dark goldenrod).
-        .environment(\.colorScheme, .light)
         .accessibilityHidden(true)
-    }
-
-    /// The stamp's ink: terracotta, moss or goldenrod, taking turns down the page order.
-    static func palette(for kind: SillyStatKind) -> (fill: Color, ink: Color) {
-        let inks: [(fill: Color, ink: Color)] = [
-            (Color.terracotta, Color.terracottaInk), (Color.moss, Color.mossInk), (Color.goldenrod, Color.goldenrodInk),
-        ]
-        let index = SillyStatKind.allCases.firstIndex(of: kind) ?? 0
-        return inks[index % inks.count]
-    }
-
-    /// A few degrees either way, fixed per stamp so the book looks hand-stamped but never shuffles.
-    static func tilt(for kind: SillyStatKind) -> Double {
-        let tilts: [Double] = [-6, 4, -3, 6, -5, 2, -2, 5]
-        let index = SillyStatKind.allCases.firstIndex(of: kind) ?? 0
-        return tilts[index % tilts.count]
     }
 }
 
-/// The stamp book: every stamp earned so far, in the order they were earned, each with its day.
+/// The Stamp book's Silly stamps card (designs `b1-stamp-book`, folded into `b2-milestones` draft 2, and
+/// `b2-stamp-art`): all nineteen stamps, four a row (two at accessibility text sizes), the earned ones on
+/// gold with their names and days, the rest as faded silhouettes over “?”, with “3 of 19” beside the title.
 ///
-/// At the top of ``SillyStatsList``, so it is on the silly stats page and on the push from
-/// Milestones alike. Drawn only once there is a stamp in it: like the stats themselves, the book
-/// never lists what is missing. Each stamp is one VoiceOver element that says its name, its stat
-/// and the day it was earned.
+/// The owner approved showing the silhouettes (`b2-stamp-art`: “Unearned stamps still show as a faded
+/// silhouette with ?”); the stats themselves still stay hidden until they mean something. Each stamp is
+/// one VoiceOver element: its name, stat and day, or “A stamp not earned yet”.
 struct SillyStampBookCard: View {
     var stamps: [SillyStampEntry]
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    /// The narrowest a stamp's column may be, growing with the text size so a name never truncates.
-    @ScaledMetric(relativeTo: .body) private var columnMinimum: CGFloat = 88
 
     var body: some View {
+        let earned = Dictionary(stamps.map { ($0.kind, $0) }, uniquingKeysWith: { first, _ in first })
         FernletCard {
-            VStack(alignment: .leading, spacing: 16) {
-                header
-                LazyVGrid(columns: columns, alignment: .center, spacing: 18) {
-                    ForEach(stamps) { entry in
-                        SillyStampCell(entry: entry)
+            VStack(alignment: .leading, spacing: 12) {
+                header(count: earned.count)
+                Text("A stamp arrives the day a silly stat first shows up. They only add up.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(WorldPalette.dim)
+                    .fernletWrappingText()
+                LazyVGrid(columns: columns, alignment: .center, spacing: 12) {
+                    ForEach(SillyStatKind.allCases, id: \.self) { kind in
+                        SillyStampCell(kind: kind, entry: earned[kind])
                     }
                 }
             }
@@ -87,49 +72,67 @@ struct SillyStampBookCard: View {
         .accessibilityIdentifier("sillyStats.stampBook")
     }
 
-    private var header: some View {
+    private func header(count: Int) -> some View {
         let layout = dynamicTypeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
             : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 8))
         return layout {
-            Text("Stamp book")
+            Text("Silly stamps")
                 .font(.fernlet(.headerMedium))
-                .foregroundStyle(Color.bark)
+                .foregroundStyle(WorldPalette.bark)
                 .accessibilityAddTraits(.isHeader)
             if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 8) }
-            Text("\(stamps.count) of \(SillyStatKind.allCases.count)")
+            Text("\(count) of \(SillyStatKind.allCases.count)")
                 .font(.fernlet(.label))
-                .foregroundStyle(Color.slate)
+                .foregroundStyle(WorldPalette.dim)
         }
     }
 
-    /// Three or four stamps a row, or one a row at accessibility text sizes.
+    /// Four stamps a row, or two at accessibility text sizes.
     private var columns: [GridItem] {
-        if dynamicTypeSize.isAccessibilitySize {
-            return [GridItem(.flexible(), alignment: .top)]
-        }
-        return [GridItem(.adaptive(minimum: columnMinimum), spacing: 10, alignment: .top)]
+        let count = dynamicTypeSize.isAccessibilitySize ? 2 : 4
+        return Array(repeating: GridItem(.flexible(), spacing: 6, alignment: .top), count: count)
     }
 }
 
-/// One stamp in the book: the stamp, its name and the day it was earned.
+/// One stamp in the book: the stamp, its name and the day it was earned, or a silhouette over “?”.
 struct SillyStampCell: View {
-    var entry: SillyStampEntry
+    var kind: SillyStatKind
+    var entry: SillyStampEntry?
 
     var body: some View {
+        if let entry {
+            earnedCell(entry)
+        } else {
+            VStack(spacing: 4) {
+                SillyStampBadge(kind: kind, earned: false)
+                Text(verbatim: "?")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(WorldPalette.dim)
+            }
+            .frame(maxWidth: .infinity, alignment: .top)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(Self.unearnedLabel))
+        }
+    }
+
+    /// An unearned stamp's spoken name. Static: nothing can activate it, so Voice Control never names it.
+    private static let unearnedLabel = LocalizedStringResource("A stamp not earned yet",
+                                                               comment: "Stamp book: VoiceOver for a stamp slot whose silly stat hasn't shown up yet (drawn as a faded silhouette over '?')")
+
+    private func earnedCell(_ entry: SillyStampEntry) -> some View {
         let name = SillyStampCopy.name(for: entry.kind)
         let earned = FernletDate.date(fromDayKey: entry.dayKey) ?? entry.createdAt
-        VStack(spacing: 6) {
+        return VStack(spacing: 4) {
             SillyStampBadge(kind: entry.kind)
-                .padding(.bottom, 2)
             Text(verbatim: name)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.bark)
+                .font(.fernlet(.labelSmall).weight(.semibold))
+                .foregroundStyle(WorldPalette.bark)
                 .multilineTextAlignment(.center)
                 .fernletWrappingText()
             Text(earned, format: Self.dayFormat(for: earned))
                 .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
+                .foregroundStyle(WorldPalette.dim)
         }
         .frame(maxWidth: .infinity, alignment: .top)
         .accessibilityElement(children: .ignore)
@@ -145,7 +148,7 @@ struct SillyStampCell: View {
 }
 
 /// The banner for a stamp earned just now: the stamp, "New stamp: Crumb Goblin" and "Cookies Per
-/// Day has begun." Tapping it opens the silly stats page, where the stamp book is.
+/// Day has begun." Tapping it opens the Stamp book at its stamps.
 ///
 /// World build: drawn in the pixel language (design `b1-stamp-banner`): a paper plate in a 3-pt ink
 /// frame with a solid drop shadow, the stamp's pixel art (``WorldStampArt``) on a gold disc.
@@ -165,7 +168,8 @@ struct SillyStampBanner: View {
         let settled = hasLanded || reduceMotion
         Button(action: onOpen) {
             HStack(alignment: .center, spacing: 12) {
-                WorldSpriteView(sprite: WorldStampArt.sprite(for: kind), scale: 4)
+                WorldSpriteView(sprite: WorldStampArt.sprite(for: kind), scale: 4,
+                                tint: StampBookArt.discTint(for: WorldStampArt.sprite(for: kind)))
                     .frame(width: 44, height: 44)
                     .background(WorldPalette.rgb(0xF2C14E), in: Circle())
                     .overlay(Circle().strokeBorder(WorldPalette.ink, lineWidth: 3))

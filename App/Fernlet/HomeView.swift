@@ -128,6 +128,8 @@ struct HomeView: View {
     /// couple of points at each end exactly as they did before.
     @ScaledMetric(relativeTo: .body) private var photowallHeight: CGFloat = 126
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// The Stamp book, pushed from the Milestones or Silly stats card.
+    @State private var isStampBookOpen = false
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -136,6 +138,16 @@ struct HomeView: View {
                     .fernletTabBarBottomClearance()
             }
             .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
+            // Milestones and Silly stats open one page, the Stamp book (design `b2-milestones`, draft 2).
+            .stampBookDestination(isPresented: $isStampBookOpen, store: store)
+            // Customize is a page inside the Today panel (design `b2-customize`): Customize → a slot,
+            // Wardrobe, Creation Studio → Save item all push under the plate. The map's hold still opens
+            // it as a sheet (`CompanionCustomizationSheet`).
+            .navigationDestination(isPresented: $isCompanionSheetPresented) {
+                CompanionCustomizationPage(store: store, petCount: $companionPetCount,
+                                           isStudioDraftDirty: .constant(false))
+                    .fernletPushedPage(CompanionCustomizationPage.title)
+            }
             // In a World panel, the panel's dotted page (the stack paints its own background otherwise).
             .background {
                 if presentation == .page { Color.parchment } else { WorldPageBackground().ignoresSafeArea() }
@@ -149,23 +161,6 @@ struct HomeView: View {
                             closesWithDone: true, onClose: { isArrangingToday = false }) {
                 WorldTodayEditor(store: store)
             }
-        }
-        .sheet(isPresented: $isCompanionSheetPresented) {
-            CompanionCustomizationSheet(
-                store: store,
-                petCount: $companionPetCount
-            )
-            // One detent, and it is the full one. This sheet hosts a four-level stack — Customize →
-            // slot picker → Wardrobe → Creation Studio → Save item — and the last two pin a bottom
-            // action bar ("Next", "Save to closet") to the sheet's edge. At the half detent there is
-            // no room left above that bar: the studio's canvas and the save step's shop toggle fall
-            // below the fold, directly behind it, so a tap aimed at the toggle lands on Save — which
-            // saves the item unlisted and, because the studio exits by dismissing, tears the whole
-            // sheet down to Home. Nothing is lost by dropping the half detent: every screen in here
-            // draws the companion itself, which is all the half sheet was showing behind it.
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-            .presentationCornerRadius(20)
         }
         .task {
             #if DEBUG
@@ -309,10 +304,9 @@ struct HomeView: View {
         let coins = CoinEconomy.milestoneAwardCoins(in: store.coinLedgerService.entries)
         let kept = keptKeepsakes(counts: counts, worries: worries)
         let summary = Self.milestonesSummary(keptKinds: kept.count, coins: coins)
-        // A large sheet, not a push (HOME-13): one rule for read-only destinations from Home —
-        // they present as sheets, matching Trends, First aid and the gear.
+        // World build (design `b2-milestones`, draft 2): the Stamp book, pushed under the Today plate.
         return Button {
-            activeSheet = .milestones
+            isStampBookOpen = true
         } label: {
             FernletCard {
                 VStack(alignment: .leading, spacing: 12) {
@@ -440,7 +434,7 @@ struct HomeView: View {
         case .mealPhotos:
             mealPhotosStrip
         case .sillyStats:
-            SillyStatsHomeCard(stats: store.sillyStats) { activeSheet = .sillyStats }
+            SillyStatsHomeCard(stats: store.sillyStats) { isStampBookOpen = true }
         case .logFood, .recipeBook, .newRecipe, .workout, .journal, .sleep, .water, .trends:
             HomeActionWidget(widget: widget) {
                 handleHomeWidget(widget)

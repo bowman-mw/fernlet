@@ -172,9 +172,13 @@ struct CreationStudioView: View {
         .onChange(of: layout.fits) { _, fits in
             if fits { scrollPosition.scrollTo(edge: .top) }
         }
-        .background(Color.parchment)
+        .fernletPageBackground()
         .tint(Color.moss)
-        .navigationTitle(editingItem == nil ? "New item" : "Edit item")
+        // Under the Today panel's plate (design `b2-studio`): ‹ Back, New item, ✕. While there is
+        // unsaved paint the plate's Back asks first and the edge swipe is off, as the toolbar Back
+        // below does in a sheet's own bar.
+        .fernletGuardedPushedPage(editingItem == nil ? Self.newItemTitle : Self.editItemTitle,
+                                  isGuarded: hasUnsavedDrawing, onBlockedBack: { askingToDiscard = true })
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) {
             // The editor screen is just the drawing now; naming + listing move to a confirmation
@@ -214,6 +218,13 @@ struct CreationStudioView: View {
             draftIsDirty?.wrappedValue = dirty
         }
     }
+
+    /// "New item", the studio's title for a new design.
+    static let newItemTitle = LocalizedStringResource("New item", comment: "Creation Studio title while designing a new companion item")
+    /// "Edit item", the studio's title for an existing design.
+    static let editItemTitle = LocalizedStringResource("Edit item", comment: "Creation Studio title while editing one of the user's companion items")
+    /// "Save item", the confirmation step's title.
+    static let saveItemTitle = LocalizedStringResource("Save item", comment: "Creation Studio: the step that names a new item and lists it in the shop")
 
     /// True while the studio holds paint that has not been saved: the live canvas, or a per-slot
     /// buffer stashed on the way here (switching slots keeps each drawing alive, so those count too).
@@ -381,25 +392,24 @@ struct CreationStudioView: View {
         .aspectRatio(CGFloat(slot.gridCols) / CGFloat(slot.gridRows), contentMode: .fit)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.parchment)
+                .fill(WorldPalette.paperLight)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Color.bark.opacity(0.10), lineWidth: 1)
+                .strokeBorder(WorldPalette.ink, lineWidth: 3)
         )
         .overlay {
             // Gentle first-touch hint when the grid is still blank.
             if isCanvasBlank {
                 Text("Drag to paint · pinch to zoom")
                     .font(.fernlet(.body))
-                    .italic()
                     // The canvas the layout leaves can be small (about 220×180pt at the largest
                     // text size on an iPhone SE), so the hint shrinks to fit rather than truncate
                     // to "pinc…" — it is the only on-screen word about pinch-to-zoom.
                     .multilineTextAlignment(.center)
                     .minimumScaleFactor(0.5)
                     .padding(8)
-                    .foregroundStyle(Color.slate)
+                    .foregroundStyle(WorldPalette.dim)
                     .allowsHitTesting(false)
                     // Decorative; hidden from a11y so it doesn't also carry the canvas's `studio.canvas` id.
                     .accessibilityHidden(true)
@@ -407,12 +417,9 @@ struct CreationStudioView: View {
         }
         // 8pt, not 16 — see the outer padding note. Together these give the grid back ~32pt of width,
         // which at 48 columns is real cell size rather than decoration.
-        .padding(8)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.cream)
-        )
-        .fernletCardShadow()
+        .background {
+            RoundedRectangle(cornerRadius: 12, style: .continuous).fill(WorldPalette.ink.opacity(0.22)).offset(y: 3)
+        }
         .accessibilityIdentifier("studio.canvas")
     }
 
@@ -438,10 +445,7 @@ struct CreationStudioView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, 10)
         .padding(.bottom, 4)
-        .background(Color.parchment)
-        .overlay(alignment: .top) {
-            Rectangle().fill(Color.bark.opacity(0.08)).frame(height: 1)
-        }
+        .background(WorldPalette.page)
     }
 
     private var eraserSwatch: some View {
@@ -556,7 +560,7 @@ struct CreationStudioView: View {
     /// vanish into the cream card behind them (the 6b "palette that never disappears" fix).
     private func selectionRing(isSelected: Bool) -> some View {
         RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .strokeBorder(isSelected ? Color.moss : Color.bark.opacity(0.22), lineWidth: isSelected ? 2.5 : 1)
+            .strokeBorder(isSelected ? WorldPalette.moss : WorldPalette.ink, lineWidth: isSelected ? 3 : 2)
     }
 
     /// Clear-canvas lives on the editor (it's a drawing action), in the tool row since 2026-09-29;
@@ -591,24 +595,10 @@ struct CreationStudioView: View {
     private var confirmationScreen: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                CompanionView(
-                    state: store.companionState,
-                    appearance: store.settings.companionAppearance,
-                    size: 148,
-                    equippedItems: previewEquipped
-                )
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
-                // The one companion render that is neither the interactive Home one nor purely
-                // decorative. Deleting `CompanionView`'s shared label (T1-10) left this a subtree of
-                // `Shape`s announcing nothing, and this screen has NO header above it — hiding it
-                // like the other seven would open the confirm step with "Name, text field" and no
-                // sign the drawing survived. So it keeps an element, with a real label, and
-                // `studio.confirm.preview` keeps resolving for anyone who later writes a test
-                // against it. `children: .ignore` because there is nothing underneath for a label
-                // to attach to otherwise.
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Preview of your item on your companion")
+                // The previews (design `b2-studio-save`), wearing the drawing. One element with a real
+                // label: this step has no header above it, so VoiceOver hears the drawing survived.
+                CustomizePreviewCard(store: store, petCount: 0, previewItems: previewEquipped,
+                                     spokenName: Text("Preview of your item on your companion"))
                 .accessibilityIdentifier("studio.confirm.preview")
 
                 SheetField("Name") {
@@ -629,9 +619,9 @@ struct CreationStudioView: View {
             .padding(20)
             .padding(.bottom, 24)
         }
-        .background(Color.parchment)
+        .fernletPageBackground()
         .tint(Color.moss)
-        .navigationTitle("Save item")
+        .fernletPushedPage(Self.saveItemTitle)
         .navigationBarTitleDisplayMode(.inline)
         // The name field's keyboard "Done", on this page because it is always pushed (the
         // customization sheet's stack or the Wardrobe's): a Done declared outside the stack, or on
@@ -655,12 +645,11 @@ struct CreationStudioView: View {
                     Toggle(isOn: $isShareable) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("List in my shop")
-                                .font(.fernlet(.label))
-                                .foregroundStyle(Color.bark)
+                                .font(FernletFramedFont.rowTitle)
+                                .foregroundStyle(WorldPalette.bark)
                             Text("Friends nearby can buy it for their companion.")
-                                .font(.fernlet(.bodySmall))
-                                .italic()
-                                .foregroundStyle(Color.slate)
+                                .font(FernletFramedFont.rowDetail)
+                                .foregroundStyle(WorldPalette.dim)
                         }
                     }
                     .tint(Color.moss)
@@ -686,18 +675,20 @@ struct CreationStudioView: View {
                         .padding(.vertical, 12)
                     }
                 }
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .background(WorldPalette.paper, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Color.bark.opacity(0.08), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(WorldPalette.ink, lineWidth: 2)
                 )
+                .background {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous).fill(WorldPalette.ink.opacity(0.22)).offset(y: 3)
+                }
             }
 
             if isShareable {
                 Text(shopHint)
-                    .font(.fernlet(.bodySmall))
-                    .italic()
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.note)
+                    .foregroundStyle(WorldPalette.dim)
             }
         }
     }
