@@ -19,7 +19,8 @@ import FernletLockUI
 /// The Settings hub: a searchable, four-group Form (2026-08-21 restructure, artboard 5a —
 /// SETT-14/26/28/29) that routes to every settings sub-page. Each row carries a one-line sub-label
 /// breadcrumb saying what is inside it; the groups are **Your day** (Appearance, Goal & nutrition,
-/// Reminders, Personal care tasks, Quick-log shortcuts, Sounds & haptics), **Friends** (Friends & Blocks,
+/// Reminders, Personal care tasks, Quick-log shortcuts, Sounds & haptics), **Home map** (World build step 5c:
+/// ``HomeMapSettingsView``, location, the fog, routes and places), **Friends** (Friends & Blocks,
 /// Nearby friends; `b4-mem-settings-friends`), **Data & sources** (AI & data sources,
 /// Health), **Privacy & data** (Privacy & Data, App lock, Safety & reporting, Privacy Policy, AI
 /// activity log), and **Private** (Period & sensitive content), followed
@@ -342,6 +343,8 @@ struct SettingsSheet: View {
             QuickLogShortcutsEditor(store: store)
         case .soundsHaptics:
             SoundsHapticsSettingsView()
+        case .homeMap:
+            HomeMapSettingsView(store: store)
         case .aiDataSources:
             settingsDestination(title: "AI & data sources") { aiDataSourcesTab }
         case .health:
@@ -386,6 +389,7 @@ struct SettingsSheet: View {
     private var settingsForm: some View {
         Form {
             yourDaySection
+            homeMapSection
             friendsSection
             dataSourcesSection
             privacyHubSection
@@ -466,6 +470,18 @@ struct SettingsSheet: View {
                 .accessibilityIdentifier("settings.row.soundsHaptics")
         } header: {
             hubSectionHeader("Your day")
+        }
+        .listRowBackground(Color.cream)
+    }
+
+    /// "Home map" (World build step 5c; `b2-settings-root` draws it between Your day and the groups
+    /// below): location, the fog, routes and places, one page (`b1-settings-map`).
+    private var homeMapSection: some View {
+        Section {
+            hubLink("Home map", subtitle: Text("Location, fog, routes, places"), .homeMap)
+                .accessibilityIdentifier("settings.row.homeMap")
+        } header: {
+            hubSectionHeader("Home map")
         }
         .listRowBackground(Color.cream)
     }

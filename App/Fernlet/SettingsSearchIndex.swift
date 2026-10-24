@@ -40,6 +40,8 @@ nonisolated enum SettingsRoute: Hashable, CaseIterable {
     case personalCare
     case layoutShortcuts
     case soundsHaptics
+    /// Home map (World build step 5c, `b1-settings-map`): location, the fog, routes and places.
+    case homeMap
     case aiDataSources
     case health
     case coreMemory
@@ -454,6 +456,53 @@ nonisolated enum SettingsSearchIndex {
             keywords: ["breathing haptics", "breathing", "pacer", "vibration", "haptics", "taps"],
             breadcrumb: .soundsHapticsBreathing,
             route: .soundsHaptics
+        ),
+
+        // Home map (World build step 5c, `b1-settings-map`): location, the fog, routes and places.
+        SettingsSearchEntry(
+            title: "Home map",
+            display: LocalizedStringResource(
+                "settings.search.title.homeMap", defaultValue: "Home map",
+                comment: "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to."),
+            keywords: ["map", "home map", "location", "gps", "places", "pins", "where you've been"],
+            breadcrumb: .homeMap,
+            route: .homeMap
+        ),
+        SettingsSearchEntry(
+            title: "Map the world in the background",
+            display: LocalizedStringResource(
+                "settings.search.title.backgroundMapping", defaultValue: "Map the world in the background",
+                comment: "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to."),
+            keywords: ["background mapping", "always location", "low power", "visits"],
+            breadcrumb: .homeMap,
+            route: .homeMap
+        ),
+        SettingsSearchEntry(
+            title: "Uncover the map as you go",
+            display: LocalizedStringResource(
+                "settings.search.title.uncoverMap", defaultValue: "Uncover the map as you go",
+                comment: "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to."),
+            keywords: ["fog", "uncover", "explore"],
+            breadcrumb: .homeMap,
+            route: .homeMap
+        ),
+        SettingsSearchEntry(
+            title: "Save new routes",
+            display: LocalizedStringResource(
+                "settings.search.title.saveRoutes", defaultValue: "Save new routes",
+                comment: "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to."),
+            keywords: ["routes", "route", "walk lines", "run lines", "trails", "delete routes"],
+            breadcrumb: .homeMap,
+            route: .homeMap
+        ),
+        SettingsSearchEntry(
+            title: "Delete map history",
+            display: LocalizedStringResource(
+                "settings.search.title.deleteMapHistory", defaultValue: "Delete map history",
+                comment: "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to."),
+            keywords: ["map history", "forget workout spaces", "clear map"],
+            breadcrumb: .homeMap,
+            route: .homeMap
         ),
 
         // AI & data sources (the grouping page that took the AI/web/weather/body-signal switches
@@ -1225,6 +1274,11 @@ nonisolated extension SettingsSearchBreadcrumb {
         token: "App lock › Danger zone",
         display: LocalizedStringResource(
             "settings.search.breadcrumb.appLockDangerZone", defaultValue: "App lock › Danger zone",
+            comment: "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it."))
+    static let homeMap = SettingsSearchBreadcrumb(
+        token: "Home map",
+        display: LocalizedStringResource(
+            "settings.search.breadcrumb.homeMap", defaultValue: "Home map",
             comment: "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it."))
     static let nearbyFriends = SettingsSearchBreadcrumb(
         token: "Nearby friends",

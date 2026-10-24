@@ -147,10 +147,11 @@ struct WorldAlbumTests {
         }
     }
 
-    /// The Settings root carries the Friends group right after Your day, with Friends & Blocks first.
+    /// The Settings root carries the Friends group right after Your day and Home map, with Friends & Blocks first.
     @Test func settingsHasAFriendsGroupAfterYourDay() throws {
         let sheet = try RepoRoot.source("App/Fernlet/SettingsSheet.swift")
-        let day = try #require(sheet.range(of: "            yourDaySection\n            friendsSection\n"))
+        // Home map (World build step 5c, `b2-settings-root`) sits between Your day and Friends.
+        let day = try #require(sheet.range(of: "            yourDaySection\n            homeMapSection\n            friendsSection\n"))
         #expect(!day.isEmpty)
         #expect(sheet.contains("hubLink(\"Friends & Blocks\", subtitle: friendsRowSubtitle, .friendsBlocks)"))
         #expect(sheet.contains("case .friendsBlocks:\n            // The page the Friends tab's header used to push (b2-friend-list), with Back to Settings.\n            FriendListView("))

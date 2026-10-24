@@ -53,6 +53,13 @@ extension SettingsSearchSynonyms {
         "Spoken cues": ["indicaciones por voz", "voz", "hablar", "leer en voz alta", "decir"],
         "Cooking timer sound": ["sonido del temporizador de cocina", "cocina", "cocinar", "temporizador", "sonido"],
         "Breathing haptics": ["vibraciones al respirar", "respiración", "respirar", "ritmo", "vibración"],
+        // Home map (World build step 5c)
+        "Home map": ["mapa de inicio", "mapa", "ubicación", "lugares", "marcas", "dónde has estado"],
+        "Map the world in the background": ["mapear el mundo en segundo plano", "segundo plano", "siempre",
+                                            "bajo consumo", "visitas"],
+        "Uncover the map as you go": ["descubrir el mapa mientras vas", "niebla", "descubrir", "explorar"],
+        "Save new routes": ["guardar rutas nuevas", "rutas", "ruta", "líneas", "senderos", "borrar rutas"],
+        "Delete map history": ["borrar el historial del mapa", "historial del mapa", "olvidar espacios", "limpiar mapa"],
         // AI & data sources
         "AI status": ["estado de la ia", "ia", "inteligencia artificial", "en el dispositivo", "asistente", "estado"],
         "Turn AI off": ["desactivar la ia", "apagar la ia", "ia apagada", "sin ia", "modo manual"],
