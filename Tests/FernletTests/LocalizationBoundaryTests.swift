@@ -3163,7 +3163,7 @@ struct LocalizationBoundaryTests {
                      role: "the Import product screen's Find product page button"),
         ForkedMember(path: "App/Fernlet/FoodView.swift", declaration: "private func detail(label: LocalizedStringKey, value: String) -> some View {",
                      role: "the product review's Product / Website / Source URL captions"),
-        ForkedMember(path: "App/Fernlet/World/Recipes/RecipePageSections.swift", declaration: "private func label(_ title: Text, sprite: WorldSprite) -> some View {",
+        ForkedMember(path: "App/Fernlet/World/Recipes/RecipePageSections.swift", declaration: "private func label(_ title: Text, sprite: WorldSprite?) -> some View {",
                      role: "the recipe page's Share and Edit buttons (World b2-recipe-detail)"),
         ForkedMember(path: "App/Fernlet/FoodView.swift", declaration: "private var reviewMessage: LocalizedStringKey {",
                      role: "the pre-log review sheet's line under its title"),

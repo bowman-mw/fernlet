@@ -48,6 +48,7 @@ struct RecipePhotoSlot: View {
     let onLibraryFailed: () -> Void
     let onDelete: () -> Void
     @Environment(\.fernletFramedLook) private var look
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -86,7 +87,10 @@ struct RecipePhotoSlot: View {
                 .overlay(shape.strokeBorder(look?.ink ?? Color.clear, lineWidth: 2))
         } else {
             VStack(spacing: 6) {
-                WorldSpriteView(sprite: WorldSprites.camera, scale: 3)
+                // At the accessibility sizes the words alone fill the slot; the camera would ride its edge.
+                if !dynamicTypeSize.isAccessibilitySize {
+                    WorldSpriteView(sprite: WorldSprites.camera, scale: 3)
+                }
                 Text("Add photo")
                     .font(FernletFramedFont.rowDetail.weight(.bold))
                     .foregroundStyle(look?.link ?? Color.moss)
@@ -158,28 +162,40 @@ struct RecipeServingCard: View {
 }
 
 /// The page's three secondaries under Start cooking (`b2-recipe-detail`): Log it (the meal-type menu),
-/// Share and Edit, each a framed button with its pixel icon, stacked at accessibility sizes.
+/// Share and Edit, each a framed button with its pixel icon.
+///
+/// Three equal thirds while the widest word fits a third; then the same thirds without the icons (a
+/// longer language, "Registrarlo"); then one above the other, as at the accessibility sizes. Never a
+/// word cut off inside a button.
 struct RecipePageActions: View {
     let onLog: (MealType) -> Void
     let onShare: () -> Void
     let onEdit: () -> Void
 
     var body: some View {
-        AdaptiveStack(spacing: 8) {
-            RecipeLogMenu(title: Text("Log it"), spokenLabel: Text("Log this recipe"), size: .regular,
-                          showsPlus: true, fillsWidth: true, identifier: "recipeDetail.log", onLog: onLog)
-            Button(action: onShare) { label(Text("Share"), sprite: WorldSprites.share) }
-                .accessibilityIdentifier("recipeDetail.share")
-            Button(action: onEdit) { label(Text("Edit"), sprite: WorldSprites.pen) }
-                .accessibilityIdentifier("recipeDetail.edit")
+        ViewThatFits(in: .horizontal) {
+            EqualColumnGrid(columns: 3, horizontalSpacing: 8) { buttons(icons: true) }
+            EqualColumnGrid(columns: 3, horizontalSpacing: 8) { buttons(icons: false) }
+            VStack(spacing: 8) { buttons(icons: true) }
         }
         .buttonStyle(ActionPillButtonStyle(.secondary))
     }
 
-    private func label(_ title: Text, sprite: WorldSprite) -> some View {
+    @ViewBuilder private func buttons(icons: Bool) -> some View {
+        RecipeLogMenu(title: Text("Log it"), spokenLabel: Text("Log this recipe"), size: .regular,
+                      showsPlus: icons, fillsWidth: true, identifier: "recipeDetail.log", onLog: onLog)
+        Button(action: onShare) { label(Text("Share"), sprite: icons ? WorldSprites.share : nil) }
+            .accessibilityIdentifier("recipeDetail.share")
+        Button(action: onEdit) { label(Text("Edit"), sprite: icons ? WorldSprites.pen : nil) }
+            .accessibilityIdentifier("recipeDetail.edit")
+    }
+
+    private func label(_ title: Text, sprite: WorldSprite?) -> some View {
         HStack(spacing: 7) {
-            WorldSpriteView(sprite: sprite, scale: 2)
-            title.lineLimit(1).minimumScaleFactor(0.8)
+            if let sprite {
+                WorldSpriteView(sprite: sprite, scale: 2)
+            }
+            title.lineLimit(1)
         }
         .frame(maxWidth: .infinity)
     }
