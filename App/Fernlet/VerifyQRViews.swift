@@ -47,47 +47,49 @@ struct VerifyQRDisplaySheet: View {
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Your verification code")
-                .font(.fernlet(.headerMedium))
-                .foregroundStyle(Color.bark)
-            if let url, let image = QRCodeRenderer.image(for: url.absoluteString) {
-                Image(uiImage: image)
-                    .interpolation(.none)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: 260)
-                    .padding(14)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 16))
-                    // T2-10: Smart Invert would flip the black-on-white modules to white-on-black
-                    // and no scanner would read them. A QR is data, not decoration.
-                    .accessibilityIgnoresInvertColors()
-                    // T2-20: the image was silent, so VoiceOver skipped straight past the only
-                    // thing on the sheet that matters. The protocol commits the *displayer*'s side
-                    // (`MeshNetworkManager.beginQRVerification`), so "I hold up my phone, you scan
-                    // it" is a fully supported ceremony for a blind user — it just has to be
-                    // narratable.
-                    .accessibilityLabel("Your verification code, as a QR code for the person you're connecting with to scan")
-                    .accessibilityIdentifier("friends.verifyQR.code")
-                Text("Have the person you're connecting with scan this code. It proves this phone really holds your Fernlet identity. The code expires after a few minutes.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .multilineTextAlignment(.center)
-                    .fernletWrappingText()
-            } else {
-                Text("Couldn't create a verification code just now.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
+        ScrollView {
+            VStack(spacing: 18) {
+                if let url, let image = QRCodeRenderer.image(for: url.absoluteString) {
+                    Image(uiImage: image)
+                        .interpolation(.none)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: 260)
+                        .padding(16)
+                        // b3-qr-show: the code on white in a framed card, white in dark mode too —
+                        // a scanner reads dark modules on light.
+                        .background(Color.white, in: RoundedRectangle(cornerRadius: 14))
+                        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(WorldPalette.ink, lineWidth: 3))
+                        // T2-10: Smart Invert would flip the black-on-white modules to white-on-black
+                        // and no scanner would read them. A QR is data, not decoration.
+                        .accessibilityIgnoresInvertColors()
+                        // T2-20: the image was silent, so VoiceOver skipped straight past the only
+                        // thing on the sheet that matters. The protocol commits the *displayer*'s side
+                        // (`MeshNetworkManager.beginQRVerification`), so "I hold up my phone, you scan
+                        // it" is a fully supported ceremony for a blind user — it just has to be
+                        // narratable.
+                        .accessibilityLabel("Your verification code, as a QR code for the person you're connecting with to scan")
+                        .accessibilityIdentifier("friends.verifyQR.code")
+                    Text("Have the person you're connecting with scan this code. It proves this phone really holds your Fernlet identity. The code expires after a few minutes.")
+                        .font(FernletFramedFont.body)
+                        .foregroundStyle(WorldPalette.dim)
+                        .multilineTextAlignment(.center)
+                        .fernletWrappingText()
+                } else {
+                    Text("Couldn't create a verification code just now.")
+                        .font(FernletFramedFont.body)
+                        .foregroundStyle(WorldPalette.dim)
+                }
             }
-            Button("Done") { dismiss() }
-                .buttonStyle(.plain)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.moss)
-                .accessibilityIdentifier("friends.verifyQR.done")
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 22)
+            .padding(.vertical, 12)
         }
-        .padding(24)
-        .presentationDetents([.medium])
-        .presentationBackground(Color.parchment)
+        // Done top right (the World build's button rule), the title in the sheet.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            SheetHeader(title: "Your verification code", onDone: { dismiss() })
+        }
+        .fernletSheet()
         // The ceremony is an in-person, eyes-on-both-screens moment: once the app leaves the
         // foreground nobody is running it, so end the display (the caller's `onDismiss` then tells
         // the mesh manager to stop honoring challenges for this QR). `.background` rather than
@@ -136,13 +138,10 @@ struct VerifyQRScanSheet: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            Text(title)
-                .font(.fernlet(.headerMedium))
-                .foregroundStyle(Color.bark)
             if scannerUnavailable {
                 Text("The camera isn't available — check camera access for Fernlet in Settings, or use the plain Connect button instead.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.body)
+                    .foregroundStyle(WorldPalette.dim)
                     .multilineTextAlignment(.center)
                     .fernletWrappingText()
                     .padding(.horizontal, 20)
@@ -163,8 +162,10 @@ struct VerifyQRScanSheet: View {
                     },
                     onUnavailable: { scannerUnavailable = true }
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-                .frame(maxHeight: 380)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                // b3-qr-scan: the camera in a framed window.
+                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(WorldPalette.ink, lineWidth: 3))
+                .frame(maxHeight: 420)
                 // The representable hosts a live `DataScannerViewController` with no accessible
                 // content of its own, so without this the viewfinder is a hole in the tree that
                 // VoiceOver walks straight over.
@@ -172,18 +173,19 @@ struct VerifyQRScanSheet: View {
                 .accessibilityLabel(scannerLabel)
                 .accessibilityIdentifier("friends.verifyQR.scanner")
                 Text(prompt)
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.body)
+                    .foregroundStyle(WorldPalette.dim)
+                    .multilineTextAlignment(.center)
             }
-            Button("Cancel") { dismiss() }
-                .buttonStyle(.plain)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.slate)
-                .accessibilityIdentifier("friends.verifyQR.cancel")
+            Spacer(minLength: 0)
         }
-        .padding(20)
-        .presentationDetents([.large])
-        .presentationBackground(Color.parchment)
+        .padding(.horizontal, 18)
+        .padding(.top, 8)
+        // Cancel top left (the World build's button rule), the title in the sheet.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            SheetHeader(title: title, onCancel: { dismiss() })
+        }
+        .fernletSheet()
         // The second half of acquisition feedback (T2-20). `handedOff` is a one-way latch, so this
         // fires exactly once per sheet; it is on the root rather than the viewfinder because the
         // viewfinder is inside the `else` branch and leaves the tree the instant the latch flips.

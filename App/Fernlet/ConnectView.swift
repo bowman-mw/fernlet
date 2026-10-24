@@ -26,6 +26,9 @@ nonisolated enum FriendsRoute: Hashable {
     case friendList
     /// The friend shops exchanged during the last session.
     case friendShop
+    /// Your own shop (`b2-shop-editor`): what friends nearby can buy from you. Pushed from Friend
+    /// shops, so it closes with the shop window too (``closingShop(_:)`` drops what sits above it).
+    case yourShop
 
     /// When a pushed friend shop has to close: its window's expiry, or `.distantPast` — at once —
     /// when no window is open or nearby clothing sharing is off (the two conditions under which the
@@ -45,13 +48,17 @@ nonisolated enum FriendsRoute: Hashable {
 
 // MARK: - FriendsView
 
-/// The Friends tab root: the shared photo album when idle, the in-session disposable camera when live.
+/// The Friends panel's root: the shared photo album, idle or in a session (World Review `b2-friends-root`
+/// draft 3 and `b3-friends-session` draft 2).
 ///
-/// Swaps to ``DisposableCameraView`` once `MeshNetworkManager.isInSession` flips and the
-/// ``ConnectionSuccessOverlay`` — played off `hasCommittedPeer`, the "is there a peer right now"
-/// predicate (P6 item 2) — completes; otherwise it renders the album layout — the
-/// post-session shop-window card, the nearby-peer banner (with the QR verify ceremony on manual
-/// commits), and the searchable photo wall.
+/// **The album never swaps for the camera any more** (owner, 2026-10-24). Idle, the slim row under the
+/// two header buttons says whether this phone is looking for nearby friends (with the QR verify
+/// ceremony on manual commits, and "Change name" while no name is set); in a session the same slot is
+/// one slim session row with a Camera button, which presents ``DisposableCameraView`` full screen over
+/// the panel. The ``ConnectionSuccessOverlay`` — played off `hasCommittedPeer`, the "is there a peer
+/// right now" predicate (P6 item 2) — still celebrates a session's commit, and the album stays under
+/// it. The camera is also offered from Home's blue button, and Messages, Session info and Leave live
+/// on Home's session button (``WorldSessionButton``).
 ///
 /// **The session-end PHOTO review is not this view's** (session photos U3, 2026-09-30: "the pop up
 /// screen for selecting photos should be the first thing shown"). ``SessionPhotoReviewCoordinator``
@@ -83,7 +90,13 @@ struct FriendsView: View {
     /// overlay is still up (Option 1b withholds it until the peer's first post-commit envelope).
     /// Nil shows "Connected" alone, never an identifier in its place.
     @State private var connectionPeerName: String?
-    @State private var sessionReady = false
+    /// The session camera, presented full screen from the session row's Camera button.
+    @State private var cameraPresented = false
+    /// Whether the album is on screen (the Friends panel is open): only then does it host the
+    /// session's prompts.
+    @State private var albumIsVisible = false
+    /// The removal proposal this panel is asking about, if any.
+    @State private var activeRemovalProposal: MeshRemovalProposalPayload?
     /// "Your friend's here" is felt on a session's first commit only; a link that blips and heals
     /// replays the overlay in silence (report B20, ``SessionConnectCue``).
     @State private var connectCue = SessionConnectCue()
@@ -140,35 +153,22 @@ struct FriendsView: View {
     private var reviewCoordinator: SessionPhotoReviewCoordinator { store.sessionPhotoReviewCoordinator }
 
     var body: some View {
-        ZStack {
-            if manager.isInSession && sessionReady {
-                DisposableCameraView(store: store, presentsOwnSheet: $cameraPresentsOwnSheet)
-                    .transition(.opacity)
-                    .zIndex(1)
-            } else {
-                photoAlbumView
-                    .zIndex(0)
-            }
-
-        }
+        photoAlbumView
         // F4: the harness proved `.fullScreenCover` does NOT remove the presenting content from
         // the accessibility tree on its own — VoiceOver/Switch Control could still reach the
-        // camera/album underneath while the celebration overlay plays. This is the covered-content
+        // album underneath while the celebration overlay plays. This is the covered-content
         // half; see the overlay's own `.isModal` note below for why that trait alone wasn't enough.
         .accessibilityHidden(showConnectionAnimation)
-        .animation(.easeInOut(duration: 0.3), value: sessionReady)
         .fullScreenCover(isPresented: $showConnectionAnimation) {
             ConnectionSuccessOverlay(peerName: connectionPeerName) {
                 withAnimation(.easeInOut(duration: 0.4)) {
                     showConnectionAnimation = false
-                    sessionReady = true
                 }
             }
             .presentationBackground(.clear)
         }
         .onAppear {
-            // Already in session when returning to the tab — skip animation, and its haptic.
-            if manager.isInSession { sessionReady = true }
+            // Already in session when returning to the panel: no celebration, and no haptic.
             connectCue.surfaceAppeared(inSession: manager.isInSession)
             // A freshly created FriendsView instance must present a review that predates it:
             // ContentView's Social-tab layout swap destroys the previous instance in the same
@@ -188,6 +188,7 @@ struct FriendsView: View {
         }
         .onChange(of: scenePhase) { _, phase in if phase == .active { scheduleReviewCheck() } }
         .onChange(of: cameraPresentsOwnSheet) { _, up in if !up { scheduleReviewCheck() } }
+        .onChange(of: cameraPresented) { _, up in if !up { scheduleReviewCheck() } }
         .onChange(of: activeSheet == nil) { _, clear in if clear { scheduleReviewCheck() } }
         // Photos first (I17): the overlay showing withdraws a keep prompt that is up, unanswered; the
         // overlay going, or the review's discovery block falling, is when a prompt may be due.
@@ -243,7 +244,7 @@ struct FriendsView: View {
     /// Read by the heal arm and by ``presentDisconnectReviewIfNeeded()``, which is the other site
     /// that requests a presentation and therefore the other site that can lose one.
     private var aPresentationIsUp: Bool {
-        keepFriendsPromptPresented || selectedAlbumPostID != nil
+        keepFriendsPromptPresented || selectedAlbumPostID != nil || cameraPresented
     }
 
     /// The **layout** half of the session transition: what surface the Social tab draws.
@@ -262,10 +263,9 @@ struct FriendsView: View {
     private func handleSessionSurfaceChange(wasInSession: Bool, nowInSession: Bool) {
         guard wasInSession, !nowInSession else { return }
         connectCue.sessionEnded()
-        // The camera swap destroyed the album's stack; the path outlives it here, so clear it or the
-        // album would come back with the page it had pushed before the session.
-        if sessionReady { path.removeAll() }
-        sessionReady = false
+        // The album never swapped out, so its pushed pages stay; the camera this panel presented
+        // has no session left to shoot for (the camera also closes itself on this edge).
+        cameraPresented = false
         showConnectionAnimation = false
         scheduleReviewCheck()
     }
@@ -291,7 +291,7 @@ struct FriendsView: View {
     /// `showConnectionAnimation` (review finding P2-4). Both halves are load-bearing: a heal is
     /// seconds away in the same room, the photo review is the blip's common case and not the keep
     /// prompt, and nothing else ever resets `showConnectionAnimation` once the cover fails to
-    /// present — `sessionReady` is set inside the cover's own completion — so
+    /// present — the flag is lowered inside the cover's own completion — so
     /// `.accessibilityHidden(showConnectionAnimation)` would latch VoiceOver and Switch Control out
     /// of the whole Friends surface for the rest of the session.
     private func handleCommittedPeerChange(hadPeer: Bool, hasPeer: Bool) {
@@ -312,7 +312,6 @@ struct FriendsView: View {
                 keptFriendFingerprints = []
                 keepFriendsPromptPresented = false
                 showConnectionAnimation = false
-                sessionReady = true
             } else {
                 connectionPeerName = connectedPeerName()
                 withAnimation { showConnectionAnimation = true }
@@ -324,7 +323,6 @@ struct FriendsView: View {
             // Leaving the flag set is the a11y latch above.
             if showConnectionAnimation {
                 showConnectionAnimation = false
-                sessionReady = true
             }
             scheduleReviewCheck()
         }
@@ -337,69 +335,59 @@ struct FriendsView: View {
             keptFingerprints: $keptFriendFingerprints,
             done: { keepFriendsPromptPresented = false }
         )
-        .presentationDetents([.medium, .large])
+        .fernletSheet()
         .onAppear { sessionEndSheetLanded = true }
     }
 
     // MARK: - Photo album
 
+    /// Everything above the album: the subtitle, the two header buttons, the cards that come and go
+    /// (the restore card, the shop window, photos waiting), the one slim row (looking for friends, or
+    /// the session), the held-delivery banner, and the search field over a non-empty album.
+    private var albumHeader: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ScreenHeader(title: "Friends", subtitle: "Together, in person.", identifier: "screen.friends")
+            FriendsHeaderButtons()
+            // P7 item 5: what the launch restore found, on the Friends surface and nothing
+            // modal — an offer, an ending named as ended, or a file set aside; silent for a
+            // deferral. Sampled from the manager, dismissable, gone once a session surface is up.
+            // P8 item 7 shares the slot and takes it first: a refused, expired or
+            // system-ended background continuation is news about the session running NOW.
+            sessionResumeBanner
+            shopWindowCard
+            // Session photos U3: photos from the last session waiting for the choice. Discovery
+            // is stopped meanwhile, so the nearby row below is empty and this takes its slot.
+            pendingPhotoReviewCard
+            statusSlot
+                .animation(.easeInOut(duration: 0.3), value: manager.isSearching)
+                .animation(.easeInOut(duration: 0.3), value: manager.slots.count)
+            RoutedDeliveryHoldBanner(hold: manager.routedDeliveryHold)
+            if !features.photos.meshPhotos.isEmpty {
+                cacheWarningBanner
+                FriendsSearchField(prompt: "Search by friend or session name", text: $sessionSearchText)
+            }
+        }
+    }
+
     private var photoAlbumView: some View {
         NavigationStack(path: $path) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(alignment: .top) {
-                        ScreenHeader(title: "Friends", subtitle: "Together, in person.", identifier: "screen.friends")
-                        Spacer()
-                        HStack(spacing: 10) {
-                            NavigationLink(value: FriendsRoute.activities) {
-                                headerButtonLabel("Activities")
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("friends.activities")
-                            .accessibilityLabel("Activities")
-                            NavigationLink(value: FriendsRoute.friendList) {
-                                headerButtonLabel("Friends")
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("friends.manageFriends")
-                            .accessibilityLabel("Friends and blocks")
-                        }
-                    }
-                    // P7 item 5: what the launch restore found, on the Friends surface and nothing
-                    // modal — an offer, an ending named as ended, or a file set aside; silent for a
-                    // deferral. Sampled from the manager, dismissable, gone once a session surface is up.
-                    // P8 item 7 shares the slot and takes it first: a refused, expired or
-                    // system-ended background continuation is news about the session running NOW.
-                    sessionResumeBanner
-                    .padding(.top, 4)
-
-                    shopWindowCard
-
-                    // Session photos U3: photos from the last session waiting for the choice. Discovery
-                    // is stopped meanwhile, so the nearby banner below is empty and this takes its slot.
-                    pendingPhotoReviewCard
-
-                    nearbyStatusBanner
-                        .animation(.easeInOut(duration: 0.3), value: manager.isSearching)
-                        .animation(.easeInOut(duration: 0.3), value: manager.slots.count)
-
-                    RoutedDeliveryHoldBanner(hold: manager.routedDeliveryHold)
-
-                    displayNameHint
-
+                VStack(alignment: .leading, spacing: 14) {
+                    albumHeader
+                        .padding(.horizontal, 16)
                     if features.photos.meshPhotos.isEmpty {
                         emptyAlbumView
+                            .padding(.horizontal, 16)
                     } else {
-                        cacheWarningBanner
-                        sessionSearchField
+                        // Edge to edge, three across, 2-pt gaps (b2-friends-root draft 3).
                         photoGrid
                     }
                 }
-                .padding(20)
+                .padding(.top, 10)
                 .fernletTabBarBottomClearance()
             }
             .fernletTabBarCompaction($isTabBarCompact, resetToken: $scrollToTopToken)
-            .background(Color.parchment)
+            .fernletPageBackground()
             .navigationTitle("")
             .navigationDestination(for: FriendsRoute.self) { friendsDestination($0) }
         }
@@ -408,13 +396,36 @@ struct FriendsView: View {
             path.removeAll()
         }
         .task(id: friendShopClosesAt) { await closeFriendShopWhenWindowLapses() }
+        // DEBUG screenshots (nil in Release): open one page deep.
+        .task { if let route = FriendsUITestHooks.initialRoute, path.isEmpty { path = [route] } }
+        // The session camera (b3-friends-session): full screen over the panel, the album untouched
+        // beneath it. It closes itself when the session ends, and this presenter lowers it too.
+        .fullScreenCover(isPresented: $cameraPresented) {
+            DisposableCameraView(store: store, presentsOwnSheet: $cameraPresentsOwnSheet)
+        }
+        // The session's prompts (join requests, the session alert, removal requests) while this
+        // panel is the surface on screen; Home's session button and the camera host them otherwise.
+        .modifier(SessionPromptsModifier(
+            manager: manager,
+            isActive: albumIsVisible && manager.isInSession && !cameraPresented && !aPresentationIsUp,
+            activeRemovalProposal: $activeRemovalProposal,
+            leaveSessionConfirm: .constant(false),
+            onConfirmEnd: {}
+        ))
+        .onChange(of: manager.pendingRemovalProposals) { _, pending in
+            activeRemovalProposal = SessionRemovalQueue.next(current: activeRemovalProposal, pending: pending,
+                                                             localFingerprint: manager.localFingerprint)
+        }
+        .onAppear { albumIsVisible = true }
+        .onDisappear { albumIsVisible = false }
     }
 
     /// When the pushed friend shop has to close: `nil` while the shop is not pushed. Keys the album's
     /// close-the-shop watch, so the watch restarts when the shop is pushed or popped and whenever the
     /// window changes (a later session reopening it, or closing it early).
     private var friendShopClosesAt: Date? {
-        guard path.contains(.friendShop) else { return nil }
+        // The DEBUG screenshot hook opens the shop with no window; it stays open for the shot.
+        guard path.contains(.friendShop), FriendsUITestHooks.initialRoute != .friendShop else { return nil }
         return FriendsRoute.shopClosesAt(
             sharingEnabled: store.settings.allowNearbyClothingShares,
             windowExpiresAt: features.clothingShop.window?.expiresAt
@@ -438,63 +449,132 @@ struct FriendsView: View {
         path = FriendsRoute.closingShop(path)
     }
 
-    /// Resolves a ``FriendsRoute`` pushed from the album to its page.
+    /// Resolves a ``FriendsRoute`` pushed from the album to its page, each handing its title to the
+    /// panel's plate (`b1-frame-push`: ‹ Friends, the title, ✕).
     @ViewBuilder private func friendsDestination(_ route: FriendsRoute) -> some View {
         switch route {
         case .activities:
             ActivitiesView(store: store)
+                .fernletPushedPage("Activities")
         case .friendList:
             FriendListView(store: store, isTabBarCompact: $isTabBarCompact, tabResetToken: $scrollToTopToken)
+                .fernletPushedPage("Friends & Blocks")
         case .friendShop:
             FriendShopView(store: store, shop: features.clothingShop)
+                .fernletPushedPage("Friend shops")
+        case .yourShop:
+            YourShopView(store: store)
+                .fernletPushedPage("Your shop")
         }
     }
 
-    // MARK: - Header button label (matches HeaderActionButton visual)
+    // MARK: - The slim row (looking for friends, or the session)
 
-    /// A named header pill matching ``HeaderActionButton``'s title variant — the same cream pill the
-    /// Food ("+ meal") and Move ("Log" / "Share") headers use.
-    ///
-    /// Drawn here rather than composed from `HeaderActionButton` because these two header actions are
-    /// `NavigationLink`s, not button actions. They are deliberately **titled**: the old icon-only pair
-    /// made the user tap to discover what `figure.2.arms.open` and `person.2` did, and `person.2` was
-    /// already doing duty as the searching-pulse glyph and the selected tab icon on the same screen.
-    private func headerButtonLabel(_ title: LocalizedStringKey) -> some View {
-        Text(title)
-            .font(.fernlet(.label))
-            .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
-            .foregroundStyle(Color.bark)
-            .frame(minWidth: 72, minHeight: 58)
-            .padding(.horizontal, 10)
-            .background(Color.cream.opacity(0.9), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(Color.bark.opacity(0.08), lineWidth: 1)
-            )
+    /// The one slot under the header buttons (b2-friends-root, b3-friends-session): in a session the
+    /// session row; otherwise what discovery is doing — a failure, the looking row, or the nearby
+    /// rows — with "Change name" while no name is set.
+    @ViewBuilder
+    private var statusSlot: some View {
+        if manager.isInSession {
+            FriendsSessionRow(names: sessionFriendNames) { cameraPresented = true }
+        } else if manager.isSearching, let discoveryError = manager.discoveryError {
+            discoveryFailureBanner(discoveryError)
+        } else if manager.isSearching, !manager.slots.isEmpty {
+            nearbySlotRows
+            displayNameHint
+        } else {
+            lookingRow
+        }
+    }
+
+    /// The other people in this session, first names only, never an identifier (2026-09-29).
+    private var sessionFriendNames: [String] {
+        manager.sessionParticipants.filter { !$0.isLocal }.map {
+            PeerNameDisplay.firstName($0.displayName, fingerprint: $0.fingerprint, placeholder: .met, in: .fernlet)
+        }
+    }
+
+    /// "Looking for nearby friends…" with the companion's face while discovery runs; with no search
+    /// running, the name hint alone (or nothing, once a name is set).
+    @ViewBuilder
+    private var lookingRow: some View {
+        if manager.isSearching {
+            FriendsSlimRow {
+                // Not `person.2` (the Friends icon): the pulse says "listening", the face says who.
+                WorldSpriteView(sprite: WorldSprites.face, scale: 2)
+                Text("Looking for nearby friends…")
+                    .font(FernletFramedFont.notice)
+                    .foregroundStyle(WorldPalette.dim)
+                    .fixedSize(horizontal: false, vertical: true)
+            } trailing: {
+                changeNameLink
+            }
+        } else {
+            displayNameHint
+        }
+    }
+
+    /// The nearby peers, one framed row each, with this row's QR ceremony.
+    private var nearbySlotRows: some View {
+        VStack(spacing: 8) {
+            ForEach(manager.slots) { slot in
+                NearbySlotRow(
+                    slot: slot,
+                    showDebugOverride: store.proximityDebugToolsEnabled,
+                    onForceConnect: { manager.commitManualProximity(slotID: slot.id) },
+                    // The QR is minted FOR THIS ROW: only a challenge arriving on this
+                    // slot may answer it, so the manager binds the nonce to slot.id.
+                    onMakeVerifyQR: { manager.makeLocalVerifyQRURL(slotID: slot.id) },
+                    onDismissVerifyQR: { manager.clearActiveVerifyQR() },
+                    // Bound to THIS row, exactly like the QR we mint above: a valid
+                    // code belonging to a different nearby peer is refused, not
+                    // searched for.
+                    onScanVerified: { url in manager.beginQRVerification(with: url, slotID: slot.id) }
+                )
+            }
+        }
     }
 
     // MARK: - Display-name hint
 
-    /// First-run nudge: with no mesh display name set, nearby friends see this device's name
-    /// ("iPhone") — the name rides the discovery broadcast. Say so where the connecting actually
-    /// happens rather than leaving it two taps deep in the roster, and link straight to the field.
+    /// "Change name" at the end of the looking row, while no name is set: nearby friends see this
+    /// device's name ("iPhone") — the name rides the discovery broadcast — so say so where the
+    /// connecting happens, and link straight to the field.
+    @ViewBuilder
+    private var changeNameLink: some View {
+        if store.settings.proximityDisplayName.trimmingCharacters(in: .whitespaces).isEmpty {
+            NavigationLink(value: FriendsRoute.friendList) {
+                Text("Change name")
+                    .font(FernletFramedFont.buttonSmall)
+                    // F3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
+                    .foregroundStyle(WorldPalette.mossInk)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("friends.changeDisplayName")
+            .accessibilityLabel("You appear as \(store.resolvedProximityDisplayName). Change the name friends see.")
+            // Voice Control: the row's drawn action word, not the two-sentence label.
+            .accessibilityInputLabels([Text("Change"), Text("Change name")])
+        }
+    }
+
+    /// First-run nudge with no search running, or under the nearby rows: "You appear as iPhone" and
+    /// Change, in a slim row.
     @ViewBuilder
     private var displayNameHint: some View {
         if store.settings.proximityDisplayName.trimmingCharacters(in: .whitespaces).isEmpty {
             NavigationLink(value: FriendsRoute.friendList) {
-                HStack(spacing: 8) {
+                FriendsSlimRow {
                     Text("You appear as \(store.resolvedProximityDisplayName)")
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
+                        .font(FernletFramedFont.body)
+                        .foregroundStyle(WorldPalette.dim)
+                        .fixedSize(horizontal: false, vertical: true)
+                } trailing: {
                     Text("Change")
-                        .font(.fernlet(.label))
-                        // F3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
-                        .foregroundStyle(Color.mossInk)
-                    Spacer(minLength: 0)
+                        .font(FernletFramedFont.buttonSmall)
+                        .foregroundStyle(WorldPalette.mossInk)
                 }
-                .padding(.horizontal, 4)
-                .frame(minHeight: 44)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -519,26 +599,9 @@ struct FriendsView: View {
             TimelineView(.periodic(from: .now, by: 60)) { context in
                 if let minutesLeft = features.clothingShop.remainingWindowMinutes(at: context.date) {
                     NavigationLink(value: FriendsRoute.friendShop) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "bag")
-                                .font(.title3.weight(.semibold))
-                                .foregroundStyle(Color.moss)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Friend shops are open")
-                                    .font(.fernlet(.headerMedium))
-                                    .foregroundStyle(Color.bark)
-                                Text("Shop open — \(minutesLeft) min")
-                                    .font(.fernlet(.bodySmall))
-                                    .foregroundStyle(Color.slate)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(Color.slate)
-                        }
-                        .padding(14)
-                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.moss.opacity(0.25), lineWidth: 1))
+                        FriendsLinkCard(title: Text("Friend shops are open"),
+                                        detail: Text("Shop open — \(minutesLeft) min"),
+                                        sprite: FriendsSprites.shop, spriteScale: 2)
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("friends.friendShops")
@@ -559,51 +622,6 @@ struct FriendsView: View {
     private var pendingPhotoReviewCard: some View {
         if features.photos.hasOutstandingPhotoReview && !manager.isSessionLive && !store.duressSessionActive {
             PendingPhotoReviewCard(count: features.photos.pendingReviewPhotos.count) { reviewCoordinator.reopen() }
-        }
-    }
-
-    // MARK: - Nearby status banner
-
-    @ViewBuilder
-    private var nearbyStatusBanner: some View {
-        if manager.isSearching {
-            VStack(spacing: 8) {
-                if let discoveryError = manager.discoveryError {
-                    discoveryFailureBanner(discoveryError)
-                } else if manager.slots.isEmpty {
-                    HStack(spacing: 10) {
-                        // Deliberately NOT `person.2`: that glyph is already the (filled) Friends tab
-                        // icon on this very screen, so it says "you are on the Friends tab", not
-                        // "listening for someone nearby". The radio waves say the second thing.
-                        SearchingPulse(tint: Color.moss, size: 32, systemImage: "dot.radiowaves.left.and.right")
-                        Text("Looking for nearby friends…")
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                } else {
-                    VStack(spacing: 6) {
-                        ForEach(manager.slots) { slot in
-                            NearbySlotRow(
-                                slot: slot,
-                                showDebugOverride: store.proximityDebugToolsEnabled,
-                                onForceConnect: { manager.commitManualProximity(slotID: slot.id) },
-                                // The QR is minted FOR THIS ROW: only a challenge arriving on this
-                                // slot may answer it, so the manager binds the nonce to slot.id.
-                                onMakeVerifyQR: { manager.makeLocalVerifyQRURL(slotID: slot.id) },
-                                onDismissVerifyQR: { manager.clearActiveVerifyQR() },
-                                // Bound to THIS row, exactly like the QR we mint above: a valid
-                                // code belonging to a different nearby peer is refused, not
-                                // searched for.
-                                onScanVerified: { url in manager.beginQRVerification(with: url, slotID: slot.id) }
-                            )
-                        }
-                    }
-                }
-            }
         }
     }
 
@@ -648,27 +666,18 @@ struct FriendsView: View {
     /// - Parameter card: `SessionResumeCopy`'s answer for the manager's presentation.
     /// - Returns: The card.
     private func resumeBanner(_ card: SessionResumeCard) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: card.symbolName)
-                .foregroundStyle(Color.terracotta)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(card.title)
-                    .font(.fernlet(.headerMedium))
-                    .foregroundStyle(Color.bark)
-                Text(card.message)
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button(SessionResumeCopy.dismiss) { sessionResumeDismissed = true }
-                    .font(.fernlet(.labelSmall))
-                    .padding(.vertical, 6)
-                    .accessibilityIdentifier("friends.sessionResume.dismiss")
-            }
-            Spacer(minLength: 4)
+        FriendsNoticeCard(tone: .warn, symbolName: card.symbolName) {
+            Text(card.title)
+                .font(FernletFramedFont.rowTitle.weight(.semibold))
+                .foregroundStyle(WorldPalette.bark)
+            Text(card.message)
+                .font(FernletFramedFont.note)
+                .foregroundStyle(WorldPalette.dim)
+                .fixedSize(horizontal: false, vertical: true)
+            Button(SessionResumeCopy.dismiss) { sessionResumeDismissed = true }
+                .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
+                .accessibilityIdentifier("friends.sessionResume.dismiss")
         }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.terracotta.opacity(0.35), lineWidth: 1))
         .accessibilityIdentifier("friends.sessionResume")
         // Owner-calls item 3 (2026-09-22): an ending is news ONCE. Appearing marks it shown in the
         // sealed context, so the next cold start is silent about it; this launch's card stays up
@@ -689,28 +698,20 @@ struct FriendsView: View {
     /// - Parameter card: The table's answer for the store's claim.
     /// - Returns: The card.
     private func continuationBanner(_ card: MeshContinuationCard) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: card.symbolName)
-                .foregroundStyle(Color.terracotta)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(card.title)
-                    .font(.fernlet(.headerMedium))
-                    .foregroundStyle(Color.bark)
-                Text(card.message)
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 4)
+        FriendsNoticeCard(tone: .warn, symbolName: card.symbolName) {
+            Text(card.title)
+                .font(FernletFramedFont.rowTitle.weight(.semibold))
+                .foregroundStyle(WorldPalette.bark)
+            Text(card.message)
+                .font(FernletFramedFont.note)
+                .foregroundStyle(WorldPalette.dim)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.terracotta.opacity(0.35), lineWidth: 1))
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier(card.accessibilityIdentifier)
     }
 
-    /// Shown in place of the "Looking for nearby friends…" pulse when the radios failed to start.
+    /// Shown in place of the "Looking for nearby friends…" row when the radios failed to start.
     ///
     /// The transport already detects this (`NetworkMeshSession`'s `onTransportError`; the retired
     /// MultipeerConnectivity session's `didNotStart*` delegates did before it) and routes it to
@@ -721,31 +722,23 @@ struct FriendsView: View {
     /// Network prompt, so lead with that. The raw reason is secondary detail for developers, shown
     /// only with the proximity debug tools on.
     private func discoveryFailureBanner(_ message: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "wifi.exclamationmark")
-                .foregroundStyle(Color.terracotta)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Can't look for nearby friends")
-                    .font(.fernlet(.headerMedium))
-                    .foregroundStyle(Color.bark)
-                Text("Fernlet needs Local Network access to find friends in person. Check Settings › Fernlet › Local Network, then come back to this screen.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
+        FriendsNoticeCard(tone: .warn, symbolName: "wifi.exclamationmark") {
+            Text("Can't look for nearby friends")
+                .font(FernletFramedFont.rowTitle.weight(.semibold))
+                .foregroundStyle(WorldPalette.bark)
+            Text("Fernlet needs Local Network access to find friends in person. Check Settings › Fernlet › Local Network, then come back to this screen.")
+                .font(FernletFramedFont.note)
+                .foregroundStyle(WorldPalette.dim)
+                .fixedSize(horizontal: false, vertical: true)
+            // The transport's own words are developer text: frozen English that can name a
+            // tunnel, an error and its identifiers (2026-09-29). Debug tools only.
+            if store.proximityDebugToolsEnabled {
+                Text(verbatim: message)
+                    .font(FernletFramedFont.rowDetail)
+                    .foregroundStyle(WorldPalette.dim)
                     .fixedSize(horizontal: false, vertical: true)
-                // The transport's own words are developer text: frozen English that can name a
-                // tunnel, an error and its identifiers (2026-09-29). Debug tools only.
-                if store.proximityDebugToolsEnabled {
-                    Text(verbatim: message)
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
             }
-            Spacer(minLength: 4)
         }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.terracotta.opacity(0.35), lineWidth: 1))
         .accessibilityIdentifier("friends.discoveryFailure")
         .accessibilityElement(children: .combine)
     }
@@ -755,45 +748,39 @@ struct FriendsView: View {
     @ViewBuilder
     private var cacheWarningBanner: some View {
         if features.photos.meshPhotos.count >= PrivateMediaStore.cacheWarningThreshold, !cacheWarningDismissed {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "exclamationmark.circle")
-                    .foregroundStyle(Color.goldenrod)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Your photo shelf is nearly full")
-                        .font(.fernlet(.headerMedium))
-                        .foregroundStyle(Color.bark)
-                    Text("You're keeping \(features.photos.meshPhotos.count) of \(PrivateMediaStore.maxCachedPhotos) shared photos. Once it's full, the oldest quietly make room for new ones — save any you'd like to keep.")
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 4)
+            FriendsNoticeCard(tone: .info, symbolName: "exclamationmark.circle") {
+                Text("Your photo shelf is nearly full")
+                    .font(FernletFramedFont.rowTitle.weight(.semibold))
+                    .foregroundStyle(WorldPalette.bark)
+                Text("You're keeping \(features.photos.meshPhotos.count) of \(PrivateMediaStore.maxCachedPhotos) shared photos. Once it's full, the oldest quietly make room for new ones — save any you'd like to keep.")
+                    .font(FernletFramedFont.note)
+                    .foregroundStyle(WorldPalette.dim)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .overlay(alignment: .topTrailing) {
                 Button {
                     cacheWarningDismissed = true
                 } label: {
-                    Image(systemName: "xmark")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(Color.slate)
+                    FernletIcon(.close, scale: 2)
+                        .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
                 .fernletIconButton("Dismiss photo shelf notice")
             }
-            .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.goldenrod.opacity(0.35), lineWidth: 1))
         }
     }
 
     // MARK: - Photo grid
 
+    /// Three across with 2-pt gaps, square tiles edge to edge, no frames (b2-friends-root draft 3).
     private let columns = [
-        GridItem(.flexible(), spacing: 1),
-        GridItem(.flexible(), spacing: 1),
-        GridItem(.flexible(), spacing: 1)
+        GridItem(.flexible(), spacing: 2),
+        GridItem(.flexible(), spacing: 2),
+        GridItem(.flexible(), spacing: 2)
     ]
 
     private var photoGrid: some View {
-        LazyVGrid(columns: columns, spacing: 1) {
+        LazyVGrid(columns: columns, spacing: 2) {
             ForEach(filteredPhotoWallPosts) { post in
                 // A real Button, not a tap gesture on a colour: VoiceOver could neither name nor
                 // activate the old cells, so the album was unopenable without sight.
@@ -807,7 +794,6 @@ struct FriendsView: View {
                 .accessibilityInputLabels(albumCellInputLabels(post))
             }
         }
-        .padding(.top, 2)
     }
 
     /// Short spoken alternatives for one album cell — the Voice Control half of T2-12.
@@ -845,20 +831,6 @@ struct FriendsView: View {
         return Text("Photo from \(cover.senderName), \(when)")
     }
 
-    private var sessionSearchField: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(Color.slate)
-            TextField("Search by friend or session name", text: $sessionSearchText,
-                      prompt: .fieldPrompt("Search by friend or session name"))
-                .autocorrectionDisabled()
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-    }
-
     private var filteredPhotoWallPosts: [FriendPhotoWallPost] {
         let posts = features.photos.photoWallPosts
         let query = sessionSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -872,8 +844,9 @@ struct FriendsView: View {
         }
     }
 
+    /// One square tile: the cover photo filling it, and the pixel stack mark on a carousel.
     private func albumPhotoCell(_ post: FriendPhotoWallPost) -> some View {
-        Color.cream
+        WorldPalette.paperShade
             .aspectRatio(1, contentMode: .fit)
             .overlay {
                 LazyFriendPhotoImage(loadData: { features.photos.thumbnailData(for: post.coverPhoto) }, contentMode: .fill)
@@ -881,10 +854,7 @@ struct FriendsView: View {
             .clipped()
             .overlay(alignment: .topTrailing) {
                 if post.isCarousel {
-                    Image(systemName: "square.on.square")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.white)
-                        .shadow(radius: 2)
+                    WorldSpriteView(sprite: FriendsSprites.stack, scale: 2)
                         .padding(8)
                 }
             }
@@ -893,11 +863,9 @@ struct FriendsView: View {
     // MARK: - Empty state
 
     private var emptyAlbumView: some View {
-        EmptyState(
-            text: "Photos from your hangouts will appear here.",
-            systemImage: "photo.on.rectangle.angled"
-        )
-        .padding(.top, 34)
+        FriendsEmptyNote(text: Text("Photos from your hangouts will appear here."),
+                         systemImage: "photo.on.rectangle.angled")
+            .padding(.top, 24)
     }
 
     // MARK: - Helper
@@ -1100,7 +1068,10 @@ struct FriendsView: View {
 
 // MARK: - Full-screen photo feed
 
-/// The full-screen, vertically scrolling feed of photo-wall posts, opened from the album grid.
+/// The full-screen, vertically scrolling feed of photo-wall posts, opened from the album grid
+/// (`b2-album-post`): under the Friends panel's wooden plate, which names the hangout on screen, each
+/// post is its photos at 4:5 with the counter and pixel dots, then a paper card with the friend's name,
+/// the date and the four framed actions. Scrolling down moves to the next hangout.
 ///
 /// Scrolls to `initialPostID` on appear and renders each post as a
 /// ``FriendPhotoCarouselPostView``. Dismisses itself when the last photo is deleted (or reported)
@@ -1119,12 +1090,14 @@ private struct FriendPhotoFeedView: View {
 
     /// The photo sender the report flow is open for, if any.
     @State private var reportSubject: PeerReportSubject?
+    /// The post at the top of the feed now: the plate names its hangout.
+    @State private var visiblePostID: UUID?
 
     var body: some View {
-        GeometryReader { geometry in
-            ScrollViewReader { proxy in
+        WorldPanelFrame(panel: .friends, title: plateTitle, onClose: onDismiss) {
+            GeometryReader { geometry in
                 ScrollView(.vertical) {
-                    LazyVStack(spacing: 8) {
+                    LazyVStack(spacing: 0) {
                         ForEach(posts) { post in
                             FriendPhotoCarouselPostView(
                                 post: post,
@@ -1136,29 +1109,13 @@ private struct FriendPhotoFeedView: View {
                             .id(post.id)
                         }
                     }
+                    .scrollTargetLayout()
                 }
                 .scrollIndicators(.hidden)
-                .background(Color.parchment)
-                .onAppear {
-                    guard let initialPostID else { return }
-                    proxy.scrollTo(initialPostID, anchor: .top)
-                }
-            }
-            .overlay(alignment: .topTrailing) {
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark")
-                        .font(.body.weight(.bold))
-                        .foregroundStyle(Color.bark)
-                        .frame(width: 44, height: 44)
-                        .background(.regularMaterial, in: Circle())
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 14)
-                .padding(.trailing, 16)
-                .accessibilityLabel("Close photo viewer")
+                .scrollPosition(id: $visiblePostID, anchor: .top)
+                .onAppear { visiblePostID = initialPostID ?? posts.first?.id }
             }
         }
-        .background(Color.parchment)
         .peerReportFlow($reportSubject) { subject, reason in store.reportWallPhoto(subject, reason: reason) }
         .onChange(of: posts.isEmpty) { _, isEmpty in
             // Deleting the last remaining photo empties the feed; dismiss instead of leaving the
@@ -1166,10 +1123,21 @@ private struct FriendPhotoFeedView: View {
             if isEmpty { onDismiss() }
         }
     }
+
+    /// The plate's title: the visible hangout's session name, else the friend's name, else Friends.
+    private var plateTitle: String? {
+        let post = posts.first { $0.id == visiblePostID } ?? posts.first
+        guard let post else { return nil }
+        if let name = post.session?.meshName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            return name
+        }
+        let sender = post.coverPhoto.senderName
+        return sender.isEmpty ? nil : sender
+    }
 }
 
 /// One post in the full-screen feed: a paged carousel of a session's photos with save, favorite,
-/// delete and — on another person's photo — report actions.
+/// delete and — on another person's photo — report actions, in a paper card under the photo.
 ///
 /// The flag (App Review guideline 1.2, 2026-10-15) asks the feed to open the app's people-report
 /// flow for the photo's sender; filing it blocks them on this phone and deletes the photo from the
@@ -1214,8 +1182,6 @@ private struct FriendPhotoCarouselPostView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-
             TabView(selection: $selectedPhotoID) {
                 ForEach(post.photos) { photo in
                     carouselPhoto(photo)
@@ -1226,8 +1192,11 @@ private struct FriendPhotoCarouselPostView: View {
             .frame(height: width * 1.25)
             .overlay(alignment: .topTrailing) { pageCounterOverlay }
             .overlay(alignment: .bottom) { pageDotsOverlay }
+
+            header
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
         }
-        .background(Color.parchment)
         .onAppear { scheduleChromeFade() }
         .onChange(of: selectedPhotoID) { _, _ in scheduleChromeFade() }
         .onChange(of: post.photos) { _, newPhotos in
@@ -1253,34 +1222,35 @@ private struct FriendPhotoCarouselPostView: View {
         .photoSaveFailureAlert("Couldn't Save Photo", failure: $saveErrorMessage)
     }
 
-    /// The "n / total" capsule, shown with the auto-fading chrome on multi-photo posts.
+    /// The "n / total" pill, shown with the auto-fading chrome on multi-photo posts.
     @ViewBuilder
     private var pageCounterOverlay: some View {
         if chromeVisible, post.photos.count > 1 {
             Text("\(selectedIndex + 1) / \(post.photos.count)")
-                .font(.fernlet(.stat))
+                .font(FernletFramedFont.buttonSmall)
+                .monospacedDigit()
                 .foregroundStyle(.white)
-                .padding(.horizontal, 10)
+                .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(.black.opacity(0.58), in: Capsule())
+                .background(.black.opacity(0.72), in: Capsule())
                 .padding(14)
                 .transition(.opacity)
         }
     }
 
-    /// The page dots, shown with the auto-fading chrome on multi-photo posts.
+    /// The page marks: one small framed square per photo, the current one filled white (the pixel
+    /// dots of `b2-album-post`), shown with the auto-fading chrome on multi-photo posts.
     @ViewBuilder
     private var pageDotsOverlay: some View {
         if chromeVisible, post.photos.count > 1 {
-            HStack(spacing: 6) {
+            HStack(spacing: 4) {
                 ForEach(post.photos) { photo in
-                    Circle()
-                        .fill(photo.id == selectedPhotoID ? Color.white : Color.white.opacity(0.5))
-                        .frame(width: 6, height: 6)
+                    Rectangle()
+                        .fill(photo.id == selectedPhotoID ? Color.white : Color.white.opacity(0.45))
+                        .frame(width: 10, height: 10)
+                        .overlay(Rectangle().strokeBorder(WorldPalette.ink, lineWidth: 1.5))
                 }
             }
-            .padding(10)
-            .background(.black.opacity(0.35), in: Capsule())
             .padding(.bottom, 14)
             .transition(.opacity)
         }
@@ -1296,27 +1266,43 @@ private struct FriendPhotoCarouselPostView: View {
         Button("Cancel", role: .cancel) { pendingDeletePhotoID = nil }
     }
 
+    /// The paper card under the photo: the friend's name and the date, then Save, Favorite, Delete and
+    /// Report as framed pixel-icon buttons for the photo on screen (`b2-album-post`).
     private var header: some View {
-        HStack(spacing: 10) {
-            FriendProfilePlaceholder()
-            VStack(alignment: .leading, spacing: 2) {
-                Text(selectedPhoto.senderName)
-                    .font(.fernlet(.headerMedium))
-                    .foregroundStyle(Color.bark)
-                Text(selectedPhoto.addedAt, style: .date)
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
+        let shape = RoundedRectangle(cornerRadius: FernletFramedLook.cardRadius, style: .continuous)
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                nameAndDate
+                Spacer(minLength: 6)
+                photoActions(selectedPhoto)
             }
-            Spacer()
-            // Balances the 44pt close button that floats over this row.
-            Color.clear.frame(width: 44, height: 44)
+            VStack(alignment: .leading, spacing: 10) {
+                nameAndDate
+                photoActions(selectedPhoto)
+            }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(EdgeInsets(top: 12, leading: 15, bottom: 12, trailing: 12))
+        .background(WorldPalette.paper, in: shape)
+        .overlay(shape.strokeBorder(WorldPalette.ink, lineWidth: FernletFramedLook.frameWidth))
+        .background { shape.fill(WorldPalette.ink.opacity(0.22)).offset(y: 3) }
+    }
+
+    /// The sender's name over the date the photo was added.
+    private var nameAndDate: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(verbatim: selectedPhoto.senderName)
+                .font(FernletFramedFont.cardTitle)
+                .foregroundStyle(WorldPalette.bark)
+            Text(selectedPhoto.addedAt, style: .date)
+                .font(FernletFramedFont.rowDetail)
+                .foregroundStyle(WorldPalette.dim)
+        }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func carouselPhoto(_ photo: FriendPhotoPayload) -> some View {
-        Color.parchment
+        Color.clear
             .overlay {
                 LazyFriendPhotoImage(
                     loadData: { photos.imageData(for: photo) },
@@ -1326,66 +1312,57 @@ private struct FriendPhotoCarouselPostView: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: width * 1.25)
-            .overlay(alignment: .bottomTrailing) {
-                HStack(spacing: 10) {
-                    let isSaved = savedPhotoIDs.contains(photo.id)
-                    circleActionButton(
-                        systemName: isSaved ? "checkmark" : "square.and.arrow.down",
-                        tint: isSaved ? Color.moss : .white,
-                        // The glyph turns into a checkmark when it's done — the label has to say the
-                        // same thing, or VoiceOver keeps offering a save that already happened.
-                        accessibilityLabel: isSaved ? "Saved to Photos" : "Save this picture to your Photos library"
-                    ) { savePhoto(photo) }
-
-                    if post.session != nil {
-                        let isFavorite = photos.favoritePhotoID(for: post) == photo.id
-                        circleActionButton(
-                            systemName: isFavorite ? "heart.fill" : "heart",
-                            tint: isFavorite ? Color.dustyRose : .white,
-                            accessibilityLabel: "Favorite this photo",
-                            selected: isFavorite
-                        ) {
-                            photos.toggleFavorite(photoID: photo.id, in: post)
-                            // The heart filling (or emptying) is the visual; the button only shows
-                            // on a session's post, where a toggle always changes the favorite.
-                            FernletFeedback.system.play(.tick)
-                        }
-                    }
-
-                    circleActionButton(
-                        systemName: "trash",
-                        tint: .white,
-                        accessibilityLabel: "Delete this picture"
-                    ) { pendingDeletePhotoID = photo.id }
-
-                    if let subject = reportSubject(photo) {
-                        circleActionButton(
-                            systemName: "flag",
-                            tint: .white,
-                            accessibilityLabel: "Report this picture"
-                        ) { requestReport(subject) }
-                    }
-                }
-                .padding(14)
-            }
     }
 
+    /// Save, Favorite (a session's post only), Delete and Report (another person's photo only).
+    private func photoActions(_ photo: FriendPhotoPayload) -> some View {
+        HStack(spacing: 8) {
+            let isSaved = savedPhotoIDs.contains(photo.id)
+            // The glyph turns into a tick when it's done — the label has to say the same thing, or
+            // VoiceOver keeps offering a save that already happened.
+            framedActionButton(sprite: isSaved ? WorldSprites.check : FriendsSprites.download,
+                               accessibilityLabel: isSaved ? "Saved to Photos" : "Save this picture to your Photos library") {
+                savePhoto(photo)
+            }
+            if post.session != nil {
+                let isFavorite = photos.favoritePhotoID(for: post) == photo.id
+                framedActionButton(sprite: isFavorite ? WorldSprites.heartSm : FriendsSprites.heartOutline,
+                                   accessibilityLabel: "Favorite this photo", selected: isFavorite) {
+                    photos.toggleFavorite(photoID: photo.id, in: post)
+                    // The heart filling (or emptying) is the visual; the button only shows
+                    // on a session's post, where a toggle always changes the favorite.
+                    FernletFeedback.system.play(.tick)
+                }
+            }
+            framedActionButton(sprite: FriendsSprites.trash, accessibilityLabel: "Delete this picture") {
+                pendingDeletePhotoID = photo.id
+            }
+            if let subject = reportSubject(photo) {
+                framedActionButton(sprite: FriendsSprites.flag, accessibilityLabel: "Report this picture") {
+                    requestReport(subject)
+                }
+            }
+        }
+    }
+
+    /// One framed 44-pt pixel-icon button on raised paper.
+    ///
     /// - Parameter accessibilityLabel: `LocalizedStringKey`, not `String` — the argument's STATIC
     ///   TYPE is what picks SwiftUI's localizing `accessibilityLabel(_:)` overload, and a `String`
     ///   parameter silently opted all three call sites out (review T2-1).
-    private func circleActionButton(
-        systemName: String,
-        tint: Color,
+    private func framedActionButton(
+        sprite: WorldSprite,
         accessibilityLabel: LocalizedStringKey,
         selected: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(tint)
+        let shape = RoundedRectangle(cornerRadius: 9, style: .continuous)
+        return Button(action: action) {
+            WorldSpriteView(sprite: sprite, scale: 2)
                 .frame(width: 44, height: 44)
-                .background(.black.opacity(0.38), in: Circle())
+                .background(WorldPalette.paperLight, in: shape)
+                .overlay(shape.strokeBorder(WorldPalette.ink, lineWidth: FernletFramedLook.frameWidth))
+                .contentShape(shape)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
@@ -1492,24 +1469,6 @@ private struct LazyFriendPhotoImage: View {
     }
 }
 
-/// The little moss-leaf circle standing in for a friend's avatar in the feed header.
-///
-/// Purely decorative — friend photos carry no profile pictures, so every post gets the same
-/// placeholder mark.
-private struct FriendProfilePlaceholder: View {
-    var body: some View {
-        Circle()
-            .fill(Color.moss.opacity(0.16))
-            .overlay {
-                Image(systemName: "leaf.fill")
-                    .font(.caption)
-                    .foregroundStyle(Color.moss)
-            }
-            .frame(width: 38, height: 38)
-            .overlay(Circle().stroke(Color.bark.opacity(0.08), lineWidth: 1))
-    }
-}
-
 // MARK: - Nearby slot row
 
 /// One row of the "nearby friends" banner: a discovered peer slot with its handshake state and
@@ -1528,29 +1487,24 @@ private struct NearbySlotRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: stateIcon)
-                .font(.title3)
-                .foregroundStyle(stateColor)
+            WorldSpriteView(sprite: stateSprite, scale: 2)
                 .frame(width: 28)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: peerName)
-                    .font(.fernlet(.headerMedium))
-                    .foregroundStyle(Color.bark)
+                    .font(FernletFramedFont.rowTitle.weight(.semibold))
+                    .foregroundStyle(WorldPalette.bark)
                 Text(stateLabel)
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.rowDetail)
+                    .foregroundStyle(WorldPalette.dim)
             }
             Spacer()
 
             trailingControl
         }
         .padding(12)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.bark.opacity(0.08), lineWidth: 1)
-        )
+        .background(WorldPalette.paperLight, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(WorldPalette.ink, lineWidth: FernletFramedLook.frameWidth))
         .onChange(of: approachMeters) { _, meters in
             if let cue = approachCue.observe(meters) { FernletFeedback.system.play(cue) }
         }
@@ -1718,20 +1672,11 @@ private struct NearbySlotRow: View {
         Int((meters * 100).rounded(.toNearestOrEven))
     }
 
-    private var stateIcon: String {
+    /// The row's pixel mark: a tick once connected, the two-people mark while the phones meet.
+    private var stateSprite: WorldSprite {
         switch slot.coordinator.state {
-        case .connected, .transferring: return "checkmark.circle.fill"
-        case .awaitingManualCommit: return "hand.tap.fill"
-        case .awaitingProximityCommit: return "wave.3.right"
-        default: return "circle.dotted"
-        }
-    }
-
-    private var stateColor: Color {
-        switch slot.coordinator.state {
-        case .connected, .transferring: return Color.moss
-        case .awaitingManualCommit: return Color.goldenrod
-        default: return Color.slate
+        case .connected, .transferring: return WorldSprites.check
+        default: return FriendsSprites.people
         }
     }
 
@@ -1848,7 +1793,7 @@ struct ConnectionSuccessOverlay: View {
             // Every step's sleep result feeds the decision to continue (R7): `Task.sleep` throws
             // exactly on cancellation, and an overlay that went away has nothing to complete — so a
             // cancelled choreography returns WITHOUT calling `onComplete`, which would otherwise
-            // flip the parent's `sessionReady` behind a dismissed view.
+            // change the parent's state behind a dismissed view.
             do {
                 try await Task.sleep(for: .milliseconds(900))
             } catch {

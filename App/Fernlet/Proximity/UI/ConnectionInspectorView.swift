@@ -27,21 +27,13 @@ struct ConnectionInspectorView: View {
                             .foregroundStyle(Color.bark)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.parchment)
                 }
             }
-            .navigationTitle("Connection Inspector")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark.circle.fill")
-                    }
-                    .foregroundStyle(Color.slate)
-                    // Without this VoiceOver announces the glyph name, "xmark.circle.fill".
-                    .accessibilityLabel("Close")
-                }
-            }
+            // b3-inspector: today's layout inside the sheet frame — paper, the wooden grabber, the
+            // title in the sheet and Done top right (the World build's ✕/Done rule).
+            .fernletSheetToolbar(title: "Connection Inspector", onDone: { dismiss() })
         }
+        .fernletSheet()
     }
 }
 

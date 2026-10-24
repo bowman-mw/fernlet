@@ -35,7 +35,7 @@ struct SessionPhotoReviewScreen: View {
 
     var body: some View {
         ZStack {
-            Color.parchment.ignoresSafeArea()
+            WorldPalette.paper.ignoresSafeArea()
             FriendPhotoReviewSheet(
                 photos: coordinator.photos,
                 selectedIDs: $coordinator.selectedIDs,
@@ -66,6 +66,9 @@ struct SessionPhotoReviewScreen: View {
             }
             .onDisappear { coordinator.acknowledgeSaveFailure() }
         }
+        // Its own window, so the root's design language does not reach it: set it here
+        // (b3-photo-review, the one design language on every screen).
+        .worldDesignLanguage()
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
         .accessibilityIdentifier("friends.review.overlay")

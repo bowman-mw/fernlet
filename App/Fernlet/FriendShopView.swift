@@ -20,19 +20,6 @@ struct FriendShopView: View {
     @State private var feedback: String?
     @State private var reportTarget: ReportTarget?
 
-    /// T2-11: the item grid's adaptive minimum was a fixed 150pt, so at Larger Text sizes the tile
-    /// stayed the same width while the item name — the widest thing in it, set in `.headerMedium`
-    /// and hard-limited to one line — grew straight past the edge. Scaled against `.title3`, the
-    /// text style `.headerMedium` itself is relative to, so the cell tracks exactly the text it
-    /// holds. Read through ``itemTileMinimum``, which caps it.
-    @ScaledMetric(relativeTo: .title3) private var scaledItemTileMinimum: CGFloat = 150
-
-    /// The grid minimum actually handed to `GridItem(.adaptive:)`. The cap matters: at AX5 the
-    /// scaled value exceeds a compact iPhone's content width, and an adaptive minimum wider than
-    /// the container is a request the grid cannot honour. 300pt still forces the single column the
-    /// large text needs while staying inside the narrowest screen the app supports.
-    private var itemTileMinimum: CGFloat { min(scaledItemTileMinimum, 300) }
-
     /// The item (plus its seller's identity) a report confirmation is currently about.
     ///
     /// Captured at ••• time so the dialog keeps a stable target even if the catalog refreshes;
@@ -46,26 +33,28 @@ struct FriendShopView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: FernletMetrics.spaceLg) {
-                if shop.peerCatalogs.isEmpty {
+            VStack(alignment: .leading, spacing: 16) {
+                topRow
+                if visibleCatalogs.isEmpty {
                     emptyState
                 } else {
-                    ForEach(shop.peerCatalogs.filter { !store.isProximitySellerBanned(fingerprint: $0.senderFingerprint) }) { catalog in
-                        shopSection(catalog)
+                    ForEach(visibleCatalogs) { catalog in
+                        shopSection(catalog, isFirst: catalog.id == visibleCatalogs.first?.id)
                     }
                 }
+                // The empty state already says when shops open; the note is for a page with shops.
+                if !visibleCatalogs.isEmpty {
+                    Text("A friend's shop opens here for an hour after you part. Report an item from its ··· menu.")
+                        .font(FernletFramedFont.body)
+                        .foregroundStyle(WorldPalette.dim)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                yourShopLink
             }
-            .padding(20)
+            .padding(16)
         }
-        .background(Color.parchment)
-        .navigationTitle("Friend shops")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                CoinBalancePill(balance: store.coinBalance)
-                    .accessibilityIdentifier("friendShop.coinBalance")
-            }
-        }
+        // The title is on the panel's plate (`fernletPushedPage` at the push); the dots show here.
+        .fernletPageBackground()
         .onAppear {
             // Lazy window expiry: entering the shop is a natural moment to drop a lapsed window's
             // catalogs (no background timers — the entry card already hides itself on expiry).
@@ -83,21 +72,7 @@ struct FriendShopView: View {
             isPresented: $reportTarget.isPresent(),
             presenting: reportTarget
         ) { target in
-            ForEach(ReportReason.allCases) { reason in
-                Button(reason.label, role: .destructive) {
-                    store.reportClothingItem(target.item, sellerFingerprint: target.sellerFingerprint,
-                                             sellerSigningPublicKey: target.sellerSigningPublicKey, reason: reason)
-                    reportTarget = nil
-                    // Disclosure (L21): the row we relay is SIGNED by this device and goes to friends
-                    // we meet in person — including the person reported, who is the only party that
-                    // can act on it as a self-ban. Saying only "on your device" understated that.
-                    feedback = String(
-                        localized: "shop.report.thanks",
-                        defaultValue: "Thanks for letting us know. We've hidden this item and blocked its sender on your device. Your report is signed by your device and travels to friends you meet in person, including the person you reported.",
-                        comment: "Alert after reporting an item in a friend's shop: what happened, and who the signed report is shared with")
-                }
-            }
-            Button("Cancel", role: .cancel) { reportTarget = nil }
+            reportButtons(target)
         } message: { _ in
             // Disclosure (L21): stated BEFORE the report is made, because the report is not
             // anonymous and not device-local — it is signed and handed to friends met in person,
@@ -107,50 +82,94 @@ struct FriendShopView: View {
         }
     }
 
+    /// The catalogs drawn: every one held, minus sellers banned on this phone.
+    private var visibleCatalogs: [ProximityClothingCatalog] {
+        shop.peerCatalogs.filter { !store.isProximitySellerBanned(fingerprint: $0.senderFingerprint) }
+    }
+
+    /// The first shop's "Made by …" line beside the framed coin balance (b2-friend-shop draft 2).
+    private var topRow: some View {
+        HStack(alignment: .center, spacing: 10) {
+            if let first = visibleCatalogs.first {
+                Text("Made by \(sellerName(first)), for your companion.")
+                    .font(FernletFramedFont.body)
+                    .foregroundStyle(WorldPalette.dim)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            FriendsCoinPill(balance: store.coinBalance)
+                .accessibilityIdentifier("friendShop.coinBalance")
+        }
+    }
+
+    /// The report reasons, each filing the report and saying what happened.
+    @ViewBuilder
+    private func reportButtons(_ target: ReportTarget) -> some View {
+        ForEach(ReportReason.allCases) { reason in
+            Button(reason.label, role: .destructive) {
+                store.reportClothingItem(target.item, sellerFingerprint: target.sellerFingerprint,
+                                         sellerSigningPublicKey: target.sellerSigningPublicKey, reason: reason)
+                reportTarget = nil
+                // Disclosure (L21): the row we relay is SIGNED by this device and goes to friends
+                // we meet in person — including the person reported, who is the only party that
+                // can act on it as a self-ban. Saying only "on your device" understated that.
+                feedback = String(
+                    localized: "shop.report.thanks",
+                    defaultValue: "Thanks for letting us know. We've hidden this item and blocked its sender on your device. Your report is signed by your device and travels to friends you meet in person, including the person you reported.",
+                    comment: "Alert after reporting an item in a friend's shop: what happened, and who the signed report is shared with")
+            }
+        }
+        Button("Cancel", role: .cancel) { reportTarget = nil }
+    }
+
+    /// Your own shop (b2-shop-editor), one tap away from the friends' shops.
+    private var yourShopLink: some View {
+        NavigationLink(value: FriendsRoute.yourShop) {
+            FriendsLinkCard(title: Text("Your shop"),
+                            detail: Text("\(store.listedShopItems.count) of \(ClothingShopLimits.maxListedItems) listed"),
+                            sprite: FriendsSprites.shop, spriteScale: 2)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("friendShop.yourShop")
+    }
+
     // MARK: - Sections
 
     /// Shown when no catalogs are held (the window closed mid-browse, or the entry was reached with
     /// nothing exchanged): explains the post-session model rather than spinning forever.
     private var emptyState: some View {
-        // The shared primitive rather than a third hand-rolled empty state: same italic centred line
-        // and glyph the other 30-odd empty sections use.
-        EmptyState(
-            text: "No shops right now. Spend time with a friend and their shop opens here for an hour after you part.",
+        FriendsEmptyNote(
+            text: Text("No shops right now. Spend time with a friend and their shop opens here for an hour after you part."),
             systemImage: "bag"
         )
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, FernletMetrics.spaceLg)
-        .padding(.vertical, 40)
+        .padding(.vertical, 20)
     }
 
-    private func shopSection(_ catalog: ProximityClothingCatalog) -> some View {
+    private func shopSection(_ catalog: ProximityClothingCatalog, isFirst: Bool) -> some View {
         let items = ClothingShareCodec.sanitizedItems(from: catalog.payload)
             .filter { !store.isClothingItemHidden($0, sellerFingerprint: catalog.senderFingerprint) }
-        return VStack(alignment: .leading, spacing: FernletMetrics.spaceMd) {
+        return VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(sellerName(catalog))’s shop")
-                    .font(.fernlet(.header))
-                    .foregroundStyle(Color.bark)
-                Text("Made by \(sellerName(catalog)), for your companion.")
-                    .font(.fernlet(.bodySmall))
-                    .italic()
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.cardTitle)
+                    .foregroundStyle(WorldPalette.bark)
+                    .accessibilityAddTraits(.isHeader)
+                // The first shop's line is in the top row, beside the coins.
+                if !isFirst {
+                    Text("Made by \(sellerName(catalog)), for your companion.")
+                        .font(FernletFramedFont.body)
+                        .foregroundStyle(WorldPalette.dim)
+                }
             }
-
             if items.isEmpty {
-                Text("Nothing for sale right now.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(FernletMetrics.spaceMd)
-                    .background(
-                        RoundedRectangle(cornerRadius: FernletMetrics.radiusMd, style: .continuous)
-                            .fill(Color.cream)
-                    )
+                FernletCard {
+                    Text("Nothing for sale right now.")
+                        .font(FernletFramedFont.body)
+                        .foregroundStyle(WorldPalette.dim)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: itemTileMinimum),
-                                             spacing: FernletMetrics.spaceMd)],
-                          spacing: FernletMetrics.spaceMd) {
+                FernletTileGrid {
                     ForEach(items) { item in
                         itemTile(item, catalog: catalog)
                     }
@@ -162,108 +181,80 @@ struct FriendShopView: View {
     private func itemTile(_ item: CustomizationItem, catalog: ProximityClothingCatalog) -> some View {
         let owned = store.customItems.contains { $0.id == item.id }
         let affordable = store.coinBalance >= item.price
-        return VStack(alignment: .leading, spacing: FernletMetrics.spaceSm) {
-            CustomItemThumbnail(texture: item.texture, size: 74)
-                .frame(maxWidth: .infinity)
-                .frame(height: 74)
-                .padding(.vertical, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: FernletMetrics.radiusSm, style: .continuous)
-                        .fill(Color.parchment)
-                )
-
-            // T2-11, second half: the tile now grows with the text (``itemTileMinimum``), but both
-            // labels were still hard-limited to ONE line, so at Larger Text sizes the wider tile
-            // just truncated a wider name — "Winter Cardig…" — and the byline lost the friend it
-            // credits. Both wrap instead. Bounded by construction: every rendered name comes
-            // through `ItemNameModeration.sanitizedName`, which caps at 24 characters, so wrapping
-            // costs a tile at most a few lines and a hostile catalog cannot stretch the grid.
-            Text(item.name.isEmpty ? item.slot.label : item.name)
-                .font(.fernlet(.headerMedium))
-                .foregroundStyle(Color.bark)
-                .fernletWrappingText()
-            Text("designed by \(sellerName(catalog))")
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
-
-            Button {
-                buy(item, from: catalog)
-            } label: {
-                buyLabel(owned: owned, price: item.price, affordable: affordable)
-            }
-            .buttonStyle(.plain)
-            .disabled(owned || !affordable)
-
-            if !owned && !affordable {
-                Text("Not enough coins yet")
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(FernletMetrics.spaceMd - 4)
-        .background(
-            RoundedRectangle(cornerRadius: FernletMetrics.radiusMd, style: .continuous)
-                .fill(Color.cream)
-        )
-        .overlay(alignment: .topTrailing) {
-            Menu {
-                Button(role: .destructive) {
-                    reportTarget = ReportTarget(item: item, sellerFingerprint: catalog.senderFingerprint,
-                                                sellerSigningPublicKey: catalog.senderSigningPublicKey)
-                } label: {
-                    Label("Report item…", systemImage: "flag")
+        return FernletCard {
+            VStack(alignment: .leading, spacing: 8) {
+                FriendsItemPreview(texture: item.texture, height: 74)
+                // T2-11: both labels wrap instead of truncating at Larger Text sizes; every rendered
+                // name comes through `ItemNameModeration.sanitizedName` (24 characters at most), so a
+                // hostile catalog cannot stretch the grid.
+                Text(item.name.isEmpty ? item.slot.label : item.name)
+                    .font(FernletFramedFont.rowTitle.weight(.semibold))
+                    .foregroundStyle(WorldPalette.bark)
+                    .fernletWrappingText()
+                Text("designed by \(sellerName(catalog))")
+                    .font(FernletFramedFont.rowDetail)
+                    .foregroundStyle(WorldPalette.dim)
+                    .fernletWrappingText()
+                buyButton(item, from: catalog, owned: owned, affordable: affordable)
+                if !owned && !affordable {
+                    Text("Not enough coins yet")
+                        .font(FernletFramedFont.rowDetail)
+                        .foregroundStyle(WorldPalette.dim)
                 }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.slate)
-                    // ~27pt with no VoiceOver label: this is the App Store UGC report path, so it
-                    // has to be both reachable and nameable.
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
             }
-            .accessibilityLabel("More options for \(item.name.isEmpty ? item.slot.label : item.name)")
-            .accessibilityIdentifier("friendShop.report")
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .fernletSmallShadow()
+        .overlay(alignment: .topTrailing) { reportMenu(item, catalog: catalog) }
     }
 
-    /// Themed buy affordance — a moss coin chip when purchasable, a muted "Owned" checkmark chip when
-    /// already in the closet, and a dimmed chip when the balance can't cover it. Replaces the old system
-    /// `.borderedProminent` button so the whole tile stays on-brand parchment.
+    /// The framed buy button: the coin price on the accent (dimmed when the balance can't cover it),
+    /// or a framed "Owned" with a tick once it is in the closet.
     @ViewBuilder
-    private func buyLabel(owned: Bool, price: Int, affordable: Bool) -> some View {
+    private func buyButton(_ item: CustomizationItem, from catalog: ProximityClothingCatalog,
+                           owned: Bool, affordable: Bool) -> some View {
         if owned {
-            HStack(spacing: 5) {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 11, weight: .bold))
-                Text("Owned")
-                    .font(.fernlet(.label))
+            Button {} label: {
+                HStack(spacing: 6) {
+                    FernletIcon(.check, scale: 2)
+                    Text("Owned")
+                }
+                .frame(maxWidth: .infinity)
             }
-            .foregroundStyle(Color.slate)
-            .padding(.horizontal, 11)
-            .padding(.vertical, 6)
-            .background(
-                Capsule(style: .continuous).fill(Color.parchment)
-            )
+            .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
+            .disabled(true)
         } else {
-            HStack(spacing: 5) {
-                CoinGlyph(diameter: 11)
-                Text("\(price)")
-                    .font(.fernlet(.label))
+            Button { buy(item, from: catalog) } label: {
+                HStack(spacing: 6) {
+                    WorldSpriteView(sprite: WorldSprites.coin, scale: 2)
+                    Text(verbatim: item.price.formatted(.number))
+                }
+                .frame(maxWidth: .infinity)
             }
-            // The contrast-safe filled-button pair: cream on plain `moss` was well under 4.5:1,
-            // worst in dark mode where moss lightens.
-            .foregroundStyle(Color.onMoss)
-            .padding(.horizontal, 11)
-            .padding(.vertical, 6)
-            .background(
-                Capsule(style: .continuous).fill(Color.mossFill)
-            )
-            .opacity(affordable ? 1 : 0.5)
+            .buttonStyle(ActionPillButtonStyle(.primary, size: .small))
+            .disabled(!affordable)
+            .accessibilityLabel(Text(verbatim: FernletUICopy.coinBalance(item.price)))
         }
+    }
+
+    /// The ••• menu on a tile: the App Store UGC report path, so it has to be both reachable and
+    /// nameable.
+    private func reportMenu(_ item: CustomizationItem, catalog: ProximityClothingCatalog) -> some View {
+        Menu {
+            Button(role: .destructive) {
+                reportTarget = ReportTarget(item: item, sellerFingerprint: catalog.senderFingerprint,
+                                            sellerSigningPublicKey: catalog.senderSigningPublicKey)
+            } label: {
+                Label("Report item…", systemImage: "flag")
+            }
+        } label: {
+            Text(verbatim: "···")
+                .font(FernletFramedFont.button)
+                .foregroundStyle(WorldPalette.dim)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel("More options for \(item.name.isEmpty ? item.slot.label : item.name)")
+        .accessibilityIdentifier("friendShop.report")
     }
 
     // MARK: - Behavior
