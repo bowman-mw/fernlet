@@ -96,7 +96,7 @@ struct WorldMapCompanion: View {
                 .offset(x: 8)
                 .accessibilityHidden(true)
             ZStack {
-                if hint { WorldHintRing().offset(y: -20) }
+                if hint { WorldHintRing() }
                 WorldCompanionSprite(state: store.liveCompanionState, look: look(emotion: emotion),
                                      settled: isSettled, asleep: emotion?.hidesTheDay == true,
                                      drowsy: isNight || emotion == .sleepy, isActive: isActive, pixelScale: pixelScale)

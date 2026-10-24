@@ -102,7 +102,7 @@ private struct AppleMutedMapView: UIViewRepresentable {
 }
 
 /// Phase 1's place lookup (``WorldPlaceLooking``; World build step 5c): Apple's points of interest within
-/// 80 m of where the person stands, asked in the foreground while the map is on screen, for a visit's
+/// 300 m of where the person stands (a park's one point can be that far from someone inside it), asked in the foreground while the map is on screen, for a visit's
 /// kind and name or a solo photo's refused-place check. Only the point goes to Apple, as the map's own
 /// tile requests for that area already do (`Docs/No-Tracking-Wall.md` §4a); what comes back is turned into
 /// Fernlet's own kinds here and nothing of it is stored but the decision (the MapKit terms).
@@ -114,9 +114,9 @@ private struct AppleMutedMapView: UIViewRepresentable {
 /// any other failure is none (nil).
 struct ApplePlaceLookup: WorldPlaceLooking {
     /// How far around the point the lookup reaches, in metres.
-    static let radius = 80.0
+    static let radius = 300.0
     /// The most places one answer keeps.
-    static let maxPlaces = 25
+    static let maxPlaces = 40
 
     func nearbyPlaces(around point: GeoPoint) async -> [NearbyPlace]? {
         guard point.isValid else { return nil }

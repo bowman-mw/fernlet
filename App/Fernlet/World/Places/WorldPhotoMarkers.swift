@@ -3,7 +3,7 @@ import SwiftUI
 import WorldMapStore
 
 /// A place on the map where the person took solo photos (design `b1-markers`' photo print; World build
-/// step 5c, owner's Q24): the print sprite with the number of photos taken there. Only photos that have
+/// step 5c, owner's Q24): the print sprite, a 44-pt target. Only photos that have
 /// shown (after the companion slept), never a friend's, never one taken at a refused place. Tapping it opens
 /// those photos (`b4-mem-solo-open`'s "Just you" carousel). VoiceOver: "Your photos here, 3".
 struct WorldPhotoMarkerView: View {
@@ -11,13 +11,11 @@ struct WorldPhotoMarkerView: View {
     let onOpen: () -> Void
 
     var body: some View {
+        // The approved marker is the print alone (`b1-markers`); how many photos it holds is spoken.
         Button(action: onOpen) {
-            VStack(spacing: 4) {
-                WorldSpriteView(sprite: WorldSprites.photo, scale: 3)
-                if place.photoIDs.count > 1 {
-                    WorldNameTag(name: place.photoIDs.count.formatted())
-                }
-            }
+            WorldSpriteView(sprite: WorldSprites.photo, scale: 3)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(verbatim: Self.spoken(place)))

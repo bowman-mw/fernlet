@@ -48,15 +48,12 @@ struct WorldLocationIntro: View {
         .accessibilityIdentifier("world.locationIntro")
     }
 
-    /// The thriving companion, large, over its shadow.
+    /// The thriving companion, large, over its own shadow.
     private var companion: some View {
-        VStack(spacing: 4) {
-            WorldCompanionSprite(state: .thriving,
-                                 look: WorldCompanionLook(appearance: .standard, state: .thriving, asleep: false),
-                                 pixelScale: dynamicTypeSize.isAccessibilitySize ? 3 : 4)
-            Capsule().fill(WorldPalette.ink.opacity(0.22)).frame(width: 64, height: 6)
-        }
-        .accessibilityHidden(true)
+        WorldCompanionSprite(state: .thriving,
+                             look: WorldCompanionLook(appearance: .standard, state: .thriving, asleep: false),
+                             pixelScale: dynamicTypeSize.isAccessibilitySize ? 3 : 4)
+            .accessibilityHidden(true)
     }
 
     /// Turn on location (the framed primary) and Not now (moss text).

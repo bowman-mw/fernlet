@@ -64,7 +64,12 @@ final class WorldPlacesKeeper {
         let nearby = await lookup.nearbyPlaces(around: fix.point)
         isLookingUp = false
         lastLookup = (fix.point, now)
-        guard !isDecoy, let nearby, case .allowed(let category, let name) = PlaceClassifier.visitVerdict(nearby) else { return false }
+        let verdict = nearby.map(PlaceClassifier.visitVerdict)
+        // The outcome's shape only (never a name or a point), for the device pass.
+        FernletAuditLog.log("worldMap.places.lookup", context: ["answered": nearby == nil ? "no" : "yes",
+                                                                 "places": "\(nearby?.count ?? 0)",
+                                                                 "verdict": Self.token(verdict)])
+        guard !isDecoy, case .allowed(let category, let name) = verdict else { return false }
         return update { $0.knownPlace(near: fix.point) == nil
             ? $0.learning(PlaceRecord(name: name, category: category, point: fix.point), at: now)
             : $0 }
@@ -82,6 +87,16 @@ final class WorldPlacesKeeper {
     func recordOuting(_ kind: PlaceStop.Kind, at date: Date, metres: Double, workoutID: UUID?) -> Bool {
         guard !isDecoy, kind != .visit, metres.isFinite else { return false }
         return update { $0.appending(PlaceStop(kind: kind, at: date, metres: max(0, metres), workoutID: workoutID)) }
+    }
+
+    /// A verdict's audit token: its kind alone.
+    static func token(_ verdict: PlaceVerdict?) -> String {
+        switch verdict {
+        case .allowed(let category, _): "allowed.\(category.rawValue)"
+        case .refused: "refused"
+        case .unnamed: "unnamed"
+        case nil: "none"
+        }
     }
 
     /// Forgets the in-memory lookup spacing (the wipes).

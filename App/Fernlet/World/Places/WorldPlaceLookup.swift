@@ -12,7 +12,7 @@ import WorldMapStore
 /// nothing the map's own tiles of that area don't already show it. Tests stand in a fixed answer.
 @MainActor
 protocol WorldPlaceLooking {
-    /// The places within about 80 m of `point`, or nil when there's no answer.
+    /// The places within about 300 m of `point`, or nil when there's no answer.
     func nearbyPlaces(around point: GeoPoint) async -> [NearbyPlace]?
 }
 

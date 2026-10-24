@@ -31,6 +31,10 @@ struct HomeMapSettingsView: View {
     @State private var confirming: HomeMapDeletion?
     @State private var isIntroUp = false
     @Environment(\.openURL) private var openURL
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    /// Whether the text is at an accessibility size: values move under their names.
+    private var isLarge: Bool { dynamicTypeSize.isAccessibilitySize }
 
     var body: some View {
         ScrollView {
@@ -66,7 +70,9 @@ struct HomeMapSettingsView: View {
     private var locationSection: some View {
         FernletFramedSection("Location") {
             Button(action: openLocation) {
-                FernletRowLabel("Location", value: Text(HomeMapCopy.permission(store.worldLocation.permission)))
+                // At the accessibility sizes the value takes the second line, so the name never breaks mid-word.
+                let value = Text(HomeMapCopy.permission(store.worldLocation.permission))
+                FernletRowLabel(title: Text("Location"), detail: isLarge ? value : nil, value: isLarge ? nil : value)
             }
             .buttonStyle(FernletRowButtonStyle(showsChevron: true))
             .accessibilityIdentifier("settings.homeMap.location")
@@ -109,8 +115,9 @@ struct HomeMapSettingsView: View {
             }
             .onChange(of: remembersSpaces) { _, on in WorldMapPreferences.setRememberSpaces(on) }
             .accessibilityIdentifier("settings.homeMap.rememberSpaces")
-            FernletRowLabel("Places Fernlet can name", detail: "Never doctors, lawyers or therapists.",
-                            value: Text("Food, drink, gyms, parks"))
+            FernletRowLabel(title: Text("Places Fernlet can name"),
+                            detail: isLarge ? Text("Food, drink, gyms, parks") : Text("Never doctors, lawyers or therapists."),
+                            value: isLarge ? nil : Text("Food, drink, gyms, parks"))
                 .accessibilityElement(children: .combine)
             FernletRowLabel("Places pinned", value: Text(pinCount, format: .number))
                 .accessibilityElement(children: .combine)
