@@ -84,13 +84,14 @@ struct WorldCompanionTests {
         #expect(map.contains("store.companionAmbientThought(addressing: termOfAddress)"))
     }
 
-    /// Every stamp has art on the banner: its own where the design drew it, the ring otherwise.
-    @Test func everyStampHasArt() {
-        let drawn = SillyStatKind.allCases.filter { WorldStampArt.sprite(for: $0) != WorldStampArt.ring }
-        #expect(drawn.count == 9, "the design draws nine stamps")
-        for kind in SillyStatKind.allCases {
-            let sprite = WorldStampArt.sprite(for: kind)
+    /// Every stamp has its own approved art (`b2-stamp-art`): nineteen distinct sprites, each a rectangle
+    /// whose keys all have colours.
+    @Test func everyStampHasItsOwnArt() {
+        let sprites = SillyStatKind.allCases.map(WorldStampArt.sprite(for:))
+        #expect(Set(sprites.map(\.rows)).count == SillyStatKind.allCases.count, "two stamps share art")
+        for sprite in sprites {
             #expect(sprite.rows.allSatisfy { $0.count == sprite.width })
+            #expect(Set(sprite.rows.joined()).subtracting(["."]).isSubset(of: Set(sprite.palette.keys)))
         }
     }
 
