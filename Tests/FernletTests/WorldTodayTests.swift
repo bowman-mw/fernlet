@@ -57,7 +57,7 @@ struct WorldTodayTests {
         #expect(!settings.contains("Reset home widgets"), "the old Home widgets editor is back beside Arrange Today")
         let home = try RepoRoot.source("App/Fernlet/HomeView.swift")
         #expect(home.contains("closesWithDone: true"))
-        #expect(home.contains(".environment(\\.fernletFramedLook, framedLook)"))
+        #expect(home.contains("@Environment(\\.fernletFramedLook) private var framedLook"))
     }
 
     /// The gold hearts card shows only while a friend's heart is gold, and only with an end time.

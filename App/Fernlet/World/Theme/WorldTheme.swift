@@ -66,7 +66,17 @@ extension WorldTheme {
     @MainActor static var framedLook: FernletFramedLook {
         FernletFramedLook(paper: WorldPalette.paper, paperLow: WorldPalette.paperShade, raised: WorldPalette.paperLight,
                           ink: WorldPalette.ink, text: WorldPalette.bark, shadow: WorldPalette.ink.opacity(0.22),
-                          sage: WorldPalette.sage, rose: WorldPalette.rose, mark: WorldPalette.moss)
+                          sage: WorldPalette.sage, rose: WorldPalette.rose, mark: WorldPalette.moss,
+                          accent: WorldPalette.accent, onAccent: WorldPalette.onAccent, dim: WorldPalette.dim)
+    }
+}
+
+extension View {
+    /// The one design language (`b1-language`) for everything below: framed cards, chips, buttons and
+    /// switches in this theme's palette (``WorldTheme/framedLook``, `FernletFramedToggleStyle`).
+    func worldDesignLanguage() -> some View {
+        environment(\.fernletFramedLook, WorldTheme.framedLook)
+            .toggleStyle(FernletFramedToggleStyle())
     }
 }
 

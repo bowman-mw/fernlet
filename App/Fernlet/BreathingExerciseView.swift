@@ -552,6 +552,8 @@ struct BreathingExerciseView: View {
                 // it. `labelsHidden()` keeps the layout identical and gives it the word back.
                 Toggle("Haptics", isOn: $hapticsEnabled)
                     .labelsHidden()
+                    // The system switch: its label is hidden, and the framed style draws it.
+                    .toggleStyle(.switch)
                     .tint(Color.moss)
             }
         }

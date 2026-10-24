@@ -53,6 +53,8 @@ public struct SheetHeader<Accessory: View>: View {
     /// Leading informational content shown when there is no Cancel (e.g. a coin balance).
     var accessory: Accessory
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// World build: the framed look's sheet (b1-frame-sheet): paper, ink title, a plain DM Sans subtitle.
+    @Environment(\.fernletFramedLook) private var look
 
     /// The full-slot initializer. Prefer the `Accessory == EmptyView` conveniences below unless
     /// the sheet genuinely leads with information.
@@ -90,7 +92,7 @@ public struct SheetHeader<Accessory: View>: View {
             }
             title
                 .font(.fernlet(.displayMedium))
-                .foregroundStyle(Color.bark)
+                .foregroundStyle(look?.text ?? Color.bark)
                 // Two lines, lifted at accessibility sizes as ``ScreenHeader``'s are: the audit
                 // reported every sheet title that carried the limit there as text that may clip.
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
@@ -118,8 +120,8 @@ public struct SheetHeader<Accessory: View>: View {
             if let subtitle, !dynamicTypeSize.isAccessibilitySize {
                 subtitle
                     .font(.fernlet(.bodySmall))
-                    .italic()
-                    .foregroundStyle(Color.slate)
+                    .italic(look == nil)
+                    .foregroundStyle(look?.dim ?? Color.slate)
                     .lineLimit(1)
                     // Last of the three header texts, still ahead of the controls.
                     .accessibilitySortPriority(10)
@@ -129,7 +131,7 @@ public struct SheetHeader<Accessory: View>: View {
         .padding(.top, 10)
         .padding(.bottom, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.parchment)
+        .background(look?.paper ?? Color.parchment)
     }
 
     /// Whether anything occupies the control row — an empty row would just push the title down.

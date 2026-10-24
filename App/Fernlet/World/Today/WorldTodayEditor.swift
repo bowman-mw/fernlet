@@ -56,7 +56,6 @@ struct WorldTodayEditor: View {
                 .foregroundStyle(isShown ? WorldPalette.bark : WorldPalette.dim)
                 .fernletWrappingText()
         }
-        .toggleStyle(WorldSwitchStyle())
         .accessibilityAction(named: Text("Move up")) { move(widget, by: -1) }
         .accessibilityAction(named: Text("Move down")) { move(widget, by: 1) }
         .accessibilityInputLabels([Text(widget.title)])
@@ -128,37 +127,5 @@ nonisolated enum TodayLayout {
             if elsewhere.contains(widget) { return widget }
             return remaining.popFirst()
         }
-    }
-}
-
-/// The design language's switch (`b1-language`): a framed track, moss when on, paper when off, with a
-/// framed white knob. Tapping anywhere on the row flips it, as a system switch does; VoiceOver hears a
-/// switch with the row's name and its state.
-struct WorldSwitchStyle: ToggleStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        Button {
-            configuration.isOn.toggle()
-        } label: {
-            HStack {
-                configuration.label
-                Spacer(minLength: 12)
-                ZStack(alignment: configuration.isOn ? .trailing : .leading) {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(configuration.isOn ? WorldPalette.moss : WorldPalette.paperShade)
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(Color.white)
-                        .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(WorldPalette.ink, lineWidth: 2))
-                        .frame(width: 22, height: 22)
-                        .padding(2)
-                }
-                .frame(width: 52, height: 30)
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(WorldPalette.ink, lineWidth: 2))
-                .animation(.easeOut(duration: 0.15), value: configuration.isOn)
-            }
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityRepresentation { Toggle(isOn: configuration.$isOn) { configuration.label } }
     }
 }

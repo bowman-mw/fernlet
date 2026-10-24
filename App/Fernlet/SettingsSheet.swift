@@ -140,7 +140,9 @@ struct SettingsSheet: View {
     var body: some View {
         NavigationStack {
             settingsContent
-                .navigationTitle("Settings")
+                // In a World panel the wooden plate carries the title: no second, large one here.
+                .navigationTitle(onClose == nil ? Text("Settings") : Text(verbatim: ""))
+                .navigationBarTitleDisplayMode(onClose == nil ? .automatic : .inline)
                 .navigationDestination(for: SettingsRoute.self) { route in
                     destination(for: route)
                         // Each pushed page's keyboard "Done" (the nutrition targets' number pads,

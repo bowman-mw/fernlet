@@ -147,6 +147,9 @@ struct ContentView: View {
             // Every passcode setup sheet, wherever it is presented from, asks the same coordinator
             // before it mints a fresh key over sealed entries (period-data design §4.4 step 2).
             .environment(\.fernletPrivateHubOpener, privateHubOpener)
+            // World build: the one design language (b1-language) on every screen and every sheet the
+            // root presents: framed cards, chips, buttons and switches (`FernletFramedLook`).
+            .worldDesignLanguage()
             .onChange(of: activeSheet?.id) { oldID, newID in
                 handleActiveSheetIDChange(oldID: oldID, newID: newID)
             }

@@ -24,14 +24,18 @@ import SwiftUI
 /// The design export's wordmark role (Playfair Display Italic) is deliberately absent: its face
 /// was dropped on 2026-10-01 because the bundled copy broke the font's license. Read the FernletUI
 /// landing page before adding it back.
+///
+/// **World build (branch `world-ui`):** two typefaces only (the approved design language, `b1-language`):
+/// Fraunces for titles, DM Sans for everything else. The DM Serif Display headers and the Instrument Serif
+/// body and bubble faces are retired; their roles now resolve to Fraunces and DM Sans.
 nonisolated public enum FernletTextRole: CaseIterable {
     case display         // Fraunces SemiBold 36 — avatar state / hero
     case displayMedium   // Fraunces SemiBold 28 — section display
-    case header          // DM Serif Display 24 — section headers
-    case headerMedium    // DM Serif Display 20 — sub-headers
-    case body            // Instrument Serif 17 — body / primary UI
-    case bodySmall       // Instrument Serif 15 — compact body
-    case bubble          // Instrument Serif Italic 14 — thought bubbles
+    case header          // Fraunces SemiBold 24 — section headers (World: was DM Serif Display)
+    case headerMedium    // Fraunces SemiBold 20 — sub-headers (World: was DM Serif Display)
+    case body            // DM Sans 17 — body / primary UI (World: was Instrument Serif)
+    case bodySmall       // DM Sans 15 — compact body (World: was Instrument Serif)
+    case bubble          // DM Sans 14 — thought bubbles (World: was Instrument Serif Italic)
     case label           // DM Sans Medium 14 — labels / buttons / toggles
     case labelSmall      // DM Sans 12 — secondary labels
     case stat            // DM Sans Medium 14 tabular — numbers / stats
@@ -46,11 +50,11 @@ nonisolated public extension Font {
         switch role {
         case .display:       return .custom(FernletFontName.frauncesSemiBold, size: 36, relativeTo: .largeTitle)
         case .displayMedium: return .custom(FernletFontName.frauncesSemiBold, size: 28, relativeTo: .title)
-        case .header:        return .custom(FernletFontName.dmSerifDisplay, size: 24, relativeTo: .title2)
-        case .headerMedium:  return .custom(FernletFontName.dmSerifDisplay, size: 20, relativeTo: .title3)
-        case .body:          return .custom(FernletFontName.instrumentSerif, size: 17, relativeTo: .body)
-        case .bodySmall:     return .custom(FernletFontName.instrumentSerif, size: 15, relativeTo: .callout)
-        case .bubble:        return .custom(FernletFontName.instrumentSerifItalic, size: 14, relativeTo: .footnote)
+        case .header:        return .custom(FernletFontName.frauncesSemiBold, size: 24, relativeTo: .title2)
+        case .headerMedium:  return .custom(FernletFontName.frauncesSemiBold, size: 20, relativeTo: .title3)
+        case .body:          return .custom(FernletFontName.dmSans, size: 17, relativeTo: .body)
+        case .bodySmall:     return .custom(FernletFontName.dmSans, size: 15, relativeTo: .callout)
+        case .bubble:        return .custom(FernletFontName.dmSans, size: 14, relativeTo: .footnote)
         case .label:         return .custom(FernletFontName.dmSansMedium, size: 14, relativeTo: .subheadline)
         case .labelSmall:    return .custom(FernletFontName.dmSans, size: 12, relativeTo: .caption)
         case .stat:          return .custom(FernletFontName.dmSansMedium, size: 14, relativeTo: .subheadline).monospacedDigit()

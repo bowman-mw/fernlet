@@ -27,11 +27,17 @@ public struct FernletFramedLook: Sendable {
     public var sage: Color
     /// The gentle-day row's fill ("I'm unwell today").
     public var rose: Color
-    /// The small square before a section label.
+    /// The small square before a section label, and a switch that is on.
     public var mark: Color
+    /// Primary buttons and selected chips (the App colors accent; moss ink by default).
+    public var accent: Color
+    /// Text on ``accent``.
+    public var onAccent: Color
+    /// Secondary text on paper.
+    public var dim: Color
 
     public init(paper: Color, paperLow: Color, raised: Color, ink: Color, text: Color, shadow: Color,
-                sage: Color, rose: Color, mark: Color) {
+                sage: Color, rose: Color, mark: Color, accent: Color, onAccent: Color, dim: Color) {
         self.paper = paper
         self.paperLow = paperLow
         self.raised = raised
@@ -41,6 +47,9 @@ public struct FernletFramedLook: Sendable {
         self.sage = sage
         self.rose = rose
         self.mark = mark
+        self.accent = accent
+        self.onAccent = onAccent
+        self.dim = dim
     }
 
     /// A card's corner radius in this look.
@@ -52,6 +61,61 @@ public struct FernletFramedLook: Sendable {
 public extension EnvironmentValues {
     /// The framed look, when a surface has opted in; nil draws every card as it always has.
     @Entry var fernletFramedLook: FernletFramedLook? = nil
+    /// Whether a page's own title is already on a title plate above it (a World panel's root page):
+    /// ``ScreenHeader`` then draws only its subtitle, so the title is never said twice. A page pushed
+    /// inside the panel, or a sheet, is presented and keeps its title.
+    @Entry var fernletTitleOnPlate: Bool = false
+}
+
+/// The framed look's switch (`b1-language`): a framed track, the look's ``FernletFramedLook/mark`` when
+/// on, recessed paper when off, with a framed white knob. The whole row flips it, as a system switch does,
+/// and VoiceOver hears a switch with the row's name and its state. Without the look it draws the system
+/// switch.
+public struct FernletFramedToggleStyle: ToggleStyle {
+    public init() {}
+
+    public func makeBody(configuration: Configuration) -> some View {
+        FramedToggle(configuration: configuration)
+    }
+
+    /// The switch itself: a nested view because a `ToggleStyle` cannot read the environment.
+    private struct FramedToggle: View {
+        let configuration: ToggleStyleConfiguration
+        @Environment(\.fernletFramedLook) private var look
+
+        var body: some View {
+            if let look {
+                Button { configuration.isOn.toggle() } label: {
+                    HStack {
+                        configuration.label
+                        Spacer(minLength: 12)
+                        track(look)
+                    }
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityRepresentation { Toggle(isOn: configuration.$isOn) { configuration.label } }
+            } else {
+                Toggle(isOn: configuration.$isOn) { configuration.label }
+                    .toggleStyle(.switch)
+            }
+        }
+
+        private func track(_ look: FernletFramedLook) -> some View {
+            ZStack(alignment: configuration.isOn ? .trailing : .leading) {
+                RoundedRectangle(cornerRadius: 8).fill(configuration.isOn ? look.mark : look.paperLow)
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(Color.white)
+                    .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(look.ink, lineWidth: 2))
+                    .frame(width: 22, height: 22)
+                    .padding(2)
+            }
+            .frame(width: 52, height: 30)
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth))
+            .animation(.easeOut(duration: 0.15), value: configuration.isOn)
+        }
+    }
 }
 
 public extension View {

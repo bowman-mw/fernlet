@@ -72,11 +72,11 @@ struct FernletFontRegistrationTests {
         switch role {
         case .display:       return FernletFontName.frauncesSemiBold
         case .displayMedium: return FernletFontName.frauncesSemiBold
-        case .header:        return FernletFontName.dmSerifDisplay
-        case .headerMedium:  return FernletFontName.dmSerifDisplay
-        case .body:          return FernletFontName.instrumentSerif
-        case .bodySmall:     return FernletFontName.instrumentSerif
-        case .bubble:        return FernletFontName.instrumentSerifItalic
+        case .header:        return FernletFontName.frauncesSemiBold
+        case .headerMedium:  return FernletFontName.frauncesSemiBold
+        case .body:          return FernletFontName.dmSans
+        case .bodySmall:     return FernletFontName.dmSans
+        case .bubble:        return FernletFontName.dmSans
         case .label:         return FernletFontName.dmSansMedium
         case .labelSmall:    return FernletFontName.dmSans
         case .stat:          return FernletFontName.dmSansMedium

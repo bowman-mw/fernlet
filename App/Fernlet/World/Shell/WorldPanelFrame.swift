@@ -34,6 +34,8 @@ struct WorldPanelFrame<Content: View>: View {
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .environment(\.fernletTabBarClearance, 0)
+                // The plate names the panel, so its root page draws only its subtitle (ScreenHeader).
+                .environment(\.fernletTitleOnPlate, showsPlate)
         }
         .background { WorldPageBackground().ignoresSafeArea() }
         .onAppear { isTitleFocused = showsPlate }

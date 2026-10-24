@@ -369,6 +369,11 @@ public struct ScreenHeader: View {
     /// default.
     var titleLineLimit: Int
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// World build: a panel root's title is on its wooden plate already (`fernletTitleOnPlate`); a
+    /// pushed page or a sheet is presented and keeps its own.
+    @Environment(\.fernletTitleOnPlate) private var titleOnPlate
+    @Environment(\.isPresented) private var isPresented
+    @Environment(\.fernletFramedLook) private var look
 
     /// The localizing initializer, for the common case where both halves are authored copy.
     ///
@@ -418,11 +423,13 @@ public struct ScreenHeader: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if subtitleFirst { subtitleView }
-            title
-                .font(.fernlet(.display))
-                .foregroundStyle(Color.bark)
-                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : titleLineLimit)
-                .fixedSize(horizontal: false, vertical: true)
+            if !(titleOnPlate && !isPresented) {
+                title
+                    .font(.fernlet(.display))
+                    .foregroundStyle(look?.text ?? Color.bark)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : titleLineLimit)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if !subtitleFirst { subtitleView }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -438,8 +445,8 @@ public struct ScreenHeader: View {
     private var subtitleView: some View {
         subtitle
             .font(.fernlet(.bodySmall))
-            .italic()
-            .foregroundStyle(Color.slate)
+            .italic(look == nil)
+            .foregroundStyle(look?.dim ?? Color.slate)
             .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 3)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -1246,8 +1253,33 @@ public struct ChipButtonStyle: ButtonStyle {
         /// unselected chip's 0.12 bark edge measures 1.19:1, so a low-vision user sees a floating
         /// word with no button boundary at all until this raises it.
         @Environment(\.colorSchemeContrast) private var contrast
+        @Environment(\.fernletFramedLook) private var look
 
         var body: some View {
+            if let look {
+                framed(look)
+            } else {
+                standard
+            }
+        }
+
+        /// The framed look's chip: raised paper (the accent when selected) in a 2-pt ink frame with a
+        /// solid shadow; a destructive chip keeps its terracotta ink.
+        private func framed(_ look: FernletFramedLook) -> some View {
+            let ink: Color = destructive ? .terracottaInk : (selected ? look.onAccent : look.text)
+            return configuration.label
+                .font(.fernlet(.label))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .foregroundStyle(ink)
+                .fernletFramed(look, fill: selected ? look.accent : nil, cornerRadius: 8)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+                .opacity(isEnabled ? (configuration.isPressed ? 0.75 : 1.0) : 0.4)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+        }
+
+        private var standard: some View {
             let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
             let ink: Color = destructive ? .terracottaInk : (selected ? .parchment : .bark)
             let fill: Color = destructive
@@ -1326,10 +1358,11 @@ public struct ActionPillButtonStyle: ButtonStyle {
         /// §4.2, same reason as ``ChipButtonStyle``'s `Chip`: the style itself has no environment.
         /// A `.secondary` pill's only boundary is a 0.14 bark hairline at 1.23:1.
         @Environment(\.colorSchemeContrast) private var contrast
+        @Environment(\.fernletFramedLook) private var look
 
         private var fill: Color {
             switch kind {
-            case .primary:     return Color.mossFill.opacity(isEnabled ? 1 : 0.55)
+            case .primary:     return (look?.accent ?? Color.mossFill).opacity(isEnabled ? 1 : 0.55)
             case .secondary:   return Color.cream
             // 2026-08-21 destructive token: tinted card, never solid — disabled drops the
             // fill to 6%, an opacity change rather than a color change (artboard 2b).
@@ -1339,8 +1372,8 @@ public struct ActionPillButtonStyle: ButtonStyle {
 
         private var ink: Color {
             switch kind {
-            case .primary:     return isEnabled ? .onMoss : .bark
-            case .secondary:   return .bark
+            case .primary:     return isEnabled ? (look?.onAccent ?? .onMoss) : (look?.text ?? .bark)
+            case .secondary:   return look?.text ?? .bark
             case .destructive: return isEnabled ? .terracottaInk : .softTaupe
             }
         }
@@ -1356,6 +1389,24 @@ public struct ActionPillButtonStyle: ButtonStyle {
         }
 
         var body: some View {
+            if let look {
+                // The framed look's button: a 10-pt rounded plate in a 2-pt ink frame with a solid shadow.
+                configuration.label
+                    .font(.fernlet(.label).weight(.bold))
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(ink)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+                    .frame(minHeight: 44)
+                    .fernletFramed(look, fill: kind == .secondary ? look.raised : fill, cornerRadius: 10)
+                    .contentShape(RoundedRectangle(cornerRadius: 10))
+                    .opacity(configuration.isPressed ? 0.78 : 1.0)
+            } else {
+                standard
+            }
+        }
+
+        private var standard: some View {
             let shape = Capsule(style: .continuous)
             return configuration.label
                 .font(.fernlet(.label))
@@ -1894,6 +1945,7 @@ public struct SheetSaveBar: View {
     var disabled: Bool
     var action: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.fernletFramedLook) private var look
 
     /// The localizing initializer. A literal at the call site is harvested into the calling target's
     /// string catalog and looked up in `Bundle.main` — the app bundle, where all ~41 call sites are.
@@ -1933,14 +1985,23 @@ public struct SheetSaveBar: View {
                 .buttonStyle(.plain)
                 .font(.fernlet(.label))
                 .multilineTextAlignment(.center)
-                .foregroundStyle(disabled ? Color.bark : Color.onMoss)
+                .foregroundStyle(disabled ? (look?.text ?? Color.bark) : (look?.onAccent ?? Color.onMoss))
                 .padding(.horizontal, 28)
                 .padding(.vertical, 16)
                 .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: 52)
                 .background(
-                    Color.mossFill.opacity(disabled ? 0.55 : 1),
-                    in: RoundedRectangle(cornerRadius: 16)
+                    (look?.accent ?? Color.mossFill).opacity(disabled ? 0.55 : 1),
+                    in: RoundedRectangle(cornerRadius: look == nil ? 16 : 10)
                 )
+                // The framed look's primary button: a 2-pt ink frame and a solid shadow (b1-language).
+                .overlay {
+                    if let look {
+                        RoundedRectangle(cornerRadius: 10).strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth)
+                    }
+                }
+                .background {
+                    if let look { RoundedRectangle(cornerRadius: 10).fill(look.shadow).offset(y: 3) }
+                }
                 // The pill is 52pt tall and draws as one target, but `.buttonStyle(.plain)` leaves
                 // the hit region on the LABEL — so the commit button every sheet in the app ends
                 // with was reporting a sub-44pt target while looking twice that size. Handing the

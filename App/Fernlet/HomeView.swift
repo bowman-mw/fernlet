@@ -143,7 +143,6 @@ struct HomeView: View {
             .navigationTitle("")
         }
         // Today's cards in the one design language; the sheets below keep their own look.
-        .environment(\.fernletFramedLook, framedLook)
         .fullScreenCover(isPresented: $isArrangingToday) {
             WorldPanelFrame(panel: .today, title: String(localized: "worldToday.arrange.title", defaultValue: "Arrange Today",
                                                          comment: "World Today panel: the title of the card layout editor"),
@@ -240,10 +239,8 @@ struct HomeView: View {
         }
     }
 
-    /// The one design language, on the Today panel only (each other panel opts in with its redesign).
-    private var framedLook: FernletFramedLook? {
-        presentation == .today ? WorldTheme.framedLook : nil
-    }
+    /// The one design language (`b1-language`), set at the app's root for every screen.
+    @Environment(\.fernletFramedLook) private var framedLook
 
     /// Arrange Today, at the bottom of the Today panel: the layout editor (design `b1-today-editor`).
     private var arrangeTodayButton: some View {
@@ -424,8 +421,7 @@ struct HomeView: View {
                 totals: store.macroTotals,
                 targets: store.nutritionTargets,
                 showCalories: store.settings.showCalories,
-                fiberIntake: store.micronutrientTotals.fiber,
-                framedBars: presentation == .today
+                fiberIntake: store.micronutrientTotals.fiber
             )
         case .hygiene:
             HygieneCard(store: store, activeSheet: $activeSheet)
@@ -2518,10 +2514,11 @@ struct MacroCard: View {
     /// The day's fiber intake in grams, when the logged meals carry micronutrients. Nil ⇒ the footer
     /// names the value as a target rather than implying it was eaten.
     var fiberIntake: Double? = nil
-    /// The World Today panel's form (design language): the three macros as framed bars, the status
-    /// plate's bars made larger, in place of the rings.
-    var framedBars = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// World build: in the design language the three macros are framed bars, the status plate's bars
+    /// made larger, in place of the rings (b1-language, b1-frame-root, b1-today).
+    @Environment(\.fernletFramedLook) private var look
+    private var framedBars: Bool { look != nil }
 
     var body: some View {
         FernletCard {

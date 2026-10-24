@@ -41,6 +41,10 @@ nonisolated enum WorldPalette {
     static let dim = adaptive(light: 0x6B5C4A, dark: 0xC9BFAE, lightHC: 0x4E4030, darkHC: 0xE2D8C6)
     /// The moss of section squares and switches.
     static let moss = adaptive(light: 0x5E844D, dark: 0x7FB069)
+    /// Primary buttons and selected chips (the design's moss ink; App colors can change it later).
+    static let accent = adaptive(light: 0x46683A, dark: 0x8DBB78)
+    /// Text on ``accent``.
+    static let onAccent = adaptive(light: 0xFFFFFF, dark: 0x10170D)
     /// Moss as text: links and quiet buttons on paper ("Arrange Today").
     static let mossInk = adaptive(light: 0x46683A, dark: 0x9BCB84)
     /// The calm card's paper (First aid).
