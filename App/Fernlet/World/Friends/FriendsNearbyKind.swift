@@ -76,14 +76,23 @@ nonisolated enum FriendsNearbyCopy {
 
     /// "Sam is in a hangout with 1 other person." Who's in it stays private: a count, never names.
     private static func hangoutNote(friend: String?, others: Int) -> String {
-        let who = friend ?? String(localized: "friendsNearby.note.they", defaultValue: "They",
-                                   comment: "Friends nearby: the subject of 'They're in a hangout' for someone who isn't a friend")
+        guard let friend else { return strangerHangoutNote(others: others) }
         guard others > 0 else {
-            return String(localized: "friendsNearby.note.hangoutAlone", defaultValue: "\(who) is in a hangout.",
-                          comment: "Friends nearby: a nearby person is in a hangout of their own; their first name, or 'They'")
+            return String(localized: "friendsNearby.note.hangoutAlone", defaultValue: "\(friend) is in a hangout.",
+                          comment: "Friends nearby: a nearby friend is in a hangout of their own; their first name")
         }
-        return String(localized: "friendsNearby.note.hangout", defaultValue: "\(who) is in a hangout with \(others) other people.",
-                      comment: "Friends nearby: a nearby person is in a hangout; their first name (or 'They'), then how many others are in it. Plural on the number (1: 'with 1 other person')")
+        return String(localized: "friendsNearby.note.hangout", defaultValue: "\(friend) is in a hangout with \(others) other people.",
+                      comment: "Friends nearby: a nearby friend is in a hangout; their first name, then how many others are in it. Plural on the number (1: 'with 1 other person')")
+    }
+
+    /// "They're in a hangout with 2 other people." for someone who isn't a friend.
+    private static func strangerHangoutNote(others: Int) -> String {
+        guard others > 0 else {
+            return String(localized: "friendsNearby.note.theirHangoutAlone", defaultValue: "They're in a hangout.",
+                          comment: "Friends nearby: someone nearby who isn't a friend is in a hangout of their own")
+        }
+        return String(localized: "friendsNearby.note.theirHangout", defaultValue: "They're in a hangout with \(others) other people.",
+                      comment: "Friends nearby: someone nearby who isn't a friend is in a hangout; how many others are in it. Plural on the number (1: 'with 1 other person')")
     }
 
     /// The choice's name: "Start a session with Sam", "Join Sam's hangout", "Make a friend".

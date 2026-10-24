@@ -282,9 +282,13 @@ struct NearbyPersonChoice: View {
     let stateLabel: String
     var connected = false
     var distance: Text?
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        HStack(spacing: 11) {
+        // At accessibility sizes the tile sits above the words, so the words keep the card's width.
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 11))
+        layout {
             WorldSpriteView(sprite: sprite, scale: 3)
                 .frame(width: 44, height: 44)
                 .background(WorldQuickStartPalette.tileOnTeal, in: RoundedRectangle(cornerRadius: 9))
@@ -307,6 +311,7 @@ struct NearbyPersonChoice: View {
                     .foregroundStyle(WorldQuickStartPalette.onTeal)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(EdgeInsets(top: 9, leading: 11, bottom: 9, trailing: 11))
         .frame(minHeight: 54)
         .background(WorldQuickStartPalette.teal, in: RoundedRectangle(cornerRadius: 11))

@@ -100,6 +100,19 @@ struct FriendsView: View {
     /// Closes the panel back to Home: after a session started from Friends nearby.
     var onFinished: () -> Void = {}
 
+    /// The album over `store`, with the tab's bindings; Home's page asks and the close-to-Home are
+    /// optional (a test host passes neither).
+    init(store: FernletStore, activeSheet: Binding<FernletSheet?>, isTabBarCompact: Binding<Bool>,
+         tabResetToken: Binding<Int>, requestedRoute: Binding<FriendsRoute?> = .constant(nil),
+         onFinished: @escaping () -> Void = {}) {
+        self.store = store
+        _activeSheet = activeSheet
+        _isTabBarCompact = isTabBarCompact
+        _tabResetToken = tabResetToken
+        _requestedRoute = requestedRoute
+        self.onFinished = onFinished
+    }
+
     @State private var showConnectionAnimation = false
     /// The name the celebration shows: sampled at commit, and adopted once if it arrives while the
     /// overlay is still up (Option 1b withholds it until the peer's first post-commit envelope).
