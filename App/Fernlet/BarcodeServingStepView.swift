@@ -68,6 +68,7 @@ struct BarcodeServingStepView: View {
     var onCancel: () -> Void
 
     @State private var servings: Double
+    @Environment(\.fernletFramedLook) private var look
 
     init(
         foodItem: FoodItem,
@@ -108,77 +109,55 @@ struct BarcodeServingStepView: View {
         return "\(String(format: "%g", foodItem.servingSize)) \(foodItem.servingUnit)"
     }
 
-    /// Title block plus the inline Cancel affordance — the sheet's own header.
-    private var header: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("How many servings?")
-                    .font(.fernlet(.header))
-                    .foregroundStyle(Color.bark)
-                    .fernletWrappingText()
-                Text(foodItem.name)
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-            }
-            Spacer(minLength: 12)
-            Button("Cancel") { onCancel() }
-                .buttonStyle(.plain)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.slate)
-                .accessibilityIdentifier("barcodeServingCancel")
+    /// The typeable count in big Fraunces, so fractional amounts (half a bar, a serving and a half)
+    /// log honestly; the framed stepper beside it moves it by whole servings.
+    private var countRow: some View {
+        HStack(alignment: .center, spacing: 12) {
+            TextField("Servings", value: $servings, format: .number.precision(.fractionLength(0...2)),
+                      prompt: .fieldPrompt("Servings"))
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.leading)
+                .textContentType(.none)
+                .font(.custom(FernletFontName.frauncesSemiBold, size: 52, relativeTo: .largeTitle))
+                .foregroundStyle(look?.text ?? Color.bark)
+                .frame(maxWidth: 140, alignment: .leading)
+                .accessibilityIdentifier("barcodeServingValue")
+            Spacer(minLength: 8)
+            // T2-8: the stepper carries the word for VoiceOver and Voice Control; the row draws the
+            // number instead.
+            FernletStepper("Servings", value: $servings, in: 0...Self.maxServings, step: 1)
+                .accessibilityValue(Text(sanitizedServings, format: .number.precision(.fractionLength(0...2))))
+                .accessibilityIdentifier("barcodeServingStepper")
         }
     }
 
-    /// The typeable servings field, its stepper, and the macros that scale with it.
-    private var servingsField: some View {
-        SheetField("Servings") {
+    /// The count, its stepper, and the macros that scale with it, in one framed card (`b3-serving`).
+    private var servingsCard: some View {
+        FernletCard {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline) {
-                    // Typeable so fractional amounts (half a bar, a serving and a half) log honestly.
-                    TextField("Servings", value: $servings, format: .number.precision(.fractionLength(0...2)),
-                              prompt: .fieldPrompt("Servings"))
-                        .keyboardType(.decimalPad)
-                        .multilineTextAlignment(.leading)
-                        .textContentType(.none)
-                        .frame(maxWidth: 90)
-                        .font(.fernlet(.displayMedium))
-                        .foregroundStyle(Color.bark)
-                        .accessibilityIdentifier("barcodeServingValue")
-                    Spacer()
-                    // T2-8: an empty label makes VoiceOver announce "stepper" with no name and
-                    // leaves Voice Control nothing to say. The word is given to the control and
-                    // hidden from the layout, so the visual row is unchanged — the same pattern
-                    // the age stepper in onboarding already uses.
-                    Stepper("Servings", value: $servings, in: 0...99, step: 1)
-                        .labelsHidden()
-                        .accessibilityIdentifier("barcodeServingStepper")
-                }
-                Text("P \(scaledMacros.protein)g   C \(scaledMacros.carbs)g   F \(scaledMacros.fat)g")
-                    .font(.fernlet(.stat))
-                    .foregroundStyle(Color.moss)
+                SectionLabel("Servings")
+                countRow
+                FoodMacroTagRow(macros: scaledMacros)
             }
-            .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
         }
     }
 
     var body: some View {
         VStack(spacing: 0) {
+            // b3-serving: Cancel top left, the question inside the sheet, the product under it.
+            SheetHeader(title: Text("How many servings?"), subtitle: Text(verbatim: foodItem.name), onCancel: onCancel)
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    header
-
+                VStack(alignment: .leading, spacing: 16) {
                     if let servingContext {
                         Text("One serving: \(servingContext)")
-                            .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.softTaupe)
+                            .font(look == nil ? .fernlet(.labelSmall) : FernletFramedFont.body)
+                            .foregroundStyle(look?.dim ?? Color.softTaupe)
                             .fernletWrappingText()
                     }
-
-                    servingsField
+                    servingsCard
                 }
-                .padding(20)
+                .padding(.horizontal, 18)
+                .padding(.top, 4)
                 .padding(.bottom, 10)
             }
 
@@ -186,7 +165,7 @@ struct BarcodeServingStepView: View {
                 onLog(sanitizedServings)
             }
         }
-        .background(Color.parchment)
+        .foodSheetBackground()
         // Its own presentation, so it inherits neither the presenting sheet's tint nor its keyboard
         // accessory: the decimal pad here had no Done and floated over the Log bar.
         .tint(Color.moss)
