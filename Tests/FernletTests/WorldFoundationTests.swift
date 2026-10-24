@@ -130,6 +130,45 @@ struct WorldFoundationTests {
         #expect(nav.pages.count == FernletPlateNavigation.capacity, "a page above another waits for its own pop")
     }
 
+    /// The panel's ✕ asks the page showing when it holds unsaved work (the Creation Studio's paint):
+    /// a guard that says no keeps the panel open; a covered page is not asked; a popped page's guard
+    /// goes with it.
+    @Test func thePanelCloseAsksAGuardedPageShowing() {
+        let clock = Clock()
+        let nav = plate(clock)
+        #expect(nav.allowsClose(), "no pushed page: ✕ closes")
+        let studio = UUID()
+        nav.show(id: studio, title: "New item", pop: {})
+        let paint = StudioPaint()
+        nav.setCloseGuard(id: studio) { [paint] in
+            guard paint.unsaved else { return true }
+            paint.asked += 1
+            return false
+        }
+        #expect(!nav.allowsClose() && paint.asked == 1, "unsaved paint: the studio asks and the panel stays")
+        paint.unsaved = false
+        #expect(nav.allowsClose(), "a blank canvas lets ✕ close")
+        paint.unsaved = true
+        // Save item pushed over the studio: the covered studio is not asked.
+        let save = UUID()
+        nav.hide(id: studio)
+        nav.show(id: save, title: "Save item", pop: {})
+        #expect(nav.allowsClose() && paint.asked == 1)
+        // Back to the studio, then the studio popped: its guard goes with it.
+        nav.hide(id: save)
+        nav.show(id: studio, title: "New item", pop: {})
+        #expect(!nav.allowsClose() && paint.asked == 2)
+        nav.popTop()
+        nav.setCloseGuard(id: UUID(), nil)
+        #expect(nav.allowsClose() && paint.asked == 2)
+    }
+
+    /// The studio's unsaved paint and how often its close guard asked, for the test above.
+    @MainActor final class StudioPaint {
+        var unsaved = true
+        var asked = 0
+    }
+
     @Test func backShowsItsArrowAloneForALongTitle() {
         #expect(!FernletBackButton.isCompact(title: "Appearance"))
         #expect(!FernletBackButton.isCompact(title: "Thirteen char"))

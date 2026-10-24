@@ -77,7 +77,8 @@ struct WorldPanelFrame<Content: View>: View {
             if closesWithDone {
                 WorldDoneButton(action: onClose)
             } else {
-                WorldCloseButton(action: onClose)
+                // A pushed page holding unsaved work (the Creation Studio's paint) asks first.
+                WorldCloseButton { if navigation.allowsClose() { onClose() } }
             }
         }
         .padding(EdgeInsets(top: 4, leading: 16, bottom: 13, trailing: 12))

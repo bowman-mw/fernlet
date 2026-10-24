@@ -50,6 +50,10 @@ public final class FernletPlateNavigation {
     public var rootTitle: String
     /// The recorded pages, bottom first.
     public private(set) var pages: [Page] = []
+    /// The close guards of pages holding unsaved work, by page (``setCloseGuard(id:_:)``). Only the
+    /// recorded pages' guards are kept, so a popped page's guard goes with it and this stays within
+    /// ``capacity``.
+    @ObservationIgnored private var closeGuards: [UUID: @MainActor () -> Bool] = [:]
     /// The clock, injectable for tests.
     private let now: () -> Date
 
@@ -109,6 +113,24 @@ public final class FernletPlateNavigation {
         guard let index = topIndex else { return }
         pages[index].pop()
         if index == 0 { pages.remove(at: 0) }
+    }
+
+    /// Registers (or with nil, removes) the close guard of a page holding unsaved work: the panel's ✕
+    /// asks it before closing the panel (``allowsClose()``). The guard asks the person itself (the
+    /// Creation Studio's discard question) and answers false to keep the panel open. A page's guard
+    /// is dropped once the page leaves the record.
+    public func setCloseGuard(id: UUID, _ closeGuard: (@MainActor () -> Bool)?) {
+        let recorded = Set(pages.map(\.id))
+        closeGuards = closeGuards.filter { recorded.contains($0.key) }
+        closeGuards[id] = closeGuard
+    }
+
+    /// Whether the panel's ✕ may close the panel now: the page showing answers through its close guard
+    /// when it has one (false: it is asking the person first); every other page lets it close. Only
+    /// the page on screen is asked, since only it can show its question.
+    public func allowsClose() -> Bool {
+        guard let top, let closeGuard = closeGuards[top.id] else { return true }
+        return closeGuard()
     }
 
     /// Drops trailing pages hidden for longer than ``staleAfter``. Bounded by the record's size.
