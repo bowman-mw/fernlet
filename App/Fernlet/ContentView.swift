@@ -75,6 +75,9 @@ struct ContentView: View {
     /// The World Home's panel that is not a tab (Today, Log, Settings), open over everything; nil when
     /// none is. The four tab panels are the `TabView`'s own pages (World build, plan step 1b).
     @State private var worldOverlay: WorldPanel?
+    /// Whether the World Home's disposable camera (the blue button's, ``WorldDisposableCamera``) is open
+    /// full screen over everything: the session button and the stamp banner hold back while it is.
+    @State private var isWorldCameraOpen = false
     /// How far the keyboard reaches above the interface's bottom edge, zero while it is down. The
     /// bar stays behind the keyboard; the meal-logged toast reads this to rest on the keyboard.
     @State private var keyboardOverlap: CGFloat = 0
@@ -905,7 +908,11 @@ struct ContentView: View {
             WorldMapHome(store: store, isFrontmost: isWorldMapFrontmost,
                          bodySignal: HomeView.companionBodySignal(enabled: store.settings.stressAwarenessEnabled,
                                                                   assessment: stressService.assessment),
-                         onOpen: openWorldPanel)
+                         onOpen: openWorldPanel,
+                         // The quick start's "Suggest today's workout" opens Move's suggestion sheet.
+                         onSheet: { activeSheet = $0 },
+                         stampBannerShowing: shownStampBanner != nil,
+                         isCameraOpen: $isWorldCameraOpen)
                 .tabPage(.home)
             WorldPanelFrame(panel: .food, onClose: closeWorldPanel) {
                 FoodView(store: store, onMealsLogged: mealLogReporter, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .food))
@@ -975,9 +982,10 @@ struct ContentView: View {
                 Color.clear
                 // The session on Home (b3-home-session): the green session button bottom left, the
                 // mirror of the blue button, beside the item bar's left end. It draws nothing outside a
-                // session, and hosts the session's prompts only while the map is in front.
-                WorldSessionButton(store: store, isFrontmost: isWorldMapFrontmost)
-                    .padding(.bottom, WorldMapHome.buttonLift)
+                // session, and hosts the session's prompts only while the map is in front and the blue
+                // button's camera is not over it (one surface for the prompts at a time).
+                WorldSessionButton(store: store, isFrontmost: isWorldMapFrontmost && !isWorldCameraOpen)
+                    .padding(.bottom, WorldMapHome.bottomLift)
                 WorldItemBar(onOpen: openWorldPanel)
                     .padding(.horizontal, 9)
                     .padding(.bottom, WorldItemBar.bottomGap)
@@ -1889,11 +1897,11 @@ struct ContentView: View {
         }
     }
 
-    /// The stamp banner on screen: the first one waiting, held back while the launch screen or a root
-    /// sheet covers the tabs, so a banner is never spent where nobody can see it. A held banner stays
-    /// queued and shows when the cover lifts.
+    /// The stamp banner on screen: the first one waiting, held back while the launch screen, a root
+    /// sheet or the World Home's disposable camera (a full-screen cover) covers the tabs, so a banner is
+    /// never spent where nobody can see it. A held banner stays queued and shows when the cover lifts.
     private var shownStampBanner: SillyStatKind? {
-        guard launcher.isDone, !rootSheetIsCoveringTabs else { return nil }
+        guard launcher.isDone, !rootSheetIsCoveringTabs, !isWorldCameraOpen else { return nil }
         return store.sillyStats.pendingStampBanners.first
     }
 
@@ -1904,6 +1912,9 @@ struct ContentView: View {
     private var sillyStampBannerOverlay: some View {
         if let kind = shownStampBanner {
             SillyStampBanner(kind: kind) { openStampBook(from: kind) }
+                // Grows with text size up to the map's own plates' cap, so at the largest sizes it
+                // holds its lines without covering half the map.
+                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
                 .frame(maxWidth: 352)
                 .padding(.horizontal, 16)
                 .padding(.top, stampBannerTop)

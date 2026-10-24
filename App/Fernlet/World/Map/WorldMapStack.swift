@@ -13,10 +13,15 @@ struct WorldMapStack<Overlay: View>: View {
     @Binding var camera: WorldCamera
     let ground: WorldGround
     let phase: CompanionDayPhase
-    /// Whether Dark Mode is on: the map and the fog go dark with it, as they do at night.
+    /// Whether Dark Mode is on: the map and the fog go dark with it. Night alone keeps the light map
+    /// under its tint (``WorldSkyWash``).
     var darkMode = false
     /// How far up from the bottom the base map keeps its own credit (above the item bar).
     let creditInset: CGFloat
+    /// Whether the base map's tiles failed (no signal): plain parchment covers it, credit and all, and the
+    /// layers draw on that (`b1-home-offline`). The map stays underneath, so it can come back with signal
+    /// and pans still reach it.
+    var veiled = false
     /// Drawn over the map in the same coordinate space; receives the current viewport.
     @ViewBuilder let overlay: (MapViewport, CGSize) -> Overlay
     @State private var viewport: MapViewport?
@@ -29,12 +34,17 @@ struct WorldMapStack<Overlay: View>: View {
                     viewport = reported
                 }
                 .accessibilityHidden(true)
+                if veiled {
+                    (isDark ? WorldPalette.nightPlainGround : WorldPalette.plainGround)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
                 if let viewport {
                     Group {
                         WorldGroundLayer(viewport: viewport, ground: ground, darkStyle: isDark)
-                        WorldSkyWash(phase: phase)
+                        WorldSkyWash(phase: phase, darkMode: isDark)
                     }
-                    .mask { WorldMapCreditClearance(bottomInset: creditInset, active: kind == .appleMuted) }
+                    .mask { WorldMapCreditClearance(bottomInset: creditInset, active: kind == .appleMuted && !veiled) }
                     overlay(viewport, proxy.size)
                 }
             }
@@ -42,8 +52,8 @@ struct WorldMapStack<Overlay: View>: View {
         .ignoresSafeArea()
     }
 
-    /// Whether the map draws dark: at night, or in Dark Mode.
-    private var isDark: Bool { phase.isDarkMap || darkMode }
+    /// Whether the map draws dark: in Dark Mode only (night is a tint, `b1-home-night`).
+    private var isDark: Bool { darkMode }
 }
 
 /// A mask with one small hole over the base map's own credit, so Fernlet's fog and wash never cover

@@ -10,6 +10,10 @@ import WorldMapStore
 struct PlainBaseMap: WorldBaseMap {
     var drawsOwnCredit: Bool { false }
 
+    /// Visible height per metre of camera distance, measured off Apple's map on an iPhone 17 (World
+    /// Shell), so switching base maps keeps the same zoom (the Home also places the companion by it).
+    static let heightPerDistance = 0.57
+
     func makeBody(camera: Binding<WorldCamera>, darkStyle: Bool, bottomInset: CGFloat,
                   onViewport: @escaping (MapViewport) -> Void) -> some View {
         PlainMapView(camera: camera, darkStyle: darkStyle, onViewport: onViewport)
@@ -24,17 +28,13 @@ private struct PlainMapView: View {
     @State private var dragStart: GeoPoint?
     @State private var pinchStart: Double?
 
-    /// Visible height per metre of camera distance, measured off Apple's map on an iPhone 17 (World
-    /// Shell), so switching base maps keeps the same zoom.
-    static let heightPerDistance = 0.57
-
     /// Survey-line spacing in Mercator units: 200 m at the fog grid's reference latitude. A fixed unit
     /// step keeps the lines put while the person pans.
     private static let gridStep = 200 * WebMercator.unitsPerMetre(at: MercatorHexGrid.referenceLatitude)
 
     var body: some View {
         GeometryReader { proxy in
-            let viewport = MapViewport.around(camera.center, heightMetres: camera.distance * Self.heightPerDistance,
+            let viewport = MapViewport.around(camera.center, heightMetres: camera.distance * PlainBaseMap.heightPerDistance,
                                               size: proxy.size)
             Canvas { context, size in
                 context.fill(Path(CGRect(origin: .zero, size: size)),

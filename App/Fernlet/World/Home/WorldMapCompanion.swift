@@ -23,6 +23,14 @@ struct WorldMapCompanion: View {
     var bodySignal: CompanionBodySignal?
     /// Whether the map is on screen; off, the breath and the emotion clock stop.
     var isActive: Bool
+    /// The map's own line when it has one (``WorldMapLine``): a friend arriving, the weather, an unwell
+    /// day, where the map is. Nil keeps the companion's usual line.
+    var mapLine: String? = nil
+    /// Points per sprite pixel; nil takes the theme's.
+    var pixelScale: CGFloat? = nil
+    /// Whether the bubble stays down: the quick-start card is open over the map (`b1-qs-*` draw the
+    /// companion without one), so the two never overlap.
+    var isQuiet = false
     let onCustomize: () -> Void
     @State private var petGovernor = PetInteractionGovernor()
     @State private var playfulUntil: Date?
@@ -40,19 +48,20 @@ struct WorldMapCompanion: View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
             figure(emotion: emotion(at: context.date))
         }
-        .task(id: isActive) { await sayAmbientLine() }
+        .task(id: LineKey(isActive: isActive, line: mapLine)) { await sayAmbientLine() }
     }
 
     /// The bubble over the sprite, and the sprite with its pet heart.
     private func figure(emotion: CompanionEmotion?) -> some View {
         VStack(spacing: 12) {
             WorldSpeechBubble(text: thought)
-                .opacity(isThoughtVisible ? 1 : 0)
+                .opacity(isThoughtVisible && !isQuiet ? 1 : 0)
                 .offset(x: 8)
                 .accessibilityHidden(true)
             ZStack {
                 WorldCompanionSprite(state: store.liveCompanionState, look: look(emotion: emotion),
-                                     settled: isSettled, asleep: emotion?.hidesTheDay == true, isActive: isActive)
+                                     settled: isSettled, asleep: emotion?.hidesTheDay == true, isActive: isActive,
+                                     pixelScale: pixelScale)
                     .offset(y: hopLift)
                 if tapCount > 0 { WorldPetHeart().id(tapCount) }
             }
@@ -74,9 +83,15 @@ struct WorldMapCompanion: View {
         }
     }
 
-    /// The line in the bubble: the one a pet produced, otherwise the companion's own.
+    /// The line in the bubble: the one a pet produced, else the map's own, else the companion's own.
     private var thought: String {
-        tapThought ?? store.companionAmbientThought(addressing: termOfAddress)
+        tapThought ?? mapLine ?? store.companionAmbientThought(addressing: termOfAddress)
+    }
+
+    /// What re-shows the bubble: the map coming to the front, or a new line of the map's own.
+    private struct LineKey: Equatable {
+        let isActive: Bool
+        let line: String?
     }
 
     /// The companion's look for the frame: the person's appearance, the night colour while it sleeps.
@@ -153,6 +168,8 @@ struct WorldMapCompanion: View {
             return
         }
         withAnimation(.easeInOut(duration: 0.22)) { isThoughtVisible = true }
+        // DEBUG screenshots (`hold`) keep the line up; the scene list is empty in release builds.
+        guard !UITestSupport.worldHomeScenes.contains("hold") else { return }
         do {
             try await Task.sleep(for: Self.noticeWindow(standard: .seconds(6)))
         } catch {

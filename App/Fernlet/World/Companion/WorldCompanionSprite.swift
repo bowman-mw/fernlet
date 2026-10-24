@@ -12,6 +12,9 @@ struct WorldCompanionSprite: View {
     var asleep = false
     /// Whether the map is on screen; off, the breath stops ticking.
     var isActive = true
+    /// Points per sprite pixel; nil takes the theme's (3). The open scene with location off draws it
+    /// larger (`b1-home-denied`, draft 4).
+    var pixelScale: CGFloat? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.worldTheme) private var theme
 
@@ -21,7 +24,7 @@ struct WorldCompanionSprite: View {
     }
 
     var body: some View {
-        let scale = theme.spriteScale
+        let scale = pixelScale ?? theme.spriteScale
         TimelineView(.animation(minimumInterval: state.animationTempo, paused: reduceMotion || !isActive)) { timeline in
             let beat = Int(timeline.date.timeIntervalSinceReferenceDate / state.animationTempo)
             let pose = WorldCompanionPose(breathIn: !reduceMotion && isActive && beat % 2 == 1, settled: settled, asleep: asleep)
