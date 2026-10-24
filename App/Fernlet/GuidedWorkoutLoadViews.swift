@@ -532,30 +532,55 @@ private struct GuidedRepsRowEditor: View {
     private var unitSpoken: String { SetLoadFormat.spokenName(loadUnit) }
 
     var body: some View {
-        AdaptiveStack(spacing: 10, horizontalAlignment: .leading) {
-            HStack(spacing: 4) {
-                if row.isDrop { Text(verbatim: "\u{21B3}").accessibilityHidden(true) }
-                Text("\(label): \(row.reps) reps")
-            }
-            .font(look == nil ? .fernlet(.body) : MoveFont.rowTitle)
-            .foregroundStyle(look?.text ?? Color.bark)
-            .padding(.leading, row.isDrop ? 16 : 0)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityHidden(true)
-            HStack(spacing: 8) {
-                FernletStepper("Set \(number) reps", value: $row.reps, in: GuidedRepsEditor.repsRange, step: 1)
-                    .accessibilityLabel(Text("\(label): \(row.reps) reps"))
-                    .accessibilityIdentifier("workout.guided.editReps.set\(number)")
-                if showsWeight { weightField }
-                if let onRemove {
-                    Button(action: onRemove) { FernletIcon(.close, scale: 2).frame(width: 30, height: 44) }
-                        .buttonStyle(.plain)
-                        .fernletIconButton("Remove drop set")
-                        .accessibilityIdentifier("workout.guided.editReps.removeDrop")
+        Group {
+            if row.isDrop && look != nil {
+                // World build (`b3-edit-reps` draft 2): a drop set's line sits over its controls, so its ✕
+                // never squeezes the words into three lines.
+                VStack(alignment: .leading, spacing: 6) {
+                    rowLabel
+                    controls.frame(maxWidth: .infinity, alignment: .trailing)
+                }
+            } else {
+                AdaptiveStack(spacing: 10, horizontalAlignment: .leading) {
+                    rowLabel
+                    controls
                 }
             }
         }
         .padding(.vertical, 8)
+    }
+
+    /// "Set 1: 10 reps", or "↳ Drop set: 8 reps"; the stepper speaks it, so the words are hidden.
+    private var rowLabel: some View {
+        HStack(spacing: 4) {
+            if row.isDrop { Text(verbatim: "\u{21B3}").accessibilityHidden(true) }
+            Text("\(label): \(row.reps) reps")
+        }
+        // The kit's 15-pt strong face (`b3-edit-reps` draft 2).
+        .font(look == nil ? .fernlet(.body) : MoveFont.body)
+        .foregroundStyle(look?.text ?? Color.bark)
+        .padding(.leading, row.isDrop ? 16 : 0)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityHidden(true)
+    }
+
+    /// The reps stepper, the weight and its unit, and a drop set's ✕.
+    private var controls: some View {
+        HStack(spacing: 8) {
+            FernletStepper("Set \(number) reps", value: $row.reps, in: GuidedRepsEditor.repsRange, step: 1)
+                .accessibilityLabel(Text("\(label): \(row.reps) reps"))
+                .accessibilityIdentifier("workout.guided.editReps.set\(number)")
+            if showsWeight { weightField }
+            if let onRemove {
+                Button(action: onRemove) { FernletIcon(.close, scale: 2).frame(width: 30, height: 44) }
+                    .buttonStyle(.plain)
+                    .fernletIconButton("Remove drop set")
+                    .accessibilityIdentifier("workout.guided.editReps.removeDrop")
+            }
+        }
+        // The controls take their full width first; the row's words wrap instead (the unit was
+        // squeezed out when the two shared the row evenly).
+        .layoutPriority(1)
     }
 
     /// The set's weight, typed on the decimal pad, with the unit after it.
@@ -564,8 +589,9 @@ private struct GuidedRepsRowEditor: View {
             TextField("Weight", text: $row.weight, prompt: .fieldPrompt("Weight"))
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.trailing)
-                .sheetTextInput(font: .fernlet(.label))
-                .frame(width: 70)
+                // Under the look the framed field's 14-pt insets need a little more room for "Weight".
+                .sheetTextInput(font: look == nil ? .fernlet(.label) : MoveFont.body)
+                .frame(width: look == nil ? 70 : 78)
                 .accessibilityLabel(Text("\(label) weight, \(unitSpoken)"))
                 .accessibilityIdentifier("workout.guided.editReps.weight\(number)")
             Text(verbatim: unitSymbol)

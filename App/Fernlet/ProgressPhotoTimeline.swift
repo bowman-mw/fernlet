@@ -215,7 +215,7 @@ struct ProgressPhotoSection: View {
                 // Top-aligned, so every picture starts on one line and a card with no caption ends
                 // short instead of drifting down to the middle. The stack's HEIGHT comes from its
                 // first child, which is why `addTile` reserves the tallest label block.
-                LazyHStack(alignment: .top, spacing: 14) {
+                LazyHStack(alignment: .top, spacing: look == nil ? 14 : 12) {
                     PhotoCaptureControl(
                         onCameraCapture: onCapture,
                         onLibraryPickData: onCaptureData,
@@ -391,7 +391,7 @@ struct ProgressPhotoSection: View {
                 // World build: a dashed ink frame around a pixel photo and the word (`b2-progress-photos`).
                 .strokeBorder(look?.text ?? Color.moss.opacity(0.5),
                               style: StrokeStyle(lineWidth: look == nil ? 1.5 : 2, dash: look == nil ? [6, 5] : [7, 5]))
-                .frame(width: ProgressPhotoCard.width(framed: look != nil), height: ProgressPhotoCard.height(framed: look != nil))
+                .frame(width: addTileWidth, height: ProgressPhotoCard.height(framed: look != nil))
                 .overlay {
                     VStack(spacing: 8) {
                         if look != nil {
@@ -417,8 +417,15 @@ struct ProgressPhotoSection: View {
             }
             .hidden()
             .accessibilityHidden(true)
+            // The reservation is the cards' height, never their width: under the look the add tile is
+            // narrower than a print.
+            .frame(width: addTileWidth, alignment: .topLeading)
         }
     }
+
+    /// The add tile's width: a card's today; under the World look the approved strip's narrower tile
+    /// (`b2-progress-photos`), so the tile and two prints fit the card.
+    private var addTileWidth: CGFloat { look == nil ? ProgressPhotoCard.cardWidth : 84 }
 
     /// Every distinct date chip the strip renders, in a stable order: what `addTile` reserves.
     private var reservedDateLabels: [String] {

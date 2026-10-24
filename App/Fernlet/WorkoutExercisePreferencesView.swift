@@ -172,7 +172,8 @@ struct WorkoutExercisePreferencesSheet: View {
                 Label {
                     Text("Add an exercise", comment: "Your exercises: opens the form for a new custom exercise")
                 } icon: {
-                    Image(systemName: "plus")
+                    // The pixel plus under the World look (`b3-your-exercises`); today's symbol without it.
+                    FernletIcon(.plus, scale: 2)
                 }
                 .frame(maxWidth: .infinity)
             }
