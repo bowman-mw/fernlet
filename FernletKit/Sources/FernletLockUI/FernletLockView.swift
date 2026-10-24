@@ -377,6 +377,9 @@ public struct FernletLockSetupView: View {
     /// The user's term of address (the app root sets it from the body profile), for the
     /// disclosure's closing line, which describes the user.
     @Environment(\.fernletTermOfAddress) private var termOfAddress
+    /// The World's framed look (`b3-lock-kind`, `b3-lock-pin`, `b3-lock-biometric`): the sheet on
+    /// paper with its title inside, framed radio cards, square dots and a framed pad.
+    @Environment(\.fernletFramedLook) private var look
 
     @State private var step: SetupStep = .kindPicker
     @State private var selectedKind: FernletLockCredentialKind = .pin6
@@ -402,7 +405,7 @@ public struct FernletLockSetupView: View {
     public var body: some View {
         NavigationStack {
             ZStack {
-                Color.parchment.ignoresSafeArea()
+                (look?.paper ?? Color.parchment).ignoresSafeArea()
                 // Once the lock IS configured the wizard stops pretending it isn't: the live step
                 // (with its tappable Cancel and Continue, which re-opened the disclosure) is
                 // replaced by a settled "You're set" state while the toast dwells.
@@ -419,18 +422,13 @@ public struct FernletLockSetupView: View {
                 // is off-screen at an accessibility text size.
                 .fernletLockPadPage()
             }
-            .navigationTitle(FernletLockCopy.Setup.navTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                if !showSuccess {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button(FernletLockCopy.Action.cancel) { dismiss() }
-                            .foregroundStyle(Color.slate)
-                    }
-                }
-            }
+            // Cancel top left and the title inside the sheet (`b1-frame-sheet`); Cancel goes once the
+            // lock is configured.
+            .fernletSheetToolbar(title: Text(verbatim: FernletLockCopy.Setup.navTitle),
+                                 onCancel: showSuccess ? nil : { dismiss() })
         }
         .tint(Color.moss)
+        .fernletSheet()
         .overlay {
             if showSuccess {
                 successToast
@@ -469,8 +467,8 @@ public struct FernletLockSetupView: View {
             // narrower set here than the gate did (and omitting the worry box from both) told the
             // user the lock covers less than it actually does.
             Text(FernletLockCopy.protectsSentence)
-                .font(.fernlet(.bubble))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.bubble) : FernletFramedFont.body)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .fernletWrappingText()
 
             VStack(spacing: 12) {
@@ -497,62 +495,91 @@ public struct FernletLockSetupView: View {
         Button {
             selectedKind = kind
         } label: {
-            HStack(spacing: 14) {
-                Image(systemName: kind == selectedKind ? "checkmark.circle.fill" : "circle")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(kind == selectedKind ? Color.moss : Color.slate)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 8) {
-                        Text(title)
-                            .font(.fernlet(.headerMedium))
-                            .foregroundStyle(Color.bark)
-                        if recommended {
-                            Text(FernletLockCopy.Setup.recommendedBadge)
-                                .font(.fernlet(.labelSmall))
-                                .foregroundStyle(Color.moss)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.moss.opacity(0.10), in: RoundedRectangle(cornerRadius: 6))
-                        }
-                    }
-                    Text(subtitle)
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                }
-                Spacer()
+            if let look {
+                framedKindCard(kind, title: title, subtitle: subtitle, recommended: recommended, look: look)
+            } else {
+                standardKindCard(kind, title: title, subtitle: subtitle, recommended: recommended)
             }
-            .padding(16)
-            .background(
-                kind == selectedKind ? Color.moss.opacity(0.06) : Color.cream,
-                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(
-                        kind == selectedKind ? Color.moss.opacity(0.4) : Color.bark.opacity(0.08),
-                        lineWidth: 1
-                    )
-            )
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(kind == selectedKind ? [.isSelected] : [])
+    }
+
+    /// The framed radio card (`b3-lock-kind`): the kind in Fraunces with a gold Recommended tag, its
+    /// line under it, the framed tick box, a moss ring when chosen.
+    private func framedKindCard(_ kind: FernletLockCredentialKind, title: String, subtitle: String,
+                                recommended: Bool, look: FernletFramedLook) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(FernletFramedFont.cardTitle)
+                    .foregroundStyle(look.text)
+                if recommended {
+                    FernletTag(text: Text(FernletLockCopy.Setup.recommendedBadge), fill: Color.goldenrod)
+                }
+            }
+            Text(subtitle)
+                .font(FernletFramedFont.body)
+                .foregroundStyle(look.dim)
+                .fernletWrappingText()
+        }
+        .modifier(LockRadioCardChrome(isSelected: kind == selectedKind, look: look))
+    }
+
+    /// Today's card: a radio circle, the name and its line on cream.
+    private func standardKindCard(_ kind: FernletLockCredentialKind, title: String, subtitle: String,
+                                  recommended: Bool) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: kind == selectedKind ? "checkmark.circle.fill" : "circle")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(kind == selectedKind ? Color.moss : Color.slate)
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 8) {
+                    Text(title)
+                        .font(.fernlet(.headerMedium))
+                        .foregroundStyle(Color.bark)
+                    if recommended {
+                        Text(FernletLockCopy.Setup.recommendedBadge)
+                            .font(.fernlet(.labelSmall))
+                            .foregroundStyle(Color.moss)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.moss.opacity(0.10), in: RoundedRectangle(cornerRadius: 6))
+                    }
+                }
+                Text(subtitle)
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+            }
+            Spacer()
+        }
+        .padding(16)
+        .background(
+            kind == selectedKind ? Color.moss.opacity(0.06) : Color.cream,
+            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(
+                    kind == selectedKind ? Color.moss.opacity(0.4) : Color.bark.opacity(0.08),
+                    lineWidth: 1
+                )
+        )
     }
 
     // MARK: Step 2 — passcode entry
 
     private var entryStep: some View {
         VStack(alignment: .leading, spacing: 20) {
-            SectionLabel(verbatim: selectedKind == .alphanumeric
+            stepHeading(selectedKind == .alphanumeric
                 ? String(localized: "lock.createPassword", defaultValue: "Create password",
                          bundle: .module, comment: "Header when creating an alphanumeric app lock")
                 : String(localized: "lock.createPIN", defaultValue: "Create PIN",
-                         bundle: .module, comment: "Header when creating a numeric app lock"))
-            Text(selectedKind == .alphanumeric
-                 ? FernletLockCopy.Setup.passwordRule
-                 : FernletLockCopy.Setup.pinRule(digits: selectedKind == .pin4 ? 4 : 6))
-                .font(.fernlet(.bubble))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
+                         bundle: .module, comment: "Header when creating a numeric app lock"),
+                        detail: selectedKind == .alphanumeric
+                ? FernletLockCopy.Setup.passwordRule
+                : FernletLockCopy.Setup.pinRule(digits: selectedKind == .pin4 ? 4 : 6))
 
             if let msg = errorMessage {
                 errorBanner(msg)
@@ -565,7 +592,9 @@ public struct FernletLockSetupView: View {
                     .sheetTextInput()
             } else {
                 pinDotsRow(current: passcode, total: selectedKind == .pin4 ? 4 : 6)
+                    .frame(maxWidth: .infinity)
                 FernletNumericPad(value: $passcode, maxLength: selectedKind == .pin4 ? 4 : 6)
+                    .frame(maxWidth: .infinity)
             }
 
             Spacer()
@@ -590,14 +619,12 @@ public struct FernletLockSetupView: View {
 
     private var confirmStep: some View {
         VStack(alignment: .leading, spacing: 20) {
-            SectionLabel(verbatim: selectedKind == .alphanumeric
+            stepHeading(selectedKind == .alphanumeric
                 ? String(localized: "lock.confirmPassword", defaultValue: "Confirm password",
                          bundle: .module, comment: "Header when re-entering an alphanumeric app lock")
                 : String(localized: "lock.confirmPIN", defaultValue: "Confirm PIN",
-                         bundle: .module, comment: "Header when re-entering a numeric app lock"))
-            Text(FernletLockCopy.Setup.confirmHint)
-                .font(.fernlet(.bubble))
-                .foregroundStyle(Color.slate)
+                         bundle: .module, comment: "Header when re-entering a numeric app lock"),
+                        detail: FernletLockCopy.Setup.confirmHint)
 
             if let msg = errorMessage {
                 errorBanner(msg)
@@ -610,7 +637,9 @@ public struct FernletLockSetupView: View {
                     .sheetTextInput()
             } else {
                 pinDotsRow(current: confirmation, total: selectedKind == .pin4 ? 4 : 6)
+                    .frame(maxWidth: .infinity)
                 FernletNumericPad(value: $confirmation, maxLength: selectedKind == .pin4 ? 4 : 6)
+                    .frame(maxWidth: .infinity)
             }
 
             Spacer()
@@ -662,20 +691,17 @@ public struct FernletLockSetupView: View {
 
             let biometryName = biometricName(lockService.biometricType)
             Text(FernletLockCopy.Setup.biometricExplainer(biometryName))
-                .font(.fernlet(.bubble))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.bubble) : FernletFramedFont.body)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .fernletWrappingText()
 
             if lockService.biometricType != .none {
-                Toggle(isOn: $biometricEnabled) {
-                    Label(FernletLockCopy.Setup.enableBiometric(biometryName),
-                          systemImage: biometricSystemImage(lockService.biometricType))
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.bark)
+                // One framed row with the framed switch (`b3-lock-biometric`).
+                FernletFramedSection(header: nil) {
+                    Toggle(isOn: $biometricEnabled) {
+                        FernletRowLabel(title: Text(FernletLockCopy.Setup.enableBiometric(biometryName)))
+                    }
                 }
-                .toggleStyle(SwitchToggleStyle(tint: Color.moss))
-                .padding(16)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
             } else {
                 FernletCard {
                     EmptyState(verbatim: String(localized: "lock.noBiometrics",
@@ -701,12 +727,17 @@ public struct FernletLockSetupView: View {
     private var completedStep: some View {
         VStack(spacing: 16) {
             Spacer()
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 44, weight: .semibold))
-                .foregroundStyle(Color.moss)
+            if let look {
+                FernletIconTile(size: 56, fill: look.accent) { FernletIcon(.check, scale: 4, tint: look.onAccent) }
+                    .accessibilityHidden(true)
+            } else {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 44, weight: .semibold))
+                    .foregroundStyle(Color.moss)
+            }
             Text(FernletLockCopy.Setup.doneTitle)
-                .font(.fernlet(.header))
-                .foregroundStyle(Color.bark)
+                .font(look == nil ? .fernlet(.header) : FernletFramedFont.cardTitle)
+                .foregroundStyle(look?.text ?? Color.bark)
             Text(FernletLockCopy.protectsSentence)
                 .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
@@ -722,64 +753,99 @@ public struct FernletLockSetupView: View {
     private var disclosureSheet: some View {
         NavigationStack {
             ZStack {
-                Color.parchment.ignoresSafeArea()
-                VStack(alignment: .leading, spacing: 20) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.system(size: 40, weight: .semibold))
-                        .foregroundStyle(Color.goldenrod)
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 8)
-
-                    Text(FernletLockCopy.Disclosure.title)
-                        .font(.fernlet(.header))
-                        .foregroundStyle(Color.bark)
-
-                    Text(FernletLockCopy.Disclosure.forgottenPasscode)
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.bark)
-                        .fernletWrappingText()
-
-                    // The second loss mode is strictly larger than the first, and it is new with
-                    // hard Secure-Enclave binding: the key lives inside THIS device's enclave, so a
-                    // remembered passcode does not help on erased or replacement hardware. Shown
-                    // only where an enclave exists — SE-less hardware stays legacy forever and its
-                    // scrypt-wrapped key really does restore, so the old copy is still true there.
-                    if FernletLockService.isSecureEnclaveBindingAvailable {
-                        Text(FernletLockCopy.Disclosure.enclaveLoss)
-                            .font(.fernlet(.body))
-                            .foregroundStyle(Color.bark)
-                            .fernletWrappingText()
-
-                        Text(FernletLockCopy.Disclosure.sealedBackup)
-                            .font(.fernlet(.bubble))
-                            .foregroundStyle(Color.slate)
-                            .fernletWrappingText()
-                    }
-
-                    Text(FernletLockCopy.Disclosure.onlyIfConfident(addressing: termOfAddress))
-                        .font(.fernlet(.bubble))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-
-                    Spacer()
-
-                    actionButton(FernletLockCopy.Disclosure.confirmButton, disabled: isFinalizing) {
-                        showDisclosure = false
-                        finalizeSetup()
-                    }
-
-                    Button(FernletLockCopy.Action.cancel) { showDisclosure = false }
-                        .frame(maxWidth: .infinity)
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.slate)
-                        .padding(.bottom, 8)
-                }
-                .padding(24)
+                (look?.paper ?? Color.parchment).ignoresSafeArea()
+                disclosureContent
+                    .padding(24)
             }
-            .navigationTitle(FernletLockCopy.Disclosure.navTitle)
-            .navigationBarTitleDisplayMode(.inline)
+            // `b3-lock-disclosure` (redrawn for the button rule): Cancel top left and the title inside
+            // the sheet; without the look, today's inline title and Cancel under the button.
+            .fernletSheetToolbar(title: Text(verbatim: FernletLockCopy.Disclosure.navTitle),
+                                 onCancel: look == nil ? nil : { showDisclosure = false })
         }
         .tint(Color.moss)
+        .fernletSheet()
+    }
+
+    /// The disclosure's words: the flag, the title, both loss modes, the Sealed backup line, the
+    /// closing line, then the confirm button.
+    private var disclosureContent: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            disclosureHeader
+
+            Text(FernletLockCopy.Disclosure.forgottenPasscode)
+                .font(look == nil ? .fernlet(.body) : FernletFramedFont.body)
+                .foregroundStyle(look?.dim ?? Color.bark)
+                .fernletWrappingText()
+
+            // The second loss mode is strictly larger than the first, and it is new with hard
+            // Secure-Enclave binding: the key lives inside THIS device's enclave, so a remembered
+            // passcode does not help on erased or replacement hardware. Shown only where an enclave
+            // exists — SE-less hardware stays legacy forever and its scrypt-wrapped key really does
+            // restore, so the old copy is still true there.
+            if FernletLockService.isSecureEnclaveBindingAvailable {
+                Text(FernletLockCopy.Disclosure.enclaveLoss)
+                    .font(look == nil ? .fernlet(.body) : FernletFramedFont.body)
+                    .foregroundStyle(look?.dim ?? Color.bark)
+                    .fernletWrappingText()
+
+                Text(FernletLockCopy.Disclosure.sealedBackup)
+                    .font(look == nil ? .fernlet(.bubble) : FernletFramedFont.body)
+                    .foregroundStyle(look?.dim ?? Color.slate)
+                    .fernletWrappingText()
+            }
+
+            Text(FernletLockCopy.Disclosure.onlyIfConfident(addressing: termOfAddress))
+                .font(look == nil ? .fernlet(.bubble) : FernletFramedFont.rowTitle.weight(.bold))
+                .foregroundStyle(look?.text ?? Color.slate)
+                .multilineTextAlignment(look == nil ? .leading : .center)
+                .frame(maxWidth: .infinity, alignment: look == nil ? .leading : .center)
+                .fernletWrappingText()
+
+            Spacer()
+
+            actionButton(FernletLockCopy.Disclosure.confirmButton, disabled: isFinalizing) {
+                showDisclosure = false
+                finalizeSetup()
+            }
+
+            if look == nil {
+                Button(FernletLockCopy.Action.cancel) { showDisclosure = false }
+                    .frame(maxWidth: .infinity)
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.slate)
+                    .padding(.bottom, 8)
+            }
+        }
+    }
+
+    /// The warning's mark and title: the pixel flag on a framed warning tile above the centred
+    /// Fraunces title under the look; today's triangle and header without it.
+    @ViewBuilder
+    private var disclosureHeader: some View {
+        if let look {
+            VStack(spacing: 12) {
+                FernletIconTile(size: 70, fill: look.warn) {
+                    LockPixelGlyphView(glyph: .flag, scale: 4, ink: look.text)
+                }
+                .accessibilityHidden(true)
+                Text(FernletLockCopy.Disclosure.title)
+                    .font(FernletFramedFont.cardTitle)
+                    .foregroundStyle(look.text)
+                    .multilineTextAlignment(.center)
+                    .accessibilityAddTraits(.isHeader)
+            }
+            .frame(maxWidth: .infinity)
+        } else {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 40, weight: .semibold))
+                .foregroundStyle(Color.goldenrod)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 8)
+
+            Text(FernletLockCopy.Disclosure.title)
+                .font(.fernlet(.header))
+                .foregroundStyle(Color.bark)
+        }
     }
 
     /// How long the success toast dwells before the sheet dismisses itself, read as it appears.
@@ -918,7 +984,47 @@ public struct FernletLockSetupView: View {
 
     // MARK: Helpers
 
+    /// A step's title and its line: centred, the title in Fraunces under the framed look
+    /// (`b3-lock-pin`); today's section label and bubble line without it.
+    @ViewBuilder
+    private func stepHeading(_ title: String, detail: String) -> some View {
+        if let look {
+            VStack(spacing: 6) {
+                Text(verbatim: title)
+                    .font(FernletFramedFont.cardTitle)
+                    .foregroundStyle(look.text)
+                    .accessibilityAddTraits(.isHeader)
+                Text(verbatim: detail)
+                    .font(FernletFramedFont.body)
+                    .foregroundStyle(look.dim)
+                    .multilineTextAlignment(.center)
+                    .fernletWrappingText()
+            }
+            .frame(maxWidth: .infinity)
+        } else {
+            SectionLabel(verbatim: title)
+            Text(verbatim: detail)
+                .font(.fernlet(.bubble))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+        }
+    }
+
+    @ViewBuilder
     private func actionButton(_ title: String, disabled: Bool = false, action: @escaping () -> Void) -> some View {
+        if look != nil {
+            // The framed primary, full width (`b3-lock-kind`); faded while disabled.
+            Button(action: action) {
+                Text(verbatim: title).frame(maxWidth: .infinity)
+            }
+            .buttonStyle(ActionPillButtonStyle(.primary))
+            .disabled(disabled)
+        } else {
+            standardActionButton(title, disabled: disabled, action: action)
+        }
+    }
+
+    private func standardActionButton(_ title: String, disabled: Bool, action: @escaping () -> Void) -> some View {
         Button(title, action: action)
             .buttonStyle(.plain)
             .font(.fernlet(.label))
@@ -934,7 +1040,16 @@ public struct FernletLockSetupView: View {
             .disabled(disabled)
     }
 
+    @ViewBuilder
     private func errorBanner(_ msg: String) -> some View {
+        if look != nil {
+            FernletNotice(text: Text(verbatim: msg), tone: .warn) { EmptyView() }
+        } else {
+            standardErrorBanner(msg)
+        }
+    }
+
+    private func standardErrorBanner(_ msg: String) -> some View {
         Text(msg)
             .font(.fernlet(.body))
             .foregroundStyle(Color.terracotta)
@@ -1870,16 +1985,8 @@ public struct FernletLockView: View {
 /// handful of decorative circles, and a VoiceOver user typing a PIN has no way to tell how many
 /// digits have landed — the one piece of feedback the masked field exists to give.
 private func pinDotsRow(current: String, total: Int) -> some View {
-    HStack(spacing: 16) {
-        ForEach(0..<total, id: \.self) { index in
-            Circle()
-                .fill(index < current.count ? Color.bark : Color.clear)
-                .frame(width: 14, height: 14)
-                .overlay(Circle().stroke(Color.bark.opacity(0.35), lineWidth: 1.5))
-        }
-    }
-    .accessibilityElement(children: .ignore)
-    .accessibilityLabel(FernletLockCopy.Unlock.pinProgress(entered: current.count, total: total))
+    // Square pixel dots under the framed look (`b3-lock-pin`); the count only, never the digits.
+    LockPinDots(current: current.count, total: total)
 }
 
 // MARK: - Numeric pad
@@ -1921,6 +2028,8 @@ public struct FernletNumericPad: View {
     /// Type sizes a 24pt digit no longer fits inside 76×56, and a hard frame clipped it.
     private static let keyMinWidth: CGFloat = 76
     private static let keyMinHeight: CGFloat = 56
+    /// The World's framed look: framed paper keys and a pixel delete glyph (`b3-lock-pin`).
+    @Environment(\.fernletFramedLook) private var look
 
     public init(value: Binding<String>, maxLength: Int) {
         self._value = value
@@ -1969,7 +2078,37 @@ public struct FernletNumericPad: View {
     /// The digits were `.fernlet(.stat)` — 14pt, less than half the size iOS's own passcode keypad
     /// uses — inside a hard 76×56 frame. They now scale with Dynamic Type from 24pt, and the frame
     /// is a floor rather than a ceiling so a grown digit pushes the tile out instead of clipping.
+    @ViewBuilder
     private func keyFace(_ key: String) -> some View {
+        if let look {
+            framedKeyFace(key, look: look)
+        } else {
+            standardKeyFace(key)
+        }
+    }
+
+    /// The framed key (`b3-lock-pin`): the digit on raised paper in a 2-pt ink frame with a solid
+    /// 3-pt shadow; the delete key's pixel glyph in the look's ink. The same floor as today's tile.
+    private func framedKeyFace(_ key: String, look: FernletFramedLook) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 12)
+        return Group {
+            if key == Self.backspaceKey {
+                LockPixelGlyphView(glyph: .backspace, scale: 2, ink: look.text)
+            } else {
+                Text(verbatim: key)
+                    .font(.custom(FernletFontName.dmSansMedium, size: 26, relativeTo: .title2))
+                    .foregroundStyle(look.text)
+            }
+        }
+        .frame(minWidth: Self.keyMinWidth, minHeight: Self.keyMinHeight)
+        .background(look.raised, in: shape)
+        .overlay(shape.strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth))
+        .background { shape.fill(look.shadow).offset(y: 3) }
+        .padding(.bottom, 3)
+    }
+
+    /// Today's key: the glyph on a cream tile.
+    private func standardKeyFace(_ key: String) -> some View {
         Group {
             if key == Self.backspaceKey {
                 Image(systemName: "delete.left")

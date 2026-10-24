@@ -162,12 +162,6 @@
   "reason": "A PLACEHOLDER FILL, not ink: one of the four tinted swatches (fern, goldenrod, slate, dusty rose, each at 32–45%) that stand in for a photo that has not been taken or cannot be shown. No text or glyph is drawn on it — the caption sits below on the polaroid's cream frame in full-strength slate. The fill measures ~1.52:1 against its surface and conveys nothing a sighted user needs, so neither contrast floor applies (WCAG 1.4.11 exempts pure decoration). Covers the three palette lines in this file (the photowall fallback, the photowall palette and the recent-bites placeholders), which are the same four-swatch set."
  },
  {
-  "rule": "A8-MUTED-SLATE",
-  "path": "App/Fernlet/PrivacyPolicyView.swift",
-  "line_contains": "Divider().background(Color.slate.opacity(0.4))",
-  "reason": "A DIVIDER between sections of the privacy policy, measuring ~1.70:1 against the page. It is decoration, not information: every section it separates opens with its own heading (and VoiceOver never reaches a Divider), so WCAG 1.4.11 does not ask it to contrast. Raising it to 3:1 would make the policy's rules darker than its body text's quietest ink without telling anyone anything."
- },
- {
   "rule": "A10-FIELD-PROMPT",
   "path": "App/Fernlet/FoodView.swift",
   "line_contains": "TextField(\"\", text: $textValue)",

@@ -30,6 +30,8 @@ struct NearbyFriendsSettingsView: View {
     /// enable presence too.
     @State private var offerPresenceForHearts = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// The World's framed look, for the disclosure rows' ink.
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
         ScrollView {
@@ -50,13 +52,13 @@ struct NearbyFriendsSettingsView: View {
                     )
                 }
             }
-            .padding(20)
-            .padding(.bottom, 20)
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 30)
         }
         .scrollContentBackground(.hidden)
-        .background(Color.parchment)
-        .navigationTitle("Nearby friends")
-        .navigationBarTitleDisplayMode(.inline)
+        .fernletPageBackground()
+        .fernletPushedPage("Nearby friends")
         .alert("Turn on Nearby Friends?", isPresented: $offerPresenceForHearts) {
             Button("Turn on") { store.setAllowNearbyPresence(true) }
             Button("Not now", role: .cancel) {}
@@ -65,9 +67,10 @@ struct NearbyFriendsSettingsView: View {
         }
     }
 
-    /// All six consents in dependency order, one card.
+    /// All six consents in dependency order, one framed card of rows (`b2-settings-nearby`); a
+    /// warning or disclosure that belongs to a switch is its own row under it.
     private var consentCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        FernletFramedSection(header: nil) {
             consentRow(
                 "Presence",
                 footnote: "Lets friends see you're around. Hearts and vibe need this on.",
@@ -77,7 +80,6 @@ struct NearbyFriendsSettingsView: View {
                     set: { store.setAllowNearbyPresence($0) }
                 )
             )
-            FernletRowDivider()
             consentRow(
                 "Share your vibe",
                 footnote: "A mood, never a number.",
@@ -86,9 +88,7 @@ struct NearbyFriendsSettingsView: View {
                     set: { store.setAllowNearbyFriendState($0) }
                 )
             )
-            FernletRowDivider()
             heartRows
-            FernletRowDivider()
             consentRow(
                 "Recipe shares",
                 footnote: "Hand a recipe over in person.",
@@ -97,7 +97,6 @@ struct NearbyFriendsSettingsView: View {
                     set: { store.setAllowNearbyRecipeShares($0) }
                 )
             )
-            FernletRowDivider()
             consentRow(
                 "Clothing shops",
                 footnote: "Friends can browse what you've designed.",
@@ -107,8 +106,6 @@ struct NearbyFriendsSettingsView: View {
                 )
             )
         }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
     /// Hearts and away delivery, with the honesty disclosures the hub carried: the presence hint,
@@ -129,8 +126,8 @@ struct NearbyFriendsSettingsView: View {
                 // working (T1-3).
                 .foregroundStyle(Color.goldenrodInk)
                 .fernletWrappingText()
+                .padding(.vertical, 10)
         }
-        FernletRowDivider()
         consentRow(
             "Deliver hearts later",
             footnote: "Holds a heart until you're next nearby.",
@@ -148,9 +145,10 @@ struct NearbyFriendsSettingsView: View {
     private var awayDeliveryDisclosures: some View {
         if store.settings.heartsAwayDelivery {
             Text(AwayDeliveryConsentCopy.disclosure)
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.rowDetail)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .fernletWrappingText()
+                .padding(.vertical, 10)
             if let problem = awayDeliveryProblemText {
                 HStack(alignment: .top, spacing: 10) {
                     Text(problem)
@@ -170,6 +168,7 @@ struct NearbyFriendsSettingsView: View {
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("settings.heartsAway.dismissProblem")
                 }
+                .padding(.vertical, 10)
             }
         } else if store.heartsAwayPurgePending {
             // Consent is off but sealed records are still on the public database because the
@@ -179,6 +178,7 @@ struct NearbyFriendsSettingsView: View {
                 // T1-3: text ink, not the `goldenrod` accent (2.22:1).
                 .foregroundStyle(Color.goldenrodInk)
                 .accessibilityIdentifier("settings.heartsAway.purgePending")
+                .padding(.vertical, 10)
         }
     }
 
@@ -217,19 +217,14 @@ struct NearbyFriendsSettingsView: View {
         keepFootnoteAtAccessibilitySizes: Bool = false,
         isOn: Binding<Bool>
     ) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Toggle(isOn: isOn) {
-                Text(title)
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.bark)
-            }
-            .accessibilityCustomContent("Details", footnote)
-            if keepFootnoteAtAccessibilitySizes || !dynamicTypeSize.isAccessibilitySize {
-                Text(footnote)
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-            }
+        // One framed row: the name, and the footnote as its second line. VoiceOver hears the name as
+        // the switch's label and the footnote as its Details.
+        Toggle(isOn: isOn) {
+            FernletRowLabel(title: Text(title),
+                            detail: keepFootnoteAtAccessibilitySizes || !dynamicTypeSize.isAccessibilitySize ? Text(footnote) : nil)
+                .padding(.vertical, 7)
         }
+        .accessibilityLabel(Text(title))
+        .accessibilityCustomContent("Details", footnote)
     }
 }

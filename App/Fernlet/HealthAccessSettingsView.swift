@@ -46,6 +46,8 @@ struct HealthAccessSettingsView: View {
     @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
     @Environment(\.openURL) private var openURL
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// The World's framed look (`b2-settings-health`).
+    @Environment(\.fernletFramedLook) private var look
     @State private var healthKit = HealthKitAuthorizationViewModel()
     /// The master-disable warning (it purges cached clinical values) — WS-5.
     @State private var pendingDestructiveAction: DestructiveConfirmation?
@@ -72,19 +74,20 @@ struct HealthAccessSettingsView: View {
                     openHealthSettingsButton
                     if !healthKit.statusMessage.isEmpty {
                         Text(healthKit.statusMessage)
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
+                            .font(FernletFramedFont.note)
+                            .foregroundStyle(look?.dim ?? Color.slate)
                             .fernletWrappingText()
+                            .padding(.horizontal, 4)
                     }
                 }
             }
-            .padding(20)
-            .padding(.bottom, 20)
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 30)
         }
         .scrollContentBackground(.hidden)
-        .background(Color.parchment)
-        .navigationTitle("Health")
-        .navigationBarTitleDisplayMode(.inline)
+        .fernletPageBackground()
+        .fernletPushedPage("Health")
         .destructiveConfirmation($pendingDestructiveAction)
         .onAppear { healthKit.refresh() }
     }
@@ -182,41 +185,31 @@ struct HealthAccessSettingsView: View {
         "Turning this off stops every kind below"
     }
 
+    /// The master switch as a framed row (`b2-settings-health`), a failed enable or disable as a
+    /// warning notice under it.
     private var masterCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Toggle(isOn: masterBinding) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Share with Health")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.bark)
+        VStack(alignment: .leading, spacing: 10) {
+            FernletFramedSection(header: nil) {
+                Toggle(isOn: masterBinding) {
                     // 5d·AX3: the master switch keeps its card and loses its sub-line.
-                    if !dynamicTypeSize.isAccessibilitySize {
-                        Text(masterSubline)
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
-                            .fernletWrappingText()
-                    }
+                    FernletRowLabel(title: Text("Share with Health"),
+                                    detail: dynamicTypeSize.isAccessibilitySize ? nil : Text(masterSubline))
+                        .padding(.vertical, 7)
                 }
+                .accessibilityLabel(Text("Share with Health"))
+                .accessibilityIdentifier("privacy.health.master")
+                // T2-2: the sub-line above is DELETED from the layout at accessibility sizes, and a
+                // view that is never drawn never enters the accessibility tree either — so a user
+                // running Larger Text and VoiceOver together lost the one sentence that says what the
+                // master switch does to the kinds below it. Re-attached on the More Content rotor at
+                // every size; the toggle's own on/off value is untouched.
+                .accessibilityCustomContent("Details", masterSubline)
             }
-            .toggleStyle(SwitchToggleStyle(tint: Color.moss))
-            .accessibilityIdentifier("privacy.health.master")
-            // T2-2: the sub-line above is DELETED from the layout at accessibility sizes, and a
-            // view that is never drawn never enters the accessibility tree either — so a user
-            // running Larger Text and VoiceOver together lost the one sentence that says what the
-            // master switch does to the kinds below it. Re-attached on the More Content rotor at
-            // every size; the toggle's own on/off value is untouched.
-            .accessibilityCustomContent("Details", masterSubline)
             if let healthError {
-                Text(healthError)
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.terracotta)
-                    .fernletWrappingText()
+                FernletNotice(text: Text(healthError), tone: .warn) { EmptyView() }
                     .accessibilityIdentifier("health.master.error")
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
     /// Enabling is constructive — commit directly. Disabling fail-closed PURGES the cached
@@ -325,23 +318,19 @@ struct HealthAccessSettingsView: View {
     }
 
     /// One capability card: plain-language name, what Fernlet does with it, state, and the action
-    /// for that state — all on the same card, so state and action can never disagree.
+    /// for that state — all on the same card, so state and action can never disagree. Framed, with
+    /// the kind's pixel icon in a framed tile and the state's framed square (`b2-settings-health`).
     private func capabilityCard(_ card: HealthAccessCard) -> some View {
         let cardState = state(of: card)
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 12) {
-                // Decorative — `card.title` names the card. Unhidden it announces the raw SF
-                // Symbol name ("person text rectangle", "waveform path ecg").
-                Image(systemName: card.systemImage)
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(Color.moss)
-                    .frame(width: 34, height: 34)
-                    .background(Color.moss.opacity(0.12), in: Circle())
+                // Decorative — `card.title` names the card.
+                FernletIconTile(size: 42) { WorldSpriteView(sprite: Self.sprite(for: card), scale: 2) }
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(card.title)
-                        .font(.fernlet(.header))
-                        .foregroundStyle(Color.bark)
+                        .font(FernletFramedFont.cardTitle)
+                        .foregroundStyle(look?.text ?? Color.bark)
                         // T2-2: the summary below is dropped from the LAYOUT at accessibility
                         // sizes, which also drops it out of the accessibility tree. Re-attached
                         // to the card's name — the one element that is always present — so
@@ -352,26 +341,40 @@ struct HealthAccessSettingsView: View {
                     // 5d·AX3: the description is what gives way; name, state and action stay.
                     if !dynamicTypeSize.isAccessibilitySize {
                         Text(card.summary)
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
+                            .font(FernletFramedFont.note)
+                            .foregroundStyle(look?.dim ?? Color.slate)
                             .fernletWrappingText()
                     }
                 }
-                Spacer(minLength: 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             HStack(spacing: 8) {
-                Circle()
+                Rectangle()
                     .fill(stateColor(for: cardState))
                     .frame(width: 8, height: 8)
+                    .padding(1.5)
+                    .background(look?.ink ?? Color.clear)
+                    .accessibilityHidden(true)
                 Text(stateLabel(for: cardState))
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.rowDetail.weight(.semibold))
+                    .foregroundStyle(look?.dim ?? Color.slate)
                     .accessibilityIdentifier("health.card.state.\(card.rawValue)")
             }
             cardActions(card, state: cardState)
         }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+        .settingsCard()
+    }
+
+    /// The pixel icon for a kind of Health data.
+    static func sprite(for card: HealthAccessCard) -> WorldSprite {
+        switch card {
+        case .bodyMeasurements: WorldSprites.diary
+        case .workoutsActivity: WorldSprites.shoe
+        case .bodySignals: WorldSprites.heartSm
+        case .mindfulness: WorldSprites.leaf
+        case .cycleTracking: WorldSprites.flag
+        case .intimateLogging: WorldSprites.heart
+        }
     }
 
     /// The action row for one card state: Give access when anything is off, Update data + Stop
@@ -384,21 +387,17 @@ struct HealthAccessSettingsView: View {
                 Button {
                     updateData(for: card)
                 } label: {
-                    Label("Update data", systemImage: "arrow.clockwise")
+                    Text("Update data")
                 }
-                .buttonStyle(.plain)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.moss)
+                .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
                 .disabled(healthKit.isRequesting)
-                .opacity(healthKit.isRequesting ? 0.55 : 1)
-                .frame(minHeight: 44)
                 .accessibilityIdentifier("health.card.update.\(card.rawValue)")
                 Spacer(minLength: 0)
                 Button("Stop sharing") {
                     stopSharing(card)
                 }
                 .buttonStyle(.plain)
-                .font(.fernlet(.label))
+                .font(FernletFramedFont.buttonSmall)
                 .foregroundStyle(Color.terracottaInk)
                 .frame(minHeight: 44)
                 .accessibilityIdentifier("health.card.stop.\(card.rawValue)")
@@ -407,16 +406,11 @@ struct HealthAccessSettingsView: View {
             Button {
                 giveAccess(to: card)
             } label: {
-                Label("Give access", systemImage: "heart.text.square")
+                Text("Give access")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.plain)
-            .font(.fernlet(.label))
-            .foregroundStyle(Color.onMoss)
-            .padding(.vertical, 11)
-            .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 12))
+            .buttonStyle(ActionPillButtonStyle(.primary))
             .disabled(!masterEnabled || healthKit.isRequesting)
-            .opacity(!masterEnabled || healthKit.isRequesting ? 0.55 : 1)
             .accessibilityIdentifier("health.card.give.\(card.rawValue)")
         }
     }
@@ -427,14 +421,10 @@ struct HealthAccessSettingsView: View {
         Button {
             Task { await makeHealthKitService().openHealthPrivacySettings() }
         } label: {
-            Label("Open Health Privacy Settings", systemImage: "arrow.up.forward.app")
+            Text("Open Health Privacy Settings")
                 .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.plain)
-        .font(.fernlet(.label))
-        .foregroundStyle(Color.onMoss)
-        .padding(.vertical, 11)
-        .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 12))
+        .buttonStyle(ActionPillButtonStyle(.secondary))
         .accessibilityIdentifier("privacy.health.openSettings")
     }
 

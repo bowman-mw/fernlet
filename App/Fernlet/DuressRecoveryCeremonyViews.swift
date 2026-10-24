@@ -202,6 +202,8 @@ private struct CeremonyQRCard: View {
     let url: URL?
     /// A catalog key: every caller passes a literal, which a `String` here drew in English.
     let instruction: LocalizedStringKey
+    /// The World's framed look: the code's white card takes the ink frame.
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
         VStack(spacing: 14) {
@@ -212,7 +214,11 @@ private struct CeremonyQRCard: View {
                     .scaledToFit()
                     .frame(maxWidth: 280)
                     .padding(14)
+                    // Always white behind the code (a scanner needs it), in the framed card's ink frame
+                    // and solid shadow under the look (`b3-recovery-qr`).
                     .background(Color.white, in: RoundedRectangle(cornerRadius: 16))
+                    .overlay { if let look { RoundedRectangle(cornerRadius: 16).strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth) } }
+                    .background { if let look { RoundedRectangle(cornerRadius: 16).fill(look.shadow).offset(y: 3) } }
                     // T2-10: an inverted QR is an unscannable QR, and this ceremony is the ONLY
                     // route back into a recovery-locked account.
                     .accessibilityIgnoresInvertColors()
@@ -228,11 +234,13 @@ private struct CeremonyQRCard: View {
                     .fernletWrappingText()
             }
             Text(instruction)
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.body) : FernletFramedFont.body)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .multilineTextAlignment(.center)
                 .fernletWrappingText()
         }
+        // Centred on the sheet, whatever the flow's own alignment.
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -248,10 +256,13 @@ private struct CeremonyInstruction: View {
 
     init(verbatim resolved: String) { text = Text(verbatim: resolved) }
 
+    /// The World's framed look: the instruction in the kit's body type and dim ink.
+    @Environment(\.fernletFramedLook) private var look
+
     var body: some View {
         text
-            .font(.fernlet(.body))
-            .foregroundStyle(Color.slate)
+            .font(look == nil ? .fernlet(.body) : FernletFramedFont.body)
+            .foregroundStyle(look?.dim ?? Color.slate)
             .fernletWrappingText()
     }
 }
@@ -265,15 +276,37 @@ private struct CeremonyButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(title, action: action)
-            .buttonStyle(.plain)
-            .font(.fernlet(.label))
-            // Paired ink/fill tokens: white on dark-mode moss measured 2.5:1.
-            .foregroundStyle(destructive ? Color.onTerracotta : Color.onMoss)
+        // The framed primary (or destructive) button, full width (`b3-recovery-*`).
+        Button(action: action) {
+            Text(title).frame(maxWidth: .infinity)
+        }
+        .buttonStyle(ActionPillButtonStyle(destructive ? .destructive : .primary))
+        .accessibilityIdentifier(identifier ?? "duress.ceremony.action")
+    }
+}
+
+/// Which step of the two-phone exchange this phone is on (`b3-recovery-qr`): a pixel square per
+/// step, inked up to this one, paper in an ink frame after it. One element to VoiceOver, "Step 2 of
+/// 4". Without the framed look, nothing (today's ceremony had no step marker).
+private struct CeremonyStepDots: View {
+    let step: Int
+    let total: Int
+    @Environment(\.fernletFramedLook) private var look
+
+    var body: some View {
+        if let look {
+            HStack(spacing: 8) {
+                ForEach(1...max(total, 1), id: \.self) { index in
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(index <= step ? look.text : look.raised)
+                        .frame(width: 12, height: 12)
+                        .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth))
+                }
+            }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(destructive ? Color.terracotta : Color.mossFill, in: RoundedRectangle(cornerRadius: 14))
-            .accessibilityIdentifier(identifier ?? "duress.ceremony.action")
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text("Step \(step) of \(total)"))
+        }
     }
 }
 
@@ -365,23 +398,20 @@ struct DuressRecoveryEnrollmentSheet: View {
 
     @State private var coordinator: DuressRecoveryCoordinator?
     @State private var role: CeremonyRole?
+    /// The World's framed look: the sheet on paper.
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.parchment.ignoresSafeArea()
+                (look?.paper ?? Color.parchment).ignoresSafeArea()
                 content
             }
-            .navigationTitle("Recovery device")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { finish() }
-                        .foregroundStyle(Color.slate)
-                }
-            }
+            // Cancel top left and the title inside the sheet (`b3-recovery-role`).
+            .fernletSheetToolbar(title: "Recovery device", onCancel: { finish() })
         }
         .tint(Color.moss)
+        .fernletSheet()
         .onAppear {
             if role == nil { role = initialRole }
             guard coordinator == nil else { return }
@@ -413,7 +443,7 @@ struct DuressRecoveryEnrollmentSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Text("Which phone is this?")
-                    .font(.fernlet(.header))
+                    .font(FernletFramedFont.cardTitle)
                     .foregroundStyle(Color.bark)
                 Text("Hold both phones together. One of them is the phone you're protecting; the other becomes its recovery device and will hold the only key that can open it again.")
                     .font(.fernlet(.body))
@@ -423,14 +453,11 @@ struct DuressRecoveryEnrollmentSheet: View {
                 CeremonyButton(title: "This is the phone I'm protecting", identifier: "duress.enroll.role.primary") {
                     role = .protectedPhone
                 }
-                Button("This is the recovery device") { role = .recoveryDevice }
-                    .buttonStyle(.plain)
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.moss)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-                    .accessibilityIdentifier("duress.enroll.role.custodian")
+                Button { role = .recoveryDevice } label: {
+                    Text("This is the recovery device").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(ActionPillButtonStyle(.secondary))
+                .accessibilityIdentifier("duress.enroll.role.custodian")
 
                 Text("The recovery device doesn't need its own app lock, and nothing about it is stored anywhere but on these two phones.")
                     .font(.fernlet(.bodySmall))
@@ -475,11 +502,13 @@ struct DuressRecoveryReturnSheet: View {
 
     @State private var coordinator: DuressRecoveryCoordinator?
     @State private var started = false
+    /// The World's framed look: the sheet on paper.
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.parchment.ignoresSafeArea()
+                (look?.paper ?? Color.parchment).ignoresSafeArea()
                 if let coordinator {
                     if started {
                         DuressCeremonyPrimaryFlow(coordinator: coordinator, purpose: .recover, onFinish: finish)
@@ -493,16 +522,11 @@ struct DuressRecoveryReturnSheet: View {
                         .accessibilityLabel("Preparing to recover this phone")
                 }
             }
-            .navigationTitle("Recover this phone")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { finish() }
-                        .foregroundStyle(Color.slate)
-                }
-            }
+            // Cancel top left and the title inside the sheet (`b3-recovery-return`).
+            .fernletSheetToolbar(title: "Recover this phone", onCancel: { finish() })
         }
         .tint(Color.moss)
+        .fernletSheet()
         .onAppear {
             guard coordinator == nil else { return }
             coordinator = coordinatorFactory?(lockService)
@@ -514,16 +538,14 @@ struct DuressRecoveryReturnSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Text("Bring your recovery device")
-                    .font(.fernlet(.header))
+                    .font(FernletFramedFont.cardTitle)
                     .foregroundStyle(Color.bark)
                 Text("Your sealed journal, cycle and intimacy notes are still on this phone. Your recovery device holds the key to them. You will scan codes between the two phones, approve the request there, then choose a new passcode here.")
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
-                Text("This puts back the key your recovery device was given. If you have set up a new app lock since then, anything you wrote under it will be lost — everything from before is recovered.")
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.terracotta)
-                    .fernletWrappingText()
+                // The warning up front, as a framed warning notice.
+                FernletNotice("This puts back the key your recovery device was given. If you have set up a new app lock since then, anything you wrote under it will be lost — everything from before is recovered.", tone: .warn)
                 CeremonyButton(title: "Start", identifier: "duress.recover.start") { started = true }
                 Spacer(minLength: 0)
             }
@@ -579,14 +601,9 @@ private struct DuressCeremonyPrimaryFlow: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                CeremonyStepDots(step: stepNumber, total: purpose == .enroll ? 4 : 6)
                 if let errorMessage {
-                    Text(errorMessage)
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.terracotta)
-                        .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.terracotta.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
-                        .fernletWrappingText()
+                    FernletNotice(text: Text(verbatim: errorMessage), tone: .warn) { EmptyView() }
                         .accessibilityIdentifier("duress.ceremony.error")
                 }
                 stepContent
@@ -635,12 +652,26 @@ private struct DuressCeremonyPrimaryFlow: View {
         }
     }
 
+    /// Which step of the exchange this is, from 1, for the step dots (`b3-recovery-qr`); the last
+    /// step's number once done. Drawing only: the flow itself never reads it.
+    private var stepNumber: Int {
+        switch step {
+        case .scanIdentity: 1
+        case .showChallenge: 2
+        case .scanResponse: 3
+        case .enterPasscode, .showRequest: 4
+        case .scanReply: 5
+        case .chooseNewPasscode: 6
+        case .done: purpose == .enroll ? 4 : 6
+        }
+    }
+
     // MARK: Steps needing input
 
     private var enterPasscodeStep: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Enter your passcode")
-                .font(.fernlet(.header))
+                .font(FernletFramedFont.cardTitle)
                 .foregroundStyle(Color.bark)
             Text("Your real passcode — the one that opens your data. Fernlet uses it to unlock the key it is about to seal to your recovery device, and the key never leaves this phone unsealed.")
                 .font(.fernlet(.body))
@@ -655,7 +686,7 @@ private struct DuressCeremonyPrimaryFlow: View {
     private var chooseNewPasscodeStep: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Choose a new passcode")
-                .font(.fernlet(.header))
+                .font(FernletFramedFont.cardTitle)
                 .foregroundStyle(Color.bark)
             Text("Your notes come back under this new passcode. Biometric unlock is off until you turn it on again.")
                 .font(.fernlet(.body))
@@ -688,8 +719,15 @@ private struct DuressCeremonyPrimaryFlow: View {
             }
             .padding(14)
             .background(Color.cream, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay {
+                // The framed radio card's frame and moss ring (`b3-lock-kind`'s cards).
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(kind == newKind ? Color.moss : Color.bark.opacity(0.5),
+                                  lineWidth: kind == newKind ? 3 : FernletFramedLook.frameWidth)
+            }
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(kind == newKind ? [.isSelected] : [])
     }
 
     /// A secure field plus its submit button. Deliberately not the numeric pad: this flow is a
@@ -893,14 +931,9 @@ private struct DuressCeremonyCustodianFlow: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                CeremonyStepDots(step: stepNumber, total: 6)
                 if let errorMessage {
-                    Text(errorMessage)
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.terracotta)
-                        .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.terracotta.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
-                        .fernletWrappingText()
+                    FernletNotice(text: Text(verbatim: errorMessage), tone: .warn) { EmptyView() }
                         .accessibilityIdentifier("duress.ceremony.error")
                 }
                 stepContent
@@ -936,14 +969,11 @@ private struct DuressCeremonyCustodianFlow: View {
             CeremonyQRCard(url: responseURL, instruction: "Have the other phone scan this answer.")
             CeremonyInstruction("If that phone is being set up, you're done. If it is recovering, it will show one more code.")
             CeremonyButton(title: "Done", identifier: "duress.custodian.done") { onFinish() }
-            Button("They're recovering — scan their next code") { step = .scanRequest }
-                .buttonStyle(.plain)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.moss)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-                .accessibilityIdentifier("duress.custodian.continueToRecovery")
+            Button { step = .scanRequest } label: {
+                Text("They're recovering — scan their next code").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(ActionPillButtonStyle(.secondary))
+            .accessibilityIdentifier("duress.custodian.continueToRecovery")
         case .scanRequest:
             CeremonyInstruction("Scan the request code the other phone is showing.")
             CeremonyButton(title: "Scan their request", identifier: "duress.custodian.scanRequest") { showScanner = true }
@@ -958,7 +988,7 @@ private struct DuressCeremonyCustodianFlow: View {
     private var decideStep: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Return the key?")
-                .font(.fernlet(.header))
+                .font(FernletFramedFont.cardTitle)
                 .foregroundStyle(Color.bark)
             if let requesterFingerprint {
                 VStack(alignment: .leading, spacing: 6) {
@@ -973,9 +1003,7 @@ private struct DuressCeremonyCustodianFlow: View {
                         .foregroundStyle(Color.bark)
                         .accessibilityIdentifier("duress.custodian.fingerprint")
                 }
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+                .settingsCard()
             }
             Text("Only say yes if that phone is in front of you and it is the one you set this up with. Saying yes hands back the key to everything it had sealed.")
                 .font(.fernlet(.body))
@@ -1032,6 +1060,19 @@ private struct DuressCeremonyCustodianFlow: View {
             step = .showReply
         } catch {
             errorMessage = ceremonyMessage(for: error)
+        }
+    }
+
+    /// Which step of the exchange this is, from 1, for the step dots (`b3-recovery-qr`). Drawing
+    /// only: the flow itself never reads it.
+    private var stepNumber: Int {
+        switch step {
+        case .showIdentity: 1
+        case .scanChallenge: 2
+        case .showResponse: 3
+        case .scanRequest: 4
+        case .decide: 5
+        case .showReply: 6
         }
     }
 
