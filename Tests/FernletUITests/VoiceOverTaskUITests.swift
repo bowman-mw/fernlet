@@ -158,7 +158,7 @@ final class VoiceOverTaskUITests: XCTestCase {
         walk.press("Log")
         walk.element("sheet.workout")
         try walk.audit("Workout sheet")
-        walk.press("workout.kind.activity")
+        walk.press("Cardio & activity")
         walk.press("activity.common.running")
         try walk.audit("Workout sheet · running chosen")
         walk.press("Save")

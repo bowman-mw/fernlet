@@ -113,16 +113,17 @@ struct WorkoutExercisePreferencesSheet: View {
                 .padding(.bottom, 10)
             }
         }
-        .background(Color.parchment)
+        .background((look?.paper ?? Color.parchment).ignoresSafeArea())
         .tint(Color.moss)
         .destructiveConfirmation($pendingDestructiveAction)
         .sheet(item: $form) { request in
             CustomExerciseFormSheet(store: store, editing: request.editing)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheet()
         }
     }
+
+    /// World build (`b3-your-exercises`): the sheet's paper, framed rows, link-coloured row buttons.
+    @Environment(\.fernletFramedLook) private var look
 
     // MARK: Your own exercises
 
@@ -224,7 +225,7 @@ struct WorkoutExercisePreferencesSheet: View {
     private func caption(_ text: Text) -> some View {
         text
             .font(.fernlet(.bodySmall))
-            .foregroundStyle(Color.slate)
+            .foregroundStyle(look?.dim ?? Color.slate)
             .fernletWrappingText()
     }
 }
@@ -243,25 +244,31 @@ private struct CustomExerciseRow: View {
             .joined(separator: " · ")
     }
 
+    @Environment(\.fernletFramedLook) private var look
+
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .center, spacing: 12) {
             Button(action: onEdit) {
                 HStack(spacing: 8) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(verbatim: exercise.name)
-                            .font(.fernlet(.body))
-                            .foregroundStyle(Color.bark)
+                            .font(look == nil ? .fernlet(.body) : MoveFont.rowTitle)
+                            .foregroundStyle(look?.text ?? Color.bark)
                             .fernletWrappingText()
                         Text(verbatim: summary)
-                            .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.slate)
+                            .font(look == nil ? .fernlet(.labelSmall) : FernletFramedFont.rowDetail)
+                            .foregroundStyle(look?.dim ?? Color.slate)
                             .fernletWrappingText()
                     }
                     Spacer(minLength: 8)
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color.slate)
-                        .accessibilityHidden(true)
+                    if look != nil {
+                        FernletIcon(.chevron)
+                    } else {
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color.slate)
+                            .accessibilityHidden(true)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
@@ -271,18 +278,21 @@ private struct CustomExerciseRow: View {
             .accessibilityInputLabels([Text(verbatim: exercise.name)])
             .accessibilityIdentifier("workout.exercises.edit")
             Button(role: .destructive, action: onDelete) {
-                Image(systemName: "trash")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.terracottaInk)
+                if look != nil {
+                    WorldSpriteView(sprite: MoveSprites.trash, scale: 2)
+                } else {
+                    Image(systemName: "trash")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.terracottaInk)
+                }
             }
             .buttonStyle(.plain)
             .fernletIconButton("Delete \(exercise.name)")
             .accessibilityInputLabels([Text("Delete")])
             .accessibilityIdentifier("workout.exercises.delete")
         }
-        .padding(12)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+        .padding(look == nil ? 12 : 14)
+        .modifier(MoveInsetCardFrame())
     }
 }
 
@@ -295,18 +305,19 @@ private struct PreferenceListRow: View {
     let buttonLabel: Text
     let identifier: String
     let action: () -> Void
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
         AdaptiveStack(spacing: 8, horizontalAlignment: .leading) {
             title
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
+                .font(look == nil ? .fernlet(.body) : FernletFramedFont.rowTitle)
+                .foregroundStyle(look?.text ?? Color.bark)
                 .fernletWrappingText()
                 .frame(maxWidth: .infinity, alignment: .leading)
             Button(action: action) {
                 buttonTitle
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.mossInk)
+                    .font(look == nil ? .fernlet(.label) : FernletFramedFont.sheetControl)
+                    .foregroundStyle(look?.link ?? Color.mossInk)
                     .fernletWrappingText()
             }
             .buttonStyle(.plain)
@@ -315,9 +326,8 @@ private struct PreferenceListRow: View {
             .accessibilityInputLabels([buttonTitle])
             .accessibilityIdentifier(identifier)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+        .padding(.horizontal, look == nil ? 12 : 15)
+        .padding(.vertical, look == nil ? 6 : 8)
+        .modifier(MoveInsetCardFrame())
     }
 }

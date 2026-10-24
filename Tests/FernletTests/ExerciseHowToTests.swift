@@ -253,9 +253,11 @@ struct ExerciseHowToTests {
              "the picker's result rows and their Voice Control name"),
             ("App/Fernlet/MoveView.swift", "exercise.fromCatalog ? exercise.displayName : WorkoutPlanLine.displayed(exercise.name)", 1,
              "the plan rows (a descriptor line drawn through the planner's own display helper)"),
-            ("App/Fernlet/MoveView.swift", "Text(verbatim: entry.exercise.displayName)", 2, "the Log sheet's added and planned rows"),
+            ("App/Fernlet/MoveView.swift", "Text(verbatim: entry.exercise.displayName)", 3,
+             "the Log sheet's added and planned rows, and the World build's planned-exercise page title (b3-workout-plan)"),
             ("App/Fernlet/MoveView.swift", "Remove \\(entry.exercise.displayName)", 2, "their remove labels"),
-            ("App/Fernlet/MoveView.swift", "ExerciseHowToCatalog.displayName(for: entry.name)", 2, "the Recent chips"),
+            ("App/Fernlet/MoveView.swift", "ExerciseHowToCatalog.displayName(for: entry.name)", 3,
+             "the Recent chips, and the World build's Recent rows (b3-workout-log draft 2)"),
             ("App/Fernlet/ExerciseHistoryView.swift", "Text(verbatim: row.displayName)", 1, "the Exercise history rows"),
         ]
         for site in sites {

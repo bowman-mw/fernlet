@@ -298,7 +298,7 @@ final class VoiceControlNameInventoryUITests: XCTestCase {
         let app = UXTestApp.launch(openSheet: "workout")
         XCTAssertTrue(app.descendants(matching: .any)["sheet.workout"].waitForExistence(timeout: 8))
         try VoiceControlNameInventory.record(app, "Sheet · Workout – exercise", in: self)
-        app.buttons["workout.kind.activity"].tap()
+        app.buttons["Cardio & activity"].tap()
         XCTAssertTrue(app.textFields["activity.search"].waitForExistence(timeout: 4))
         try VoiceControlNameInventory.record(app, "Sheet · Workout – activity", in: self)
     }

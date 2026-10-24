@@ -389,6 +389,8 @@ struct GoalsSheet: View {
     @State private var interests = ""
     @State private var constraints = ""
     @State private var proposed: [FitnessGoal] = []
+    /// World build (`b3-goals`): the sheet's paper under the framed look.
+    @Environment(\.fernletFramedLook) private var goalsLook
 
     var body: some View {
         VStack(spacing: 0) {
@@ -418,10 +420,10 @@ struct GoalsSheet: View {
                                 .sheetTextInput()
                         }
 
-                        Text("Goals are crafted entirely on your device — your health details never leave your phone.")
-                            .font(.fernlet(.bubble))
-                            .foregroundStyle(Color.slate)
-                            .fernletWrappingText()
+                        // World build (`b3-goals`): a framed notice with the pixel lock.
+                        FernletNotice("Goals are crafted entirely on your device — your health details never leave your phone.") {
+                            FernletIcon(.lock)
+                        }
                     } else {
                         VStack(spacing: 8) {
                             ForEach(proposed) { goal in
@@ -445,7 +447,7 @@ struct GoalsSheet: View {
                 }
             }
         }
-        .background(Color.parchment)
+        .background((goalsLook?.paper ?? Color.parchment).ignoresSafeArea())
         .fernletDraftGuard(
             isDirty: isDirty,
             title: proposed.isEmpty ? "Plan goals" : "Review goals"
