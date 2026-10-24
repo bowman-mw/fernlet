@@ -73,4 +73,13 @@ extension View {
             self.frame(maxWidth: .infinity, alignment: .leading)
         }
     }
+
+    /// ``settingsCard()`` under its section label, the label above the card as every framed section
+    /// draws it (`b2-settings-privacy`: label, then the card).
+    func settingsCard(label: LocalizedStringKey) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel(label).padding(.horizontal, 4)
+            settingsCard()
+        }
+    }
 }

@@ -629,7 +629,6 @@ struct PrivacyDataSettingsView: View {
 
     private var exportDataCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionLabel("Your data")
             // One literal, not a `+`: a concatenation is a `String`, which binds `Text`'s verbatim
             // initializer and never reaches the catalog (the T2-1 class). Same rendered words.
             Text("""
@@ -663,7 +662,7 @@ struct PrivacyDataSettingsView: View {
             operationErrorLine(.export)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .settingsCard()
+        .settingsCard(label: "Your data")
     }
 
     /// The one-line escape hatch for the local correction memory (research §26 fix 1.10, review
@@ -779,19 +778,15 @@ struct PrivacyDataSettingsView: View {
         }
     }
 
+    /// The backups card (`b2-settings-privacy`): its label above a framed section, one row per switch
+    /// with dotted rules between them; the photo switch keeps its size disclosure in its row, and any
+    /// found-backup line or failure sits in its own row underneath.
     private var iCloudCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionLabel("Backups")
+        FernletFramedSection("Backups") {
             Toggle(isOn: iCloudBinding) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Sync to iCloud")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.bark)
-                    Text("Private database sync for daily logs across your Fernlet devices.")
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-                }
+                // A two-line row takes the kit's row padding above and below its words.
+                FernletRowLabel("Sync to iCloud", detail: "Private database sync for daily logs across your Fernlet devices.")
+                    .padding(.vertical, 7)
             }
             .accessibilityIdentifier("privacy.icloud.toggle")
 
@@ -806,10 +801,7 @@ struct PrivacyDataSettingsView: View {
             if store?.isPeriodTrackingVisible ?? true {
                 Toggle("Sealed backup for period data", isOn: sealedPeriodBinding)
             } else {
-                Text("Sealed backup for period data is unavailable while period tracking is turned off. Your existing backup is kept.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
+                backupNote(Text("Sealed backup for period data is unavailable while period tracking is turned off. Your existing backup is kept."))
             }
 
             Toggle("Sealed backup for journal entries", isOn: sealedJournalBinding)
@@ -821,10 +813,7 @@ struct PrivacyDataSettingsView: View {
             if store?.isIntimacyTrackingVisible ?? true {
                 Toggle("Sealed backup for intimate logs", isOn: sealedIntimacyBinding)
             } else {
-                Text("Sealed backup for intimate logs is unavailable while intimacy tracking is turned off. Your existing backup is kept.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
+                backupNote(Text("Sealed backup for intimate logs is unavailable while intimacy tracking is turned off. Your existing backup is kept."))
             }
 
             // ONE switch for all three own-photo corpora (meal, recipe, gym progress). They are
@@ -832,19 +821,26 @@ struct PrivacyDataSettingsView: View {
             // single decision about the user's own pictures — and the size disclosure below is
             // attached to the switch rather than buried in the confirm dialog, because photos are
             // the one backup whose cost the user pays in iCloud storage.
-            Toggle("Sealed backup for your photos", isOn: ownPhotoBackupBinding)
-                .accessibilityIdentifier("privacy.sealedBackup.ownPhotos")
-            Text(Self.ownPhotoBackupSizeDisclosure)
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle("Sealed backup for your photos", isOn: ownPhotoBackupBinding)
+                    .accessibilityIdentifier("privacy.sealedBackup.ownPhotos")
+                backupNote(Text(Self.ownPhotoBackupSizeDisclosure))
+                    .padding(.bottom, 10)
+            }
             foundBackupLines
 
             // Beneath the switches themselves, not at the far bottom of the page.
             operationErrorLine(.iCloud)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .settingsCard()
+    }
+
+    /// A quiet line in the backups card (an unavailable switch's reason, the photo size disclosure).
+    private func backupNote(_ text: Text) -> some View {
+        text
+            .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.rowDetail)
+            .foregroundStyle(look?.dim ?? Color.slate)
+            .fernletWrappingText()
+            .padding(.vertical, look == nil ? 0 : 8)
     }
 
     /// The sealed backups iCloud was found to hold (`ExistingDataSummary.sealedBackups`) whose switch on
@@ -1131,23 +1127,28 @@ struct PrivacyDataSettingsView: View {
     @ViewBuilder
     private var multiDeviceWarningBanner: some View {
         if let warning = multiDeviceWarning {
+            // Under the look (`b2-settings-privacy`): a framed sage note straight under the backups,
+            // with no label of its own; today's tinted box with its label without it.
+            let shape = RoundedRectangle(cornerRadius: look == nil ? 14 : FernletFramedLook.cardRadius)
             VStack(alignment: .leading, spacing: 8) {
-                SectionLabel("Multiple devices")
+                if look == nil { SectionLabel("Multiple devices") }
                 Text(warning.message)
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.bark)
+                    .font(look == nil ? .fernlet(.body) : FernletFramedFont.body)
+                    .foregroundStyle(look?.text ?? Color.bark)
                     .fernletWrappingText()
                 if warning == .anotherDeviceHasData, let summary = existingDataSummary {
                     // Grammar agreement on each count: the fixed plurals read "1 workouts".
                     Text("Found ^[\(summary.mealLogCount) meal log](inflect: true), ^[\(summary.journalEntryCount) journal entry](inflect: true), ^[\(summary.workoutCount) workout](inflect: true) in this iCloud account.")
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
+                        .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.note)
+                        .foregroundStyle(look?.dim ?? Color.slate)
                         .fernletWrappingText()
                 }
             }
-            .padding(14)
+            .padding(look == nil ? 14 : 16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.terracotta.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+            .background(look?.sage ?? Color.terracotta.opacity(0.08), in: shape)
+            .overlay { if let look { shape.strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth) } }
+            .background { if let look { shape.fill(look.shadow).offset(y: 3) } }
             .accessibilityIdentifier("privacy.multiDevice.warning")
         }
     }
@@ -1159,7 +1160,6 @@ struct PrivacyDataSettingsView: View {
     private var sealedBackupStatusBanner: some View {
         if showsSealedBackupStatusBanner {
             VStack(alignment: .leading, spacing: 12) {
-                SectionLabel("Encrypted backup status")
                 ownPhotoStatusLines
                 sealedBackupDisableFailureLines
                 reuploadDeferredLines
@@ -1172,7 +1172,7 @@ struct PrivacyDataSettingsView: View {
                 operationErrorLine(.backupStatus)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .settingsCard()
+            .settingsCard(label: "Encrypted backup status")
             .accessibilityIdentifier("privacy.sealedBackup.statusBanner")
         }
     }
@@ -1877,23 +1877,16 @@ struct PrivacyDataSettingsView: View {
         }
     }
 
+    /// The iOS-backup switch: its label above a one-row framed section (`b2-settings-privacy`).
     private var localBackupCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionLabel("Local backup")
+        FernletFramedSection("Local backup") {
             Toggle(isOn: localBackupIncludedBinding) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Include local data in iOS backup")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.bark)
-                    Text("When off, your local Fernlet data is excluded from iOS and iCloud device backups.")
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-                }
+                FernletRowLabel("Include local data in iOS backup",
+                                detail: "When off, your local Fernlet data is excluded from iOS and iCloud device backups.")
+                    .padding(.vertical, 7)
             }
             .accessibilityIdentifier("privacy.localBackup.toggle")
         }
-        .settingsCard()
     }
 
     /// The Delete group at the BOTTOM of the page (5f): the only two terracotta things on the
@@ -1902,7 +1895,6 @@ struct PrivacyDataSettingsView: View {
     /// deletes.
     private var deleteSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionLabel("Delete")
             Text("Erase Fernlet's iCloud records, or everything Fernlet stores on this phone and in your iCloud.")
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
@@ -1912,7 +1904,7 @@ struct PrivacyDataSettingsView: View {
             deleteEverythingButton
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .settingsCard()
+        .settingsCard(label: "Delete")
     }
 
     /// The second entry point into the shared delete funnel.

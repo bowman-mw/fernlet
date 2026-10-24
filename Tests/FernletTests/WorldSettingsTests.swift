@@ -60,6 +60,31 @@ struct WorldSettingsTests {
         #expect(PixelSpinner.opacity(cell: 7, head: 0) == 0.75, "the tail wraps from the first cell to the last")
     }
 
+    // MARK: Search and the quick-log moves
+
+    /// The two settings that moved or arrived in the World build are findable: Advanced period
+    /// tracking (Period & sensitive content) and the recipe-sharing switches (Sharing).
+    @Test func newSettingsAreFoundBySearch() {
+        let advanced = SettingsSearchIndex.results(for: "advanced period")
+        #expect(advanced.contains { $0.title == "Advanced period tracking" && $0.route == .periodSensitive })
+        for word in ["ovulation", "cervical mucus", "basal temperature", "spotting"] {
+            #expect(SettingsSearchIndex.results(for: word).contains { $0.route == .periodSensitive }, "\(word)")
+        }
+        #expect(SettingsSearchIndex.results(for: "include notes").contains { $0.title == "Recipes you share" && $0.route == .sharing })
+        #expect(SettingsSearchIndex.results(for: "recipe picture").contains { $0.route == .sharing })
+    }
+
+    /// "Move up" and "Move down" swap a tile with its neighbour, and do nothing at either end.
+    @Test func quickLogTilesStepOnePlaceAndStopAtTheEnds() {
+        let tiles = FernletShortcut.defaultQuickLog
+        let down = QuickLogOrder.stepping(tiles, at: 0, by: 1)
+        #expect(down[0] == tiles[1] && down[1] == tiles[0])
+        #expect(Array(down.dropFirst(2)) == Array(tiles.dropFirst(2)))
+        #expect(QuickLogOrder.stepping(tiles, at: 0, by: -1) == tiles)
+        #expect(QuickLogOrder.stepping(tiles, at: tiles.count - 1, by: 1) == tiles)
+        #expect(QuickLogOrder.stepping(tiles, at: 9, by: 1) == tiles)
+    }
+
     // MARK: Source pins
 
     /// Settings' first page draws the framed search field under the look (no system drawer under an
@@ -86,6 +111,20 @@ struct WorldSettingsTests {
             #expect(source.contains(".fernletPushedPage(\"\(title)\")"), "\(path) lost its plate title")
             #expect(!source.contains(".navigationTitle(\"\(title)\")"), "\(path) still sets a navigation title")
         }
+    }
+
+    /// Privacy & Data's backups are one framed section under their label (`b2-settings-privacy`), and
+    /// Settings' body profile draws the framed stepper and dropdowns under the look (`b2-settings-goal`).
+    @Test func privacyBackupsAndBodyProfileUseTheFramedPieces() throws {
+        let privacy = try RepoRoot.source("App/Fernlet/PrivacyDataSettingsView.swift")
+        #expect(privacy.contains("FernletFramedSection(\"Backups\")"))
+        #expect(privacy.contains("FernletFramedSection(\"Local backup\")"))
+        let profile = try RepoRoot.source("App/Fernlet/OnboardingView.swift")
+        #expect(profile.contains("FernletFramedSection(\"Body profile\")"))
+        #expect(profile.contains("FernletDropdown(BodyProfileFieldLabel.sex"))
+        let quickLog = try RepoRoot.source("App/Fernlet/QuickLogShortcutsEditor.swift")
+        #expect(quickLog.contains(".environment(\\.editMode, .constant(look == nil ? .active : .inactive))"))
+        #expect(quickLog.contains("accessibilityAction(named: Text(\"Move up\"))"))
     }
 
     /// The lock and duress sheets sit on paper with the title inside (`b1-frame-sheet`).

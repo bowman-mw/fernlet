@@ -770,6 +770,18 @@ nonisolated enum SettingsSearchIndex {
             breadcrumb: .sharingSettings,
             route: .sharing
         ),
+        // The recipe-sharing switches (notes, picture) moved from each share to Settings › Sharing
+        // (owner decision, world-ui; the card is "Recipes you share").
+        SettingsSearchEntry(
+            title: "Recipes you share",
+            display: LocalizedStringResource(
+                "settings.search.title.recipesYouShare", defaultValue: "Recipes you share",
+                comment: "Settings search result: the name of a setting a search can find, on the Sharing settings page (whether shared recipes carry your notes and their picture). Short, sentence case, like the row it leads to."),
+            keywords: ["include notes", "include picture", "recipe notes", "recipe photo", "recipe picture",
+                       "recipe sharing", "shared recipes"],
+            breadcrumb: .sharingSettings,
+            route: .sharing
+        ),
         SettingsSearchEntry(
             title: "Delete everything",
             display: LocalizedStringResource(
@@ -968,6 +980,18 @@ nonisolated enum SettingsSearchIndex {
                 "settings.search.title.intimacyTracking", defaultValue: "Intimacy tracking",
                 comment: "Settings search result: the name of a setting a search can find, on the Period & sensitive content page. Short, sentence case, like the row it leads to."),
             keywords: ["intimacy", "intimate", "visibility", "hide intimacy", "sensitive"],
+            breadcrumb: .periodSensitiveContent,
+            route: .periodSensitive
+        ),
+        // The Advanced period tracking switch (owner decision, world-ui): every symptom, cervical mucus,
+        // ovulation tests, basal temperature and spotting on Log period.
+        SettingsSearchEntry(
+            title: "Advanced period tracking",
+            display: LocalizedStringResource(
+                "settings.search.title.advancedPeriodTracking", defaultValue: "Advanced period tracking",
+                comment: "Settings search result: the name of a setting a search can find, on the Period & sensitive content page. Short, sentence case, like the row it leads to."),
+            keywords: ["advanced", "symptoms", "cervical mucus", "mucus", "ovulation", "ovulation test",
+                       "basal temperature", "bbt", "spotting", "fertility", "period"],
             breadcrumb: .periodSensitiveContent,
             route: .periodSensitive
         ),

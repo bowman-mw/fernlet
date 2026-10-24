@@ -27,6 +27,11 @@ import FernletUI
 ///
 /// Dynamic Type (5g·AX3): the system drag handles hold their size while rows grow, and the inline
 /// palette's `FlowLayout` naturally stacks one chip per row.
+///
+/// Under the World's framed look (`b2-settings-quicklog`) the list leaves edit mode: the system grip
+/// drew on the card's right frame, so each row draws the ink ``ReorderGrip`` inside the card and a row
+/// is pressed and dragged to move (List's own `onMove` drag). Every row also carries "Move up" and
+/// "Move down" actions, so VoiceOver and Voice Control can reorder without dragging.
 struct QuickLogShortcutsEditor: View {
     @Bindable var store: FernletStore
     /// The slot whose inline palette is open, by position. Nil when no slot is being chosen.
@@ -56,9 +61,10 @@ struct QuickLogShortcutsEditor: View {
         }
         // A plain list under the look, so the rows draw the framed card themselves.
         .modifier(QuickLogListStyle(framed: look != nil))
-        // Always reorderable: edit mode is what makes `onMove` handles render, and this page has
-        // no other editing state for the button to toggle.
-        .environment(\.editMode, .constant(.active))
+        // Without the look, always in edit mode: that is what makes `onMove` handles render, and this
+        // page has no other editing state for a button to toggle. Under the look the rows draw their
+        // own grip and List's press-and-drag reorders them.
+        .environment(\.editMode, .constant(look == nil ? .active : .inactive))
         .scrollContentBackground(.hidden)
         .fernletPageBackground()
         .fernletPushedPage("Quick-log shortcuts")
@@ -104,8 +110,9 @@ struct QuickLogShortcutsEditor: View {
                 if editingSlot == index {
                     Text("Choosing")
                         .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
+                        .foregroundStyle(look?.dim ?? Color.slate)
                 }
+                if look != nil { ReorderGrip() }
             }
             .frame(minHeight: 44)
             .contentShape(Rectangle())
@@ -114,6 +121,8 @@ struct QuickLogShortcutsEditor: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
+            .accessibilityAction(named: Text("Move up")) { step(index, by: -1) }
+            .accessibilityAction(named: Text("Move down")) { step(index, by: 1) }
             .accessibilityIdentifier("settings.quickLog.slot.\(index)")
             if editingSlot == index {
                 palette(for: index, current: item)
@@ -157,6 +166,16 @@ struct QuickLogShortcutsEditor: View {
         // B13: the tiles changed (one replaced, or two swapped) — `moved`, with the row's new
         // title and the palette folding away as its twin. Re-picking the current chip says nothing.
         if updated != items { FernletFeedback.system.play(.moved) }
+        store.setQuickLogItems(updated)
+        editingSlot = nil
+    }
+
+    /// One tile one place up or down (the row's "Move up" / "Move down"), with the layout cue the
+    /// palette's swap plays (report B13). Nothing at either end.
+    private func step(_ index: Int, by offset: Int) {
+        let updated = QuickLogOrder.stepping(items, at: index, by: offset)
+        guard updated != items else { return }
+        FernletFeedback.system.play(.moved)
         store.setQuickLogItems(updated)
         editingSlot = nil
     }

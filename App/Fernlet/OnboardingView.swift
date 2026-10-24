@@ -8,11 +8,91 @@ import FernletUI
 /// Despite the file name, this is not an onboarding screen: ``SettingsSheet``'s "Goal & nutrition"
 /// tab is its caller, feeding it a Health-synced profile binding so weight/height edits also write
 /// back to Apple Health. Both bindings are the caller's; the editor persists nothing itself.
+///
+/// Under the World's framed look (`b2-settings-goal`) the two groups are framed sections: each
+/// measurement a row with the framed −/+ at its end, each choice a framed dropdown. Without the look it
+/// is today's cream cards with system steppers and menu pickers.
 struct ProfileEditor: View {
     @Binding var profile: UserNutritionProfile
     @Binding var preferences: UserNutritionPreferences
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
+        if look != nil {
+            VStack(alignment: .leading, spacing: 16) {
+                framedBodyProfile
+                framedPreferences
+            }
+        } else {
+            todaysCards
+        }
+    }
+
+    /// The body profile as framed rows: Age, Weight and Height with the framed stepper, then Sex and
+    /// Typical activity as dropdowns (the words ``BodyProfileFieldLabel`` keeps for both surfaces).
+    private var framedBodyProfile: some View {
+        FernletFramedSection("Body profile") {
+            // Voice Control: each stepper answers to its field's word ("Age"); VoiceOver hears today's
+            // "Age: 30", the drawn words being hidden in favour of the stepper.
+            measureRow(Text("Age: \(profile.age)")) {
+                FernletStepper("Age: \(profile.age)", value: $profile.age, in: 13...100, step: 1)
+                    .accessibilityInputLabels([Text("Age")])
+            }
+            let weight = BodyMeasurementEntry.weightLabel(pounds: profile.weightPounds)
+            measureRow(Text(verbatim: weight)) {
+                FernletStepper("Weight", value: BodyMeasurementEntry.weightBinding($profile.weightPounds),
+                               in: BodyMeasurementEntry.weightRange(), step: 1)
+                    .accessibilityLabel(Text(verbatim: weight))
+                    .accessibilityInputLabels([Text("Weight")])
+            }
+            let height = BodyMeasurementEntry.heightLabel(inches: profile.heightInches)
+            measureRow(Text(verbatim: height)) {
+                FernletStepper("Height", value: BodyMeasurementEntry.heightBinding($profile.heightInches),
+                               in: BodyMeasurementEntry.heightRange(), step: 1)
+                    .accessibilityLabel(Text(verbatim: height))
+                    .accessibilityInputLabels([Text("Height")])
+            }
+            FernletDropdown(BodyProfileFieldLabel.sex, selection: $profile.sex, options: BiologicalSex.allCases) {
+                Text($0.label)
+            }
+            .padding(.vertical, 6)
+            FernletDropdown(BodyProfileFieldLabel.activity, selection: $profile.activityLevel,
+                            options: ActivityLevel.allCases) { Text($0.label) }
+                .padding(.vertical, 6)
+        }
+    }
+
+    /// Eating pattern and Guidance style as framed dropdowns (each with the row's padding, so a stacked
+    /// dropdown at the largest text sizes never touches the rules).
+    private var framedPreferences: some View {
+        FernletFramedSection("Preferences") {
+            FernletDropdown("Eating pattern", selection: $preferences.dietaryPattern, options: DietaryPattern.allCases) {
+                Text($0.label)
+            }
+            .padding(.vertical, 6)
+            FernletDropdown("Guidance style", selection: $preferences.guidanceIntensity,
+                            options: GuidanceIntensity.allCases) { Text($0.label) }
+                .padding(.vertical, 6)
+        }
+    }
+
+    /// One measurement row: its words (hidden from VoiceOver: the stepper says them), then the stepper.
+    private func measureRow<Control: View>(_ words: Text, @ViewBuilder stepper: () -> Control) -> some View {
+        HStack(spacing: 12) {
+            words
+                .font(FernletFramedFont.rowTitle)
+                .foregroundStyle(look?.text ?? Color.bark)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityHidden(true)
+            stepper()
+        }
+        // A wrapped measurement (largest text sizes) keeps the row's padding above and below it.
+        .padding(.vertical, 6)
+    }
+
+    /// Today's two cream cards with system steppers and menu pickers (no framed look).
+    private var todaysCards: some View {
         VStack(alignment: .leading, spacing: 16) {
             SheetField("Body profile") {
                 VStack(alignment: .leading, spacing: 12) {
