@@ -460,19 +460,10 @@ struct DeletingEverythingOverlay: View {
     var body: some View {
         ZStack {
             Color.black.opacity(0.20).ignoresSafeArea()
-            VStack(spacing: 12) {
-                // Hidden, not labelled: "Deleting everything…" below is the label, and this
-                // overlay is the app's most consequential busy state — the one place a doubled or
-                // empty utterance is least welcome.
-                ProgressView()
-                    .tint(Color.moss)
-                    .accessibilityHidden(true)
-                Text("Deleting everything…")
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.bark)
-            }
-            .padding(20)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+            // The framed busy card with its pixel spinner (`b3-deleting`). The spinner is hidden,
+            // not labelled: "Deleting everything…" is the label, and this overlay is the app's most
+            // consequential busy state — the one place a doubled or empty utterance is least welcome.
+            SettingsBusyCard(text: "Deleting everything…")
         }
         .accessibilityIdentifier("deleteAll.spinner")
         // T1-4: dims and swallows taps over the settings rows behind it, but was transparent to
