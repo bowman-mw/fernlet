@@ -4,7 +4,9 @@ import FernletScoring
 import FernletUI
 
 /// The companion on the World map (design `b1-home-day`, draft 3; World app plan step 3): the pixel
-/// sprite standing where the person is, its speech bubble above it, tap to pet and hold to customize.
+/// sprite standing where the person is, its speech bubble above it, tap to see it up close
+/// (``WorldCompanionCloseUp``, refinement `ref-comp-close`, where a tap pets it) and hold to customize.
+/// VoiceOver's "Pet" action still pets it here.
 ///
 /// **One companion, two drawings.** Everything it does is Home's: the same `PetInteractionGovernor`
 /// (its pacing lives in device-local defaults, so pets here and on Today count together), the same
@@ -15,8 +17,8 @@ import FernletUI
 ///
 /// **Accessibility** is Home's companion's: one button named "Fernlet companion", the band and feeling
 /// as its value, the line as custom content (the bubble itself is decoration and fades), the default
-/// action pets and "Edit your companion" opens the customize sheet (a VoiceOver user cannot make the
-/// long press).
+/// action opens it up close, "Pet" pets it in place and "Edit your companion" opens the customize sheet
+/// (a VoiceOver user cannot make the long press).
 struct WorldMapCompanion: View {
     var store: FernletStore
     /// The opt-in body-signal reading, already gated on the setting (Home's `companionBodySignal`).
@@ -40,6 +42,8 @@ struct WorldMapCompanion: View {
     @State private var isSettled = false
     @State private var hopLift: CGFloat = 0
     @State private var settledResync: Task<Void, Never>?
+    /// Whether the companion is open up close (``WorldCompanionCloseUp``).
+    @State private var isCloseUpOpen = false
     @Environment(\.fernletTermOfAddress) private var termOfAddress
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -66,7 +70,8 @@ struct WorldMapCompanion: View {
                 if tapCount > 0 { WorldPetHeart().id(tapCount) }
             }
             .contentShape(Rectangle())
-            .onTapGesture { pet() }
+            // Refinement 1 (`ref-comp-close`): a tap opens the companion up close, where it is petted.
+            .onTapGesture { openCloseUp() }
             .onLongPressGesture(minimumDuration: 0.45) {
                 FernletFeedback.system.play(.held)
                 onCustomize()
@@ -76,11 +81,20 @@ struct WorldMapCompanion: View {
             .accessibilityValue(CompanionEmotion.accessibilityValue(state: store.liveCompanionState, emotion: emotion))
             .accessibilityCustomContent("Thought", Text(verbatim: thought))
             .accessibilityAddTraits(.isButton)
-            .accessibilityAction { pet() }
+            .accessibilityAction { openCloseUp() }
+            .accessibilityAction(named: "Pet") { pet() }
             .accessibilityAction(named: "Edit your companion") { onCustomize() }
-            .accessibilityHint("Double tap to pet.")
+            .accessibilityHint("Double tap to see it up close.")
             .accessibilityIdentifier("world.companion")
         }
+        .worldCompanionCloseUp(isPresented: $isCloseUpOpen, store: store, bodySignal: bodySignal, onCustomize: onCustomize)
+        // DEBUG screenshots (`closeup`) open it at launch; the scene list is empty in release builds.
+        .task { if UITestSupport.worldHomeScenes.contains("closeup") { openCloseUp() } }
+    }
+
+    /// Opens the close-up without the cover's slide; it fades in by itself.
+    private func openCloseUp() {
+        withTransaction(WorldCompanionCloseUpPresenter.instant) { isCloseUpOpen = true }
     }
 
     /// The line in the bubble: the one a pet produced, else the map's own, else the companion's own.
@@ -222,16 +236,23 @@ private struct WorldPetHeart: View {
 /// accessibility size, wrapping at the design's 236 pt.
 struct WorldSpeechBubble: View {
     let text: String
+    /// The bubble's type: the map's 14 pt; the close-up draws 17 (``WorldCompanionCloseUp``).
+    var font: Font = WorldType.speech
+    /// How wide it wraps: the map's 236 pt, the close-up's 300.
+    var maxWidth: CGFloat = 236
+    var alignment: TextAlignment = .leading
+    /// The largest text size it grows to.
+    var typeCap: DynamicTypeSize = .accessibility1
 
     var body: some View {
         Text(verbatim: text)
-            .font(WorldType.speech)
-            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+            .font(font)
+            .dynamicTypeSize(...typeCap)
             .foregroundStyle(WorldPalette.bark)
-            .multilineTextAlignment(.leading)
+            .multilineTextAlignment(alignment)
             .fixedSize(horizontal: false, vertical: true)
             .padding(EdgeInsets(top: 7, leading: 10, bottom: 7, trailing: 10))
-            .frame(maxWidth: 236)
+            .frame(maxWidth: maxWidth)
             .background(WorldPalette.paperLight, in: RoundedRectangle(cornerRadius: 4))
             .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(WorldPalette.ink, lineWidth: 3))
             .background {
