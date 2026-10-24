@@ -77,16 +77,22 @@ struct FriendsSlimRow<Leading: View, Trailing: View>: View {
     @ViewBuilder let leading: Leading
     @ViewBuilder let trailing: Trailing
     @Environment(\.fernletFramedLook) private var look
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
-        HStack(spacing: 10) {
-            leading
-            Spacer(minLength: 6)
+        // At accessibility sizes the control drops under the line, so neither breaks mid-word.
+        let stacked = dynamicTypeSize.isAccessibilitySize
+        let layout = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+                             : AnyLayout(HStackLayout(spacing: 10))
+        layout {
+            HStack(spacing: 10) { leading }
+            if !stacked { Spacer(minLength: 6) }
             trailing
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.vertical, stacked ? 10 : 6)
         .frame(minHeight: 52)
         .background(look?.raised ?? Color.cream, in: shape)
         .overlay(shape.strokeBorder(accent ? (look?.mark ?? Color.moss) : (look?.ink ?? Color.bark.opacity(0.12)),

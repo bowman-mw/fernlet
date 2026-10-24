@@ -123,6 +123,7 @@ struct WorldSessionButton: View {
         if count > 0 {
             Text(verbatim: count.formatted(.number))
                 .font(FernletFramedFont.buttonSmall)
+                .dynamicTypeSize(...DynamicTypeSize.xLarge)
                 .foregroundStyle(WorldPalette.rgb(0x3A2414))
                 .frame(minWidth: 26, minHeight: 26)
                 .background(WorldPalette.rgb(0xF2D58A), in: RoundedRectangle(cornerRadius: 7))
@@ -248,6 +249,22 @@ struct SessionMenuCard: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        // At the largest text sizes the card is taller than the map; it scrolls rather than squeezing
+        // its rows into each other.
+        ViewThatFits(in: .vertical) {
+            cardContent
+            ScrollView { cardContent }
+        }
+        .frame(maxWidth: 420, alignment: .leading)
+        .background(WorldPalette.paper, in: shape)
+        .overlay(shape.strokeBorder(WorldPalette.ink, lineWidth: 3))
+        .background { shape.fill(WorldPalette.ink.opacity(0.25)).offset(y: 4) }
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isModal)
+    }
+
+    /// The title row, then the three rows.
+    private var cardContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -276,12 +293,6 @@ struct SessionMenuCard: View {
                 .accessibilityIdentifier("world.session.leave")
         }
         .padding(16)
-        .frame(maxWidth: 420, alignment: .leading)
-        .background(WorldPalette.paper, in: shape)
-        .overlay(shape.strokeBorder(WorldPalette.ink, lineWidth: 3))
-        .background { shape.fill(WorldPalette.ink.opacity(0.25)).offset(y: 4) }
-        .accessibilityElement(children: .contain)
-        .accessibilityAddTraits(.isModal)
     }
 
     /// "1 new · only in this session", or "Only in this session".
