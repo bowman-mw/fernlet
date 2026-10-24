@@ -138,21 +138,21 @@ struct WorkoutCueSwitches: View {
     private var spoken = WorkoutCuePreferences.defaultSpoken
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        // Three separate rows (no stack of their own), so the Sounds & haptics page's framed section
+        // draws each as its own row with dotted rules between (`b2-settings-sounds`).
+        Group {
             SoundsHapticsSwitchRow(
                 title: "Workout haptics",
                 footnote: "A tap when a rest or a hold ends.",
                 isOn: $haptics,
                 identifier: "settings.soundsHaptics.workoutHaptics"
             )
-            FernletRowDivider()
             SoundsHapticsSwitchRow(
                 title: "Workout sounds",
                 footnote: "A quiet chime that follows your ring/silent switch.",
                 isOn: $sounds,
                 identifier: "settings.soundsHaptics.workoutSounds"
             )
-            FernletRowDivider()
             SoundsHapticsSwitchRow(
                 title: "Spoken cues",
                 footnote: "Says the next exercise, and when a rest or a hold ends.",

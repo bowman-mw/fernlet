@@ -63,17 +63,43 @@ struct PrivacyPolicyView: View {
 
     var body: some View {
         ScrollView {
+            // One framed card per section (`b3-privacy-policy`): the title's card, then a card per
+            // "##" header with everything under it. The words are the policy's, unchanged.
             VStack(alignment: .leading, spacing: 14) {
-                ForEach(Array(Self.blocks.enumerated()), id: \.offset) { _, block in
-                    block.view
+                ForEach(Array(Self.sections.enumerated()), id: \.offset) { _, section in
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(Array(section.enumerated()), id: \.offset) { _, block in
+                            block.view
+                        }
+                    }
+                    .settingsCard()
                 }
             }
-            .padding(20)
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 30)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(Color.parchment)
-        .navigationTitle("Privacy Policy")
-        .navigationBarTitleDisplayMode(.inline)
+        .fernletPageBackground()
+        // A page in the Settings panel: the plate carries the title and Back.
+        .fernletPushedPage("Privacy Policy")
+    }
+
+    /// The parsed policy cut into sections: a new section starts at every header (`##`), and the
+    /// blocks before the first header (the title and its preamble) are the first. Bounded by the
+    /// block count; no block is dropped or reordered.
+    private static var sections: [[PolicyBlock]] {
+        var result: [[PolicyBlock]] = []
+        for block in blocks {
+            if case .header = block, !(result.last?.isEmpty ?? true) {
+                result.append([block])
+            } else if result.isEmpty {
+                result.append([block])
+            } else {
+                result[result.count - 1].append(block)
+            }
+        }
+        return result
     }
 
     // MARK: - Content (display copy)
@@ -192,9 +218,8 @@ private enum PolicyBlock {
                 .accessibilityHeading(.h1)
         case .header(let s):
             Text(s)
-                .font(.fernlet(.headerMedium))
+                .font(FernletFramedFont.cardTitle)
                 .foregroundStyle(Color.bark)
-                .padding(.top, 8)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityHeading(.h2)
         case .paragraph(let s):
@@ -204,14 +229,21 @@ private enum PolicyBlock {
                 .fixedSize(horizontal: false, vertical: true)
         case .bullet(let s):
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("•").font(.fernlet(.body)).foregroundStyle(Color.moss)
+                // The bullet as a framed moss pixel square (`b3-privacy-policy`).
+                Rectangle()
+                    .fill(Color.moss)
+                    .frame(width: 6, height: 6)
+                    .padding(1.5)
+                    .background(Color.bark)
+                    .alignmentGuide(.firstTextBaseline) { $0[.bottom] }
+                    .accessibilityHidden(true)
                 Text(PolicyMarkdown.inline(s))
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                     .fixedSize(horizontal: false, vertical: true)
             }
         case .rule:
-            Divider().background(Color.slate.opacity(0.4)).padding(.vertical, 4)
+            FernletDottedRule().padding(.vertical, 4)
         }
     }
 }

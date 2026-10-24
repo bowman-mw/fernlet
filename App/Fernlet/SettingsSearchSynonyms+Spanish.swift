@@ -114,6 +114,8 @@ extension SettingsSearchSynonyms {
         "Also include in trainer summaries": ["incluir también en los resúmenes para entrenador",
                                               "contenido del resumen", "objetivo", "sueño", "malestar", "bienestar",
                                               "opciones del entrenador"],
+        "Recipes you share": ["recetas que compartes", "incluir notas", "incluir foto", "notas de la receta",
+                              "foto de la receta", "compartir recetas", "recetas compartidas"],
         "Delete everything": ["borrar todo", "eliminar todo", "borrar", "restablecer", "eliminar todos los datos",
                               "eliminar", "empezar de cero"],
         "AI activity log": ["registro de actividad de ia", "actividad de ia", "registro de ia", "llamadas de ia",
@@ -147,6 +149,9 @@ extension SettingsSearchSynonyms {
         "Period tracking": ["seguimiento del periodo", "periodo", "ciclo", "menstruación", "regla", "visibilidad",
                             "ocultar periodo"],
         "Intimacy tracking": ["seguimiento de intimidad", "intimidad", "íntimo", "visibilidad", "ocultar intimidad",
-                              "sensible"]
+                              "sensible"],
+        "Advanced period tracking": ["seguimiento avanzado del periodo", "avanzado", "síntomas", "moco cervical",
+                                     "flujo cervical", "ovulación", "prueba de ovulación", "temperatura basal",
+                                     "manchado", "fertilidad"]
     ]
 }

@@ -29,7 +29,12 @@ conditions — auto-triggers the prompt at most once per lock session via the se
 `consumeAutoBiometricPromptOpportunity()` handshake, and mirrors the service's failure ladder — remaining-attempt warnings, an
 escalating-cooldown countdown card, and a reset-required card whose only exit is a
 destructive reset. ``FernletNumericPad`` is the shared 3×4 PIN keypad both flows (and the
-app's passcode-change settings) use instead of the system keyboard. Tying them together,
+app's passcode-change settings) use instead of the system keyboard. Under the World build's framed
+look (`fernletFramedLook`, World Review Batch 3) the setup is a paper sheet with its title inside,
+the pad's keys are framed paper with a pixel delete glyph, the PIN dots are square, and the lock
+types are framed radio cards (``LockRadioCardChrome``, which the app's change-passcode and
+duress-code sheets reuse); without the look every piece draws as before. Drawing only: none of it
+reads, holds or compares a passcode. Tying them together,
 `FernletLockGateModifier` — applied through the public
 `fernletLockGate(scope:active:automaticallyPromptsBiometrics:privateHubOpener:shouldLockOnDisappear:)`
 extension on `View` — overlays ``FernletLockView`` over gated content while the service is locked
@@ -247,6 +252,7 @@ internally — so a service-side policy change updates the counter automatically
 ### Shared input components
 
 - ``FernletNumericPad``
+- ``LockRadioCardChrome``
 
 ### Biometric display helpers
 

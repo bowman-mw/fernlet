@@ -107,6 +107,8 @@ struct PrivacyDataSettingsView: View {
     /// Drives the 5f·AX3 degradation: the lock-photos button's label shortens at accessibility
     /// Dynamic Type sizes while keeping its moss outline and lock glyph.
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// The World's framed look (`b2-settings-privacy`): framed cards and rows on the dotted page.
+    @Environment(\.fernletFramedLook) private var look
 
     @State private var hasFreshVerification = false
     @State private var isVerifying = false
@@ -238,11 +240,12 @@ struct PrivacyDataSettingsView: View {
         ZStack {
             ScrollView {
                 content
-                    .padding(20)
-                    .padding(.bottom, 24)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 14)
+                    .padding(.bottom, 30)
             }
             .scrollContentBackground(.hidden)
-            .background(Color.parchment)
+            .fernletPageBackground()
             // T1-4: either busy overlay below dims and blocks touches but was transparent to
             // VoiceOver/Switch Control, which could keep walking (and operating) the settings rows
             // underneath — including the delete/storage controls the overlay exists to guard.
@@ -260,7 +263,8 @@ struct PrivacyDataSettingsView: View {
                 DeletingEverythingOverlay()
             }
         }
-        .navigationTitle("Privacy & Data")
+        // The plate carries the title and Back (`b2-settings-privacy`).
+        .fernletPushedPage("Privacy & Data")
         // Mid-wipe escape hatches, mirroring the SettingsSheet entry point's guard set. The busy
         // overlay lives INSIDE this pushed view, so the nav bar's Back chevron stays tappable above
         // it — and the enclosing Settings sheet's own `interactiveDismissDisabled` keys off ITS
@@ -447,34 +451,32 @@ struct PrivacyDataSettingsView: View {
             Text(verificationError == nil
                  ? "Privacy & Data asks for a fresh Face ID or device passcode check every time you enter."
                  : "Privacy & Data needs a fresh Face ID or device passcode check before it can show you anything.")
-                .font(.fernlet(.bubble))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.body)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .fernletWrappingText()
 
             if let verificationError {
                 Text(verificationError)
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.terracotta)
+                    .font(FernletFramedFont.note)
+                    .foregroundStyle(Color.terracottaInk)
                     .fernletWrappingText()
             }
 
             Button {
                 verifyFreshAccess()
             } label: {
-                Label(verifyButtonTitle, systemImage: "lock.shield.fill")
-                    .frame(maxWidth: .infinity)
+                Label {
+                    Text(verifyButtonTitle)
+                } icon: {
+                    FernletIcon(.lock, scale: 2, tint: look?.onAccent ?? Color.onMoss)
+                }
+                .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.plain)
-            .font(.fernlet(.label))
-            .foregroundStyle(Color.onMoss)
-            .padding(.vertical, 14)
-            .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 14))
+            .buttonStyle(ActionPillButtonStyle(.primary))
             .disabled(isVerifying)
             .accessibilityIdentifier("privacy.verify")
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+        .settingsCard()
         .accessibilityIdentifier("privacy.lock.gate")
     }
 
@@ -502,8 +504,7 @@ struct PrivacyDataSettingsView: View {
 
             deleteEverythingButton
         }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+        .settingsCard()
         .accessibilityIdentifier("privacy.lock.noLockDeleteCard")
     }
 
@@ -561,32 +562,20 @@ struct PrivacyDataSettingsView: View {
     /// UI-test harness (no `SettingsRoute` destination in that stack), where a value link would be
     /// silently dead.
     private var healthAccessRow: some View {
-        NavigationLink {
-            HealthAccessSettingsView(store: store)
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "heart.text.square")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.moss)
-                    .frame(width: 28)
-                Text("Health access")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.bark)
-                Spacer()
-                Text(verbatim: healthAccessCountLabel)
-                    .font(.fernlet(.stat))
-                    .foregroundStyle(Color.slate)
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(Color.slate)
+        // One framed row (`b2-settings-privacy`): the pixel heart, the name, the count, the chevron.
+        FernletFramedSection(header: nil) {
+            NavigationLink {
+                HealthAccessSettingsView(store: store)
+            } label: {
+                HStack(spacing: 12) {
+                    WorldSpriteView(sprite: WorldSprites.heartSm, scale: 2)
+                        .frame(width: 28)
+                    FernletRowLabel("Health access", value: Text(verbatim: healthAccessCountLabel))
+                }
             }
-            .frame(minHeight: 44)
-            .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-            .contentShape(Rectangle())
+            .buttonStyle(FernletRowButtonStyle())
+            .accessibilityIdentifier("privacy.health.access")
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("privacy.health.access")
     }
 
     /// "N of M" over the offered capability cards, or the off state.
@@ -640,7 +629,6 @@ struct PrivacyDataSettingsView: View {
 
     private var exportDataCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionLabel("Your data")
             // One literal, not a `+`: a concatenation is a `String`, which binds `Text`'s verbatim
             // initializer and never reaches the catalog (the T2-1 class). Same rendered words.
             Text("""
@@ -651,6 +639,8 @@ struct PrivacyDataSettingsView: View {
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
+            // The framed primary button (the same one as the entry check's): it fades while the
+            // export is being prepared.
             Button {
                 runExport()
             } label: {
@@ -658,14 +648,7 @@ struct PrivacyDataSettingsView: View {
                       systemImage: "square.and.arrow.up")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.plain)
-            .font(.fernlet(.label))
-            .foregroundStyle(isBuildingExport ? Color.bark : Color.onMoss)
-            .padding(.vertical, 11)
-            .background(
-                Color.mossFill.opacity(isBuildingExport ? 0.55 : 1),
-                in: RoundedRectangle(cornerRadius: 12)
-            )
+            .buttonStyle(ActionPillButtonStyle(.primary))
             .disabled(isBuildingExport)
             .accessibilityIdentifier("privacy.export")
 
@@ -674,8 +657,7 @@ struct PrivacyDataSettingsView: View {
             operationErrorLine(.export)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+        .settingsCard(label: "Your data")
     }
 
     /// The one-line escape hatch for the local correction memory (research §26 fix 1.10, review
@@ -783,8 +765,7 @@ struct PrivacyDataSettingsView: View {
                 ownPhotoDeviceBindingRow
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+            .settingsCard()
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
                     .stroke(Color.moss.opacity(0.45), lineWidth: 1.5)
@@ -792,21 +773,16 @@ struct PrivacyDataSettingsView: View {
         }
     }
 
+    /// The backups card (`b2-settings-privacy`): its label above a framed section, one row per switch
+    /// with dotted rules between them; the photo switch keeps its size disclosure in its row, and any
+    /// found-backup line or failure sits in its own row underneath.
     private var iCloudCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionLabel("Backups")
+        FernletFramedSection("Backups") {
             Toggle(isOn: iCloudBinding) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Sync to iCloud")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.bark)
-                    Text("Private database sync for daily logs across your Fernlet devices.")
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-                }
+                // A two-line row takes the kit's row padding above and below its words.
+                FernletRowLabel("Sync to iCloud", detail: "Private database sync for daily logs across your Fernlet devices.")
+                    .padding(.vertical, 7)
             }
-            .toggleStyle(SwitchToggleStyle(tint: Color.moss))
             .accessibilityIdentifier("privacy.icloud.toggle")
 
             // No switch for the retired sensitive-notes backup (owner decision 2026-09-23: Tier-2
@@ -819,16 +795,11 @@ struct PrivacyDataSettingsView: View {
             // nothing was ever uploaded. Don't offer a backup for a feature that is switched off.
             if store?.isPeriodTrackingVisible ?? true {
                 Toggle("Sealed backup for period data", isOn: sealedPeriodBinding)
-                    .toggleStyle(SwitchToggleStyle(tint: Color.moss))
             } else {
-                Text("Sealed backup for period data is unavailable while period tracking is turned off. Your existing backup is kept.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
+                backupNote(Text("Sealed backup for period data is unavailable while period tracking is turned off. Your existing backup is kept."))
             }
 
             Toggle("Sealed backup for journal entries", isOn: sealedJournalBinding)
-                .toggleStyle(SwitchToggleStyle(tint: Color.moss))
 
             // Withheld while intimacy tracking is hidden, for exactly the reason the period toggle is:
             // the reconcile honors the hard visibility gate by SKIPPING (disabling the pref would delete
@@ -836,12 +807,8 @@ struct PrivacyDataSettingsView: View {
             // here would promise an upload that never happens.
             if store?.isIntimacyTrackingVisible ?? true {
                 Toggle("Sealed backup for intimate logs", isOn: sealedIntimacyBinding)
-                    .toggleStyle(SwitchToggleStyle(tint: Color.moss))
             } else {
-                Text("Sealed backup for intimate logs is unavailable while intimacy tracking is turned off. Your existing backup is kept.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
+                backupNote(Text("Sealed backup for intimate logs is unavailable while intimacy tracking is turned off. Your existing backup is kept."))
             }
 
             // ONE switch for all three own-photo corpora (meal, recipe, gym progress). They are
@@ -849,21 +816,27 @@ struct PrivacyDataSettingsView: View {
             // single decision about the user's own pictures — and the size disclosure below is
             // attached to the switch rather than buried in the confirm dialog, because photos are
             // the one backup whose cost the user pays in iCloud storage.
-            Toggle("Sealed backup for your photos", isOn: ownPhotoBackupBinding)
-                .toggleStyle(SwitchToggleStyle(tint: Color.moss))
-                .accessibilityIdentifier("privacy.sealedBackup.ownPhotos")
-            Text(Self.ownPhotoBackupSizeDisclosure)
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
+            VStack(alignment: .leading, spacing: 0) {
+                Toggle("Sealed backup for your photos", isOn: ownPhotoBackupBinding)
+                    .accessibilityIdentifier("privacy.sealedBackup.ownPhotos")
+                backupNote(Text(Self.ownPhotoBackupSizeDisclosure), padded: false)
+                    .padding(.bottom, 14)
+            }
             foundBackupLines
 
             // Beneath the switches themselves, not at the far bottom of the page.
             operationErrorLine(.iCloud)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// A quiet line in the backups card (an unavailable switch's reason, the photo size disclosure).
+    /// `padded` gives a row of its own the row's padding; the disclosure under its switch takes none.
+    private func backupNote(_ text: Text, padded: Bool = true) -> some View {
+        text
+            .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.rowDetail)
+            .foregroundStyle(look?.dim ?? Color.slate)
+            .fernletWrappingText()
+            .padding(.vertical, look == nil || !padded ? 0 : 8)
     }
 
     /// The sealed backups iCloud was found to hold (`ExistingDataSummary.sealedBackups`) whose switch on
@@ -1150,23 +1123,28 @@ struct PrivacyDataSettingsView: View {
     @ViewBuilder
     private var multiDeviceWarningBanner: some View {
         if let warning = multiDeviceWarning {
+            // Under the look (`b2-settings-privacy`): a framed sage note straight under the backups,
+            // with no label of its own; today's tinted box with its label without it.
+            let shape = RoundedRectangle(cornerRadius: look == nil ? 14 : FernletFramedLook.cardRadius)
             VStack(alignment: .leading, spacing: 8) {
-                SectionLabel("Multiple devices")
+                if look == nil { SectionLabel("Multiple devices") }
                 Text(warning.message)
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.bark)
+                    .font(look == nil ? .fernlet(.body) : FernletFramedFont.body)
+                    .foregroundStyle(look?.text ?? Color.bark)
                     .fernletWrappingText()
                 if warning == .anotherDeviceHasData, let summary = existingDataSummary {
                     // Grammar agreement on each count: the fixed plurals read "1 workouts".
                     Text("Found ^[\(summary.mealLogCount) meal log](inflect: true), ^[\(summary.journalEntryCount) journal entry](inflect: true), ^[\(summary.workoutCount) workout](inflect: true) in this iCloud account.")
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
+                        .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.note)
+                        .foregroundStyle(look?.dim ?? Color.slate)
                         .fernletWrappingText()
                 }
             }
-            .padding(14)
+            .padding(look == nil ? 14 : 16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.terracotta.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+            .background(look?.sage ?? Color.terracotta.opacity(0.08), in: shape)
+            .overlay { if let look { shape.strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth) } }
+            .background { if let look { shape.fill(look.shadow).offset(y: 3) } }
             .accessibilityIdentifier("privacy.multiDevice.warning")
         }
     }
@@ -1178,7 +1156,6 @@ struct PrivacyDataSettingsView: View {
     private var sealedBackupStatusBanner: some View {
         if showsSealedBackupStatusBanner {
             VStack(alignment: .leading, spacing: 12) {
-                SectionLabel("Encrypted backup status")
                 ownPhotoStatusLines
                 sealedBackupDisableFailureLines
                 reuploadDeferredLines
@@ -1191,8 +1168,7 @@ struct PrivacyDataSettingsView: View {
                 operationErrorLine(.backupStatus)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+            .settingsCard(label: "Encrypted backup status")
             .accessibilityIdentifier("privacy.sealedBackup.statusBanner")
         }
     }
@@ -1897,25 +1873,16 @@ struct PrivacyDataSettingsView: View {
         }
     }
 
+    /// The iOS-backup switch: its label above a one-row framed section (`b2-settings-privacy`).
     private var localBackupCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionLabel("Local backup")
+        FernletFramedSection("Local backup") {
             Toggle(isOn: localBackupIncludedBinding) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Include local data in iOS backup")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.bark)
-                    Text("When off, your local Fernlet data is excluded from iOS and iCloud device backups.")
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-                }
+                FernletRowLabel("Include local data in iOS backup",
+                                detail: "When off, your local Fernlet data is excluded from iOS and iCloud device backups.")
+                    .padding(.vertical, 7)
             }
-            .toggleStyle(SwitchToggleStyle(tint: Color.moss))
             .accessibilityIdentifier("privacy.localBackup.toggle")
         }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
     /// The Delete group at the BOTTOM of the page (5f): the only two terracotta things on the
@@ -1924,7 +1891,6 @@ struct PrivacyDataSettingsView: View {
     /// deletes.
     private var deleteSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionLabel("Delete")
             Text("Erase Fernlet's iCloud records, or everything Fernlet stores on this phone and in your iCloud.")
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
@@ -1934,8 +1900,7 @@ struct PrivacyDataSettingsView: View {
             deleteEverythingButton
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+        .settingsCard(label: "Delete")
     }
 
     /// The second entry point into the shared delete funnel.
@@ -1964,20 +1929,10 @@ struct PrivacyDataSettingsView: View {
     private var storageSpinner: some View {
         ZStack {
             Color.black.opacity(0.20).ignoresSafeArea()
-            VStack(spacing: 12) {
-                // Hidden, not labelled: the sentence below IS the label, and an unlabelled
-                // `ProgressView` is otherwise an empty leaf that VoiceOver stops on and says
-                // nothing about. Labelling it too would speak the same state twice.
-                ProgressView()
-                    .tint(Color.moss)
-                    .accessibilityHidden(true)
-                Text("Updating storage settings…")
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.bark)
-            }
-            .padding(20)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-            .accessibilityIdentifier("privacy.storage.spinner")
+            // The framed busy card (`b3-deleting`'s card). Its spinner is hidden, not labelled: the
+            // sentence IS the label, and labelling both would speak the same state twice.
+            SettingsBusyCard(text: "Updating storage settings…")
+                .accessibilityIdentifier("privacy.storage.spinner")
         }
         // T1-4: this overlay's covered-content half is `screenContent`'s `.accessibilityHidden`.
         .accessibilityAddTraits(.isModal)
@@ -1993,14 +1948,19 @@ struct PrivacyDataSettingsView: View {
                     disableSheetActions
                 }
             }
-            .background(Color.parchment)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { isShowingDisableConfirmation = false }
-                        .foregroundStyle(Color.slate)
-                }
-            }
+            .fernletSheetStyle()
+            // Titled by the door the user came through: from the Delete button (sync already off)
+            // "Turn off iCloud sync?" described nothing they had asked for. The title and its line
+            // sit inside the sheet under Cancel (`b3-icloud-off`).
+            .fernletSheetToolbar(
+                title: isCloudDeleteOnlyEntry ? Text("Delete iCloud data?") : Text("Turn off iCloud sync?"),
+                subtitle: isCloudDeleteOnlyEntry
+                    ? Text("This removes Fernlet's records from your iCloud account.")
+                    : Text("Stop syncing now, or also delete iCloud data."),
+                onCancel: { isShowingDisableConfirmation = false }
+            )
         }
+        .fernletSheet()
     }
 
     /// The in-sheet busy state while the persistence stack is being swapped.
@@ -2025,33 +1985,15 @@ struct PrivacyDataSettingsView: View {
     private var disableSheetExplanation: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                // Titled by the door the user came through: from the Delete button (sync already
-                // off) "Turn off iCloud sync?" described nothing they had asked for.
-                ScreenHeader(
-                    title: isCloudDeleteOnlyEntry ? "Delete iCloud data?" : "Turn off iCloud sync?",
-                    subtitle: isCloudDeleteOnlyEntry
-                        ? "This removes Fernlet's records from your iCloud account."
-                        : "Stop syncing now, or also delete iCloud data."
-                )
-
                 cloudCountsCard
 
                 if !isCloudDeleteOnlyEntry {
-                    Text("Stopping sync keeps your data on this device but disconnects it from iCloud: changes you make here will no longer reach your other Fernlet devices, and theirs won't reach you. The two will drift apart until you turn sync back on.")
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.bark)
-                        .fernletWrappingText()
-                        .padding(14)
-                        .background(Color.terracotta.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                    // The warnings are framed terracotta notices (`b3-icloud-off`).
+                    FernletNotice("Stopping sync keeps your data on this device but disconnects it from iCloud: changes you make here will no longer reach your other Fernlet devices, and theirs won't reach you. The two will drift apart until you turn sync back on.", tone: .warn)
                         .accessibilityIdentifier("privacy.icloud.divergenceWarning")
                 }
 
-                Text("This will delete data from iCloud, which may also remove it from other Fernlet devices signed into the same Apple ID. Your encrypted (sealed) backups in iCloud are deleted too — if you lose this device, that data can't be recovered. This device keeps a local copy of everything else.")
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.bark)
-                    .fernletWrappingText()
-                    .padding(14)
-                    .background(Color.terracotta.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                FernletNotice("This will delete data from iCloud, which may also remove it from other Fernlet devices signed into the same Apple ID. Your encrypted (sealed) backups in iCloud are deleted too — if you lose this device, that data can't be recovered. This device keeps a local copy of everything else.", tone: .warn)
 
                 // The confirm word is a MATCHING INPUT under the localization wall: the prompt
                 // inserts the same localized word `DeleteConfirmationWord.matches` compares
@@ -2065,7 +2007,9 @@ struct PrivacyDataSettingsView: View {
                         .accessibilityIdentifier("privacy.icloud.confirmText")
                 }
             }
-            .padding(20)
+            .padding(.horizontal, 18)
+            .padding(.top, 8)
+            .padding(.bottom, 20)
         }
     }
 
@@ -2078,40 +2022,32 @@ struct PrivacyDataSettingsView: View {
             // "Stop syncing, keep iCloud data" is an answer to "do you want to turn sync off?".
             // Entered from the Delete button — with sync already off — it answers nothing.
             if !isCloudDeleteOnlyEntry {
-                Button("Stop syncing, keep iCloud data") {
+                Button {
                     stopSyncingKeepCloudData()
+                } label: {
+                    Text("Stop syncing, keep iCloud data").frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.plain)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.moss)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(Color.moss.opacity(0.1), in: RoundedRectangle(cornerRadius: 16))
+                .buttonStyle(ActionPillButtonStyle(.secondary))
                 .accessibilityIdentifier("privacy.icloud.stopSync")
             }
 
             HStack {
                 Spacer()
-                Button("Delete iCloud data") {
+                Button {
                     disableICloudSyncAndDeleteCloudData()
+                } label: {
+                    // Terracotta, not moss: this deletes, and moss is the app's affirmative colour.
+                    // Solid once the typed word arms it; faded fill, readable words before.
+                    ArmedDeleteLabel(title: "Delete iCloud data", isArmed: isArmed)
                 }
                 .buttonStyle(.plain)
-                .font(.fernlet(.label))
-                // Terracotta, not moss: this deletes, and moss is the app's affirmative colour.
-                // Disabled fades the fill only, so the label stays readable while the user types.
-                .foregroundStyle(isArmed ? Color.onTerracotta : Color.bark)
-                .padding(.horizontal, 28)
-                .padding(.vertical, 16)
-                .background(
-                    Color.terracotta.opacity(isArmed ? 1 : 0.55),
-                    in: RoundedRectangle(cornerRadius: 16)
-                )
                 .disabled(!isArmed)
                 .accessibilityIdentifier("privacy.icloud.confirmDelete")
             }
         }
-        .padding(20)
-        .background(Color.parchment)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .fernletSheetStyle()
     }
 
     private var cloudCountsCard: some View {
@@ -2148,8 +2084,7 @@ struct PrivacyDataSettingsView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+        .settingsCard()
     }
 
     private var isLockConfigured: Bool {

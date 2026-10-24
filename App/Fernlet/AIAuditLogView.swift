@@ -198,14 +198,15 @@ struct AIAuditLogView: View {
                 headerCard
                 callsSection
             }
-            .padding(20)
-            .padding(.bottom, 20)
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 30)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .scrollContentBackground(.hidden)
-        .background(Color.parchment)
-        .navigationTitle("AI activity log")
-        .navigationBarTitleDisplayMode(.inline)
+        .fernletPageBackground()
+        // A page in the Settings panel: the plate carries the title and Back (`b3-ai-log`).
+        .fernletPushedPage("AI activity log")
         .task { await loadRows() }
     }
 
@@ -268,7 +269,7 @@ struct AIAuditLogView: View {
     private func callHeadline(_ row: AIAuditRow) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             valueText(row.kind)
-                .font(.fernlet(.headerMedium))
+                .font(FernletFramedFont.rowTitle.weight(.bold))
                 .foregroundStyle(Color.bark)
             Spacer(minLength: 8)
             Text(row.timestamp.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
@@ -301,19 +302,21 @@ struct AIAuditLogView: View {
     @ViewBuilder
     private func boundaryBadge(_ boundary: AIAuditBoundary) -> some View {
         switch boundary {
-        case .stayedOnDevice: badge("Stayed on this device", Color.moss)
-        case .leftDevice: badge("Left this device", Color.terracotta)
-        case .unknown: badge("This version can't say where this went", Color.terracotta)
+        case .stayedOnDevice: badge("Stayed on this device", Self.stayedFill)
+        case .leftDevice: badge("Left this device", Self.leftFill)
+        case .unknown: badge("This version can't say where this went", Self.leftFill)
         }
     }
 
-    private func badge(_ title: LocalizedStringKey, _ tint: Color) -> some View {
-        Text(title)
-            .font(.fernlet(.labelSmall))
-            .foregroundStyle(tint)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(tint.opacity(0.12), in: Capsule())
+    /// The moss tag's fill (`b3-ai-log`): a light moss that keeps the tag's dark ink above 10:1 in
+    /// both modes, as the kit draws a light tag on dark paper too.
+    static let stayedFill = Color(.sRGB, red: 0.80, green: 0.87, blue: 0.75, opacity: 1)
+    /// The terracotta tag's fill: a light terracotta, the same dark ink above 10:1.
+    static let leftFill = Color(.sRGB, red: 0.95, green: 0.80, blue: 0.75, opacity: 1)
+
+    /// Where the call went, as a framed tag (`.ptag`): moss for stayed, terracotta for left.
+    private func badge(_ title: LocalizedStringKey, _ fill: Color) -> some View {
+        FernletTag(title, fill: fill)
     }
 
     /// The field NAMES that went with the call. The line says "names only" because that is the whole

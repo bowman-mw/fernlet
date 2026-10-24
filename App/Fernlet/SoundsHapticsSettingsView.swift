@@ -25,61 +25,77 @@ struct SoundsHapticsSettingsView: View {
     @AppStorage(FernletHapticsLevel.storageKey) private var level = FernletHapticsLevel.defaultLevel
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
+    /// The World's framed look (`b2-settings-sounds`): the level as the framed segmented control on
+    /// a card, then each surface's switches as a framed section with its closing line under it.
+    @Environment(\.fernletFramedLook) private var look
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 14) {
                 ScreenHeader(
                     title: "Sounds & haptics",
                     subtitle: "Taps you can feel, and the few sounds Fernlet makes.",
                     identifier: "screen.settings.soundsHaptics"
                 )
                 levelCard
-                workoutCard
-                cookingCard
-                breathingCard
+                surfaceSection("During a workout",
+                               whenOff: "Haptics are off for all of Fernlet, so Workout haptics won't play. Sounds and spoken cues keep their own switches.",
+                               closing: "The same switches as Move › Workout setup.") { WorkoutCueSwitches() }
+                surfaceSection("Cooking",
+                               whenOff: "Haptics are off for all of Fernlet, so the cooking timer's tap won't play. Its sound keeps its own switch.",
+                               closing: "The same switch as on a step's timer while you cook.") { CookingSoundSwitch() }
+                surfaceSection("Breathing",
+                               whenOff: "Haptics are off for all of Fernlet, so breathing's taps won't play either.",
+                               closing: nil) { BreathingHapticsSwitch() }
             }
-            .padding(20)
-            .padding(.bottom, 20)
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 30)
         }
         .scrollContentBackground(.hidden)
-        .background(Color.parchment)
-        .navigationTitle("Sounds & haptics")
-        .navigationBarTitleDisplayMode(.inline)
+        .fernletPageBackground()
+        .fernletPushedPage("Sounds & haptics")
     }
 
     /// The app-wide level, with a line saying what the chosen level keeps.
     private var levelCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Haptics")
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.bark)
+                .font(FernletFramedFont.rowTitle.weight(.semibold))
+                .foregroundStyle(look?.text ?? Color.bark)
             // The segments' own keys rather than the bare "All" / "Off" every other screen shares:
             // a segmented control's choice and a status readout can need different words ("Off" is
             // also the AI and Health status).
-            Picker("Haptics", selection: $level) {
-                Text(LocalizedStringResource("settings.haptics.level.all", defaultValue: "All",
-                                             comment: "Sounds & haptics: segmented control choice, every haptic plays.")).tag(FernletHapticsLevel.all)
-                Text(LocalizedStringResource("settings.haptics.level.fewer", defaultValue: "Fewer",
-                                             comment: "Sounds & haptics: segmented control choice, only the important haptics play.")).tag(FernletHapticsLevel.fewer)
-                Text(LocalizedStringResource("settings.haptics.level.off", defaultValue: "Off",
-                                             comment: "Sounds & haptics: segmented control choice, no haptics play. A choice on a switch-like control, not a status readout.")).tag(FernletHapticsLevel.off)
-            }
-            .pickerStyle(.segmented)
-            .accessibilityIdentifier("settings.soundsHaptics.level")
+            FernletSegmentedPicker("Haptics", selection: $level, options: [.all, .fewer, .off]) { Self.levelName($0) }
+                .accessibilityIdentifier("settings.soundsHaptics.level")
             Text(levelFootnote)
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.note)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .fernletWrappingText()
                 .accessibilityIdentifier("settings.soundsHaptics.levelFootnote")
             if !dynamicTypeSize.isAccessibilitySize {
                 Text("Sounds play only in a workout or a cook you started, and only if you turn them on. Your phone's own sound and haptics settings still apply.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.note)
+                    .foregroundStyle(look?.dim ?? Color.slate)
                     .fernletWrappingText()
             }
         }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+        .settingsCard()
+    }
+
+    /// A level's name on its segment.
+    private static func levelName(_ level: FernletHapticsLevel) -> Text {
+        switch level {
+        case .all:
+            Text(LocalizedStringResource("settings.haptics.level.all", defaultValue: "All",
+                                         comment: "Sounds & haptics: segmented control choice, every haptic plays."))
+        case .fewer:
+            Text(LocalizedStringResource("settings.haptics.level.fewer", defaultValue: "Fewer",
+                                         comment: "Sounds & haptics: segmented control choice, only the important haptics play."))
+        case .off:
+            Text(LocalizedStringResource("settings.haptics.level.off", defaultValue: "Off",
+                                         comment: "Sounds & haptics: segmented control choice, no haptics play. A choice on a switch-like control, not a status readout."))
+        }
     }
 
     /// What the chosen level keeps, in one sentence.
@@ -91,65 +107,22 @@ struct SoundsHapticsSettingsView: View {
         }
     }
 
-    /// The guided workout's switches, the same keys Workout setup edits.
-    private var workoutCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SectionLabel("During a workout")
-            WorkoutCueSwitches()
-            surfaceNote(
-                whenOff: "Haptics are off for all of Fernlet, so Workout haptics won't play. Sounds and spoken cues keep their own switches.",
-                closing: "The same switches as Move › Workout setup."
-            )
-        }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-    }
-
-    /// The cooking timer's sound switch, the same key as the switch on a cooking step's timer.
-    private var cookingCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SectionLabel("Cooking")
-            CookingSoundSwitch()
-            surfaceNote(
-                whenOff: "Haptics are off for all of Fernlet, so the cooking timer's tap won't play. Its sound keeps its own switch.",
-                closing: "The same switch as on a step's timer while you cook."
-            )
-        }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-    }
-
-    /// The breathing timer's own switch, the same key its screen edits.
-    private var breathingCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SectionLabel("Breathing")
-            BreathingHapticsSwitch()
-            surfaceNote(
-                whenOff: "Haptics are off for all of Fernlet, so breathing's taps won't play either.",
-                closing: nil
-            )
-        }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-    }
-
-    /// A card's closing line, plus — while the app-wide level is Off — the reason its haptics
-    /// switch plays nothing. The Off line is kept at every text size: it explains a switch that
-    /// reads "on" and does nothing.
-    @ViewBuilder
-    private func surfaceNote(whenOff offNote: LocalizedStringKey, closing: LocalizedStringKey?) -> some View {
-        if level == .off {
-            Text(offNote)
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
-                .accessibilityIdentifier("settings.soundsHaptics.offNote")
-        }
-        if let closing, !dynamicTypeSize.isAccessibilitySize {
-            Text(closing)
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
+    /// One surface's switches as a framed section (the same keys that surface edits), its closing
+    /// line under the card, and — while the app-wide level is Off — the reason its haptics switch
+    /// plays nothing. The Off line is kept at every text size: it explains a switch that reads "on"
+    /// and does nothing.
+    private func surfaceSection<Switches: View>(_ header: LocalizedStringKey, whenOff offNote: LocalizedStringKey,
+                                                closing: LocalizedStringKey?,
+                                                @ViewBuilder switches: () -> Switches) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FernletFramedSection(header: Text(header),
+                                 footer: dynamicTypeSize.isAccessibilitySize ? nil : closing.map { Text($0) }) {
+                switches()
+            }
+            if level == .off {
+                FernletNotice(offNote)
+                    .accessibilityIdentifier("settings.soundsHaptics.offNote")
+            }
         }
     }
 }
@@ -165,20 +138,14 @@ struct SoundsHapticsSwitchRow: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Toggle(isOn: $isOn) {
-                Text(title)
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.bark)
-            }
-            .accessibilityCustomContent("Details", footnote)
-            .accessibilityIdentifier(identifier)
-            if !dynamicTypeSize.isAccessibilitySize {
-                Text(footnote)
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-            }
+        // One framed row (`.sr`): the name, and the footnote as its second line. VoiceOver hears the
+        // name as the switch's label and the footnote as its Details, as before.
+        Toggle(isOn: $isOn) {
+            FernletRowLabel(title: Text(title), detail: dynamicTypeSize.isAccessibilitySize ? nil : Text(footnote))
+                .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 0 : 7)
         }
+        .accessibilityLabel(Text(title))
+        .accessibilityCustomContent("Details", footnote)
+        .accessibilityIdentifier(identifier)
     }
 }
