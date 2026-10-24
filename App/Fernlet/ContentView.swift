@@ -272,10 +272,11 @@ struct ContentView: View {
                 sheetContent(for: sheet)
             }
             .sheet(isPresented: $store.showConnectionInspector) {
+                // The inspector carries its own sheet frame (`fernletSheet()`, Done top right); a detent or
+                // grabber line here would win over it.
                 ConnectionInspectorView(inspector: store.connectionInspector)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
                     .presentationBackgroundInteraction(.enabled)
+                    .worldDesignLanguage()
             }
             .sheet(item: pendingRecipeShareBinding) { share in
                 ProximityRecipeShareReviewSheet(
@@ -283,9 +284,8 @@ struct ContentView: View {
                     store: store,
                     manager: store.recipeShareManager
                 )
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheet()
+                .worldDesignLanguage()
             }
             // FLOW-15: the toast's "Adjust" action — the same correction sheet the meal row's
             // Adjust opens, presented from the root because the toast outlives the logging sheet.
@@ -871,23 +871,12 @@ struct ContentView: View {
     /// Always the five-tab `tabPages`, unconditionally — its structural identity must never
     /// change, or SwiftUI tears down and rebuilds every tab (losing all @State) on the swap.
     ///
-    /// This used to be an `if isDisposableCameraSessionActive { SocialHubView(...) } else { tabPages }`.
-    /// Because a `@ViewBuilder` if/else is `_ConditionalContent<SocialHubView, TabView>` — two
-    /// different types in the same slot — flipping the condition removed the whole `TabView` and
-    /// inserted a bare `SocialHubView`, then reversed it at session end. Every tab (Home/Food/Move/
-    /// Journal/Private) was destroyed and rebuilt with empty @State, each painting `Color.parchment`
-    /// before its `.onAppear` `store.loadDays()` refilled it — the "blank then loads" symptom, fired
-    /// on every friend-mesh session edge (and every Social↔other tab hop during a session).
-    ///
-    /// The swap was also redundant: the disposable camera is NOT a separate top-level surface —
-    /// `FriendsView` (the body of the `.social` tab's `SocialHubView`) already swaps itself to
-    /// `DisposableCameraView` while `isInSession && sessionReady` (ConnectView.swift:36). So the
-    /// camera still takes over the Social tab full-bleed here; the takeover's *look* — dark
-    /// `sceneBackground`, suppressed bottom scrim, and the landscape tab-bar hide — is applied by
-    /// the modifiers in `mainInterface` that read `isDisposableCameraSessionActive`, entirely
-    /// independent of this slot's identity. Removing the swap also revives the connection-success
-    /// overlay + haptic in `FriendsView.onChange(of: isInSession)`, which the old swap defeated by
-    /// destroying that instance in the same transaction as the flip.
+    /// This used to be an `if <camera session> { SocialHubView(...) } else { tabPages }`. Because a
+    /// `@ViewBuilder` if/else is `_ConditionalContent<SocialHubView, TabView>` — two different types
+    /// in the same slot — flipping the condition removed the whole `TabView` and rebuilt every tab
+    /// with empty @State on every friend-mesh session edge (the "blank then loads" symptom). The
+    /// session camera is a full-screen cover of the Friends panel now (b3-friends-session), so nothing
+    /// here swaps or takes over the tab at all.
     private var mainTabContent: some View {
         tabPages
     }
@@ -932,8 +921,9 @@ struct ContentView: View {
                 )
             }
             .tabPage(.move)
-            // The disposable camera stays full screen (design batch 2): the plate steps aside for it.
-            WorldPanelFrame(panel: .friends, showsPlate: !isDisposableCameraSessionActive, onClose: closeWorldPanel) {
+            // The album never swaps for the camera any more (b3-friends-session): the session camera is a
+            // full-screen cover of its own, so the plate always shows.
+            WorldPanelFrame(panel: .friends, onClose: closeWorldPanel) {
                 SocialHubView(store: store, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .social))
             }
             .tabPage(.social)
@@ -953,7 +943,7 @@ struct ContentView: View {
         // onto Food mid-gesture. Making the strip hit-testable is not a fix — a non-scrolling view
         // still lets the pager take the drag — so the page style is gone entirely and tab switching
         // is deliberate (tab-bar taps only). That also subsumes the old camera-session special case
-        // (`.scrollDisabled(isDisposableCameraSessionActive)`), which existed only to stop a stray
+        // (a `.scrollDisabled` while the camera took over the tab), which existed only to stop a stray
         // drag swiping off the live camera.
         //
         // Locking the *pager* with `.scrollDisabled(true)` is NOT the way to do this: that modifier
@@ -983,6 +973,11 @@ struct ContentView: View {
         if selectedTab == .home && worldOverlay == nil {
             ZStack(alignment: .bottom) {
                 Color.clear
+                // The session on Home (b3-home-session): the green session button bottom left, the
+                // mirror of the blue button, beside the item bar's left end. It draws nothing outside a
+                // session, and hosts the session's prompts only while the map is in front.
+                WorldSessionButton(store: store, isFrontmost: isWorldMapFrontmost)
+                    .padding(.bottom, WorldItemBar.height + WorldItemBar.bottomGap + 14)
                 WorldItemBar(onOpen: openWorldPanel)
                     .padding(.horizontal, 9)
                     .padding(.bottom, WorldItemBar.bottomGap)
@@ -1045,23 +1040,11 @@ struct ContentView: View {
         if selectedTab != .home { selectedTab = .home }
     }
 
-    /// Whether the disposable-camera surface is the Social tab's content right now.
-    ///
-    /// It must read the SAME predicate as the swap that actually shows it
-    /// (`ConnectView`'s `isInSession && sessionReady`), so this one stays on `isInSession` and is
-    /// not re-pointed at `hasCommittedPeer` (P6 item 2): the compact tab bar and the dark scene
-    /// background are the camera's chrome, and a founded mesh keeps the camera up across a blip by
-    /// design. Pointing only this half at the lifecycle predicate would draw parchment and a full
-    /// tab bar over a visible camera.
-    private var isDisposableCameraSessionActive: Bool {
-        selectedTab == .social
-            && store.meshNetworkManager.isInSession
-    }
-
+    /// The scene behind every page. Parchment always: the session camera used to take over the
+    /// Friends tab and darken this scene, but it is a full-screen cover now that paints its own
+    /// (b3-friends-session), so the takeover's dark scene is retired with it.
     private var sceneBackground: Color {
-        isDisposableCameraSessionActive
-            ? Color(red: 0.13, green: 0.10, blue: 0.08)
-            : Color.parchment
+        Color.parchment
     }
 
     /// Routes a sheet case to its family builder. Split per family (not per case) because the flat
@@ -1175,11 +1158,18 @@ struct ContentView: View {
             // Artboard 3f: one rule for read-only destinations from Home — they present as large
             // sheets, matching Trends, First aid and the gear. MilestonesView carries its own
             // NavigationStack so the keepsake shelf pushes inside the sheet's own stack.
+            // World build: MilestonesView is the Stamp book in a sheet and carries its own
+            // `fernletSheet()`, so the presenter adds no sheet chrome of its own (a second frame would
+            // draw a second grabber). The stamp banner's route; Today pushes the same page.
             MilestonesView(store: store)
-                .fernletSheetChrome(anchor: "sheet.milestones", detents: [.large])
+                .uxScreenAnchor("sheet.milestones")
+                .keyboardDoneToolbar()
+                .worldDesignLanguage()
         case .sillyStats:
             SillyStatsView(store: store)
-                .fernletSheetChrome(anchor: "sheet.sillyStats", detents: [.large])
+                .uxScreenAnchor("sheet.sillyStats")
+                .keyboardDoneToolbar()
+                .worldDesignLanguage()
         case .stressExplainer:
             StressExplainerSheet(assessment: stressService.assessment, onFirstAid: {
                 // Chain into First Aid via the dismiss-then-represent pattern (single-active sheet).
@@ -1899,11 +1889,11 @@ struct ContentView: View {
         }
     }
 
-    /// The stamp banner on screen: the first one waiting, held back while the launch screen, a root
-    /// sheet or the disposable camera covers the tabs, so a banner is never spent where nobody can
-    /// see it. A held banner stays queued and shows when the cover lifts.
+    /// The stamp banner on screen: the first one waiting, held back while the launch screen or a root
+    /// sheet covers the tabs, so a banner is never spent where nobody can see it. A held banner stays
+    /// queued and shows when the cover lifts.
     private var shownStampBanner: SillyStatKind? {
-        guard launcher.isDone, !rootSheetIsCoveringTabs, !isDisposableCameraSessionActive else { return nil }
+        guard launcher.isDone, !rootSheetIsCoveringTabs else { return nil }
         return store.sillyStats.pendingStampBanners.first
     }
 
@@ -2090,12 +2080,21 @@ extension View {
             .tag(tab)
     }
 
-    /// The presentation chrome every routed sheet shares: the UX-test screen anchor, the detent set,
-    /// a visible drag indicator, the house 20pt presentation corner radius, the moss tint, and the
-    /// keyboard "Done" accessory.
+    /// The presentation chrome every routed sheet shares: the UX-test screen anchor, the World sheet
+    /// frame (``SwiftUI/View/fernletSheet()``: full height, paper, the ink top edge and the wooden
+    /// grabber), the moss tint, the keyboard "Done" accessory, and the one design language.
     ///
     /// One modifier rather than the same lines repeated per case — the values are identical across
-    /// all 22 sheets except the anchor and the detents.
+    /// all 22 sheets except the anchor.
+    ///
+    /// World build (Batch 3, owner 2026-10-24): every sheet is full height, so `detents` is no longer
+    /// read. The parameter stays so every call site (here and in the Food tab) keeps compiling while the
+    /// lanes still pass one; the presenter's own detent and grabber lines would otherwise win over the
+    /// sheet's `fernletSheet()` and keep the half detent and the system grabber.
+    ///
+    /// `worldDesignLanguage()` is applied here, on the sheet's own content, because a presented sheet
+    /// does not inherit the root's toggle and form styles: without it a routed sheet's switches and
+    /// Forms drew the system look under the framed paper.
     ///
     /// The last two are here rather than per sheet because a routed sheet is attached to
     /// `launchRoot`, OUTSIDE the `.tint(Color.moss)` on `mainInterface`: every un-tinted system
@@ -2108,13 +2107,12 @@ extension View {
     /// wraps a stack (meal, recipe, recipe book, Settings, First aid), every page of the stack —
     /// its root included — is hosted in its own controller and never sees it, so those pages
     /// declare their own (2026-10-01).
-    func fernletSheetChrome(anchor: String, detents: Set<PresentationDetent>) -> some View {
+    func fernletSheetChrome(anchor: String, detents _: Set<PresentationDetent>) -> some View {
         uxScreenAnchor(anchor)
-            .presentationDetents(detents)
-            .presentationDragIndicator(.visible)
-            .presentationCornerRadius(20)
+            .fernletSheet()
             .tint(Color.moss)
             .keyboardDoneToolbar()
+            .worldDesignLanguage()
     }
 }
 
@@ -2338,22 +2336,19 @@ private struct MealToastPillStyle: ButtonStyle {
 // MARK: - Launch screen
 
 /// The calm launch/loading screen: a time-of-day greeting, a rotating status line, and (once the
-/// store exists) the pulsing companion.
+/// store exists) the companion — drawn as the World launch scene (design `b2-launch`): the dotted page,
+/// the pixel companion, the Fraunces greeting, the status line and the framed moss bar, which stands
+/// still under Reduce Motion (``WorldLaunchScene`` handles that itself).
 ///
 /// Shown twice per cold launch — by ``FernletApp`` while ``FernletStoreLoader`` runs (no
 /// companion) and by ``ContentView`` while ``LaunchPreparationService`` prepares (with the
-/// companion). Status text falls back to `LaunchPreparationService.initialStatusMessage` so the
-/// line never renders empty.
+/// companion) — so both phases match. Status text falls back to
+/// `LaunchPreparationService.initialStatusMessage` so the line never renders empty.
 struct LaunchScreen: View {
     var statusMessage: String
     var companionState: CompanionState = .thriving
     var companionAppearance: CompanionAppearance = .standard
     var showsCompanion = false
-
-    /// T1-6: pauses both `TimelineView` clocks below — the halo pulse and the loading-dot wave —
-    /// rather than hiding them, so the launch screen still renders, just without the perpetual
-    /// motion Reduce Motion asks to remove.
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var greeting: String {
         Self.greeting(for: Date.now)
@@ -2378,66 +2373,12 @@ struct LaunchScreen: View {
     }
 
     var body: some View {
-        ZStack {
-            Color.parchment.ignoresSafeArea()
-
-            VStack(spacing: 32) {
-                Spacer()
-
-                if showsCompanion {
-                    TimelineView(.animation(paused: reduceMotion)) { timeline in
-                        let elapsed = timeline.date.timeIntervalSinceReferenceDate
-                        let pulse = 1 + 0.14 * ((sin(elapsed * .pi / 0.85) + 1) / 2)
-
-                        ZStack {
-                            Circle()
-                                .fill(Color.fern.opacity(0.07))
-                                .frame(width: 168, height: 168)
-                                .scaleEffect(pulse)
-                            CompanionView(
-                                state: companionState,
-                                appearance: companionAppearance,
-                                size: 112
-                            )
-                            // Decorative: the launch illustration. The greeting below it is what
-                            // the screen actually says.
-                            .accessibilityHidden(true)
-                        }
-                    }
-                }
-
-                VStack(spacing: 10) {
-                    Text(greeting)
-                        .font(.fernlet(.display))
-                        .foregroundStyle(Color.bark)
-
-                    Text(displayedStatusMessage)
-                        .font(.fernlet(.bubble))
-                        .foregroundStyle(Color.slate)
-                        .animation(.easeInOut(duration: 0.25), value: displayedStatusMessage)
-                }
-
-                TimelineView(.animation(paused: reduceMotion)) { timeline in
-                    let elapsed = timeline.date.timeIntervalSinceReferenceDate
-
-                    HStack(spacing: 7) {
-                        ForEach(0..<3, id: \.self) { i in
-                            let wave = (sin((elapsed - Double(i) * 0.18) * .pi / 0.55) + 1) / 2
-                            Circle()
-                                .fill(Color.moss)
-                                .frame(width: 7, height: 7)
-                                .opacity(0.2 + 0.65 * wave)
-                        }
-                    }
-                }
-
-                Spacer()
-            }
-        }
-        // UX-test anchor (a frozen token, never display text): `UXTestApp.launch` waits for this
-        // to leave the tree before a test's first tap. `.contain` keeps the greeting and the status
-        // line individually readable, exactly as they were.
-        .uxScreenAnchor("launch.screen")
+        WorldLaunchScene(greeting: greeting, status: displayedStatusMessage,
+                         companion: showsCompanion ? (companionState, companionAppearance) : nil)
+            // UX-test anchor (a frozen token, never display text): `UXTestApp.launch` waits for this
+            // to leave the tree before a test's first tap. `.contain` keeps the greeting and the status
+            // line individually readable, exactly as they were.
+            .uxScreenAnchor("launch.screen")
     }
 }
 

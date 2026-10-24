@@ -51,10 +51,9 @@ struct WorldMapHome: View {
         }
         .accessibilityElement(children: .contain)
         .sheet(isPresented: $isCustomizing) {
+            // The sheet applies `fernletSheet()` itself (full height, the wooden grabber); a detent or
+            // grabber line here would win over it and draw the system grabber on top.
             CompanionCustomizationSheet(store: store, petCount: $customizePetCount)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
         }
         // Test hook (DEBUG; false in release): open customize directly, as Home's does, since XCUITest
         // and screenshots cannot send the hold.

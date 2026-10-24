@@ -249,8 +249,8 @@ struct FriendsView: View {
 
     /// The **layout** half of the session transition: what surface the Social tab draws.
     ///
-    /// `isInSession`, because that is the predicate `body`'s own swap reads and the predicate
-    /// `ContentView.isDisposableCameraSessionActive` dresses the tab in camera chrome for. A founded
+    /// `isInSession`, because that is the predicate `body`'s own swap reads (the session camera's
+    /// full-screen cover follows it too; the root no longer dresses the tab in camera chrome). A founded
     /// mesh outlives its links by design (P6 item 2), so a blip deliberately does **not** take the
     /// camera down: the pair still holds a mesh with a ledger, a capture during the blip is sealed
     /// into custody and drained when the link heals, and the radios come back through

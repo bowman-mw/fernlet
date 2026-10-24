@@ -239,6 +239,10 @@ struct FernletSheetModifier: ViewModifier {
                 .environment(\.fernletPlateNavigation, nil)
                 .environment(\.fernletTitleOnPlate, false)
                 .environment(\.fernletPageTitleOnPlate, false)
+                // A presented sheet does not inherit the presenter's toggle and Form styles, so the
+                // framed switch and Form are set again here (each falls back to today's look without one).
+                .toggleStyle(FernletFramedToggleStyle())
+                .formStyle(FernletFormStyle())
                 .frame(maxHeight: .infinity)
         }
         .presentationDetents([.large])
