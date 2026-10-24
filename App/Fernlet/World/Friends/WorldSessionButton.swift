@@ -94,7 +94,8 @@ struct WorldSessionButton: View {
     /// The green 58-pt framed square with two people on it and the gold count badge.
     private var sessionButton: some View {
         Button { menuOpen.toggle() } label: {
-            WorldSpriteView(sprite: FriendsSprites.people, scale: 4, tint: .white)
+            // The accent's own text ink: white on the light faces, a dark ink on the lighter dark-mode face.
+            WorldSpriteView(sprite: FriendsSprites.people, scale: 4, tint: WorldPalette.onAccent)
                 .frame(width: 58, height: 58)
                 .background(WorldPalette.accent, in: RoundedRectangle(cornerRadius: 12))
                 .overlay(alignment: .bottom) { Color.black.opacity(0.2).frame(height: 4).padding(.horizontal, 3).padding(.bottom, 3) }

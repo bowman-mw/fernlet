@@ -40,7 +40,7 @@ struct WorldMapHome: View {
             ZStack(alignment: .topLeading) {
                 WorldMapStack(kind: hasPlace ? .appleMuted : .plain, camera: $camera,
                               ground: WorldGround(lifted: store.worldFog.visibleCells), phase: phase,
-                              darkMode: colorScheme == .dark, creditInset: WorldItemBar.height + WorldItemBar.bottomGap + 12) { viewport, size in
+                              darkMode: colorScheme == .dark, creditInset: Self.creditInset) { viewport, size in
                     companion(at: companionPoint(viewport: viewport, size: size))
                 }
                 WorldStatusPlate(status: WorldStatus.current(store: store, date: timeline.date)) { onOpen(.today) }
@@ -64,6 +64,15 @@ struct WorldMapHome: View {
         .onChange(of: scenePhase) { updateLocation() }
         .onChange(of: store.worldLocation.latest) { _, fix in follow(fix) }
     }
+
+    /// Where Apple's "Maps" credit sits: just above the item bar, as the approved Home draws it
+    /// (`b3-home-session`), below the session button's bottom edge so the button never covers it
+    /// (MapKit terms).
+    static let creditInset = WorldItemBar.height + WorldItemBar.bottomGap + 2
+
+    /// How far the session button (and the blue button, when it lands) sits off the physical bottom:
+    /// above the item bar and the Maps credit, with the design's gap.
+    static let buttonLift = WorldItemBar.height + WorldItemBar.bottomGap + 22
 
     /// The companion with its bubble, its feet on `point`.
     private func companion(at point: CGPoint) -> some View {

@@ -977,7 +977,7 @@ struct ContentView: View {
                 // mirror of the blue button, beside the item bar's left end. It draws nothing outside a
                 // session, and hosts the session's prompts only while the map is in front.
                 WorldSessionButton(store: store, isFrontmost: isWorldMapFrontmost)
-                    .padding(.bottom, WorldItemBar.height + WorldItemBar.bottomGap + 14)
+                    .padding(.bottom, WorldMapHome.buttonLift)
                 WorldItemBar(onOpen: openWorldPanel)
                     .padding(.horizontal, 9)
                     .padding(.bottom, WorldItemBar.bottomGap)
