@@ -504,6 +504,9 @@ struct FernletApp: App {
                     // this does nothing at all, and in release it is a compiled-out no-op. It
                     // speaks no radio verb: it moves the store facts the run policy reads.
                     .task { RecipeShareLaneHarness.install(store: store) }
+                    // World Batch 4's Live Activity screenshots: absent FERNLET_UI_TEST_LIVE_ACTIVITY
+                    // this does nothing, and in release it is a compiled-out no-op.
+                    .task { LiveActivityDemoHarness.install() }
                     // P5 item 10's launch push. `.onChange(of: scenePhase)` carries no `initial:`,
                     // and on a cold launch the loader reaches `.ready` AFTER the
                     // `.inactive → .active` edge — without this the gate would sit fail-closed for
