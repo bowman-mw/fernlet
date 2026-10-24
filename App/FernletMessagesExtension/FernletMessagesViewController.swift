@@ -220,25 +220,35 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UITextFi
         titleStack.spacing = 4
         headerStack.addArrangedSubview(titleStack)
         headerStack.addArrangedSubview(insertButton)
-        headerStack.axis = .horizontal
-        headerStack.alignment = .top
         headerStack.spacing = 12
         insertButton.setContentHuggingPriority(.required, for: .horizontal)
         insertButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+        applyHeaderAxis()
     }
 
+    /// Share beside the title, or under it at accessibility text sizes, where beside it would squeeze
+    /// the title to a word a line.
+    private func applyHeaderAxis() {
+        let large = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+        headerStack.axis = large ? .vertical : .horizontal
+        headerStack.alignment = large ? .leading : .top
+    }
+
+    /// The column sits in the view's margins; the scroll view reaches `ring` points past them on each
+    /// side, so the picked card's moss ring, drawn just outside the card, is never clipped.
     private func scrollConstraints(for scrollView: UIScrollView, contentStack: UIStackView) -> [NSLayoutConstraint] {
-        [
-            scrollView.leadingAnchor.constraint(equalTo: view.layoutMarginsGuide.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: view.layoutMarginsGuide.trailingAnchor),
+        let ring: CGFloat = 4
+        return [
+            scrollView.leadingAnchor.constraint(equalTo: view.layoutMarginsGuide.leadingAnchor, constant: -ring),
+            scrollView.trailingAnchor.constraint(equalTo: view.layoutMarginsGuide.trailingAnchor, constant: ring),
             scrollView.topAnchor.constraint(equalTo: view.layoutMarginsGuide.topAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.layoutMarginsGuide.bottomAnchor),
-            contentStack.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
-            contentStack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
-            contentStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 4),
+            contentStack.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor, constant: ring),
+            contentStack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor, constant: -ring),
+            contentStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 14),
             // Room for the last card's drop shadow and the picked card's ring.
             contentStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -8),
-            contentStack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor)
+            contentStack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor, constant: -2 * ring)
         ]
     }
 
@@ -258,9 +268,10 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UITextFi
         [titleLabel, statusLabel, previewLabel].forEach { $0.textAlignment = alignment }
     }
 
-    /// The grid is two cards wide, or one at accessibility text sizes; a text size change redraws it
-    /// while the composer is up.
+    /// The header and the grid follow the text size: Share under the title and one card a row at
+    /// accessibility sizes. A change redraws the grid while the composer is up.
     private func textSizeChanged() {
+        applyHeaderAxis()
         guard panelState == .composer else { return }
         renderComposer()
     }

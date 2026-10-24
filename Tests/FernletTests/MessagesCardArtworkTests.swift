@@ -21,7 +21,7 @@ struct MessagesCardArtworkTests {
         try Self.expect(image, at: CGPoint(x: 600, y: 620), is: 0x8DBB78, "the grass strip")
         try Self.expect(image, at: CGPoint(x: 600, y: FernletMessagesCard.groundTop + 4), is: 0x4A2E1C, "the ground's ink line")
         // The bowl: 9 × 6 keys at 27 points, centred; key (4, 3) is the cream fill, key (0, 2) the rim.
-        let origin = CGPoint(x: ((1_200 - 9 * 27) / 2).rounded(.down), y: ((630 - 6 * 27) / 2).rounded(.down))
+        let origin = CGPoint(x: CGFloat((1_200 - 9 * 27) / 2), y: CGFloat((630 - 6 * 27) / 2))
         try Self.expect(image, at: CGPoint(x: origin.x + 4 * 27 + 13, y: origin.y + 3 * 27 + 13), is: 0xF3E2B3, "the bowl's fill")
         try Self.expect(image, at: CGPoint(x: origin.x + 13, y: origin.y + 2 * 27 + 13), is: 0x4A2E1C, "the bowl's rim")
         try Self.expect(image, at: CGPoint(x: 48, y: 90), is: 0x4A2E1C, "the tag's ink frame")
@@ -31,7 +31,7 @@ struct MessagesCardArtworkTests {
     @Test func theWorkoutArtworkCarriesTheDumbbell() throws {
         let image = FernletMessagesCard.placeholderImage(sprite: .dumbbell, tag: "Fernlet workout")
         #expect(image.size == FernletMessagesCard.artworkSize)
-        let origin = CGPoint(x: ((1_200 - 11 * 27) / 2).rounded(.down), y: ((630 - 5 * 27) / 2).rounded(.down))
+        let origin = CGPoint(x: CGFloat((1_200 - 11 * 27) / 2), y: CGFloat((630 - 5 * 27) / 2))
         try Self.expect(image, at: CGPoint(x: origin.x + 5 * 27 + 13, y: origin.y + 2 * 27 + 13), is: 0x4A2E1C, "the bar")
         try Self.expect(image, at: CGPoint(x: origin.x + 5 * 27 + 13, y: origin.y + 13), is: 0xFFF6E2, "paper above the bar")
     }

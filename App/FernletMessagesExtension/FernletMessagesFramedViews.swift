@@ -82,6 +82,9 @@ final class FernletMessagesIconTile: FernletMessagesFramedView {
         show(sprite, pixel: pixel)
     }
 
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { nil }
+
     /// Swaps the icon. A one-colour sprite (the dumbbell, the ⓘ) is inked by the tile's ink token, so
     /// it stays visible on dark paper; a coloured one (the bowl) keeps its colours.
     func show(_ sprite: FernletMessagesSprite, pixel: CGFloat) {

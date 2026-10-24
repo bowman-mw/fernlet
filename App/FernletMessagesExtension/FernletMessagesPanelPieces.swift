@@ -107,9 +107,11 @@ final class FernletMessagesSegmentedControl: UIView {
                                                  shadowDrop: 2)
     private let stack = UIStackView()
     private var segments: [UIButton] = []
+    private let titles: [String]
 
     /// A control with one segment per title, the first chosen.
     init(titles: [String]) {
+        self.titles = titles
         super.init(frame: .zero)
         face.translatesAutoresizingMaskIntoConstraints = false
         addSubview(face)
@@ -119,13 +121,14 @@ final class FernletMessagesSegmentedControl: UIView {
         stack.translatesAutoresizingMaskIntoConstraints = false
         face.contentView.addSubview(stack)
         FernletMessagesLayout.pin(stack, to: face.contentView)
-        for (index, title) in titles.enumerated() {
+        for index in titles.indices {
             let segment = UIButton(type: .custom)
             segment.addAction(UIAction { [weak self] _ in self?.pick(index) }, for: .touchUpInside)
             segment.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            // Restyled on every state and trait change, so the words follow Dynamic Type.
+            segment.configurationUpdateHandler = { [weak self] button in self?.style(button, at: index) }
             segments.append(segment)
             stack.addArrangedSubview(segment)
-            style(segment, title: title, chosen: index == selectedIndex)
         }
         applyAxis()
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) {
@@ -140,9 +143,7 @@ final class FernletMessagesSegmentedControl: UIView {
     func select(_ index: Int) {
         guard segments.indices.contains(index) else { return }
         selectedIndex = index
-        for (position, segment) in segments.enumerated() {
-            style(segment, title: segment.configuration?.title ?? "", chosen: position == index)
-        }
+        segments.forEach { $0.setNeedsUpdateConfiguration() }
     }
 
     private func pick(_ index: Int) {
@@ -156,16 +157,16 @@ final class FernletMessagesSegmentedControl: UIView {
     }
 
     /// One segment: the words in DM Sans semibold, the accent behind the chosen one.
-    private func style(_ segment: UIButton, title: String, chosen: Bool) {
+    private func style(_ segment: UIButton, at index: Int) {
+        guard titles.indices.contains(index) else { return }
+        let chosen = index == selectedIndex
         var configuration = UIButton.Configuration.plain()
-        configuration.title = title
+        var words = AttributedString(titles[index])
+        words.font = FernletMessagesLook.segment
         let ink = chosen ? FernletMessagesLook.onAccent : FernletMessagesLook.text
-        configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-            var styled = attributes
-            styled.font = FernletMessagesLook.segment
-            styled.foregroundColor = ink
-            return styled
-        }
+        words.foregroundColor = ink
+        configuration.attributedTitle = words
+        configuration.baseForegroundColor = ink
         configuration.titleAlignment = .center
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 9, leading: 4, bottom: 9, trailing: 4)
         configuration.background.backgroundColor = chosen ? FernletMessagesLook.accent : FernletMessagesLook.raised
@@ -228,7 +229,8 @@ final class FernletMessagesNoticeCard: FernletMessagesFramedView {
         label = FernletMessagesLayout.label(font: font, colour: colour)
         tile = sprite.map { FernletMessagesIconTile(side: 40, sprite: $0, pixel: 2) }
         super.init(fill: FernletMessagesLook.paper)
-        let row = UIStackView(arrangedSubviews: [tile, label].compactMap { $0 })
+        let pieces: [UIView?] = [tile, label]
+        let row = UIStackView(arrangedSubviews: pieces.compactMap { $0 })
         row.spacing = 12
         row.alignment = .center
         row.translatesAutoresizingMaskIntoConstraints = false
