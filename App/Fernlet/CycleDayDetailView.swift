@@ -136,7 +136,7 @@ struct CycleDayDetailView: View {
                     ForEach(narrative.symptomFlags) { symptom in
                         // World (b2-cycle-day): each symptom as a framed tag ("Cramps · 6").
                         FernletTag(text: Text(symptomLabel(symptom, scales: narrative.customSymptomScales)),
-                                   fill: WorldPalette.paperLight)
+                                   fill: WorldPalette.gameCream)
                     }
                 }
             }

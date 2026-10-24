@@ -291,6 +291,9 @@ struct BreathingExerciseView: View {
                             }
                         }
                         .onDisappear { idleBreathing = false }
+                        // The rings rest at 0.6 of their full size: lay out what is drawn, not the
+                        // full ring, so Begin stays on screen (`b3-breathe-setup`).
+                        .frame(height: 170)
                     Text("Ready when you are.")
                         .font(FernletFramedFont.field)
                         .foregroundStyle(WorldPalette.dim)
@@ -446,10 +449,10 @@ struct BreathingExerciseView: View {
                 .frame(width: 112, height: 112)
                 .offset(y: 5)
             Circle()
-                .fill(WorldPalette.moss)
+                .fill(WorldPalette.accent)
                 .frame(width: 112, height: 112)
                 .overlay(Circle().strokeBorder(WorldPalette.ink, lineWidth: 3))
-            WorldSpriteView(sprite: WorldSprites.check, scale: 6, tint: Color.white)
+            WorldSpriteView(sprite: WorldSprites.check, scale: 6, tint: WorldPalette.onAccent)
         }
         .accessibilityHidden(true)
     }
@@ -510,6 +513,8 @@ struct BreathingExerciseView: View {
             // framed switch the app root sets.
             Toggle("Haptics", isOn: $hapticsEnabled)
                 .labelsHidden()
+                // Stated here: a sheet the root presents does not inherit the root's toggle style.
+                .toggleStyle(FernletFramedToggleStyle())
         }
     }
 

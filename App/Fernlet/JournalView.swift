@@ -1606,7 +1606,7 @@ struct DayDetailView: View {
                         }
                         Spacer()
                         // World (b2-journal-day): the meal type as a framed tag.
-                        FernletTag(text: Text(verbatim: meal.mealType.displayName))
+                        FernletTag(text: Text(verbatim: meal.mealType.displayName), fill: WorldPalette.gameCream)
                     }
                     .padding(.vertical, 4)
                     if index < day.meals.count - 1 { FernletRowDivider() }
@@ -2136,7 +2136,8 @@ struct DayEditSheet: View {
                         // `displayLabel`: see the same chip on ``DayDetailView``'s care card. World
                         // (b3-day-edit): a framed chip with the task's pixel icon.
                         HStack(spacing: 6) {
-                            WorldSpriteView(sprite: PersonalCareSprites.sprite(forSymbol: task.systemImage), scale: 2)
+                            WorldSpriteView(sprite: PersonalCareSprites.sprite(forSymbol: task.systemImage), scale: 2,
+                                    tint: PersonalCareSprites.tint(forSymbol: task.systemImage))
                                 .accessibilityHidden(true)
                             Text(task.displayLabel)
                                 .lineLimit(1)

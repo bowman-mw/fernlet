@@ -169,9 +169,9 @@ struct GroundingView: View {
             // World: the moss medal of the breathing finish, with the pixel leaf.
             ZStack {
                 Circle().fill(WorldPalette.ink.opacity(0.22)).frame(width: 112, height: 112).offset(y: 5)
-                Circle().fill(WorldPalette.moss).frame(width: 112, height: 112)
+                Circle().fill(WorldPalette.accent).frame(width: 112, height: 112)
                     .overlay(Circle().strokeBorder(WorldPalette.ink, lineWidth: 3))
-                WorldSpriteView(sprite: WorldSprites.leaf, scale: 6, tint: Color.white)
+                WorldSpriteView(sprite: WorldSprites.leaf, scale: 6, tint: WorldPalette.onAccent)
             }
             .accessibilityHidden(true)
             Text("You're here.")

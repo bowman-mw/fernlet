@@ -89,7 +89,7 @@ struct WorldSignalCard: View {
                 WorldSignalMeter(strength: SignalPresentation.strength(for: signal.value), look: look)
                 FlowLayout(spacing: 8) {
                     ForEach(signal.sourceFields, id: \.self) { field in
-                        FernletTag(text: Text(SignalPresentation.sourceLabel(for: field)), fill: look.raised)
+                        FernletTag(text: Text(SignalPresentation.sourceLabel(for: field)), fill: WorldPalette.gameCream)
                     }
                 }
                 gaps

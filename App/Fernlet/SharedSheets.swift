@@ -516,7 +516,8 @@ struct HygieneSheet: View {
                 // it, a one-word task like "Deodorant" was wider than the space left and was cut.
                 // Only the glyph is conditional, so the title stays the same view at every size.
                 if !dynamicTypeSize.isAccessibilitySize {
-                    WorldSpriteView(sprite: PersonalCareSprites.sprite(forSymbol: task.systemImage), scale: 2)
+                    WorldSpriteView(sprite: PersonalCareSprites.sprite(forSymbol: task.systemImage), scale: 2,
+                                    tint: PersonalCareSprites.tint(forSymbol: task.systemImage))
                         .frame(minWidth: 20)
                 }
                 Text(task.displayLabel)

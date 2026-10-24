@@ -613,10 +613,13 @@ struct LogPeriodSheet: View {
     private func periodToggle(label: Text, isOn: Binding<Bool>) -> some View {
         Toggle(isOn: isOn) { label }
             // Without these the label rendered in system SF, next to DM Sans everywhere else.
-            .font(.fernlet(.label))
-            .foregroundStyle(Color.bark)
+            .font(FernletFramedFont.rowTitle.weight(.semibold))
+            .foregroundStyle(WorldPalette.bark)
             .tint(Color.moss)
-            .padding(.vertical, 12)
+            // World (b3-log-period): the framed switch, stated here because a sheet the root
+            // presents does not inherit the root's toggle style.
+            .toggleStyle(FernletFramedToggleStyle())
+            .padding(.vertical, 8)
     }
 
     /// Seeds the temperature field from a record's stored reading, converted from the unit it was

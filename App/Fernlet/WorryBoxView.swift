@@ -81,7 +81,24 @@ struct WorryEntryView: View {
         { dismiss() }
     }
 
+    /// The writing page: the prompt, the editor and the notes scroll; Let it go stays at the foot,
+    /// riding above the keyboard, so the header never slides away under it.
     private var composer: some View {
+        VStack(spacing: 12) {
+            ScrollView {
+                composerFields
+                    .padding(.top, 4)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            letGoButton
+        }
+        // Arriving here from First aid is a heavy moment — the keyboard should already be up
+        // rather than costing one more tap.
+        .onAppear { isEditorFocused = true }
+    }
+
+    /// The prompt, the editor, the 300-character note, the sealed note and any error.
+    private var composerFields: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("What's circling around?")
                 .font(.custom(FernletFontName.frauncesSemiBold, size: 26, relativeTo: .title))
@@ -113,14 +130,8 @@ struct WorryEntryView: View {
                     .foregroundStyle(Color.terracottaInk)
                     .fernletWrappingText()
             }
-
-            Spacer(minLength: 12)
-
-            letGoButton
         }
-        // Arriving here from First aid is a heavy moment — the keyboard should already be up
-        // rather than costing one more tap.
-        .onAppear { isEditorFocused = true }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// The worry text editor: placeholder overlay, the 300-character cap, and its a11y label. World:

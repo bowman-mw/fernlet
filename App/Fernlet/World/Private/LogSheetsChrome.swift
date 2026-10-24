@@ -19,6 +19,12 @@ enum PersonalCareSprites {
         default: WorldSprites.check
         }
     }
+
+    /// The ink a task's icon draws in: the dim token for the pale moon, which all but vanishes on
+    /// light paper; the sprite's own colours (nil) for the rest.
+    static func tint(forSymbol symbol: String) -> Color? {
+        symbol == "moon" ? WorldPalette.dim : nil
+    }
 }
 
 /// A sheet's date row in the World look (`b3-log-period`, `b3-log-intimacy`): the field's name in bold
