@@ -203,7 +203,7 @@ public struct FernletRowLabel: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 title
-                    .font(FernletFramedFont.rowTitle.weight(destructive ? .semibold : .regular))
+                    .font(destructive ? FernletFramedFont.rowTitleBold : FernletFramedFont.rowTitle)
                     .foregroundStyle(destructive ? Color.terracottaInk : (look?.text ?? Color.bark))
                     .fixedSize(horizontal: false, vertical: true)
                 if let detail {

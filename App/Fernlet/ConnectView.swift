@@ -621,7 +621,7 @@ struct FriendsView: View {
     private func resumeBanner(_ card: SessionResumeCard) -> some View {
         FriendsNoticeCard(tone: .warn, symbolName: card.symbolName) {
             Text(card.title)
-                .font(FernletFramedFont.rowTitle.weight(.semibold))
+                .font(FernletFramedFont.rowTitleBold)
                 .foregroundStyle(WorldPalette.bark)
             Text(card.message)
                 .font(FernletFramedFont.note)
@@ -653,7 +653,7 @@ struct FriendsView: View {
     private func continuationBanner(_ card: MeshContinuationCard) -> some View {
         FriendsNoticeCard(tone: .warn, symbolName: card.symbolName) {
             Text(card.title)
-                .font(FernletFramedFont.rowTitle.weight(.semibold))
+                .font(FernletFramedFont.rowTitleBold)
                 .foregroundStyle(WorldPalette.bark)
             Text(card.message)
                 .font(FernletFramedFont.note)
@@ -671,7 +671,7 @@ struct FriendsView: View {
         if features.photos.meshPhotos.count >= PrivateMediaStore.cacheWarningThreshold, !cacheWarningDismissed {
             FriendsNoticeCard(tone: .info, symbolName: "exclamationmark.circle") {
                 Text("Your photo shelf is nearly full")
-                    .font(FernletFramedFont.rowTitle.weight(.semibold))
+                    .font(FernletFramedFont.rowTitleBold)
                     .foregroundStyle(WorldPalette.bark)
                 Text("You're keeping \(features.photos.meshPhotos.count) of \(PrivateMediaStore.maxCachedPhotos) shared photos. Once it's full, the oldest quietly make room for new ones — save any you'd like to keep.")
                     .font(FernletFramedFont.note)

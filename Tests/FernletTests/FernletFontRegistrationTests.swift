@@ -23,6 +23,7 @@ struct FernletFontRegistrationTests {
         "InstrumentSerif-Italic.ttf":  ("InstrumentSerif-OFL", "The Instrument Serif Project Authors"),
         "DMSans-Regular.ttf":          ("DMSans-OFL", "The DM Sans Project Authors"),
         "DMSans-Medium.ttf":           ("DMSans-OFL", "The DM Sans Project Authors"),
+        "DMSans-Bold.ttf":             ("DMSans-OFL", "The DM Sans Project Authors"),
     ]
 
     /// OFL 1.1 condition 2 lets the fonts ship inside the app only if each copy carries the copyright
@@ -49,6 +50,15 @@ struct FernletFontRegistrationTests {
             // UIFont(name:) resolves the requested face exactly when the name matches.
             #expect(font?.fontName == name, "Resolved to \(font?.fontName ?? "nil"), expected \(name)")
         }
+    }
+
+    /// The widget extension registers its own copy of DM Sans Bold (owner, 2026-10-24, question 18):
+    /// an extension cannot read the app's fonts, and the widgets and Live Activities name the face.
+    @Test func theWidgetExtensionRegistersItsOwnBoldFace() throws {
+        let plist = try RepoRoot.source("App/FernletWidgets/Info.plist")
+        #expect(plist.contains("<string>DMSans-Bold.ttf</string>"), "the widget extension does not register DM Sans Bold")
+        #expect(FileManager.default.fileExists(atPath: RepoRoot.url("App/FernletWidgets/Fonts/DMSans-Bold.ttf").path),
+                "the widget extension lost its copy of DM Sans Bold")
     }
 
     @Test func everyTypeRoleProducesAFont() {

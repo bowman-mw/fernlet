@@ -137,7 +137,7 @@ struct FriendListView: View {
             // here ever said so.
             TextField(store.resolvedProximityDisplayName, text: $displayName,
                       prompt: .fieldPrompt(verbatim: store.resolvedProximityDisplayName))
-                .font(FernletFramedFont.field.weight(.semibold))
+                .font(FernletFramedFont.fieldBold)
                 .multilineTextAlignment(.trailing)
                 .foregroundStyle(WorldPalette.bark)
                 .submitLabel(.done)

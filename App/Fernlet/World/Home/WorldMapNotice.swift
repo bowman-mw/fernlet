@@ -183,7 +183,7 @@ struct WorldNoticeLineLayout: Layout {
 
 /// The notice plate's type (DM Sans): the line 15 pt bold, the line under it 13 pt.
 nonisolated enum WorldNoticeType {
-    static let title = Font.custom(FernletFontName.dmSansMedium, size: 15, relativeTo: .subheadline).weight(.bold)
+    static let title = Font.custom(FernletFontName.dmSansBold, size: 15, relativeTo: .subheadline)
     static let detail = Font.custom(FernletFontName.dmSans, size: 13, relativeTo: .footnote)
 }
 

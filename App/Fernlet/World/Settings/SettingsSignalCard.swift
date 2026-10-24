@@ -26,7 +26,7 @@ struct SettingsSignalCard: View {
                         .font(FernletFramedFont.cardTitle)
                         .foregroundStyle(look.text)
                     Text(SignalPresentation.valueLabel(for: signal.value, addressing: termOfAddress))
-                        .font(FernletFramedFont.rowValue.weight(.bold))
+                        .font(FernletFramedFont.rowValueBold)
                         .foregroundStyle(look.dim)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

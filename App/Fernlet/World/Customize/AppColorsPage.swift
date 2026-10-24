@@ -93,7 +93,7 @@ private struct AppPaperRow: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(title)
-                    .font(FernletFramedFont.rowTitle.weight(.semibold))
+                    .font(FernletFramedFont.rowTitleBold)
                     .foregroundStyle(WorldPalette.bark)
                 Spacer()
                 Button("Reset") { hex = defaultHex }
@@ -228,7 +228,7 @@ private struct AppPaperSwatch: View {
                                             tint: WorldPalette.rgb(isDark ? 0xFFF1CF : 0x3A2414))
                         } else {
                             Text(verbatim: "Aa")
-                                .font(.custom(FernletFontName.dmSansMedium, size: 13, relativeTo: .caption).weight(.bold).italic())
+                                .font(.custom(FernletFontName.dmSansBold, size: 13, relativeTo: .caption).italic())
                                 .foregroundStyle(WorldPalette.rgb(isDark ? 0xFFF1CF : 0x3A2414))
                         }
                     }

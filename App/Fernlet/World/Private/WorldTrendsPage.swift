@@ -78,7 +78,7 @@ struct WorldSignalCard: View {
                             .font(FernletFramedFont.sheetTitle)
                             .foregroundStyle(look.text)
                         Text(SignalPresentation.valueLabel(for: signal.value, addressing: termOfAddress))
-                            .font(FernletFramedFont.field.weight(.semibold))
+                            .font(FernletFramedFont.fieldBold)
                             .foregroundStyle(look.dim)
                     }
                 }

@@ -91,7 +91,7 @@ struct RecipeEditorPageTitle: ViewModifier {
 /// The recipe screens' type sizes that the kit draws beyond ``FernletFramedFont``'s set.
 nonisolated enum RecipeType {
     /// A macro tag's figure (`.mtag3`): DM Sans semibold 13.
-    static let tag = Font.custom(FernletFontName.dmSansMedium, size: 13, relativeTo: .footnote).weight(.semibold)
+    static let tag = Font.custom(FernletFontName.dmSansBold, size: 13, relativeTo: .footnote)
     /// A recipe card's title in the book (`.ac-t` at 20).
     static let cardTitle = Font.custom(FernletFontName.frauncesSemiBold, size: 20, relativeTo: .title3)
     /// The recipe page's title beside its photo (25).
@@ -101,11 +101,11 @@ nonisolated enum RecipeType {
         Font.custom(FernletFontName.frauncesSemiBold, size: size, relativeTo: .largeTitle)
     }
     /// An ingredient's name in its row (`.ingr .in`): DM Sans semibold 15.
-    static let ingredientName = Font.custom(FernletFontName.dmSansMedium, size: 15, relativeTo: .body).weight(.semibold)
+    static let ingredientName = Font.custom(FernletFontName.dmSansBold, size: 15, relativeTo: .body)
     /// An ingredient's amount (`.ingr .iq`): DM Sans 14.
     static let ingredientAmount = Font.custom(FernletFontName.dmSans, size: 14, relativeTo: .subheadline)
     /// The wooden Start cooking button (17 bold).
-    static let woodButton = Font.custom(FernletFontName.dmSansMedium, size: 17, relativeTo: .body).weight(.bold)
+    static let woodButton = Font.custom(FernletFontName.dmSansBold, size: 17, relativeTo: .body)
 }
 
 /// A pixel sprite on a framed tile of raised paper (`.icci`, `.ingr .is`): the art centred in a

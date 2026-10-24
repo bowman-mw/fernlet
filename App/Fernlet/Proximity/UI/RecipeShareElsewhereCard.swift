@@ -169,7 +169,7 @@ struct RecipeShareElsewhereCard: View {
             RecipeSpriteTile(sprite: sprite, size: glyphSide + 8)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(FernletFramedFont.rowTitle.weight(.bold))
+                    .font(FernletFramedFont.rowTitleBold)
                     .foregroundStyle(WorldPalette.bark)
                     .fernletWrappingText()
                 Text(caption)

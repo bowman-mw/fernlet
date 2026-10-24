@@ -82,7 +82,7 @@ struct WorldNameTag: View {
 
     var body: some View {
         Text(verbatim: name)
-            .font(Font.custom(FernletFontName.dmSansMedium, size: 15, relativeTo: .subheadline).weight(.bold))
+            .font(Font.custom(FernletFontName.dmSansBold, size: 15, relativeTo: .subheadline))
             .dynamicTypeSize(...DynamicTypeSize.xxLarge)
             .foregroundStyle(WorldPalette.bark)
             .lineLimit(1)

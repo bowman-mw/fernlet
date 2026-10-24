@@ -62,7 +62,7 @@ struct CookingTimerSoundToggle: View {
         Toggle(isOn: $sounds) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Timer sound")
-                    .font(FernletFramedFont.rowTitle.weight(.semibold))
+                    .font(FernletFramedFont.rowTitleBold)
                     .foregroundStyle(WorldPalette.bark)
                 Text("A quiet chime when the timer runs out. It follows your ring/silent switch.")
                     .font(FernletFramedFont.rowDetail)

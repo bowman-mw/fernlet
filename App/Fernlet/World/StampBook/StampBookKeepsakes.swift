@@ -213,7 +213,7 @@ private struct StampBookGiftTag: View {
             Text(verbatim: "★")
             Text(count, format: .number)
         }
-        .font(.custom(FernletFontName.dmSansMedium, size: 12.5, relativeTo: .caption).weight(.bold))
+        .font(.custom(FernletFontName.dmSansBold, size: 12.5, relativeTo: .caption))
         .foregroundStyle(WorldPalette.rgb(0x3A2414))
         .padding(.horizontal, 5)
         .padding(.vertical, 2)

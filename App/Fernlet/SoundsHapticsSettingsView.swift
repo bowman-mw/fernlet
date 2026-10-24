@@ -61,7 +61,7 @@ struct SoundsHapticsSettingsView: View {
     private var levelCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Haptics")
-                .font(FernletFramedFont.rowTitle.weight(.semibold))
+                .font(FernletFramedFont.rowTitleBold)
                 .foregroundStyle(look?.text ?? Color.bark)
             // The segments' own keys rather than the bare "All" / "Off" every other screen shares:
             // a segmented control's choice and a status readout can need different words ("Off" is

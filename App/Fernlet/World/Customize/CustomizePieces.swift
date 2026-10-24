@@ -113,7 +113,7 @@ struct CustomizeLinkCard: View {
                 FernletIconTile(size: 40) { WorldSpriteView(sprite: sprite, scale: 2) }
                 VStack(alignment: .leading, spacing: 2) {
                     title
-                        .font(FernletFramedFont.rowTitle.weight(.semibold))
+                        .font(FernletFramedFont.rowTitleBold)
                         .foregroundStyle(look?.text ?? Color.bark)
                     if let detail {
                         detail
@@ -142,7 +142,7 @@ struct CustomizeAppColorsCard: View {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("App colors")
-                        .font(FernletFramedFont.rowTitle.weight(.semibold))
+                        .font(FernletFramedFont.rowTitleBold)
                         .foregroundStyle(look?.text ?? Color.bark)
                     Text("Paper, wood and accent")
                         .font(FernletFramedFont.rowDetail)
@@ -202,7 +202,7 @@ struct CustomizeSlotRowLabel<Icon: View>: View {
             }
             if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 8) }
             Text(verbatim: value)
-                .font(FernletFramedFont.rowValue.weight(.semibold))
+                .font(FernletFramedFont.rowValueBold)
                 .foregroundStyle(isEmpty ? (look?.dim ?? Color.slate) : (look?.text ?? Color.bark))
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
         }

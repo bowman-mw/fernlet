@@ -941,7 +941,7 @@ private struct RecipeImportSheet: View {
                 HStack(spacing: 8) {
                     FernletIcon(.check, scale: 2)
                     Text("Already in your recipe book")
-                        .font(FernletFramedFont.rowTitle.weight(.semibold))
+                        .font(FernletFramedFont.rowTitleBold)
                         .foregroundStyle(WorldPalette.mossInk)
                 }
                 Text(verbatim: recipe.name)
@@ -1679,7 +1679,7 @@ struct RecipeSheet: View {
         } label: {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Split into parts")
-                    .font(FernletFramedFont.rowTitle.weight(.semibold))
+                    .font(FernletFramedFont.rowTitleBold)
                     .foregroundStyle(WorldPalette.mossInk)
                 Text("For a recipe made in stages, like a dressing you make first and a salad you put together after.")
                     .font(FernletFramedFont.note)
@@ -1745,7 +1745,7 @@ struct RecipeSheet: View {
         FernletCard {
             HStack(spacing: 10) {
                 Text("Servings")
-                    .font(FernletFramedFont.rowTitle.weight(.semibold))
+                    .font(FernletFramedFont.rowTitleBold)
                     .foregroundStyle(WorldPalette.bark)
                     .accessibilityHidden(true)
                 Spacer(minLength: 8)
@@ -2086,7 +2086,7 @@ struct CollapsedIngredientRow: View {
             Button(action: onExpand) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(ingredient.name)
-                        .font(FernletFramedFont.rowTitle.weight(.bold))
+                        .font(FernletFramedFont.rowTitleBold)
                         .foregroundStyle(WorldPalette.bark)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Text(summaryLine)
@@ -4174,7 +4174,7 @@ struct FoodProductReviewSheet: View {
                 VStack(alignment: .leading, spacing: 6) {
                     SectionLabel("SERVING SIZE")
                     Text(product.servingSize)
-                        .font(.custom(FernletFontName.dmSansMedium, size: 20, relativeTo: .title3).weight(.bold))
+                        .font(.custom(FernletFontName.dmSansBold, size: 20, relativeTo: .title3))
                         .foregroundStyle(look?.text ?? Color.bark)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -5883,7 +5883,7 @@ struct RecipeDetailView: View {
     private var cookForStepper: some View {
         HStack(spacing: 8) {
             Text("Cook for")
-                .font(FernletFramedFont.rowTitle.weight(.semibold))
+                .font(FernletFramedFont.rowTitleBold)
                 .foregroundStyle(WorldPalette.bark)
                 .accessibilityHidden(true)
             FernletStepper("Cook for", value: Binding(get: { effectiveYield }, set: { cookYield = $0 }),
@@ -6407,7 +6407,7 @@ private struct RecipeCreationOptionRow: View {
                 RecipeSpriteTile(sprite: sprite)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(FernletFramedFont.rowTitle.weight(.semibold))
+                        .font(FernletFramedFont.rowTitleBold)
                         .foregroundStyle(WorldPalette.bark)
                     subtitle
                         .font(FernletFramedFont.note)

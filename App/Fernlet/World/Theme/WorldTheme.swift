@@ -39,19 +39,19 @@ nonisolated enum WorldType {
     /// A panel's title on its wooden plate (25 pt Fraunces).
     static let plateTitle = Font.custom(FernletFontName.frauncesSemiBold, size: 25, relativeTo: .title2)
     /// An item-bar name (12.5 pt DM Sans, bold).
-    static let barLabel = Font.custom(FernletFontName.dmSansMedium, size: 12.5, relativeTo: .caption).weight(.bold)
+    static let barLabel = Font.custom(FernletFontName.dmSansBold, size: 12.5, relativeTo: .caption)
     /// The status plate's macro letters (13 pt DM Sans, bold).
-    static let plateLabel = Font.custom(FernletFontName.dmSansMedium, size: 13, relativeTo: .caption).weight(.bold)
+    static let plateLabel = Font.custom(FernletFontName.dmSansBold, size: 13, relativeTo: .caption)
     /// The status plate's water count: 16 pt, or 22 pt at accessibility sizes, as the approved
     /// largest-text design draws it.
     static func plateCount(large: Bool) -> Font {
-        Font.custom(FernletFontName.dmSansMedium, size: large ? 22 : 16, relativeTo: .caption).weight(.bold)
+        Font.custom(FernletFontName.dmSansBold, size: large ? 22 : 16, relativeTo: .caption)
     }
 
     /// The companion's speech bubble (14 pt DM Sans).
     static let speech = Font.custom(FernletFontName.dmSans, size: 14, relativeTo: .subheadline)
     /// A banner's title (16 pt DM Sans, bold) and its line under it (13.5 pt).
-    static let bannerTitle = Font.custom(FernletFontName.dmSansMedium, size: 16, relativeTo: .headline).weight(.bold)
+    static let bannerTitle = Font.custom(FernletFontName.dmSansBold, size: 16, relativeTo: .headline)
     static let bannerDetail = Font.custom(FernletFontName.dmSans, size: 13.5, relativeTo: .subheadline)
 
     /// The largest the status plate's letters grow: the plate sits on the map, so its text follows the

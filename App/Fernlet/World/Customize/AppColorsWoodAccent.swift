@@ -77,7 +77,7 @@ private struct AppColorChoiceSwatch: View {
                             WorldSpriteView(sprite: WorldSprites.check, scale: 2, tint: ink)
                         } else {
                             Text(verbatim: "Aa")
-                                .font(.custom(FernletFontName.dmSansMedium, size: 13, relativeTo: .caption).weight(.bold).italic())
+                                .font(.custom(FernletFontName.dmSansBold, size: 13, relativeTo: .caption).italic())
                                 .foregroundStyle(ink)
                         }
                     }

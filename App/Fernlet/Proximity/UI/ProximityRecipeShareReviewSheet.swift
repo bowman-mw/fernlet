@@ -126,7 +126,7 @@ struct ProximityRecipeShareReviewSheet: View {
                 HStack(spacing: 8) {
                     WorldSpriteView(sprite: recipeKindSprite, scale: 2)
                     Text(recipeKindLabel)
-                        .font(FernletFramedFont.rowTitle.weight(.bold))
+                        .font(FernletFramedFont.rowTitleBold)
                         .foregroundStyle(WorldPalette.bark)
                 }
                 FlowLayout(spacing: 8) {

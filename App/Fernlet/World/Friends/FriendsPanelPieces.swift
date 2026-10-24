@@ -185,7 +185,7 @@ struct FriendsLinkCard: View {
             FernletIconTile(size: 42) { WorldSpriteView(sprite: sprite, scale: spriteScale) }
             VStack(alignment: .leading, spacing: 2) {
                 title
-                    .font(FernletFramedFont.rowTitle.weight(.semibold))
+                    .font(FernletFramedFont.rowTitleBold)
                     .foregroundStyle(look?.text ?? Color.bark)
                 if let detail {
                     detail

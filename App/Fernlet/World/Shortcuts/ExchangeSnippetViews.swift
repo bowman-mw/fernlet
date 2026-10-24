@@ -103,7 +103,7 @@ struct ExchangeSnippetCard<Lines: View>: View {
 /// The confirmation's type: the title in Fraunces (19 pt, as drawn) and the warning in DM Sans bold.
 nonisolated enum ExchangeSnippetType {
     static let title = Font.custom(FernletFontName.frauncesSemiBold, size: 19, relativeTo: .title3)
-    static let warning = Font.custom(FernletFontName.dmSansMedium, size: 15, relativeTo: .body).weight(.bold)
+    static let warning = Font.custom(FernletFontName.dmSansBold, size: 15, relativeTo: .body)
     /// The warning's orange, darkened for contrast on paper (6.3:1 light, 7.1:1 dark).
     static let warningInk = WorldPalette.adaptive(light: 0x8A4B12, dark: 0xF0B26A)
 }

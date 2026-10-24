@@ -94,11 +94,14 @@ nonisolated public enum FernletFontName {
     public static let instrumentSerifItalic = "InstrumentSerif-Italic"
     public static let dmSans                = "DMSans-14pt"
     public static let dmSansMedium          = "DMSans-14ptMedium"
+    /// DM Sans Bold (owner, 2026-10-24, question 18): every DM Sans text that asks for bold or
+    /// semibold names this face, since a weight asked of the Medium face renders Medium.
+    public static let dmSansBold            = "DMSans-Bold"
 
     /// Every bundled PostScript name — consumed by the registration self-check test.
     public static let all = [
         frauncesSemiBold, dmSerifDisplay,
-        instrumentSerif, instrumentSerifItalic, dmSans, dmSansMedium,
+        instrumentSerif, instrumentSerifItalic, dmSans, dmSansMedium, dmSansBold,
     ]
 }
 

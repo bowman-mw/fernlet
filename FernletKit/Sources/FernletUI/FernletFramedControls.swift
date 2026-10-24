@@ -288,7 +288,7 @@ public struct FernletStepper: View {
             stepButton("\u{2212}", enabled: canDecrement, action: onDecrement, look: look)
             if let value {
                 value
-                    .font(FernletFramedFont.field.weight(.bold))
+                    .font(FernletFramedFont.fieldBold)
                     .foregroundStyle(look.text)
                     .monospacedDigit()
                     .padding(.horizontal, 10)
@@ -410,7 +410,7 @@ public struct FernletKeyValueRow: View {
                 .foregroundStyle(look?.text ?? Color.bark)
                 .frame(maxWidth: .infinity, alignment: .leading)
             value
-                .fontWeight(.bold)
+                .font(FernletFramedFont.keyValueBold)
                 .foregroundStyle(look?.text ?? Color.bark)
                 .multilineTextAlignment(.trailing)
         }

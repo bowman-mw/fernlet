@@ -166,7 +166,7 @@ struct YourShopView: View {
 
     private func itemName(_ item: CustomizationItem) -> some View {
         Text(verbatim: displayName(item))
-            .font(FernletFramedFont.rowTitle.weight(.semibold))
+            .font(FernletFramedFont.rowTitleBold)
             .foregroundStyle(WorldPalette.bark)
             .fernletWrappingText()
     }

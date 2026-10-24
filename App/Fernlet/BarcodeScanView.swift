@@ -1067,7 +1067,7 @@ private struct FoodMacroTile: View {
             VStack(spacing: 6) {
                 WorldSpriteView(sprite: sprite, scale: 3)
                 Text(verbatim: "\(grams)g")
-                    .font(.custom(FernletFontName.dmSansMedium, size: 22, relativeTo: .title3).weight(.bold))
+                    .font(.custom(FernletFontName.dmSansBold, size: 22, relativeTo: .title3))
                     .foregroundStyle(look?.text ?? Color.bark)
                     .monospacedDigit()
                 Text(name)

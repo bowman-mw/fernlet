@@ -80,7 +80,7 @@ struct SafetyReportingView: View {
     private var contactSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Contact")
-                .font(FernletFramedFont.rowTitle.weight(.bold))
+                .font(FernletFramedFont.rowTitleBold)
                 .foregroundStyle(Color.bark)
                 // This page is where help lives; its section titles are how the Headings rotor
                 // finds the developer's address without reading every paragraph above it.
@@ -116,7 +116,7 @@ struct SafetyReportingView: View {
         // One framed card per titled paragraph (`b3-safety`).
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(FernletFramedFont.rowTitle.weight(.bold))
+                .font(FernletFramedFont.rowTitleBold)
                 .foregroundStyle(Color.bark)
                 .accessibilityAddTraits(.isHeader)
             Text(body)

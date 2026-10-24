@@ -286,7 +286,7 @@ struct StampRibbon: View {
 
     var body: some View {
         Text("New today")
-            .font(WidgetFont.label(11).weight(.bold))
+            .font(WidgetFont.bold(11))
             .foregroundStyle(.white)
             .lineLimit(1)
             .minimumScaleFactor(0.6)

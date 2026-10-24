@@ -39,7 +39,7 @@ struct WorldTodayTab: View {
 
     /// The tab's type: 13.5 pt, or 17 at the accessibility sizes (the approved largest-text design).
     static func font(accessibilitySize: Bool) -> Font {
-        .custom(FernletFontName.dmSansMedium, size: pointSize(accessibilitySize: accessibilitySize), relativeTo: .caption).weight(.bold)
+        .custom(FernletFontName.dmSansBold, size: pointSize(accessibilitySize: accessibilitySize), relativeTo: .caption)
     }
 
     /// The tab's text size in points.

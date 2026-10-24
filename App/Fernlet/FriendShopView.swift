@@ -188,7 +188,7 @@ struct FriendShopView: View {
                 // name comes through `ItemNameModeration.sanitizedName` (24 characters at most), so a
                 // hostile catalog cannot stretch the grid.
                 Text(item.name.isEmpty ? item.slot.label : item.name)
-                    .font(FernletFramedFont.rowTitle.weight(.semibold))
+                    .font(FernletFramedFont.rowTitleBold)
                     .foregroundStyle(WorldPalette.bark)
                     .fernletWrappingText()
                 Text("designed by \(sellerName(catalog))")

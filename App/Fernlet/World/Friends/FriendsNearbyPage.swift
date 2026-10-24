@@ -171,7 +171,7 @@ struct FriendsDiscoveryFailureCard: View {
     var body: some View {
         FriendsNoticeCard(tone: .warn, symbolName: "wifi.exclamationmark") {
             Text("Can't look for nearby friends")
-                .font(FernletFramedFont.rowTitle.weight(.semibold))
+                .font(FernletFramedFont.rowTitleBold)
                 .foregroundStyle(WorldPalette.bark)
             Text("Fernlet needs Local Network access to find friends in person. Check Settings › Fernlet › Local Network, then come back to this screen.")
                 .font(FernletFramedFont.note)

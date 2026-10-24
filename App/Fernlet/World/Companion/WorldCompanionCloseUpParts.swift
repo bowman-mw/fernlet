@@ -91,7 +91,7 @@ struct WorldCloseUpHeader: View {
                     .font(.custom(FernletFontName.frauncesSemiBold, size: 30, relativeTo: .title))
                     .foregroundStyle(WorldPalette.bark)
                 Text(verbatim: status)
-                    .font(.custom(FernletFontName.dmSansMedium, size: 15, relativeTo: .subheadline).weight(.semibold))
+                    .font(.custom(FernletFontName.dmSansBold, size: 15, relativeTo: .subheadline))
                     .foregroundStyle(WorldPalette.dim)
             }
             .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
@@ -175,7 +175,7 @@ struct WorldCloseUpFooter: View {
         VStack(spacing: 12) {
             WorldHeartRow(status: status, count: isLarge ? 4 : 6, scale: theme.scale(accessibilitySize: isLarge))
             Text(verbatim: WorldCloseUpCopy.hint)
-                .font(.custom(FernletFontName.dmSansMedium, size: 14, relativeTo: .footnote).weight(.semibold))
+                .font(.custom(FernletFontName.dmSansBold, size: 14, relativeTo: .footnote))
                 .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                 .foregroundStyle(WorldPalette.dim)
                 .multilineTextAlignment(.center)

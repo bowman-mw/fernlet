@@ -309,7 +309,7 @@ struct SessionMenuCard: View {
                 FernletIconTile(size: 44, fill: WorldPalette.sage) { WorldSpriteView(sprite: sprite, scale: 3) }
                 VStack(alignment: .leading, spacing: 2) {
                     title
-                        .font(FernletFramedFont.rowTitle.weight(.bold))
+                        .font(FernletFramedFont.rowTitleBold)
                         .foregroundStyle(WorldPalette.bark)
                     detail
                         .font(FernletFramedFont.rowDetail)

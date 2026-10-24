@@ -126,7 +126,7 @@ struct SessionChatPanel: View {
             VStack(alignment: message.isOutgoing ? .trailing : .leading, spacing: 4) {
                 if !message.isOutgoing {
                     Text(message.senderDisplayName)
-                        .font(FernletFramedFont.rowDetail.weight(.bold))
+                        .font(FernletFramedFont.rowDetailBold)
                         .foregroundStyle(WorldPalette.dim)
                 }
                 Text(message.text)

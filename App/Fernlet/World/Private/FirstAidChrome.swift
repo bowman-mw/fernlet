@@ -62,7 +62,7 @@ struct FirstAidToolCardLabel: View {
             .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(FernletFramedFont.rowTitle.weight(.bold))
+                    .font(FernletFramedFont.rowTitleBold)
                     .foregroundStyle(WorldPalette.bark)
                 Text(caption)
                     .font(FernletFramedFont.rowValue)

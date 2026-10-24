@@ -18,7 +18,7 @@ struct SettingsBusyCard: View {
             HStack(spacing: 14) {
                 PixelSpinner(ink: look.text)
                 Text(text)
-                    .font(FernletFramedFont.rowTitle.weight(.semibold))
+                    .font(FernletFramedFont.rowTitleBold)
                     .foregroundStyle(look.text)
                     .fernletWrappingText()
             }

@@ -196,23 +196,43 @@ nonisolated public enum FernletFramedFont {
     /// What a person types in a field (`.fld`): DM Sans 16.
     public static let field = Font.custom(FernletFontName.dmSans, size: 16, relativeTo: .body)
     /// A framed button's word (`.pxbtn`): DM Sans bold 16.
-    public static let button = Font.custom(FernletFontName.dmSansMedium, size: 16, relativeTo: .body).weight(.bold)
+    public static let button = Font.custom(FernletFontName.dmSansBold, size: 16, relativeTo: .body)
     /// A small framed button (`.pxbtn.sm`): DM Sans bold 14.5.
-    public static let buttonSmall = Font.custom(FernletFontName.dmSansMedium, size: 14.5, relativeTo: .subheadline).weight(.bold)
+    public static let buttonSmall = Font.custom(FernletFontName.dmSansBold, size: 14.5, relativeTo: .subheadline)
     /// A sheet's Cancel (`.sht3 .top button`): DM Sans semibold 16.
-    public static let sheetControl = Font.custom(FernletFontName.dmSansMedium, size: 16, relativeTo: .body).weight(.semibold)
+    public static let sheetControl = Font.custom(FernletFontName.dmSansBold, size: 16, relativeTo: .body)
     /// Chips, segments and a dropdown's value (`.chip`, `.seg3`): DM Sans semibold 14.5.
-    public static let chip = Font.custom(FernletFontName.dmSansMedium, size: 14.5, relativeTo: .subheadline).weight(.semibold)
+    public static let chip = Font.custom(FernletFontName.dmSansBold, size: 14.5, relativeTo: .subheadline)
     /// A section tab (`.tabs3`): DM Sans semibold 15.
-    public static let tab = Font.custom(FernletFontName.dmSansMedium, size: 15, relativeTo: .subheadline).weight(.semibold)
+    public static let tab = Font.custom(FernletFontName.dmSansBold, size: 15, relativeTo: .subheadline)
     /// A notice's words (`.notice3`): DM Sans 14.5.
     public static let notice = Font.custom(FernletFontName.dmSans, size: 14.5, relativeTo: .subheadline)
     /// A key-value row (`.kv`): DM Sans 15; the value is the bold of it.
     public static let keyValue = Font.custom(FernletFontName.dmSans, size: 15, relativeTo: .subheadline)
     /// A tag (`.ptag`): DM Sans bold 12.
-    public static let tag = Font.custom(FernletFontName.dmSansMedium, size: 12, relativeTo: .caption).weight(.bold)
+    public static let tag = Font.custom(FernletFontName.dmSansBold, size: 12, relativeTo: .caption)
     /// The plate's Back (`.pt .bk`): DM Sans bold 16.
-    public static let back = Font.custom(FernletFontName.dmSansMedium, size: 16, relativeTo: .body).weight(.bold)
+    public static let back = Font.custom(FernletFontName.dmSansBold, size: 16, relativeTo: .body)
     /// A stepper's − and + (`.stepper span`): DM Sans bold 18.
-    public static let stepperGlyph = Font.custom(FernletFontName.dmSansMedium, size: 18, relativeTo: .body).weight(.bold)
+    public static let stepperGlyph = Font.custom(FernletFontName.dmSansBold, size: 18, relativeTo: .body)
+
+    // The bold of each DM Sans role (owner, 2026-10-24, question 18): the Bold face itself, since a
+    // weight asked of a single-weight face renders that face's own weight.
+
+    /// A row's name in bold: DM Sans Bold 16.5.
+    public static let rowTitleBold = Font.custom(FernletFontName.dmSansBold, size: 16.5, relativeTo: .body)
+    /// A row's second line in bold: DM Sans Bold 13.
+    public static let rowDetailBold = Font.custom(FernletFontName.dmSansBold, size: 13, relativeTo: .footnote)
+    /// A row's value in bold: DM Sans Bold 14.5.
+    public static let rowValueBold = Font.custom(FernletFontName.dmSansBold, size: 14.5, relativeTo: .subheadline)
+    /// Body copy in bold: DM Sans Bold 15.
+    public static let bodyBold = Font.custom(FernletFontName.dmSansBold, size: 15, relativeTo: .body)
+    /// A note in bold: DM Sans Bold 13.5.
+    public static let noteBold = Font.custom(FernletFontName.dmSansBold, size: 13.5, relativeTo: .footnote)
+    /// A field's text in bold: DM Sans Bold 16.
+    public static let fieldBold = Font.custom(FernletFontName.dmSansBold, size: 16, relativeTo: .body)
+    /// A key-value row's value (the bold of `.kv`): DM Sans Bold 15.
+    public static let keyValueBold = Font.custom(FernletFontName.dmSansBold, size: 15, relativeTo: .subheadline)
+    /// A section label's caption under the look (`■ CAPTION`): DM Sans Bold 12, the small label's size.
+    public static let sectionLabel = Font.custom(FernletFontName.dmSansBold, size: 12, relativeTo: .caption)
 }

@@ -523,7 +523,7 @@ struct HygieneSheet: View {
                         .frame(minWidth: 20)
                 }
                 Text(task.displayLabel)
-                    .font(FernletFramedFont.rowTitle.weight(.semibold))
+                    .font(FernletFramedFont.rowTitleBold)
                     .foregroundStyle(WorldPalette.bark)
                 Spacer()
                 CareTickBox(isDone: isDone)

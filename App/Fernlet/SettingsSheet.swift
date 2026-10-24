@@ -2585,7 +2585,7 @@ private struct FernletLockChangePasscodeView: View {
             if let look {
                 // The framed radio card, as the lock setup draws it (`b3-lock-kind`).
                 Text(title)
-                    .font(FernletFramedFont.rowTitle.weight(.semibold))
+                    .font(FernletFramedFont.rowTitleBold)
                     .foregroundStyle(look.text)
                     .modifier(LockRadioCardChrome(isSelected: kind == selectedKind, look: look))
             } else {

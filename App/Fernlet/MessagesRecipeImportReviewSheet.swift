@@ -96,7 +96,7 @@ struct MessagesRecipeImportReviewSheet: View {
     private var saveButton: some View {
         if let landedLine {
             ImportLandedLine(text: landedLine)
-                .font(FernletFramedFont.body.weight(.semibold))
+                .font(FernletFramedFont.bodyBold)
                 .foregroundStyle(WorldPalette.bark)
         } else {
             Button(action: beginImport) {

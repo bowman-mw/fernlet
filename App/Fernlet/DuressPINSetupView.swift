@@ -382,7 +382,7 @@ struct DuressPINSetupView: View {
     private var introCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("A second code you can give away")
-                .font(look == nil ? .fernlet(.header) : FernletFramedFont.rowTitle.weight(.bold))
+                .font(look == nil ? .fernlet(.header) : FernletFramedFont.rowTitleBold)
                 .foregroundStyle(look?.text ?? Color.bark)
             Text("If someone makes you unlock Fernlet, type your duress code instead of your passcode. Fernlet does what you choose below and looks completely normal doing it — no warning, no message, nothing on screen that says anything happened.")
                 .font(look == nil ? .fernlet(.body) : FernletFramedFont.body)
@@ -410,7 +410,7 @@ struct DuressPINSetupView: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(availability.hasDuressConfigured ? "Duress code set" : "No duress code")
-                        .font(look == nil ? .fernlet(.header) : FernletFramedFont.rowTitle.weight(.bold))
+                        .font(look == nil ? .fernlet(.header) : FernletFramedFont.rowTitleBold)
                         .foregroundStyle(look?.text ?? Color.bark)
                         .accessibilityIdentifier("duress.status.title")
                     if let mode = availability.configuredMode {

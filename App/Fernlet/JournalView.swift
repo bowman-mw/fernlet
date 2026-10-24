@@ -1563,7 +1563,7 @@ struct DayDetailView: View {
                         SectionLabel("Daily score")
                         Spacer()
                         Text("\(Int(dayScore * 100))%")
-                            .font(FernletFramedFont.field.weight(.bold))
+                            .font(FernletFramedFont.fieldBold)
                             .foregroundStyle(WorldPalette.mossInk)
                     }
                     // World (b2-journal-day): the day's score as the status plate's six hearts.
@@ -2096,7 +2096,7 @@ struct DayEditSheet: View {
         FernletCard {
             HStack {
                 Text("Water")
-                    .font(FernletFramedFont.rowTitle.weight(.bold))
+                    .font(FernletFramedFont.rowTitleBold)
                     .foregroundStyle(WorldPalette.bark)
                 Spacer(minLength: 8)
                 FernletStepper("Bottles: \(bottleCount)", value: $bottleCount, in: 0...30, step: 1,

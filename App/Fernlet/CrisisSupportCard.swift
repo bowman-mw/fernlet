@@ -34,7 +34,7 @@ struct CrisisSupportCard: View {
                 WorldSpriteView(sprite: WorldSprites.heartSm, scale: 2)
                     .accessibilityHidden(true)
                 Text("If things feel heavy")
-                    .font(FernletFramedFont.rowTitle.weight(.bold))
+                    .font(FernletFramedFont.rowTitleBold)
                     .foregroundStyle(WorldPalette.bark)
                     // T2-19: the card's heading, so a distressed user reaches the crisis line by
                     // heading navigation instead of swiping through everything above it.

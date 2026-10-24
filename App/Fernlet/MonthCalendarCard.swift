@@ -253,7 +253,7 @@ struct MonthCalendarCard<Cell: View, Footer: View>: View {
                         .font(look != nil ? FernletFramedFont.cardTitle : .fernlet(.headerMedium))
                         .foregroundStyle(look?.text ?? Color.bark)
                     Text("Today")
-                        .font(look != nil ? FernletFramedFont.rowDetail.weight(.bold) : .fernlet(.labelSmall))
+                        .font(look != nil ? FernletFramedFont.rowDetailBold : .fernlet(.labelSmall))
                         .foregroundStyle(look?.link ?? Color.moss)
                 }
                 .frame(maxWidth: .infinity)

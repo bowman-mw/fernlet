@@ -795,7 +795,7 @@ public struct FernletLockSetupView: View {
             }
 
             Text(FernletLockCopy.Disclosure.onlyIfConfident(addressing: termOfAddress))
-                .font(look == nil ? .fernlet(.bubble) : FernletFramedFont.rowTitle.weight(.bold))
+                .font(look == nil ? .fernlet(.bubble) : FernletFramedFont.rowTitleBold)
                 .foregroundStyle(look?.text ?? Color.slate)
                 .multilineTextAlignment(look == nil ? .leading : .center)
                 .frame(maxWidth: .infinity, alignment: look == nil ? .leading : .center)

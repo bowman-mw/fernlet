@@ -79,7 +79,7 @@ struct PrivateDayTitle: View {
                 .fixedSize(horizontal: false, vertical: true)
             if let subtitle {
                 subtitle
-                    .font(FernletFramedFont.field.weight(.semibold))
+                    .font(FernletFramedFont.fieldBold)
                     .foregroundStyle(WorldPalette.dim)
             }
         }

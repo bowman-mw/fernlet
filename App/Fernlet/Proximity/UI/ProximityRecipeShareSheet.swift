@@ -165,7 +165,7 @@ struct ProximityRecipeShareSheet: View {
                 HStack(spacing: 8) {
                     WorldSpriteView(sprite: WorldSprites.waves, scale: 2)
                     Text("Fernlet nearby")
-                        .font(FernletFramedFont.rowTitle.weight(.bold))
+                        .font(FernletFramedFont.rowTitleBold)
                         .foregroundStyle(WorldPalette.bark)
                 }
                 .accessibilityElement(children: .combine)
@@ -215,7 +215,7 @@ struct ProximityRecipeShareSheet: View {
                 // pre-handshake "Verifying…" claimed work nobody had started. First names only in
                 // the World build ("Friends nearby: first name only, never a distance").
                 Text(verbatim: PeerNameDisplay.shown(recipient.displayName, fingerprint: recipient.fingerprint, in: .fernlet))
-                    .font(FernletFramedFont.rowTitle.weight(.bold))
+                    .font(FernletFramedFont.rowTitleBold)
                     .foregroundStyle(WorldPalette.bark)
                     .lineLimit(1)
                 Spacer()
@@ -362,7 +362,7 @@ struct ProximityRecipeShareSheet: View {
     private var noNearbyView: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("No nearby Fernlets found")
-                .font(FernletFramedFont.rowTitle.weight(.bold))
+                .font(FernletFramedFont.rowTitleBold)
                 .foregroundStyle(WorldPalette.bark)
             Text("Ask the other person to open Fernlet on Home, Food, or Move while unlocked.")
                 .font(FernletFramedFont.note)

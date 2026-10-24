@@ -97,7 +97,7 @@ public struct SheetHeader<Accessory: View>: View {
                     .padding(.top, 4)
             }
             VStack(alignment: .leading, spacing: 4) {
-                if let eyebrow { eyebrowText(eyebrow, color: look.link, font: FernletFramedFont.note.weight(.bold)) }
+                if let eyebrow { eyebrowText(eyebrow, color: look.link, font: FernletFramedFont.noteBold) }
                 titleText(look: look)
                 if let subtitle, !dynamicTypeSize.isAccessibilitySize {
                     subtitleText(subtitle, color: look.dim, font: FernletFramedFont.body, italic: false)

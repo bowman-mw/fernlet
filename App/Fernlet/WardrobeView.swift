@@ -214,7 +214,7 @@ struct WardrobeView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.name.isEmpty ? item.slot.label : item.name)
-                        .font(FernletFramedFont.rowTitle.weight(.semibold))
+                        .font(FernletFramedFont.rowTitleBold)
                         .foregroundStyle(WorldPalette.bark)
                     provenance(for: item)
                 }

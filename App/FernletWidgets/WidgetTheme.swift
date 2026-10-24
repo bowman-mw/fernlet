@@ -117,6 +117,12 @@ enum WidgetFont {
         .custom("DMSans-14pt", size: size, relativeTo: .caption)
     }
 
+    /// DM Sans Bold: a ribbon or a label the design draws bold (a weight asked of the Medium face
+    /// would draw Medium).
+    static func bold(_ size: CGFloat) -> Font {
+        .custom("DMSans-Bold", size: size, relativeTo: .caption)
+    }
+
     /// Instrument Serif italic: the companion's voice.
     static func thought(_ size: CGFloat) -> Font {
         .custom("InstrumentSerif-Italic", size: size, relativeTo: .body)

@@ -356,7 +356,7 @@ struct HealthAccessSettingsView: View {
                     .background(look?.ink ?? Color.clear)
                     .accessibilityHidden(true)
                 Text(stateLabel(for: cardState))
-                    .font(FernletFramedFont.rowDetail.weight(.semibold))
+                    .font(FernletFramedFont.rowDetailBold)
                     .foregroundStyle(look?.dim ?? Color.slate)
                     .accessibilityIdentifier("health.card.state.\(card.rawValue)")
             }

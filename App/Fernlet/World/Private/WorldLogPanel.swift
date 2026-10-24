@@ -47,7 +47,7 @@ struct WorldQuickLogTileFace: View {
                 .frame(height: 36)
                 .accessibilityHidden(true)
             noun
-                .font(FernletFramedFont.rowTitle.weight(.semibold))
+                .font(FernletFramedFont.rowTitleBold)
                 .foregroundStyle(look.text)
                 .fixedSize(horizontal: false, vertical: true)
             if let state {

@@ -109,7 +109,7 @@ struct StepTimerControl: View {
             WorldSpriteView(sprite: WorldSprites.clock, scale: 2)
             if durationSeconds == nil {
                 Button("Add timer") { durationSeconds = 60 }
-                    .font(FernletFramedFont.rowDetail.weight(.bold))
+                    .font(FernletFramedFont.rowDetailBold)
                     .foregroundStyle(WorldPalette.mossInk)
                     .buttonStyle(.plain)
                     .frame(minHeight: 44)
@@ -393,7 +393,7 @@ struct CookingModeView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 10) {
                     Text("Cook for")
-                        .font(FernletFramedFont.rowTitle.weight(.semibold))
+                        .font(FernletFramedFont.rowTitleBold)
                         .foregroundStyle(WorldPalette.bark)
                         .accessibilityHidden(true)
                     Spacer(minLength: 8)
@@ -462,7 +462,7 @@ struct CookingModeView: View {
                         // Which part of a multipart recipe this step belongs to ("make the dressing
                         // first"). Read as part of the step's own label below, so hidden here.
                         Text("Part \(part.position) of \(part.count) · \(part.name)")
-                            .font(FernletFramedFont.note.weight(.bold))
+                            .font(FernletFramedFont.noteBold)
                             .foregroundStyle(WorldPalette.mossInk)
                             .fernletWrappingText()
                             .accessibilityHidden(true)
@@ -627,7 +627,7 @@ struct CookingModeView: View {
             }
             .frame(height: 10)
             Text("\(stepIndex + 1) / \(total)")
-                .font(FernletFramedFont.rowDetail.weight(.bold))
+                .font(FernletFramedFont.rowDetailBold)
                 .foregroundStyle(WorldPalette.dim)
                 .monospacedDigit()
         }

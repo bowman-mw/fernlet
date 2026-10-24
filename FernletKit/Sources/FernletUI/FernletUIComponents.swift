@@ -1292,7 +1292,8 @@ public struct SheetField<Content: View>: View {
                     .padding(2)
                     .background(look.ink)
                     .accessibilityHidden(true)
-                styledCaption(label.fontWeight(.bold), color: look.text)
+                // The Bold face itself, as ``SectionLabel``'s framed caption draws it.
+                styledCaption(label.font(FernletFramedFont.sectionLabel), color: look.text)
             }
             .accessibilityElement(children: .combine)
         } else {

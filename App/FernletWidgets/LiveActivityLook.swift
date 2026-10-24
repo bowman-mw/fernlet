@@ -100,7 +100,7 @@ enum LiveActivityIslandLook {
 enum LiveActivityFont {
     private static let fraunces = "Fraunces-72ptSemiBoldNonWonky"
     private static let dmSans = "DMSans-14pt"
-    private static let dmSansMedium = "DMSans-14ptMedium"
+    private static let dmSansBold = "DMSans-Bold"
 
     /// The exercise or "Rest" on the Lock Screen (`.laT`): Fraunces 19.
     static let title = Font.custom(fraunces, size: 19, relativeTo: .title3)
@@ -109,26 +109,25 @@ enum LiveActivityFont {
     /// The expanded island's countdown (`.diBig`): Fraunces 38.
     static let islandCountdown = Font.custom(fraunces, size: 38, relativeTo: .title)
     /// The header: the workout or the recipe (`.lah`): DM Sans bold 12.5.
-    static let header = Font.custom(dmSansMedium, size: 12.5, relativeTo: .caption).weight(.bold)
+    static let header = Font.custom(dmSansBold, size: 12.5, relativeTo: .caption)
     /// "Step 3 of 8" (`.lmoss`): DM Sans bold 13.
-    static let stepCount = Font.custom(dmSansMedium, size: 13, relativeTo: .caption).weight(.bold)
+    static let stepCount = Font.custom(dmSansBold, size: 13, relativeTo: .caption)
     /// The set line, "Next up", "Open Fernlet…" (`.lsoft`): DM Sans 13.5.
     static let line = Font.custom(dmSans, size: 13.5, relativeTo: .subheadline)
     /// Last time, the heart rate, the rest's weight (`.lsoft` 12.5): DM Sans 12.5.
     static let detail = Font.custom(dmSans, size: 12.5, relativeTo: .caption)
-    /// The weight inside that line ("**25 lb** · 25–30 lb"): DM Sans bold 12.5. The extension carries no
-    /// regular-weight bold, so the bold rides on the medium face, as the app's framed fonts do.
-    static let detailBold = Font.custom(dmSansMedium, size: 12.5, relativeTo: .caption).weight(.bold)
+    /// The weight inside that line ("**25 lb** · 25–30 lb"): DM Sans Bold 12.5.
+    static let detailBold = Font.custom(dmSansBold, size: 12.5, relativeTo: .caption)
     /// "Exercise 3 of 6" (`.lsoft` 11.5): DM Sans 11.5.
-    static let progress = Font.custom(dmSansMedium, size: 11.5, relativeTo: .caption2).weight(.semibold)
+    static let progress = Font.custom(dmSansBold, size: 11.5, relativeTo: .caption2)
     /// A cooking step's words: DM Sans 14.5.
     static let step = Font.custom(dmSans, size: 14.5, relativeTo: .subheadline)
     /// The set's weight: DM Sans bold 15.
-    static let weight = Font.custom(dmSansMedium, size: 15, relativeTo: .subheadline).weight(.bold)
+    static let weight = Font.custom(dmSansBold, size: 15, relativeTo: .subheadline)
     /// The range under the weight: DM Sans 12.
     static let range = Font.custom(dmSans, size: 12, relativeTo: .caption2)
     /// A framed button's word (`.pxbtn.sm` in the card): DM Sans bold 15.
-    static let button = Font.custom(dmSansMedium, size: 15, relativeTo: .subheadline).weight(.bold)
+    static let button = Font.custom(dmSansBold, size: 15, relativeTo: .subheadline)
 }
 
 extension Color {

@@ -73,7 +73,7 @@ private struct KeepFriendRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Text(verbatim: displayName)
-                .font(look == nil ? .fernlet(.headerMedium) : FernletFramedFont.rowTitle.weight(.semibold))
+                .font(look == nil ? .fernlet(.headerMedium) : FernletFramedFont.rowTitleBold)
                 .foregroundStyle(look?.text ?? Color.bark)
 
             Spacer(minLength: 12)

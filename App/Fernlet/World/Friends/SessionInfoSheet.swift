@@ -111,7 +111,7 @@ struct SessionInfoSheet: View {
             HStack(spacing: 8) {
                 WorldSpriteView(sprite: FriendsSprites.film, scale: 2)
                 Text("\(shots) shots left")
-                    .font(FernletFramedFont.rowTitle.weight(.bold))
+                    .font(FernletFramedFont.rowTitleBold)
                     .foregroundStyle(WorldPalette.bark)
             }
             // P8 item 0 (c): photos that reached nobody are said once, as a count — through the

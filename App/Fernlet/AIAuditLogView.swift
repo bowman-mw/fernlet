@@ -269,7 +269,7 @@ struct AIAuditLogView: View {
     private func callHeadline(_ row: AIAuditRow) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             valueText(row.kind)
-                .font(FernletFramedFont.rowTitle.weight(.bold))
+                .font(FernletFramedFont.rowTitleBold)
                 .foregroundStyle(Color.bark)
             Spacer(minLength: 8)
             Text(row.timestamp.formatted(.dateTime.month(.abbreviated).day().hour().minute()))

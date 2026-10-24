@@ -175,7 +175,7 @@ struct ShoppingListBuilderView: View {
                 let current = yieldByID[recipe.id] ?? recipe.servings
                 HStack(spacing: 10) {
                     Text("Cook for \(current)")
-                        .font(FernletFramedFont.rowDetail.weight(.bold))
+                        .font(FernletFramedFont.rowDetailBold)
                         .foregroundStyle(WorldPalette.bark)
                         .accessibilityHidden(true)
                     Spacer(minLength: 8)
@@ -439,7 +439,7 @@ struct WeeklyMealPlannerView: View {
             RecipePhotoThumb(recipeID: recipe.id, load: { store.recipePhotoData(for: recipe.id) })
             VStack(alignment: .leading, spacing: 2) {
                 Text(recipe.name)
-                    .font(FernletFramedFont.body.weight(.semibold))
+                    .font(FernletFramedFont.bodyBold)
                     .foregroundStyle(WorldPalette.bark)
                     .fixedSize(horizontal: false, vertical: true)
                 if let mealType = entry.mealType {
@@ -594,7 +594,7 @@ private struct RecipePickerSheet: View {
         } label: {
             HStack(spacing: 10) {
                 Text(recipe.name)
-                    .font(FernletFramedFont.rowTitle.weight(.semibold))
+                    .font(FernletFramedFont.rowTitleBold)
                     .foregroundStyle(WorldPalette.bark)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 RecipeSpriteTile(sprite: WorldSprites.plus, size: 32)
@@ -612,7 +612,7 @@ private struct RecipePickerSheet: View {
         FernletCard {
             VStack(alignment: .leading, spacing: 10) {
                 Text(verbatim: recipe.name)
-                    .font(FernletFramedFont.rowTitle.weight(.bold))
+                    .font(FernletFramedFont.rowTitleBold)
                     .foregroundStyle(WorldPalette.bark)
                 SectionLabel("Plan it for")
                 FlowLayout(spacing: 8) {

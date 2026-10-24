@@ -174,7 +174,7 @@ struct WorldQuickStartLabelPill: View {
     var body: some View {
         let shape = UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 10)
         Text(label.title)
-            .font(.custom(FernletFontName.dmSansMedium, size: dynamicTypeSize.isAccessibilitySize ? 21 : 17, relativeTo: .body).weight(.bold))
+            .font(.custom(FernletFontName.dmSansBold, size: dynamicTypeSize.isAccessibilitySize ? 21 : 17, relativeTo: .body))
             // Two steps, as the approved designs draw it beside the 60-pt button: 17, then 21.
             .dynamicTypeSize(...DynamicTypeSize.large)
             .foregroundStyle(Self.ink)

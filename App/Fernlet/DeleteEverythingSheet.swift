@@ -200,7 +200,7 @@ struct DeleteEverythingSheet: View {
                 // NOT "none of it can be recovered": local data rides iOS device backups by default,
                 // so an older encrypted backup can still restore it — Fernlet can't reach into that.
                 Text("Fernlet can't undo this.")
-                    .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.rowTitle.weight(.bold))
+                    .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.rowTitleBold)
                     .foregroundStyle(look?.text ?? Color.slate)
                     .fernletWrappingText()
             }

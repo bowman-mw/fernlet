@@ -142,7 +142,8 @@ public struct SectionLabel: View {
                     .padding(2)
                     .background(framedLook.ink)
                     .accessibilityHidden(true)
-                styled(text.fontWeight(.bold), color: framedLook.text)
+                // The Bold face itself (a weight asked of the single-weight face drew it regular).
+                styled(text.font(FernletFramedFont.sectionLabel), color: framedLook.text)
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)

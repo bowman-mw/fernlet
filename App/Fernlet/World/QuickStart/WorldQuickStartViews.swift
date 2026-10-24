@@ -22,7 +22,7 @@ nonisolated enum WorldQuickStartPalette {
 /// The quick start's type: DM Sans throughout, as the approved card draws it (heading 19 pt bold,
 /// choice names 16 pt bold, lines 13.5 to 14 pt), each scaling with Dynamic Type.
 nonisolated enum WorldQuickStartType {
-    static let heading = Font.custom(FernletFontName.dmSansMedium, size: 19, relativeTo: .title3).weight(.bold)
+    static let heading = Font.custom(FernletFontName.dmSansBold, size: 19, relativeTo: .title3)
     static let note = Font.custom(FernletFontName.dmSans, size: 14, relativeTo: .subheadline)
     static let optionTitle = FernletFramedFont.button
     static let optionDetail = FernletFramedFont.note

@@ -133,7 +133,7 @@ struct StressExplainerSheet: View {
                     .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Something for right now?")
-                            .font(FernletFramedFont.rowTitle.weight(.bold))
+                            .font(FernletFramedFont.rowTitleBold)
                             .foregroundStyle(WorldPalette.bark)
                         Text("First aid has slow breathing, grounding, and a worry box — only if it sounds nice.")
                             .font(FernletFramedFont.note)

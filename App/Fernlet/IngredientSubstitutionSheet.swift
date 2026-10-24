@@ -218,7 +218,7 @@ struct IngredientSubstitutionSheet: View {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(foodItem.name)
-                        .font(FernletFramedFont.rowTitle.weight(.semibold))
+                        .font(FernletFramedFont.rowTitleBold)
                         .foregroundStyle(WorldPalette.bark)
                         .fernletWrappingText()
                     HStack(spacing: 6) {
@@ -299,7 +299,7 @@ struct IngredientSubstitutionSheet: View {
     private func changeLine(label: LocalizedStringKey, text: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Text(label)
-                .font(FernletFramedFont.rowDetail.weight(.bold))
+                .font(FernletFramedFont.rowDetailBold)
                 .foregroundStyle(WorldPalette.dim)
                 .frame(minWidth: 40, alignment: .leading)
             Text(text)

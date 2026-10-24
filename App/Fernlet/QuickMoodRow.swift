@@ -97,7 +97,7 @@ struct QuickMoodRow: View {
                 .frame(width: look != nil ? 14 : 8, height: look != nil ? 14 : 8)
                 .overlay { if let look { Circle().strokeBorder(look.ink, lineWidth: 2) } }
             Text(tag.label(addressing: termOfAddress))
-                .font(look != nil ? FernletFramedFont.field.weight(.semibold) : .fernlet(.label))
+                .font(look != nil ? FernletFramedFont.fieldBold : .fernlet(.label))
                 .lineLimit(1)
         }
     }

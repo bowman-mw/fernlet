@@ -44,7 +44,7 @@ struct SharingSettingsView: View {
         FernletFramedSection(header: Text("Trainer summaries"),
                              footer: Text("These choices apply to every summary prepared from Move or Shortcuts.")) {
             Text("Also include in trainer summaries")
-                .font(FernletFramedFont.rowDetail.weight(.bold))
+                .font(FernletFramedFont.rowDetailBold)
                 .foregroundStyle(WorldPalette.dim)
             switchRow("Your goal", isOn: binding(\.trainerExportIncludesGoal))
             switchRow("Hydration", isOn: binding(\.trainerExportIncludesHydration))
@@ -61,7 +61,7 @@ struct SharingSettingsView: View {
         Toggle(isOn: isOn) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(FernletFramedFont.rowTitle.weight(.semibold))
+                    .font(FernletFramedFont.rowTitleBold)
                     .foregroundStyle(WorldPalette.bark)
                 if let detail {
                     Text(detail)

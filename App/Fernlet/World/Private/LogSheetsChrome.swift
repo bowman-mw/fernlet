@@ -51,7 +51,7 @@ struct PrivateDateRow<Picker: View>: View {
     /// The field's name.
     private var label: some View {
         Text(title)
-            .font(FernletFramedFont.rowTitle.weight(.bold))
+            .font(FernletFramedFont.rowTitleBold)
             .foregroundStyle(WorldPalette.bark)
     }
 }

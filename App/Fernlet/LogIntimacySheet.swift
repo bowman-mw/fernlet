@@ -135,7 +135,7 @@ struct LogIntimacySheet: View {
                     WorldSpriteView(sprite: WorldSprites.heartSm, scale: 2,
                                     tint: writesToHealthKit ? nil : WorldPalette.dim)
                 }
-                .font(FernletFramedFont.rowTitle.weight(.bold))
+                .font(FernletFramedFont.rowTitleBold)
                 .foregroundStyle(writesToHealthKit ? WorldPalette.mossInk : WorldPalette.dim)
 
                 if writesToHealthKit {

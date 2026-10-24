@@ -105,7 +105,7 @@ struct PeriodSensitiveSettingsView: View {
         )) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Advanced period tracking")
-                    .font(FernletFramedFont.rowTitle.weight(.semibold))
+                    .font(FernletFramedFont.rowTitleBold)
                     .foregroundStyle(WorldPalette.bark)
                 Text("Log every symptom, cervical mucus, ovulation tests, basal temperature and spotting between periods.",
                      comment: "Settings › Period & sensitive content: the line under the Advanced period tracking switch, saying what it adds to Log period.")
@@ -175,7 +175,7 @@ struct PeriodSensitiveSettingsView: View {
                         .frame(width: 28)
                         .accessibilityHidden(true)
                     Text("App lock")
-                        .font(FernletFramedFont.rowTitle.weight(.semibold))
+                        .font(FernletFramedFont.rowTitleBold)
                         .foregroundStyle(WorldPalette.bark)
                     Spacer()
                     FernletIcon(.chevron, scale: 2)
@@ -258,7 +258,7 @@ struct PeriodSensitiveSettingsView: View {
     private func hubToggle(_ title: LocalizedStringKey, isOn: Binding<Bool>) -> some View {
         Toggle(isOn: isOn) {
             Text(title)
-                .font(FernletFramedFont.rowTitle.weight(.semibold))
+                .font(FernletFramedFont.rowTitleBold)
                 .foregroundStyle(WorldPalette.bark)
         }
     }

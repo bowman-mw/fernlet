@@ -126,9 +126,9 @@ nonisolated enum WorldWalkPalette {
 
 /// The walk bar's type (DM Sans): the distance 21 pt bold, the title 15 pt, the line 13 pt semibold.
 nonisolated enum WorldWalkType {
-    static let distance = Font.custom(FernletFontName.dmSansMedium, size: 21, relativeTo: .title3).weight(.bold)
+    static let distance = Font.custom(FernletFontName.dmSansBold, size: 21, relativeTo: .title3)
     static let title = Font.custom(FernletFontName.dmSans, size: 15, relativeTo: .subheadline)
-    static let line = Font.custom(FernletFontName.dmSansMedium, size: 13, relativeTo: .footnote).weight(.semibold)
+    static let line = Font.custom(FernletFontName.dmSansBold, size: 13, relativeTo: .footnote)
 }
 
 /// The walk's words.

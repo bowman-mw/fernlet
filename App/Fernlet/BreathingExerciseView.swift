@@ -494,7 +494,7 @@ struct BreathingExerciseView: View {
             Toggle(isOn: $hapticsEnabled) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Haptics")
-                        .font(FernletFramedFont.rowTitle.weight(.bold))
+                        .font(FernletFramedFont.rowTitleBold)
                         .foregroundStyle(WorldPalette.bark)
                     Text("soft taps in, one tap out",
                          comment: "Under the breathing screen's Haptics switch: what the haptics feel like. Several soft taps while breathing in, a single tap as the breath goes out, nothing while holding.")
@@ -528,7 +528,7 @@ struct BreathingExerciseView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .top) {
                     Text(candidate.name)
-                        .font(FernletFramedFont.rowTitle.weight(.bold))
+                        .font(FernletFramedFont.rowTitleBold)
                         .foregroundStyle(WorldPalette.bark)
                     Spacer(minLength: 4)
                     if selected {

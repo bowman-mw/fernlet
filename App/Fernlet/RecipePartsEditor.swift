@@ -131,7 +131,7 @@ struct RecipeStepEditorCard: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 4) {
                 Text("Step \(index + 1)")
-                    .font(FernletFramedFont.rowDetail.weight(.bold))
+                    .font(FernletFramedFont.rowDetailBold)
                     .foregroundStyle(WorldPalette.dim)
                 Spacer()
                 RecipeEditorGlyphButton(sprite: WorldSprites.chevU, enabled: index > 0,
@@ -260,7 +260,7 @@ struct RecipePartEditorCard: View {
 
     private func subheading(_ title: LocalizedStringKey) -> some View {
         Text(title)
-            .font(FernletFramedFont.rowDetail.weight(.bold))
+            .font(FernletFramedFont.rowDetailBold)
             .foregroundStyle(WorldPalette.dim)
             .accessibilityAddTraits(.isHeader)
     }

@@ -30,7 +30,7 @@ struct RecipePageHeaderCard<PhotoSlot: View>: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityAddTraits(.isHeader)
                     yieldLine
-                        .font(FernletFramedFont.body.weight(.semibold))
+                        .font(FernletFramedFont.bodyBold)
                         .foregroundStyle(look?.dim ?? Color.slate)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -92,7 +92,7 @@ struct RecipePhotoSlot: View {
                     WorldSpriteView(sprite: WorldSprites.camera, scale: 3)
                 }
                 Text("Add photo")
-                    .font(FernletFramedFont.rowDetail.weight(.bold))
+                    .font(FernletFramedFont.rowDetailBold)
                     .foregroundStyle(look?.link ?? Color.moss)
                     .multilineTextAlignment(.center)
                     // The slot stays 110 pt; at the largest sizes the words shrink rather than cut off.
@@ -144,7 +144,7 @@ struct RecipeServingCard: View {
         VStack(spacing: 2) {
             WorldSpriteView(sprite: sprite, scale: 3)
             value
-                .font(FernletFramedFont.button.weight(.bold))
+                .font(FernletFramedFont.button)
                 .foregroundStyle(look?.text ?? Color.bark)
             name
                 .font(FernletFramedFont.rowDetail)
@@ -319,7 +319,7 @@ struct RecipeSourceCard: View {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         WorldSpriteView(sprite: WorldSprites.globe, scale: 2)
                         Text(verbatim: url.host() ?? url.absoluteString)
-                            .font(FernletFramedFont.body.weight(.semibold))
+                            .font(FernletFramedFont.bodyBold)
                             .underline()
                             .foregroundStyle(look?.link ?? Color.moss)
                             .lineLimit(1)
