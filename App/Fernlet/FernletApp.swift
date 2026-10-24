@@ -774,7 +774,7 @@ private extension UIView {
 }
 #endif
 
-/// Full-screen fallback for a failed store load: names the error and offers a retry.
+/// Full-screen fallback for a failed store load (design `b2-launch-fail`): names the error and offers a retry.
 ///
 /// Rendered only from ``FernletApp``'s `.failed` loader phase; the button re-runs
 /// ``FernletStoreLoader/retry()`` so a transient persistence failure never strands the user on a
@@ -784,33 +784,7 @@ private struct LaunchFailureView: View {
     let retry: () -> Void
 
     var body: some View {
-        VStack(spacing: 18) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 38, weight: .semibold))
-                .foregroundStyle(Color.terracotta)
-
-            VStack(spacing: 8) {
-                Text("Fernlet couldn't open")
-                    .font(.fernlet(.header))
-                    .foregroundStyle(Color.bark)
-                    .multilineTextAlignment(.center)
-                Text(error.localizedDescription)
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .multilineTextAlignment(.center)
-                    .fernletWrappingText()
-            }
-
-            Button("Try again", action: retry)
-                .buttonStyle(.plain)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.onMoss)
-                .padding(.horizontal, 28)
-                .padding(.vertical, 14)
-                .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 14))
-        }
-        .padding(28)
-        .frame(maxWidth: 420)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Design `b2-launch-fail`: the dotted page, the pixel warning, the framed Try again.
+        WorldLaunchFailure(message: error.localizedDescription, retry: retry)
     }
 }

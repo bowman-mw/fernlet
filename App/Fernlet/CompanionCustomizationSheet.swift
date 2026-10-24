@@ -6,136 +6,109 @@ import FernletUI
 import UIKit
 #endif
 
-/// The companion customization sheet (reached by the Customize chip under the hero companion, or
-/// the legacy long-press, and on the World map by holding the companion): the template
-/// ``SheetHeader`` with the coin balance leading, a live companion preview beside named Wardrobe /
-/// Creation Studio rows, and one selector row per slot (body / accessory / clothing / side item).
+/// The companion customization sheet, for the World map's hold on the companion: ``CompanionCustomizationPage``
+/// in its own stack under the sheet's paper header, “Customize” with Done.
 ///
-/// Each slot row pushes a picker that combines the built-in item grid + recolor controls with the
-/// user's own Wardrobe-designed items for the covered `ItemSlot`s; all writes go through
-/// `FernletStore.setCompanionAppearance` / the equip APIs, so the preview and the Home hero stay
-/// in lockstep. Wardrobe and Studio stay reachable ONLY through this stack's push wiring
-/// (binding-driven with `onExit`) so an environment dismiss can never tear the sheet down.
+/// The Today panel pushes the same page under its plate (design `b2-customize`). Here the sheet blocks
+/// swipe-to-dismiss while a Creation Studio pushed anywhere on its stack holds unsaved paint.
 struct CompanionCustomizationSheet: View {
     var store: FernletStore
     @Binding var petCount: Int
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// Raised by a ``CreationStudioView`` pushed anywhere on this stack while it holds unsaved paint.
-    /// The studio is a PUSH inside this sheet, so without this a swipe-down from the studio threw the
-    /// drawing away with no prompt.
     @State private var isStudioDraftDirty = false
-    /// Drives the root-level push into a NEW item's studio (HOME-30). A binding-driven push with
-    /// `onExit`, mirroring ``WardrobeView``'s wiring, because the studio must be popped by its
-    /// host — its environment `dismiss` from the confirmation step tears the whole sheet down
-    /// (see ``CreationStudioView/leaveStudio()``).
-    @State private var isDesigningFromRoot = false
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // The template chrome (XCUT-14/XCUT-15): left-aligned Fraunces title with Done as
-                // the trailing text button, replacing the centred system title + toolbar Done. The
-                // coin balance leads — a balance is information, not an action, so it never takes
-                // the slot that dismisses the sheet.
-                SheetHeader(
-                    title: Text("Customize"),
-                    subtitle: Text("Tap a slot to change it."),
-                    onDone: { dismiss() }
-                ) {
-                    coinAccessory
-                }
-                ScrollView {
-                    VStack(spacing: 9) {
-                        companionAndLibraryRows
-                        bodyRow
-                        accessoryRow
-                        clothingRow
-                        sideItemRow
-                        unlockedFooter
-                    }
-                    .padding(20)
-                }
-            }
-            .background(Color.parchment)
-            .tint(Color.moss)
-            // The root draws its own SheetHeader; pushed screens (slot pickers, Wardrobe, Studio)
-            // keep their system navigation bars and back buttons.
-            .toolbar(.hidden, for: .navigationBar)
-            .navigationDestination(isPresented: $isDesigningFromRoot) {
-                CreationStudioView(store: store,
-                                   draftIsDirty: $isStudioDraftDirty,
-                                   onExit: { isDesigningFromRoot = false })
-            }
+            CompanionCustomizationPage(store: store, petCount: $petCount, isStudioDraftDirty: $isStudioDraftDirty)
+                .fernletSheetToolbar(title: "Customize", onDone: { dismiss() })
         }
+        .fernletSheet()
         .interactiveDismissDisabled(isStudioDraftDirty)
     }
+}
 
-    /// The leading header slot: the wallet, moved here from the Wardrobe's toolbar (HOME-22 /
-    /// XCUT-14). 3e·AX3: the balance keeps its slot but drops the coin glyph.
-    @ViewBuilder
-    private var coinAccessory: some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            Text(verbatim: "\(store.coinBalance)")
-                .font(.fernlet(.stat))
-                .foregroundStyle(Color.bark)
-                // The pill's own spoken balance (`FernletUICopy`, plural-ruled), so the numeral form
-                // and the pill it replaces say the same words.
-                .accessibilityLabel(Text(verbatim: FernletUICopy.coinBalance(store.coinBalance)))
-                .accessibilityIdentifier("customize.coinBalance")
-        } else {
-            CoinBalancePill(balance: store.coinBalance)
-                .accessibilityIdentifier("customize.coinBalance")
-        }
-    }
+/// Customize (design `b2-customize`, approved 2026-10-23): the coin pill, the close-up and on-the-map
+/// previews, Wardrobe and Creation Studio, App colors, and one row per slot (body, accessory, clothing,
+/// side item), each pushing its picker (`b2-slot-picker`).
+///
+/// A page inside the Today panel, opened from its Customize button (and in a sheet from the map's hold,
+/// ``CompanionCustomizationSheet``). All writes go through `FernletStore.setCompanionAppearance` / the
+/// equip APIs, so the previews and the map stay in lockstep. Wardrobe and Studio stay reachable only
+/// through this stack's push wiring (binding-driven with `onExit`), so the studio's exit never tears
+/// the stack down.
+struct CompanionCustomizationPage: View {
+    var store: FernletStore
+    @Binding var petCount: Int
+    /// Raised while a pushed ``CreationStudioView`` holds unsaved paint (the sheet blocks swipe-down).
+    @Binding var isStudioDraftDirty: Bool
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// Drives the root-level push into a NEW item's studio (HOME-30), binding-driven with `onExit`.
+    @State private var isDesigningFromRoot = false
 
-    /// The companion preview beside the Wardrobe / Creation Studio rows (HOME-30: both become
-    /// named rows at the sheet root, one chevron each). 3e·AX3: the companion stops sharing the
-    /// row and sits above them, centred.
-    @ViewBuilder
-    private var companionAndLibraryRows: some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            VStack(spacing: 9) {
-                companionPreview.frame(maxWidth: .infinity)
-                wardrobeRow
-                studioRow
-            }
-        } else {
-            HStack(alignment: .center, spacing: 12) {
-                companionPreview
-                VStack(spacing: 9) {
-                    wardrobeRow
-                    studioRow
+    /// "Customize", the page's title on the plate.
+    static let title = LocalizedStringResource("Customize", comment: "Customize page title: the companion's look, Wardrobe and Creation Studio")
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 14) {
+                topRow
+                CustomizePreviewCard(store: store, petCount: petCount)
+                libraryRows
+                NavigationLink {
+                    AppColorsPage(store: store)
+                } label: {
+                    CustomizeAppColorsCard()
                 }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("companion.appColors")
+                FernletFramedSection {
+                    bodyRow
+                    accessoryRow
+                    clothingRow
+                    sideItemRow
+                }
+                unlockedFooter
             }
+            .padding(20)
+        }
+        .fernletPageBackground()
+        .navigationDestination(isPresented: $isDesigningFromRoot) {
+            CreationStudioView(store: store,
+                               draftIsDirty: $isStudioDraftDirty,
+                               onExit: { isDesigningFromRoot = false })
         }
     }
 
-    /// The live 84pt companion preview; every write below refreshes it via the store.
-    private var companionPreview: some View {
-        CompanionView(
-            state: store.companionState,
-            appearance: store.settings.companionAppearance,
-            size: 84,
-            interactionLevel: petCount,
-            equippedItems: store.equippedCustomItems
-        )
-        .frame(width: 84, height: 84)
-        // Decorative: a live preview of the edits being made below, not a control.
-        .accessibilityHidden(true)
+    /// “Tap a slot to change it.” and the coin balance (moved here from the Wardrobe, HOME-22).
+    private var topRow: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text("Tap a slot to change it.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(WorldPalette.dim)
+                .fernletWrappingText()
+            Spacer(minLength: 8)
+            CustomizeCoinPill(balance: store.coinBalance)
+        }
     }
 
-    /// The named Wardrobe row: the closet with its item count, one chevron. Carries the
-    /// `companion.wardrobe` test token — this is the primary Wardrobe entry now.
+    /// Wardrobe and Creation Studio side by side, or stacked at accessibility text sizes.
+    private var libraryRows: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: 12))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: 12))
+        return layout {
+            wardrobeRow
+            studioRow
+        }
+    }
+
+    /// The Wardrobe card: the closet with its item count. Carries the `companion.wardrobe` test token.
     private var wardrobeRow: some View {
         NavigationLink {
             WardrobeView(store: store, studioDraftIsDirty: $isStudioDraftDirty)
         } label: {
-            libraryRowLabel(
-                systemImage: "tshirt.fill",
-                title: Text("Wardrobe"),
-                detail: wardrobeCountText
-            )
+            CustomizeLinkCard(sprite: WorldSprites.face, title: Text("Wardrobe"), detail: wardrobeCountText)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("companion.wardrobe")
@@ -147,68 +120,34 @@ struct CompanionCustomizationSheet: View {
         return Text(verbatim: HomeCopy.wardrobeItemCount(count))
     }
 
-    /// The named Creation Studio row — a straight door to designing a new item.
+    /// The Creation Studio card — a straight door to designing a new item.
     private var studioRow: some View {
         Button {
             isDesigningFromRoot = true
         } label: {
-            libraryRowLabel(
-                systemImage: "paintbrush.pointed.fill",
-                title: Text("Creation Studio"),
-                detail: nil
-            )
+            CustomizeLinkCard(sprite: WorldSprites.pen, title: Text("Creation Studio"))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("companion.studio")
     }
 
-    /// Shared chrome for the Wardrobe / Studio rows: icon tile, title, optional count, one chevron.
-    private func libraryRowLabel(systemImage: String, title: Text, detail: Text?) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.system(size: 15))
-                .foregroundStyle(Color.moss)
-                .frame(width: 30, height: 30)
-                .background(Color.moss.opacity(0.14), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-            title
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.bark)
-            Spacer(minLength: 8)
-            if let detail {
-                detail
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
-            }
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(Color.slate)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.cream)
-        )
-    }
-
-    /// The reassurance line closing the sheet root.
+    /// The reassurance line closing the page.
     private var unlockedFooter: some View {
         Text("Everything you've unlocked stays unlocked.")
             .font(.fernlet(.bodySmall))
-            .italic()
-            .foregroundStyle(Color.slate)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.top, 8)
+            .foregroundStyle(WorldPalette.dim)
+            .fernletWrappingText()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 2)
     }
 
-    // MARK: Selector rows — one per slot, each showing what's equipped and pushing its picker.
+    // MARK: Selector rows — one per slot, each showing what's worn and pushing its picker.
 
     private var bodyRow: some View {
         let appearance = store.settings.companionAppearance
         return NavigationLink {
             slotPicker(
-                title: "Body",
+                title: CustomizeSlotTitle.body,
                 items: CompanionBodyStyle.allCases,
                 selection: appearanceBinding(\.bodyStyle),
                 colorTitle: "Body color",
@@ -221,23 +160,21 @@ struct CompanionCustomizationSheet: View {
                 Label(style.label, systemImage: bodyStyleIcon(style))
             }
         } label: {
-            slotRowLabel(
-                slot: "Body",
-                value: appearance.bodyStyle.label,
-                isEmpty: false
-            ) {
+            CustomizeSlotRowLabel(slot: Text("Body"), value: appearance.bodyStyle.label, isEmpty: false) {
                 Circle()
                     .fill(appearance.bodyColor.color(for: store.companionState))
+                    .frame(width: 22, height: 22)
+                    .overlay(Circle().strokeBorder(WorldPalette.ink, lineWidth: 2))
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(FernletRowButtonStyle())
     }
 
     private var accessoryRow: some View {
         let appearance = store.settings.companionAppearance
         return NavigationLink {
             slotPicker(
-                title: "Accessory",
+                title: CustomizeSlotTitle.accessory,
                 items: CompanionAccessory.allCases,
                 selection: appearanceBinding(\.accessory),
                 colorTitle: "Accessory color",
@@ -247,25 +184,25 @@ struct CompanionCustomizationSheet: View {
                 isBuiltInEquipped: appearance.accessory != .none,
                 customSlots: [.hat, .face]
             ) { accessory in
-                Label(accessory.label, systemImage: accessoryIcon(accessory))
+                pieceLabel(accessory.label, sprite: CustomizeSlotArt.sprite(for: accessory), systemImage: accessoryIcon(accessory))
             }
         } label: {
-            slotRowLabel(
-                slot: "Accessory",
+            CustomizeSlotRowLabel(
+                slot: Text("Accessory"),
                 value: rowValue(builtInLabel: appearance.accessory.label, builtInEmpty: appearance.accessory == .none, customSlots: [.hat, .face]),
                 isEmpty: appearance.accessory == .none && equippedCustomItem(in: [.hat, .face]) == nil
             ) {
-                slotIcon(accessoryIcon(appearance.accessory))
+                CustomizePieceIcon(sprite: CustomizeSlotArt.sprite(for: appearance.accessory), systemImage: accessoryIcon(appearance.accessory))
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(FernletRowButtonStyle())
     }
 
     private var clothingRow: some View {
         let appearance = store.settings.companionAppearance
         return NavigationLink {
             slotPicker(
-                title: "Clothing",
+                title: CustomizeSlotTitle.clothing,
                 items: CompanionClothing.allCases,
                 selection: appearanceBinding(\.clothing),
                 colorTitle: "Clothing color",
@@ -275,25 +212,25 @@ struct CompanionCustomizationSheet: View {
                 isBuiltInEquipped: appearance.clothing != .none,
                 customSlots: [.body]
             ) { clothing in
-                Label(clothing.label, systemImage: clothingIcon(clothing))
+                pieceLabel(clothing.label, sprite: CustomizeSlotArt.sprite(for: clothing), systemImage: clothingIcon(clothing))
             }
         } label: {
-            slotRowLabel(
-                slot: "Clothing",
+            CustomizeSlotRowLabel(
+                slot: Text("Clothing"),
                 value: rowValue(builtInLabel: appearance.clothing.label, builtInEmpty: appearance.clothing == .none, customSlots: [.body]),
                 isEmpty: appearance.clothing == .none && equippedCustomItem(in: [.body]) == nil
             ) {
-                slotIcon(clothingIcon(appearance.clothing))
+                CustomizePieceIcon(sprite: CustomizeSlotArt.sprite(for: appearance.clothing), systemImage: clothingIcon(appearance.clothing))
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(FernletRowButtonStyle())
     }
 
     private var sideItemRow: some View {
         let appearance = store.settings.companionAppearance
         return NavigationLink {
             slotPicker(
-                title: "Side item",
+                title: CustomizeSlotTitle.sideItem,
                 items: CompanionSideItem.allCases,
                 selection: appearanceBinding(\.sideItem),
                 colorTitle: "Item color",
@@ -303,18 +240,26 @@ struct CompanionCustomizationSheet: View {
                 isBuiltInEquipped: appearance.sideItem != .none,
                 customSlots: [.heldItem]
             ) { item in
-                Label(item.label, systemImage: item.systemImage)
+                pieceLabel(item.label, sprite: CustomizeSlotArt.sprite(for: item), systemImage: item.systemImage)
             }
         } label: {
-            slotRowLabel(
-                slot: "Side item",
+            CustomizeSlotRowLabel(
+                slot: Text("Side item"),
                 value: rowValue(builtInLabel: appearance.sideItem.label, builtInEmpty: appearance.sideItem == .none, customSlots: [.heldItem]),
                 isEmpty: appearance.sideItem == .none && equippedCustomItem(in: [.heldItem]) == nil
             ) {
-                slotIcon(appearance.sideItem.systemImage)
+                CustomizePieceIcon(sprite: CustomizeSlotArt.sprite(for: appearance.sideItem), systemImage: appearance.sideItem.systemImage)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(FernletRowButtonStyle())
+    }
+
+    /// A built-in item's chip label: its pixel piece (or symbol) and its name.
+    private func pieceLabel(_ name: String, sprite: WorldSprite?, systemImage: String) -> some View {
+        HStack(spacing: 8) {
+            CustomizePieceIcon(sprite: sprite, systemImage: systemImage)
+            Text(verbatim: name)
+        }
     }
 
     /// The value shown on a slot row: the built-in label when a built-in is on; otherwise the name of
@@ -332,74 +277,12 @@ struct CompanionCustomizationSheet: View {
         store.equippedCustomItems.first { slots.contains($0.slot) }
     }
 
-    /// The shared selector-row chrome: a small icon/swatch, an uppercase slot label, the current
-    /// value right-aligned, and a chevron. `isEmpty` renders the value as a soft italic nudge.
-    /// - Parameter slot: `LocalizedStringKey`, not `String` (review A4 follow-up F5). All four call
-    ///   sites pass a literal, and a `String` parameter bound `Text`'s verbatim overload — so the
-    ///   four slot names were never harvested and the `.textCase(.uppercase)` below had no catalog
-    ///   lookup to run after. One word of type is the whole fix.
-    private func slotRowLabel<Icon: View>(
-        slot: LocalizedStringKey,
-        value: String,
-        isEmpty: Bool,
-        @ViewBuilder icon: () -> Icon
-    ) -> some View {
-        HStack(spacing: 12) {
-            icon()
-                .frame(width: 30, height: 30)
-                .background(
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(Color.bark.opacity(0.06))
-                )
-
-            // `.textCase`, not `String.uppercased()`: the transform has to run after any catalog
-            // lookup so it uppercases the translation, not the English key (T2-1).
-            Text(slot)
-                .textCase(.uppercase)
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
-                .frame(width: 66, alignment: .leading)
-
-            Spacer(minLength: 8)
-
-            Text(value)
-                .font(.fernlet(.body))
-                .italic(isEmpty)
-                .foregroundStyle(isEmpty ? Color.slate : Color.bark)
-                .multilineTextAlignment(.trailing)
-                .lineLimit(1)
-
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(Color.slate)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.cream)
-        )
-        .accessibilityElement(children: .combine)
-        // `Text(slot)`, not `slot`: a `LocalizedStringKey` cannot be interpolated INTO another
-        // `LocalizedStringKey` (the compiler deprecates it — it would fall back to a debug
-        // description), but a `Text` can, and it carries the caption's own lookup with it.
-        .accessibilityLabel("\(Text(slot)): \(value)")
-    }
-
-    /// A slot swatch built from an SF Symbol, tinted to read as a quiet placeholder.
-    private func slotIcon(_ systemImage: String) -> some View {
-        Image(systemName: systemImage)
-            .font(.system(size: 15, weight: .light))
-            .foregroundStyle(Color.slate)
-    }
-
-    /// A full-screen picker for one slot: a live companion preview, the built-in item grid + recolor
-    /// controls, and — folded into the same picker — the user's custom items for the slot(s) this row
-    /// covers. Built-ins keep the swatch/ColorPicker recolor; custom items carry their own painted
-    /// colors and so get no color control. Reuses the existing customization card verbatim so all
-    /// built-in pick / recolor / custom-color behavior is preserved.
+    /// A slot's page (design `b2-slot-picker`): the previews, the built-in choices and their colours as
+    /// framed chips, then the user's own items for the slot(s) this row covers and the way into the
+    /// Wardrobe. Built-ins keep the swatch/ColorPicker recolor; custom items carry their own painted
+    /// colours and so get no colour control.
     private func slotPicker<Item: Identifiable & Hashable, LabelContent: View>(
-        title: LocalizedStringKey,
+        title: LocalizedStringResource,
         items: [Item],
         selection: Binding<Item>,
         colorTitle: LocalizedStringKey,
@@ -411,9 +294,8 @@ struct CompanionCustomizationSheet: View {
         @ViewBuilder label: @escaping (Item) -> LabelContent
     ) -> some View {
         ScrollView {
-            VStack(spacing: 16) {
-                pickerPreview
-
+            VStack(spacing: 14) {
+                CustomizePreviewCard(store: store, petCount: petCount)
                 CompanionCustomizationCard(
                     title: title,
                     items: items,
@@ -428,97 +310,43 @@ struct CompanionCustomizationSheet: View {
                     showsColor: isBuiltInEquipped,
                     label: label
                 )
-
                 customItemsSection(for: customSlots)
             }
             .padding(20)
         }
-        .background(Color.parchment)
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
+        .fernletPageBackground()
+        .fernletPushedPage(title)
     }
 
-    /// A live companion preview shown atop each slot picker, so recolor + equip changes are visible
-    /// without leaving the picker.
-    private var pickerPreview: some View {
-        CompanionView(
-            state: store.companionState,
-            appearance: store.settings.companionAppearance,
-            size: 96,
-            interactionLevel: petCount,
-            equippedItems: store.equippedCustomItems
-        )
-        .frame(width: 96, height: 96)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 6)
-        // Decorative: a live preview above the slot picker; the picker carries the semantics.
-        .accessibilityHidden(true)
-    }
-
-    /// The custom-item section folded into a slot picker: the user's own items for the covered
-    /// slot(s), each tappable to equip/unequip, plus the standing route into the Wardrobe (which
-    /// still owns designing, editing, and recoloring custom items).
+    /// The custom-item part of a slot's page: the user's own items for the covered slot(s), each
+    /// tappable to equip/unequip, then the standing way into the Wardrobe (which still owns designing,
+    /// editing and recolouring custom items).
     @ViewBuilder
     private func customItemsSection(for slots: [ItemSlot]) -> some View {
         let items = store.customItems.filter { slots.contains($0.slot) }
-        if slots.isEmpty {
-            EmptyView()
-        } else {
-            FernletCard {
-            VStack(alignment: .leading, spacing: 12) {
-                SectionLabel("Your items")
-
-                if items.isEmpty {
-                    Text("Design one in the Wardrobe to fold it in here.")
-                        .font(.fernlet(.body))
-                        .italic()
-                        .foregroundStyle(Color.slate)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
+        if !slots.isEmpty {
+            if !items.isEmpty {
+                FernletFramedSection("Your items") {
                     ForEach(items) { item in
                         customItemButton(item)
                     }
                 }
-
-                // The `companion.wardrobe` test token migrated to the sheet root's Wardrobe row
-                // (HOME-30) — this contextual link stays, without the identifier, so a slot picker
-                // still routes into designing.
-                NavigationLink {
-                    WardrobeView(store: store, studioDraftIsDirty: $isStudioDraftDirty)
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "tshirt.fill")
-                            .font(.system(size: 15))
-                            .foregroundStyle(Color.moss)
-                            .frame(width: 34, height: 34)
-                            .background(Color.moss.opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text("Design & recolor in Wardrobe")
-                                .font(.fernlet(.label))
-                                .foregroundStyle(Color.moss)
-                            Text("Open the closet")
-                                .font(.fernlet(.bodySmall))
-                                .italic()
-                                .foregroundStyle(Color.slate)
-                        }
-                        Spacer(minLength: 8)
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(Color.moss)
-                    }
-                }
-                .buttonStyle(.plain)
             }
+            NavigationLink {
+                WardrobeView(store: store, studioDraftIsDirty: $isStudioDraftDirty)
+            } label: {
+                CustomizeLinkCard(sprite: WorldSprites.face, title: Text("Design & recolor in Wardrobe"),
+                                  detail: Text("Open the closet"))
             }
+            .buttonStyle(.plain)
         }
     }
 
-    /// One custom-item row inside a slot picker. Tap to equip; tap the equipped item to unequip.
+    /// One custom-item row inside a slot's page. Tap to equip; tap the equipped item to unequip.
     private func customItemButton(_ item: CustomizationItem) -> some View {
         let isEquipped = store.equippedCustomItems.contains { $0.id == item.id }
         return Button {
-            // A choice in the customize sheet: the tick says it took; the preview and the
-            // "Equipped" pill show it.
+            // A choice in Customize: the tick says it took; the preview and the "Equipped" tag show it.
             FernletFeedback.system.play(.tick)
             if isEquipped {
                 store.unequipCustomSlot(item.slot)
@@ -528,34 +356,15 @@ struct CompanionCustomizationSheet: View {
         } label: {
             HStack(spacing: 12) {
                 CustomItemThumbnail(texture: item.texture, size: 40)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(item.name.isEmpty ? item.slot.label : item.name)
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.bark)
-                    Text(item.slot.label)
-                        .font(.fernlet(.bodySmall))
-                        .italic()
-                        .foregroundStyle(Color.slate)
-                }
+                FernletRowLabel(title: Text(verbatim: item.name.isEmpty ? item.slot.label : item.name),
+                                detail: Text(verbatim: item.slot.label))
                 Spacer(minLength: 8)
                 if isEquipped {
-                    Text("Equipped")
-                        .font(.fernlet(.labelSmall))
-                        // T1-3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
-                        .foregroundStyle(Color.mossInk)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Color.moss.opacity(0.12), in: Capsule())
+                    FernletTag("Equipped")
                 }
             }
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isEquipped ? Color.moss.opacity(0.10) : Color.bark.opacity(0.04))
-            )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(FernletRowButtonStyle(showsChevron: false))
         .accessibilityLabel(customItemSpokenName(item, isEquipped: isEquipped))
     }
 
@@ -660,16 +469,16 @@ private extension Color {
     }
 }
 
-/// The reusable built-in item grid + color controls inside a slot picker: a 2-column grid of
-/// selectable items and (optionally) the preset swatches + custom `ColorPicker`.
+/// The built-in choices and colours on a slot's page (design `b2-slot-picker`): a two-column grid of
+/// framed chips (the selected one in the accent), then the preset colours as framed chips with a dot,
+/// and the custom `ColorPicker`.
 ///
 /// Generic over the slot's item type so one card serves body styles, accessories, clothing, and
 /// side items; selection and color flow back through the bindings
-/// `CompanionCustomizationSheet` builds onto the store.
+/// `CompanionCustomizationPage` builds onto the store.
 private struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelContent: View>: View {
-    /// Authored copy ("Body", "Clothing", …), so `LocalizedStringKey`: every caller passes a
-    /// literal, and only that type extracts into the string catalog.
-    var title: LocalizedStringKey
+    /// The slot's name ("Accessory"), a catalog resource.
+    var title: LocalizedStringResource
     var items: [Item]
     @Binding var selection: Item
     var colorTitle: LocalizedStringKey
@@ -681,81 +490,85 @@ private struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelCo
     /// custom items carry their own painted colors and get no color control.
     var showsColor: Bool = true
     @ViewBuilder var label: (Item) -> LabelContent
-
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 2)
-    private let colorColumns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 3)
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         FernletCard {
             VStack(alignment: .leading, spacing: 14) {
-                SectionLabel(title)
-                LazyVGrid(columns: columns, spacing: 8) {
+                SectionLabel(verbatim: String(localized: title))
+                LazyVGrid(columns: columns(2), spacing: 10) {
                     ForEach(items) { item in
-                        let isSelected = selection.id == item.id
-                        Button {
-                            // Re-tapping the current pick changes nothing, so it says nothing.
-                            if !isSelected { FernletFeedback.system.play(.tick) }
-                            selection = item
-                        } label: {
-                            label(item)
-                                .font(.fernlet(.label))
-                                // The contrast-safe fill/ink pair, not cream on plain `moss`.
-                                .foregroundStyle(isSelected ? Color.onMoss : Color.bark)
-                                .frame(maxWidth: .infinity, minHeight: 42)
-                                .background(
-                                    isSelected ? Color.mossFill : Color.bark.opacity(0.06),
-                                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                )
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+                        itemChip(item)
                     }
                 }
-
                 if showsColor {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            SectionLabel(colorTitle)
-                            Spacer()
-                            ColorPicker("Custom color", selection: $customColor, supportsOpacity: false)
-                                .labelsHidden()
-                        }
-
-                        LazyVGrid(columns: colorColumns, spacing: 6) {
-                            ForEach(CompanionAssetColor.allCases) { color in
-                                colorButton(for: color)
-                            }
-                        }
-                    }
+                    colorSection
                 }
             }
         }
     }
 
-    @ViewBuilder
+    /// `count` equal columns, or one at accessibility text sizes.
+    private func columns(_ count: Int) -> [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 10), count: dynamicTypeSize.isAccessibilitySize ? 1 : count)
+    }
+
+    private func itemChip(_ item: Item) -> some View {
+        let isSelected = selection.id == item.id
+        return Button {
+            // Re-tapping the current pick changes nothing, so it says nothing.
+            if !isSelected { FernletFeedback.system.play(.tick) }
+            selection = item
+        } label: {
+            label(item)
+                .frame(maxWidth: .infinity, minHeight: 34)
+        }
+        .buttonStyle(ChipButtonStyle(selected: isSelected))
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+
+    private var colorSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                SectionLabel(colorTitle)
+                Spacer()
+                ColorPicker("Custom color", selection: $customColor, supportsOpacity: false)
+                    .labelsHidden()
+            }
+            LazyVGrid(columns: columns(3), spacing: 10) {
+                ForEach(CompanionAssetColor.allCases) { color in
+                    colorButton(for: color)
+                }
+            }
+        }
+    }
+
     private func colorButton(for color: CompanionAssetColor) -> some View {
         let isSelected = customColorHex == nil && colorSelection == color
-        Button {
+        return Button {
             if !isSelected { FernletFeedback.system.play(.tick) }
             colorSelection = color
         } label: {
             HStack(spacing: 6) {
                 Circle()
                     .fill(color.color(for: state))
-                    .frame(width: 11, height: 11)
+                    .frame(width: 14, height: 14)
+                    .overlay(Circle().strokeBorder(WorldPalette.ink, lineWidth: 1.5))
                 Text(color.label)
-                    .font(.fernlet(.label))
                     .lineLimit(1)
             }
-            .foregroundStyle(isSelected ? Color.onMoss : Color.bark)
-            .frame(maxWidth: .infinity, minHeight: 34)
-            .background(
-                isSelected ? Color.mossFill : Color.bark.opacity(0.05),
-                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-            )
+            .frame(maxWidth: .infinity, minHeight: 30)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ChipButtonStyle(selected: isSelected))
         .accessibilityLabel(color.label)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
+}
+
+/// The four slots' names, for their pages' titles on the plate (and the sheet's bar).
+enum CustomizeSlotTitle {
+    static let body = LocalizedStringResource("Body", comment: "Customize: the body slot's page title and row name")
+    static let accessory = LocalizedStringResource("Accessory", comment: "Customize: the accessory slot's page title and row name")
+    static let clothing = LocalizedStringResource("Clothing", comment: "Customize: the clothing slot's page title and row name")
+    static let sideItem = LocalizedStringResource("Side item", comment: "Customize: the side-item slot's page title and row name")
 }

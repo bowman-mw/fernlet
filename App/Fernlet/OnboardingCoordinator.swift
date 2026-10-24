@@ -415,9 +415,14 @@ struct OnboardingCoordinator: View {
 
     var body: some View {
         ZStack {
-            Color.parchment.ignoresSafeArea()
+            // The dotted page of the one design language (designs `b2-onb-1` … `b2-onb-8`).
+            FernletDottedPage().ignoresSafeArea()
             currentScreen
         }
+        .environment(\.onboardingStepPosition,
+                     OnboardingStepPosition(index: model.step.rawValue, count: OnboardingCoordinatorModel.Step.allCases.count))
+        // Onboarding comes before ContentView, which sets the look for everything else.
+        .worldDesignLanguage()
         .animation(.spring(response: 0.34, dampingFraction: 0.88), value: model.step)
         // The personal-details step's second page swaps in with the same spring as a step change.
         .animation(.spring(response: 0.34, dampingFraction: 0.88), value: model.isShowingIntimacyChoice)
@@ -564,27 +569,16 @@ struct OnboardingScreenContainer<Content: View>: View {
         self.content = content()
     }
 
+    /// Where this step sits in the flow, for the framed segments (the coordinator sets it).
+    @Environment(\.onboardingStepPosition) private var position
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    HStack(spacing: 12) {
-                        if let backAction {
-                            Button(action: backAction) {
-                                Label("Back", systemImage: "chevron.left")
-                                    .labelStyle(.titleAndIcon)
-                                    .font(.fernlet(.label))
-                                    .foregroundStyle(Color.slate)
-                            }
-                            .buttonStyle(.plain)
-                            .fernletTapTarget()
-                            .accessibilityIdentifier("onboarding.back")
-                        }
-                        Text(stepText)
-                            .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.moss)
-                            .accessibilityIdentifier("onboarding.step")
-                        Spacer(minLength: 0)
+                VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        stepRow
+                        if let position { OnboardingStepProgress(position: position) }
                     }
                     ScreenHeader(title: title, subtitle: Text(subtitle))
                         .accessibilityFocused($isHeaderFocused)
@@ -596,6 +590,21 @@ struct OnboardingScreenContainer<Content: View>: View {
             }
         }
         .onAppear { isHeaderFocused = true }
+    }
+
+    /// Back at the start (design `b2-onb-2`), and the step's “2 of 8” at the end in moss.
+    private var stepRow: some View {
+        HStack(spacing: 12) {
+            if let backAction {
+                OnboardingBackButton(action: backAction)
+            }
+            Spacer(minLength: 0)
+            Text(stepText)
+                .font(FernletFramedFont.buttonSmall)
+                .foregroundStyle(WorldPalette.mossInk)
+                .accessibilityIdentifier("onboarding.step")
+        }
+        .frame(minHeight: 44)
     }
 }
 
@@ -698,12 +707,16 @@ private struct OnboardingStarterScreen: View {
                 subtitle: "Pick a starter name and color. You can change these later.",
                 backAction: backAction
             ) {
-                CompanionView(state: .thriving, appearance: previewAppearance, size: 120)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    // Decorative: a live preview of the colour being picked below, at a fixed
-                    // `.thriving`. The controls under it are what carries the meaning.
-                    .accessibilityHidden(true)
+                // Decorative: a live preview of the colour being picked below, at a fixed
+                // `.thriving`, close up and as it will stand on the map (design `b2-onb-5`).
+                VStack(spacing: 8) {
+                    OnboardingPixelCompanion(appearance: previewAppearance, scale: 8, showsMap: true)
+                    Text("Close up, and on the map")
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(WorldPalette.dim)
+                        .accessibilityHidden(true)
+                }
+                .frame(maxWidth: .infinity)
 
                 SheetField("Name") {
                     TextField("Fernlet", text: $starterName, prompt: .fieldPrompt("Fernlet"))
@@ -715,14 +728,10 @@ private struct OnboardingStarterScreen: View {
                 }
 
                 SheetField("Color") {
-                    Picker("Color", selection: $starterColor) {
-                        ForEach(colors) { color in
-                            // `label` is the model's own name, so onboarding and the wardrobe agree.
-                            // The old hardcoded list said "Gold" for what the model calls "Sun".
-                            Text(color.label).tag(color)
-                        }
+                    // `label` is the model's own name, so onboarding and the wardrobe agree.
+                    FernletSegmentedPicker("Color", selection: $starterColor, options: colors) { color in
+                        Text(color.label)
                     }
-                    .pickerStyle(.segmented)
                     .accessibilityIdentifier("onboarding.starter.color")
                 }
             }
@@ -777,56 +786,59 @@ private struct OnboardingPersonalDetailsScreen: View {
 
     /// Age, weight, height, and the two labelled pickers that feed nutrition targets.
     private var bodyProfileField: some View {
-        SheetField("Body profile") {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 12) {
-                    Text("Age")
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.bark)
-                    TextField("30", text: ageText, prompt: .fieldPrompt("30"))
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.center)
-                        .sheetTextInput(font: .fernlet(.label))
-                        .frame(maxWidth: 90)
-                        .accessibilityLabel("Age")
-                        .accessibilityIdentifier("onboarding.profile.age")
-                    Spacer(minLength: 0)
-                    Stepper("Age", value: steppedAge, in: 13...100)
-                        .labelsHidden()
-                        // `.labelsHidden()` drops the spoken name too; say whose stepper it is and
-                        // the age it is at, as the field beside it does.
-                        .accessibilityLabel("Age")
-                        .accessibilityValue(Text(verbatim: "\(steppedAge.wrappedValue)"))
-                }
-                // Voice Control: each stepper's label carries its value ("Weight: 170 lb"), so the
-                // name a user would say moves with every step; the field's own word does not.
-                Stepper(BodyMeasurementEntry.weightLabel(pounds: profile.weightPounds),
-                        value: BodyMeasurementEntry.weightBinding($profile.weightPounds),
-                        in: BodyMeasurementEntry.weightRange(), step: 1)
-                    .accessibilityInputLabels([Text("Weight")])
-                Stepper(BodyMeasurementEntry.heightLabel(inches: profile.heightInches),
-                        value: BodyMeasurementEntry.heightBinding($profile.heightInches),
-                        in: BodyMeasurementEntry.heightRange(), step: 1)
-                    .accessibilityInputLabels([Text("Height")])
-                // Labelled, and with the same words Settings uses: `.menu` pickers outside a
-                // Form hide their own label, so these two rows read as a bare "Male ◇" and
-                // "Moderate ◇" with nothing saying what they set.
-                LabeledProfilePicker(BodyProfileFieldLabel.sex) {
-                    Picker(BodyProfileFieldLabel.sex, selection: $profile.sex) {
-                        ForEach(BiologicalSex.allCases) { sex in
-                            Text(sex.label).tag(sex)
-                        }
-                    }
-                }
-                LabeledProfilePicker(BodyProfileFieldLabel.activity) {
-                    Picker(BodyProfileFieldLabel.activity, selection: $profile.activityLevel) {
-                        ForEach(ActivityLevel.allCases) { level in
-                            Text(level.label).tag(level)
-                        }
-                    }
-                }
+        FernletFramedSection("Body profile") {
+            ageRow
+            measureRow("Weight", value: BodyMeasurementEntry.weightBinding($profile.weightPounds),
+                       range: BodyMeasurementEntry.weightRange(), text: { OnboardingMeasureText.weight($0, imperial: $1) })
+            measureRow("Height", value: BodyMeasurementEntry.heightBinding($profile.heightInches),
+                       range: BodyMeasurementEntry.heightRange(), text: { OnboardingMeasureText.height($0, imperial: $1) })
+            // The same words Settings uses for these two fields (``BodyProfileFieldLabel``).
+            FernletDropdown(BodyProfileFieldLabel.sex, selection: $profile.sex, options: BiologicalSex.allCases) { sex in
+                Text(sex.label)
             }
-            .profileFieldStyle()
+            FernletDropdown(BodyProfileFieldLabel.activity, selection: $profile.activityLevel, options: ActivityLevel.allCases) { level in
+                Text(level.label)
+            }
+        }
+    }
+
+    /// A measurement row (design `b2-onb-6`): "Weight: **170 lb**", then the framed −/+ at the end.
+    /// Voice Control answers to the field's word ("Weight"), not its value.
+    private func measureRow(_ label: LocalizedStringKey, value: Binding<Double>, range: ClosedRange<Double>,
+                            text: @escaping (Double, Bool) -> String) -> some View {
+        let shown = text(value.wrappedValue, BodyMeasurementEntry.usesImperial)
+        return HStack(spacing: 12) {
+            HStack(spacing: 0) {
+                Text(label)
+                Text(verbatim: ": ")
+                Text(verbatim: shown).fontWeight(.bold)
+            }
+            .font(FernletFramedFont.rowTitle)
+            .foregroundStyle(WorldPalette.bark)
+            .accessibilityHidden(true)
+            Spacer(minLength: 8)
+            FernletStepper(label, value: value, in: range, step: 1, display: nil)
+                .accessibilityValue(Text(verbatim: shown))
+                .accessibilityInputLabels([Text(label)])
+        }
+    }
+
+    /// Age: typed, with a framed −/+ beside it for one-year nudges.
+    private var ageRow: some View {
+        HStack(spacing: 12) {
+            Text("Age")
+                .font(FernletFramedFont.rowTitle)
+                .foregroundStyle(WorldPalette.bark)
+            TextField("30", text: ageText, prompt: .fieldPrompt("30"))
+                .keyboardType(.numberPad)
+                .multilineTextAlignment(.center)
+                .sheetTextInput(font: .fernlet(.label))
+                .frame(maxWidth: 90)
+                .accessibilityLabel("Age")
+                .accessibilityIdentifier("onboarding.profile.age")
+            Spacer(minLength: 0)
+            FernletStepper("Age", value: steppedAge, in: 13...100, step: 1)
+                .fixedSize()
         }
     }
 
@@ -851,7 +863,7 @@ private struct OnboardingPersonalDetailsScreen: View {
                 // read Apple's answer, not this field, so say so before the system sheet appears.
                 Text("Next, iPhone will ask whether you want to share your age range with Fernlet. It's used only to unlock messaging friends nearby (13+) and intimacy tracking (16+). Fernlet never sees your birthday, and the answer stays on this device.")
                     .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
+                    .foregroundStyle(WorldPalette.dim)
                     .accessibilityIdentifier("onboarding.profile.ageRangeExplainer")
             }
             SheetSaveBar(
@@ -892,7 +904,6 @@ private struct OnboardingDietaryPatternScreen: View {
                         OnboardingChoiceRow(
                             title: pattern.label,
                             subtitle: subtitle(for: pattern),
-                            systemImage: preferences.dietaryPattern == pattern ? "checkmark.circle.fill" : "circle",
                             isSelected: preferences.dietaryPattern == pattern
                         ) {
                             FernletFeedback.system.select(pattern, in: &preferences.dietaryPattern)
@@ -922,48 +933,32 @@ private struct OnboardingDietaryPatternScreen: View {
 /// Used by ``OnboardingDietaryPatternScreen`` for its pattern choices; purely presentational, with
 /// selection state and the tap action owned by the caller.
 private struct OnboardingChoiceRow: View {
-    /// Stays `String`: the caller passes `DietaryPattern.label`, which the domain module already
-    /// resolves through its own catalog, so it is final text and is drawn verbatim.
     var title: String
     var subtitle: LocalizedStringKey
-    var systemImage: String
     var isSelected: Bool
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 14) {
-                Image(systemName: systemImage)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(isSelected ? Color.moss : Color.slate)
-                    .frame(width: 28, height: 28)
-                    // The check is the drawn selection; the trait below is the spoken one.
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.fernlet(.headerMedium))
-                        .foregroundStyle(Color.bark)
-                    // On the selected row's moss wash `slate` measured 4.44:1, so it goes to `bark`.
-                    Text(subtitle)
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(isSelected ? Color.bark : Color.slate)
-                        .fernletWrappingText()
-                }
-                Spacer(minLength: 8)
-            }
-            .padding(16)
-            .background(isSelected ? Color.moss.opacity(0.07) : Color.cream, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(isSelected ? Color.moss.opacity(0.42) : Color.bark.opacity(0.08), lineWidth: 1)
-            )
+            OnboardingRadioCard(title: Text(verbatim: title), detail: Text(subtitle), isSelected: isSelected)
         }
         .buttonStyle(.plain)
-        // Selection was carried only by a check glyph's spoken name ("checkmark.circle.fill" vs
-        // "circle") — the storage and intimacy cards on neighbouring steps already say "selected".
+        // Selection is drawn by the tick and the ring; the trait is the spoken one.
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-        // Voice Control: the row's name is its title AND its sentence of copy; the title alone is
-        // what a user reads off the card and says.
+        // Voice Control: the title alone is what a user reads off the card and says.
         .accessibilityInputLabels([Text(verbatim: title)])
+    }
+}
+
+/// The value half of onboarding's weight and height steppers ("170 lb", "5 ft 8 in"), in the units
+/// ``BodyMeasurementEntry`` steps in; the field's word ("Weight") is the stepper's own label.
+nonisolated enum OnboardingMeasureText {
+    static func weight(_ displayValue: Double, imperial: Bool) -> String {
+        "\(Int(displayValue.rounded())) \(imperial ? "lb" : "kg")"
+    }
+
+    static func height(_ displayValue: Double, imperial: Bool) -> String {
+        let whole = Int(displayValue.rounded())
+        return imperial ? "\(whole / 12) ft \(whole % 12) in" : "\(whole) cm"
     }
 }

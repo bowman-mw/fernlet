@@ -466,6 +466,12 @@ struct PersistedSurfaceWipeBoundaryTests {
         "unresolved:FernletThemeDefaults.customDarkBackgroundKey@App/Fernlet/SettingsSheet.swift": .kept(
             reason: "@AppStorage(FernletThemeDefaults.customDarkBackgroundKey) — the custom dark background `fernletCustomDarkBackgroundHex`, kept as app chrome. The constant lives in FernletKit's FernletTheme.swift."
         ),
+        "unresolved:FernletThemeDefaults.customLightBackgroundKey@App/Fernlet/World/Customize/AppColorsPage.swift": .kept(
+            reason: "@AppStorage(FernletThemeDefaults.customLightBackgroundKey) — App colors' Paper row (design `b2-colors`) writes the same custom light background `fernletCustomLightBackgroundHex` as Settings' Appearance, kept as app chrome. The constant lives in FernletKit's FernletTheme.swift."
+        ),
+        "unresolved:FernletThemeDefaults.customDarkBackgroundKey@App/Fernlet/World/Customize/AppColorsPage.swift": .kept(
+            reason: "@AppStorage(FernletThemeDefaults.customDarkBackgroundKey) — App colors' Paper row (design `b2-colors`) writes the same custom dark background `fernletCustomDarkBackgroundHex` as Settings' Appearance, kept as app chrome. The constant lives in FernletKit's FernletTheme.swift."
+        ),
         "unresolved:CompanionEmotionPreferences.appetiteCuesKey@App/Fernlet/HomeView.swift": .kept(
             reason: "@AppStorage(CompanionEmotionPreferences.appetiteCuesKey) in Home's live companion — `fernlet.companionFeelings.appetiteCues`, the hunger-and-thirst cue switch, kept as a preference. The constant lives in CompanionEmotionPreferences.swift, so the key resolves in neither direction from here."
         ),
@@ -539,8 +545,10 @@ struct PersistedSurfaceWipeBoundaryTests {
         "unresolved:FernletHapticsLevel.storageKey@App/Fernlet/SoundsHapticsSettingsView.swift": 1,
         "unresolved:FernletThemeDefaults.customDarkBackgroundKey@App/Fernlet/ContentView.swift": 1,
         "unresolved:FernletThemeDefaults.customDarkBackgroundKey@App/Fernlet/SettingsSheet.swift": 1,
+        "unresolved:FernletThemeDefaults.customDarkBackgroundKey@App/Fernlet/World/Customize/AppColorsPage.swift": 1,
         "unresolved:FernletThemeDefaults.customLightBackgroundKey@App/Fernlet/ContentView.swift": 1,
         "unresolved:FernletThemeDefaults.customLightBackgroundKey@App/Fernlet/SettingsSheet.swift": 1,
+        "unresolved:FernletThemeDefaults.customLightBackgroundKey@App/Fernlet/World/Customize/AppColorsPage.swift": 1,
         "unresolved:OnboardingDefaults.hasCompletedOnboardingKey@App/Fernlet/BackupExclusionLaunchGate.swift": 1,
         "unresolved:OnboardingDefaults.hasCompletedOnboardingKey@App/Fernlet/FernletApp.swift": 1,
         "unresolved:key@App/Fernlet/PetInteractionGovernor.swift": 2,

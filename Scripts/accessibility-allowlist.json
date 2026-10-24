@@ -31,12 +31,6 @@
  },
  {
   "rule": "A1-COMBINE-LABEL",
-  "path": "App/Fernlet/CompanionCustomizationSheet.swift",
-  "line_contains": ".accessibilityLabel(\"\\(Text(slot)): \\(value)\")",
-  "reason": "Adds the CAPTION-TO-VALUE relation. The fragments are a slot caption and a value drawn one above the other; `.combine` speaks them as two unlinked items in one breath, and the widget slot rows stack several of them, so a user hears four captions and four values with no way to pair them. The colon is what carries the pairing in speech. `Text(slot)` rather than `slot` is deliberate and commented at the site: a `LocalizedStringKey` cannot be interpolated into another `LocalizedStringKey`, but a `Text` carries its own lookup."
- },
- {
-  "rule": "A1-COMBINE-LABEL",
   "path": "App/Fernlet/HomeView.swift",
   "line_contains": ".accessibilityLabel(\"\\(label) \\(current) of \\(goal) grams\")",
   "reason": "Adds the UNIT and the of-relation, neither of which is ever drawn. The macro rows render a name, a filled bar and two numerals; the word 'grams' appears nowhere on screen and 'of' is expressed purely by the bar's geometry, so `.combine` yields 'Protein 40 120'. Covers both macro rows (the compact and the AX-size variant of the same helper) — they are the same code shape, deliberately, so one entry covering two hits is the honest pin rather than two copies of one reason."
@@ -46,12 +40,6 @@
   "path": "App/Fernlet/SessionChatPanel.swift",
   "line_contains": ".accessibilityLabel(",
   "reason": "Adds the AUTHOR. `.combine` gathers a chat bubble's fragments, which are a sender-name caption plus the message text for an INCOMING message and the message text ALONE for an outgoing one — the name caption is drawn only under `if !message.isOutgoing` (:103). So an outgoing bubble combines to the bare sentence with nothing saying who sent it; authorship is carried purely by right-alignment and the terracotta tint, and neither of those is speech. The label restores it ('You: …') and supplies the speaker-to-utterance colon on the incoming branch. This site was invisible to the wall until the 2026-08-23 A1 hardening: `.accessibilityIdentifier(\"session.chat.message\")` sits BETWEEN `.combine` and the label, and the old rule inspected only the immediately-next code line — this is the review's planted evasion #3 (one interleaved modifier) occurring naturally in shipping code, and surfacing it is the hardening working. NOTE: SessionChatPanel.swift is NOT part of this round's diff. The entry pins a PRE-EXISTING shape the tightened rule newly reaches, not a line this batch wrote. The reported text is the bare `.accessibilityLabel(` because the argument wraps to the following lines; this file contains exactly one `.combine` chain, so the entry cannot drift onto a second site."
- },
- {
-  "rule": "A1-COMBINE-LABEL",
-  "path": "App/Fernlet/MilestonesView.swift",
-  "line_contains": ".accessibilityLabel(row.headline)",
-  "reason": "Adds the SENTENCE. The tile's fragments are a bare count numeral and a shelf label ('12', 'journal shelf'); `row.headline` is the warm sentence the milestone card is actually about ('You've written 12 journal moments.'). SEPARATE OPEN DEFECT, recorded here rather than hidden: `MilestoneRow.headline` is a plain `String` built from unlocalized English literals in `MilestonesView.headline(kind:count:)`, and it is ALSO rendered visually as `Text(row.headline)` at :199 — so this is display copy frozen in English, not merely an accessibility label. The A1 invariant above holds regardless of that; the localization fix (a plural-aware catalog fork of ~10 switch arms) is named as a residual in the batch report and does not belong in this file's entry."
  },
  {
   "rule": "A6-INVERT-COLORS",
@@ -160,12 +148,6 @@
   "path": "App/Fernlet/BarcodeScanView.swift",
   "line_contains": "grams protein, \\(item.macros.carbs) grams carbs",
   "reason": "Not actionable, so Voice Control never names it. This is `foodChip`, the created-item summary on the scan's success screen: an `HStack` flattened by `.accessibilityElement(children: .ignore)` with no tap gesture, no Button around it and no button trait, sitting beside the screen's one control (Done). The long label exists so VoiceOver reads the name and all three macros as one utterance; nothing here is ever spoken BY the user."
- },
- {
-  "rule": "A9-INPUT-LABELS",
-  "path": "App/Fernlet/CreationStudioView.swift",
-  "line_contains": "\"Preview of your item on your companion\"",
-  "reason": "Not actionable, so Voice Control never names it. The confirm step's companion render is a picture: `.accessibilityElement(children: .ignore)` mints one element so VoiceOver can say the drawing survived, and the site's own comment says there is nothing under it to tap. The controls on this screen are the Name field, the shop toggle and Save, each named by its own drawn text."
  },
  {
   "rule": "A9-INPUT-LABELS",

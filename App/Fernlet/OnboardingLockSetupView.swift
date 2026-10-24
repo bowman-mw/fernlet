@@ -45,7 +45,7 @@ struct OnboardingLockSetupView: View {
                     lockChoice(
                         title: "Set a passcode",
                         subtitle: "Create a PIN or password for lockable features — you can turn on Face ID with it here too.",
-                        systemImage: "key.fill"
+                        sprite: WorldSprites.lock
                     ) {
                         isShowingPasscodeSetup = true
                     }
@@ -54,7 +54,7 @@ struct OnboardingLockSetupView: View {
                     lockChoice(
                         title: "Set up Face ID later",
                         subtitle: "Face ID needs a Fernlet passcode first. Nothing is locked until you set one.",
-                        systemImage: "faceid"
+                        sprite: WorldSprites.face
                     ) {
                         laterAction()
                     }
@@ -63,7 +63,7 @@ struct OnboardingLockSetupView: View {
                     lockChoice(
                         title: "Skip for now",
                         subtitle: "You can skip this. Without a passcode, Private opens with a tap.",
-                        systemImage: "clock.arrow.circlepath"
+                        sprite: WorldSprites.chevR
                     ) {
                         skipAction()
                     }
@@ -94,35 +94,11 @@ struct OnboardingLockSetupView: View {
 
     /// One choice card. `LocalizedStringKey` so the three cards' copy is harvested and localized —
     /// a `String` parameter silently opts every call site out.
-    private func lockChoice(title: LocalizedStringKey, subtitle: LocalizedStringKey, systemImage: String, action: @escaping () -> Void) -> some View {
+    private func lockChoice(title: LocalizedStringKey, subtitle: LocalizedStringKey, sprite: WorldSprite, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 14) {
-                Image(systemName: systemImage)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(Color.moss)
-                    .frame(width: 32, height: 32)
-                    .background(Color.moss.opacity(0.10), in: Circle())
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.fernlet(.header))
-                        .foregroundStyle(Color.bark)
-                    Text(subtitle)
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-                }
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.slate)
-            }
-            .padding(16)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+            OnboardingCard(sprite: sprite, title: Text(title), detail: Text(subtitle))
         }
         .buttonStyle(.plain)
-        // Voice Control: the card is named by its title and its sentence together; the title alone
-        // is the name a user says.
         .accessibilityInputLabels([Text(title)])
     }
 }

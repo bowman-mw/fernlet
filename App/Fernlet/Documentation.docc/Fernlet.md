@@ -46,7 +46,7 @@ Weights on hand (2026-10-20): the location editor's equipment step ends with "We
 
 ### Silly Stats
 
-Deliberately useless lifetime numbers — cookies per day (on ``SillyFoodCounter``'s cookie table, where an Oreo is half a cookie and anything homemade is a whole one), the weight lifted in grand pianos, the walk to the Moon, the stair machine's Eiffel Towers, sleep in koala days — on a page (``SillyStatsView``, also pushed from ``MilestonesView``) and a Home card (``SillyStatsHomeCard``), and in the companion's thought bubble every two or three days. ``SillyStatsTallier`` folds the diary, Apple Health's lifetime steps (`FernletStore.lifetimeHealthSteps(since:now:)`) and the device-local pat count into a ``SillyStatsTally``; ``SillyStatsEngine`` decides what is revealed (0.1% of the very long trips, the first whole unit for the slow stats, anything logged for the rest) and picks each comparison from a ``SillyUnit`` ladder; ``SillyStatsCopy`` writes the words with inflected nouns; ``SillyStatsCompanionPacer`` paces the mentions in device-local defaults; and ``SillyStatsService`` holds it all in memory, because some of it comes from Apple Health and a Health value never reaches synced state. Nothing here is a goal: no rates to beat, streaks, badges, coins or comparisons with friends, and nothing reads calories, body weight, cycle or intimate data, or journal text.
+Deliberately useless lifetime numbers — cookies per day (on ``SillyFoodCounter``'s cookie table, where an Oreo is half a cookie and anything homemade is a whole one), the weight lifted in grand pianos, the walk to the Moon, the stair machine's Eiffel Towers, sleep in koala days — in the Stamp book (``StampBookPage``, design `b2-milestones` draft 2: Milestones, the keepsake shelf and the silly stamps and stats on one page, pushed from the Today panel or presented by ``MilestonesView`` and ``SillyStatsView``) and a Home card (``SillyStatsHomeCard``), and in the companion's thought bubble every two or three days. ``SillyStatsTallier`` folds the diary, Apple Health's lifetime steps (`FernletStore.lifetimeHealthSteps(since:now:)`) and the device-local pat count into a ``SillyStatsTally``; ``SillyStatsEngine`` decides what is revealed (0.1% of the very long trips, the first whole unit for the slow stats, anything logged for the rest) and picks each comparison from a ``SillyUnit`` ladder; ``SillyStatsCopy`` writes the words with inflected nouns; ``SillyStatsCompanionPacer`` paces the mentions in device-local defaults; and ``SillyStatsService`` holds it all in memory, because some of it comes from Apple Health and a Health value never reaches synced state. Nothing here is a goal: no rates to beat, streaks, badges, coins or comparisons with friends, and nothing reads calories, body weight, cycle or intimate data, or journal text.
 
 Each stat earns a stamp the first time it appears (Home redesign round, 2026-10-22). ``SillyStampRules`` decides when, from the engine's own reveal: a stamp earned since the stamp book began on this device raises a ``SillyStampBanner`` at the top of the app and a line in the companion's bubble, never a notification, while the book's first check files everything already showing under the day ``SillyStatsTallier/firstRevealDays(_:calendar:)`` replays it to. Stamps only ever add up: one per stat, kept when a stat hides again, never earned twice, and none for streaks, body weight or calories. ``SillyStampStore`` keeps the book (``SillyStampEntry`` rows, append-only and keyed by the frozen stat token, after the milestone ledger) in device-local defaults, because a stamp can be a Health-derived fact; ``SillyStampBookCard`` shows it at the top of the stats page; ``SillyStampCopy`` holds the original names (the Crumb Goblin, the Small Step) and the companion's lines.
 
@@ -316,6 +316,13 @@ The app's front door and its conscience: first-run onboarding, the Settings hub 
 - ``CompanionEmotionPreferences``
 - ``PetInteractionGovernor``
 - ``MilestonesView``
+- ``StampBookPage``
+- ``StampBookKeepsakesCard``
+- ``StampBookShelfSlot``
+- ``StampBookDisc``
+- ``StampBookArt``
+- ``StampBookCopy``
+- ``StampBookTitle``
 
 ### Silly Stats
 
