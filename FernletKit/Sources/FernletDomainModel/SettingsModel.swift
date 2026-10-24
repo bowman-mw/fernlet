@@ -199,6 +199,13 @@ public nonisolated struct FernletSettings: Codable {
     public var proximityDisplayName: String = ""
     public var showProximityDebugTools: Bool = false
     public var allowNearbyRecipeShares: Bool = true
+    /// Whether a recipe the person shares carries their notes (and, for a recipe they made, its steps'
+    /// words), by every route: nearby, Messages and text. Settings › Sharing (World `b3-sharing-settings`;
+    /// owner, 2026-10-24: moved off the share sheet). On by default, as the sheet's switch was.
+    public var recipeShareIncludesNotes: Bool = true
+    /// Whether a recipe shared nearby carries its picture, when it has one (the only route that can).
+    /// Settings › Sharing, beside ``recipeShareIncludesNotes``; on by default, as before.
+    public var recipeShareIncludesPicture: Bool = true
     /// Opt-in: broadcast/browse clothing shops with nearby friends in person (Increment 3). Default on.
     public var allowNearbyClothingShares: Bool = true
     /// Opt-IN: send/receive "good vibes" hearts with trusted friends in person. Unlike recipe/clothing
@@ -563,6 +570,8 @@ public nonisolated struct FernletSettings: Codable {
         proximityDisplayName = try container.decodeIfPresent(String.self, forKey: .proximityDisplayName) ?? ""
         showProximityDebugTools = try container.decodeIfPresent(Bool.self, forKey: .showProximityDebugTools) ?? false
         allowNearbyRecipeShares = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyRecipeShares) ?? true
+        recipeShareIncludesNotes = try container.decodeIfPresent(Bool.self, forKey: .recipeShareIncludesNotes) ?? true
+        recipeShareIncludesPicture = try container.decodeIfPresent(Bool.self, forKey: .recipeShareIncludesPicture) ?? true
         allowNearbyClothingShares = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyClothingShares) ?? true
         allowNearbyHearts = try container.decodeIfPresent(Bool.self, forKey: .allowNearbyHearts) ?? false
         heartsAwayDelivery = try container.decodeIfPresent(Bool.self, forKey: .heartsAwayDelivery) ?? false
@@ -730,6 +739,7 @@ public nonisolated struct FernletSettings: Codable {
         case workoutWarmUpSets
         case workoutStrengthFocus, unknownWorkoutStrengthFocusToken
         case workoutFoodAware
+        case recipeShareIncludesNotes, recipeShareIncludesPicture
     }
 
     /// Custom encode (required so `parkedUnknownKeys` can be re-emitted at the top level). It writes the
@@ -820,6 +830,8 @@ public nonisolated struct FernletSettings: Codable {
         try container.encode(proximityDisplayName, forKey: .proximityDisplayName)
         try container.encode(showProximityDebugTools, forKey: .showProximityDebugTools)
         try container.encode(allowNearbyRecipeShares, forKey: .allowNearbyRecipeShares)
+        try container.encode(recipeShareIncludesNotes, forKey: .recipeShareIncludesNotes)
+        try container.encode(recipeShareIncludesPicture, forKey: .recipeShareIncludesPicture)
         try container.encode(allowNearbyClothingShares, forKey: .allowNearbyClothingShares)
         try container.encode(allowNearbyHearts, forKey: .allowNearbyHearts)
         try container.encode(heartsAwayDelivery, forKey: .heartsAwayDelivery)

@@ -44,16 +44,14 @@ struct RecipeShareElsewhereCard: View {
     var body: some View {
         FernletCard {
             VStack(alignment: .leading, spacing: 10) {
-                Label("Share outside Fernlet", systemImage: "square.and.arrow.up")
-                    .font(.fernlet(.header))
-                    .foregroundStyle(Color.bark)
-                    .accessibilityAddTraits(.isHeader)
+                // World build (b3-recipe-share draft 2): the framed section label, then each route as
+                // a framed link row with its pixel icon tile.
+                SectionLabel("Share outside Fernlet")
                 messagesRow
                     .sheet(item: $composing) { card in
                         RecipeMessageComposer(message: card.message) { finish($0) }
                             .ignoresSafeArea()
                     }
-                FernletRowDivider()
                 textRow
                     .sheet(item: $sharingText) { source in
                         ActivityShareView(items: [source]) { sharingText = nil }
@@ -62,8 +60,8 @@ struct RecipeShareElsewhereCard: View {
                     }
                 if let status {
                     Text(status.message)
-                        .font(.fernlet(.bubble))
-                        .foregroundStyle(Color.slate)
+                        .font(FernletFramedFont.note)
+                        .foregroundStyle(WorldPalette.dim)
                         .fernletWrappingText()
                         .accessibilityIdentifier("recipeShare.messagesOutcome")
                 }
@@ -84,7 +82,7 @@ struct RecipeShareElsewhereCard: View {
             Button { compose(packet) } label: {
                 rowLabel(title: "Send in Messages",
                          caption: "A Fernlet card they can open and save in Fernlet on iPhone.",
-                         systemImage: "message")
+                         sprite: WorldSprites.bubble)
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("recipeShare.sendInMessages")
@@ -156,7 +154,7 @@ struct RecipeShareElsewhereCard: View {
         } label: {
             rowLabel(title: "Share as text",
                      caption: "Readable text for Mail, Notes or any other app. It doesn't import into Fernlet.",
-                     systemImage: "text.alignleft")
+                     sprite: WorldSprites.doc)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("recipeShare.shareAsText")
@@ -166,41 +164,35 @@ struct RecipeShareElsewhereCard: View {
 
     /// A full-width, at-least-44-point row: a decorative glyph, the action's name and one line
     /// saying what it sends.
-    private func rowLabel(title: LocalizedStringKey, caption: LocalizedStringKey, systemImage: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(Color.moss)
-                .frame(width: glyphSide, height: glyphSide)
-                .accessibilityHidden(true)
+    private func rowLabel(title: LocalizedStringKey, caption: LocalizedStringKey, sprite: WorldSprite) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            RecipeSpriteTile(sprite: sprite, size: glyphSide + 8)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.fernlet(.headerMedium))
-                    .foregroundStyle(Color.bark)
+                    .font(FernletFramedFont.rowTitle.weight(.bold))
+                    .foregroundStyle(WorldPalette.bark)
                     .fernletWrappingText()
                 Text(caption)
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.rowDetail)
+                    .foregroundStyle(WorldPalette.dim)
                     .fernletWrappingText()
             }
             Spacer(minLength: 0)
+            FernletIcon(.chevron, scale: 2)
         }
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-        .padding(.vertical, 6)
+        .padding(12)
+        .modifier(RecipeEditorCardFrame(radius: 10))
         .contentShape(Rectangle())
     }
 
     /// The note that stands in for "Send in Messages" when it cannot be offered.
     private func noteRow(_ text: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "message")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(Color.slate)
-                .frame(width: glyphSide, height: glyphSide)
-                .accessibilityHidden(true)
+            RecipeSpriteTile(sprite: WorldSprites.bubble, size: glyphSide + 8)
             Text(text)
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.rowDetail)
+                .foregroundStyle(WorldPalette.dim)
                 .fernletWrappingText()
                 .padding(.top, 7)
             Spacer(minLength: 0)
