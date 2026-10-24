@@ -87,6 +87,8 @@ struct WorldMapCompanion: View {
             .accessibilityHint("Double tap to see it up close.")
             .accessibilityIdentifier("world.companion")
         }
+        // Up close it stands over the map itself; the small one would show through the veil.
+        .opacity(isCloseUpOpen ? 0 : 1)
         .worldCompanionCloseUp(isPresented: $isCloseUpOpen, store: store, bodySignal: bodySignal, onCustomize: onCustomize)
         // DEBUG screenshots (`closeup`) open it at launch; the scene list is empty in release builds.
         .task { if UITestSupport.worldHomeScenes.contains("closeup") { openCloseUp() } }
@@ -133,9 +135,9 @@ struct WorldMapCompanion: View {
     /// settled), and the first pat ever begins Pats Given.
     private func pet() {
         playfulUntil = Date().addingTimeInterval(3 * 60)
-        let response = petGovernor.registerPet()
+        // The one pet path, shared with the close-up: pacing and Pats Given, nothing kept in a decoy.
+        let response = WorldCompanionPet.register(governor: petGovernor, store: store)
         if let cue = HomeView.petFeedbackEvent(for: response) { FernletFeedback.system.play(cue) }
-        store.sillyStats.scheduleRetally(store: store)
         tapCount += 1
         switch response {
         case .bounce:

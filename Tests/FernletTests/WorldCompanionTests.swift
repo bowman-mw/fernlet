@@ -65,15 +65,21 @@ struct WorldCompanionTests {
     }
 
     /// The map's pet is Home's pet: the governor answers, its cue plays and nothing else does, and the
-    /// first pat begins Pats Given. (Pinned by source: the handler is a private view method.)
+    /// first pat begins Pats Given. (Pinned by source: the handler is a private view method.) Since the
+    /// close-up (refinement `ref-comp-react`) the governor and the re-tally sit in the one shared path,
+    /// `WorldCompanionPet`, which both the map and the close-up call.
     @Test func theMapsPetIsHomesPet() throws {
         let source = try RepoRoot.source("App/Fernlet/World/Home/WorldMapCompanion.swift")
         let pet = try #require(source.range(of: "private func pet() {")).upperBound
         let body = String(source[pet...].prefix(900))
-        #expect(body.contains("petGovernor.registerPet()"))
+        #expect(body.contains("WorldCompanionPet.register(governor: petGovernor, store: store)"))
         #expect(body.contains("if let cue = HomeView.petFeedbackEvent(for: response) { FernletFeedback.system.play(cue) }"))
         #expect(body.components(separatedBy: "FernletFeedback").count == 2, "a second cue in the map's pet handler")
-        #expect(body.contains("store.sillyStats.scheduleRetally(store: store)"))
+        let shared = try RepoRoot.source("App/Fernlet/World/Companion/WorldCompanionCloseUp.swift")
+        let register = try #require(shared.range(of: "static func register(")).upperBound
+        let path = String(shared[register...].prefix(500))
+        #expect(path.contains("governor.registerPet()"))
+        #expect(path.contains("store.sillyStats.scheduleRetally(store: store)"))
     }
 
     /// Home and the map say the same thing: Home's line is the store's.
