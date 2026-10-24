@@ -44,8 +44,10 @@ struct FoodLogMealButton: View {
 /// recipe-book note): the name in Fraunces, "4 servings · 4 ingredients", the notes' first lines, then
 /// the per-serving macros as coloured tags with a small Log and a framed share button at the end.
 ///
-/// Tapping the summary pushes the recipe's page (the caller's `NavigationLink` value). Log is one menu of
-/// meal slots, the same choice the meal sheet's dropdown offers; a choice logs at once.
+/// The recipe book's own card (``RecipeBookCard``, lane food-recipes) without its photo banner: one
+/// card for both pages. Tapping the summary pushes the recipe's page (the caller's `NavigationLink`
+/// value). Log is one menu of meal slots, the same choice the meal sheet's dropdown offers; a choice
+/// logs at once.
 ///
 /// It draws a manual recipe and a saved web recipe alike: a web recipe adds its source's host and the
 /// first ingredient lines, and shows tags only when its import carried macros.
@@ -58,48 +60,16 @@ struct FoodRootRecipeCard: View {
     var calories: Int? = nil
     let onLog: (MealType) -> Void
     let onShare: () -> Void
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        FernletCard {
-            VStack(alignment: .leading, spacing: 10) {
-                NavigationLink(value: FoodRoute.recipeDetail(id: recipe.id, isSaved: isSaved)) {
-                    FoodRecipeCardSummary(recipe: recipe, isSaved: isSaved)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                controls
+        RecipeBookCard(macros: perServing.map { MacroTotals(protein: $0.protein, carbs: $0.carbs, fat: $0.fat) },
+                       showsCalories: calories != nil, onLog: onLog, onShare: onShare) {
+            NavigationLink(value: FoodRoute.recipeDetail(id: recipe.id, isSaved: isSaved)) {
+                FoodRecipeCardSummary(recipe: recipe, isSaved: isSaved)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
             }
-        }
-    }
-
-    /// The tags with Log and Share at the end; at the largest sizes the buttons take their own line.
-    @ViewBuilder private var controls: some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            VStack(alignment: .leading, spacing: 10) {
-                tags
-                HStack(spacing: 10) { Spacer(minLength: 0); buttons }
-            }
-        } else {
-            HStack(alignment: .center, spacing: 10) {
-                tags
-                Spacer(minLength: 0)
-                buttons
-            }
-        }
-    }
-
-    @ViewBuilder private var tags: some View {
-        if let perServing {
-            FoodMacroTagRow(macros: perServing, calories: calories)
-        }
-    }
-
-    private var buttons: some View {
-        HStack(spacing: 10) {
-            FoodRecipeLogMenu(onLog: onLog)
-            FoodShareIconButton(action: onShare)
+            .buttonStyle(.plain)
         }
     }
 }
@@ -158,52 +128,5 @@ struct FoodRecipeCardSummary: View {
         }
         WebImportEstimateNote(uncountedLines: recipe.webImport?.uncountedIngredientLines,
                               estimatedLines: recipe.webImport?.estimatedIngredientLines)
-    }
-}
-
-/// A recipe card's small Log (`.pxbtn.sm`): one tap opens the meal slots, and a choice logs the recipe
-/// there. It replaced the inline row of six slot chips (the owner's "meal type is one dropdown").
-struct FoodRecipeLogMenu: View {
-    let onLog: (MealType) -> Void
-
-    var body: some View {
-        Menu {
-            ForEach(MealType.allCases) { type in
-                Button { onLog(type) } label: { Text(verbatim: type.displayName) }
-            }
-        } label: {
-            Text("Log")
-        }
-        .menuStyle(.button)
-        .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
-        .accessibilityLabel("Log recipe as meal")
-        .accessibilityIdentifier("food.recipe.log")
-    }
-}
-
-/// The framed share button on a recipe card (`b2-recipe-book` draft 3's new share icon): the pixel
-/// tray-and-arrow on raised paper in an ink frame, 44 pt.
-struct FoodShareIconButton: View {
-    let action: () -> Void
-    @Environment(\.fernletFramedLook) private var look
-
-    var body: some View {
-        Button(action: action) {
-            Group {
-                if let look {
-                    FernletIconTile(size: 44, fill: look.raised) {
-                        WorldSpriteView(sprite: FoodSprites.share, scale: 2)
-                    }
-                } else {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(Color.moss)
-                        .frame(width: 44, height: 44)
-                }
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Share recipe")
     }
 }

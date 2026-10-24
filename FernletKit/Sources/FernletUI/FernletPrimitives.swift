@@ -194,21 +194,25 @@ public struct EmptyState: View {
         self.systemImage = systemImage
     }
 
+    /// The World build's framed look: the line in the look's dim ink and body face, with less air
+    /// around it (the mockups' empty lines, "No workouts planned", sit close to their card's edges).
+    @Environment(\.fernletFramedLook) private var look
+
     public var body: some View {
         VStack(spacing: 10) {
             if let systemImage {
                 Image(systemName: systemImage)
                     .font(.system(size: 30, weight: .light))
-                    .foregroundStyle(Color.slate)
+                    .foregroundStyle(look?.dim ?? Color.slate)
                     .accessibilityHidden(true)
             }
             text
-                .font(.fernlet(.bubble))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.bubble) : FernletFramedFont.body)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .center)
-        .padding(.vertical, 18)
+        .padding(.vertical, look == nil ? 18 : 8)
     }
 }
