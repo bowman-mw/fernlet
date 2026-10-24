@@ -33,6 +33,9 @@ nonisolated enum WorldQuickStartType {
 /// stand (``WorldQuickStart``); it never badges, buzzes or notifies.
 struct WorldQuickStartButton: View {
     let glyph: WorldQuickStartGlyph
+    /// What VoiceOver hears after the name when the button has news ("Sam is nearby. Start a session
+    /// or an activity."), nil otherwise.
+    var spokenStatus: String? = nil
     let action: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -51,6 +54,7 @@ struct WorldQuickStartButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(WorldQuickStartCopy.buttonLabel))
+        .accessibilityValue(Text(verbatim: spokenStatus ?? ""))
         .accessibilityHint(Text(WorldQuickStartCopy.buttonHint))
         .accessibilityInputLabels([Text(WorldQuickStartCopy.buttonLabel)])
         .accessibilityIdentifier("world.quickStart")
@@ -64,6 +68,7 @@ struct WorldQuickStartButton: View {
         case .rest: WorldSprites.rest
         case .camera: WorldSprites.disposableCamera
         case .trail: WorldSprites.tree
+        case .friends: WorldSprites.pair
         }
     }
 }
@@ -168,6 +173,9 @@ struct WorldQuickStartOptionRow: View {
         case .walkTogether: WorldSprites.pair
         case .walkSavedLine: WorldSprites.tree
         case .sessionCamera, .soloCamera: WorldSprites.disposableCamera
+        case .startSession: WorldSprites.pair
+        case .startActivity: FriendsSprites.flag
+        case .friendsNearby: WorldSprites.face
         }
     }
 
@@ -182,6 +190,9 @@ struct WorldQuickStartOptionRow: View {
         case .sessionCamera: "sessionCamera"
         case .soloCamera: "soloCamera"
         case .backToWorkout: "backToWorkout"
+        case .startSession: "startSession"
+        case .startActivity: "startActivity"
+        case .friendsNearby: "friendsNearby"
         }
     }
 }

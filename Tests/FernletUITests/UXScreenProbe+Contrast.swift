@@ -189,7 +189,7 @@ extension UXScreenProbe {
     }
 
     /// The five tab titles, as `FernletTab` labels its buttons.
-    static let tabTitles = ["Home", "Food", "Move", "Friends", "Private"]
+    static let tabTitles = ["Home", "Food", "Move", "Album", "Private"]
 
     /// Points the floating bar's glass extends above its buttons: the bar's 6pt vertical padding
     /// plus its 1pt stroke and a point of shadow.

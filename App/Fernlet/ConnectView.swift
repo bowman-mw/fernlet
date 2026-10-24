@@ -9,22 +9,29 @@ import FernletUI
 import FernletProximityUI
 import FernletConnections
 
-/// The pages the Friends album pushes onto its own `NavigationStack`, as path values.
+/// The pages the Album panel pushes onto its own `NavigationStack`, as path values.
 ///
 /// A path — rather than the view-destination links these used to be — is what lets a re-tap of the
-/// Friends tab pop them back to the album (``TabReselectModifier``). Pages pushed from these in turn
+/// tab pop them back to the album (``TabReselectModifier``). Pages pushed from these in turn
 /// (Friends & Blocks → Safety & reporting) stay their own navigation and come off with them.
 ///
-/// `friendShop` is pushed from the post-session shop-window card, and closes with its window: the
-/// view-destination link it replaced vanished with the card when the one-hour window lapsed (or
-/// closed early, or sharing was turned off) and popped the shop, so the album now pops it itself at
-/// that moment (``shopClosesAt(sharingEnabled:windowExpiresAt:)``, ``closingShop(_:)``).
+/// Since `b4-mem-root` the album's page has no links of its own: Home opens these (the root's
+/// `openFriends(_:)`), each one page deep so the plate's Back reads "Album" — Friends nearby and
+/// Activities from the blue button, Friend shops from the gold shop button.
+///
+/// `friendShop` closes with its window: the view-destination link it replaced vanished with the card
+/// when the one-hour window lapsed (or closed early, or sharing was turned off) and popped the shop, so
+/// the album pops it itself at that moment (``shopClosesAt(sharingEnabled:windowExpiresAt:)``,
+/// ``closingShop(_:)``).
 nonisolated enum FriendsRoute: Hashable {
-    /// Group Activities.
+    /// Group Activities — from the blue button's "Start an activity", and from Friends nearby.
     case activities
-    /// Friends & Blocks — from the header, and from the "You appear as" display-name hint.
+    /// Friends & Blocks — from Friends nearby's "You appear as" display-name hint (Settings pushes the
+    /// same page in its own stack, `b4-mem-settings-friends`).
     case friendList
-    /// The friend shops exchanged during the last session.
+    /// Friends nearby (`b4-mem-blue-*`): starting a session, joining a hangout, making a friend.
+    case nearby
+    /// The friend shops exchanged during the last session — from Home's gold shop button.
     case friendShop
     /// Your own shop (`b2-shop-editor`): what friends nearby can buy from you. Pushed from Friend
     /// shops, so it closes with the shop window too (``closingShop(_:)`` drops what sits above it).
@@ -48,17 +55,20 @@ nonisolated enum FriendsRoute: Hashable {
 
 // MARK: - FriendsView
 
-/// The Friends panel's root: the shared photo album, idle or in a session (World Review `b2-friends-root`
-/// draft 3 and `b3-friends-session` draft 2).
+/// The Album panel's root (the Friends panel before `b4-mem-name`): the photo album, the same in a
+/// session as at any other time (World Review Batch 4 `b4-mem-root` and `b4-mem-session`, draft 2).
 ///
-/// **The album never swaps for the camera any more** (owner, 2026-10-24). Idle, the slim row under the
-/// two header buttons says whether this phone is looking for nearby friends (with the QR verify
-/// ceremony on manual commits, and "Change name" while no name is set); in a session the same slot is
-/// one slim session row with a Camera button, which presents ``DisposableCameraView`` full screen over
-/// the panel. The ``ConnectionSuccessOverlay`` — played off `hasCommittedPeer`, the "is there a peer
-/// right now" predicate (P6 item 2) — still celebrates a session's commit, and the album stays under
-/// it. The camera is also offered from Home's blue button, and Messages, Session info and Leave live
-/// on Home's session button (``WorldSessionButton``).
+/// **Just the album** (owner, 2026-10-24): the title, "Together, and just you.", search and the 3-wide
+/// grid with the "Just you" sets, plus the notices that are about the album or come back to it ("Photos
+/// waiting for you" after a session, the photo shelf, held deliveries, the launch restore's card). The
+/// friend controls moved: starting a session, joining a hangout and making a friend to Home's blue
+/// button and the page it opens (``FriendsNearbyPage``, pushed here so the discovery radio runs as it
+/// did on the Friends tab), Activities there too, Friend shops to Home's gold shop button
+/// (``WorldShopButton``), Friends & Blocks to Settings, the camera to the blue button, and Messages,
+/// Session info and Leave to Home's session button (``WorldSessionButton``). The
+/// ``ConnectionSuccessOverlay`` — played off `hasCommittedPeer`, the "is there a peer right now"
+/// predicate (P6 item 2) — still celebrates a session's commit; a session started from Friends nearby
+/// then closes the panel back to Home, where the session button now sits.
 ///
 /// **The session-end PHOTO review is not this view's** (session photos U3, 2026-09-30: "the pop up
 /// screen for selecting photos should be the first thing shown"). ``SessionPhotoReviewCoordinator``
@@ -84,14 +94,20 @@ struct FriendsView: View {
     @Binding var activeSheet: FernletSheet?
     @Binding var isTabBarCompact: Bool
     @Binding var tabResetToken: Int
+    /// A page Home asked for (Friends nearby, Activities, Friend shops): pushed one deep when it is set,
+    /// then cleared.
+    @Binding var requestedRoute: FriendsRoute?
+    /// Closes the panel back to Home: after a session started from Friends nearby.
+    var onFinished: () -> Void = {}
 
     @State private var showConnectionAnimation = false
     /// The name the celebration shows: sampled at commit, and adopted once if it arrives while the
     /// overlay is still up (Option 1b withholds it until the peer's first post-commit envelope).
     /// Nil shows "Connected" alone, never an identifier in its place.
     @State private var connectionPeerName: String?
-    /// The session camera, presented full screen from the session row's Camera button.
-    @State private var cameraPresented = false
+    /// A session started while Friends nearby was in front: close back to Home once its celebration
+    /// has played (``finishAfterSessionStart()``).
+    @State private var closesAfterCelebration = false
     /// Whether the album is on screen (the Friends panel is open): only then does it host the
     /// session's prompts.
     @State private var albumIsVisible = false
@@ -124,11 +140,6 @@ struct FriendsView: View {
     /// The album root's own scroll-to-top token; `tabReselect` bumps it only when nothing is pushed.
     @State private var scrollToTopToken = 0
 
-    /// Whether the live camera (this surface's own child) has a sheet or alert of its own up,
-    /// reported by `DisposableCameraView`. A session-end sheet requested over one queues behind it
-    /// with a snapshot taken before the person answered the camera's own review, so the presenter
-    /// waits for this to go false and snapshots then (2026-09-30 fix round, findings C-F1/C-F2).
-    @State private var cameraPresentsOwnSheet = false
     /// Bumped to run a deferred session-end check (``scheduleReviewCheck()``).
     @State private var reviewCheckRequest = 0
     /// Bumped on every session-end sheet request; its task is the landing watchdog
@@ -192,8 +203,6 @@ struct FriendsView: View {
             scheduleReviewCheck()
         }
         .onChange(of: scenePhase) { _, phase in if phase == .active { scheduleReviewCheck() } }
-        .onChange(of: cameraPresentsOwnSheet) { _, up in if !up { scheduleReviewCheck() } }
-        .onChange(of: cameraPresented) { _, up in if !up { scheduleReviewCheck() } }
         .onChange(of: activeSheet == nil) { _, clear in if clear { scheduleReviewCheck() } }
         // Photos first (I17): the overlay showing withdraws a keep prompt that is up, unanswered; the
         // overlay going, or the review's discovery block falling, is when a prompt may be due.
@@ -249,7 +258,7 @@ struct FriendsView: View {
     /// Read by the heal arm and by ``presentDisconnectReviewIfNeeded()``, which is the other site
     /// that requests a presentation and therefore the other site that can lose one.
     private var aPresentationIsUp: Bool {
-        keepFriendsPromptPresented || selectedAlbumPostID != nil || cameraPresented || openSoloSetID != nil
+        keepFriendsPromptPresented || selectedAlbumPostID != nil || openSoloSetID != nil
     }
 
     /// The **layout** half of the session transition: what surface the Social tab draws.
@@ -268,9 +277,8 @@ struct FriendsView: View {
     private func handleSessionSurfaceChange(wasInSession: Bool, nowInSession: Bool) {
         guard wasInSession, !nowInSession else { return }
         connectCue.sessionEnded()
-        // The album never swapped out, so its pushed pages stay; the camera this panel presented
-        // has no session left to shoot for (the camera also closes itself on this edge).
-        cameraPresented = false
+        // The album never swapped out, so its pushed pages stay (the camera is Home's now, and closes
+        // itself on this edge).
         showConnectionAnimation = false
         scheduleReviewCheck()
     }
@@ -346,26 +354,21 @@ struct FriendsView: View {
 
     // MARK: - Photo album
 
-    /// Everything above the album: the subtitle, the two header buttons, the cards that come and go
-    /// (the restore card, the shop window, photos waiting), the one slim row (looking for friends, or
-    /// the session), the held-delivery banner, and the search field over a non-empty album.
+    /// Everything above the album (`b4-mem-root`): the subtitle, "Photos waiting for you" on top after a
+    /// session, the notices that come and go (the restore card, held deliveries, the photo shelf), and
+    /// the search field over a non-empty album.
     private var albumHeader: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ScreenHeader(title: "Friends", subtitle: "Together, in person.", identifier: "screen.friends")
-            FriendsHeaderButtons()
-            // P7 item 5: what the launch restore found, on the Friends surface and nothing
-            // modal — an offer, an ending named as ended, or a file set aside; silent for a
-            // deferral. Sampled from the manager, dismissable, gone once a session surface is up.
-            // P8 item 7 shares the slot and takes it first: a refused, expired or
-            // system-ended background continuation is news about the session running NOW.
-            sessionResumeBanner
-            shopWindowCard
-            // Session photos U3: photos from the last session waiting for the choice. Discovery
-            // is stopped meanwhile, so the nearby row below is empty and this takes its slot.
+            ScreenHeader(title: "Album", subtitle: "Together, and just you.", identifier: "screen.friends")
+            // Session photos U3: photos from the last session waiting for the choice, on top.
             pendingPhotoReviewCard
-            statusSlot
-                .animation(.easeInOut(duration: 0.3), value: manager.isSearching)
-                .animation(.easeInOut(duration: 0.3), value: manager.slots.count)
+            // P7 item 5: what the launch restore found, on this surface and nothing modal — an
+            // offer, an ending named as ended, or a file set aside; silent for a deferral. Sampled
+            // from the manager, dismissable, gone once a session surface is up. It stays on the
+            // album, the tab the radios resume on. P8 item 7 shares the slot and takes it first: a
+            // refused, expired or system-ended background continuation is news about the session
+            // running NOW.
+            sessionResumeBanner
             RoutedDeliveryHoldBanner(hold: manager.routedDeliveryHold)
             if !features.photos.meshPhotos.isEmpty {
                 cacheWarningBanner
@@ -387,12 +390,46 @@ struct FriendsView: View {
         return chosen.isEmpty ? "Fernlet" : chosen
     }
 
-    /// DEBUG screenshots (the hooks answer nil / false in Release, and the demo seed is DEBUG-only):
-    /// one page pushed, the camera on your own as Home's blue button opens it, or a solo album scene.
+    /// DEBUG screenshots (the hooks answer nil in Release, and the demo seed is DEBUG-only): one page
+    /// pushed, or a solo album scene. (The camera on your own is Home's blue button's, and so is its hook.)
     private func applyScreenshotHooks() {
         if let route = FriendsUITestHooks.initialRoute, path.isEmpty { path = [route] }
         plantSoloAlbumDemoIfAsked()
-        if FriendsUITestHooks.opensSoloCamera, !manager.isInSession { cameraPresented = true }
+    }
+
+    /// Pushes the page Home asked for, one deep (so the plate's Back reads "Album"), and clears the ask.
+    private func takeRequestedRoute() {
+        guard let route = requestedRoute else { return }
+        requestedRoute = nil
+        path = [route]
+    }
+
+    /// A session went live: when Friends nearby was in front, close back to Home once the celebration
+    /// has played, where the session button now holds Messages, Session info and Leave.
+    private func noteSessionStarted(_ inSession: Bool) {
+        guard inSession, path.last == .nearby else { return }
+        closesAfterCelebration = true
+    }
+
+    /// Closes back to Home after a session started from Friends nearby (the celebration has gone, or
+    /// never presented within its own length).
+    private func finishAfterSessionStart() {
+        guard closesAfterCelebration, !showConnectionAnimation else { return }
+        closesAfterCelebration = false
+        path.removeAll()
+        onFinished()
+    }
+
+    /// The fallback for a celebration that never presented (another presentation was up): closes once
+    /// the celebration's own length has passed.
+    private func finishAfterCelebrationLength() async {
+        guard closesAfterCelebration else { return }
+        do {
+            try await Task.sleep(for: .seconds(3))
+        } catch {
+            return
+        }
+        finishAfterSessionStart()
     }
 
     /// DEBUG screenshots: plants the solo album's demo photos, reads them, and opens the first set for
@@ -434,23 +471,25 @@ struct FriendsView: View {
             path.removeAll()
         }
         .task(id: friendShopClosesAt) { await closeFriendShopWhenWindowLapses() }
-        // DEBUG screenshots (nothing in Release): a pushed page, the camera alone, a solo album scene.
+        // DEBUG screenshots (nothing in Release): a pushed page, a solo album scene.
         .task { applyScreenshotHooks() }
-        // The session camera (b3-friends-session): full screen over the panel, the album untouched
-        // beneath it. It closes itself when the session ends, and this presenter lowers it too.
-        .fullScreenCover(isPresented: $cameraPresented) {
-            DisposableCameraView(store: store, presentsOwnSheet: $cameraPresentsOwnSheet)
-        }
-        // The solo camera's photos (b4-mem-solo-*): read on appear, when the camera closes and when
-        // the decoy flips; a decoy reads nothing. A tapped "Just you" set opens full screen.
+        // Home's asks (b4-mem-blue-*, b4-mem-home-shop): the page, one deep.
+        .onChange(of: requestedRoute, initial: true) { _, _ in takeRequestedRoute() }
+        // A session started from Friends nearby goes back to Home once it is celebrated.
+        .onChange(of: manager.isInSession) { _, inSession in noteSessionStarted(inSession) }
+        .onChange(of: showConnectionAnimation) { _, _ in finishAfterSessionStart() }
+        .task(id: closesAfterCelebration) { await finishAfterCelebrationLength() }
+        // The solo camera's photos (b4-mem-solo-*): read on appear and when the decoy flips (the camera
+        // is Home's, so the album reads afresh each time it opens); a decoy reads nothing. A tapped
+        // "Just you" set opens full screen.
         .modifier(SoloAlbumHost(album: soloAlbum, openSetID: $openSoloSetID,
-                                refreshKey: [cameraPresented, store.duressSessionActive],
+                                refreshKey: [store.duressSessionActive],
                                 roll: { store.duressSessionActive ? nil : store.soloCameraRoll() }))
         // The session's prompts (join requests, the session alert, removal requests) while this
         // panel is the surface on screen; Home's session button and the camera host them otherwise.
         .modifier(SessionPromptsModifier(
             manager: manager,
-            isActive: albumIsVisible && manager.isInSession && !cameraPresented && !aPresentationIsUp,
+            isActive: albumIsVisible && manager.isInSession && !aPresentationIsUp,
             activeRemovalProposal: $activeRemovalProposal,
             leaveSessionConfirm: .constant(false),
             onConfirmEnd: {}
@@ -492,10 +531,13 @@ struct FriendsView: View {
         path = FriendsRoute.closingShop(path)
     }
 
-    /// Resolves a ``FriendsRoute`` pushed from the album to its page, each handing its title to the
-    /// panel's plate (`b1-frame-push`: ‹ Friends, the title, ✕).
+    /// Resolves a ``FriendsRoute`` pushed onto the album to its page, each handing its title to the
+    /// panel's plate (`b1-frame-push`: ‹ Album, the title, ✕).
     @ViewBuilder private func friendsDestination(_ route: FriendsRoute) -> some View {
         switch route {
+        case .nearby:
+            FriendsNearbyPage(store: store)
+                .fernletPushedPage("Friends nearby")
         case .activities:
             ActivitiesView(store: store)
                 .fernletPushedPage("Activities")
@@ -508,151 +550,6 @@ struct FriendsView: View {
         case .yourShop:
             YourShopView(store: store)
                 .fernletPushedPage("Your shop")
-        }
-    }
-
-    // MARK: - The slim row (looking for friends, or the session)
-
-    /// The one slot under the header buttons (b2-friends-root, b3-friends-session): in a session the
-    /// session row; otherwise what discovery is doing — a failure, the looking row, or the nearby
-    /// rows — with "Change name" while no name is set.
-    @ViewBuilder
-    private var statusSlot: some View {
-        if manager.isInSession {
-            FriendsSessionRow(names: sessionFriendNames) { cameraPresented = true }
-        } else if manager.isSearching, let discoveryError = manager.discoveryError {
-            discoveryFailureBanner(discoveryError)
-        } else if manager.isSearching, !manager.slots.isEmpty {
-            nearbySlotRows
-            displayNameHint
-        } else {
-            lookingRow
-        }
-    }
-
-    /// The other people in this session, first names only, never an identifier (2026-09-29).
-    private var sessionFriendNames: [String] {
-        manager.sessionParticipants.filter { !$0.isLocal }.map {
-            PeerNameDisplay.firstName($0.displayName, fingerprint: $0.fingerprint, placeholder: .met, in: .fernlet)
-        }
-    }
-
-    /// "Looking for nearby friends…" with the companion's face while discovery runs; with no search
-    /// running, the name hint alone (or nothing, once a name is set).
-    @ViewBuilder
-    private var lookingRow: some View {
-        if manager.isSearching {
-            FriendsSlimRow {
-                // Not `person.2` (the Friends icon): the pulse says "listening", the face says who.
-                WorldSpriteView(sprite: WorldSprites.face, scale: 2)
-                Text("Looking for nearby friends…")
-                    .font(FernletFramedFont.notice)
-                    .foregroundStyle(WorldPalette.dim)
-                    .fixedSize(horizontal: false, vertical: true)
-            } trailing: {
-                changeNameLink
-            }
-        } else {
-            displayNameHint
-        }
-    }
-
-    /// The nearby peers, one framed row each, with this row's QR ceremony.
-    private var nearbySlotRows: some View {
-        VStack(spacing: 8) {
-            ForEach(manager.slots) { slot in
-                NearbySlotRow(
-                    slot: slot,
-                    showDebugOverride: store.proximityDebugToolsEnabled,
-                    onForceConnect: { manager.commitManualProximity(slotID: slot.id) },
-                    // The QR is minted FOR THIS ROW: only a challenge arriving on this
-                    // slot may answer it, so the manager binds the nonce to slot.id.
-                    onMakeVerifyQR: { manager.makeLocalVerifyQRURL(slotID: slot.id) },
-                    onDismissVerifyQR: { manager.clearActiveVerifyQR() },
-                    // Bound to THIS row, exactly like the QR we mint above: a valid
-                    // code belonging to a different nearby peer is refused, not
-                    // searched for.
-                    onScanVerified: { url in manager.beginQRVerification(with: url, slotID: slot.id) }
-                )
-            }
-        }
-    }
-
-    // MARK: - Display-name hint
-
-    /// "Change name" at the end of the looking row, while no name is set: nearby friends see this
-    /// device's name ("iPhone") — the name rides the discovery broadcast — so say so where the
-    /// connecting happens, and link straight to the field.
-    @ViewBuilder
-    private var changeNameLink: some View {
-        if store.settings.proximityDisplayName.trimmingCharacters(in: .whitespaces).isEmpty {
-            NavigationLink(value: FriendsRoute.friendList) {
-                Text("Change name")
-                    .font(FernletFramedFont.buttonSmall)
-                    // F3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
-                    .foregroundStyle(WorldPalette.mossInk)
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("friends.changeDisplayName")
-            .accessibilityLabel("You appear as \(store.resolvedProximityDisplayName). Change the name friends see.")
-            // Voice Control: the row's drawn action word, not the two-sentence label.
-            .accessibilityInputLabels([Text("Change"), Text("Change name")])
-        }
-    }
-
-    /// First-run nudge with no search running, or under the nearby rows: "You appear as iPhone" and
-    /// Change, in a slim row.
-    @ViewBuilder
-    private var displayNameHint: some View {
-        if store.settings.proximityDisplayName.trimmingCharacters(in: .whitespaces).isEmpty {
-            NavigationLink(value: FriendsRoute.friendList) {
-                FriendsSlimRow {
-                    Text("You appear as \(store.resolvedProximityDisplayName)")
-                        .font(FernletFramedFont.body)
-                        .foregroundStyle(WorldPalette.dim)
-                        .fixedSize(horizontal: false, vertical: true)
-                } trailing: {
-                    Text("Change")
-                        .font(FernletFramedFont.buttonSmall)
-                        .foregroundStyle(WorldPalette.mossInk)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("friends.changeDisplayName")
-            .accessibilityLabel("You appear as \(store.resolvedProximityDisplayName). Change the name friends see.")
-            // Voice Control: the row's drawn action word, not the two-sentence label.
-            .accessibilityInputLabels([Text("Change"), Text("Change name")])
-        }
-    }
-
-    // MARK: - Post-session shop window (Phase 3a)
-
-    /// After a friends session ends, any shop catalogs exchanged during it stay browsable for one hour
-    /// (`MeshClothingShop.windowDuration`) — this card is the window's only entry point, visible on the
-    /// normal (post-session) Friends layout while the window is open and sharing isn't opted out. The
-    /// minute-tick TimelineView is all the "timer" the window needs: expiry itself is lazy
-    /// (`remainingWindowMinutes` returns nil once lapsed, hiding the card), and each tick refreshes the
-    /// countdown. Closes early on the next session start or app quit (memory-only state).
-    @ViewBuilder
-    private var shopWindowCard: some View {
-        if store.settings.allowNearbyClothingShares {
-            TimelineView(.periodic(from: .now, by: 60)) { context in
-                if let minutesLeft = features.clothingShop.remainingWindowMinutes(at: context.date) {
-                    NavigationLink(value: FriendsRoute.friendShop) {
-                        FriendsLinkCard(title: Text("Friend shops are open"),
-                                        detail: Text("Shop open — \(minutesLeft) min"),
-                                        sprite: FriendsSprites.shop, spriteScale: 2)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("friends.friendShops")
-                    .accessibilityLabel("Friend shops open, \(minutesLeft) minutes left")
-                    // Voice Control: the drawn title, without the countdown that changes by the minute.
-                    .accessibilityInputLabels([Text("Friend shops"), Text("Friend shops are open")])
-                }
-            }
         }
     }
 
@@ -752,38 +649,6 @@ struct FriendsView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier(card.accessibilityIdentifier)
-    }
-
-    /// Shown in place of the "Looking for nearby friends…" row when the radios failed to start.
-    ///
-    /// The transport already detects this (`NetworkMeshSession`'s `onTransportError`; the retired
-    /// MultipeerConnectivity session's `didNotStart*` delegates did before it) and routes it to
-    /// `manager.meshError`, but the only view that rendered `meshError` was
-    /// `DisposableCameraView` — which exists only *inside* a session. A discovery failure happens
-    /// before any session, so the message was set and never seen: the pulse span forever and the
-    /// mesh looked simply broken. On device the overwhelmingly likely cause is a declined Local
-    /// Network prompt, so lead with that. The raw reason is secondary detail for developers, shown
-    /// only with the proximity debug tools on.
-    private func discoveryFailureBanner(_ message: String) -> some View {
-        FriendsNoticeCard(tone: .warn, symbolName: "wifi.exclamationmark") {
-            Text("Can't look for nearby friends")
-                .font(FernletFramedFont.rowTitle.weight(.semibold))
-                .foregroundStyle(WorldPalette.bark)
-            Text("Fernlet needs Local Network access to find friends in person. Check Settings › Fernlet › Local Network, then come back to this screen.")
-                .font(FernletFramedFont.note)
-                .foregroundStyle(WorldPalette.dim)
-                .fixedSize(horizontal: false, vertical: true)
-            // The transport's own words are developer text: frozen English that can name a
-            // tunnel, an error and its identifiers (2026-09-29). Debug tools only.
-            if store.proximityDebugToolsEnabled {
-                Text(verbatim: message)
-                    .font(FernletFramedFont.rowDetail)
-                    .foregroundStyle(WorldPalette.dim)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .accessibilityIdentifier("friends.discoveryFailure")
-        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Cache soft-warning (spec §11: 900-photo warning ahead of the 1000 FIFO cap)
@@ -1008,9 +873,9 @@ struct FriendsView: View {
         // `fullScreenCover` is up is one of the two presentations SwiftUI drops (fix review P2-2),
         // and a prompt that silently never appears is a batch the user never gets to answer.
         guard !aPresentationIsUp else { return }
-        // Nor over a presentation this surface does not own (fix round C-F2/L-F2): the camera's own
-        // sheets and alerts, or the root sheet. Each re-checks here the moment it goes away.
-        guard activeSheet == nil, !cameraPresentsOwnSheet else { return }
+        // Nor over a presentation this surface does not own (fix round C-F2/L-F2): the root sheet. It
+        // re-checks here the moment it goes away (the camera is Home's full-screen cover now).
+        guard activeSheet == nil else { return }
         // Photos first (I17): the overlay answers a photo batch's candidates, once.
         guard !features.photos.hasOutstandingPhotoReview, !reviewCoordinator.isShowing,
               !reviewCoordinator.blocksDiscovery else { return }
@@ -1425,223 +1290,6 @@ private struct FriendPhotoCarouselPostView: View {
         post.photos[selectedIndex]
     }
 
-}
-
-// MARK: - Nearby slot row
-
-/// One row of the "nearby friends" banner: a discovered peer slot with its handshake state and
-/// commit affordances.
-///
-/// Renders `PeerSlot.coordinator.state` as icon + label, shows the live UWB distance while
-/// `awaitingProximityCommit`, and in `awaitingManualCommit` offers the plain Connect button plus
-/// the QR verification ceremony (show my code / scan theirs), whose closures reach
-/// `MeshNetworkManager` through the parent ``FriendsView``. The failed-scan alert is raised from
-/// the scan sheet's `onDismiss` — presenting it from the scanner callback landed in the same
-/// update that tore the sheet down, and SwiftUI silently dropped it.
-private struct NearbySlotRow: View {
-    let slot: PeerSlot
-    let showDebugOverride: Bool
-    let onForceConnect: () -> Void
-
-    var body: some View {
-        HStack(spacing: 12) {
-            WorldSpriteView(sprite: stateSprite, scale: 2)
-                .frame(width: 28)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: peerName)
-                    .font(FernletFramedFont.rowTitle.weight(.semibold))
-                    .foregroundStyle(WorldPalette.bark)
-                Text(stateLabel)
-                    .font(FernletFramedFont.rowDetail)
-                    .foregroundStyle(WorldPalette.dim)
-            }
-            Spacer()
-
-            trailingControl
-        }
-        .padding(12)
-        .background(WorldPalette.paperLight, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(WorldPalette.ink, lineWidth: FernletFramedLook.frameWidth))
-        .onChange(of: approachMeters) { _, meters in
-            if let cue = approachCue.observe(meters) { FernletFeedback.system.play(cue) }
-        }
-    }
-
-    /// B19: one `tick` as the phones come inside the commit distance, re-armed only past 30 cm
-    /// (``ProximityApproachCue``). The "Hold still…" line in ``stateLabel`` is its visual twin.
-    @State private var approachCue = ProximityApproachCue()
-
-    /// The distance the approach cue reads: the live reading while this row waits for the phones
-    /// to come together, and nothing in any other state, so a connected pair that touches again
-    /// never ticks.
-    private var approachMeters: Double? {
-        guard case .awaitingProximityCommit = slot.coordinator.state else { return nil }
-        return distanceMeters
-    }
-
-    // QR verification ceremony (bitchat adoptions Increment 4): row-local sheet state; the
-    // closures reach MeshNetworkManager through the parent. Defaults keep other construction
-    // sites source-compatible.
-    var onMakeVerifyQR: () -> URL? = { nil }
-    /// Fires whenever the display sheet goes away (Done, swipe-down, or the sheet dismissing
-    /// itself on backgrounding) so the manager stops honoring challenges for the shown QR.
-    var onDismissVerifyQR: () -> Void = {}
-    var onScanVerified: (URL) -> Bool = { _ in false }
-    @State private var verifyQRURL: URL?
-    @State private var showVerifyScanner = false
-    @State private var verifyMissed = false
-    /// Set by the scanner callback, converted into `verifyMissed` only in the scan sheet's
-    /// `onDismiss`. Raising the alert from the callback flipped `isPresented` in the same update
-    /// that tore the sheet down, and SwiftUI drops an alert presented on a view whose sheet is
-    /// mid-dismiss — so a failed scan closed the scanner and said nothing at all.
-    @State private var pendingScanFailed = false
-    /// Set by the scanner callback when the code matched this row, so the "friend's here" cue plays
-    /// as the scanner goes away — a beat after the scanner's own "got it", never stacked on it (A10).
-    @State private var pendingScanMatched = false
-
-    /// The scanner has gone away. Raise the alert only now, and give each result its own cue here
-    /// (A10): the error beside "That code didn't match", or the friend cue for a code that matched.
-    /// A Cancel sets neither, so it stays silent.
-    private func verifyScannerDismissed() {
-        if pendingScanFailed {
-            pendingScanFailed = false
-            verifyMissed = true
-            FernletFeedback.system.play(.failed)
-        } else if pendingScanMatched {
-            pendingScanMatched = false
-            FernletFeedback.system.play(.friendHere)
-        }
-    }
-
-    @ViewBuilder
-    private var trailingControl: some View {
-        switch slot.coordinator.state {
-        case .awaitingProximityCommit:
-            if showDebugOverride {
-                Button("Force", action: onForceConnect)
-                    .buttonStyle(ChipButtonStyle(selected: true))
-                    .font(.fernlet(.label))
-                    .accessibilityIdentifier("friends.forceConnect.\(slot.id)")
-            } else if let d = distanceMeters {
-                Text("\(Self.wholeCentimeters(d)) cm")
-                    .font(.fernlet(.stat))
-                    .foregroundStyle(Color.slate)
-            }
-        case .awaitingManualCommit:
-            // Both of these ACT (they commit a connection), so they take the 44pt action pill rather
-            // than the 34pt selection chip — and the bare "Verify" text label now matches Connect.
-            AdaptiveStack(spacing: 8) {
-                // Ceremony-grade alternative to the bare tap (Increment 4): scan proves the
-                // person holds the key; a successful round commits BOTH sides.
-                Menu {
-                    Button {
-                        verifyQRURL = onMakeVerifyQR()
-                    } label: {
-                        Label("Show my code", systemImage: "qrcode")
-                    }
-                    Button {
-                        showVerifyScanner = true
-                    } label: {
-                        Label("Scan their code", systemImage: "qrcode.viewfinder")
-                    }
-                } label: {
-                    Text("Verify")
-                }
-                .menuStyle(.button)
-                .buttonStyle(ActionPillButtonStyle(.secondary))
-                .accessibilityIdentifier("friends.verifyQR.menu.\(slot.id)")
-                Button("Connect", action: onForceConnect)
-                    .buttonStyle(ActionPillButtonStyle(.primary))
-                    .accessibilityIdentifier("friends.manualCommit.\(slot.id)")
-            }
-            .sheet(isPresented: $verifyQRURL.isPresent(), onDismiss: onDismissVerifyQR) {
-                VerifyQRDisplaySheet(url: verifyQRURL)
-            }
-            .sheet(isPresented: $showVerifyScanner, onDismiss: verifyScannerDismissed) {
-                VerifyQRScanSheet { url in
-                    let matched = onScanVerified(url)
-                    pendingScanFailed = !matched
-                    pendingScanMatched = matched
-                }
-            }
-            .alert("That code didn't match", isPresented: $verifyMissed) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text("Ask your friend to show their code again — codes expire after a few minutes — and make sure you're scanning the person shown in this row.")
-            }
-        default:
-            EmptyView()
-        }
-    }
-
-    /// The row's title: the peer's chosen name once this device has it, else "Someone nearby".
-    ///
-    /// Never an identifier (owner decision 2026-09-29, reversing the fingerprint title of
-    /// stranger-admission Option 1b). Until this device commits, the peer has disclosed no name,
-    /// and the only other strings on hand are its fingerprint and, before the identity
-    /// introduction, the QUIC transport's random Bonjour instance name (`slot.peer.displayHint`,
-    /// `fernlet-mesh-…`). Both were debugging aids. The name replaces the placeholder once the
-    /// peer's first post-commit envelope discloses it; the row-bound QR ceremony is how two people
-    /// tell rows apart before that.
-    private var peerName: String {
-        switch slot.coordinator.state {
-        case .awaitingProximityCommit(let p), .awaitingManualCommit(let p),
-             .awaitingUserConfirmation(let p), .connected(let p), .transferring(let p, _):
-            return PeerNameDisplay.shown(p.displayName, fingerprint: p.fingerprint, in: .fernlet)
-        default:
-            return PeerNameDisplay.text(for: .nearby)
-        }
-    }
-
-    private var stateLabel: String {
-        switch slot.coordinator.state {
-        case .awaitingIdentityIntroduction:
-            return String(localized: "friends.nearby.exchangingIdentity", defaultValue: "Exchanging identity…",
-                          comment: "A nearby-friend row's status while the two phones confirm who each other is")
-        case .awaitingProximityCommit:
-            if let d = distanceMeters, ProximityApproachCue.isWithinCommitDistance(d) {
-                return String(localized: "friends.nearby.holdStill",
-                              defaultValue: "Close enough — hold still…",
-                              comment: "A nearby-friend row's status once the two phones are within the 15 cm connect distance, while the connection settles (under a second). Pairs with a light haptic tick.")
-            }
-            if let d = distanceMeters {
-                let centimeters = Self.wholeCentimeters(d)
-                return String(localized: "friends.nearby.moveCloser", defaultValue: "Move closer — \(centimeters) cm away",
-                              comment: "A nearby-friend row's status while the phones are too far apart to connect. %lld is the distance in centimetres.")
-            }
-            return String(localized: "friends.nearby.tapPhones", defaultValue: "Tap phones together to connect",
-                          comment: "A nearby-friend row's status before the phones are close: bring them together to connect")
-        case .awaitingManualCommit:
-            return String(localized: "friends.nearby.tapToConfirm", defaultValue: "Tap to confirm connection",
-                          comment: "A nearby-friend row's status when a tap on this phone completes the connection")
-        case .connected, .transferring:
-            return String(localized: "friends.nearby.connected", defaultValue: "Connected",
-                          comment: "A nearby-friend row's status once the two phones are connected")
-        default:
-            return String(localized: "friends.nearby.connecting", defaultValue: "Connecting…",
-                          comment: "A nearby-friend row's status while the connection is being set up")
-        }
-    }
-
-    /// A ranging distance in whole centimetres, rounded exactly as `String(format: "%.0f")` rounds
-    /// (to nearest, ties to even), so the drawn number is the one the row always showed.
-    static func wholeCentimeters(_ meters: Double) -> Int {
-        Int((meters * 100).rounded(.toNearestOrEven))
-    }
-
-    /// The row's pixel mark: a tick once connected, the two-people mark while the phones meet.
-    private var stateSprite: WorldSprite {
-        switch slot.coordinator.state {
-        case .connected, .transferring: return WorldSprites.check
-        default: return FriendsSprites.people
-        }
-    }
-
-    private var distanceMeters: Double? {
-        if case .meters(let d, _) = slot.coordinator.lastKnownDistance { return d }
-        return nil
-    }
 }
 
 // MARK: - Connection success overlay

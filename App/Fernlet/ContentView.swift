@@ -78,6 +78,9 @@ struct ContentView: View {
     /// Whether the World Home's disposable camera (the blue button's, ``WorldDisposableCamera``) is open
     /// full screen over everything: the session button and the stamp banner hold back while it is.
     @State private var isWorldCameraOpen = false
+    /// A page of the Album panel Home asked for (Friends nearby, Activities, Friend shops), handed to the
+    /// panel, which pushes it one deep and clears this (`b4-mem-blue-*`, `b4-mem-home-shop`).
+    @State private var pendingFriendsRoute: FriendsRoute?
     /// How far the keyboard reaches above the interface's bottom edge, zero while it is down. The
     /// bar stays behind the keyboard; the meal-logged toast reads this to rest on the keyboard.
     @State private var keyboardOverlap: CGFloat = 0
@@ -909,6 +912,8 @@ struct ContentView: View {
                          bodySignal: HomeView.companionBodySignal(enabled: store.settings.stressAwarenessEnabled,
                                                                   assessment: stressService.assessment),
                          onOpen: openWorldPanel,
+                         // The blue button's friend choices open Friends nearby or Activities in the Album.
+                         onFriends: openFriends,
                          // The quick start's "Suggest today's workout" opens Move's suggestion sheet.
                          onSheet: { activeSheet = $0 },
                          stampBannerShowing: shownStampBanner != nil,
@@ -928,10 +933,13 @@ struct ContentView: View {
                 )
             }
             .tabPage(.move)
-            // The album never swaps for the camera any more (b3-friends-session): the session camera is a
-            // full-screen cover of its own, so the plate always shows.
+            // The Album (b4-mem-root): just the album, the same in a session. Home's buttons push its pages
+            // (Friends nearby, Activities, Friend shops), and a session started from Friends nearby closes
+            // it back to Home.
             WorldPanelFrame(panel: .friends, onClose: closeWorldPanel) {
-                SocialHubView(store: store, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .social))
+                SocialHubView(store: store, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact,
+                              tabResetToken: resetTokenBinding(for: .social), requestedRoute: $pendingFriendsRoute,
+                              onFinished: closeWorldPanel)
             }
             .tabPage(.social)
             // `!rootSheetIsCoveringTabs`: the hub stays alive beneath a root-presented sheet, so
@@ -986,6 +994,10 @@ struct ContentView: View {
                 // button's camera is not over it (one surface for the prompts at a time).
                 WorldSessionButton(store: store, isFrontmost: isWorldMapFrontmost && !isWorldCameraOpen)
                     .padding(.bottom, WorldMapHome.bottomLift)
+                // For the hour after a session the same corner is the gold shop button (b4-mem-home-shop);
+                // it draws nothing during a session, so the two never show together.
+                WorldShopButton(store: store) { openFriends(.friendShop) }
+                    .padding(.bottom, WorldMapHome.bottomLift)
                 WorldItemBar(onOpen: openWorldPanel)
                     .padding(.horizontal, 9)
                     .padding(.bottom, WorldItemBar.bottomGap)
@@ -1035,6 +1047,13 @@ struct ContentView: View {
         } else {
             worldOverlay = panel
         }
+    }
+
+    /// Opens the Album panel at one of its pages (Friends nearby, Activities, Friend shops): the page is
+    /// handed over first, so the panel pushes it as it opens.
+    private func openFriends(_ route: FriendsRoute) {
+        pendingFriendsRoute = route
+        openWorldPanel(.friends)
     }
 
     /// Closes whatever panel is open and returns to the map. Closing Settings does what dismissing

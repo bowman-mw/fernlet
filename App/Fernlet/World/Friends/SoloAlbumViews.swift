@@ -161,8 +161,8 @@ struct SoloSetTile: View {
     }
 }
 
-/// The "Just you" sets opened full screen (`b4-mem-solo-open`): the Friends panel's plate titled
-/// "Just you", then each set as the album post's carousel, starting at the one tapped. Closes itself
+/// The "Just you" sets opened full screen (`b4-mem-solo-open`): the Album panel's plate titled "Just
+/// you" with "‹ Album" in the icon's place (draft: "Back now says Album"), then each set as the album post's carousel, starting at the one tapped. Closes itself
 /// when the last photo is deleted.
 struct SoloPhotoFeedView: View {
     let album: SoloAlbumModel
@@ -180,7 +180,7 @@ struct SoloPhotoFeedView: View {
 
     var body: some View {
         WorldPanelFrame(panel: .friends, title: String(localized: "Just you", comment: "The name of a set of photos taken with the camera on your own"),
-                        onClose: onDismiss) {
+                        backTitle: WorldPanel.friends.title, onBack: onDismiss, onClose: onDismiss) {
             GeometryReader { geometry in
                 ScrollView(.vertical) {
                     LazyVStack(spacing: 0) {
@@ -358,9 +358,8 @@ struct SoloPhotoPostView: View {
     }
 }
 
-/// Hangs the solo camera's album on a page (today the Friends album; the Album page once approved):
-/// reads the roll when the page appears and whenever `refreshKey` changes (the camera closing, the
-/// decoy starting or ending), reads again the moment the next held photo is due (the companion
+/// Hangs the solo camera's album on a page (the Album page, `b4-mem-root`): reads the roll when the
+/// page appears and whenever `refreshKey` changes (the decoy starting or ending), reads again the moment the next held photo is due (the companion
 /// falling asleep while the page is open), and presents a tapped "Just you" set full screen.
 struct SoloAlbumHost: ViewModifier {
     let album: SoloAlbumModel

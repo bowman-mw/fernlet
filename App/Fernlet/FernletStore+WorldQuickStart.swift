@@ -30,10 +30,19 @@ extension FernletStore {
         context.session = quickStartSession
         context.activity = quickStartActivity
         context.soloCameraAvailable = WorldDisposableCamera.soloIsAvailable
+        context.canMeetFriends = worldCanMeetFriends
+        context.nearbyFriends = worldNearbyFriends.map(\.firstName)
         if includingPlans, context.isResting {
             context.hasGentleStretch = todaysGentleStretch(committing: false) != nil
         }
         return context
+    }
+
+    /// Whether friends in person are offered on Home at all (`b4-mem-blue-*`): never in a decoy, below
+    /// the minimum age, or while Delete everything runs — the proximity radios' own hard stops
+    /// (`ProximityRunPolicy.isHardStop`), so the blue button never offers what the radios refuse.
+    var worldCanMeetFriends: Bool {
+        !duressSessionActive && !deleteAllInProgress && !ProximityRunPolicy.belowMinimumAge(ageAssurance.record)
     }
 
     /// Whether Walk together can be offered: location already allowed (nothing on Home asks), and a

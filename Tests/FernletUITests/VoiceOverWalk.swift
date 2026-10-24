@@ -129,7 +129,7 @@ struct VoiceOverWalk {
     static let maxTabBarClearingDrags = 4
     /// The floating tab bar's buttons, by their spoken labels (``FernletTab`` titles; the buttons
     /// carry no identifier).
-    static let tabBarLabels = ["Home", "Food", "Move", "Friends", "Private"]
+    static let tabBarLabels = ["Home", "Food", "Move", "Album", "Private"]
     /// The bar's own padding and material above its buttons' frames, in points.
     static let tabBarTopInset: CGFloat = 12
 

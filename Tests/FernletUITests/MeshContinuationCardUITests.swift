@@ -40,7 +40,7 @@ final class MeshContinuationCardUITests: XCTestCase {
     @MainActor
     func testAnIdleClaimShowsNoContinuationCard() {
         let app = UXTestApp.launch()
-        let friendsTab = app.buttons["Friends"].firstMatch
+        let friendsTab = app.buttons["Album"].firstMatch
         XCTAssertTrue(friendsTab.waitForExistence(timeout: 30), "the app never reached the tab bar")
         friendsTab.tap()
         XCTAssertTrue(app.descendants(matching: .any)["screen.friends"].waitForExistence(timeout: 10),
@@ -66,7 +66,7 @@ final class MeshContinuationCardUITests: XCTestCase {
         line: UInt = #line
     ) {
         let app = UXTestApp.launch(extraEnvironment: ["FERNLET_MESH_CONTINUATION": kind])
-        let friendsTab = app.buttons["Friends"].firstMatch
+        let friendsTab = app.buttons["Album"].firstMatch
         XCTAssertTrue(friendsTab.waitForExistence(timeout: 30),
                       "the app never reached the tab bar", file: file, line: line)
         friendsTab.tap()

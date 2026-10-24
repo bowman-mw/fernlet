@@ -3,6 +3,7 @@ import FernletDomainModel
 import FernletFoundation
 import FernletScoring
 import FernletUI
+import ProximityKit
 import SwiftUI
 import UIKit
 import WorldMapStore
@@ -37,8 +38,11 @@ struct WorldMapHome: View {
     let isFrontmost: Bool
     /// The opt-in body-signal reading for the companion's feeling, as Home reads it.
     var bodySignal: CompanionBodySignal?
-    /// Opens a panel: Today from the status plate, Friends (the shared album) from the photo prints.
+    /// Opens a panel: Today from the status plate, the Album from the photo prints.
     let onOpen: (WorldPanel) -> Void
+    /// Opens a page of the Album panel: Friends nearby or Activities from the blue button's friend
+    /// choices (`b4-mem-blue-*`).
+    var onFriends: (FriendsRoute) -> Void = { _ in }
     /// Opens one of the app's sheets (Move's workout suggestion, from the quick start).
     var onSheet: (FernletSheet) -> Void = { _ in }
     /// Whether a stamp's banner is showing over the map: the prints step aside for it, as the approved
@@ -194,7 +198,8 @@ struct WorldMapHome: View {
                         .transition(.opacity)
                 }
                 if let glyph = WorldQuickStart.glyph(for: buttonContext) {
-                    WorldQuickStartButton(glyph: glyph, action: toggleCard)
+                    WorldQuickStartButton(glyph: glyph, spokenStatus: WorldQuickStartCopy.spokenStatus(WorldQuickStart.card(for: buttonContext)),
+                                          action: toggleCard)
                 }
             }
             .padding(.trailing, 12)
@@ -308,12 +313,13 @@ struct WorldMapHome: View {
     }
 
     /// Adds what the map holds to the store's reading (the saved walk starting here) and, for DEBUG
-    /// screenshots only, `solo` (the camera of your own) or `session` (a session with Sam and Rae),
-    /// display only; the scene list is empty in release builds.
+    /// screenshots only, `solo` (the camera of your own), `friend` (Sam nearby, as the map stands him in)
+    /// or `session` (a session with Sam and Rae), display only; the scene list is empty in release builds.
     private func staged(_ context: WorldQuickStartContext) -> WorldQuickStartContext {
         var context = context
         context.savedLine = savedLineHere?.summary
         if testScenes.contains("solo") { context.soloCameraAvailable = true }
+        if testScenes.contains("friend"), context.canMeetFriends { context.nearbyFriends = nearbyFriends.map(\.firstName) }
         if testScenes.contains("session"), !context.isDecoy {
             context.session = WorldQuickStartContext.Session(names: ["Sam", "Rae"], shotsLeft: 3)
         }
@@ -383,6 +389,10 @@ struct WorldMapHome: View {
             cameraMode = .solo(placeName: placeName)
         case .backToWorkout:
             guidedSession = store.guidedSessionForResume()
+        case .startSession, .friendsNearby:
+            onFriends(.nearby)
+        case .startActivity:
+            onFriends(.activities)
         }
     }
 
@@ -529,6 +539,8 @@ extension WorldMapHome {
     /// scene list asks (nothing in release builds).
     private func applyTestScenes() async {
         if UITestSupport.shouldOpenCustomize { isCustomizing = true }
+        // The camera on your own, as the blue button opens it (`FERNLET_UI_TEST_SOLO_CAMERA`).
+        if FriendsUITestHooks.opensSoloCamera, !store.meshNetworkManager.isInSession { cameraMode = .solo(placeName: nil) }
         let scenes = testScenes
         guard !scenes.isEmpty else { return }
         if scenes.contains("sick") != store.isSick(on: store.todayKey) { store.setSick(scenes.contains("sick"), on: store.todayKey) }

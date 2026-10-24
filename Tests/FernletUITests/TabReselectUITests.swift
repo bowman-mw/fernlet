@@ -142,23 +142,20 @@ final class TabReselectUITests: XCTestCase {
                        "re-tapping Food at its main page did not scroll back to the top")
     }
 
-    // MARK: - Friends
+    // MARK: - Album (the Friends tab before b4-mem-name)
 
+    /// Friends & Blocks left the album for Settings (`b4-mem-settings-friends`); the album's own stack
+    /// still pushes Friend shops, Activities and Friends nearby. The DEBUG route hook pushes Activities.
     @MainActor
-    func testFriendsTabPopsFriendsAndBlocks() {
-        let app = UXTestApp.launch()
-        openTab("Friends", page: "screen.friends", in: app)
-        let manage = app.buttons["friends.manageFriends"].firstMatch
-        XCTAssertTrue(manage.waitForExistence(timeout: 10), "the Friends header has no Friends & Blocks link")
-        manage.tap()
-        XCTAssertTrue(app.navigationBars["Friends & Blocks"].waitForExistence(timeout: 6), "Friends & Blocks did not open")
+    func testAlbumTabPopsAPushedPage() {
+        let app = UXTestApp.launch(extraEnvironment: ["FERNLET_UI_TEST_FRIENDS_ROUTE": "activities"])
+        openTab("Album", page: "screen.friends", in: app)
+        XCTAssertTrue(app.staticTexts["Activities"].firstMatch.waitForExistence(timeout: 6), "Activities did not open")
 
-        // The pushed page has its own "Friends" filter segment; `tabItem` finds the bar's button.
-        tabItem("Friends", in: app).tap()
+        tabItem("Album", in: app).tap()
 
-        XCTAssertTrue(waitForGone(app.navigationBars["Friends & Blocks"]), "re-tapping Friends left Friends & Blocks pushed")
         XCTAssertTrue(app.descendants(matching: .any)["screen.friends"].waitForExistence(timeout: 6),
-                      "re-tapping Friends did not bring the album back")
+                      "re-tapping Album did not bring the album back")
     }
 
     // MARK: - Move

@@ -43,7 +43,7 @@ final class SessionPhotoReviewFirstUITests: XCTestCase {
 
         app.buttons["friends.review.notNow"].tap()
         XCTAssertTrue(overlay.waitForNonExistence(timeout: 10), "Not now hides the review")
-        let friendsTab = app.buttons["Friends"].firstMatch
+        let friendsTab = app.buttons["Album"].firstMatch
         XCTAssertTrue(friendsTab.waitForExistence(timeout: 10), "the tab bar is back")
         friendsTab.tap()
         XCTAssertTrue(app.descendants(matching: .any)["friends.pendingReview.card"].waitForExistence(timeout: 10),
