@@ -38,6 +38,9 @@ struct WorldMapNotice: View {
             }
             .foregroundStyle(WorldPalette.bark)
             .fernletWrappingText()
+            // The line keeps the room; a long "Use precise" wraps onto two lines instead of
+            // squeezing it into a narrow column (Spanish and the doubled-length check).
+            .layoutPriority(1)
             .accessibilityElement(children: .combine)
             if kind == .approximate { usePrecise }
         }
@@ -55,11 +58,13 @@ struct WorldMapNotice: View {
             Text(WorldNoticeCopy.usePrecise)
                 .font(FernletFramedFont.buttonSmall)
                 .foregroundStyle(WorldPalette.bark)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 11)
-                .frame(minHeight: 44)
+                .padding(.vertical, 4)
+                .frame(minWidth: 44, minHeight: 44)
                 .background(WorldPalette.wood, in: RoundedRectangle(cornerRadius: 7))
                 .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(WorldPalette.ink, lineWidth: 2))
-                .fixedSize()
         }
         .buttonStyle(.plain)
         .accessibilityHint(Text(WorldNoticeCopy.usePreciseHint))

@@ -118,7 +118,7 @@ struct WorldMapHome: View {
     private func mapHome(date: Date) -> some View {
         ZStack(alignment: .topLeading) {
             WorldMapStack(kind: hasPlace ? .appleMuted : .plain, camera: $camera, ground: ground, phase: phase(at: date),
-                          darkMode: colorScheme == .dark, creditInset: WorldItemBar.height + WorldItemBar.bottomGap + 12,
+                          darkMode: colorScheme == .dark, creditInset: Self.creditInset,
                           veiled: isOffline) { viewport, size in
                 onMap(viewport: viewport, size: size)
             }
@@ -212,7 +212,12 @@ struct WorldMapHome: View {
     }
 
     /// The blue button's distance off the physical bottom: above the item bar with the design's gap.
+    /// The session button bottom left mirrors it.
     static let bottomLift = WorldItemBar.height + WorldItemBar.bottomGap + 22
+
+    /// Where Apple's "Maps" credit sits: just above the item bar, as the approved Home draws it, below
+    /// the blue button and the session button's bottom edge, so neither covers it (MapKit terms).
+    static let creditInset = WorldItemBar.height + WorldItemBar.bottomGap + 2
 
     // MARK: State read from the store
 

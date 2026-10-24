@@ -1921,6 +1921,9 @@ struct ContentView: View {
     private var sillyStampBannerOverlay: some View {
         if let kind = shownStampBanner {
             SillyStampBanner(kind: kind) { openStampBook(from: kind) }
+                // Grows with text size up to the map's own plates' cap, so at the largest sizes it
+                // holds its lines without covering half the map.
+                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
                 .frame(maxWidth: 352)
                 .padding(.horizontal, 16)
                 .padding(.top, stampBannerTop)
