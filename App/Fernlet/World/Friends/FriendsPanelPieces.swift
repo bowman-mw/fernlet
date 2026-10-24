@@ -63,15 +63,19 @@ nonisolated enum FriendsSprites {
     static let heartMoss = WorldSprite(
         rows: [".kk.kk.", "kGGkGGk", "kGGGGGk", ".kGGGk.", "..kGk..", "...k..."],
         palette: ["k": WorldSprite.ink, "G": 0x5E844D])
+    /// A shopping bag in gold (`b4-mem-home-shop`): Home's shop button for the hour after a session.
+    static let bag = WorldSprite(
+        rows: ["..kkk..", ".k...k.", "kkkkkkk", "kwwwwwk", "kwwkwwk", "kwwwwwk", "kkkkkkk"],
+        palette: ["k": WorldSprite.ink, "w": 0xF2D58A])
     /// A shop's awning box: the Your shop row.
     static let shop = WorldSprite(
         rows: ["kkkkkkkkk", "k.......k", "kkkkkkkkk", ".k.....k.", ".k.kkk.k.", ".k.....k.", ".kkkkkkk."],
         palette: ["k": WorldSprite.ink])
 }
 
-/// A framed slim row on the Friends panel (`b2-friends-root` draft 3, `b3-friends-session` draft 2):
-/// one line of status with a small sprite in front and an optional control at the end, on raised paper
-/// in a 2-pt frame. `accent` frames it in the look's mark colour (the session row).
+/// A framed slim row (`b2-friends-root` draft 3; on Friends nearby since `b4-mem-root`): one line of
+/// status with a small sprite in front and an optional control at the end, on raised paper in a 2-pt
+/// frame. `accent` frames it in the look's mark colour.
 struct FriendsSlimRow<Leading: View, Trailing: View>: View {
     var accent = false
     @ViewBuilder let leading: Leading
@@ -97,73 +101,6 @@ struct FriendsSlimRow<Leading: View, Trailing: View>: View {
         .background(look?.raised ?? Color.cream, in: shape)
         .overlay(shape.strokeBorder(accent ? (look?.mark ?? Color.moss) : (look?.ink ?? Color.bark.opacity(0.12)),
                                     lineWidth: accent ? 3 : FernletFramedLook.frameWidth))
-    }
-}
-
-/// The Friends panel's slot during a session (`b3-friends-session` draft 2): one slim moss-framed row,
-/// "In a session · Sam, Rae", with the Camera button that opens the disposable camera. Messages,
-/// Session info and Leave are on Home's session button, not here.
-struct FriendsSessionRow: View {
-    /// The other people's first names, already filtered (never an identifier).
-    let names: [String]
-    let onCamera: () -> Void
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    var body: some View {
-        FriendsSlimRow(accent: true) {
-            WorldSpriteView(sprite: FriendsSprites.people, scale: 2)
-            label
-        } trailing: {
-            Button(action: onCamera) { Text("Camera") }
-                .buttonStyle(ActionPillButtonStyle(.primary, size: .small))
-                .accessibilityIdentifier("friends.session.camera")
-                .accessibilityLabel("Open the disposable camera")
-                .accessibilityInputLabels([Text("Camera"), Text("Disposable camera")])
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("friends.session.row")
-    }
-
-    /// "In a session" in bold, then the names; the names drop under it at accessibility sizes.
-    private var label: some View {
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(spacing: 6))
-        return layout {
-            Text("In a session")
-                .font(FernletFramedFont.body.weight(.bold))
-                .foregroundStyle(WorldPalette.bark)
-            if !names.isEmpty {
-                Text(verbatim: "· " + FriendsSessionNames.narrow(names))
-                    .font(FernletFramedFont.body)
-                    .foregroundStyle(WorldPalette.bark)
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-            }
-        }
-    }
-}
-
-/// The two framed buttons under the Friends subtitle, Activities and Friends (`b2-friends-root`
-/// draft 3): each half the width, side by side, stacked at accessibility sizes. They push the album
-/// stack's routes, so a re-tap of the panel pops them as before.
-struct FriendsHeaderButtons: View {
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    var body: some View {
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(spacing: 10)) : AnyLayout(HStackLayout(spacing: 10))
-        layout {
-            NavigationLink(value: FriendsRoute.activities) {
-                Text("Activities").frame(maxWidth: .infinity)
-            }
-            .accessibilityIdentifier("friends.activities")
-            NavigationLink(value: FriendsRoute.friendList) {
-                Text("Friends").frame(maxWidth: .infinity)
-            }
-            .accessibilityIdentifier("friends.manageFriends")
-            .accessibilityLabel("Friends and blocks")
-            .accessibilityInputLabels([Text("Friends"), Text("Friends and blocks")])
-        }
-        .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
     }
 }
 

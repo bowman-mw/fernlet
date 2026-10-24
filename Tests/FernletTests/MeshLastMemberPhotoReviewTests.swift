@@ -1034,8 +1034,10 @@ struct LastMemberPhotoReviewSourceWallTests {
         #expect(deferred.contains("presentDisconnectReviewIfNeeded()"))
         let present = try #require(MeshRoutedSourceScan.bracedBody(
             after: "private func presentDisconnectReviewIfNeeded()", in: source))
-        #expect(present.contains("guard activeSheet == nil, !cameraPresentsOwnSheet else { return }"),
-                "no request over the root sheet or the camera's own sheets")
+        // The Album hosts no camera since b4-mem-session (the camera is Home's blue button's full-screen
+        // cover), so the only covering presentation it waits out is the root sheet.
+        #expect(present.contains("guard activeSheet == nil else { return }"),
+                "no request over the root sheet")
         #expect(present.contains("guard !features.photos.hasOutstandingPhotoReview, !reviewCoordinator.isShowing,"),
                 "photos first: never while photos wait or the overlay is up (I17)")
         #expect(present.contains("sessionEndReview(hasPhotos: false"), "the photo half is never decided here")
@@ -1057,10 +1059,10 @@ struct LastMemberPhotoReviewSourceWallTests {
         #expect(cleared.lowerBound < lowered.lowerBound,
                 "the overlay showing withdraws a standing prompt with its batch cleared FIRST, so its finalize mints nothing")
         #expect(source.contains(".onChange(of: reviewCoordinator.isShowing)"))
-        #expect(source.contains("DisposableCameraView(store: store, presentsOwnSheet: $cameraPresentsOwnSheet)"),
-                "the camera reports its own sheets up")
-        #expect(source.contains(".onChange(of: cameraPresentsOwnSheet)") && source.contains(".onChange(of: activeSheet == nil)"),
-                "and each covering presentation re-checks when it goes")
+        #expect(!source.contains("DisposableCameraView("),
+                "the Album presents no camera of its own (b4-mem-session): it is Home's blue button's")
+        #expect(source.contains(".onChange(of: activeSheet == nil)"),
+                "and the covering presentation re-checks when it goes")
     }
 
     /// Session photos U3, invariant I20: the camera reports its Develop review to the coordinator

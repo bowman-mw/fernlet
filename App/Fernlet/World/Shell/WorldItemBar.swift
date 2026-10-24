@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The item bar over the map: today's tabs as a wooden bar, Food, Move, Log (raised, in the middle),
-/// Friends, Private and Settings, each with its name small under its pixel icon (design page answer 9;
+/// Album, Private and Settings, each with its name small under its pixel icon (design page answer 9;
 /// approved Batch 1 draft 3). It shows only on the map: every panel covers it.
 ///
 /// Sizes are the approved design's (84 pt tall, 9 pt in from the sides, 26 pt off the bottom, a 3-pt ink
@@ -75,6 +75,7 @@ struct WorldItemBar: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(verbatim: panel.barName))
+        .accessibilityInputLabels(panel.inputNames.map { Text(verbatim: $0) })
         .accessibilityIdentifier(panel.itemIdentifier)
         .accessibilityShowsLargeContentViewer {
             WorldSpriteView(sprite: theme.icon(for: panel), scale: 4)

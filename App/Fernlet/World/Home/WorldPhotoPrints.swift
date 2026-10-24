@@ -4,7 +4,7 @@ import UIKit
 
 /// The photo wall on the map: four friend prints, two over two, in the top right beside the status
 /// plate (design `b1-home-day`, draft 3: 72-pt prints in the language's ink frame, no captions, so the
-/// photos speak for themselves). One button: it opens the shared album, the Friends panel's first page.
+/// photos speak for themselves). One button: it opens the Album panel (`b4-mem-name`; the Friends panel before).
 ///
 /// The prints are today's photo wall (`FernletStore.photowallSeeds`, chosen once per launch from the
 /// friend photos). A print with no photo yet is an empty paper print with a small pixel sprite, as the
@@ -115,8 +115,8 @@ struct WorldPhotoPrints: View {
 
     static let label = LocalizedStringResource("worldPhotos.label", defaultValue: "Photo wall",
                                                comment: "World Home: the friend photos in the top right, for VoiceOver")
-    static let hint = LocalizedStringResource("worldPhotos.hint", defaultValue: "Opens the shared album in Friends.",
-                                              comment: "World Home: what tapping the photo wall does, for VoiceOver")
+    static let hint = LocalizedStringResource("worldPhotos.hint.album", defaultValue: "Opens Album.",
+                                              comment: "World Home: what tapping the photo wall does, for VoiceOver. Album is the item bar's name for the photo album (Spanish: Abre Álbum.)")
     static let shortName = LocalizedStringResource("worldPhotos.inputLabel", defaultValue: "Photos",
                                                    comment: "World Home: a short name Voice Control can use for the photo wall")
 }

@@ -191,6 +191,10 @@ import FernletSocial
             "App/Fernlet/World/Friends/SessionPrompts.swift",
             "App/Fernlet/World/Friends/WorldSessionButton.swift",
             "App/Fernlet/World/Friends/FriendsPanelPieces.swift",
+            // b4-mem-blue-*: the nearby rows moved off the album onto Friends nearby.
+            "App/Fernlet/World/Friends/FriendsNearbyPage.swift",
+            "App/Fernlet/World/Friends/NearbyPersonCard.swift",
+            "App/Fernlet/World/Friends/FriendsNearbyKind.swift",
             "App/Fernlet/VerifyQRViews.swift",
             "App/Fernlet/SessionChatPanel.swift",
             "App/Fernlet/Proximity/UI/ProximityRecipeShareSheet.swift",

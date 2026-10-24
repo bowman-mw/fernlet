@@ -35,6 +35,9 @@ nonisolated enum WorldQuickStartType {
 /// (``WorldQuickStartLabel``), and VoiceOver hears "Quick start, Camera" as its name.
 struct WorldQuickStartButton: View {
     let glyph: WorldQuickStartGlyph
+    /// What VoiceOver hears after the name when the button has news ("Sam is nearby. Start a session
+    /// or an activity."), nil otherwise.
+    var spokenStatus: String? = nil
     let action: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -55,6 +58,7 @@ struct WorldQuickStartButton: View {
         // Refinement 6 (`ref-blue-how`): the action's word slides out when it changes; the name always says it.
         .worldQuickStartLabel(for: glyph)
         .accessibilityLabel(Text(verbatim: WorldQuickStartLabel.buttonName(for: glyph)))
+        .accessibilityValue(Text(verbatim: spokenStatus ?? ""))
         .accessibilityHint(Text(WorldQuickStartCopy.buttonHint))
         .accessibilityInputLabels([Text(WorldQuickStartCopy.buttonLabel)])
         .accessibilityIdentifier("world.quickStart")
@@ -68,6 +72,7 @@ struct WorldQuickStartButton: View {
         case .rest: WorldSprites.rest
         case .camera: WorldSprites.disposableCamera
         case .trail: WorldSprites.tree
+        case .friends: WorldSprites.pair
         }
     }
 }
@@ -172,6 +177,9 @@ struct WorldQuickStartOptionRow: View {
         case .walkTogether: WorldSprites.pair
         case .walkSavedLine: WorldSprites.tree
         case .sessionCamera, .soloCamera: WorldSprites.disposableCamera
+        case .startSession: WorldSprites.pair
+        case .startActivity: FriendsSprites.flag
+        case .friendsNearby: WorldSprites.face
         }
     }
 
@@ -186,6 +194,9 @@ struct WorldQuickStartOptionRow: View {
         case .sessionCamera: "sessionCamera"
         case .soloCamera: "soloCamera"
         case .backToWorkout: "backToWorkout"
+        case .startSession: "startSession"
+        case .startActivity: "startActivity"
+        case .friendsNearby: "friendsNearby"
         }
     }
 }

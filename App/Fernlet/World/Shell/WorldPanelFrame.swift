@@ -16,8 +16,8 @@ import SwiftUI
 /// rides above the keyboard and nothing hides behind it.
 ///
 /// **The seam.** Every panel goes through this one view, so a revision of the frame lands here and
-/// nowhere else. During the disposable camera the Friends panel hides its plate, because the camera
-/// stays full screen (design batch 2). A page that edits something (Arrange Today) names itself and
+/// nowhere else. A frame opened over a page of its own panel can put a Back in the icon's place
+/// (`backTitle`, `b4-mem-solo-open`'s "‹ Album"). A page that edits something (Arrange Today) names itself and
 /// closes with Done instead of ✕ (design `b1-today-editor`).
 ///
 /// VoiceOver lands on the title when a panel opens and again when a page is pushed or popped, so it
@@ -30,6 +30,11 @@ struct WorldPanelFrame<Content: View>: View {
     var closesWithDone = false
     /// Whether the wooden plate shows (false while the disposable camera fills the screen).
     var showsPlate = true
+    /// A Back in the icon's place at the root, for a frame opened over a page of its own panel (a "Just
+    /// you" set over the Album, `b4-mem-solo-open`): the name of the page it returns to.
+    var backTitle: String? = nil
+    /// What that Back does (close this frame); the Back shows only when both are set.
+    var onBack: (() -> Void)? = nil
     let onClose: () -> Void
     @ViewBuilder let content: Content
     @Environment(\.worldTheme) private var theme
@@ -73,6 +78,10 @@ struct WorldPanelFrame<Content: View>: View {
                     .disabled(navigation.isHeld)
                     .padding(.trailing, 6)
                 plateText(page.title)
+            } else if let backTitle, let onBack {
+                FernletBackButton(verbatim: backTitle, compact: FernletBackButton.isCompact(title: plateTitle), action: onBack)
+                    .padding(.trailing, 6)
+                plateText(plateTitle)
             } else {
                 WorldSpriteView(sprite: theme.icon(for: panel), scale: theme.scale(accessibilitySize: dynamicTypeSize.isAccessibilitySize))
                 plateText(plateTitle)

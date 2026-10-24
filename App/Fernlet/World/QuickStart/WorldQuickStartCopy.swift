@@ -31,7 +31,29 @@ nonisolated enum WorldQuickStartCopy {
                           comment: "World Home quick-start card heading where one of the person's saved walks starts")
         case .workout(let title):
             return title
+        case .friendNearby(let names):
+            return friendsAreNearby(names)
+        case .inPerson:
+            return String(localized: "worldQuickStart.heading.inPerson", defaultValue: "Together, in person",
+                          comment: "World Home quick-start card heading when friends nearby is the only choice")
         }
+    }
+
+    /// "Sam is nearby", or "Sam and Rae are nearby".
+    static func friendsAreNearby(_ names: [String]) -> String {
+        guard names.count > 1 else { return FriendsNearbyCopy.isNearby(names.first ?? "") }
+        let list = names.formatted(.list(type: .and))
+        return String(localized: "worldQuickStart.heading.friendsNearby", defaultValue: "\(list) are nearby",
+                      comment: "World Home quick-start card heading: two friends nearby, e.g. 'Sam and Rae are nearby'")
+    }
+
+    /// What VoiceOver hears on the blue button with a friend nearby: "Sam is nearby. Start a session or
+    /// an activity." Nil otherwise.
+    static func spokenStatus(_ card: WorldQuickStartCard?) -> String? {
+        guard case .friendNearby(let names) = card?.heading else { return nil }
+        return String(localized: "worldQuickStart.status.friendNearby",
+                      defaultValue: "\(friendsAreNearby(names)). Start a session or an activity.",
+                      comment: "World Home: the blue button's VoiceOver value with a friend nearby; the heading, e.g. 'Sam is nearby'")
     }
 
     /// The line under the heading.
@@ -79,6 +101,14 @@ nonisolated enum WorldQuickStartCopy {
         case .backToWorkout(let title):
             return String(localized: "worldQuickStart.backToWorkout", defaultValue: "Back to \(title)",
                           comment: "World Home quick start during a guided workout: returns to it; the workout's name")
+        case .startSession(let friend):
+            return FriendsNearbyCopy.startSession(with: friend)
+        case .startActivity:
+            return String(localized: "worldQuickStart.startActivity", defaultValue: "Start an activity",
+                          comment: "World Home quick start with a friend nearby: opens Activities to plan one friends nearby can join")
+        case .friendsNearby:
+            return String(localized: "worldQuickStart.friendsNearby", defaultValue: "Friends nearby",
+                          comment: "World Home quick start: opens Friends nearby, to start a session or make a friend in person")
         }
     }
 
@@ -110,6 +140,14 @@ nonisolated enum WorldQuickStartCopy {
         case .backToWorkout:
             return String(localized: "worldQuickStart.backToWorkout.detail", defaultValue: "Your workout is still going",
                           comment: "World Home quick start during a guided workout: under 'Back to …'")
+        case .startSession:
+            return FriendsNearbyCopy.sessionDetail
+        case .startActivity:
+            return String(localized: "worldQuickStart.startActivity.detail", defaultValue: "A walk, coffee or meal that friends nearby can join",
+                          comment: "World Home quick start: under 'Start an activity'")
+        case .friendsNearby:
+            return String(localized: "worldQuickStart.friendsNearby.detail", defaultValue: "Start a session or make a friend, in person",
+                          comment: "World Home quick start: under 'Friends nearby'")
         }
     }
 }

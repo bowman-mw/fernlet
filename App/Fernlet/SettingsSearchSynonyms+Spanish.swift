@@ -137,6 +137,8 @@ extension SettingsSearchSynonyms {
         "Reset app lock": ["restablecer bloqueo de la app", "restablecer bloqueo", "olvidé mi código", "quitar bloqueo"],
         // Friends & sharing
         "Nearby friends": ["amigos cerca", "cerca", "amigos", "presencia", "proximidad", "compartir"],
+        "Friends & Blocks": ["amigos y bloqueos", "amigos", "bloqueos", "bloquear", "desbloquear", "lista de amigos", "denunciar"],
+        "Change name": ["cambiar nombre", "nombre", "apodo", "apareces como", "nombre visible"],
         "Share your vibe": ["compartir tu ánimo", "ánimo", "estado de ánimo", "compartir ánimo", "amigos"],
         "Nearby hearts": ["corazones con amigos cerca", "corazones", "corazón", "enviar corazón", "amigos"],
         "Deliver hearts when apart": ["entregar corazones después", "corazones", "lejos", "separados", "entregar",

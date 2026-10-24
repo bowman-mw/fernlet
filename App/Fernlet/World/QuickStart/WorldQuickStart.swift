@@ -67,6 +67,12 @@ nonisolated struct WorldQuickStartContext: Equatable, Sendable {
     /// Whether the disposable camera has its on-your-own mode (10 a day;
     /// `WorldDisposableCamera.soloIsAvailable`). Without it the camera is offered only in a session.
     var soloCameraAvailable = false
+    /// Whether friends in person are offered at all (`b4-mem-blue-*`): never in a decoy, below the
+    /// minimum age, or while Delete everything runs (the radios' own hard stops).
+    var canMeetFriends = false
+    /// Kept friends the presence radio hears nearby right now, by first name (at most two; empty with
+    /// Nearby friends off). Strangers are never here: presence recognises kept friends only.
+    var nearbyFriends: [String] = []
 }
 
 /// A saved walk line of the person's own that starts where they stand (`FernletStore.worldSavedLine`):
@@ -103,6 +109,13 @@ nonisolated enum WorldQuickStartOption: Equatable, Hashable, Sendable {
     case soloCamera
     /// Back to the guided workout under way.
     case backToWorkout(title: String)
+    /// "Start a session with Sam" (`b4-mem-blue-friend`): Friends nearby, where the phones meet.
+    case startSession(friend: String)
+    /// "Start an activity": Activities, a walk, coffee or meal that friends nearby can join.
+    case startActivity
+    /// "Friends nearby": the same page, for a session, a hangout or a new friend when the presence
+    /// radio hears no friend (it can't hear people who aren't friends; `b4-mem-blue-join`, `-blue-new`).
+    case friendsNearby
 }
 
 /// The card the blue button opens (the design's `.qs` card): a heading, an optional line, and the
@@ -124,6 +137,10 @@ nonisolated struct WorldQuickStartCard: Equatable, Sendable {
         case walking
         /// The guided workout's title, while it runs.
         case workout(String)
+        /// "Sam is nearby" (`b4-mem-blue-friend`).
+        case friendNearby([String])
+        /// "Together, in person": nothing else to offer here but friends nearby.
+        case inPerson
     }
 
     /// The line under the heading.
@@ -155,6 +172,8 @@ nonisolated enum WorldQuickStartGlyph: Equatable, Sendable {
     case camera
     /// A tree: at the start of a saved walk.
     case trail
+    /// Two people: a friend nearby, or friends in person.
+    case friends
 }
 
 /// The blue button's rules (World app plan step 6b), first match wins:
@@ -163,15 +182,19 @@ nonisolated enum WorldQuickStartGlyph: Equatable, Sendable {
 /// 2. **During a walk** the camera, when there is one to offer (the walk bar holds End).
 /// 3. **During a guided workout** the camera, and the way back to the workout.
 /// 4. **In a session** the session's camera, then Walk together.
-/// 5. **On a resting or unwell day** "Resting counts today" first, the gentle stretch leading, and the
+/// 5. **With a friend nearby** (`b4-mem-blue-friend`) "Sam is nearby": Start a session with Sam,
+///    Start an activity, and the usual choices below so nothing is taken away.
+/// 6. **On a resting or unwell day** "Resting counts today" first, the gentle stretch leading, and the
 ///    usual choices below so nothing is taken away.
-/// 6. **At a pinned space** today's plan there (or Move's suggestion when nothing is planned), then
+/// 7. **At a pinned space** today's plan there (or Move's suggestion when nothing is planned), then
 ///    Walk together.
-/// 7. **At the start of a saved walk** that walk again, its line drawn to follow.
-/// 8. **Anywhere else** Walk together.
+/// 8. **At the start of a saved walk** that walk again, its line drawn to follow.
+/// 9. **Anywhere else** Walk together.
 ///
-/// A card with no choice is no card: the button hides (for example while walking with no camera, or
-/// with location off).
+/// Rules 6 to 9 end with "Friends nearby" while friends are offered at all, so a session, a hangout
+/// and a new friend stay reachable when the presence radio hears no friend (`b4-mem-blue-join`,
+/// `-blue-new`). A card with no choice is no card: the button hides (for example while walking with no
+/// camera, or in a decoy with location off).
 nonisolated enum WorldQuickStart {
     /// The card for `context`, or nil when the button has nothing to offer.
     static func card(for context: WorldQuickStartContext) -> WorldQuickStartCard? {
@@ -189,6 +212,7 @@ nonisolated enum WorldQuickStart {
         case .gentle: return .rest
         case .savedLine: return .trail
         case .session, .walk, .walking: return .walk
+        case .friendNearby, .inPerson: return .friends
         }
     }
 
@@ -209,13 +233,28 @@ nonisolated enum WorldQuickStart {
         }
     }
 
-    /// The rules while nothing is under way: session, resting, space, anywhere.
+    /// The rules while nothing is under way: session, a friend nearby, then the usual ones with friends
+    /// nearby last.
     private static func still(_ context: WorldQuickStartContext) -> WorldQuickStartCard {
         let walk: [WorldQuickStartOption] = context.canWalk ? [.walkTogether] : []
         if let session = context.session {
             return WorldQuickStartCard(heading: .session(session.names), note: nil,
                                        options: [.sessionCamera(shotsLeft: session.shotsLeft)] + walk)
         }
+        let card = usual(context, walk: walk)
+        guard context.canMeetFriends else { return card }
+        if let friend = context.nearbyFriends.first {
+            return WorldQuickStartCard(heading: .friendNearby(context.nearbyFriends), note: nil,
+                                       options: [.startSession(friend: friend), .startActivity] + card.options)
+        }
+        guard !card.options.isEmpty else {
+            return WorldQuickStartCard(heading: .inPerson, note: nil, options: [.friendsNearby])
+        }
+        return WorldQuickStartCard(heading: card.heading, note: card.note, options: card.options + [.friendsNearby])
+    }
+
+    /// The rules without friends: resting, space, saved walk, anywhere.
+    private static func usual(_ context: WorldQuickStartContext, walk: [WorldQuickStartOption]) -> WorldQuickStartCard {
         if context.isResting { return resting(context, walk: walk) }
         if let space = context.space {
             let first: WorldQuickStartOption = context.plannedSession.map { .todaysPlan(space: space.name, session: $0) }

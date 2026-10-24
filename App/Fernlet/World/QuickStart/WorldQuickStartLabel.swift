@@ -17,7 +17,7 @@ nonisolated enum WorldQuickStartLabel: String, CaseIterable, Sendable {
         case .camera: .camera
         case .space: .workout
         case .trail: .run
-        case .walk, .rest, nil: nil
+        case .walk, .rest, .friends, nil: nil
         }
     }
 
