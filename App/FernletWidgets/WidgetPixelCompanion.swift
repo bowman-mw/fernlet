@@ -244,6 +244,7 @@ struct WidgetCompanionSprite: View {
     var ink: WidgetCompanionInk = .color
     /// Draws the pixel "z" at the top right (asleep).
     var showsZee = false
+    @Environment(\.redactionReasons) private var redaction
 
     /// The sprite's size at `scale`.
     static func size(scale: CGFloat) -> CGSize {
@@ -251,15 +252,24 @@ struct WidgetCompanionSprite: View {
     }
 
     var body: some View {
-        canvas
-            .frame(width: Self.size(scale: scale).width, height: Self.size(scale: scale).height)
-            .overlay(alignment: .topTrailing) {
-                if showsZee {
-                    WidgetSpriteView(sprite: WidgetSprites.zee, scale: scale, paint: zeePaint)
-                        .offset(x: scale * 4.5, y: 0)
-                }
+        // A Canvas is not redacted by iOS on its own: under the privacy reason (a locked Lock Screen,
+        // StandBy) the companion gives way to a round placeholder, so its state face never shows.
+        let hidden = redaction.contains(.privacy)
+        Group {
+            if hidden {
+                Circle().fill(.tertiary).padding(scale * 3)
+            } else {
+                canvas
             }
-            .accessibilityHidden(true)
+        }
+        .frame(width: Self.size(scale: scale).width, height: Self.size(scale: scale).height)
+        .overlay(alignment: .topTrailing) {
+            if showsZee && !hidden {
+                WidgetSpriteView(sprite: WidgetSprites.zee, scale: scale, paint: zeePaint)
+                    .offset(x: scale * 4.5, y: 0)
+            }
+        }
+        .accessibilityHidden(true)
     }
 
     private var zeePaint: WidgetSpritePaint {

@@ -1,5 +1,6 @@
 import Foundation
 import FernletDomainModel
+import FernletSocial
 
 /// What the World widgets add to the widget snapshot (World Review Batch 4, approved 2026-10-24): a
 /// friend's gold hearts after the six (`b4-gold-widgets`) and the stamp book (`b4-new-stamp`).

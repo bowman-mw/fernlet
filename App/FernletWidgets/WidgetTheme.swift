@@ -71,12 +71,20 @@ enum WidgetFixedInk {
 /// The 3-point ink frame inside the widget's own rounded edge, around content padded clear of it. The
 /// paper itself is the container background, so iOS can swap it for its own material when it tints
 /// the Home Screen; the frame then draws in the one colour (``WidgetTheme/mono``).
+///
+/// A widget's size is fixed, so text grows no further than the first accessibility size
+/// (``maxTypeSize``); at any accessibility size the cards switch to their larger-text layouts (four
+/// hearts, "2 / 4" water), as Home does.
 struct WidgetPaperFrame: ViewModifier {
     let theme: WidgetTheme
     var padding = EdgeInsets(top: 14, leading: 15, bottom: 14, trailing: 15)
 
+    /// The largest text a widget card draws.
+    static let maxTypeSize = DynamicTypeSize.accessibility1
+
     func body(content: Content) -> some View {
         content
+            .dynamicTypeSize(...Self.maxTypeSize)
             .padding(padding)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .overlay { ContainerRelativeShape().strokeBorder(theme.frame, lineWidth: 3) }

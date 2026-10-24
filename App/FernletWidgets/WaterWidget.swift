@@ -79,12 +79,17 @@ struct WaterSmallView: View {
                 Text(entry.bottleCount, format: .number)
                     .font(WidgetFont.display(34))
                     .foregroundStyle(theme.text)
-                    .contentTransition(.numericText())
-                Text(WaterWords.ofTarget(entry.hydrationTarget))
-                    .font(WidgetFont.label(12.5))
-                    .foregroundStyle(theme.text)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                    .minimumScaleFactor(0.6)
+                    .contentTransition(.numericText())
+                // At the largest text the drop row reads "2 / 4", so the target line steps aside.
+                if !typeSize.isAccessibilitySize {
+                    Text(WaterWords.ofTarget(entry.hydrationTarget))
+                        .font(WidgetFont.label(12.5))
+                        .foregroundStyle(theme.text)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Text("Water"))

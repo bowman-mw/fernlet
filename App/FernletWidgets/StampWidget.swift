@@ -164,14 +164,17 @@ struct StampSmallView: View {
     let mono: Bool
     @Environment(\.colorScheme) private var scheme
     @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let theme = mono ? WidgetTheme.mono : WidgetTheme.current(scheme, contrast: contrast)
+        // The disc gives way to the larger text at accessibility sizes.
+        let disc: CGFloat = typeSize.isAccessibilitySize ? 48 : (WidgetStampShelf.featured(stamps, at: date)?.isNewToday == true ? 70 : 78)
         Group {
             if let featured = WidgetStampShelf.featured(stamps, at: date) {
                 VStack(spacing: 3) {
                     if featured.isNewToday { StampRibbon(mono: mono) }
-                    WidgetStampDisc(kind: featured.stamp.kind, size: featured.isNewToday ? 70 : 78, scale: 5, mono: mono, theme: theme)
+                    WidgetStampDisc(kind: featured.stamp.kind, size: disc, scale: disc < 60 ? 3 : 5, mono: mono, theme: theme)
                     Text(verbatim: featured.stamp.kind.displayName)
                         .font(WidgetFont.display(17))
                         .foregroundStyle(theme.text)
@@ -286,6 +289,7 @@ struct StampRibbon: View {
             .font(WidgetFont.label(11).weight(.bold))
             .foregroundStyle(.white)
             .lineLimit(1)
+            .minimumScaleFactor(0.6)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
             .background(mono ? Color.white.opacity(0.2) : WidgetFixedInk.ribbon, in: RoundedRectangle(cornerRadius: 6))
@@ -321,10 +325,14 @@ struct WidgetStampDisc: View {
     let scale: CGFloat
     let mono: Bool
     let theme: WidgetTheme
+    @Environment(\.redactionReasons) private var redaction
 
     var body: some View {
         ZStack {
-            if let kind {
+            if redaction.contains(.privacy) {
+                // A Canvas is not redacted by iOS on its own: a placeholder disc while locked.
+                Circle().fill(.tertiary)
+            } else if let kind {
                 Circle().fill(mono ? Color.white.opacity(0.18) : WidgetFixedInk.stampGold)
                 Circle().strokeBorder(mono ? Color.white.opacity(0.6) : WidgetFixedInk.bubbleFrame, lineWidth: size > 40 ? 3 : 2)
                 WidgetSpriteView(sprite: kind.sprite, scale: scale, paint: artPaint(kind.sprite))
@@ -338,7 +346,9 @@ struct WidgetStampDisc: View {
     }
 
     private func artPaint(_ sprite: WidgetSprite) -> WidgetSpritePaint {
-        if mono { return .solid(0xFFFFFF) }
+        // In one colour the art keeps only its ink outline, so the duck still reads as a duck; art
+        // with no ink key (the leaf) is drawn whole.
+        if mono { return sprite.palette["k"] == nil ? .solid(0xFFFFFF) : .outline(0xFFFFFF) }
         return sprite.isMonoInk ? .solid(WidgetSprite.ink) : .plain
     }
 }

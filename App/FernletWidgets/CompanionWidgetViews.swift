@@ -85,6 +85,7 @@ struct CompanionThoughtView: View {
                     .font(WidgetFont.label(12.5))
                     .foregroundStyle(theme.muted)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                     .padding(.leading, 4)
             }
         }
@@ -190,6 +191,7 @@ struct CompanionLockRectView: View {
                                 accessibilitySize: typeSize.isAccessibilitySize)
         }
         .foregroundStyle(.white)
+        .dynamicTypeSize(...WidgetPaperFrame.maxTypeSize)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
@@ -227,6 +229,7 @@ struct PlaceholderView: View {
     let mono: Bool
     @Environment(\.colorScheme) private var scheme
     @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     /// The ghost: the plain companion's okay face, as the Batch 4 page draws it.
     private static let ghost = WidgetCompanionPainter.paint(
@@ -237,16 +240,18 @@ struct PlaceholderView: View {
         VStack(spacing: 6) {
             // There is no companion yet, so the ghost illustrates the invitation below rather than
             // reporting anything — hidden, in front of the real message.
-            WidgetCompanionSprite(grid: Self.ghost, scale: 3, ink: .silhouette(mono ? 0xFFFFFF : WidgetFixedInk.ghost))
+            WidgetCompanionSprite(grid: Self.ghost, scale: typeSize.isAccessibilitySize ? 2 : 3,
+                                  ink: .silhouette(mono ? 0xFFFFFF : WidgetFixedInk.ghost))
             Text("Open Fernlet")
                 .font(WidgetFont.display(18))
                 .foregroundStyle(theme.text)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(0.5)
             Text("to meet your companion")
                 .font(WidgetFont.label(12.5))
                 .foregroundStyle(theme.muted)
                 .multilineTextAlignment(.center)
+                .minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .widgetPaperFrame(theme)

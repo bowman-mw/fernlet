@@ -78,11 +78,15 @@ struct WidgetHeartRow: View {
     /// Points per sprite pixel at the standard text sizes without gold hearts.
     var scale: CGFloat = 7.0 / 3.0
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.redactionReasons) private var redaction
 
     var body: some View {
         let count = typeSize.isAccessibilitySize ? 4 : 6
         let gold = min(max(goldHearts, 0), WidgetHearts.maxGold)
         let steps = WidgetHearts.steps(score)
+        // A Canvas is not redacted by iOS on its own: under the privacy reason (a locked Lock Screen,
+        // StandBy) the hearts give way to one placeholder bar, as text does.
+        let hidden = redaction.contains(.privacy)
         HStack(spacing: 1) {
             ForEach(0..<count, id: \.self) { index in
                 heart(WidgetHearts.fill(steps: steps, at: index, of: count), count: count, gold: gold)
@@ -91,6 +95,8 @@ struct WidgetHeartRow: View {
                 heart(.gold, count: count, gold: gold)
             }
         }
+        .opacity(hidden ? 0 : 1)
+        .overlay { if hidden { Capsule().fill(.tertiary) } }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(WidgetHearts.label))
         .accessibilityValue(Text(WidgetHearts.value(score: score, goldHearts: gold)))
