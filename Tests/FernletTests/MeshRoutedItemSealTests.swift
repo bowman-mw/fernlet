@@ -566,9 +566,10 @@ struct MeshRoutedItemSealGoldenTests {
         // `Hash.sealedBackupWriterTagV1` (the Sealed backup v2 writer tag) — two storage domains no
         // item seal touches, acknowledged together when both rounds merged; 83 since the World build's
         // map store (branch `world-ui` only, 2026-10-23) registered `AEAD.worldMapFogV1` and
-        // `AEAD.worldMapPendingV1`, two at-rest domains no item seal touches. This count is a tripwire on
+        // `AEAD.worldMapPendingV1`, two at-rest domains no item seal touches; 84 since its saved walk lines
+        // (World app plan step 5b) registered `AEAD.worldMapRouteV1`, another. This count is a tripwire on
         // the registry, not on the item seal: a new row must be acknowledged here, deliberately.
-        #expect(CryptographicDomainSeparationTests.allDomains.count == 83)
+        #expect(CryptographicDomainSeparationTests.allDomains.count == 84)
         let rows = CryptographicDomainSeparationTests.allDomains.filter {
             $0.purpose.rawValue == FernletCryptoPurpose.AEAD.meshRoutedItemV1.rawValue
         }

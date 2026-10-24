@@ -126,6 +126,20 @@ public final class WorldMapVault {
         public let purpose: CryptographicPurpose
         /// Which key seals it.
         public let role: WorldMapKeyRole
+        /// Further authenticated data after the purpose (a walk line's workout id), so a file renamed to
+        /// another of its kind never opens. Empty for the fog files, whose sealing it leaves unchanged.
+        public let context: Data
+
+        /// A file `name`, sealed under `purpose` with `role`'s key, bound to `context`.
+        public init(name: String, purpose: CryptographicPurpose, role: WorldMapKeyRole, context: Data = Data()) {
+            self.name = name
+            self.purpose = purpose
+            self.role = role
+            self.context = context
+        }
+
+        /// The authenticated data the file is sealed with: the purpose, then the context.
+        var authenticatedData: Data { purpose.data + context }
 
         /// The fog store.
         public static let fog = File(name: "fog.bin", purpose: FernletCryptoPurpose.AEAD.worldMapFogV1, role: .store)
@@ -168,7 +182,7 @@ public final class WorldMapVault {
         let key = try keys.key(file.role)
         do {
             let box = try AES.GCM.SealedBox(combined: sealed.dropFirst(Self.magic.count))
-            return try AES.GCM.open(box, using: key, authenticating: file.purpose.data)
+            return try AES.GCM.open(box, using: key, authenticating: file.authenticatedData)
         } catch {
             throw VaultError.unopenable
         }
@@ -177,10 +191,9 @@ public final class WorldMapVault {
     /// Seals `plaintext` and writes it to `file`, atomically, with the file's protection class.
     public func write(_ plaintext: Data, to file: File) throws {
         let key = try keys.key(file.role)
-        let purpose = file.purpose
         let sealed: Data
         do {
-            guard let combined = try AES.GCM.seal(plaintext, using: key, authenticating: purpose.data).combined else {
+            guard let combined = try AES.GCM.seal(plaintext, using: key, authenticating: file.authenticatedData).combined else {
                 throw VaultError.unopenable
             }
             sealed = Self.magic + combined
@@ -205,6 +218,14 @@ public final class WorldMapVault {
         } catch {
             return false
         }
+    }
+
+    /// The names of the vault's files that start with `prefix`, at most `limit` of them (a missing folder
+    /// has none). Bounded: the folder is read once and the list cut at `limit`.
+    public func fileNames(withPrefix prefix: String, limit: Int) throws -> [String] {
+        guard limit > 0, FileManager.default.fileExists(atPath: directory.path) else { return [] }
+        let names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+        return Array(names.lazy.filter { $0.hasPrefix(prefix) }.prefix(limit))
     }
 
     /// Deletes every World map file and both keys: the wipe. Whether everything is gone.

@@ -240,6 +240,11 @@ final class FernletStore {
             #endif
             // The World map's fog follows the decoy on the same flag: history hidden, nothing written.
             worldFog.setDecoy(duressSessionActive)
+            // A walk recording when the decoy opens or closes is dropped: neither side keeps the other's.
+            if worldWalk.isRecording {
+                worldWalk.cancel()
+                worldLocation.stopWalk()
+            }
         }
     }
     /// One-shot request to show the "Turn on Nearby Friends?" prompt (set when the user keeps
@@ -753,9 +758,17 @@ final class FernletStore {
     /// to ``worldFog``, which decides whether it lifts the fog.
     @ObservationIgnored private(set) lazy var worldLocation: WorldLocationSource = {
         let source = WorldLocationSource()
-        source.onFix = { [weak self] fix in self?.worldFog.handle(fix) }
+        source.onFix = { [weak self] fix in
+            self?.worldFog.handle(fix)
+            self?.worldWalk.record(fix)
+        }
         return source
     }()
+    /// The World map's saved walk lines (`WorldRouteStore`), sealed in the same vault as the fog and
+    /// cleared with it. Lazy, like the fog.
+    @ObservationIgnored private(set) lazy var worldRoutes = WorldRouteStore(vault: worldMapVault)
+    /// The walk recording now, if any (`WorldWalkRecorder`; `FernletStore+WorldWalk`).
+    @ObservationIgnored let worldWalk = WorldWalkRecorder()
     /// Recipe ids whose web-image download is currently in flight. Guards the entry to
     /// ``fetchRecipeWebImageIfNeeded(for:)`` so the paste-import fire-and-forget task and the
     /// detail's first-open task — both of which can hold the same not-yet-attempted recipe copy —
@@ -3329,6 +3342,9 @@ final class FernletStore {
         if let plannedID = workout.plannedWorkoutID {
             diary.planWorkout(Self.reconstructPlannedWorkout(from: workout, plannedID: plannedID), date: date)
         }
+
+        // A World walk's saved line goes with its workout (World build; nothing to do for any other row).
+        worldRoutes.delete(for: id)
 
         // Tombstone synchronously (survives relaunch; the observer anchor persists immediately while the
         // snapshot save is debounced), then delete the app-authored Health sample by `fernlet.workoutID`.
@@ -7091,8 +7107,9 @@ final class FernletStore {
         if !deviceDaySummaryStore.clearAll() {
             incompleteStores.append("your day summaries")
         }
-        // The World map's sealed location history (fog cells and its locked-phone buffer) and both of
-        // its device keys, plus its two device-only settings. World build only.
+        // The World map's sealed location history (fog cells, its locked-phone buffer and the saved
+        // walk lines, one folder) and both of its device keys, plus its device-only settings. World
+        // build only.
         if !worldFog.clearAll() {
             incompleteStores.append("your map history")
         }

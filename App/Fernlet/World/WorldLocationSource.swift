@@ -38,6 +38,12 @@ nonisolated enum WorldLocationPermission: Equatable, Sendable {
 ///   (``setLowPowerAlways(_:)``), which need no `location` background mode and use little battery.
 /// - **Asking:** ``requestWhileUsing()`` and ``requestAlways()`` are called only from the approved
 ///   permission screens (step 5c); nothing here asks on its own.
+/// - **A walk** (``startWalk()`` / ``stopWalk()``, plan step 5b): updates keep running while a walk the
+///   person started records, even when the map leaves the screen. With approximate location it asks for
+///   precise location for this walk only (temporary full accuracy), and it holds a background activity
+///   session so a walk with the phone in a pocket keeps its line. Both need their Info.plist half (the
+///   temporary-accuracy purpose and the `location` background mode), which arrive with the approved
+///   permission strings (step 5c); until then each is skipped, never crashed into.
 ///
 /// Every reading goes to ``onFix`` as a ``WorldFix``; what to do with it (lift the fog or not) is the
 /// fog keeper's call. Delegate callbacks arrive off the main actor and hop to it with the values they
@@ -54,9 +60,16 @@ final class WorldLocationSource: NSObject {
     /// Called with every reading.
     @ObservationIgnored var onFix: ((WorldFix) -> Void)?
 
+    /// Whether a walk is recording (updates keep running off the map).
+    private(set) var isWalking = false
+
     @ObservationIgnored private let manager = CLLocationManager()
     @ObservationIgnored private var isUpdating = false
     @ObservationIgnored private var isMonitoringAlways = false
+    @ObservationIgnored private var walkSession: CLBackgroundActivitySession?
+
+    /// The Info.plist purpose key the walk's temporary full-accuracy request names (a frozen token).
+    static let walkAccuracyPurposeKey = "WorldWalk"
 
     override init() {
         super.init()
@@ -85,11 +98,49 @@ final class WorldLocationSource: NSObject {
         manager.startUpdatingLocation()
     }
 
-    /// Stops the map's updates (the map left the screen, or the app went to the background).
+    /// Stops the map's updates (the map left the screen, or the app went to the background); a walk
+    /// keeps them running until it ends.
     func stopForeground() {
-        guard isUpdating else { return }
+        guard isUpdating, !isWalking else { return }
         isUpdating = false
         manager.stopUpdatingLocation()
+    }
+
+    /// Keeps updates running for a walk the person started, asking for precise location for this walk
+    /// when only approximate is allowed, and holding a background session while the app declares one.
+    func startWalk() {
+        guard permission == .whileUsing || permission == .always, !isWalking else { return }
+        isWalking = true
+        startForeground()
+        if !isPrecise, Self.declares("NSLocationTemporaryUsageDescriptionDictionary") {
+            manager.requestTemporaryFullAccuracyAuthorization(withPurposeKey: Self.walkAccuracyPurposeKey)
+        }
+        if Self.declaresBackgroundLocation {
+            walkSession = CLBackgroundActivitySession()
+            manager.allowsBackgroundLocationUpdates = true
+        }
+    }
+
+    /// Ends the walk's hold on updates: the background session goes, and updates stop unless the map
+    /// is still on screen (the map restarts them when it next comes to the front).
+    func stopWalk() {
+        guard isWalking else { return }
+        isWalking = false
+        walkSession?.invalidate()
+        walkSession = nil
+        if Self.declaresBackgroundLocation { manager.allowsBackgroundLocationUpdates = false }
+        stopForeground()
+    }
+
+    /// Whether the app's Info.plist has `key` (an undeclared feature is skipped, never crashed into).
+    nonisolated static func declares(_ key: String) -> Bool {
+        Bundle.main.object(forInfoDictionaryKey: key) != nil
+    }
+
+    /// Whether the app declares the `location` background mode (setting background updates without it
+    /// traps).
+    nonisolated static var declaresBackgroundLocation: Bool {
+        (Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String])?.contains("location") == true
     }
 
     /// Turns the low-power Always mode on or off; on needs the Always permission.
@@ -112,7 +163,10 @@ final class WorldLocationSource: NSObject {
         isPrecise = accuracy == .fullAccuracy
         guard permission != .always else { return }
         setLowPowerAlways(false)
-        if permission == .denied || permission == .notAsked { stopForeground() }
+        if permission == .denied || permission == .notAsked {
+            stopWalk()
+            stopForeground()
+        }
     }
 
     /// Hands a reading on, as plain values.

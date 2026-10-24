@@ -447,6 +447,10 @@ public nonisolated enum FernletCryptoPurpose {
         /// after-first-unlock buffer key and drained into the fog store on the next unlock. Separate
         /// from ``worldMapFogV1`` so a buffer file moved into the store's name cannot open as the store.
         public static let worldMapPendingV1 = CryptographicPurpose("fernlet.world-map.pending.aead.v1")
+        /// **World build only.** One saved walk line (`WorldRouteStore`), sealed under the vault's
+        /// when-unlocked store key with its workout id as further authenticated data, so a line can
+        /// open only as its own workout's line, never as the fog or another walk.
+        public static let worldMapRouteV1 = CryptographicPurpose("fernlet.world-map.route.aead.v1")
         public static let mealPhotoV2 = CryptographicPurpose("fernlet.private-media.meal-photo.aead.v2")
         public static let recipePhotoV2 = CryptographicPurpose("fernlet.private-media.recipe-photo.aead.v2")
         public static let progressPhotoV2 = CryptographicPurpose("fernlet.private-media.progress-photo.aead.v2")
