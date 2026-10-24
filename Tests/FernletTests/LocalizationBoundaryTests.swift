@@ -3936,6 +3936,17 @@ struct LocalizationBoundaryTests {
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
                      key: "privacy.ownPhotos.verifiedUnreadable",
                      source: "Privacy & Data's encrypted photo backup verification line"),
+        // World Review Batch 4, lane ext (2026-10-24): Shortcuts' Add this workout plan? card, which
+        // read "1 collisions" and "1 … warnings". Its recipe twin reuses the Messages card's counts.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "shortcuts.plan.collisions",
+                     source: "Shortcuts' workout plan confirmation: days that already hold workouts"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "shortcuts.plan.safetyWarnings",
+                     source: "Shortcuts' workout plan confirmation: the warning line"),
+        // World Review Batch 4, lane album (2026-10-24): Friends nearby's open-hangout line. Its
+        // friend twin, `friendsNearby.note.hangout`, carries the name first and plurals the count
+        // through a substitution, which this one-count check does not read (WorldAlbumTests pins it).
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "friendsNearby.note.theirHangout",
+                     source: "Friends nearby: someone new in a hangout with others ('1 other person')"),
     ]
 
     /// Every count-bearing key carries real plural variations.
@@ -3974,14 +3985,7 @@ struct LocalizationBoundaryTests {
     /// absent key passes and a PRESENT key without an English `one`/`other` block is red, so that
     /// sync cannot land without the hand-authored block. The catalog commit that authors the block
     /// moves the row into ``pluralRuledKeys``, where absence is red too.
-    static let pluralRuledKeysAwaitingTheirCatalog: [HarvestedKey] = [
-        // World Review Batch 4, lane ext (2026-10-24): Shortcuts' Add this workout plan? card, which
-        // read "1 collisions" and "1 … warnings". Its recipe twin reuses the Messages card's counts.
-        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "shortcuts.plan.collisions",
-                     source: "Shortcuts' workout plan confirmation: days that already hold workouts"),
-        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "shortcuts.plan.safetyWarnings",
-                     source: "Shortcuts' workout plan confirmation: the warning line"),
-    ]
+    static let pluralRuledKeysAwaitingTheirCatalog: [HarvestedKey] = []
 
     /// Whether a catalog's `strings` table carries `key` with an English `one` AND `other` plural form.
     ///

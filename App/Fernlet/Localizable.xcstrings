@@ -1060,6 +1060,7 @@
       }
     },
     "%lld avoided or unavailable exercise warnings" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -1202,6 +1203,7 @@
       }
     },
     "%lld collisions · %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2020,6 +2022,7 @@
       }
     },
     "%lld servings · %lld ingredients" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2086,6 +2089,7 @@
       }
     },
     "%lld steps · %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2256,6 +2260,16 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$lldh %2$lldm"
+          }
+        }
+      }
+    },
+    "%lldm" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld min"
           }
         }
       }
@@ -2891,6 +2905,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Un toque cuando termina un descanso o un ejercicio por tiempo. Los sonidos son discretos, respetan el interruptor de tono/silencio y suenan sobre tu música sin pausarla. La pantalla se mantiene encendida durante el entrenamiento. Si bloqueas el celular, el final de un descanso o de un ejercicio por tiempo te llega como notificación si las notificaciones de Fernlet están permitidas, y el entrenamiento espera en ese paso hasta que vuelvas a abrir Fernlet."
+          }
+        }
+      }
+    },
+    "A walk, coffee or meal that friends nearby can join" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Una caminata, un café o una comida a la que pueden unirse amigos cerca"
           }
         }
       }
@@ -3936,6 +3960,26 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Ideal: hablar en frases cortas"
+          }
+        }
+      }
+    },
+    "Album" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Álbum"
+          }
+        }
+      }
+    },
+    "Album tab" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pestaña Álbum"
           }
         }
       }
@@ -5122,6 +5166,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Trae un plan de vuelta"
+          }
+        }
+      }
+    },
+    "Bring your phones together to start. Nothing is shared until you both say yes." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Juntad los móviles para empezar. No se comparte nada hasta que los dos digáis que sí."
           }
         }
       }
@@ -8345,6 +8399,7 @@
       }
     },
     "Disposable camera" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -8470,6 +8525,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Toca dos veces para acariciarlo."
+          }
+        }
+      }
+    },
+    "Double tap to see it up close." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Toca dos veces para verlo de cerca."
           }
         }
       }
@@ -11374,6 +11439,7 @@
       }
     },
     "Friend shops are open" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -11426,6 +11492,7 @@
       }
     },
     "Friends & private" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -11436,6 +11503,7 @@
       }
     },
     "Friends and blocks" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -11461,6 +11529,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Tus amigos pueden explorar lo que diseñaste."
+          }
+        }
+      }
+    },
+    "Friends nearby" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Amigos cerca"
           }
         }
       }
@@ -11506,6 +11584,7 @@
       }
     },
     "Friends tab" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -13186,6 +13265,7 @@
       }
     },
     "In a session" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -18118,6 +18198,7 @@
       }
     },
     "Open the disposable camera" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -18921,6 +19002,16 @@
         }
       }
     },
+    "Pet" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Acariciar"
+          }
+        }
+      }
+    },
     "Phase 3 gate readout" : {
       "localizations" : {
         "es" : {
@@ -19622,7 +19713,28 @@
         }
       }
     },
+    "Presence off" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Presencia desactivada"
+          }
+        }
+      }
+    },
+    "Presence on" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Presencia activada"
+          }
+        }
+      }
+    },
     "Presence, vibe, hearts, sharing" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -19738,6 +19850,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Política de privacidad"
+          }
+        }
+      }
+    },
+    "Private" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Privado"
           }
         }
       }
@@ -23830,6 +23952,7 @@
       }
     },
     "Shop open — %lld min" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -23845,6 +23968,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Lista de compras"
+          }
+        }
+      }
+    },
+    "Shops" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tiendas"
           }
         }
       }
@@ -23954,7 +24087,18 @@
         }
       }
     },
+    "Shows the connection inspector button and a Force override on Album › Friends nearby that bypasses distance requirements." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Muestra el botón del inspector de conexiones y un ajuste Forzar en Álbum › Amigos cerca que se salta los requisitos de distancia."
+          }
+        }
+      }
+    },
     "Shows the connection inspector button and a Force override on the Friends tab that bypasses distance requirements." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -27427,7 +27571,18 @@
         }
       }
     },
+    "Together, and just you." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Juntos, y solo tú."
+          }
+        }
+      }
+    },
     "Together, in person." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -29830,6 +29985,22 @@
         }
       }
     },
+    "You appear as %@ · ^[%lld friends](inflect: true)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You appear as %1$@ · ^[%2$lld friends](inflect: true)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Apareces como %@ · ^[%lld amigos](inflect: true)"
+          }
+        }
+      }
+    },
     "You appear as %@. Change the name friends see." : {
       "localizations" : {
         "es" : {
@@ -30130,6 +30301,26 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Ya organizas el máximo de %lld actividades. Termina una para iniciar otra."
+          }
+        }
+      }
+    },
+    "You're in a session with %@. It lives on Home's session button." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estás en una sesión con %@. La tienes en el botón de sesión de Inicio."
+          }
+        }
+      }
+    },
+    "You're in a session. It lives on Home's session button." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estás en una sesión. La tienes en el botón de sesión de Inicio."
           }
         }
       }
@@ -38391,6 +38582,342 @@
         }
       }
     },
+    "friendsNearby.heading.friend" : {
+      "comment" : "Friends nearby and the blue button: a card heading for a friend nearby; their first name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ is nearby"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ está cerca"
+          }
+        }
+      }
+    },
+    "friendsNearby.heading.someone" : {
+      "comment" : "Friends nearby: a card heading for a nearby person with Fernlet who isn't a friend yet",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Someone with Fernlet is nearby"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Alguien con Fernlet está cerca"
+          }
+        }
+      }
+    },
+    "friendsNearby.join.friend" : {
+      "comment" : "Friends nearby: asks to join a nearby friend's hangout; their first name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Join %@'s hangout"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Unirte a la quedada de %@"
+          }
+        }
+      }
+    },
+    "friendsNearby.join.friend.detail" : {
+      "comment" : "Friends nearby: under 'Join Sam's hangout'; the hangout's name, then the friend's first name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@ says yes before you're in"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ · %2$@ dice que sí antes de que entres"
+          }
+        }
+      }
+    },
+    "friendsNearby.join.someone" : {
+      "comment" : "Friends nearby: asks to join the hangout of someone nearby who isn't a friend",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Join this hangout"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Unirte a esta quedada"
+          }
+        }
+      }
+    },
+    "friendsNearby.join.someone.detail" : {
+      "comment" : "Friends nearby: under 'Join this hangout'; the hangout's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ · they say yes before you're in"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ · te dicen que sí antes de que entres"
+          }
+        }
+      }
+    },
+    "friendsNearby.makeFriend" : {
+      "comment" : "Friends nearby: starts the in-person code exchange with someone who isn't a friend yet",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Make a friend"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hacer un amigo"
+          }
+        }
+      }
+    },
+    "friendsNearby.makeFriend.detail" : {
+      "comment" : "Friends nearby: under 'Make a friend'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Show each other a code, in person"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Enseñaos un código, en persona"
+          }
+        }
+      }
+    },
+    "friendsNearby.note.hangout" : {
+      "comment" : "Friends nearby: a nearby friend is in a hangout; their first name, then how many others are in it. Plural on the number (1: 'with 1 other person')",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ is in a hangout with %#@others@."
+          },
+          "substitutions" : {
+            "others" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg other person"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg other people"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ está en una quedada con %#@others@."
+          },
+          "substitutions" : {
+            "others" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%arg persona más"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%arg personas más"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "friendsNearby.note.hangoutAlone" : {
+      "comment" : "Friends nearby: a nearby friend is in a hangout of their own; their first name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ is in a hangout."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ está en una quedada."
+          }
+        }
+      }
+    },
+    "friendsNearby.note.new" : {
+      "comment" : "Friends nearby: under the heading for someone with Fernlet who isn't a friend yet",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Not a friend yet. Nothing is shared until you both say yes."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aún no es tu amigo. No se comparte nada hasta que los dos digáis que sí."
+          }
+        }
+      }
+    },
+    "friendsNearby.note.theirHangout" : {
+      "comment" : "Friends nearby: someone nearby who isn't a friend is in a hangout; how many others are in it. Plural on the number (1: 'with 1 other person')",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "They're in a hangout with 1 other person."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "They're in a hangout with %lld other people."
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Está en una quedada con 1 persona más."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Está en una quedada con %lld personas más."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "friendsNearby.note.theirHangoutAlone" : {
+      "comment" : "Friends nearby: someone nearby who isn't a friend is in a hangout of their own",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "They're in a hangout."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Está en una quedada."
+          }
+        }
+      }
+    },
+    "friendsNearby.startSession" : {
+      "comment" : "Friends nearby and the blue button: start a friend session with a friend nearby; their first name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start a session with %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Empezar una sesión con %@"
+          }
+        }
+      }
+    },
+    "friendsNearby.startSession.detail" : {
+      "comment" : "Friends nearby and the blue button: under 'Start a session with Sam'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Photos, messages and walks together, while you're in person"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fotos, mensajes y caminatas juntos, mientras estáis en persona"
+          }
+        }
+      }
+    },
     "g" : {
 
     },
@@ -39499,6 +40026,42 @@
         }
       }
     },
+    "itemBar.album" : {
+      "comment" : "World Home item bar and the panel's title: the photo album, shared hangout photos and your own (Spanish: Álbum). Keep it short; it shares the bar with five others",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Album"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Álbum"
+          }
+        }
+      }
+    },
+    "itemBar.album.formerName" : {
+      "comment" : "World Home item bar, Voice Control only: the Album's former name, still answered to (Spanish: Amigos)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Friends"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Amigos"
+          }
+        }
+      }
+    },
     "itemBar.food" : {
       "comment" : "World Home item bar: meals, recipes and nutrition",
       "extractionState" : "extracted_with_value",
@@ -39519,7 +40082,7 @@
     },
     "itemBar.friends" : {
       "comment" : "World Home item bar: in-person friends and shared photos",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -45631,6 +46194,24 @@
         }
       }
     },
+    "settings.search.breadcrumb.friendsBlocks" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Friends & Blocks"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Amigos y bloqueos"
+          }
+        }
+      }
+    },
     "settings.search.breadcrumb.goalNutrition" : {
       "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
       "extractionState" : "extracted_with_value",
@@ -46266,6 +46847,24 @@
         }
       }
     },
+    "settings.search.title.changeName" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Friends & Blocks page (the name friends nearby see). Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Change name"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cambiar nombre"
+          }
+        }
+      }
+    },
     "settings.search.title.changePasscode" : {
       "comment" : "Settings search result: the name of a setting a search can find, on the App lock › Manage page. Short, sentence case, like the row it leads to.",
       "extractionState" : "extracted_with_value",
@@ -46640,6 +47239,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Olvidar un recuerdo"
+          }
+        }
+      }
+    },
+    "settings.search.title.friendsBlocks" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Friends & Blocks page. Short, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Friends & Blocks"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Amigos y bloqueos"
           }
         }
       }
@@ -47630,6 +48247,124 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Gracias por avisarnos. Ocultamos este artículo y bloqueamos en tu dispositivo a la persona que lo envió. Tu reporte va firmado por tu dispositivo y llega a los amigos que ves en persona, incluida la persona que reportaste."
+          }
+        }
+      }
+    },
+    "shortcuts.plan.changes" : {
+      "comment" : "Shortcuts' Add this workout plan? confirmation: planned workouts the import adds, changes and removes. The three numbers are counts of workouts; a label-and-number form ('Added: 3') avoids needing plural forms.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld added · %2$lld changed · %3$lld removed"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Agregados: %1$lld · Cambiados: %2$lld · Quitados: %3$lld"
+          }
+        }
+      }
+    },
+    "shortcuts.plan.collisions" : {
+      "comment" : "Shortcuts' Add this workout plan? confirmation: how many days in the plan's range already have planned workouts, e.g. '1 collision', '3 collisions'. Needs a plural variation per language. Followed by ' · ' and what the import does about them.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld collision"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld collisions"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld coincidencia"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld coincidencias"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "shortcuts.plan.safetyWarnings" : {
+      "comment" : "Shortcuts' Add this workout plan? confirmation, in the warning colour: how many of the plan's exercises you avoid or Fernlet can't offer, e.g. '1 avoided or unavailable exercise warning'. Needs a plural variation per language.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld avoided or unavailable exercise warning"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld avoided or unavailable exercise warnings"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld aviso de ejercicio evitado o no disponible"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld avisos de ejercicios evitados o no disponibles"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "shortcuts.plan.senderNotSpecified" : {
+      "comment" : "Shortcuts' Add this workout plan? confirmation, under the plan's title, when the plan file names no sender.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sender not specified"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Remitente sin indicar"
           }
         }
       }
@@ -48792,7 +49527,7 @@
       }
     },
     "stampBook.medal.breathing" : {
-      "comment" : "Stamp book: lowercase caption under the breathing medal, below its count of breathing breaks. A tally caption, the same at any count.",
+      "comment" : "Stamp book: lowercase caption under the breathing medal, below its count of breathing breaks when it is not 1. The 1 form is stampBook.medal.breathing.one.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
@@ -48809,8 +49544,26 @@
         }
       }
     },
+    "stampBook.medal.breathing.one" : {
+      "comment" : "Stamp book: lowercase caption under the breathing medal when its count of breathing breaks is exactly 1",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "breathing break"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "pausa para respirar"
+          }
+        }
+      }
+    },
     "stampBook.medal.journal" : {
-      "comment" : "Stamp book: lowercase caption under the journal medal, below its lifetime count. A tally caption, the same at any count.",
+      "comment" : "Stamp book: lowercase caption under the journal medal, below its lifetime count when it is not 1. The 1 form is stampBook.medal.journal.one.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
@@ -48827,8 +49580,26 @@
         }
       }
     },
+    "stampBook.medal.journal.one" : {
+      "comment" : "Stamp book: lowercase caption under the journal medal when its lifetime count is exactly 1",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "journal moment"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "momento de diario"
+          }
+        }
+      }
+    },
     "stampBook.medal.meals" : {
-      "comment" : "Stamp book: lowercase caption under the meals medal, below its lifetime count. A tally caption, the same at any count.",
+      "comment" : "Stamp book: lowercase caption under the meals medal, below its lifetime count when it is not 1. The 1 form is stampBook.medal.meals.one.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
@@ -48845,8 +49616,26 @@
         }
       }
     },
+    "stampBook.medal.meals.one" : {
+      "comment" : "Stamp book: lowercase caption under the meals medal when its lifetime count is exactly 1",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "meal noted"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "comida anotada"
+          }
+        }
+      }
+    },
     "stampBook.medal.water" : {
-      "comment" : "Stamp book: lowercase caption under the water medal, below its count of days the water target was met. A tally caption, the same at any count.",
+      "comment" : "Stamp book: lowercase caption under the water medal, below its count of days the water target was met when it is not 1. The 1 form is stampBook.medal.water.one.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
@@ -48863,8 +49652,26 @@
         }
       }
     },
+    "stampBook.medal.water.one" : {
+      "comment" : "Stamp book: lowercase caption under the water medal when its count of days the water target was met is exactly 1",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "well-watered day"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "día bien hidratado"
+          }
+        }
+      }
+    },
     "stampBook.medal.workouts" : {
-      "comment" : "Stamp book: lowercase caption under the workouts medal, below its lifetime count. A tally caption, the same at any count.",
+      "comment" : "Stamp book: lowercase caption under the workouts medal, below its lifetime count when it is not 1. The 1 form is stampBook.medal.workouts.one.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
@@ -48881,8 +49688,26 @@
         }
       }
     },
+    "stampBook.medal.workouts.one" : {
+      "comment" : "Stamp book: lowercase caption under the workouts medal when its lifetime count is exactly 1",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "workout on purpose"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "entreno a propósito"
+          }
+        }
+      }
+    },
     "stampBook.medal.worries" : {
-      "comment" : "Stamp book: lowercase caption under the worry medal, below its count of worries let go. A tally caption, the same at any count.",
+      "comment" : "Stamp book: lowercase caption under the worry medal, below its count of worries let go when it is not 1. The 1 form is stampBook.medal.worries.one.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
@@ -48895,6 +49720,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "preocupaciones soltadas"
+          }
+        }
+      }
+    },
+    "stampBook.medal.worries.one" : {
+      "comment" : "Stamp book: lowercase caption under the worry medal when its count of worries let go is exactly 1",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "worry let go"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "preocupación soltada"
           }
         }
       }
@@ -49925,6 +50768,78 @@
         }
       }
     },
+    "worldCloseUp.hint" : {
+      "comment" : "World companion up close: how to pet it and how to open Customize",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tap to pet · hold for Customize"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Toca para acariciar · mantén para personalizar"
+          }
+        }
+      }
+    },
+    "worldCloseUp.petInput" : {
+      "comment" : "World companion up close: the Voice Control name for petting it; the companion's name follows 'Pet'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pet %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Acariciar a %@"
+          }
+        }
+      }
+    },
+    "worldCloseUp.status" : {
+      "comment" : "World companion up close, under its name: its state, then its feeling. Example: 'Thriving · feeling happy'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "worldCloseUp.tickles" : {
+      "comment" : "World companion up close: what the companion says when petted (Spanish: ¡Me haces cosquillas!)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "That tickles!"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Me haces cosquillas!"
+          }
+        }
+      }
+    },
     "worldFriend.nearby" : {
       "comment" : "World Home, VoiceOver: a friend's companion beside yours; their first name",
       "extractionState" : "extracted_with_value",
@@ -49975,6 +50890,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "¡%@ está aquí!"
+          }
+        }
+      }
+    },
+    "worldLine.night" : {
+      "comment" : "World Home at night or past the companion's bedtime: the companion's speech as it winds down",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Getting sleepy. Night soon."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Me está dando sueño. Ya casi es de noche."
           }
         }
       }
@@ -50287,7 +51220,7 @@
     },
     "worldPhotos.hint" : {
       "comment" : "World Home: what tapping the photo wall does, for VoiceOver",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -50299,6 +51232,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Abre el álbum compartido en Amigos."
+          }
+        }
+      }
+    },
+    "worldPhotos.hint.album" : {
+      "comment" : "World Home: what tapping the photo wall does, for VoiceOver. Album is the item bar's name for the photo album (Spanish: Abre Álbum.)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Opens Album."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre Álbum."
           }
         }
       }
@@ -50452,6 +51403,42 @@
         }
       }
     },
+    "worldQuickStart.friendsNearby" : {
+      "comment" : "World Home quick start: opens Friends nearby, to start a session or make a friend in person",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Friends nearby"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Amigos cerca"
+          }
+        }
+      }
+    },
+    "worldQuickStart.friendsNearby.detail" : {
+      "comment" : "World Home quick start: under 'Friends nearby'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start a session or make a friend, in person"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Empieza una sesión o haz un amigo, en persona"
+          }
+        }
+      }
+    },
     "worldQuickStart.gentleStretch" : {
       "comment" : "World Home quick start on a resting day: a guided gentle stretch",
       "extractionState" : "extracted_with_value",
@@ -50488,6 +51475,24 @@
         }
       }
     },
+    "worldQuickStart.heading.friendsNearby" : {
+      "comment" : "World Home quick-start card heading: two friends nearby, e.g. 'Sam and Rae are nearby'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ are nearby"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ están cerca"
+          }
+        }
+      }
+    },
     "worldQuickStart.heading.gentle" : {
       "comment" : "World Home quick-start card heading on a resting or unwell day, away from a workout space",
       "extractionState" : "extracted_with_value",
@@ -50502,6 +51507,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Un día tranquilo"
+          }
+        }
+      }
+    },
+    "worldQuickStart.heading.inPerson" : {
+      "comment" : "World Home quick-start card heading when friends nearby is the only choice",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Together, in person"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Juntos, en persona"
           }
         }
       }
@@ -50610,6 +51633,96 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Inicio rápido"
+          }
+        }
+      }
+    },
+    "worldQuickStart.label.announcement" : {
+      "comment" : "World Home: what VoiceOver says once when the blue button's action changes, 'Quick start: Camera'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@: %2$@"
+          }
+        }
+      }
+    },
+    "worldQuickStart.label.camera" : {
+      "comment" : "World Home: the short label beside the blue button when it becomes the disposable camera (Spanish: Cámara)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Camera"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cámara"
+          }
+        }
+      }
+    },
+    "worldQuickStart.label.name" : {
+      "comment" : "World Home: the blue button's VoiceOver name with its action, 'Quick start, Camera'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
+    "worldQuickStart.label.run" : {
+      "comment" : "World Home: the short label beside the blue button at the start of a saved route (Spanish: Correr)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Run"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Correr"
+          }
+        }
+      }
+    },
+    "worldQuickStart.label.workout" : {
+      "comment" : "World Home: the short label beside the blue button at a workout space (Spanish: Entreno)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Workout"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Entreno"
           }
         }
       }
@@ -50764,6 +51877,60 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%@ · tu recorrido guardado"
+          }
+        }
+      }
+    },
+    "worldQuickStart.startActivity" : {
+      "comment" : "World Home quick start with a friend nearby: opens Activities to plan one friends nearby can join",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start an activity"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Empezar una actividad"
+          }
+        }
+      }
+    },
+    "worldQuickStart.startActivity.detail" : {
+      "comment" : "World Home quick start: under 'Start an activity'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A walk, coffee or meal that friends nearby can join"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Una caminata, un café o una comida a la que pueden unirse amigos cerca"
+          }
+        }
+      }
+    },
+    "worldQuickStart.status.friendNearby" : {
+      "comment" : "World Home: the blue button's VoiceOver value with a friend nearby; the heading, e.g. 'Sam is nearby'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@. Start a session or an activity."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@. Empieza una sesión o una actividad."
           }
         }
       }
@@ -51098,6 +52265,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "P"
+          }
+        }
+      }
+    },
+    "worldStatus.todayTab" : {
+      "comment" : "World Home: the small wood tab under the status plate that shows tapping it opens Today (Spanish: Hoy)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Today"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy"
           }
         }
       }
