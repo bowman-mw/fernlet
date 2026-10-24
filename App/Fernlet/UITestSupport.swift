@@ -130,6 +130,11 @@ enum UITestSupport {
     /// whole app: every framed primitive, no store load. Consumed by `FernletApp`.
     static var worldFoundationGallery: String? { env["FERNLET_UI_TEST_WORLD_GALLERY"] }
 
+    /// `FERNLET_UI_TEST_FOOD_SCREEN=meal|macros|review|adjust|serving|recent|targets|chooser|veil|camera|cameraOff|remember|remembered|labelScan|productReview|mealPhoto`
+    /// — open that Food screen over the Food panel with fixtures (`FoodLaneScreen`): the World build's
+    /// screenshots of sheets a simulator cannot reach by tapping. Consumed by `FoodView`.
+    static var foodLaneScreen: String? { env["FERNLET_UI_TEST_FOOD_SCREEN"] }
+
     /// `FERNLET_UI_TEST_WORLD_MAP_PLAIN=1` — the harness draws the plain (offline) base map instead of
     /// Apple's.
     static var worldMapHarnessPlain: Bool { env["FERNLET_UI_TEST_WORLD_MAP_PLAIN"] == "1" }
@@ -240,6 +245,7 @@ enum UITestSupport {
     static var shouldSeedStudioCanvas: Bool { false }
     static var shouldOpenWorldMapHarness: Bool { false }
     static var worldFoundationGallery: String? { nil }
+    static var foodLaneScreen: String? { nil }
     static var worldMapHarnessPlain: Bool { false }
     static var worldMapHarnessPhase: CompanionDayPhase? { nil }
     static var initialWorldPanel: WorldPanel? { nil }

@@ -183,11 +183,11 @@ struct NutritionTargetsEditor: View {
     private var carbsRow: some View {
         HStack {
             Text("Carbs")
-                .font(look == nil ? .fernlet(.body) : FernletFramedFont.rowTitle.weight(.semibold))
+                .font(look == nil ? .fernlet(.body) : FoodFont.rowName)
                 .foregroundStyle(look?.text ?? Color.bark)
             Spacer()
             Text("\(applied.carbs)g")
-                .font(look == nil ? .fernlet(.stat) : FernletFramedFont.field.weight(.bold))
+                .font(look == nil ? .fernlet(.stat) : FoodFont.fieldBold)
                 .foregroundStyle(look?.text ?? Color.slate)
                 // Lines up with the typed figures above it, before their unit column.
                 .padding(.trailing, look == nil ? 0 : 36)
@@ -270,7 +270,7 @@ private struct MacroTargetRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Text(label)
-                .font(look == nil ? .fernlet(.body) : FernletFramedFont.rowTitle.weight(.semibold))
+                .font(look == nil ? .fernlet(.body) : FoodFont.rowName)
                 .foregroundStyle(look?.text ?? Color.bark)
             Spacer()
             TextField("\(placeholder)", text: text, prompt: .fieldPrompt("\(placeholder)"))

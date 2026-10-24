@@ -90,7 +90,7 @@ struct FoodCaptureRouter {
 
 // MARK: - Cheap image prep for the label OCR stage
 
-private extension FoodCaptureRouter {
+extension FoodCaptureRouter {
     /// Longest edge (in pixels) we hand the label OCR pipeline. Nutrition-facts text stays legible far
     /// below a full 12MP camera frame, and capping the long edge keeps document segmentation +
     /// perspective correction + `.accurate` recognition off the full-resolution image — the sluggish
@@ -156,52 +156,49 @@ private extension FoodCaptureRouter {
 struct BarcodePayloadResolveView: View {
     var store: FernletStore
     let payload: String
+    /// The page Back returns to on the naming screen, already resolved; nil says "Back".
+    var backTitle: String? = nil
     var onResolved: (FoodItem) -> Void
 
     var body: some View {
         Group {
             if let item = store.foodCatalog.item(forBarcode: payload) {
                 // Known product — hand it straight back; the naming screen would be redundant.
-                Color.parchment
+                Color.clear
                     .onAppear { onResolved(item) }
             } else {
-                BarcodeNotFoundView(store: store, barcode: payload, onCreated: onResolved)
+                BarcodeNotFoundView(store: store, barcode: payload, backTitle: backTitle, onCreated: onResolved)
             }
         }
-        .background(Color.parchment)
+        .foodSheetBackground()
         .navigationBarTitleDisplayMode(.inline)
     }
 }
 
-// MARK: - Analyzing state (mockup §2b "Reading what you caught…")
+// MARK: - Analyzing state (b3-capture-veil, "Reading what you caught…")
 
-/// The calm full-screen "analyzing…" veil shown while the auto-router detects what was captured. A
-/// soft parchment scrim with a moss spinner and one gentle line — never a clinical progress bar.
+/// The calm full-screen "analyzing…" veil shown while the auto-router reads what was captured
+/// (`b3-capture-veil`, approved 2026-10-24): the page's parchment over the sheet, a framed moss disc
+/// with pixel dots that take turns (still under Reduce Motion), "Analyzing" in Fraunces and one gentle
+/// line. Never a clinical progress bar.
 struct CaptureAnalyzingOverlay: View {
+    @Environment(\.fernletFramedLook) private var look
+
     var body: some View {
         ZStack {
-            Color.parchment.opacity(0.94).ignoresSafeArea()
+            (look?.page ?? Color.parchment).opacity(0.96).ignoresSafeArea()
 
-            VStack(spacing: 16) {
-                ZStack {
-                    Circle()
-                        .fill(Color.moss.opacity(0.12))
-                        .frame(width: 76, height: 76)
-                    ProgressView()
-                        .controlSize(.large)
-                        .tint(Color.moss)
-                        // "Analyzing" below is the label; the ring and the spinner are the same
-                        // fact drawn twice, and neither has anything of its own to say.
-                        .accessibilityHidden(true)
-                }
-
+            VStack(spacing: 14) {
+                CaptureAnalyzingDots()
+                    // "Analyzing" below is the label; the disc is the same fact drawn again.
+                    .accessibilityHidden(true)
                 VStack(spacing: 6) {
                     Text("Analyzing")
-                        .font(.fernlet(.header))
-                        .foregroundStyle(Color.bark)
+                        .font(look == nil ? .fernlet(.header) : FernletFramedFont.sheetTitle)
+                        .foregroundStyle(look?.text ?? Color.bark)
                     Text("Reading what you caught…")
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.slate)
+                        .font(look == nil ? .fernlet(.body) : FernletFramedFont.body)
+                        .foregroundStyle(look?.dim ?? Color.slate)
                         .multilineTextAlignment(.center)
                         .fernletWrappingText()
                 }
@@ -211,123 +208,143 @@ struct CaptureAnalyzingOverlay: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Analyzing your photo")
         .accessibilityIdentifier("captureAnalyzing")
-        // T1-4: this full-screen veil blocks touches but was transparent to VoiceOver/Switch
-        // Control, which could keep walking the capture screen underneath it. `.isModal` is the
-        // half that belongs to the overlay itself; hiding the covered content is the caller's half
-        // (`FoodView.swift`, owned by a separate track — deferred).
+        // T1-4: this full-screen veil blocks touches, so it is modal to VoiceOver and Switch Control
+        // too; hiding the covered content is the caller's half.
         .accessibilityAddTraits(.isModal)
     }
 }
 
-// MARK: - Gentle chooser (mockup §2d "What did you catch?")
+/// The veil's spinner: a 96-pt sage disc in a 3-pt ink ring holding a 3 × 3 ring of pixel squares in
+/// moss shades, the darkest walking round once a second. Reduce Motion holds it on one frame.
+struct CaptureAnalyzingDots: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.fernletFramedLook) private var look
 
-/// Shown when detection is ambiguous/low-confidence: three calm targets that route to the SAME
-/// existing flows the auto-router would (barcode lookup · nutrition label · meal photo), plus a
-/// "Type it instead" escape hatch. The meal branch is disabled and clearly named — never silently
-/// missing — when on-device photo recognition is off (mockup §2d "AI off · meal branch unavailable").
+    /// The eight ring cells, clockwise from the top left, as (column, row).
+    private static let ring: [(Int, Int)] = [(0, 0), (1, 0), (2, 0), (2, 1), (2, 2), (1, 2), (0, 2), (0, 1)]
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 0.125, paused: reduceMotion)) { timeline in
+            let step = reduceMotion ? 0 : Int(timeline.date.timeIntervalSinceReferenceDate * 8) % Self.ring.count
+            ZStack {
+                Circle().fill(look?.sage ?? Color.moss.opacity(0.12))
+                Circle().strokeBorder(look?.ink ?? Color.clear, lineWidth: 3)
+                cells(step: step)
+            }
+            .frame(width: 96, height: 96)
+        }
+    }
+
+    /// The eight cells, each a little lighter the further it trails the lead.
+    private func cells(step: Int) -> some View {
+        ZStack {
+            ForEach(Self.ring.indices, id: \.self) { index in
+                let cell = Self.ring[index]
+                let behind = (step - index + Self.ring.count) % Self.ring.count
+                Rectangle()
+                    .fill(WorldPalette.moss.opacity(1 - Double(behind) * 0.1))
+                    .frame(width: 13, height: 13)
+                    .offset(x: CGFloat(cell.0 - 1) * 19, y: CGFloat(cell.1 - 1) * 19)
+            }
+        }
+    }
+}
+
+// MARK: - Fallback chooser (b3-capture-chooser draft 2, "Nothing to read here")
+
+/// The fallback when a photo had no barcode or label to read (`b3-capture-chooser` draft 2; owner,
+/// 2026-10-24: "for the barcode and label, it should detect automatically. This should be a back up
+/// screen at worst"). Barcodes and labels are read without asking, so this only asks what to do with a
+/// photo that reads as neither: log it as a meal photo, take it again, or type it instead.
+///
+/// The meal-photo row is disabled and says why (never silently missing) when on-device photo
+/// recognition is off in Settings.
 struct CaptureChooserSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.fernletFramedLook) private var look
+    let image: UIImage
     var aiEnabled: Bool
-    var onBarcode: () -> Void
-    var onLabel: () -> Void
     var onMeal: () -> Void
+    var onRetake: () -> Void
     var onTypeInstead: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("What did you catch?")
-                    .font(.fernlet(.header))
-                    .foregroundStyle(Color.bark)
-                Text("A couple of readings looked close. Pick the one that fits.")
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
+        VStack(spacing: 0) {
+            SheetHeader(title: "Nothing to read here", onCancel: onTypeInstead)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 170)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(look?.ink ?? Color.clear, lineWidth: 2))
+                        .accessibilityIgnoresInvertColors()
+                        .accessibilityHidden(true)
+                    Text("Fernlet didn't find a barcode or a nutrition label in this photo.")
+                        .font(look == nil ? .fernlet(.body) : FernletFramedFont.body)
+                        .foregroundStyle(look?.dim ?? Color.slate)
+                        .fernletWrappingText()
+                    rows
+                    typeInsteadButton
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 6)
             }
-
-            VStack(spacing: 10) {
-                chooserRow(
-                    title: "Look up the barcode",
-                    subtitle: "find the product by its code",
-                    icon: "barcode.viewfinder",
-                    action: onBarcode
-                )
-                chooserRow(
-                    title: "Read the label",
-                    subtitle: "pull the macros from a nutrition-facts label",
-                    icon: "doc.viewfinder",
-                    action: onLabel
-                )
-                chooserRow(
-                    title: "It's a meal photo",
-                    subtitle: aiEnabled
-                        ? "let Fernlet guess what's on the plate"
-                        : "photo recognition is off in Settings — barcode and label still work",
-                    icon: "fork.knife",
-                    action: onMeal,
-                    disabled: !aiEnabled
-                )
-            }
-
-            Button {
-                onTypeInstead()
-            } label: {
-                Text("Type it instead")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.moss)
-                    .frame(maxWidth: .infinity)
-                    .padding(14)
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("captureChooserTypeInstead")
-
-            Spacer(minLength: 0)
         }
-        .padding(24)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.parchment)
+        .foodSheetBackground()
     }
 
-    /// One chooser target. Title and subtitle are `LocalizedStringKey`: as `String` all three rows,
-    /// and the meal row's AI-off explanation, were drawn verbatim and never reached the catalog.
-    private func chooserRow(
-        title: LocalizedStringKey,
-        subtitle: LocalizedStringKey,
-        icon: String,
-        action: @escaping () -> Void,
-        disabled: Bool = false
-    ) -> some View {
+    private var rows: some View {
+        VStack(spacing: 12) {
+            chooserRow(
+                title: "Log it as a meal photo",
+                subtitle: aiEnabled
+                    ? "let Fernlet guess what's on the plate"
+                    : "photo recognition is off in Settings — barcode and label still work",
+                sprite: WorldSprites.onigiri,
+                action: onMeal,
+                disabled: !aiEnabled
+            )
+            chooserRow(title: "Take it again", subtitle: "closer, with more light", sprite: FoodSprites.camera,
+                       action: onRetake)
+        }
+    }
+
+    private var typeInsteadButton: some View {
+        Button(action: onTypeInstead) {
+            Text("Type it instead")
+                .font(look == nil ? .fernlet(.label) : FernletFramedFont.button)
+                .foregroundStyle(look?.link ?? Color.moss)
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("captureChooserTypeInstead")
+    }
+
+    /// One way on: a framed icon tile, the title and its line, and the pixel chevron, on a framed card.
+    private func chooserRow(title: LocalizedStringKey, subtitle: LocalizedStringKey, sprite: WorldSprite,
+                            action: @escaping () -> Void, disabled: Bool = false) -> some View {
         Button(action: action) {
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 13, style: .continuous)
-                        .fill(Color.moss.opacity(0.14))
-                    Image(systemName: icon)
-                        .font(.system(size: 20, weight: .regular))
-                        .foregroundStyle(Color.moss)
-                }
-                .frame(width: 44, height: 44)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.bark)
-                    Text(subtitle)
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                if !disabled {
-                    Image(systemName: "chevron.right")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(Color.softTaupe)
+            FernletCard {
+                HStack(spacing: 14) {
+                    FernletIconTile(size: 44) { WorldSpriteView(sprite: sprite, scale: 2) }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                            .font(FoodFont.rowName)
+                            .foregroundStyle(look?.text ?? Color.bark)
+                        Text(subtitle)
+                            .font(FernletFramedFont.rowDetail)
+                            .foregroundStyle(look?.dim ?? Color.slate)
+                            .fernletWrappingText()
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    if !disabled { FernletIcon(.chevron, scale: 2) }
                 }
             }
-            .padding(16)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: FernletMetrics.radiusMd))
-            .overlay(RoundedRectangle(cornerRadius: FernletMetrics.radiusMd).stroke(Color.bark.opacity(0.08), lineWidth: 1))
             .opacity(disabled ? 0.5 : 1)
         }
         .buttonStyle(.plain)

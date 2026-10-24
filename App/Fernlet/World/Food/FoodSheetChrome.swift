@@ -15,4 +15,19 @@ extension View {
             .tint(Color.moss)
             .keyboardDoneToolbar()
     }
+
+    /// A Food sheet's background: the framed sheet's paper under the World look, today's parchment
+    /// without it. Use it in place of `.background(Color.parchment)` on a sheet's content.
+    func foodSheetBackground() -> some View {
+        modifier(FoodSheetBackground())
+    }
+}
+
+/// Implements ``SwiftUI/View/foodSheetBackground()``.
+private struct FoodSheetBackground: ViewModifier {
+    @Environment(\.fernletFramedLook) private var look
+
+    func body(content: Content) -> some View {
+        content.background(look?.paper ?? Color.parchment)
+    }
 }

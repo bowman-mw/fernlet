@@ -8,6 +8,17 @@ nonisolated enum FoodFont {
     /// A meal's or recipe's name on its Food card (`b1-frame-root`, `b2-food-rest`): Fraunces 19, so
     /// "Greek yogurt with berries" holds one line beside its photo and ✕.
     static let cardTitle = Font.custom(FernletFontName.frauncesSemiBold, size: 19, relativeTo: .title3)
+    /// A row's name in the kit's semibold (`.sl b`): DM Sans Medium 16.5 at semibold. A weight on the
+    /// regular face draws regular; the medium face takes it.
+    static let rowName = Font.custom(FernletFontName.dmSansMedium, size: 16.5, relativeTo: .body).weight(.semibold)
+    /// A row's figure in bold (a value at a row's end).
+    static let rowNameBold = Font.custom(FernletFontName.dmSansMedium, size: 16.5, relativeTo: .body).weight(.bold)
+    /// A small strong line (a group's caption, "Probably not what you meant"): 13.5 semibold.
+    static let noteStrong = Font.custom(FernletFontName.dmSansMedium, size: 13.5, relativeTo: .footnote).weight(.semibold)
+    /// A typed figure in bold (an amount, a target): 16 bold.
+    static let fieldBold = Font.custom(FernletFontName.dmSansMedium, size: 16, relativeTo: .body).weight(.bold)
+    /// A typed figure a little lighter (a matched item's amount): 16 semibold.
+    static let fieldStrong = Font.custom(FernletFontName.dmSansMedium, size: 16, relativeTo: .body).weight(.semibold)
 }
 
 /// The Food panel's one primary action (`b1-frame-root` draft 3): "+ Log a meal" in moss across the page,

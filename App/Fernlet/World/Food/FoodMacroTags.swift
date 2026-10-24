@@ -86,24 +86,46 @@ struct FoodMacroTag: View {
 /// A row of the three macro tags (and the calories, when Show calories is on), wrapping onto a second
 /// line when the row runs out of width (the largest text sizes, a long Spanish figure). One element to
 /// VoiceOver, read as its figures.
+///
+/// `wraps: false` keeps the tags on one line at their own width, for a row that sits beside other
+/// content (a total, a stepper). Never give the wrapping row `.fixedSize()`: `FlowLayout` asks for all
+/// the width it is offered, and an unbounded offer is an infinite width that SwiftUI traps on.
 struct FoodMacroTagRow: View {
+    let macros: Macros
+    /// Calories to draw after the tags; nil when Show calories is off.
+    var calories: Int? = nil
+    /// False draws the tags on one line at their own width.
+    var wraps = true
+
+    var body: some View {
+        Group {
+            if wraps {
+                FlowLayout(spacing: 6) { FoodMacroTagItems(macros: macros, calories: calories) }
+            } else {
+                HStack(spacing: 6) { FoodMacroTagItems(macros: macros, calories: calories) }
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// The macro tags (and the calories) as loose views, for a layout that holds more beside them (a meal
+/// card's provenance tag): each one is its own subview of the enclosing layout.
+struct FoodMacroTagItems: View {
     let macros: Macros
     /// Calories to draw after the tags; nil when Show calories is off.
     var calories: Int? = nil
     @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
-        FlowLayout(spacing: 6) {
-            ForEach(FoodMacroKind.allCases, id: \.self) { kind in
-                FoodMacroTag(kind: kind, grams: kind.grams(in: macros))
-            }
-            if let calories {
-                Text("\(calories) cal")
-                    .font(look == nil ? .fernlet(.stat) : FernletFramedFont.chip)
-                    .foregroundStyle(look?.dim ?? Color.slate)
-                    .padding(.vertical, 4)
-            }
+        ForEach(FoodMacroKind.allCases, id: \.self) { kind in
+            FoodMacroTag(kind: kind, grams: kind.grams(in: macros))
         }
-        .accessibilityElement(children: .combine)
+        if let calories {
+            Text("\(calories) cal")
+                .font(look == nil ? .fernlet(.stat) : FernletFramedFont.chip)
+                .foregroundStyle(look?.dim ?? Color.slate)
+                .padding(.vertical, 4)
+        }
     }
 }
