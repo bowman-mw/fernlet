@@ -63,15 +63,15 @@ struct ShoppingListBuilderView: View {
 
     private var listText: String { store.groceryListText(for: selections) }
 
+    /// World build (`b2-shopping`, approved 2026-10-23): pushed under the wooden plate, the line, the
+    /// search field, the recipes with framed checkboxes, then the preview and Share once any is picked.
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                // A pushed page titles itself in the nav bar (see `.navigationTitle` below); drawing
-                // the title in the body as well left ~90pt of empty bar above it.
+            VStack(alignment: .leading, spacing: 14) {
+                // A pushed page: the plate carries the title.
                 Text("Pick recipes, then share the combined list to Notes.")
-                    .font(.fernlet(.bodySmall))
-                    .italic()
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.body)
+                    .foregroundStyle(WorldPalette.dim)
                     .fernletWrappingText()
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityIdentifier("screen.shoppingList")
@@ -80,40 +80,29 @@ struct ShoppingListBuilderView: View {
                     EmptyState(text: "No recipes yet. Create one in the recipe book first.")
                         .frame(maxWidth: .infinity)
                 } else {
-                    TextField("Search recipes", text: $searchText, prompt: .fieldPrompt("Search recipes"))
-                        .sheetTextInput()
+                    HStack(spacing: 9) {
+                        FernletIcon(.search, scale: 2)
+                        TextField("Search recipes", text: $searchText, prompt: .fieldPrompt("Search recipes"))
+                    }
+                    .sheetTextInput()
 
                     FernletCard {
                         VStack(spacing: 0) {
                             ForEach(Array(filteredRecipes.enumerated()), id: \.element.id) { index, recipe in
-                                if index > 0 { FernletRowDivider() }
+                                if index > 0 { FernletDottedRule() }
                                 recipeSelectRow(recipe)
                             }
                         }
                     }
-
-                    if !selections.isEmpty {
-                        listPreview
-                        ShareLink(item: listText) {
-                            Label("Share shopping list", systemImage: "square.and.arrow.up")
-                                .font(.fernlet(.label))
-                                .foregroundStyle(Color.onMoss)
-                                .frame(maxWidth: .infinity)
-                                .padding(14)
-                                .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
-                        }
-                        .accessibilityIdentifier("shoppingList.share")
-                    } else {
-                        EmptyState(text: "Select recipes to build a list.")
-                            .frame(maxWidth: .infinity)
-                    }
+                    selectionFooter
                 }
             }
-            .padding(20)
-            .padding(.bottom, 24)
+            .padding(.horizontal, 18)
+            .padding(.top, 14)
+            .padding(.bottom, 28)
         }
-        .background(Color.parchment)
-        .navigationTitle("Shopping list")
+        .fernletPageBackground()
+        .fernletPushedPage("Shopping list")
         .navigationBarTitleDisplayMode(.inline)
         // Always pushed (the recipe book or the planner), so the page declares its own keyboard
         // "Done": one declared outside the stack never reaches a page inside it.
@@ -126,6 +115,28 @@ struct ShoppingListBuilderView: View {
         }
     }
 
+    /// The preview and Share once a recipe is picked; the hint before.
+    @ViewBuilder private var selectionFooter: some View {
+        if !selections.isEmpty {
+            listPreview
+            ShareLink(item: listText) {
+                HStack(spacing: 8) {
+                    WorldSpriteView(sprite: WorldSprites.share, scale: 2, tint: WorldPalette.onAccent)
+                    Text("Share shopping list")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(ActionPillButtonStyle(.primary))
+            .accessibilityIdentifier("shoppingList.share")
+        } else {
+            Text("Select recipes to build a list.")
+                .font(FernletFramedFont.body)
+                .foregroundStyle(WorldPalette.dim)
+                .frame(maxWidth: .infinity)
+                .multilineTextAlignment(.center)
+        }
+    }
+
     @ViewBuilder
     private func recipeSelectRow(_ recipe: RecipeDefinition) -> some View {
         let isSelected = selectedIDs.contains(recipe.id)
@@ -133,14 +144,12 @@ struct ShoppingListBuilderView: View {
             Button {
                 toggle(recipe)
             } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(isSelected ? Color.moss : Color.slate)
-                        .font(.system(size: 22))
+                HStack(spacing: 14) {
+                    ShoppingCheckbox(isOn: isSelected)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(recipe.name)
-                            .font(.fernlet(.body))
-                            .foregroundStyle(Color.bark)
+                            .font(FernletFramedFont.rowTitle)
+                            .foregroundStyle(WorldPalette.bark)
                         Group {
                             if recipe.isWebImport {
                                 Text("Imported \u{00B7} free-text ingredients")
@@ -149,32 +158,36 @@ struct ShoppingListBuilderView: View {
                                 Text("^[\(recipe.servings) serving](inflect: true)")
                             }
                         }
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
+                        .font(FernletFramedFont.rowDetail)
+                        .foregroundStyle(WorldPalette.dim)
                     }
                     Spacer(minLength: 0)
                 }
+                .frame(minHeight: 54)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            // T1-5: a hand-rolled checkbox row — the checkmark/circle glyph swap is otherwise
-            // invisible to VoiceOver and Differentiate Without Color.
+            // T1-5: a hand-rolled checkbox row — the box's fill is otherwise invisible to VoiceOver
+            // and Differentiate Without Color.
             .accessibilityAddTraits(isSelected ? .isSelected : [])
 
             if isSelected, RecipeScaling.isScalable(recipe) {
                 let current = yieldByID[recipe.id] ?? recipe.servings
-                Stepper(value: Binding(
-                    get: { yieldByID[recipe.id] ?? recipe.servings },
-                    set: { yieldByID[recipe.id] = RecipeScaling.clampedYield($0) }
-                ), in: RecipeScaling.yieldRange) {
+                HStack(spacing: 10) {
                     Text("Cook for \(current)")
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.bark)
+                        .font(FernletFramedFont.rowDetail.weight(.bold))
+                        .foregroundStyle(WorldPalette.bark)
+                        .accessibilityHidden(true)
+                    Spacer(minLength: 8)
+                    FernletStepper("Cook for \(current)", value: Binding(
+                        get: { yieldByID[recipe.id] ?? recipe.servings },
+                        set: { yieldByID[recipe.id] = RecipeScaling.clampedYield($0) }
+                    ), in: RecipeScaling.yieldRange, step: 1)
                 }
-                .padding(.leading, 34)
+                .padding(.leading, 38)
+                .padding(.bottom, 6)
             }
         }
-        .padding(.vertical, 6)
     }
 
     private var listPreview: some View {
@@ -182,8 +195,8 @@ struct ShoppingListBuilderView: View {
             SectionLabel("Preview")
             FernletCard {
                 Text(listText)
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.bark)
+                    .font(FernletFramedFont.body)
+                    .foregroundStyle(WorldPalette.bark)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
             }
@@ -258,13 +271,12 @@ struct WeeklyMealPlannerView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                // Pushed page: the nav bar carries the title (see `.navigationTitle` below), so the
-                // body keeps only the line that says what this screen is for.
+            VStack(alignment: .leading, spacing: 14) {
+                // Pushed page: the plate carries the title, so the body keeps only the line that says
+                // what this screen is for.
                 Text("Assign recipes to your week, then build one shopping list.")
-                    .font(.fernlet(.bodySmall))
-                    .italic()
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.body)
+                    .foregroundStyle(WorldPalette.dim)
                     .fernletWrappingText()
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityIdentifier("screen.mealPlanner")
@@ -278,22 +290,22 @@ struct WeeklyMealPlannerView: View {
                 NavigationLink {
                     ShoppingListBuilderView(store: store, initialSelection: plannedIDsThisWeek)
                 } label: {
-                    Label("Create shopping list", systemImage: "cart")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.onMoss)
-                        .frame(maxWidth: .infinity)
-                        .padding(14)
-                        .background(plannedIDsThisWeek.isEmpty ? Color.slate : Color.moss,
-                                    in: RoundedRectangle(cornerRadius: 12))
+                    HStack(spacing: 8) {
+                        WorldSpriteView(sprite: WorldSprites.box, scale: 2, tint: WorldPalette.onAccent)
+                        Text("Create shopping list")
+                    }
+                    .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(ActionPillButtonStyle(.primary))
                 .disabled(plannedIDsThisWeek.isEmpty)
                 .accessibilityIdentifier("mealPlanner.createList")
             }
-            .padding(20)
-            .padding(.bottom, 24)
+            .padding(.horizontal, 18)
+            .padding(.top, 14)
+            .padding(.bottom, 28)
         }
-        .background(Color.parchment)
-        .navigationTitle("Meal planner")
+        .fernletPageBackground()
+        .fernletPushedPage("Meal planner")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear(perform: reload)
         .sheet(item: $pickingForDay) { pick in
@@ -301,26 +313,29 @@ struct WeeklyMealPlannerView: View {
                 store.planRecipe(recipeID, mealType: mealType, date: pick.id)
                 reload()
             }
+            .fernletSheet()
         }
     }
 
+    /// "‹ This week ›" (`b2-planner`): pixel arrows either side of the week's name in Fraunces.
     private var weekSwitcher: some View {
         HStack {
             Button { weekOffset -= 1; reload() } label: {
-                Image(systemName: "chevron.left").foregroundStyle(Color.moss)
+                FernletIcon(.back, scale: 2).frame(width: 44, height: 44).contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             .fernletIconButton("Previous week")
             Spacer()
             weekLabel
-                .font(.fernlet(.headerMedium))
-                .foregroundStyle(Color.bark)
+                .font(RecipeType.cardTitle)
+                .foregroundStyle(WorldPalette.bark)
             Spacer()
             Button { weekOffset += 1; reload() } label: {
-                Image(systemName: "chevron.right").foregroundStyle(Color.moss)
+                FernletIcon(.chevron, scale: 2).frame(width: 44, height: 44).contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             .fernletIconButton("Next week")
         }
-        .padding(.horizontal, 4)
     }
 
     /// The switcher's heading. `Text`, not `String`: as a `String` it was drawn verbatim and never
@@ -339,26 +354,30 @@ struct WeeklyMealPlannerView: View {
         let entries = plannedByDay[key] ?? []
         let isToday = key == todayKey
         FernletCard {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
                 dayCardHeader(key, plannedCount: entries.count, isToday: isToday)
                 if entries.isEmpty {
                     Text("Nothing planned.")
-                        .font(.fernlet(.bubble))
-                        .foregroundStyle(Color.slate)
+                        .font(FernletFramedFont.body)
+                        .foregroundStyle(WorldPalette.dim)
                 } else {
                     ForEach(entries) { entry in
                         // A dangling id (recipe since deleted) resolves to nothing and is dropped silently.
                         if let recipe = recipeByID[entry.recipeID] {
+                            FernletDottedRule()
                             plannedEntryRow(entry, recipe: recipe, dayKey: key, isToday: isToday)
                         }
                     }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        // Today's card is the one with the moss outline, so it is findable at a glance (FOOD-35).
+        // Today's card is the one with the moss outline, so it is findable at a glance (FOOD-35,
+        // b2-planner draft 2: a 3-pt moss ring outside the frame).
         .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(isToday ? Color.moss.opacity(0.55) : Color.clear, lineWidth: 1.5)
+            RoundedRectangle(cornerRadius: FernletFramedLook.cardRadius + 3, style: .continuous)
+                .strokeBorder(isToday ? WorldPalette.moss : Color.clear, lineWidth: 3)
+                .padding(-4)
         )
     }
 
@@ -367,22 +386,19 @@ struct WeeklyMealPlannerView: View {
     private func dayCardHeader(_ key: String, plannedCount: Int, isToday: Bool) -> some View {
         HStack(spacing: 8) {
             dayHeadingText(key, isToday: isToday)
-                .font(.fernlet(.headerMedium))
-                .foregroundStyle(Color.bark)
+                .font(RecipeType.cardTitle)
+                .foregroundStyle(WorldPalette.bark)
+                .fixedSize(horizontal: false, vertical: true)
             if isToday, plannedCount > 0 {
-                Text("\(plannedCount) planned")
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Color.parchment, in: Capsule())
+                FernletTag(text: Text("\(plannedCount) planned"))
             }
             Spacer()
             Button { pickingForDay = DayPick(id: key) } label: {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 22))
-                    .foregroundStyle(Color.moss)
+                RecipeSpriteTile(sprite: WorldSprites.plus, size: 34)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             .fernletIconButton("Add a meal to \(dayHeading(key))")
             // Voice Control: one plus per day card, so the weekday is what makes each sayable and
             // unique; the full date in the label is more than anyone should have to dictate.
@@ -416,16 +432,21 @@ struct WeeklyMealPlannerView: View {
         }
     }
 
-    /// The planned recipe's name over its meal slot (omitted for a legacy slotless entry).
+    /// The planned recipe's photo (or its bowl tile), its name over its meal slot (the slot omitted for
+    /// a legacy slotless entry), as `b2-planner` draft 2 draws a planned meal.
     private func plannedEntrySummary(_ entry: PlannedMealEntry, recipe: RecipeDefinition) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(recipe.name)
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
-            if let mealType = entry.mealType {
-                Text(verbatim: mealType.displayName)
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
+        HStack(spacing: 10) {
+            RecipePhotoThumb(recipeID: recipe.id, load: { store.recipePhotoData(for: recipe.id) })
+            VStack(alignment: .leading, spacing: 2) {
+                Text(recipe.name)
+                    .font(FernletFramedFont.body.weight(.semibold))
+                    .foregroundStyle(WorldPalette.bark)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let mealType = entry.mealType {
+                    Text(verbatim: mealType.displayName)
+                        .font(FernletFramedFont.rowDetail)
+                        .foregroundStyle(WorldPalette.dim)
+                }
             }
         }
     }
@@ -435,20 +456,22 @@ struct WeeklyMealPlannerView: View {
     /// by-time "Auto" rule inside `logRecipe`.
     private func logPill(_ entry: PlannedMealEntry, recipe: RecipeDefinition) -> some View {
         Button("Log") { logPlanned(entry, recipe: recipe) }
-            .buttonStyle(ActionPillButtonStyle(.secondary))
+            .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
             .accessibilityLabel("Log \(recipe.name)")
             .accessibilityIdentifier("mealPlanner.log")
     }
 
-    /// The remove control, in the destructive tint (XCUT-21) — no neutral minus.
+    /// The remove control, the framed look's pixel ✕ (`b2-planner` draft 2).
     private func removeButton(_ entry: PlannedMealEntry, recipe: RecipeDefinition, dayKey: String) -> some View {
         Button {
             store.unplanRecipe(entry.recipeID, date: dayKey)
             reload()
         } label: {
-            Image(systemName: "minus.circle")
-                .foregroundStyle(Color.terracottaInk)
+            FernletIcon(.close, scale: 2)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .fernletIconButton("Remove \(recipe.name) from \(dayHeading(dayKey))")
     }
 
@@ -519,36 +542,37 @@ private struct RecipePickerSheet: View {
         return all.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
 
+    /// World build (`b3-planner-picker`, approved 2026-10-24): the sheet frame with Done top right and
+    /// the title inside, the search field, the recipes with framed +, and once one is tapped, its card
+    /// with "Plan it for" and the meal chips under the list.
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 14) {
+                    recipeListStep
                     if let pendingRecipe {
                         mealTypeStep(pendingRecipe)
-                    } else {
-                        recipeListStep
                     }
                 }
-                .padding(20)
+                .padding(.horizontal, 18)
+                .padding(.top, 6)
+                .padding(.bottom, 24)
             }
-            .background(Color.parchment)
-            .navigationTitle("Add a meal")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
+            .background(WorldPalette.paper)
+            .fernletSheetToolbar(title: "Add a meal", onDone: { dismiss() })
             // The search field's keyboard "Done", on the stack's root page: one declared on the
             // stack itself would reach no page in it.
             .keyboardDoneToolbar()
         }
     }
 
-    /// Step 1: the searchable A–Z recipe list. Tapping a row advances to the meal-slot step.
+    /// Step 1: the searchable A–Z recipe list. Tapping a row opens the meal-slot step under it.
     @ViewBuilder private var recipeListStep: some View {
-        TextField("Search recipes", text: $searchText, prompt: .fieldPrompt("Search recipes"))
-            .sheetTextInput()
+        HStack(spacing: 9) {
+            FernletIcon(.search, scale: 2)
+            TextField("Search recipes", text: $searchText, prompt: .fieldPrompt("Search recipes"))
+        }
+        .sheetTextInput()
         if recipes.isEmpty {
             EmptyState(text: "No recipes to add.")
                 .frame(maxWidth: .infinity)
@@ -556,36 +580,41 @@ private struct RecipePickerSheet: View {
             FernletCard {
                 VStack(spacing: 0) {
                     ForEach(Array(recipes.enumerated()), id: \.element.id) { index, recipe in
-                        if index > 0 { FernletRowDivider() }
-                        Button {
-                            pendingRecipe = recipe
-                        } label: {
-                            HStack {
-                                Text(recipe.name)
-                                    .font(.fernlet(.body))
-                                    .foregroundStyle(Color.bark)
-                                Spacer()
-                                Image(systemName: "plus")
-                                    .foregroundStyle(Color.moss)
-                            }
-                            .contentShape(Rectangle())
-                            .padding(.vertical, 6)
-                        }
-                        .buttonStyle(.plain)
+                        if index > 0 { FernletDottedRule() }
+                        recipeRow(recipe)
                     }
                 }
             }
         }
     }
 
+    private func recipeRow(_ recipe: RecipeDefinition) -> some View {
+        Button {
+            pendingRecipe = recipe
+        } label: {
+            HStack(spacing: 10) {
+                Text(recipe.name)
+                    .font(FernletFramedFont.rowTitle.weight(.semibold))
+                    .foregroundStyle(WorldPalette.bark)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                RecipeSpriteTile(sprite: WorldSprites.plus, size: 32)
+            }
+            .frame(minHeight: 54)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(pendingRecipe?.id == recipe.id ? .isSelected : [])
+    }
+
     /// Step 2: the meal-slot chips for the chosen recipe — the choice the plan carries so logging
-    /// it later never asks again. "Back" returns to the list without planning anything.
+    /// it later never asks again. "Back to recipes" closes the step without planning anything.
     private func mealTypeStep(_ recipe: RecipeDefinition) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(recipe.name)
-                .font(.fernlet(.headerMedium))
-                .foregroundStyle(Color.bark)
-            SheetField("Plan it for") {
+        FernletCard {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(verbatim: recipe.name)
+                    .font(FernletFramedFont.rowTitle.weight(.bold))
+                    .foregroundStyle(WorldPalette.bark)
+                SectionLabel("Plan it for")
                 FlowLayout(spacing: 8) {
                     ForEach(MealType.allCases) { type in
                         Button { onPick(recipe.id, type); dismiss() } label: {
@@ -594,12 +623,14 @@ private struct RecipePickerSheet: View {
                         .buttonStyle(ChipButtonStyle(selected: false))
                     }
                 }
+                Button("Back to recipes") { pendingRecipe = nil }
+                    .buttonStyle(.plain)
+                    .font(FernletFramedFont.sheetControl)
+                    .foregroundStyle(WorldPalette.mossInk)
+                    .frame(maxWidth: .infinity)
+                    .fernletTapTarget()
             }
-            Button("Back to recipes") { pendingRecipe = nil }
-                .buttonStyle(.plain)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.moss)
-                .fernletTapTarget()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
