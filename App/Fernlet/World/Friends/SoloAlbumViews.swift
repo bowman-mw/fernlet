@@ -167,20 +167,24 @@ struct SoloSetTile: View {
 struct SoloPhotoFeedView: View {
     let album: SoloAlbumModel
     let initialSetID: String?
+    /// Whether it was opened from a photo marker on the map (World build step 5c): then ✕ alone closes it,
+    /// with no "‹ Album".
+    let fromMap: Bool
     let onDismiss: () -> Void
 
     @State private var visibleSetID: String?
 
     /// The feed over `album`'s sets, opened at `initialSetID`.
-    init(album: SoloAlbumModel, initialSetID: String?, onDismiss: @escaping () -> Void) {
+    init(album: SoloAlbumModel, initialSetID: String?, fromMap: Bool = false, onDismiss: @escaping () -> Void) {
         self.album = album
         self.initialSetID = initialSetID
+        self.fromMap = fromMap
         self.onDismiss = onDismiss
     }
 
     var body: some View {
         WorldPanelFrame(panel: .friends, title: String(localized: "Just you", comment: "The name of a set of photos taken with the camera on your own"),
-                        backTitle: WorldPanel.friends.title, onBack: onDismiss, onClose: onDismiss) {
+                        backTitle: fromMap ? nil : WorldPanel.friends.title, onBack: fromMap ? nil : onDismiss, onClose: onDismiss) {
             GeometryReader { geometry in
                 ScrollView(.vertical) {
                     LazyVStack(spacing: 0) {
@@ -301,11 +305,20 @@ struct SoloPhotoPostView: View {
                 .font(FernletFramedFont.cardTitle)
                 .foregroundStyle(WorldPalette.bark)
                 .accessibilityAddTraits(.isHeader)
-            Text(selectedPhoto.takenAt, format: .dateTime.weekday(.wide).month(.wide).day())
+            Text(verbatim: dayLine)
                 .font(FernletFramedFont.rowDetail)
                 .foregroundStyle(WorldPalette.dim)
         }
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// The day the photo was taken, then its place's name when it has one (`b4-mem-solo-open`: "Thursday 23
+    /// October · Oak Park"). A photo taken at a refused place has no place, so no name.
+    private var dayLine: String {
+        let day = selectedPhoto.takenAt.formatted(.dateTime.weekday(.wide).month(.wide).day())
+        guard let place = album.placeName(selectedPhoto.id) else { return day }
+        return String(localized: "soloPhoto.dayAndPlace", defaultValue: "\(day) · \(place)",
+                      comment: "A solo photo's card: the day it was taken, then where (a workout space's name)")
     }
 
     /// Save, Favorite and Delete for the photo on screen.

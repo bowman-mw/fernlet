@@ -11,6 +11,8 @@ import SwiftUI
 struct WorldWalkBar: View {
     /// Metres walked so far.
     let metres: Double
+    /// A walk, or a run on a saved route ("Running", "Precise location on for this run").
+    var kind: WorldWalkRecorder.Kind = .walk
     let onEnd: () -> Void
 
     var body: some View {
@@ -20,17 +22,17 @@ struct WorldWalkBar: View {
                     Text(verbatim: WorldWalkCopy.distance(metres))
                         .font(WorldWalkType.distance)
                         .monospacedDigit()
-                    Text(WorldWalkCopy.walking)
+                    Text(kind == .run ? WorldWalkCopy.running : WorldWalkCopy.walking)
                         .font(WorldWalkType.title)
                 }
                 .foregroundStyle(WorldPalette.bark)
-                Text(WorldWalkCopy.precise)
+                Text(kind == .run ? WorldWalkCopy.preciseRun : WorldWalkCopy.precise)
                     .font(WorldWalkType.line)
                     .foregroundStyle(WorldWalkPalette.preciseInk)
             }
             .fernletWrappingText()
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text(verbatim: WorldWalkCopy.spoken(metres)))
+            .accessibilityLabel(Text(verbatim: WorldWalkCopy.spoken(metres, kind: kind)))
             .accessibilityAddTraits(.updatesFrequently)
             Spacer(minLength: 4)
             endButton
@@ -59,8 +61,8 @@ struct WorldWalkBar: View {
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(WorldPalette.ink, lineWidth: 3))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(Text(WorldWalkCopy.endLabel))
-        .accessibilityInputLabels([Text("End"), Text(WorldWalkCopy.endLabel)])
+        .accessibilityLabel(Text(kind == .run ? WorldWalkCopy.endRunLabel : WorldWalkCopy.endLabel))
+        .accessibilityInputLabels([Text("End"), Text(kind == .run ? WorldWalkCopy.endRunLabel : WorldWalkCopy.endLabel)])
         .accessibilityIdentifier("world.walkBar.end")
     }
 }
@@ -110,6 +112,8 @@ nonisolated struct WorldLoggedWalk: Equatable, Identifiable, Sendable {
     /// Whether it was logged (false in a decoy, where a walk leaves nothing behind; Undo then only closes
     /// the note).
     let isKept: Bool
+    /// A walk or a run.
+    var kind: WorldWalkRecorder.Kind = .walk
 }
 
 /// The walk bar's colours: the End button's brick and the precise line's blue (both from the
@@ -141,6 +145,14 @@ nonisolated enum WorldWalkCopy {
                                                   comment: "World Home walk bar, VoiceOver: the End button stops and logs the walk")
     static let undone = LocalizedStringResource("worldWalk.undone", defaultValue: "Walk removed.",
                                                 comment: "World Home, VoiceOver: said after the walk note's Undo removed the walk")
+    static let running = LocalizedStringResource("worldWalk.running", defaultValue: "Running",
+                                                 comment: "World Home walk bar: what is happening while a run on a saved route records")
+    static let preciseRun = LocalizedStringResource("worldWalk.precise.run", defaultValue: "Precise location on for this run",
+                                                    comment: "World Home walk bar during a run: precise location is used for this run only")
+    static let endRunLabel = LocalizedStringResource("worldWalk.end.run", defaultValue: "End run",
+                                                     comment: "World Home walk bar, VoiceOver: the End button stops and logs the run")
+    static let undoneRun = LocalizedStringResource("worldWalk.undone.run", defaultValue: "Run removed.",
+                                                   comment: "World Home, VoiceOver: said after the run note's Undo removed the run")
 
     /// The distance as the person's region writes a road distance ("0.6 km", "0.4 mi").
     static func distance(_ metres: Double) -> String {
@@ -149,10 +161,14 @@ nonisolated enum WorldWalkCopy {
     }
 
     /// What VoiceOver reads: the distance in 100 m steps, so it changes every 100 m, not every reading.
-    static func spoken(_ metres: Double) -> String {
+    static func spoken(_ metres: Double, kind: WorldWalkRecorder.Kind = .walk) -> String {
         let stepped = (max(0, metres) / 100).rounded(.down) * 100
         let distance = Measurement(value: stepped, unit: UnitLength.meters)
             .formatted(.measurement(width: .wide, usage: .road, numberFormatStyle: .number.precision(.significantDigits(1...2))))
+        guard kind == .walk else {
+            return String(localized: "worldWalk.spoken.run", defaultValue: "Running, \(distance)",
+                          comment: "World Home walk bar, VoiceOver: the run so far, e.g. 'Running, 0.6 kilometres'")
+        }
         return String(localized: "worldWalk.spoken", defaultValue: "Walking together, \(distance)",
                       comment: "World Home walk bar, VoiceOver: the walk so far, e.g. 'Walking together, 0.6 kilometres'")
     }
@@ -160,6 +176,10 @@ nonisolated enum WorldWalkCopy {
     /// The toast's line: "Walk logged · 0.6 km · 12 min".
     static func logged(_ walk: WorldLoggedWalk) -> String {
         let distance = Self.distance(walk.metres)
+        guard walk.kind == .walk else {
+            return String(localized: "worldWalk.logged.run", defaultValue: "Run logged · \(distance) · \(walk.minutes) min",
+                          comment: "World Home: the note after a run ends; its distance and minutes")
+        }
         return String(localized: "worldWalk.logged", defaultValue: "Walk logged · \(distance) · \(walk.minutes) min",
                       comment: "World Home: the note after a walk ends; its distance and minutes")
     }

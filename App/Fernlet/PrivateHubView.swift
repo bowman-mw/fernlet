@@ -21,6 +21,9 @@ enum PrivateHubSection: String, CaseIterable, Hashable, Identifiable {
     // Sentence case, matching the page's own title and the First aid tile — the picker was the one
     // place that title-cased it.
     case worryBox = "Worry box"
+    /// "Where you've been" (World build step 5c, `b2-where-been`): the 30-day timeline and Places you
+    /// return to, sealed under the hub key like the journal.
+    case places = "Places"
     var id: String { rawValue }
 
     /// The page's name for the World plate's Back on a page pushed from it (`b2-journal-day`:
@@ -30,6 +33,7 @@ enum PrivateHubSection: String, CaseIterable, Hashable, Identifiable {
         case .journal: String(localized: "Journal")
         case .cycle: String(localized: "Cycle")
         case .worryBox: String(localized: "Worry box")
+        case .places: String(localized: WorldPlacesCopy.tab)
         }
     }
 
@@ -41,7 +45,7 @@ enum PrivateHubSection: String, CaseIterable, Hashable, Identifiable {
             switch section {
             // The merged page survives while either half is visible; only both-hidden removes it.
             case .cycle: visibility.period || visibility.intimacy
-            case .journal, .worryBox: true
+            case .journal, .worryBox, .places: true
             }
         }
     }
@@ -118,7 +122,7 @@ struct PrivateHubView: View {
                 HubSectionPicker(
                     sections: Array(visibleSections),
                     selection: $section
-                ) { $0.rawValue }
+                ) { $0.plateBackTitle }
             }
             Group {
                 if isActive {
@@ -182,6 +186,8 @@ struct PrivateHubView: View {
             )
         case .worryBox:
             WorryBoxView(worryBox: worryBox)
+        case .places:
+            WorldPlacesPage(store: store)
         }
     }
 

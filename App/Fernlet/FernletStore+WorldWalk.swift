@@ -3,8 +3,8 @@ import FernletDomainModel
 import FernletFoundation
 import WorldMapStore
 
-/// Walks on the World map (World build, branch `world-ui`; World app plan step 5b). The quick start's
-/// Walk together (step 6b) starts and ends one; this is everything between.
+/// Walks and runs on the World map (World build, branch `world-ui`; World app plan step 5b, runs since step 5c). The
+/// quick start's Walk together (step 6b) and a saved run route again start and end one; this is everything between.
 ///
 /// - **Start:** the recorder starts, and location keeps running for the walk (``WorldLocationSource``'s
 ///   walk mode: precise for this walk only, and in the background while it records).
@@ -18,21 +18,23 @@ import WorldMapStore
 /// A decoy session can walk, and the walk is logged as the decoy logs anything, but no line is kept and
 /// no line is read (``worldRoute(for:)``).
 extension FernletStore {
-    /// Starts recording a walk at `date` (a no-op while one is already running).
-    func startWorldWalk(at date: Date = Date()) {
+    /// Starts recording a walk (or, from a saved run route, a run) at `date`; a no-op while one is already
+    /// running.
+    func startWorldWalk(at date: Date = Date(), kind: WorldWalkRecorder.Kind = .walk) {
         guard !worldWalk.isRecording else { return }
-        worldWalk.start(at: date)
+        worldWalk.start(at: date, kind: kind)
         worldLocation.startWalk()
     }
 
-    /// Ends the walk at `date`: logs it as a walking workout and keeps its line when allowed. The logged
-    /// workout, or nil when no walk was running.
+    /// Ends the walk at `date`: logs it as a walking (or running) workout, puts it on Where you've been's
+    /// timeline, and keeps its line when allowed. The logged workout, or nil when no walk was running.
     @discardableResult
     func finishWorldWalk(at date: Date = Date(), defaults: UserDefaults = .standard) -> Workout? {
         worldLocation.stopWalk()
         guard let walk = worldWalk.finish(at: date) else { return nil }
         let workout = Self.walkWorkout(walk)
         addWorkout(workout, date: FernletDate.dayKey(for: walk.ended))
+        worldPlaces.recordOuting(walk.kind == .run ? .run : .walk, at: walk.started, metres: walk.metres, workoutID: workout.id)
         guard WorldMapPreferences.saveNewRoutes(in: defaults), !duressSessionActive, walk.points.count >= 2 else {
             return workout
         }
@@ -60,8 +62,9 @@ extension FernletStore {
     /// name (drawn in the person's language), with its minutes and its distance in miles, ending when it
     /// ended.
     static func walkWorkout(_ walk: WorldWalkRecorder.Walk) -> Workout {
-        Workout(name: WorkoutActivityType.walking.defaultName, type: .cardio, mode: .activity, activityType: .walking,
-                exercises: "", rpe: nil, notes: "", duration: walk.minutes, distanceMiles: walk.metres / 1_609.344,
-                intensity: .light, completedAt: walk.ended, loggedAt: walk.ended)
+        let activity: WorkoutActivityType = walk.kind == .run ? .running : .walking
+        return Workout(name: activity.defaultName, type: .cardio, mode: .activity, activityType: activity,
+                       exercises: "", rpe: nil, notes: "", duration: walk.minutes, distanceMiles: walk.metres / 1_609.344,
+                       intensity: walk.kind == .run ? .moderate : .light, completedAt: walk.ended, loggedAt: walk.ended)
     }
 }

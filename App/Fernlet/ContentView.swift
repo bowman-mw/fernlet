@@ -1488,7 +1488,8 @@ struct ContentView: View {
         switch section {
         case .journal:
             applySealedJournalActivation(for: lockState)
-        case .cycle:
+        // Places (World build step 5c) reads its own log under the hub key when its page opens.
+        case .cycle, .places:
             break
         case .worryBox:
             worryBoxService.updateActivation(

@@ -30,12 +30,14 @@ nonisolated struct WorldQuickStartContext: Equatable, Sendable {
         let shotsLeft: Int
     }
 
-    /// A walk of the person's own, saved on this iPhone, that started within 100 m of here.
+    /// A walk or run of the person's own, saved on this iPhone, that started within 100 m of here.
     struct SavedLine: Equatable, Sendable {
         /// Its length, in metres.
         let metres: Double
-        /// How many recent walks started here.
+        /// How many recent walks (or runs, for a run's line) started here.
         let walks: Int
+        /// A walk's line (a trail, `b1-qs-trail`) or a run's (a saved run route, `b1-qs-run`).
+        var kind: WorldWalkRecorder.Kind = .walk
     }
 
     /// What the person is doing right now.
@@ -43,6 +45,8 @@ nonisolated struct WorldQuickStartContext: Equatable, Sendable {
         case none
         /// A walk (Walk together, or a saved line again) is recording.
         case walking
+        /// A run on a saved route is recording.
+        case running
         /// A guided workout is under way; its title as drawn.
         case workout(title: String)
     }
@@ -84,11 +88,13 @@ nonisolated struct WorldSavedLine: Equatable, Sendable {
     let points: [GeoPoint]
     /// Its length, in metres.
     let metres: Double
-    /// How many recent walks started here.
+    /// How many recent walks (or runs) started here.
     let walks: Int
+    /// A walk's line or a run's.
+    var kind: WorldWalkRecorder.Kind = .walk
 
     /// The card's facts.
-    var summary: WorldQuickStartContext.SavedLine { WorldQuickStartContext.SavedLine(metres: metres, walks: walks) }
+    var summary: WorldQuickStartContext.SavedLine { WorldQuickStartContext.SavedLine(metres: metres, walks: walks, kind: kind) }
 }
 
 /// One choice on the quick-start card. The view draws the words; these are the facts behind them.
@@ -103,6 +109,8 @@ nonisolated enum WorldQuickStartOption: Equatable, Hashable, Sendable {
     case walkTogether
     /// Walk a saved line again: Walk together, with that line drawn on the map to follow.
     case walkSavedLine(metres: Double)
+    /// Run a saved run route again (`b1-qs-run`): recorded and logged as a run, the line drawn to follow.
+    case runSavedLine(metres: Double)
     /// The session's disposable camera, on its shared film.
     case sessionCamera(shotsLeft: Int)
     /// The disposable camera on your own (10 a day, the photos appear tonight).
@@ -131,10 +139,14 @@ nonisolated struct WorldQuickStartCard: Equatable, Sendable {
         case walk
         /// "Your walk from here": a saved walk starts where the person stands.
         case savedLine
+        /// "Your run from here": a saved run route starts where the person stands (`b1-qs-run`).
+        case savedRun
         /// "A gentle day": resting, away from a space.
         case gentle
         /// "On your walk": while a walk records.
         case walking
+        /// "On your run": while a run records.
+        case running
         /// The guided workout's title, while it runs.
         case workout(String)
         /// "Sam is nearby" (`b4-mem-blue-friend`).
@@ -153,6 +165,8 @@ nonisolated struct WorldQuickStartCard: Equatable, Sendable {
         case restingCounts
         /// "You've walked from here 3 times"
         case walkedFromHere(times: Int)
+        /// "You've run this route 8 times"
+        case ranFromHere(times: Int)
     }
 
     let heading: Heading
@@ -172,6 +186,8 @@ nonisolated enum WorldQuickStartGlyph: Equatable, Sendable {
     case camera
     /// A tree: at the start of a saved walk.
     case trail
+    /// A runner: at the start of a saved run route.
+    case run
     /// Two people: a friend nearby, or friends in person.
     case friends
 }
@@ -179,7 +195,7 @@ nonisolated enum WorldQuickStartGlyph: Equatable, Sendable {
 /// The blue button's rules (World app plan step 6b), first match wins:
 ///
 /// 1. **A decoy** offers only the walk (and nothing while it walks), so nothing hints at a decoy.
-/// 2. **During a walk** the camera, when there is one to offer (the walk bar holds End).
+/// 2. **During a walk or run** the camera, when there is one to offer (the walk bar holds End).
 /// 3. **During a guided workout** the camera, and the way back to the workout.
 /// 4. **In a session** the session's camera, then Walk together.
 /// 5. **With a friend nearby** (`b4-mem-blue-friend`) "Sam is nearby": Start a session with Sam,
@@ -188,7 +204,8 @@ nonisolated enum WorldQuickStartGlyph: Equatable, Sendable {
 ///    usual choices below so nothing is taken away.
 /// 7. **At a pinned space** today's plan there (or Move's suggestion when nothing is planned), then
 ///    Walk together.
-/// 8. **At the start of a saved walk** that walk again, its line drawn to follow.
+/// 8. **At the start of a saved walk** that walk again, its line drawn to follow; **at the start of a saved
+///    run route** that run again, then Walk together (`b1-qs-run`).
 /// 9. **Anywhere else** Walk together.
 ///
 /// Rules 6 to 9 end with "Friends nearby" while friends are offered at all, so a session, a hangout
@@ -211,7 +228,8 @@ nonisolated enum WorldQuickStart {
         case .space, .workout: return context.isResting ? .rest : .space
         case .gentle: return .rest
         case .savedLine: return .trail
-        case .session, .walk, .walking: return .walk
+        case .savedRun: return .run
+        case .session, .walk, .walking, .running: return .walk
         case .friendNearby, .inPerson: return .friends
         }
     }
@@ -225,6 +243,8 @@ nonisolated enum WorldQuickStart {
         switch context.activity {
         case .walking:
             return WorldQuickStartCard(heading: .walking, note: nil, options: camera(context).map { [$0] } ?? [])
+        case .running:
+            return WorldQuickStartCard(heading: .running, note: nil, options: camera(context).map { [$0] } ?? [])
         case .workout(let title):
             return WorldQuickStartCard(heading: .workout(title), note: nil,
                                        options: (camera(context).map { [$0] } ?? []) + [.backToWorkout(title: title)])
@@ -264,8 +284,12 @@ nonisolated enum WorldQuickStart {
                                        options: [first] + walk)
         }
         if let line = context.savedLine, context.canWalk {
-            return WorldQuickStartCard(heading: .savedLine, note: .walkedFromHere(times: line.walks),
-                                       options: [.walkSavedLine(metres: line.metres)])
+            guard line.kind == .run else {
+                return WorldQuickStartCard(heading: .savedLine, note: .walkedFromHere(times: line.walks),
+                                           options: [.walkSavedLine(metres: line.metres)])
+            }
+            return WorldQuickStartCard(heading: .savedRun, note: .ranFromHere(times: line.walks),
+                                       options: [.runSavedLine(metres: line.metres)] + walk)
         }
         return WorldQuickStartCard(heading: .walk, note: .nothingSaved, options: walk)
     }

@@ -54,30 +54,42 @@ extension FernletStore {
         return location.isPrecise || WorldLocationSource.declares("NSLocationTemporaryUsageDescriptionDictionary")
     }
 
-    /// The most recent saved walk line that starts within 100 m of `point`, among the walks of the last
-    /// ``worldSavedLineDays`` days (at most ``worldSavedLineWalksPerDay`` a day), with how many of those
-    /// walks started there. Read on this iPhone only; nil in a decoy, and nil when none starts here.
+    /// The most recent saved line that starts within 100 m of `point`, among the walks and runs of the
+    /// last ``worldSavedLineDays`` days (at most ``worldSavedLineWalksPerDay`` a day), with how many walks
+    /// (or runs, for a run's line) started there. A run's line makes a saved run route (`b1-qs-run`), a
+    /// walk's a trail (`b1-qs-trail`). Read on this iPhone only; nil in a decoy, and nil when none starts here.
     func worldSavedLine(startingNear point: GeoPoint, now: Date = Date()) -> WorldSavedLine? {
         guard !duressSessionActive, point.isValid else { return nil }
         var latest: WorldSavedLine?
-        var walks = 0
+        var counts: [WorldWalkRecorder.Kind: Int] = [:]
         for offset in 0..<Self.worldSavedLineDays {
             guard let date = Calendar.current.date(byAdding: .day, value: -offset, to: now) else { continue }
             let key = FernletDate.dayKey(for: date)
             let recent = (key == todayKey ? day : loadDay(for: key)).workouts
-                .filter { $0.activityType == .walking }
+                .filter { Self.savedLineKind(of: $0) != nil }
                 .sorted { $0.completedAt > $1.completedAt }
                 .prefix(Self.worldSavedLineWalksPerDay)
-            for walk in recent {
-                guard let line = worldRoute(for: walk.id), let start = line.first,
+            for outing in recent {
+                guard let kind = Self.savedLineKind(of: outing), let line = worldRoute(for: outing.id), let start = line.first,
                       start.point.distance(to: point) <= SpacePinStore.matchRadius else { continue }
-                walks += 1
+                counts[kind, default: 0] += 1
                 if latest == nil {
-                    latest = WorldSavedLine(workoutID: walk.id, points: line.map(\.point), metres: WorldRouteCodec.length(of: line), walks: 0)
+                    latest = WorldSavedLine(workoutID: outing.id, points: line.map(\.point), metres: WorldRouteCodec.length(of: line),
+                                            walks: 0, kind: kind)
                 }
             }
         }
-        return latest.map { WorldSavedLine(workoutID: $0.workoutID, points: $0.points, metres: $0.metres, walks: walks) }
+        return latest.map { WorldSavedLine(workoutID: $0.workoutID, points: $0.points, metres: $0.metres,
+                                           walks: counts[$0.kind, default: 0], kind: $0.kind) }
+    }
+
+    /// Whether `workout`'s saved line is a walk's (walking, hiking) or a run's, or neither.
+    static func savedLineKind(of workout: Workout) -> WorldWalkRecorder.Kind? {
+        switch workout.activityType {
+        case .walking, .hiking: .walk
+        case .running: .run
+        default: nil
+        }
     }
 
     /// How many days back the saved-line search reads.
@@ -124,7 +136,7 @@ extension FernletStore {
 
     /// What is under way: a walk recording, or a guided workout working or resting.
     private var quickStartActivity: WorldQuickStartContext.Activity {
-        if worldLocation.isWalking { return .walking }
+        if worldLocation.isWalking { return worldWalk.kind == .run ? .running : .walking }
         if let run = guidedRunState, run.isWorking || run.isResting {
             return .workout(title: WorkoutSessionNames.drawn(run.title))
         }
@@ -165,12 +177,15 @@ extension FernletStore {
         if duressSessionActive {
             worldLocation.stopWalk()
             guard let walk = worldWalk.finish(at: date) else { return nil }
-            return WorldLoggedWalk(id: UUID(), dayKey: todayKey, metres: walk.metres, minutes: walk.minutes, isKept: false)
+            return WorldLoggedWalk(id: UUID(), dayKey: todayKey, metres: walk.metres, minutes: walk.minutes, isKept: false,
+                                   kind: walk.kind)
         }
+        let kind = worldWalk.kind
         guard let workout = finishWorldWalk(at: date, defaults: defaults) else { return nil }
         worldFog.flush()
         return WorldLoggedWalk(id: workout.id, dayKey: FernletDate.dayKey(for: workout.completedAt),
-                               metres: (workout.distanceMiles ?? 0) * 1_609.344, minutes: workout.duration ?? 1, isKept: true)
+                               metres: (workout.distanceMiles ?? 0) * 1_609.344, minutes: workout.duration ?? 1, isKept: true,
+                               kind: kind)
     }
 
     /// The walk toast's Undo: removes the logged walk (and its line with it). Whether it went.

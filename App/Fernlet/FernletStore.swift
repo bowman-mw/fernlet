@@ -240,6 +240,8 @@ final class FernletStore {
             #endif
             // The World map's fog follows the decoy on the same flag: history hidden, nothing written.
             worldFog.setDecoy(duressSessionActive)
+            // "Where you've been" captures nothing in a decoy (and Private's Places page shows nothing).
+            worldPlaces.setDecoy(duressSessionActive)
             // The solo camera's decoy keeps its shots in memory and drops them when the decoy ends.
             soloCamera.setDecoy(duressSessionActive)
             // A walk recording when the decoy opens or closes is dropped: neither side keeps the other's.
@@ -763,9 +765,23 @@ final class FernletStore {
         source.onFix = { [weak self] fix in
             self?.worldFog.handle(fix)
             self?.worldWalk.record(fix)
+            self?.noteWorldPlace(from: fix)
+        }
+        source.onVisit = { [weak self] visit in
+            self?.worldPlaces.handleVisit(visit)
         }
         return source
     }()
+    /// "Where you've been"'s capture (`WorldPlacesKeeper`; `FernletStore+WorldPlaces`): the stops the map
+    /// notes, waiting in the same vault as the fog until Private folds them under its hub key. Lazy, like
+    /// the fog, and it follows the decoy.
+    @ObservationIgnored private(set) lazy var worldPlaces = WorldPlacesKeeper(vault: worldMapVault, lookup: worldPlaceLookup)
+    /// Where each solo camera photo was taken (`PhotoPlaceStore`; `FernletStore+WorldPlaces`), in the same
+    /// vault and cleared with it.
+    @ObservationIgnored private(set) lazy var worldPhotoPlaces = PhotoPlaceStore(vault: worldMapVault)
+    /// The place lookup a visit's kind and a photo's refused-place check go through: Apple's map on the
+    /// launch path, a lookup with no answer in a test-built store (nothing named, no photo place kept).
+    @ObservationIgnored let worldPlaceLookup: any WorldPlaceLooking
     /// The World map's saved walk lines (`WorldRouteStore`), sealed in the same vault as the fog and
     /// cleared with it. Lazy, like the fog.
     @ObservationIgnored private(set) lazy var worldRoutes = WorldRouteStore(vault: worldMapVault)
@@ -776,8 +792,12 @@ final class FernletStore {
     @ObservationIgnored private(set) lazy var worldSpacePins = SpacePinStore(vault: worldMapVault)
     /// The disposable camera's roll on your own (`SoloCameraRoll`; `FernletStore+SoloCamera`): today's
     /// film, the sealed device-only solo corpus, and a decoy's shots in memory. Follows the decoy above.
-    @ObservationIgnored private(set) lazy var soloCamera = SoloCameraRoll(
-        store: SoloCameraPhotoStore(directory: soloCameraDirectory), isDecoy: duressSessionActive)
+    @ObservationIgnored private(set) lazy var soloCamera: SoloCameraRoll = {
+        let roll = SoloCameraRoll(store: SoloCameraPhotoStore(directory: soloCameraDirectory), isDecoy: duressSessionActive)
+        // Deleting a solo photo deletes where it was taken (World build step 5c).
+        roll.onDeleted = { [weak self] id in self?.forgetSoloPhotoPlaces([id]) }
+        return roll
+    }()
     /// Recipe ids whose web-image download is currently in flight. Guards the entry to
     /// ``fetchRecipeWebImageIfNeeded(for:)`` so the paste-import fire-and-forget task and the
     /// detail's first-open task — both of which can hold the same not-yet-attempted recipe copy —
@@ -918,7 +938,7 @@ final class FernletStore {
     /// Every repository/service/defaults parameter is an injection seam; nil means production
     /// default. Prefer `FernletStore.load` at app launch — it does the slow work off the first
     /// frame.
-    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, appGroupDirectory: URL? = nil, messagesCatalogDirectory: URL? = nil, sharedRecipeImportQueueFileURL: URL? = nil, photoDocumentsDirectory: URL? = nil, proximitySupportDirectory: URL? = nil, heartDropKeychainService: String? = nil, aiQuotaDefaults: UserDefaults = .standard, foodSearchCorrectionDefaults: UserDefaults = .standard, deviceHealthResidueStore: (any DeviceHealthResidueStoring)? = nil, deviceDaySummaryStore: (any DeviceDaySummaryStoring)? = nil, worldMapVault: WorldMapVault? = nil) {
+    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, appGroupDirectory: URL? = nil, messagesCatalogDirectory: URL? = nil, sharedRecipeImportQueueFileURL: URL? = nil, photoDocumentsDirectory: URL? = nil, proximitySupportDirectory: URL? = nil, heartDropKeychainService: String? = nil, aiQuotaDefaults: UserDefaults = .standard, foodSearchCorrectionDefaults: UserDefaults = .standard, deviceHealthResidueStore: (any DeviceHealthResidueStoring)? = nil, deviceDaySummaryStore: (any DeviceDaySummaryStoring)? = nil, worldMapVault: WorldMapVault? = nil, worldPlaceLookup: (any WorldPlaceLooking)? = nil) {
         // Assigned FIRST: the own-photo corpora, the escrow coordinator and the launch key migration
         // all read it, and the migration kicks off at the end of this initializer.
         self.photoDocumentsDirectory = photoDocumentsDirectory ?? Self.defaultPhotoDocumentsDirectory
@@ -927,6 +947,7 @@ final class FernletStore {
         self.deviceHealthResidueStore = deviceHealthResidueStore ?? InMemoryDeviceHealthResidueStore()
         self.deviceDaySummaryStore = deviceDaySummaryStore ?? InMemoryDeviceDaySummaryStore()
         self.worldMapVault = worldMapVault ?? WorldMapVault.ephemeral()
+        self.worldPlaceLookup = worldPlaceLookup ?? FixedPlaceLookup(answer: nil)
         self.proximitySupportRoot = proximitySupportDirectory ?? FernletProximityStorage.productionDirectory
         self.heartDropKeychainService = heartDropKeychainService ?? HeartDropStorageScope.production.keychainService
         self.appGroupDirectory = appGroupDirectory
@@ -1084,6 +1105,7 @@ final class FernletStore {
         self.deviceHealthResidueStore = deviceHealthResidueStore
         self.deviceDaySummaryStore = deviceDaySummaryStore
         self.worldMapVault = WorldMapVault.production()
+        self.worldPlaceLookup = ApplePlaceLookup()
         self.proximitySupportRoot = FernletProximityStorage.productionDirectory
         self.heartDropKeychainService = HeartDropStorageScope.production.keychainService
         // nil / `.standard` = the REAL app-group container and the real defaults. Never a unique
@@ -7127,9 +7149,10 @@ final class FernletStore {
             incompleteStores.append("your day summaries")
         }
         // The World map's sealed location history (fog cells, its locked-phone buffer, the saved walk
-        // lines and the workout-space pins, one folder) and both of its device keys, plus its
-        // device-only settings. World build only.
+        // lines, the workout-space pins, Where you've been's log and device side, and the solo photos'
+        // places, one folder) and both of its device keys, plus its device-only settings. World build only.
         if !worldFog.clearAll() { incompleteStores.append("your map history") }
+        worldPlaces.forget()
         WorldMapPreferences.clearAll()
         // Advanced period tracking's device-only switch (World build, `b3-period-settings`): how the
         // person tracks their cycle, so it goes with everything else.

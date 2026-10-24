@@ -29,6 +29,12 @@ nonisolated enum WorldQuickStartCopy {
         case .savedLine:
             return String(localized: "worldQuickStart.heading.savedLine", defaultValue: "Your walk from here",
                           comment: "World Home quick-start card heading where one of the person's saved walks starts")
+        case .savedRun:
+            return String(localized: "worldQuickStart.heading.savedRun", defaultValue: "Your run from here",
+                          comment: "World Home quick-start card heading where one of the person's saved run routes starts")
+        case .running:
+            return String(localized: "worldQuickStart.heading.running", defaultValue: "On your run",
+                          comment: "World Home quick-start card heading while a run records")
         case .workout(let title):
             return title
         case .friendNearby(let names):
@@ -74,6 +80,9 @@ nonisolated enum WorldQuickStartCopy {
         case .walkedFromHere(let times):
             return String(localized: "worldQuickStart.note.walkedFromHere", defaultValue: "You've walked from here \(times) times",
                           comment: "World Home quick-start card where saved walks start: how many recent walks started here. Plural on the number")
+        case .ranFromHere(let times):
+            return String(localized: "worldQuickStart.note.ranFromHere", defaultValue: "You've run this route \(times) times",
+                          comment: "World Home quick-start card where a saved run route starts: how many recent runs started here. Plural on the number")
         }
     }
 
@@ -95,6 +104,9 @@ nonisolated enum WorldQuickStartCopy {
         case .walkSavedLine:
             return String(localized: "worldQuickStart.savedLine", defaultValue: "Walk it again",
                           comment: "World Home quick start where a saved walk starts: walk that same line again")
+        case .runSavedLine:
+            return String(localized: "worldQuickStart.savedRun", defaultValue: "Run it again",
+                          comment: "World Home quick start where a saved run route starts: run that same route again")
         case .sessionCamera, .soloCamera:
             return String(localized: "worldQuickStart.camera", defaultValue: "Disposable camera",
                           comment: "World Home quick start: opens the disposable camera")
@@ -131,6 +143,10 @@ nonisolated enum WorldQuickStartCopy {
             let distance = WorldWalkCopy.distance(metres)
             return String(localized: "worldQuickStart.savedLine.detail", defaultValue: "\(distance) · your saved line",
                           comment: "World Home quick start: under 'Walk it again'; the saved walk's length")
+        case .runSavedLine(let metres):
+            let distance = WorldWalkCopy.distance(metres)
+            return String(localized: "worldQuickStart.savedRun.detail", defaultValue: "\(distance) · your saved route",
+                          comment: "World Home quick start: under 'Run it again'; the saved run route's length")
         case .sessionCamera(let shots):
             return String(localized: "worldQuickStart.camera.session", defaultValue: "\(shots) shots left · shared with the session",
                           comment: "World Home quick start in a friend session: the shared film's shots left. Plural on the number")

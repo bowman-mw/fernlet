@@ -227,7 +227,8 @@ func makeTestStore(
     sharedRecipeImportQueueFileURL: URL = uniqueSharedRecipeImportQueueURL(),
     deviceHealthResidueStore: (any DeviceHealthResidueStoring)? = nil,
     deviceDaySummaryStore: (any DeviceDaySummaryStoring)? = nil,
-    healthKitService: (any HealthKitServicing)? = nil
+    healthKitService: (any HealthKitServicing)? = nil,
+    worldPlaceLookup: (any WorldPlaceLooking)? = nil
 ) -> FernletStore {
     makeTestStoreWithRepositories(
         date: date,
@@ -243,7 +244,8 @@ func makeTestStore(
         sharedRecipeImportQueueFileURL: sharedRecipeImportQueueFileURL,
         deviceHealthResidueStore: deviceHealthResidueStore,
         deviceDaySummaryStore: deviceDaySummaryStore,
-        healthKitService: healthKitService
+        healthKitService: healthKitService,
+        worldPlaceLookup: worldPlaceLookup
     ).store
 }
 
@@ -270,6 +272,7 @@ func makeTestStoreWithRepositories(
     deviceHealthResidueStore: (any DeviceHealthResidueStoring)? = nil,
     deviceDaySummaryStore: (any DeviceDaySummaryStoring)? = nil,
     healthKitService: (any HealthKitServicing)? = nil,
+    worldPlaceLookup: (any WorldPlaceLooking)? = nil,
     wrapNarrativeStore: (JournalNarrativeRepository) -> any JournalNarrativeStoring = { $0 }
 ) -> (store: FernletStore, repository: CoreDataFernletRepository, narratives: JournalNarrativeRepository) {
     precondition(
@@ -341,7 +344,9 @@ func makeTestStoreWithRepositories(
         // sync initializer's hermetic default); pass one to share it across a simulated relaunch.
         deviceHealthResidueStore: deviceHealthResidueStore,
         // This device's day summaries, the same rule: nil = a fresh in-memory store.
-        deviceDaySummaryStore: deviceDaySummaryStore
+        deviceDaySummaryStore: deviceDaySummaryStore,
+        // The World map's place lookup: nil = one with no answer (nothing named, no photo place kept).
+        worldPlaceLookup: worldPlaceLookup
     )
     // The recipe editor's "grams in one" memory (F4b) is a defaults SUITE too; nothing reads it during
     // init, so a fresh suite set here keeps every test store off `.standard`.

@@ -10,9 +10,9 @@ import WorldMapStore
 /// person's own is, with a crisp name tag.
 ///
 /// This round draws the markers the phone has data for: the person's **workout spaces**, at the pins set
-/// at their first guided workout there (`SpacePinStore`). Favourite restaurants, places friends shared,
-/// trail and run starts and photos on the map wait for the data behind them (visits, shared places,
-/// named trails, run lines). Never friends' photos.
+/// at their first guided workout there (`SpacePinStore`), and the person's own **solo photos** where they were taken
+/// (``WorldPhotoMarkerView``, step 5c). Favourite restaurants, places friends shared and named trail starts wait
+/// for the data behind them (a later round). Never friends' photos.
 nonisolated struct WorldMapMarker: Equatable, Identifiable, Sendable {
     /// What the marker is.
     enum Kind: Equatable, Sendable {

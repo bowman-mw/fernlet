@@ -108,8 +108,8 @@ struct WorldRefinementTests {
         // The first glyph is not a change, nor is the same glyph again; Walk together and the resting
         // day keep the icon alone.
         let shown = labels([(.camera, today), (.camera, today), (.walk, today), (.space, today), (.rest, today),
-                            (.trail, today), (nil, today)])
-        #expect(shown == [nil, nil, nil, .workout, nil, .run, nil])
+                            (.run, today), (.trail, today), (nil, today)])
+        #expect(shown == [nil, nil, nil, .workout, nil, .run, nil, nil])
     }
 
     /// Never twice for the same action in a day; a new day starts afresh.
@@ -140,7 +140,9 @@ struct WorldRefinementTests {
     @Test func theWordsAndTheButtonsName() {
         #expect(WorldQuickStartLabel.label(for: .camera) == .camera)
         #expect(WorldQuickStartLabel.label(for: .space) == .workout)
-        #expect(WorldQuickStartLabel.label(for: .trail) == .run)
+        #expect(WorldQuickStartLabel.label(for: .run) == .run)
+        // A saved walk's start (the tree) keeps the icon alone since step 5c gave runs their own glyph.
+        #expect(WorldQuickStartLabel.label(for: .trail) == nil)
         #expect(WorldQuickStartLabel.label(for: .walk) == nil)
         #expect(WorldQuickStartLabel.label(for: .rest) == nil)
         #expect(WorldQuickStartLabel.buttonName(for: .camera) == "Quick start, Camera")

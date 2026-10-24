@@ -342,6 +342,7 @@ struct SensitiveSurfaceGateTests {
         // Ungated sections are unaffected.
         #expect(neither.contains(.journal))
         #expect(neither.contains(.worryBox))
+        #expect(neither.contains(.places))
     }
 
     // MARK: - Mixed-version multi-device key-drop (end-to-end)

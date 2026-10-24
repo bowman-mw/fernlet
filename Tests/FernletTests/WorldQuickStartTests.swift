@@ -116,6 +116,39 @@ struct WorldQuickStartTests {
         #expect(WorldQuickStart.card(for: context) == nil)
     }
 
+    /// Where a saved run route starts (`b1-qs-run`, step 5c): run it again first, then Walk together; the
+    /// runner glyph and its "Run" word; while it records, the run's own heading with the camera.
+    @Test func aSavedRunRouteStartingHereOffersItAgain() throws {
+        var context = Self.anywhere()
+        context.savedLine = WorldQuickStartContext.SavedLine(metres: 3_200, walks: 8, kind: .run)
+        let card = try #require(WorldQuickStart.card(for: context))
+        #expect(card.heading == .savedRun && card.note == .ranFromHere(times: 8))
+        #expect(card.options == [.runSavedLine(metres: 3_200), .walkTogether])
+        #expect(WorldQuickStart.glyph(for: context) == .run)
+        #expect(WorldQuickStartLabel.label(for: .run) == .run)
+        context.savedLine = nil
+        context.activity = .running
+        context.soloCameraAvailable = true
+        #expect(WorldQuickStart.card(for: context)?.heading == .running)
+        #expect(WorldQuickStart.card(for: context)?.options == [.soloCamera])
+    }
+
+    /// A finished run is logged as a run, its line kept under the same switch, and the saved-line search
+    /// reads it as a run route.
+    @Test func aRunIsLoggedAsARunAndFoundAsARunRoute() throws {
+        let store = makeTestStore()
+        let defaults = try #require(UserDefaults(suiteName: "WorldQuickStartTests.\(UUID().uuidString)"))
+        let origin = GeoPoint(45.5205, -122.6255), start = Date()
+        store.startWorldWalk(at: start, kind: .run)
+        for east in stride(from: 0.0, through: 600, by: 5) {
+            store.worldWalk.record(WorldFix(point: origin.offset(east: east, north: 0), accuracy: 5, at: start, isPrecise: true))
+        }
+        let run = try #require(store.finishWorldWalk(at: start.addingTimeInterval(240), defaults: defaults))
+        #expect(run.activityType == .running && run.intensity == .moderate)
+        let line = try #require(store.worldSavedLine(startingNear: origin))
+        #expect(line.kind == .run && line.walks == 1 && line.workoutID == run.id)
+    }
+
     // MARK: The map's states
 
     /// Off until allowed (not asked counts as off; nothing on Home asks), approximate or precise.

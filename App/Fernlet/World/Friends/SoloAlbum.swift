@@ -111,6 +111,16 @@ final class SoloAlbumModel {
     /// When the next held photo shows; nil when none is held.
     private(set) var nextRevealAt: Date?
     @ObservationIgnored private var roll: SoloCameraRoll?
+    /// Only these photos, when set: the photos taken at one place, opened from its marker on the map
+    /// (World build step 5c).
+    @ObservationIgnored private let only: Set<UUID>?
+    /// The name a photo's place goes by on its card ("Thursday 23 October · Oak Park"), or nil.
+    @ObservationIgnored var placeName: (UUID) -> String? = { _ in nil }
+
+    /// A model over every solo photo, or over `only` those photos.
+    init(only: Set<UUID>? = nil) {
+        self.only = only
+    }
 
     /// Whether there is nothing of the solo camera to show at all.
     var isEmpty: Bool { sets.isEmpty && heldCount == 0 }
@@ -125,7 +135,8 @@ final class SoloAlbumModel {
             nextRevealAt = nil
             return
         }
-        sets = SoloAlbum.sets(from: roll.photos(visibleAt: now))
+        let shown = roll.photos(visibleAt: now)
+        sets = SoloAlbum.sets(from: only.map { ids in shown.filter { ids.contains($0.id) } } ?? shown)
         let held = roll.heldPhotos(at: now)
         heldCount = held.count
         nextRevealAt = held.map(\.revealsAt).min()

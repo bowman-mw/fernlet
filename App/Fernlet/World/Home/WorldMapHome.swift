@@ -15,8 +15,8 @@ import WorldMapStore
 /// button a friend session puts there.
 ///
 /// **The map.** Apple's muted map behind the map seam, following the person while location is allowed
-/// (the permission screens are step 5c; until then the map follows a permission given earlier, for
-/// example for weather). Without a reading yet the plain map stands in, the companion in its middle.
+/// (asked once by the map intro, `b1-loc-intro`, step 5c; a permission given earlier, for weather, counts too,
+/// and the intro never shows). Without a reading yet the plain map stands in, the companion in its middle.
 /// With location off (or not asked) there is no map: the open scene (``WorldOffMapHome``,
 /// `b1-home-denied` draft 4). With approximate location the map zooms out to the area. With no
 /// signal, parchment covers Apple's map and the fog and lines draw on it. Location updates run only
@@ -67,6 +67,14 @@ struct WorldMapHome: View {
     @State private var savedLine: WorldSavedLine?
     /// The saved line being walked again, drawn to follow.
     @State private var guideLine: [GeoPoint] = []
+    /// Whether the map intro is up (`b1-loc-intro`, ``WorldLocationIntroPresenter``).
+    @State private var isLocationIntroUp = false
+    /// Where the person's shown solo photos were taken (``WorldPhotoPlace``), read when the map comes to
+    /// the front, and the one whose photos are open.
+    @State private var photoPlaces: [WorldPhotoPlace] = []
+    @State private var openPhotoPlace: WorldPhotoPlace?
+    /// Whether the one-time "Tap me to say hi!" hint is showing (`ref-hint`, ``WorldCompanionHint``).
+    @State private var isHintShowing = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -92,8 +100,13 @@ struct WorldMapHome: View {
             GuidedWorkoutSheet(store: store, session: session, sessionsRemain: store.worldGuidedSessionsRemain(after: session))
         }
         .worldDisposableCamera(store: store, mode: $cameraMode)
+        // The map intro, once, before iOS asks (`b1-loc-intro`).
+        .modifier(WorldLocationIntroPresenter(store: store, isFrontmost: isFrontmost, isUp: $isLocationIntroUp))
+        // A photo place's marker opens the photos taken there (World build step 5c).
+        .modifier(WorldPhotoPlacePresenter(store: store, place: $openPhotoPlace))
         .environment(\.worldTileStatus, tiles)
         .task { await applyTestScenes() }
+        .task(id: isHintDue) { if isHintDue { isHintShowing = true } }
         .task(id: isFrontmost) { await refreshWeather() }
         .task(id: tiles.state) { await watchLoading() }
         .onAppear { updateLocation() }
@@ -102,7 +115,10 @@ struct WorldMapHome: View {
         .onChange(of: scenePhase) { updateLocation() }
         .onChange(of: store.worldLocation.latest) { _, fix in follow(fix) }
         .onChange(of: notice) { _, kind in announce(kind) }
-        .onChange(of: cameraMode) { _, mode in isCameraOpen.wrappedValue = mode != nil }
+        .onChange(of: cameraMode) { _, mode in isCameraOpen.wrappedValue = mode != nil || isLocationIntroUp }
+        .onChange(of: isLocationIntroUp) { _, up in isCameraOpen.wrappedValue = up || cameraMode != nil }
+        // A permission given (or taken back) in iOS's prompt or in Settings: start or stop following.
+        .onChange(of: store.worldLocation.permission) { updateLocation() }
     }
 
     // MARK: Location off
@@ -112,7 +128,7 @@ struct WorldMapHome: View {
         WorldOffMapHome(store: store, date: date, status: WorldStatus.current(store: store, date: date), onOpen: onOpen) {
             WorldMapCompanion(store: store, bodySignal: bodySignal, isActive: isFrontmost && !isCustomizing,
                               mapLine: mapLine, pixelScale: dynamicTypeSize.isAccessibilitySize ? 6 : 7,
-                              isNight: phase(at: date) == .night) {
+                              isNight: phase(at: date) == .night, hint: isHintShowing, onHintEnded: endHint) {
                 isCustomizing = true
             }
         }
@@ -146,6 +162,11 @@ struct WorldMapHome: View {
                     .fixedSize()
                     .position(viewport.screenPoint(for: marker.point, in: size))
             }
+            ForEach(shownPhotoPlaces) { place in
+                WorldPhotoMarkerView(place: place) { openPhotoPlace = place }
+                    .fixedSize()
+                    .position(viewport.screenPoint(for: place.point, in: size))
+            }
             ForEach(Array(nearbyFriends.enumerated()), id: \.element.id) { index, friend in
                 WorldNearbyFriendView(friend: friend)
                     .fixedSize()
@@ -158,7 +179,7 @@ struct WorldMapHome: View {
     /// The companion with its bubble, its feet on `point`.
     private func companion(at point: CGPoint) -> some View {
         WorldMapCompanion(store: store, bodySignal: bodySignal, isActive: isFrontmost && !isCustomizing, mapLine: mapLine,
-                          isQuiet: isBubbleQuiet, isNight: phase(at: Date()) == .night) {
+                          isQuiet: isBubbleQuiet, isNight: phase(at: Date()) == .night, hint: isHintShowing, onHintEnded: endHint) {
             isCustomizing = true
         }
         .fixedSize()
@@ -178,7 +199,7 @@ struct WorldMapHome: View {
                 }
             }
             if isWalking {
-                WorldWalkBar(metres: walkMetres, onEnd: endWalk)
+                WorldWalkBar(metres: walkMetres, kind: store.worldWalk.kind, onEnd: endWalk)
             }
             if let notice {
                 WorldMapNotice(kind: notice, onUsePrecise: openSettings)
@@ -294,6 +315,14 @@ struct WorldMapHome: View {
                                          point: fix.point.offset(east: -90, north: -170))]
     }
 
+    /// The solo photos' places on the map (a DEBUG screenshot, `photo`, stands three photos in beside the
+    /// companion, display only).
+    private var shownPhotoPlaces: [WorldPhotoPlace] {
+        guard testScenes.contains("photo"), !store.duressSessionActive, let fix = store.worldLocation.latest else { return photoPlaces }
+        return photoPlaces + [WorldPhotoPlace(id: UUID(uuidString: "5C000000-0000-0000-0000-000000000001") ?? UUID(),
+                                              point: fix.point.offset(east: 110, north: 140), photoIDs: [UUID(), UUID(), UUID()])]
+    }
+
     /// Friends nearby (a DEBUG screenshot can stand one in).
     private var nearbyFriends: [WorldNearbyFriend] {
         guard testScenes.contains("friend") else { return store.worldNearbyFriends }
@@ -322,6 +351,7 @@ struct WorldMapHome: View {
         var context = context
         context.savedLine = savedLineHere?.summary
         if testScenes.contains("solo") { context.soloCameraAvailable = true }
+        if testScenes.contains("run") { context.savedLine = WorldQuickStartContext.SavedLine(metres: 3_200, walks: 8, kind: .run) }
         if testScenes.contains("friend"), context.canMeetFriends { context.nearbyFriends = nearbyFriends.map(\.firstName) }
         if testScenes.contains("session"), !context.isDecoy {
             context.session = WorldQuickStartContext.Session(names: ["Sam", "Rae"], shotsLeft: 3)
@@ -386,6 +416,9 @@ struct WorldMapHome: View {
         case .walkSavedLine:
             guideLine = savedLineHere?.points ?? []
             startWalk()
+        case .runSavedLine:
+            guideLine = savedLineHere?.points ?? []
+            startWalk(kind: .run)
         case .sessionCamera:
             cameraMode = .session
         case .soloCamera:
@@ -401,10 +434,10 @@ struct WorldMapHome: View {
 
     // MARK: Walking together
 
-    /// Starts Walk together: the recorder, and location for the walk.
-    private func startWalk() {
+    /// Starts Walk together (or a run on a saved route): the recorder, and location for it.
+    private func startWalk(kind: WorldWalkRecorder.Kind = .walk) {
         loggedWalk = nil
-        store.startWorldWalk()
+        store.startWorldWalk(kind: kind)
         follow(store.worldLocation.latest)
     }
 
@@ -423,7 +456,7 @@ struct WorldMapHome: View {
     private func undo(_ walk: WorldLoggedWalk) {
         loggedWalk = nil
         guard store.undoWorldWalk(walk) else { return }
-        FernletAnnouncer.system.announce(.status, resolved: String(localized: WorldWalkCopy.undone))
+        FernletAnnouncer.system.announce(.status, resolved: String(localized: walk.kind == .run ? WorldWalkCopy.undoneRun : WorldWalkCopy.undone))
     }
 
     /// Holds the walk's note for its window (four seconds, or the assistive one), then lets it go.
@@ -461,6 +494,7 @@ extension WorldMapHome {
         }
         store.worldFog.load()
         markers = store.worldSpaceMarkers(near: location.latest)
+        photoPlaces = store.worldPhotoMarkers(near: location.latest)
         readSavedLine()
         location.startForeground()
         follow(location.latest)
@@ -529,6 +563,27 @@ extension WorldMapHome {
             guard notice == .loading else { return }
             FernletAnnouncer.system.announce(.status, resolved: WorldMapNotice.announcement(kind))
         }
+    }
+
+    /// Whether the one-time companion hint should show (`ref-hint`): after the location question, never
+    /// under the intro, iOS's prompt or a stamp banner, never in a decoy. Under a test harness only when a
+    /// screenshot asks for it (`FERNLET_UI_TEST_WORLD_HOME=hint`).
+    private var isHintDue: Bool {
+        let asked = testScenes.contains("hint")
+        guard !UITestSupport.isTestHarnessActive || asked else { return false }
+        return WorldCompanionHint.isDue(alreadyShown: WorldMapPreferences.companionHintShown(),
+                                        introAnswered: WorldMapPreferences.locationIntroAnswered() || asked,
+                                        permission: store.worldLocation.permission, isAsking: store.worldLocation.isAsking,
+                                        stampBannerShowing: stampBannerShowing,
+                                        isFrontmost: isFrontmost && scenePhase == .active && !isLocationIntroUp,
+                                        isDecoy: store.duressSessionActive)
+    }
+
+    /// The hint ended (a tap, or its 12 seconds): it never shows again on this iPhone (a decoy keeps nothing).
+    private func endHint() {
+        isHintShowing = false
+        guard !store.duressSessionActive else { return }
+        WorldMapPreferences.setCompanionHintShown()
     }
 
     /// "Use precise": Fernlet's page in the Settings app, where Precise Location is. Fernlet's own ask

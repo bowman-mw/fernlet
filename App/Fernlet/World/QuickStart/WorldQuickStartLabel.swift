@@ -4,7 +4,7 @@ import SwiftUI
 /// The short word that slides out beside the blue button when its action changes (World Review
 /// Refinements `ref-blue-session`, `ref-blue-space`, `ref-blue-route`, `ref-blue-hike`, `ref-blue-how`,
 /// approved by the owner on 2026-10-24): "Camera" when a session or a hike makes it the camera,
-/// "Workout" at a workout space, "Run" at the start of a saved route. Walk together and the resting
+/// "Workout" at a workout space, "Run" at the start of a saved run route. Walk together and the resting
 /// day keep the icon alone, as approved. The cases are tokens; ``title`` is what is shown.
 nonisolated enum WorldQuickStartLabel: String, CaseIterable, Sendable {
     case camera
@@ -16,8 +16,8 @@ nonisolated enum WorldQuickStartLabel: String, CaseIterable, Sendable {
         switch glyph {
         case .camera: .camera
         case .space: .workout
-        case .trail: .run
-        case .walk, .rest, .friends, nil: nil
+        case .run: .run
+        case .walk, .trail, .rest, .friends, nil: nil
         }
     }
 

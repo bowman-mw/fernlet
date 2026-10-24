@@ -570,9 +570,11 @@ struct MeshRoutedItemSealGoldenTests {
         // (World app plan step 5b) registered `AEAD.worldMapRouteV1`, another; 85 since its workout-space pins
         // (step 6a) registered `AEAD.worldMapPinsV1`; 88 since the solo camera's corpus (lane friends-solo,
         // owner 2026-10-24) registered `AEAD.privateSoloCamera{PhotoImage,PhotoThumbnail,Index}V1`, three
-        // at-rest domains no item seal touches. This count is a tripwire on the registry, not on the
+        // at-rest domains no item seal touches; 91 since step 5c's places (lane 5c, owner 2026-10-24)
+        // registered `AEAD.worldMap{Places,PlacesDevice,PhotoPlaces}V1`, three more at-rest domains no item
+        // seal touches. This count is a tripwire on the registry, not on the
         // item seal: a new row must be acknowledged here, deliberately.
-        #expect(CryptographicDomainSeparationTests.allDomains.count == 88)
+        #expect(CryptographicDomainSeparationTests.allDomains.count == 91)
         let rows = CryptographicDomainSeparationTests.allDomains.filter {
             $0.purpose.rawValue == FernletCryptoPurpose.AEAD.meshRoutedItemV1.rawValue
         }

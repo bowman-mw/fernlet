@@ -94,6 +94,11 @@ final class SoloCameraRoll {
     @ObservationIgnored private var decoyImages: [UUID: Data] = [:]
     /// The ids the last ``photos(visibleAt:)`` showed: the only ones whose bytes are handed out.
     @ObservationIgnored private var shownIDs: Set<UUID> = []
+    /// The id of the last shot sealed into the corpus (never a decoy's), for its place
+    /// (`FernletStore.keepSoloPhotoPlace`; World build step 5c).
+    @ObservationIgnored private(set) var lastKeptID: UUID?
+    /// Told the id of every photo deleted from the sealed corpus, so its place goes with it.
+    @ObservationIgnored var onDeleted: ((UUID) -> Void)?
 
     /// A roll over `store`; nothing is read until ``refresh()`` or a shot.
     init(store: SoloCameraPhotoStore, isDecoy: Bool) {
@@ -140,11 +145,13 @@ final class SoloCameraRoll {
         let photo = SoloCameraPhoto(takenAt: now,
                                     revealsAt: SoloCameraRules.revealsAt(takenAt: now, window: night, calendar: calendar))
         let day = FernletDate.dayKey(for: now)
+        lastKeptID = nil
         guard !isDecoy else { return keepInMemory(photo, normalized, day: day) }
         switch store.add(photo, imageData: normalized, filmDay: day, dailyLimit: SoloCameraRules.photosPerDay) {
         case .added(let index):
             film = index.film
             isReadable = true
+            lastKeptID = photo.id
             return .kept
         case .noFilmLeft:
             refresh()
@@ -205,7 +212,9 @@ final class SoloCameraRoll {
             decoyImages[id] = nil
             return true
         }
-        return store.delete(id: id)
+        let gone = store.delete(id: id)
+        if gone { onDeleted?(id) }
+        return gone
     }
 
     /// Makes `id` the favorite (its set's cover) among `ids`, one day's set; nil clears it. Nothing in

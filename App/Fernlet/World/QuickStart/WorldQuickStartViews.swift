@@ -72,6 +72,7 @@ struct WorldQuickStartButton: View {
         case .rest: WorldSprites.rest
         case .camera: WorldSprites.disposableCamera
         case .trail: WorldSprites.tree
+        case .run: WorldSprites.runner
         case .friends: WorldSprites.pair
         }
     }
@@ -176,6 +177,7 @@ struct WorldQuickStartOptionRow: View {
         case .gentleStretch: WorldSprites.rest
         case .walkTogether: WorldSprites.pair
         case .walkSavedLine: WorldSprites.tree
+        case .runSavedLine: WorldSprites.runner
         case .sessionCamera, .soloCamera: WorldSprites.disposableCamera
         case .startSession: WorldSprites.pair
         case .startActivity: FriendsSprites.flag
@@ -191,6 +193,7 @@ struct WorldQuickStartOptionRow: View {
         case .gentleStretch: "gentleStretch"
         case .walkTogether: "walk"
         case .walkSavedLine: "savedLine"
+        case .runSavedLine: "savedRun"
         case .sessionCamera: "sessionCamera"
         case .soloCamera: "soloCamera"
         case .backToWorkout: "backToWorkout"

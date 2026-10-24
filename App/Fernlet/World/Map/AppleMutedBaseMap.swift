@@ -101,6 +101,57 @@ private struct AppleMutedMapView: UIViewRepresentable {
 
 }
 
+/// Phase 1's place lookup (``WorldPlaceLooking``; World build step 5c): Apple's points of interest within
+/// 80 m of where the person stands, asked in the foreground while the map is on screen, for a visit's
+/// kind and name or a solo photo's refused-place check. Only the point goes to Apple, as the map's own
+/// tile requests for that area already do (`Docs/No-Tracking-Wall.md` §4a); what comes back is turned into
+/// Fernlet's own kinds here and nothing of it is stored but the decision (the MapKit terms).
+///
+/// The kinds: food and drink (restaurant, café, bakery, brewery, winery, distillery, food market,
+/// nightlife), gyms (fitness centre), parks (park, national park), beaches and campgrounds (campground,
+/// RV park) are allowed; hospitals and pharmacies are refused; everything else is "other", and its name
+/// still goes through the refused words (`PlaceClassifier`). "Nothing here" is an answer (an empty list);
+/// any other failure is none (nil).
+struct ApplePlaceLookup: WorldPlaceLooking {
+    /// How far around the point the lookup reaches, in metres.
+    static let radius = 80.0
+    /// The most places one answer keeps.
+    static let maxPlaces = 25
+
+    func nearbyPlaces(around point: GeoPoint) async -> [NearbyPlace]? {
+        guard point.isValid else { return nil }
+        let centre = CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude)
+        let request = MKLocalPointsOfInterestRequest(center: centre, radius: Self.radius)
+        request.pointOfInterestFilter = .includingAll
+        do {
+            let response = try await MKLocalSearch(request: request).start()
+            return response.mapItems.prefix(Self.maxPlaces).map { item in
+                let at = item.location.coordinate
+                return NearbyPlace(name: item.name ?? "", kind: Self.kind(of: item.pointOfInterestCategory),
+                                   metres: point.distance(to: GeoPoint(at.latitude, at.longitude)))
+            }
+        } catch let error as MKError where error.code == .placemarkNotFound {
+            return []
+        } catch {
+            return nil
+        }
+    }
+
+    /// Fernlet's kind for one of Apple's categories.
+    static func kind(of category: MKPointOfInterestCategory?) -> NearbyPlace.Kind {
+        guard let category else { return .other }
+        switch category {
+        case .restaurant, .cafe, .bakery, .brewery, .winery, .distillery, .foodMarket, .nightlife: return .allowed(.foodAndDrink)
+        case .fitnessCenter: return .allowed(.gym)
+        case .park, .nationalPark: return .allowed(.park)
+        case .beach: return .allowed(.beach)
+        case .campground, .rvPark: return .allowed(.campground)
+        case .hospital, .pharmacy: return .refused
+        default: return .other
+        }
+    }
+}
+
 /// The map's delegate: the viewport on every move, the person's pans written back, and the tiles'
 /// progress. Main actor, as MapKit calls it there.
 @MainActor

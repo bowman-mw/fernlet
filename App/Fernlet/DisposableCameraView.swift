@@ -1382,7 +1382,13 @@ struct DisposableCameraView: View {
             return
         }
         switch soloRoll.takePhoto(data) {
-        case .kept, .noFilmLeft:
+        case .kept:
+            // Where it was taken, unless that's a refused place (World build step 5c; never a friend's photo).
+            if let id = soloRoll.lastKeptID {
+                let fix = store.worldLocation.latest
+                Task { await store.keepSoloPhotoPlace(for: id, fix: fix) }
+            }
+        case .noFilmLeft:
             // A used-up film shows on the badge and the shutter; nothing else to say.
             return
         case .notKept:

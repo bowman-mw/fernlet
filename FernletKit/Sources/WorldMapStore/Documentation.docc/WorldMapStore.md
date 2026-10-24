@@ -14,7 +14,7 @@ The World build's Home is a live map ("A World for Fernlet", design page v9). Ap
 
 ### The sealed history
 
-``WorldMapVault`` is the only place the map's history is written. Every file is AES-GCM sealed with its own authenticated purpose (`FernletCryptoPurpose.AEAD.worldMapFogV1`, `worldMapPendingV1`, `worldMapRouteV1`, `worldMapPinsV1`), plus any per-file context (a walk line's workout id), written with file protection, and kept in `Application Support/WorldMap`, a folder excluded from device backups. Its two keys (``WorldMapKeys``, ``WorldMapKeyRole``) are this-device-only rows under `com.fernlet.world-map`:
+``WorldMapVault`` is the only place the map's history is written. Every file is AES-GCM sealed with its own authenticated purpose (`FernletCryptoPurpose.AEAD.worldMapFogV1`, `worldMapPendingV1`, `worldMapRouteV1`, `worldMapPinsV1`, `worldMapPlacesV1`, `worldMapPlacesDeviceV1`, `worldMapPhotoPlacesV1`), plus any per-file context (a walk line's workout id), written with file protection, and kept in `Application Support/WorldMap`, a folder excluded from device backups. Its two keys (``WorldMapKeys``, ``WorldMapKeyRole``) are this-device-only rows under `com.fernlet.world-map`:
 
 - the **store** key is `WhenUnlockedThisDeviceOnly`, so the fog can only be read or written while the phone is unlocked;
 - the **buffer** key is `AfterFirstUnlockThisDeviceOnly`, for the small locked-phone buffer alone: a walk with the screen off, or Always mode's visits, lift cells while the phone is locked, and those wait there until the next unlock drains them into the store. The same split as `PendingNarrativeBuffer`, for the same reason.
@@ -22,6 +22,10 @@ The World build's Home is a live map ("A World for Fernlet", design page v9). Ap
 **Walk lines** (``WorldRouteStore``, ``WorldRouteCodec``, ``RoutePoint``) are one sealed file per workout, bound to the workout's id, shaped like the watch build's planned `DeviceRouteStore` so a later move to it is a straight copy. A line is thinned (Ramer–Douglas–Peucker at 2.5 m), quantised (1e-5°, 0.5 m) and delta-coded as zigzag varints; at most 50,000 points, at most 2,000 lines. Only the workout's duration and distance reach the synced diary; the line stays here.
 
 **Workout-space pins** (``SpacePinStore``) are one small sealed file: a point per space, keyed by the space's `WorkoutLocation.id`, matched within 100 m on the phone. A space's name and setup stay in the synced settings; only its place on the map lives here. At most 200 pins.
+
+**Where you've been** (step 5c; ``PlaceLogStore``, ``PlaceLog``, ``PlaceDeviceState``) is two files. The log (`places.bin`, `AEAD.worldMapPlacesV1`) is sealed with the **Private tab's hub key**, passed per call while Private is open (``WorldMapVault/read(_:sealedWith:)``, ``WorldMapVault/write(_:to:sealedWith:)``): the rolling 30-day timeline of ``PlaceStop``s and Places you return to (``PlaceRecord``: a name, an allowed ``PlaceCategory``, the person's own point and a visit count, never dates). A log the current hub key can't open is removed. The device side (`places-device.bin`, `AEAD.worldMapPlacesDeviceV1`, the buffer key) holds what was captured while Private was closed and the allowed places' points (``KnownPlace``, no names) that background visits are matched against; a fold moves it under the hub key, each stop once. ``PlaceClassifier`` is the device's rule at capture: a visit names only the nearest place, only an allowed kind (food and drink, gyms, parks, beaches, campgrounds), and a refused place (medical, legal, therapy, by kind or by the words in its name) refuses the visit; nothing of a lookup's answer (``NearbyPlace``) is stored but that decision. At most 300 places, 2,000 stops and 500 waiting.
+
+**Solo photos' places** (``PhotoPlaceStore``, `photo-places.bin`, `AEAD.worldMapPhotoPlacesV1`): a point per solo camera photo id, never one taken at a refused place or with no lookup answer (``PlaceClassifier/photoMayKeepPlace(_:)``). Deleting a photo deletes its point. At most 3,650.
 
 A key that can't be read right now is an error, never a reason to mint a new one over it; a file that can't be opened (its key gone, its bytes damaged) is removed, so the map starts fresh rather than carrying noise.
 
@@ -31,7 +35,7 @@ A key that can't be read right now is an error, never a reason to mint a new one
 
 ### Its place on the walls
 
-This module holds location history (the lifted fog cells now; saved walk lines and workout-space pins in later steps), so it sits on the far side of the S3 wall from every module that sends data anywhere. `CloudKitSync`, `AIProviders`, `AIContext`, `FernletSocial` and `FernletConnections` do not depend on it, and the strict build (`Scripts/spm-wall-check.sh`, `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR`) fails any of them that imports it. It holds no display strings, so it has no string catalog.
+This module holds location history (the lifted fog cells, saved walk and run lines, workout-space pins, Where you've been and the solo photos' places), so it sits on the far side of the S3 wall from every module that sends data anywhere. `CloudKitSync`, `AIProviders`, `AIContext`, `FernletSocial` and `FernletConnections` do not depend on it, and the strict build (`Scripts/spm-wall-check.sh`, `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR`) fails any of them that imports it. It holds no display strings, so it has no string catalog.
 
 ## Topics
 
@@ -59,3 +63,17 @@ This module holds location history (the lifted fog cells now; saved walk lines a
 - ``WorldRouteCodec``
 - ``RoutePoint``
 - ``SpacePinStore``
+
+### Where you've been and photo places
+
+- ``PlaceLogStore``
+- ``PlaceLog``
+- ``PlaceDeviceState``
+- ``PlaceRecord``
+- ``PlaceStop``
+- ``KnownPlace``
+- ``PlaceCategory``
+- ``PlaceClassifier``
+- ``PlaceVerdict``
+- ``NearbyPlace``
+- ``PhotoPlaceStore``

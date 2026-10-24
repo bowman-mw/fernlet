@@ -145,6 +145,17 @@ public final class WorldMapVault {
         public static let fog = File(name: "fog.bin", purpose: FernletCryptoPurpose.AEAD.worldMapFogV1, role: .store)
         /// The locked-phone buffer of cells waiting to be merged into the fog.
         public static let pendingFog = File(name: "fog-pending.bin", purpose: FernletCryptoPurpose.AEAD.worldMapPendingV1, role: .buffer)
+        /// "Where you've been" (`PlaceLogStore`): the 30-day timeline and Places you return to, sealed with
+        /// the Private tab's hub key (never a vault key), so it opens only while Private is open.
+        public static let places = File(name: "places.bin", purpose: FernletCryptoPurpose.AEAD.worldMapPlacesV1, role: .store)
+        /// The places log's device side (`PlaceLogStore`): stops captured while Private is closed, waiting
+        /// to be folded under the hub key, and the allowed places' points that background visits are
+        /// matched against. Under the buffer key, because Always mode's visits arrive with the phone locked.
+        public static let placesDevice = File(name: "places-device.bin", purpose: FernletCryptoPurpose.AEAD.worldMapPlacesDeviceV1,
+                                              role: .buffer)
+        /// Where each solo camera photo was taken (`PhotoPlaceStore`), by photo id.
+        public static let photoPlaces = File(name: "photo-places.bin", purpose: FernletCryptoPurpose.AEAD.worldMapPhotoPlacesV1,
+                                             role: .store)
     }
 
     /// The folder the files live in.
@@ -174,23 +185,45 @@ public final class WorldMapVault {
 
     /// The opened contents of `file`, or nil when it doesn't exist.
     public func read(_ file: File) throws -> Data? {
+        try read(file, key: { try self.keys.key(file.role) })
+    }
+
+    /// The opened contents of `file` sealed with `key` rather than one of the vault's own: the Private
+    /// tab's hub key for "Where you've been" (`PlaceLogStore`), which the vault never holds and the
+    /// caller passes per call while the tab is open. Nil when the file doesn't exist.
+    public func read(_ file: File, sealedWith key: SymmetricKey) throws -> Data? {
+        try read(file, key: { key })
+    }
+
+    /// Seals `plaintext` and writes it to `file`, atomically, with the file's protection class.
+    public func write(_ plaintext: Data, to file: File) throws {
+        try write(plaintext, to: file, key: try keys.key(file.role))
+    }
+
+    /// Seals `plaintext` with `key` (the Private tab's hub key) instead of a vault key and writes it to
+    /// `file`, with the file's protection class.
+    public func write(_ plaintext: Data, to file: File, sealedWith key: SymmetricKey) throws {
+        try write(plaintext, to: file, key: key)
+    }
+
+    /// Reads and opens `file` with the key `key` returns, asked for only once the file exists.
+    private func read(_ file: File, key: () throws -> SymmetricKey) throws -> Data? {
         let url = directory.appendingPathComponent(file.name)
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
         let sealed = try Data(contentsOf: url)
         guard sealed.count <= Self.maxFileBytes else { throw VaultError.tooLarge }
         guard sealed.starts(with: Self.magic) else { throw VaultError.unopenable }
-        let key = try keys.key(file.role)
+        let resolved = try key()
         do {
             let box = try AES.GCM.SealedBox(combined: sealed.dropFirst(Self.magic.count))
-            return try AES.GCM.open(box, using: key, authenticating: file.authenticatedData)
+            return try AES.GCM.open(box, using: resolved, authenticating: file.authenticatedData)
         } catch {
             throw VaultError.unopenable
         }
     }
 
-    /// Seals `plaintext` and writes it to `file`, atomically, with the file's protection class.
-    public func write(_ plaintext: Data, to file: File) throws {
-        let key = try keys.key(file.role)
+    /// Seals `plaintext` under `key` and writes it to `file`.
+    private func write(_ plaintext: Data, to file: File, key: SymmetricKey) throws {
         let sealed: Data
         do {
             guard let combined = try AES.GCM.seal(plaintext, using: key, authenticating: file.authenticatedData).combined else {

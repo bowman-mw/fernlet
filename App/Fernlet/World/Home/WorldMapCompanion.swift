@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import FernletDomainModel
 import FernletScoring
 import FernletUI
@@ -36,6 +37,10 @@ struct WorldMapCompanion: View {
     /// The map's night (`b1-home-night`; the DEBUG night override too): the companion winds down, its
     /// eyes closing, before its own bedtime makes it sleepy and then asleep.
     var isNight = false
+    /// Whether the one-time "Tap me to say hi!" hint is showing (``WorldCompanionHint``, `ref-hint`).
+    var hint = false
+    /// The hint ended: the first tap, or its 12 seconds on Home.
+    var onHintEnded: () -> Void = {}
     let onCustomize: () -> Void
     @State private var petGovernor = PetInteractionGovernor()
     @State private var playfulUntil: Date?
@@ -56,16 +61,42 @@ struct WorldMapCompanion: View {
             figure(emotion: emotion(at: context.date))
         }
         .task(id: LineKey(isActive: isActive, line: mapLine)) { await sayAmbientLine() }
+        .task(id: HintKey(hint: hint, isActive: isActive)) { await endHintWhenDue() }
+    }
+
+    /// What restarts the hint's 12 seconds: the hint starting, or Home coming back to the front.
+    private struct HintKey: Equatable {
+        let hint: Bool
+        let isActive: Bool
+    }
+
+    /// Ends the hint after its 12 seconds on Home; with VoiceOver on it waits for the first activation.
+    private func endHintWhenDue() async {
+        guard hint, isActive, !UIAccessibility.isVoiceOverRunning else { return }
+        do {
+            try await Task.sleep(for: WorldCompanionHint.duration)
+        } catch {
+            return
+        }
+        onHintEnded()
+    }
+
+    /// A tap or VoiceOver's activation: ends the hint, then opens the companion up close.
+    private func activate() {
+        if hint { onHintEnded() }
+        openCloseUp()
     }
 
     /// The bubble over the sprite, and the sprite with its pet heart.
     private func figure(emotion: CompanionEmotion?) -> some View {
         VStack(spacing: 12) {
             WorldSpeechBubble(text: thought)
-                .opacity(isThoughtVisible && !isQuiet ? 1 : 0)
+                .opacity((isThoughtVisible || hint) && !isQuiet ? 1 : 0)
+                .animation(.easeInOut(duration: 0.3), value: hint)
                 .offset(x: 8)
                 .accessibilityHidden(true)
             ZStack {
+                if hint { WorldHintRing().offset(y: -20) }
                 WorldCompanionSprite(state: store.liveCompanionState, look: look(emotion: emotion),
                                      settled: isSettled, asleep: emotion?.hidesTheDay == true,
                                      drowsy: isNight || emotion == .sleepy, isActive: isActive, pixelScale: pixelScale)
@@ -74,7 +105,7 @@ struct WorldMapCompanion: View {
             }
             .contentShape(Rectangle())
             // Refinement 1 (`ref-comp-close`): a tap opens the companion up close, where it is petted.
-            .onTapGesture { openCloseUp() }
+            .onTapGesture { activate() }
             .onLongPressGesture(minimumDuration: 0.45) {
                 FernletFeedback.system.play(.held)
                 onCustomize()
@@ -82,12 +113,12 @@ struct WorldMapCompanion: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Fernlet companion")
             .accessibilityValue(CompanionEmotion.accessibilityValue(state: store.liveCompanionState, emotion: emotion))
-            .accessibilityCustomContent("Thought", Text(verbatim: thought))
+            .accessibilityCustomContent("Thought", Text(verbatim: spokenThought))
             .accessibilityAddTraits(.isButton)
-            .accessibilityAction { openCloseUp() }
+            .accessibilityAction { activate() }
             .accessibilityAction(named: "Pet") { pet() }
             .accessibilityAction(named: "Edit your companion") { onCustomize() }
-            .accessibilityHint("Double tap to see it up close.")
+            .accessibilityHint(Text(WorldCompanionHint.companionHint))
             .accessibilityIdentifier("world.companion")
         }
         // Up close it stands over the map itself; the small one would show through the veil.
@@ -102,9 +133,18 @@ struct WorldMapCompanion: View {
         withTransaction(WorldCompanionCloseUpPresenter.instant) { isCloseUpOpen = true }
     }
 
-    /// The line in the bubble: the one a pet produced, else the map's own, else the companion's own.
+    /// The line in the bubble: the hint while it shows, else the one a pet produced, else the map's own,
+    /// else the companion's own.
     private var thought: String {
-        tapThought ?? mapLine ?? store.companionAmbientThought(addressing: termOfAddress)
+        if hint { return String(localized: WorldCompanionHint.line) }
+        return tapThought ?? mapLine ?? store.companionAmbientThought(addressing: termOfAddress)
+    }
+
+    /// The bubble as VoiceOver reads it: "Double-tap Sprout to say hi" while the hint shows.
+    private var spokenThought: String {
+        guard hint else { return thought }
+        let chosen = store.settings.companionName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return WorldCompanionHint.spoken(name: chosen.isEmpty ? "Fernlet" : chosen)
     }
 
     /// What re-shows the bubble: the map coming to the front, or a new line of the map's own.
