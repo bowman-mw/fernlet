@@ -33,11 +33,35 @@ above the note.
 A planned workout's own notes travel inside its card too, and the recipient's Fernlet imports them.
 So when a workout carries notes (`WorkoutPlanExchangePacket.includesNotes`), its composer row and the
 composer's preview read "2026-10-18 · 1 workout · Notes included" (2026-10-18, the owner's pick after
-the 2026-09-23 review found the notes went unannounced). The card face itself, which the recipient
-and a lock-screen preview see, keeps the date and the count alone and never shows the note text.
+the 2026-09-23 review found the notes went unannounced). Since World Review Batch 4 (`b4-msg-bubbles`,
+owner, 2026-10-24) the card face's subcaption says it too — "2026-10-26 · 3 workouts · Notes
+included" — as the recipe card's trailing caption always has; the card never shows the note text.
 
-The card artwork is drawn locally — an SF Symbol and a wordmark on a 1200×630 canvas — so Messages
+The card artwork is drawn locally — since 2026-10-24 the World pixel scene: cream paper, the pixel
+bowl or dumbbell, a grass strip under an ink line, and a framed "Fernlet recipe" / "Fernlet workout"
+tag with the pixel fern, on a 1200×630 canvas that stays light in a dark conversation — so Messages
 never fetches, and a recipient never sees, a private food photo.
+
+### The World design (2026-10-24)
+
+The panel is drawn in the app's design language (World Review Batch 4, `b4-msg-opening` …
+`b4-msg-invalid`): the pixel fern and "Fernlet" over a Fraunces title, framed Recipes | Workouts, a
+framed moss Share with a pixel share icon (faded until a card is picked), framed catalog cards with a
+pixel bowl or dumbbell (the picked one ringed in moss with a check), a framed search field, the empty
+catalog's sentence in a framed notice, a received card's counts in a framed card above a full-width
+Review in Fernlet, and a pixel ⓘ over the three centred lines of a card that can't be opened. It
+follows Dark Mode, Increase Contrast and Dynamic Type (the grid drops to one column, and the segments
+stack, at accessibility sizes); today's panel was always light.
+
+UIKit draws it, because this target may import only `FernletExchange`, `Foundation`, `Messages` and
+`UIKit`: ``FernletMessagesLook`` spells out the app's palette (WorldPalette's values) and type, and
+`FernletMessagesFramedViews.swift` / `FernletMessagesPanelPieces.swift` rebuild FernletUI's framed
+shapes. The faces (Fraunces SemiBold, DM Sans Regular and Medium) ship in `Fonts/` with their OFL
+licences and register through the appex's own `UIAppFonts`, as the widget extension's do. The pixel
+sprites are digit-keyed rows (``FernletMessagesSprite``), so the target's literal wall
+(`LocalizationBoundaryTests` H2) reads no letters in them. The person's App colors pick is not read —
+it lives in the app's defaults, and the extension reads only the App Group catalog — so the panel
+keeps the default Oak and Moss. What the panel reads and writes did not change.
 
 **One card builder, shared with the app (2026-09-30).** The recipe card — envelope URL, template
 layout, artwork, summary line — is built by ``FernletMessagesCard`` with the copy in

@@ -3975,6 +3975,12 @@ struct LocalizationBoundaryTests {
     /// sync cannot land without the hand-authored block. The catalog commit that authors the block
     /// moves the row into ``pluralRuledKeys``, where absence is red too.
     static let pluralRuledKeysAwaitingTheirCatalog: [HarvestedKey] = [
+        // World Review Batch 4, lane ext (2026-10-24): Shortcuts' Add this workout plan? card, which
+        // read "1 collisions" and "1 … warnings". Its recipe twin reuses the Messages card's counts.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "shortcuts.plan.collisions",
+                     source: "Shortcuts' workout plan confirmation: days that already hold workouts"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "shortcuts.plan.safetyWarnings",
+                     source: "Shortcuts' workout plan confirmation: the warning line"),
     ]
 
     /// Whether a catalog's `strings` table carries `key` with an English `one` AND `other` plural form.
@@ -5352,23 +5358,27 @@ struct LocalizationBoundaryTests {
     /// Keep this list honest rather than short: it is the target's complete token inventory, and
     /// each entry is the argument for why translating it would BREAK something.
     static let uikitTargetTokens: [UIKitTargetToken] = [
+        // World Review Batch 4 (2026-10-24): the SF Symbols (`fork.knife`, `dumbbell.fill`,
+        // `figure.strengthtraining.traditional`) left with the pixel redesign — the sprites' rows are
+        // digits and dots, so they carry no letters — and the bundled faces' names arrived.
         UIKitTargetToken(
-            path: "App/FernletMessagesExtension/FernletMessagesViewController.swift",
-            literal: "fork.knife",
+            path: "App/FernletMessagesExtension/FernletMessagesCard.swift",
+            literal: "Fraunces-72ptSemiBoldNonWonky",
             reason: """
-                SF Symbol name, resolved by `UIImage(systemName:)` against Apple's fixed catalogue. \
-                Translating it returns nil and the card loses its glyph.
+                PostScript name of the bundled Fraunces face, resolved by `UIFont(name:size:)` against \
+                the fonts the appex registers through `UIAppFonts`. Translated, the lookup returns nil \
+                and every title falls back to the system face.
                 """
         ),
         UIKitTargetToken(
-            path: "App/FernletMessagesExtension/FernletMessagesViewController.swift",
-            literal: "dumbbell.fill",
-            reason: "SF Symbol name — see the `fork.knife` entry."
+            path: "App/FernletMessagesExtension/FernletMessagesCard.swift",
+            literal: "DMSans-14pt",
+            reason: "PostScript name of the bundled DM Sans Regular face — see the Fraunces entry."
         ),
         UIKitTargetToken(
             path: "App/FernletMessagesExtension/FernletMessagesCard.swift",
-            literal: "fork.knife",
-            reason: "SF Symbol name drawn into the recipe card's artwork — see the first `fork.knife` entry."
+            literal: "DMSans-14ptMedium",
+            reason: "PostScript name of the bundled DM Sans Medium face — see the Fraunces entry."
         ),
         UIKitTargetToken(
             path: "App/FernletMessagesExtension/FernletMessagesCardCopy.swift",
@@ -5383,11 +5393,6 @@ struct LocalizationBoundaryTests {
             path: "App/FernletMessagesExtension/FernletMessagesCardCopy.swift",
             literal: "appex",
             reason: "The path extension of an app extension's bundle, compared with `URL.pathExtension`."
-        ),
-        UIKitTargetToken(
-            path: "App/FernletMessagesExtension/FernletMessagesViewController.swift",
-            literal: "figure.strengthtraining.traditional",
-            reason: "SF Symbol name — see the `fork.knife` entry."
         ),
         UIKitTargetToken(
             path: "App/FernletMessagesExtension/MessageTransportProbe.swift",

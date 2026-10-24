@@ -18,18 +18,96 @@ import Foundation
 import Messages
 import UIKit
 
-/// The colours a Fernlet Messages card and the iMessage app's panel are drawn in, spelled out in
-/// `UIColor` rather than read from the app's design tokens: an app extension is a separate process
-/// with no access to the host's asset catalog, and a missing token here would render as
-/// black-on-black rather than fail loudly. The card artwork uses `paper`, `sage` and `moss`.
-enum FernletMessagesPalette {
-    static let ink = UIColor(red: 0.24, green: 0.18, blue: 0.12, alpha: 1)
-    static let moss = UIColor(red: 0.27, green: 0.41, blue: 0.23, alpha: 1)
-    static let paper = UIColor(red: 0.96, green: 0.93, blue: 0.87, alpha: 1)
-    static let card = UIColor(red: 0.99, green: 0.97, blue: 0.92, alpha: 1)
-    static let sage = UIColor(red: 0.79, green: 0.85, blue: 0.73, alpha: 1)
-    static let muted = UIColor(red: 0.36, green: 0.42, blue: 0.47, alpha: 1)
-    static let line = UIColor(red: 0.24, green: 0.18, blue: 0.12, alpha: 0.16)
+/// The fixed colours of a Fernlet Messages card's artwork, spelled out in `UIColor` rather than read
+/// from the app's design tokens: an app extension is a separate process with no access to the host's
+/// asset catalog, and the artwork is a picture Messages shows in light and dark conversations alike,
+/// so it keeps one palette (the World pixel scene's: cream paper, an ink line, a grass strip).
+///
+/// The iMessage app's panel draws in `FernletMessagesLook` instead, which follows Dark Mode.
+nonisolated enum FernletMessagesPalette {
+    /// The scene's paper (`#FFF6E2`).
+    static let paper = rgb(0xFFF6E2)
+    /// The pixel art's ink, the ground line and the tag's frame (`#4A2E1C`).
+    static let ink = rgb(0x4A2E1C)
+    /// The grass strip along the bottom (`#8DBB78`).
+    static let grass = rgb(0x8DBB78)
+    /// The tag's words (`#3A2414`, the design's bark).
+    static let bark = rgb(0x3A2414)
+
+    /// An opaque colour from a `0xRRGGBB` literal.
+    static func rgb(_ hex: UInt32) -> UIColor {
+        UIColor(red: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255,
+                blue: CGFloat(hex & 0xFF) / 255, alpha: 1)
+    }
+}
+
+/// The PostScript names of the typefaces the World design language draws in: Fraunces for titles,
+/// DM Sans for everything else. The same faces, by the same names, as FernletUI's `FernletFontName`,
+/// which this target may not import. The iMessage app registers its own copies through its
+/// `UIAppFonts`; the app (which compiles this file for "Send in Messages") through the app's. A name
+/// that does not resolve falls back to the system face, so a missing font never blanks a card.
+nonisolated enum FernletMessagesFontName {
+    /// Fraunces SemiBold: titles.
+    static let fraunces = "Fraunces-72ptSemiBoldNonWonky"
+    /// DM Sans Regular: body text.
+    static let dmSans = "DMSans-14pt"
+    /// DM Sans Medium: the bold weight the design draws labels, tags and buttons in.
+    static let dmSansMedium = "DMSans-14ptMedium"
+}
+
+/// One piece of the World's pixel art, drawn by UIKit: rows of palette keys (`.` is clear), each key
+/// one square. The approved sprites, copied key for key from the design page (World Review Batch 4),
+/// with digits for keys so no row carries a letter (the target's literal wall reads letters as copy).
+///
+/// The card's three sprites live here because the card artwork is drawn in both processes; the
+/// panel's own icons extend this type in the iMessage app (`FernletMessagesPanelSprites.swift`).
+struct FernletMessagesSprite: Sendable {
+    /// The rows, top to bottom; every row has the same width.
+    let rows: [String]
+    /// The colour of each key, as `0xRRGGBB`.
+    let palette: [Character: UInt32]
+
+    /// Width in sprite pixels.
+    var width: Int { rows.first?.count ?? 0 }
+    /// Height in sprite pixels.
+    var height: Int { rows.count }
+
+    /// Fills each key's square, `pixel` points wide, from `origin` in the current graphics context:
+    /// in its own colour, or every key in `tint`.
+    func draw(at origin: CGPoint, pixel: CGFloat, tint: UIColor? = nil) {
+        guard pixel > 0 else { return }
+        for (y, row) in rows.enumerated() {
+            for (x, key) in row.enumerated() where key != "." {
+                guard let hex = palette[key] else { continue }
+                (tint ?? FernletMessagesPalette.rgb(hex)).setFill()
+                UIRectFill(CGRect(x: origin.x + CGFloat(x) * pixel, y: origin.y + CGFloat(y) * pixel,
+                                  width: pixel, height: pixel))
+            }
+        }
+    }
+
+    /// The sprite as an image at the screen's scale, `pixel` points per key. A one-colour icon is
+    /// drawn as a template, so an image view's dynamic `tintColor` inks it in light and dark mode.
+    func image(pixel: CGFloat, template: Bool = false) -> UIImage {
+        let size = CGSize(width: CGFloat(width) * pixel, height: CGFloat(height) * pixel)
+        guard size.width > 0, size.height > 0 else { return UIImage() }
+        let image = UIGraphicsImageRenderer(size: size).image { _ in draw(at: .zero, pixel: pixel) }
+        return template ? image.withRenderingMode(.alwaysTemplate) : image
+    }
+
+    /// The pixel fern of the Fernlet mark: moss fronds on an ink stem.
+    static let fern = FernletMessagesSprite(
+        rows: ["....1....", "...111...", "..1.1.1..", ".11.1.11.", "..1.1.1..", ".11.1.11.", "..1.1.1..",
+               "....1....", "....2...."],
+        palette: ["1": 0x5E844D, "2": 0x4A2E1C])
+    /// The recipe bowl, ink-outlined with a cream fill (the app's `bowlInk`).
+    static let bowl = FernletMessagesSprite(
+        rows: ["......11.", ".....1...", "111111111", "122222221", ".1222221.", "..11111.."],
+        palette: ["1": 0x4A2E1C, "2": 0xF3E2B3])
+    /// The workout dumbbell, one colour (inked by its caller in the panel).
+    static let dumbbell = FernletMessagesSprite(
+        rows: [".11.....11.", "111.....111", "11111111111", "111.....111", ".11.....11."],
+        palette: ["1": 0x4A2E1C])
 }
 
 /// Builds the `MSMessage` a Fernlet recipe or workout card travels as: the envelope's serverless
@@ -37,7 +115,7 @@ enum FernletMessagesPalette {
 ///
 /// The recipe card is whole here (``recipeMessage(for:)``); the workout card's layout stays in the
 /// iMessage app, which is the only place that sends one, and reaches this type for the shared
-/// ``message(for:layout:)`` and ``placeholderImage(symbol:label:)``. Main-actor isolated in both
+/// ``message(for:layout:)`` and ``placeholderImage(sprite:tag:)``. Main-actor isolated in both
 /// targets (their default isolation), like the UIKit drawing it does.
 enum FernletMessagesCard {
 
@@ -95,13 +173,22 @@ enum FernletMessagesCard {
 
     /// Local, high-resolution recipe artwork; Messages never fetches or exposes private food photos.
     static func recipePlaceholderImage() -> UIImage {
-        placeholderImage(symbol: "fork.knife", label: FernletMessagesCardCopy.recipeWordmark)
+        placeholderImage(sprite: .bowl, tag: FernletMessagesCardCopy.recipeTag)
     }
 
-    /// A 1200×630 card image: an SF Symbol on a sage halo over the paper colour, with `label` as the
-    /// wordmark beneath it. Drawn at scale 1 so the bytes do not depend on the device's screen.
-    static func placeholderImage(symbol: String, label: String) -> UIImage {
-        let size = CGSize(width: 1_200, height: 630)
+    /// The artwork's canvas: 1200×630, the 1.91:1 a Messages card shows.
+    static let artworkSize = CGSize(width: 1_200, height: 630)
+    /// Canvas points per point of the approved 270-point-wide card drawing (World Review Batch 4).
+    private static let artworkScale: CGFloat = 1_200 / 270
+    /// Where the grass strip's ink line starts, from the top: the drawing's 36-point strip.
+    static let groundTop: CGFloat = 630 - 160
+
+    /// A 1200×630 card image, the World pixel scene (`b4-msg-bubbles`): cream paper, `sprite` in the
+    /// middle at 27 canvas points a pixel, a grass strip under an ink line along the bottom, and a
+    /// framed tag top left with the pixel fern and `tag` ("Fernlet recipe"). Drawn at scale 1 so the
+    /// bytes do not depend on the device's screen; always light, whatever the conversation's mode.
+    static func placeholderImage(sprite: FernletMessagesSprite, tag: String) -> UIImage {
+        let size = artworkSize
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = true
@@ -109,30 +196,53 @@ enum FernletMessagesCard {
         return renderer.image { _ in
             FernletMessagesPalette.paper.setFill()
             UIRectFill(CGRect(origin: .zero, size: size))
-            drawPlaceholderSymbol(named: symbol)
-            drawPlaceholderWordmark(label, in: size)
+            drawGround(in: size)
+            let pixel: CGFloat = 27
+            let origin = CGPoint(x: ((size.width - CGFloat(sprite.width) * pixel) / 2).rounded(.down),
+                                 y: ((size.height - CGFloat(sprite.height) * pixel) / 2).rounded(.down))
+            sprite.draw(at: origin, pixel: pixel)
+            drawTag(tag, in: size)
         }
     }
 
-    private static func drawPlaceholderSymbol(named symbol: String) {
-        let halo = UIBezierPath(ovalIn: CGRect(x: 350, y: 60, width: 500, height: 470))
-        FernletMessagesPalette.sage.withAlphaComponent(0.5).setFill()
-        halo.fill()
-        let configuration = UIImage.SymbolConfiguration(pointSize: 250, weight: .medium)
-        let image = UIImage(systemName: symbol, withConfiguration: configuration)
-        let tinted = image?.withTintColor(FernletMessagesPalette.moss, renderingMode: .alwaysOriginal)
-        tinted?.draw(in: CGRect(x: 475, y: 145, width: 250, height: 250))
+    /// The ground: a 3-point ink line over a grass strip, scaled to the canvas.
+    private static func drawGround(in size: CGSize) {
+        let line = (3 * artworkScale).rounded()
+        FernletMessagesPalette.ink.setFill()
+        UIRectFill(CGRect(x: 0, y: groundTop, width: size.width, height: line))
+        FernletMessagesPalette.grass.setFill()
+        UIRectFill(CGRect(x: 0, y: groundTop + line, width: size.width, height: size.height - groundTop - line))
     }
 
-    private static func drawPlaceholderWordmark(_ label: String, in size: CGSize) {
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.alignment = .center
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: 28, weight: .semibold),
-            .foregroundColor: FernletMessagesPalette.moss,
-            .paragraphStyle: paragraphStyle
-        ]
-        let rect = CGRect(x: 0, y: size.height - 88, width: size.width, height: 40)
-        label.draw(in: rect, withAttributes: attributes)
+    /// The framed tag: paper in a 2-point ink frame, the pixel fern, then `tag` in DM Sans bold,
+    /// all at the drawing's 12-point size scaled to the canvas. A long translation truncates.
+    private static func drawTag(_ tag: String, in size: CGSize) {
+        let inset = (10 * artworkScale).rounded()
+        let pad = CGSize(width: (7 * artworkScale).rounded(), height: (4 * artworkScale).rounded())
+        let fernPixel = (2 * artworkScale).rounded()
+        let gap = (5 * artworkScale).rounded()
+        let font = UIFont(name: FernletMessagesFontName.dmSansMedium, size: 12 * artworkScale)
+            ?? .systemFont(ofSize: 12 * artworkScale, weight: .bold)
+        let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: FernletMessagesPalette.bark]
+        let fernSide = CGFloat(FernletMessagesSprite.fern.width) * fernPixel
+        let textSize = (tag as NSString).size(withAttributes: attributes)
+        let maxText = size.width - 2 * inset - 2 * pad.width - fernSide - gap
+        let textWidth = min(textSize.width.rounded(.up), maxText)
+        let height = max(fernSide, textSize.height) + 2 * pad.height
+        let frame = CGRect(x: inset, y: inset, width: 2 * pad.width + fernSide + gap + textWidth, height: height)
+        let stroke = (2 * artworkScale).rounded()
+        let plate = UIBezierPath(roundedRect: frame.insetBy(dx: stroke / 2, dy: stroke / 2),
+                                 cornerRadius: (6 * artworkScale).rounded() - stroke / 2)
+        FernletMessagesPalette.paper.setFill()
+        plate.fill()
+        FernletMessagesPalette.ink.setStroke()
+        plate.lineWidth = stroke
+        plate.stroke()
+        FernletMessagesSprite.fern.draw(at: CGPoint(x: frame.minX + pad.width, y: (frame.midY - fernSide / 2).rounded()),
+                                        pixel: fernPixel)
+        let textRect = CGRect(x: frame.minX + pad.width + fernSide + gap, y: frame.midY - textSize.height / 2,
+                              width: textWidth, height: textSize.height)
+        (tag as NSString).draw(with: textRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine],
+                               attributes: attributes, context: nil)
     }
 }
