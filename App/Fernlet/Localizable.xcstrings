@@ -36665,6 +36665,24 @@
         }
       }
     },
+    "deleteAll.store.soloCameraPhotos" : {
+      "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "photos from the camera on your own"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "las fotos de la cámara que usaste por tu cuenta"
+          }
+        }
+      }
+    },
     "deleteAll.store.storageSettings" : {
       "comment" : "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name.",
       "extractionState" : "extracted_with_value",
