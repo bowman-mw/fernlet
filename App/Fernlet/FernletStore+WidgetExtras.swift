@@ -21,7 +21,15 @@ extension FernletStore {
     /// arrived, as `GoldHeartRules.glowEnds` reads it). Empty in a decoy.
     func widgetGoldHeartEnds(at date: Date = Date()) -> [Date] {
         guard !duressSessionActive else { return [] }
-        return Self.goldHeartEnds(arrivals: heartLedger.goldHeartArrivals(at: date), at: date)
+        return Self.goldHeartEnds(arrivals: heartLedger.goldHeartArrivals(at: date), at: date).map(Self.wholeSecond)
+    }
+
+    /// `date` cut to its whole second, as the snapshot file's ISO 8601 dates keep it: a fraction would
+    /// make every published snapshot differ from the one read back, and the background refresh would
+    /// reload the widgets each time (`WidgetSnapshot.contentEquals`; found by lane 5c's full run on a
+    /// simulator that had earned stamps).
+    static func wholeSecond(_ date: Date) -> Date {
+        Date(timeIntervalSince1970: date.timeIntervalSince1970.rounded(.down))
     }
 
     /// The pure half of ``widgetGoldHeartEnds(at:)``, for tests.
@@ -34,7 +42,9 @@ extension FernletStore {
     /// The stamp book as the stamp widget reads it, oldest first. Empty in a decoy.
     func widgetStamps() -> [WidgetSnapshot.StampMoment] {
         guard !duressSessionActive else { return [] }
-        return Self.stampMoments(sillyStats.stamps)
+        return Self.stampMoments(sillyStats.stamps).map {
+            WidgetSnapshot.StampMoment(kindRaw: $0.kindRaw, dayKey: $0.dayKey, earnedAt: Self.wholeSecond($0.earnedAt))
+        }
     }
 
     /// The pure half of ``widgetStamps()``: each stamp's frozen token, day and moment, oldest first,
