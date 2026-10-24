@@ -15,9 +15,10 @@
 // which carries the sealed Private* stores). Keep both sides byte-identical: iso8601 dates,
 // sorted keys, same field names.
 //
-// PRIVACY: the snapshot carries the wellness score, water count, macro grams, and the companion's
-// state and emotion tokens ONLY — never journal text, cycle data, stress readings, or intimacy data
-// (those are sealed by design). The emotion timeline can reflect the day's journal mood TAG, the meal
+// PRIVACY: the snapshot carries the wellness score, water count, macro grams, the companion's
+// state and emotion tokens, when a friend's gold hearts fade, and the stamp book's tokens and days
+// ONLY — never journal text, cycle data, stress readings, intimacy data or a place (those are sealed
+// or device-held by design). The emotion timeline can reflect the day's journal mood TAG, the meal
 // and water logging gaps, the bedtime window, and a friend's heart; the body-signal emotions never
 // enter it (`CompanionEmotion.isWidgetPublishable`).
 
@@ -27,8 +28,9 @@ import FernletFoundation
 
 /// The benign outbound snapshot mirrored to the app-group container for the widget.
 ///
-/// Carries only the wellness score, companion state and emotion timeline, water count, and macro
-/// grams — never journal text, cycle, stress or intimacy data (sealed by design). Must stay
+/// Carries only the wellness score, companion state and emotion timeline, water count, macro grams,
+/// when a friend's gold hearts fade and the stamp book's tokens and days — never journal text, cycle,
+/// stress or intimacy data (sealed by design), and never a place. Must stay
 /// byte-identical to the widget-side twin in `FernletWidgets/WidgetSharedModels.swift` (deliberate
 /// duplication; the widget cannot link the FernletKit umbrella).
 struct WidgetSnapshot: Codable, Equatable {
@@ -59,6 +61,19 @@ struct WidgetSnapshot: Codable, Equatable {
         var bodyColorHex: String?
         var accessoryRaw: String
         var accessoryColorHex: String?
+        /// The scarf's colour when the companion wears one, else nil — the pixel companion draws it as
+        /// the map's does. ADDITIVE (2026-10-24) and optional.
+        var scarfColorHex: String? = nil
+    }
+
+    /// One stamp from the device-local stamp book, as the stamp widget shows it (World build,
+    /// `b4-new-stamp`): the stat's FROZEN `SillyStatKind` token, the day it was earned and when it was
+    /// recorded. No name, no number, no Health figure — the widget resolves the name from the token in
+    /// its own catalog. Byte-identical to the widget-side twin.
+    struct StampMoment: Codable, Equatable {
+        var kindRaw: String
+        var dayKey: String
+        var earnedAt: Date
     }
 
     var companionStateRaw: String
@@ -85,6 +100,15 @@ struct WidgetSnapshot: Codable, Equatable {
     /// The person's companion look (``CompanionLook``); nil draws the plain companion. ADDITIVE
     /// (2026-10-21) and optional.
     var companionLook: CompanionLook? = nil
+    /// When each of a friend's gold hearts showing now fades, earliest first: at most two, each 12
+    /// hours after it was given in person (`GoldHeartRules`). The widget draws a gold heart while its
+    /// end is still ahead, and adds a timeline entry at each end so it fades on time with the app
+    /// closed. ADDITIVE (2026-10-24) and optional; empty while a decoy is open.
+    var goldHeartEnds: [Date]? = nil
+    /// The stamp book, oldest first (``StampMoment``), for the stamp widget. ADDITIVE (2026-10-24) and
+    /// optional; empty while a decoy is open. The book itself stays device-local (`SillyStampStore`):
+    /// the app-group file is on this device too, and "Delete everything" deletes it.
+    var stamps: [StampMoment]? = nil
 }
 
 // MARK: - Content vs. metadata
@@ -139,6 +163,8 @@ extension WidgetSnapshot {
     /// | `companionEmotionTimeline` | content | the faces the widget draws through the day; time-stable (built from local midnight on whole seconds), so an unchanged day compares equal |
     /// | `companionName` | content | written on the small and thought cards |
     /// | `companionLook` | content | the body, colour and topper every family draws |
+    /// | `goldHeartEnds` | content | the gold hearts after the six; a new heart is a real change |
+    /// | `stamps` | content | the stamp widget's book; a new stamp is a real change |
     /// | `computedAt` | **metadata** | stamped at construction, rendered by nothing |
     ///
     /// `WidgetSnapshotContentEqualityTests` pins that table — the field COUNT through `Mirror`, the
@@ -163,6 +189,8 @@ extension WidgetSnapshot {
             && companionEmotionTimeline == other.companionEmotionTimeline
             && companionName == other.companionName
             && companionLook == other.companionLook
+            && goldHeartEnds == other.goldHeartEnds
+            && stamps == other.stamps
     }
 }
 
@@ -493,6 +521,8 @@ final class WidgetSnapshotMirror {
     static let waterWidgetKind = "FernletWater"
     /// The water control's kind — twin of `FernletWidgetKind.waterControl`.
     static let waterControlKind = "FernletWaterControl"
+    /// The stamp widget's kind — twin of `FernletWidgetKind.stamp`.
+    static let stampWidgetKind = "FernletStamp"
 
     private let fileStore: WidgetSnapshotFileStore
     private let reloadTimelines: () -> Void
@@ -502,12 +532,13 @@ final class WidgetSnapshotMirror {
         self.reloadTimelines = reloadTimelines ?? { Self.reloadEverySurface() }
     }
 
-    /// Reloads every surface that renders the snapshot: both widgets and the Control Center control.
+    /// Reloads every surface that renders the snapshot: the three widgets and the Control Center control.
     /// One function so a new surface is added in one place, and the Siri water intent reloads the same
     /// set the mirror does.
     static func reloadEverySurface() {
         WidgetCenter.shared.reloadTimelines(ofKind: widgetKind)
         WidgetCenter.shared.reloadTimelines(ofKind: waterWidgetKind)
+        WidgetCenter.shared.reloadTimelines(ofKind: stampWidgetKind)
         ControlCenter.shared.reloadControls(ofKind: waterControlKind)
     }
 

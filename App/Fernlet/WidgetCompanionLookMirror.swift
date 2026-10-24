@@ -25,8 +25,19 @@ extension WidgetSnapshot.CompanionLook {
         self.init(bodyStyleRaw: appearance.bodyStyle.rawValue,
                   bodyColorHex: Self.hex(custom: appearance.bodyCustomColorHex, slot: appearance.bodyColor),
                   accessoryRaw: appearance.accessory.rawValue,
-                  accessoryColorHex: Self.hex(custom: appearance.accessoryCustomColorHex, slot: appearance.accessoryColor))
+                  accessoryColorHex: Self.hex(custom: appearance.accessoryCustomColorHex, slot: appearance.accessoryColor),
+                  scarfColorHex: Self.scarfHex(appearance))
     }
+
+    /// The scarf the pixel companion wears, as the map's does (`WorldCompanionLook`): the clothing
+    /// slot's colour, or the design's scarf red when the slot follows the state; nil without a scarf.
+    static func scarfHex(_ appearance: CompanionAppearance) -> String? {
+        guard appearance.clothing == .scarf else { return nil }
+        return hex(custom: appearance.clothingCustomColorHex, slot: appearance.clothingColor) ?? scarfRed
+    }
+
+    /// The design's scarf red, the twin of `WorldCompanionLook.scarfRed`.
+    static let scarfRed = "#D9532F"
 
     /// A slot's colour as `#RRGGBB`: the person's custom hex when it is well formed, nil for a slot
     /// that follows the state, else the named design colour resolved in the light appearance.
@@ -57,7 +68,7 @@ extension WidgetSnapshot.CompanionLook {
 
 /// The deep links a widget tap opens, read where the app receives URLs.
 ///
-/// The widget's `FernletWidgetLink` writes the same two spellings (`WidgetBridgeTests` pins them).
+/// The widget's `FernletWidgetLink` writes the same spellings (`WidgetBridgeTests` pins them).
 /// Each becomes a ``PendingIntentSheet`` request, so it rides the same path a Siri open does: it waits
 /// behind launch and behind any open sheet, and a stale one expires rather than hijacking a later
 /// open.
@@ -66,10 +77,14 @@ nonisolated enum FernletWidgetLinkRouter {
     static let host = "widget"
 
     /// Where a widget link lands, or nil when the URL is not one.
+    ///
+    /// The stamp widget's `/stamps` lands on Home for now: the Stamp book is pushed inside the Today
+    /// panel, and opening it from a link needs a landing in `ContentView` (lane widgets' ledger asks
+    /// the integrator for it). Home is the honest fallback — never a dead tap.
     static func target(of url: URL) -> PendingIntentSheet.Target? {
         guard url.scheme == "fernlet-world", url.host == host else { return nil }
         switch url.path {
-        case "/home": return .home
+        case "/home", "/stamps": return .home
         case "/water": return .water
         default: return nil
         }

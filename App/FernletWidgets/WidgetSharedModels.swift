@@ -185,6 +185,9 @@ struct WidgetCompanionLook: Codable, Equatable {
     var accessoryRaw: String
     /// The topper's fixed colour, or nil to wear the state's colour.
     var accessoryColorHex: String?
+    /// The scarf's colour when the companion wears one, else nil. ADDITIVE (2026-10-24): the pixel
+    /// companion draws the scarf as the map's does, so a file an older app wrote simply has none.
+    var scarfColorHex: String? = nil
 
     /// The plain companion: a round body in the state's colour with a fern sprout — the app's
     /// `CompanionAppearance.standard`, used before the app has published a look.
@@ -195,8 +198,8 @@ struct WidgetCompanionLook: Codable, Equatable {
 /// The benign outbound snapshot the app mirrors into the app-group container.
 ///
 /// PRIVACY: wellness score + water + macro grams + the companion's state and emotion tokens, name and
-/// look ONLY —
-/// never journal text, cycle, stress, or intimacy data. The emotion timeline can reflect the day's
+/// look, when a friend's gold hearts fade, and the stamp book's tokens and days ONLY —
+/// never journal text, cycle, stress, or intimacy data, and never a place. The emotion timeline can reflect the day's
 /// journal mood TAG, the meal and water logging gaps and the bedtime window; the body-signal emotions
 /// never enter it. Written by the app's `WidgetSnapshotMirror` on every snapshot save and read back by
 /// ``WidgetSnapshotStore`` on each timeline build; `dateKey` is what ``WidgetDayGate`` checks so a
@@ -220,6 +223,18 @@ struct WidgetSnapshot: Codable, Equatable {
         var emotionRaw: String?
     }
 
+    /// One stamp from the person's stamp book, as the stamp widget shows it. Byte-identical to the
+    /// app-side twin. `kindRaw` is the app's FROZEN `SillyStatKind` token — never shown, never
+    /// translated; an unknown token (a stat a newer app added) is skipped, never drawn.
+    struct StampMoment: Codable, Equatable {
+        /// The stat's frozen token ("bathtubIndex").
+        var kindRaw: String
+        /// The day the stamp was earned (`yyyy-MM-dd`).
+        var dayKey: String
+        /// When the app recorded it — the "Earned 9:12" of a stamp earned today.
+        var earnedAt: Date
+    }
+
     var companionStateRaw: String
     var score: Double
     var bottleCount: Int
@@ -235,6 +250,13 @@ struct WidgetSnapshot: Codable, Equatable {
     var companionName: String? = nil
     /// The person's companion look; nil draws ``WidgetCompanionLook/standard``. ADDITIVE (2026-10-21).
     var companionLook: WidgetCompanionLook? = nil
+    /// When each of a friend's gold hearts showing at publish time fades, earliest first — at most
+    /// two (the app's `GoldHeartRules`: given in person, 12 hours each). ADDITIVE (2026-10-24) and
+    /// optional; the widget draws a gold heart only while its end is still ahead of the entry's date.
+    var goldHeartEnds: [Date]? = nil
+    /// The stamp book, oldest first, for the stamp widget. ADDITIVE (2026-10-24) and optional; nil or
+    /// empty before the first stamp, and empty while a decoy is open.
+    var stamps: [StampMoment]? = nil
 
     var companionState: WidgetCompanionState? { WidgetCompanionState(rawValue: companionStateRaw) }
 

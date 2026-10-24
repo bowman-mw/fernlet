@@ -235,8 +235,10 @@ struct CompanionEmotionPresentationTests {
         #expect(bundle.contains("static let lockScreenShowsEmotion = false"),
                 "the Lock Screen now draws feelings — the owner chose the state face only (2026-09-24)")
         let views = try RepoRoot.source("App/FernletWidgets/CompanionWidgetViews.swift")
-        #expect(views.components(separatedBy: "FernletWidgetEmotionPolicy.lockScreenEmotion(entry.currentCompanionEmotion)").count == 2,
-                "the Lock Screen face must route its emotion through the policy (the rectangular card was retired 2026-10-21)")
+        // Two Lock Screen families since World Review Batch 4 (2026-10-24): the face, and the hearts-and-
+        // water rectangle that speaks the companion's status. Both route the feeling through the policy.
+        #expect(views.components(separatedBy: "FernletWidgetEmotionPolicy.lockScreenEmotion(entry.currentCompanionEmotion)").count == 3,
+                "each Lock Screen family must route its emotion through the policy (the face and the rectangle)")
         let policy = try #require(CompanionEmotionPrivacyTests.body(of: "static func lockScreenEmotion(", in: bundle),
                                   "the Lock Screen emotion policy is gone")
         #expect(policy.contains("emotion.hidesTheDay || lockScreenShowsEmotion ? emotion : nil"),

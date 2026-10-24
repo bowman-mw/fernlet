@@ -51,7 +51,7 @@ struct WidgetSnapshotContentEqualityTests {
     /// should be reading it.
     static let contentFields = [
         "companionStateRaw", "score", "bottleCount", "hydrationTarget", "macroSummary", "dateKey",
-        "companionEmotionTimeline", "companionName", "companionLook"
+        "companionEmotionTimeline", "companionName", "companionLook", "goldHeartEnds", "stamps"
     ]
 
     /// The fields stamped at construction that no widget family renders. A difference in one of
@@ -89,7 +89,10 @@ struct WidgetSnapshotContentEqualityTests {
             ],
             companionName: "Pip",
             companionLook: WidgetSnapshot.CompanionLook(bodyStyleRaw: "pear", bodyColorHex: nil,
-                                                        accessoryRaw: "sprout", accessoryColorHex: "#72A364")
+                                                        accessoryRaw: "sprout", accessoryColorHex: "#72A364"),
+            goldHeartEnds: [Date(timeIntervalSince1970: 1_780_030_000)],
+            stamps: [WidgetSnapshot.StampMoment(kindRaw: "bathtubIndex", dayKey: "2026-09-20",
+                                                earnedAt: Date(timeIntervalSince1970: 1_780_000_100))]
         )
     }
 
@@ -126,7 +129,11 @@ struct WidgetSnapshotContentEqualityTests {
         // The name and the look are drawn on every family (2026-10-21): a rename or a new topper is a
         // change a person sees.
         Flip(field: "companionName", apply: { $0.companionName = "Moss" }),
-        Flip(field: "companionLook", apply: { $0.companionLook?.accessoryRaw = "glasses" })
+        Flip(field: "companionLook", apply: { $0.companionLook?.accessoryRaw = "glasses" }),
+        // A friend's gold heart and a new stamp are drawn (World Review Batch 4, 2026-10-24): both are
+        // changes a person sees, and both are time-stable (an end, and the moment a stamp was earned).
+        Flip(field: "goldHeartEnds", apply: { $0.goldHeartEnds?.append(Date(timeIntervalSince1970: 1_780_031_000)) }),
+        Flip(field: "stamps", apply: { $0.stamps?[0].dayKey = "2026-09-19" })
     ]
 
     // MARK: - The thesis
@@ -195,7 +202,7 @@ struct WidgetSnapshotContentEqualityTests {
             construction, rendered by nothing → no reload), and the one that is missing has to be \
             put on a side before this passes.
             """)
-        #expect(fields.count == 10, "MEASURED 2026-10-21: nine content fields (the name and look joined) and one metadata field")
+        #expect(fields.count == 12, "MEASURED 2026-10-24: eleven content fields (the gold hearts and the stamps joined) and one metadata field")
 
         let macroFields = Mirror(reflecting: WidgetSnapshot.MacroSummary(protein: 0, carbs: 0, fat: 0))
             .children.compactMap(\.label)
