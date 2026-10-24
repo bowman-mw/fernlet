@@ -88,6 +88,9 @@ struct HomeView: View {
     @State private var isCompanionSheetPresented = false
     /// Arrange Today, open over the Today panel (World build).
     @State private var isArrangingToday = false
+    /// World Today panel: Trends (`b2-trends`) and Body signals (`b2-stress`) push under the plate.
+    @State private var isShowingTrends = false
+    @State private var isShowingBodySignals = false
     @State private var companionPetCount = 0
     @State private var companionTapCount = 0
     @State private var isCompanionJumping = false
@@ -141,6 +144,7 @@ struct HomeView: View {
                 if presentation == .page { Color.parchment } else { WorldPageBackground().ignoresSafeArea() }
             }
             .navigationTitle("")
+            .modifier(todayPushedPages)
         }
         // Today's cards in the one design language; the sheets below keep their own look.
         .fullScreenCover(isPresented: $isArrangingToday) {
@@ -170,7 +174,7 @@ struct HomeView: View {
         .task {
             #if DEBUG
             // Test hook: open customization directly (the real entry is a long-press XCUITest can't send).
-            if UITestSupport.shouldOpenCustomize { isCompanionSheetPresented = true }
+            applyUITestLaunchHooks()
             #endif
             // Restore the settled pose if the app returned during an active cooldown window.
             isCompanionSettled = petGovernor.isSettled
@@ -208,6 +212,25 @@ struct HomeView: View {
         .onChange(of: store.isPeriodTrackingVisible) { _, _ in
             scheduleRecentPeriodActivityRefresh()
         }
+    }
+
+    #if DEBUG
+    /// DEBUG launch hooks (`UITestSupport`): open Customize directly (the real entry is a long-press
+    /// XCUITest can't send), or push Trends / Body signals in the World Today panel for screenshots.
+    private func applyUITestLaunchHooks() {
+        if UITestSupport.shouldOpenCustomize { isCompanionSheetPresented = true }
+        if presentation == .today, let page = UITestSupport.initialTodayPage {
+            isShowingTrends = page == "trends"
+            isShowingBodySignals = page == "bodySignals"
+        }
+    }
+    #endif
+
+    /// The World Today panel's pushed pages: Trends and Body signals (``WorldTodayPushedPages``).
+    private var todayPushedPages: WorldTodayPushedPages {
+        WorldTodayPushedPages(isShowingTrends: $isShowingTrends, isShowingBodySignals: $isShowingBodySignals,
+                              signals: store.derivedSignals, assessment: stressService?.assessment,
+                              activeSheet: $activeSheet)
     }
 
     /// Every section this Home draws, top to bottom.
@@ -747,7 +770,8 @@ struct HomeView: View {
     /// (setting the top-level `activeSheet` so the sheet's dismiss-then-First-Aid chain keeps working).
     private var bodySignalsLink: some View {
         companionChip(systemImage: "waveform.path.ecg", title: Text("Body signals")) {
-            activeSheet = .stressExplainer
+            // World Today panel (b2-stress): a page pushed under the plate; elsewhere today's sheet.
+            if presentation == .today { isShowingBodySignals = true } else { activeSheet = .stressExplainer }
         }
         .accessibilityIdentifier("home.stressLine")
         .accessibilityLabel("Body signals — how Fernlet reads this")
@@ -1426,8 +1450,25 @@ struct HomeView: View {
     /// only one of its kind on Home and is retired.
     private var quickLog: some View {
         VStack(spacing: 16) {
-            quickLogCard
-            moodCard
+            if presentation == .quickLog && framedLook != nil {
+                // World Log panel (b2-log): the six framed tiles straight on the page, How today
+                // felt as one card, and where to change the tiles.
+                quickLogGrid
+                moodCard
+                WorldLogTilesFootnote()
+            } else {
+                quickLogCard
+                moodCard
+            }
+        }
+    }
+
+    /// The quick-log tiles on their own (the World Log panel draws them without the card).
+    private var quickLogGrid: some View {
+        EqualColumnGrid(columns: quickLogColumnCount, horizontalSpacing: 12, verticalSpacing: 14) {
+            ForEach(FernletShortcut.visibleQuickLog(store.settings.quickLogItems, visibility: store.sensitiveSurfaceVisibility)) { item in
+                quickLogTile(item)
+            }
         }
     }
 
@@ -1481,7 +1522,8 @@ struct HomeView: View {
             accessibilityState: stateText(for: item, short: false),
             spokenSynonym: spokenSynonym(for: item),
             systemImage: item.systemImage,
-            active: isActive(item)
+            active: isActive(item),
+            worldIcon: item.worldLogIcon
         ) {
             handleQuickLog(item)
         }
@@ -1498,15 +1540,22 @@ struct HomeView: View {
                     // nothing at all. Compared, not assumed: the store clamps at its cap.
                     FernletFeedback.system.play(Self.waterQuickAddEvent(before: before, after: store.day.bottleCount))
                 } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundStyle(Color.moss)
-                        .background(Color.parchment, in: Circle())
-                        // The glyph keeps its drawn size; the 44pt frame around it is the target.
-                        // At ~27pt this was the app's fastest daily log sitting under the minimum,
-                        // right beside a larger button that does something else (opens the sheet).
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
+                    Group {
+                        if framedLook != nil {
+                            // World (b2-log): a small framed moss square with the pixel plus.
+                            WorldWaterQuickAddFace()
+                        } else {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 20))
+                                .foregroundStyle(Color.moss)
+                                .background(Color.parchment, in: Circle())
+                        }
+                    }
+                    // The glyph keeps its drawn size; the 44pt frame around it is the target.
+                    // At ~27pt this was the app's fastest daily log sitting under the minimum,
+                    // right beside a larger button that does something else (opens the sheet).
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Add a bottle of water")
@@ -1667,7 +1716,8 @@ struct HomeView: View {
         case .hygiene:
             activeSheet = .hygiene
         case .trends:
-            activeSheet = .trends
+            // World Today panel (b2-trends): a page pushed under the plate; elsewhere today's sheet.
+            if presentation == .today { isShowingTrends = true } else { activeSheet = .trends }
         case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient, .milestones, .firstAid, .mealPhotos, .sillyStats:
             break
         }
@@ -1756,8 +1806,19 @@ struct SignalDetailRow: View {
     /// The user's term of address, which the readiness values agree with.
     @Environment(\.fernletTermOfAddress) private var termOfAddress
     var signal: DerivedSignalRecord
+    /// The World look (`b2-trends`): the framed card with a pixel icon (``WorldSignalCard``).
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
+        if let look {
+            WorldSignalCard(signal: signal, look: look)
+        } else {
+            standardBody
+        }
+    }
+
+    /// Today's card: the symbol, the title, value and explanation, the meter, the inputs and gaps.
+    private var standardBody: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
                 // Decorative — `SignalPresentation.title(for:)` below names the signal. Unhidden it
@@ -2217,8 +2278,19 @@ enum SignalPresentation {
 struct TrendsModal: View {
     @Environment(\.dismiss) private var dismiss
     var signals: [DerivedSignalRecord]
+    /// World (`b2-trends`): pushed under the Today panel's plate instead of presented as a sheet.
+    var isPushed = false
 
     var body: some View {
+        if isPushed {
+            WorldTrendsPage(signals: signals)
+        } else {
+            sheetBody
+        }
+    }
+
+    /// Today's sheet: the pinned header with Done, then the signal cards.
+    private var sheetBody: some View {
         VStack(spacing: 0) {
             SheetHeader(
                 title: "Trends",
@@ -2439,10 +2511,32 @@ struct QuickLogButton: View {
     var spokenSynonym: Text? = nil
     var systemImage: String
     var active: Bool
+    /// The tile's pixel icon in the World look (the Log panel, `b2-log`); nil keeps the symbol.
+    var worldIcon: WorldLogIcon? = nil
     var action: () -> Void
+    /// The World look: a framed paper tile with the pixel icon (``WorldQuickLogTileFace``).
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
         Button(action: action) {
+            if let look, let worldIcon {
+                WorldQuickLogTileFace(icon: worldIcon, noun: noun, state: state, look: look)
+            } else {
+                standardFace
+            }
+        }
+        .buttonStyle(.plain)
+        // No `children: .ignore`: on a `Button` it mints a second, traitless element beside the
+        // real one, so all six quick-log tiles would read "Meals, 3 logged" without ever saying
+        // "button". `accessibilityLabelText` already replaces the noun/state the Button collapsed.
+        .accessibilityLabel(accessibilityLabelText)
+        // Voice Control: the label carries the live state ("Meals, 3 logged"), so the name a user
+        // would have to say changes with every log. The drawn noun is the name that never moves.
+        .accessibilityInputLabels(spokenNames)
+    }
+
+    /// Today's tile: the symbol, the noun and the state, moss-washed when today has an entry.
+    private var standardFace: some View {
             VStack(spacing: 3) {
                 Image(systemName: systemImage)
                     .font(.title3)
@@ -2470,15 +2564,6 @@ struct QuickLogButton: View {
             .frame(maxWidth: .infinity, minHeight: 56)
             .foregroundStyle(active ? Color.moss : Color.slate)
             .background(active ? Color.moss.opacity(0.08) : Color.clear, in: RoundedRectangle(cornerRadius: 12))
-        }
-        .buttonStyle(.plain)
-        // No `children: .ignore`: on a `Button` it mints a second, traitless element beside the
-        // real one, so all six quick-log tiles would read "Meals, 3 logged" without ever saying
-        // "button". `accessibilityLabelText` already replaces the noun/state the Button collapsed.
-        .accessibilityLabel(accessibilityLabelText)
-        // Voice Control: the label carries the live state ("Meals, 3 logged"), so the name a user
-        // would have to say changes with every log. The drawn noun is the name that never moves.
-        .accessibilityInputLabels(spokenNames)
     }
 
     /// The tile's Voice Control names: the drawn noun first, then the synonym when there is one.
@@ -2884,6 +2969,8 @@ struct FernletScrollSection<Content: View>: View {
     /// whether the caller's string was authored copy or a runtime value.
     private let header: SectionLabel?
     @ViewBuilder var content: Content
+    /// The World look: the rows sit in a framed card instead of today's cream one.
+    @Environment(\.fernletFramedLook) private var framedLook
 
     /// The localizing initializer — for a heading written here as a literal, which is every
     /// caller but one.
@@ -2915,14 +3002,22 @@ struct FernletScrollSection<Content: View>: View {
                 header
                     .padding(.horizontal, 4)
             }
-            VStack(alignment: .leading, spacing: 0) {
-                content
+            if framedLook != nil {
+                // World: the section's rows in the one framed card (design language `b1-language`).
+                FernletCard {
+                    VStack(alignment: .leading, spacing: 0) { content }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    content
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .shadow(color: .bark.opacity(0.06), radius: 10, x: 0, y: 4)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .shadow(color: .bark.opacity(0.06), radius: 10, x: 0, y: 4)
         }
     }
 }
@@ -2932,10 +3027,18 @@ struct FernletScrollSection<Content: View>: View {
 /// A `Divider` tinted to the bark palette with the standard vertical padding, so row lists stay
 /// visually consistent across screens.
 struct FernletRowDivider: View {
+    /// The World look draws the kit's dotted rule between rows instead of a hairline.
+    @Environment(\.fernletFramedLook) private var framedLook
+
     var body: some View {
-        Divider()
-            .overlay(Color.bark.opacity(0.08))
-            .padding(.vertical, 8)
+        if framedLook != nil {
+            FernletDottedRule()
+                .padding(.vertical, 8)
+        } else {
+            Divider()
+                .overlay(Color.bark.opacity(0.08))
+                .padding(.vertical, 8)
+        }
     }
 }
 

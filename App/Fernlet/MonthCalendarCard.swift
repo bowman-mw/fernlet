@@ -108,6 +108,8 @@ struct MonthCalendarCard<Cell: View, Footer: View>: View {
     var footer: () -> Footer
 
     private var cal: Calendar { .current }
+    /// The World look (`b2-journal`, `b2-cycle`): pixel chevrons, a Fraunces month and framed cells.
+    @Environment(\.fernletFramedLook) private var look
 
     /// One rendered grid slot: a leading blank (`day == nil`) or a real day. Freshly identified
     /// per render, preserving the per-render cell identity the three calendars always had.
@@ -151,10 +153,7 @@ struct MonthCalendarCard<Cell: View, Footer: View>: View {
             Button {
                 displayedMonth = cal.date(byAdding: .month, value: -1, to: displayedMonth) ?? displayedMonth
             } label: {
-                Image(systemName: "chevron.left")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(Color.slate)
-                    .frame(width: 32, height: 32)
+                pagingChevron(left: true, isCurrentMonth: false)
             }
             .buttonStyle(.plain)
             // 44pt target + a spoken name: VoiceOver read "chevron.left" before.
@@ -167,15 +166,30 @@ struct MonthCalendarCard<Cell: View, Footer: View>: View {
                     displayedMonth = cal.date(byAdding: .month, value: 1, to: displayedMonth) ?? displayedMonth
                 }
             } label: {
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(isCurrentMonth ? Color.slate.opacity(0.25) : Color.slate)
-                    .frame(width: 32, height: 32)
+                pagingChevron(left: false, isCurrentMonth: isCurrentMonth)
             }
             .buttonStyle(.plain)
             .disabled(isCurrentMonth)
             .fernletIconButton("Next month")
         }
+    }
+
+    /// A paging arrow: the pixel chevron in the look's ink under the framed look (the next-month arrow
+    /// faded while it can't go further), today's SF chevron without it.
+    @ViewBuilder
+    private func pagingChevron(left: Bool, isCurrentMonth: Bool) -> some View {
+        Group {
+            if look != nil {
+                FernletIcon(left ? .back : .chevron, scale: 3)
+                    .opacity(isCurrentMonth ? 0.3 : 1)
+            } else {
+                Image(systemName: left ? "chevron.left" : "chevron.right")
+                    .font(.caption.weight(.bold))
+                    // The faded arrow is a disabled control's glyph, never text (A8).
+                    .foregroundStyle(isCurrentMonth ? Color.slate.opacity(0.25) : Color.slate)
+            }
+        }
+        .frame(width: 32, height: 32)
     }
 
     /// The 7-column grid: the weekday-initial row, then the leading pads and one caller-rendered
@@ -204,11 +218,12 @@ struct MonthCalendarCard<Cell: View, Footer: View>: View {
             + model.days.map { Slot(day: $0) }
         // Not lazy: a month is at most 49 cells, and a lazy grid tore down the rows that larger
         // text pushed off screen, which the audit read as fonts that ignore Dynamic Type.
-        return EqualColumnGrid(columns: 7, horizontalSpacing: 4, verticalSpacing: 4) {
+        let gap: CGFloat = look != nil ? 7 : 4
+        return EqualColumnGrid(columns: 7, horizontalSpacing: gap, verticalSpacing: gap) {
             ForEach(Array(model.weekdaySymbols.enumerated()), id: \.offset) { _, day in
                 Text(day)
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
+                    .font(look != nil ? FernletFramedFont.rowValue.weight(.medium) : .fernlet(.labelSmall))
+                    .foregroundStyle(look?.text ?? Color.slate)
                     .accessibilityHidden(true)
             }
             ForEach(slots) { slot in
@@ -226,8 +241,8 @@ struct MonthCalendarCard<Cell: View, Footer: View>: View {
     private func monthTitleView(_ title: String, isCurrentMonth: Bool) -> some View {
         if isCurrentMonth {
             Text(title)
-                .font(.fernlet(.headerMedium))
-                .foregroundStyle(Color.bark)
+                .font(look != nil ? FernletFramedFont.cardTitle : .fernlet(.headerMedium))
+                .foregroundStyle(look?.text ?? Color.bark)
                 .frame(maxWidth: .infinity)
         } else {
             Button {
@@ -235,11 +250,11 @@ struct MonthCalendarCard<Cell: View, Footer: View>: View {
             } label: {
                 VStack(spacing: 1) {
                     Text(title)
-                        .font(.fernlet(.headerMedium))
-                        .foregroundStyle(Color.bark)
+                        .font(look != nil ? FernletFramedFont.cardTitle : .fernlet(.headerMedium))
+                        .foregroundStyle(look?.text ?? Color.bark)
                     Text("Today")
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.moss)
+                        .font(look != nil ? FernletFramedFont.rowDetail.weight(.bold) : .fernlet(.labelSmall))
+                        .foregroundStyle(look?.link ?? Color.moss)
                 }
                 .frame(maxWidth: .infinity)
                 .contentShape(Rectangle())

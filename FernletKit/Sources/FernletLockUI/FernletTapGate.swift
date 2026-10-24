@@ -339,7 +339,7 @@ struct FernletTapGateOverlay: View {
 
     var body: some View {
         ZStack {
-            Color.parchment.ignoresSafeArea()
+            FernletLockPageBackground()
             GeometryReader { proxy in
                 ScrollView {
                     VStack(spacing: 20) {
@@ -361,27 +361,13 @@ struct FernletTapGateOverlay: View {
     /// The symbol, the heading, what is here, and the honest line — text only, nothing operable.
     private var heading: some View {
         VStack(spacing: 12) {
-            // Decorative next to the heading; without this VoiceOver speaks the raw symbol name.
-            Image(systemName: "lock.open")
-                .font(.system(size: 44, weight: .semibold))
-                .foregroundStyle(Color.moss)
-                .frame(width: 88, height: 88)
-                .background(Color.moss.opacity(0.10), in: Circle())
-                .accessibilityHidden(true)
-            Text(GateCopy.Tap.title)
-                .font(.fernlet(.header))
-                .foregroundStyle(Color.bark)
+            // Decorative next to the heading (hidden from VoiceOver inside the glyph); World: the
+            // framed pixel lock of `b2-private-gate`.
+            FernletLockGlyph(systemName: "lock.open")
+            FernletLockTitle(text: Text(GateCopy.Tap.title))
                 .accessibilityAddTraits(.isHeader)
-            Text(GateCopy.Tap.body(namingCycle: opener.tapGateNamesCycleEntries))
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
-                .multilineTextAlignment(.center)
-                .fernletWrappingText()
-            Text(GateCopy.Tap.honesty)
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
-                .multilineTextAlignment(.center)
-                .fernletWrappingText()
+            FernletLockLine(text: Text(GateCopy.Tap.body(namingCycle: opener.tapGateNamesCycleEntries)), isPrimary: true)
+            FernletLockLine(text: Text(GateCopy.Tap.honesty))
         }
     }
 
@@ -412,14 +398,10 @@ struct FernletTapGateOverlay: View {
                     .multilineTextAlignment(.center)
                     .fernletWrappingText()
             }
-            Button(GateCopy.Tap.unlock) { run { await opener.openPrivateHub() } }
-                .buttonStyle(.plain)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.onMoss)
-                .padding(.horizontal, 36)
-                .padding(.vertical, 16)
-                .background(Color.mossFill.opacity(isWorking ? 0.55 : 1), in: RoundedRectangle(cornerRadius: 16))
-                .contentShape(RoundedRectangle(cornerRadius: 16))
+            // World (`b2-private-gate`): the framed moss primary with a pixel lock; today's capsule
+            // without the framed look. The chrome dresses this one button; it adds no control.
+            Button(action: { run { await opener.openPrivateHub() } }, label: { FernletTapGateUnlockLabel() })
+                .modifier(FernletTapGateUnlockChrome(isWorking: isWorking))
                 .fernletTapTarget()
                 .disabled(isWorking)
                 .accessibilityHint(GateCopy.Tap.unlockHint)

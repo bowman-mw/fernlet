@@ -51,7 +51,9 @@ struct CycleDayDetailView: View {
                 // localizes itself, and the phase is the app-target ``CyclePhase/displayName`` fork
                 // (Spanish round, 2026-10-20) — the sealed `title` is `rawValue.capitalized`, a
                 // storage token wearing paint, and read "Follicular" in every language.
-                ScreenHeader(
+                // World (b2-cycle-day): the plate reads "Cycle day", so the date is the page's own
+                // big title here rather than a ScreenHeader (whose title defers to the plate).
+                PrivateDayTitle(
                     title: Text(verbatim: entry.date.formatted(.dateTime.month(.wide).day())),
                     subtitle: Text(verbatim: showsPeriodHalf
                                    ? entry.phase.displayName
@@ -67,13 +69,15 @@ struct CycleDayDetailView: View {
                 }
 
                 if showsPeriodHalf {
-                    periodActions
+                    HStack(spacing: 12) { periodActions }
                 }
             }
-            .padding(20)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
         }
-        .background(Color.parchment)
-        .navigationTitle("")
+        .fernletPageBackground()
+        .fernletPushedPage(LocalizedStringResource("cycle.day.plateTitle", defaultValue: "Cycle day",
+                                                   comment: "World: the title on the plate over a day of the Cycle calendar (its date is the page's own heading)"))
         .destructiveConfirmation($pendingDelete)
     }
 
@@ -96,7 +100,7 @@ struct CycleDayDetailView: View {
         FernletCard {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Your entry")
-                    .font(.fernlet(.header))
+                    .font(FernletFramedFont.cardTitle)
                     .foregroundStyle(Color.bark)
                     .accessibilityAddTraits(.isHeader)
                 if entry.records.isEmpty {
@@ -130,12 +134,9 @@ struct CycleDayDetailView: View {
             if let narrative = record.narrative, !narrative.symptomFlags.isEmpty {
                 FlowLayout(spacing: 6) {
                     ForEach(narrative.symptomFlags) { symptom in
-                        Text(symptomLabel(symptom, scales: narrative.customSymptomScales))
-                            .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.slate)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
-                            .background(Color.bark.opacity(0.05), in: Capsule())
+                        // World (b2-cycle-day): each symptom as a framed tag ("Cramps · 6").
+                        FernletTag(text: Text(symptomLabel(symptom, scales: narrative.customSymptomScales)),
+                                   fill: WorldPalette.paperLight)
                     }
                 }
             }
@@ -200,7 +201,7 @@ struct CycleDayDetailView: View {
         FernletCard {
             VStack(alignment: .leading, spacing: 10) {
                 title
-                    .font(.fernlet(.header))
+                    .font(FernletFramedFont.cardTitle)
                     .foregroundStyle(Color.bark)
                     .accessibilityAddTraits(.isHeader)
                 ForEach(Array(samples.enumerated()), id: \.offset) { _, sample in
@@ -217,13 +218,18 @@ struct CycleDayDetailView: View {
     /// Edit / Log this day, and Delete when the day holds a Fernlet entry.
     @ViewBuilder
     private var periodActions: some View {
-        Button(hasCycleLog ? "Edit" : "Log this day", action: onEdit)
-            .font(.fernlet(.label))
-            .foregroundStyle(Color.moss)
-            .padding(.horizontal, 4)
-            // The only way back into the log sheet: `fernletTapTarget` grows the button's LAYOUT box
-            // to at least 44×44 and makes all of it tappable (review T2-18).
-            .fernletTapTarget()
+        // World (b2-cycle-day): Edit is a framed secondary with the pixel pen; Delete the framed rust
+        // button beside it. Both fill half the row and stay at least 44 pt tall (review T2-18).
+        Button(action: onEdit) {
+            HStack(spacing: 8) {
+                WorldSpriteView(sprite: WorldSprites.pen, scale: 2)
+                    .accessibilityHidden(true)
+                Text(hasCycleLog ? "Edit" : "Log this day")
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(ActionPillButtonStyle(.secondary))
+        .fernletTapTarget()
         if hasCycleLog {
             Button(role: .destructive) {
                 pendingDelete = DestructiveConfirmation(
@@ -234,9 +240,10 @@ struct CycleDayDetailView: View {
                     perform: { onDelete() }
                 )
             } label: {
-                Label("Delete", systemImage: "trash")
+                Text("Delete")
+                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(DestructiveCardButtonStyle())
+            .buttonStyle(ActionPillButtonStyle(.destructive))
         }
     }
 
@@ -249,7 +256,7 @@ struct CycleDayDetailView: View {
         FernletCard {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Intimacy")
-                    .font(.fernlet(.header))
+                    .font(FernletFramedFont.cardTitle)
                     .foregroundStyle(Color.bark)
                 if intimacyLogs.isEmpty && intimacyEventCount == 0 {
                     EmptyState(text: "No intimacy events for this day.")

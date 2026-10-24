@@ -90,39 +90,28 @@ struct GroundingView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        ZStack {
-            // The calm wash for the current sense (or a soft moss for the final screen),
-            // crossfading gently as the senses change.
-            (isComplete ? Color.moss : Self.steps[stepIndex].tint)
-                .opacity(isComplete ? 0.12 : Self.steps[stepIndex].washOpacity)
-                .background(Color.parchment)
-                .ignoresSafeArea()
-                .animation(.easeInOut(duration: 0.45), value: stepIndex)
-                .animation(.easeInOut(duration: 0.5), value: isComplete)
-
-            VStack(spacing: 0) {
-                Text("Grounding")
-                    .font(.custom(FernletFontName.dmSansMedium, size: 12, relativeTo: .caption))
-                    .tracking(2.6)
-                    .foregroundStyle(isComplete ? Color.moss : Self.steps[stepIndex].mid)
-                    .textCase(.uppercase)
-
-                Spacer(minLength: 12)
-
+        // World (b3-grounding): a page pushed inside the First aid sheet, on its paper, with
+        // "‹ First aid" above the GROUNDING label; the sense's own tint stays on its icon tile.
+        VStack(alignment: .leading, spacing: 0) {
+            FirstAidToolHeader(title: nil)
+            VStack(alignment: .leading, spacing: 0) {
+                SectionLabel("Grounding")
+                    .padding(.top, 24)
                 if isComplete {
+                    Spacer(minLength: 12)
                     completion
                 } else {
                     stepContent(Self.steps[stepIndex])
+                        .padding(.top, 14)
                 }
-
                 Spacer(minLength: 12)
-
                 footer
             }
-            .padding(.horizontal, 30)
-            .padding(.vertical, 26)
+            .padding(.horizontal, 18)
+            .padding(.bottom, 20)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .fernletSheetStyle()
         .contentShape(Rectangle())
         .onTapGesture { advance() }
         // Tap-anywhere is a bonus, never the only way through: a rotor action gives VoiceOver users
@@ -130,134 +119,132 @@ struct GroundingView: View {
         // sense they skipped by accident.
         .accessibilityAction(named: "Next") { advance() }
         .accessibilityAction(named: "Back") { goBack() }
-        // The screen already carries a large "GROUNDING" kicker; an inline nav title said it twice.
+        // The screen already carries a large "GROUNDING" kicker; the header carries the way back.
         .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
     }
 
+    /// One sense (`b3-grounding`): the big numeral beside the sense's pixel icon on a framed tile in
+    /// its tint, then the prompt in Fraunces and the hint in dim ink, left-aligned.
     private func stepContent(_ step: GroundingStep) -> some View {
-        VStack(spacing: 16) {
-            Text("\(step.count)")
-                .font(.custom(FernletFontName.frauncesSemiBold, size: 128, relativeTo: .largeTitle))
-                .foregroundStyle(step.ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
-            Image(systemName: step.icon)
-                .font(.system(size: 28, weight: .regular))
-                .foregroundStyle(step.ink)
-                .frame(width: 58, height: 58)
-                .background(step.tint.opacity(0.3), in: RoundedRectangle(cornerRadius: 19, style: .continuous))
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 18) {
+                Text("\(step.count)")
+                    .font(.custom(FernletFontName.frauncesSemiBold, size: 110, relativeTo: .largeTitle))
+                    .foregroundStyle(WorldPalette.bark)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                FernletIconTile(size: 72, fill: step.tint.opacity(0.3)) {
+                    WorldSpriteView(sprite: Self.sprite(for: step.icon), scale: 4)
+                }
+                .accessibilityHidden(true)
+            }
             Text(step.prompt)
-                .font(.fernlet(.header))
-                .foregroundStyle(Color.bark)
-                .multilineTextAlignment(.center)
+                .font(.custom(FernletFontName.frauncesSemiBold, size: 26, relativeTo: .title))
+                .foregroundStyle(WorldPalette.bark)
                 .fernletWrappingText()
             Text(step.hint)
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.slate)
-                .multilineTextAlignment(.center)
+                .font(FernletFramedFont.field)
+                .foregroundStyle(WorldPalette.dim)
                 .fernletWrappingText()
-                .frame(maxWidth: 280)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .transition(.opacity)
         .id(stepIndex)
     }
 
+    /// A sense's pixel icon, from its step's frozen SF Symbol name: see, touch, hear, smell, taste.
+    private static func sprite(for symbol: String) -> WorldSprite {
+        switch symbol {
+        case "hand.raised": WorldSprites.hand
+        case "ear": WorldSprites.ear
+        case "nose": WorldSprites.nose
+        case "mouth": WorldSprites.mouth
+        default: WorldSprites.eye
+        }
+    }
+
     private var completion: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "leaf.fill")
-                .font(.system(size: 40, weight: .regular))
-                .foregroundStyle(Color.parchment)
-                .frame(width: 118, height: 118)
-                .background(
-                    RadialGradient(
-                        colors: [Color.fern, Color.moss],
-                        center: UnitPoint(x: 0.42, y: 0.36),
-                        startRadius: 4,
-                        endRadius: 90
-                    ),
-                    in: Circle()
-                )
-                .shadow(color: Color.moss.opacity(0.3), radius: 16, x: 0, y: 10)
+        VStack(spacing: 18) {
+            // World: the moss medal of the breathing finish, with the pixel leaf.
+            ZStack {
+                Circle().fill(WorldPalette.ink.opacity(0.22)).frame(width: 112, height: 112).offset(y: 5)
+                Circle().fill(WorldPalette.moss).frame(width: 112, height: 112)
+                    .overlay(Circle().strokeBorder(WorldPalette.ink, lineWidth: 3))
+                WorldSpriteView(sprite: WorldSprites.leaf, scale: 6, tint: Color.white)
+            }
+            .accessibilityHidden(true)
             Text("You're here.")
                 .font(.custom(FernletFontName.frauncesSemiBold, size: 42, relativeTo: .largeTitle))
-                .foregroundStyle(Color.bark)
+                .foregroundStyle(WorldPalette.bark)
                 // T2-19: the completion screen's own heading — the arrival marker of the exercise.
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityHeading(.h1)
             Text("That's enough. Take the calm with you — there's nothing else to do.")
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.field)
+                .foregroundStyle(WorldPalette.dim)
                 .multilineTextAlignment(.center)
                 .fernletWrappingText()
-                .frame(maxWidth: 280)
+                .frame(maxWidth: 300)
         }
+        .frame(maxWidth: .infinity)
         .transition(.opacity)
     }
 
     private var footer: some View {
         Group {
             if isComplete {
-                VStack(spacing: 16) {
+                // World: Begin again and Done as framed buttons, side by side.
+                HStack(spacing: 12) {
                     Button { restart() } label: {
-                        Text("Begin again")
-                            .font(.fernlet(.label))
-                            // T1-3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
-                            .foregroundStyle(Color.mossInk)
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 26)
-                            .background(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(Color.moss.opacity(0.4), lineWidth: 1.5)
-                            )
+                        Text("Begin again").frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.plain)
-
-                    Button("Done") { dismiss() }
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.slate)
+                    .buttonStyle(ActionPillButtonStyle(.secondary))
+                    Button { dismiss() } label: {
+                        Text("Done").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(ActionPillButtonStyle(.primary))
                 }
             } else {
-                VStack(spacing: 16) {
-                    HStack(spacing: 14) {
-                        Button("Back") { goBack() }
-                            .font(.fernlet(.label))
-                            .foregroundStyle(stepIndex == 0 ? Color.slate.opacity(0.35) : Color.slate)
-                            .buttonStyle(.plain)
-                            .fernletTapTarget(minWidth: 60)
-                            .disabled(stepIndex == 0)
-
+                VStack(spacing: 10) {
+                    // World (b3-grounding): Back (framed secondary, faded on the first sense), the
+                    // five pixel steps, Next (framed primary).
+                    HStack(spacing: 10) {
+                        Button { goBack() } label: {
+                            Text("Back").frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(ActionPillButtonStyle(.secondary))
+                        .disabled(stepIndex == 0)
                         progressDots
-
-                        Button("Next") { advance() }
-                            .font(.fernlet(.label))
-                            // T1-3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
-                            .foregroundStyle(Color.mossInk)
-                            .buttonStyle(.plain)
-                            .fernletTapTarget(minWidth: 60)
+                        Button { advance() } label: {
+                            Text("Next").frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(ActionPillButtonStyle(.primary))
                     }
                     AddressedText("Tap anywhere when you're ready for the next one — take all the time you like.")
-                        .font(.fernlet(.bubble))
-                        .foregroundStyle(Color.slate)
+                        .font(FernletFramedFont.note)
+                        .foregroundStyle(WorldPalette.dim)
                         .multilineTextAlignment(.center)
                         .fernletWrappingText()
-                        .frame(maxWidth: 260)
+                        .frame(maxWidth: .infinity)
                 }
             }
         }
     }
 
-    /// Five dots that fill in as the senses pass — a quiet sense of progress, no numbers racing.
+    /// Five framed squares that fill in moss as the senses pass — a quiet sense of progress.
     private var progressDots: some View {
-        let mid = Self.steps[stepIndex].mid
-        return HStack(spacing: 8) {
+        HStack(spacing: 4) {
             ForEach(Self.steps.indices, id: \.self) { index in
-                Circle()
-                    .fill(index <= stepIndex ? mid : mid.opacity(0.25))
-                    .frame(width: 8, height: 8)
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(index <= stepIndex ? WorldPalette.moss : WorldPalette.paperLight)
+                    .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(WorldPalette.ink, lineWidth: 2))
+                    .frame(width: 14, height: 14)
             }
         }
+        .fixedSize()
         .animation(.easeInOut(duration: 0.35), value: stepIndex)
+        .accessibilityHidden(true)
     }
 
     private func advance() {

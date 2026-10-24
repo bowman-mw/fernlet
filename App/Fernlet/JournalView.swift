@@ -48,7 +48,7 @@ struct JournalView: View {
                     .fernletTabBarBottomClearance()
             }
             .fernletTabBarCompaction($isTabBarCompact, resetToken: $scrollToTopToken)
-            .background(Color.parchment)
+            .fernletPageBackground()
             .navigationTitle("")
             .toolbar(isInHub ? .hidden : .visible, for: .navigationBar)
             .navigationDestination(for: String.self) { dateKey in
@@ -78,18 +78,14 @@ struct JournalView: View {
             // `.large` only: at `.medium` the feeling chips and the character counter pushed the
             // editor itself under the fold, and at accessibility sizes it was off-screen entirely.
             JournalEntryEditorSheet(store: store, dateKey: target.dateKey, entry: target.entry)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheet()
                 .environment(captureProtection)
         }
         #if DEBUG
         .task { presentUITestJournalSheetsIfRequested() }
         .sheet(isPresented: $uiTestDayEditPresented) {
             DayEditSheet(store: store, dateKey: store.todayKey, initialDay: store.day)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheet()
                 .environment(captureProtection)
         }
         #endif
@@ -135,18 +131,16 @@ struct JournalView: View {
     /// entry lists (R4: `body` keeps only the NavigationStack and its modifiers).
     private var pageContent: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top) {
+            // World (b2-journal, draft 2): the plate names the panel, so the header keeps its
+            // subtitle, and Write is a framed primary beside it.
+            HStack(alignment: .center, spacing: 12) {
                 ScreenHeader(title: "Journal", subtitle: "A small record of being.", identifier: "screen.journal")
-                Spacer()
-                HeaderActionButton(systemImage: "plus", accessibilityLabel: "New journal entry") { activeSheet = .journal }
+                Spacer(minLength: 0)
+                PrivatePageActionButton(title: "Write", accessibilityLabel: "New journal entry") { activeSheet = .journal }
             }
             .padding(.top, 4)
 
-            // One-tap mood check-in — a tag-only entry, no writing required.
-            FernletCard {
-                QuickMoodRow(store: store)
-            }
-
+            // Draft 2, from the owner's note: the month comes first, then how today feels.
             JournalCalendarCard(
                 displayedMonth: $displayedMonth,
                 allDays: allDays,
@@ -154,10 +148,16 @@ struct JournalView: View {
                 onDayTapped: { key in path.append(key) }
             )
 
+            // One-tap mood check-in — a tag-only entry, no writing required.
+            FernletCard {
+                QuickMoodRow(store: store)
+            }
+
             todaySection
             previousSection
         }
-        .padding(20)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     /// Today's entries, newest first — the one just saved sits at the top.
@@ -241,6 +241,9 @@ struct JournalView: View {
             editingJournal = JournalEntryEditTarget(entry: entry, dateKey: store.todayKey)
         } else if UITestSupport.shouldOpenDayEditSheet {
             uiTestDayEditPresented = true
+        } else if UITestSupport.opensPrivateDayPage, path.isEmpty,
+                  (UITestSupport.initialPrivateHubSection ?? .journal) == .journal {
+            path.append(store.todayKey)
         }
     }
     #endif
@@ -268,6 +271,8 @@ struct JournalSheet: View {
     @State private var promptedReasons: Set<JournalPromptReason> = []
     @State private var journalPromptNotification: JournalPromptNotification?
     @State private var inspirationDismissed = false
+    /// The World look: the prompt card's pixel ✕.
+    @Environment(\.fernletFramedLook) private var look
     /// The feeling the day already carried when the sheet opened — both the starting selection and
     /// the "is this dirty?" reference point.
     private let initialTag: FeelingTag
@@ -320,8 +325,8 @@ struct JournalSheet: View {
                     }
 
                     Text("\(text.count)/800")
-                        .font(.fernlet(.stat))
-                        .foregroundStyle(Color.slate)
+                        .font(FernletFramedFont.body)
+                        .foregroundStyle(WorldPalette.dim)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 .padding(20)
@@ -335,7 +340,7 @@ struct JournalSheet: View {
                 Task { @MainActor in await TaskConfirmation.journalSaved.announceAfterSheetCloses() }
             }
         }
-        .background(Color.parchment)
+        .fernletSheetStyle()
         .overlay(alignment: .top) {
             if let journalPromptNotification {
                 JournalPromptNotificationView(notification: journalPromptNotification) {
@@ -365,16 +370,15 @@ struct JournalSheet: View {
         if !inspirationDismissed && text.isEmpty {
             let prompt = JournalPromptLibrary.prompt(for: store.todayKey, addressing: termOfAddress)
             VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "sparkles")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color.goldenrod)
-                        .padding(.top, 2)
-                        // Decorative: VoiceOver otherwise speaks the symbol before the prompt.
+                HStack(alignment: .top, spacing: 10) {
+                    // World (b3-journal-quick): the pixel star. Decorative: VoiceOver otherwise
+                    // speaks the symbol before the prompt.
+                    WorldSpriteView(sprite: WorldSprites.star, scale: 2)
+                        .padding(.top, 3)
                         .accessibilityHidden(true)
                     Text(prompt)
-                        .font(.fernlet(.bubble))
-                        .foregroundStyle(Color.bark)
+                        .font(FernletFramedFont.field)
+                        .foregroundStyle(WorldPalette.bark)
                         .fernletWrappingText()
                     Spacer(minLength: 0)
                     Button {
@@ -382,28 +386,36 @@ struct JournalSheet: View {
                             inspirationDismissed = true
                         }
                     } label: {
-                        Image(systemName: "xmark")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(Color.slate)
-                            .frame(width: 24, height: 24)
-                            .background(Color.slate.opacity(0.10), in: Circle())
+                        if look != nil {
+                            FernletIcon(.close, scale: 2)
+                                .frame(width: 24, height: 24)
+                        } else {
+                            Image(systemName: "xmark")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(Color.slate)
+                                .frame(width: 24, height: 24)
+                                .background(Color.slate.opacity(0.10), in: Circle())
+                        }
                     }
                     .buttonStyle(.plain)
+                    .fernletTapTarget()
                     .accessibilityLabel("Dismiss the prompt")
                 }
                 Button("Start from this") {
                     text = prompt + "\n"
                 }
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.moss)
+                .font(FernletFramedFont.button)
+                .foregroundStyle(WorldPalette.mossInk)
                 .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
                 // The label alone was an 18pt-tall target.
                 .fernletTapTarget()
                 .accessibilityHint("Inserts the prompt so you can write under it")
             }
-            .padding(12)
+            .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.goldenrod.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            // World (b3-journal-quick): the prompt as a framed card.
+            .fernletFramed(WorldTheme.framedLook, fill: WorldPalette.paper, cornerRadius: FernletFramedLook.cardRadius)
             .accessibilityIdentifier("journal.inspiration")
         }
     }
@@ -707,8 +719,8 @@ struct JournalEntryEditorSheet: View {
             }
 
             Text("\(text.count)/800")
-                .font(.fernlet(.stat))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.body)
+                .foregroundStyle(WorldPalette.dim)
                 .frame(maxWidth: .infinity, alignment: .trailing)
 
             deleteEntryButton
@@ -732,9 +744,15 @@ struct JournalEntryEditorSheet: View {
                 }
             )
         } label: {
-            Label("Delete journal entry", systemImage: "trash")
+            // World (b3-journal-editor): the framed terracotta button, full width, with a pixel bin.
+            HStack(spacing: 8) {
+                WorldSpriteView(sprite: WorldSprites.bin, scale: 2, tint: Color.white)
+                    .accessibilityHidden(true)
+                Text("Delete journal entry")
+            }
+            .frame(maxWidth: .infinity)
         }
-        .buttonStyle(DestructiveCardButtonStyle())
+        .buttonStyle(ActionPillButtonStyle(.destructive))
     }
 
     /// The editor hosted as the root page of a `NavigationStack` of the sheet's own, whose bar is
@@ -762,7 +780,7 @@ struct JournalEntryEditorSheet: View {
                 dismiss()
             }
         }
-        .background(Color.parchment)
+        .fernletSheetStyle()
         .overlay(alignment: .top) {
             if let journalPromptNotification {
                 JournalPromptNotificationView(notification: journalPromptNotification) {
@@ -881,18 +899,9 @@ struct JournalCalendarCard: View {
     private var tagLegend: some View {
         FlowLayout(spacing: 10) {
             ForEach(FeelingTag.allCases) { tag in
-                HStack(spacing: 4) {
-                    if differentiateWithoutColor {
-                        Image(systemName: tag.differentiatingSymbol)
-                            .font(.system(size: 9, weight: .black))
-                            .foregroundStyle(Color.bark)
-                            .frame(width: 10, height: 10)
-                    } else {
-                        Circle().fill(tag.color).frame(width: 8, height: 8)
-                    }
-                    Text(tag.label(addressing: termOfAddress)).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
-                }
-                .fixedSize(horizontal: true, vertical: false)
+                // World (b2-journal): a framed square swatch beside each word.
+                PrivateLegendSwatch(fill: tag.color, label: Text(tag.label(addressing: termOfAddress)),
+                                    symbol: differentiateWithoutColor ? tag.differentiatingSymbol : nil)
             }
         }
     }
@@ -986,34 +995,42 @@ struct JournalCalendarCell: View {
     @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
     /// The user's term of address, for the spoken feeling (``JournalMonthCell/accessibilityLabel(addressing:)``).
     @Environment(\.fernletTermOfAddress) private var termOfAddress
+    /// The World look: framed cells (``PrivateCalendarCellBackground``).
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
         Button(action: onTap) {
             ZStack {
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(cell.fill)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 5)
-                            .stroke(cell.isToday ? Color.moss : Color.clear, lineWidth: 1.5)
-                    )
+                if let look {
+                    // World (b2-journal): a framed day cell — paper wash, the feeling's tint, today
+                    // outlined in ink; future days stay bare.
+                    PrivateCalendarCellBackground(fill: cell.framedFill(look: look), isToday: cell.isToday)
+                } else {
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(cell.fill)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 5)
+                                .stroke(cell.isToday ? Color.moss : Color.clear, lineWidth: 1.5)
+                        )
+                }
                 if let day = cell.day {
                     VStack(spacing: 1) {
                         Text("\(day)")
                             // Today's numeral gets real weight via the heavier bundled Fraunces face
                             // — `.fontWeight(.bold)` is a silent no-op on the single-weight DM Sans
                             // Medium that `.stat` resolves to.
-                            .font(cell.isToday
-                                  ? .custom(FernletFontName.frauncesSemiBold, size: 14, relativeTo: .subheadline)
-                                  : .fernlet(.stat))
+                            .font(PrivateCalendarCellBackground.numeralFont(isToday: cell.isToday, framed: look != nil))
                             .foregroundStyle(
                                 cell.isFuture ? Color.bark.opacity(0.28)
+                                    : look != nil ? (look?.text ?? Color.bark)
                                     : cell.isToday ? Color.moss
                                     : Color.bark.opacity(0.68)
                             )
                         if cell.hasData && cell.tag == nil {
-                            Circle()
-                                .fill(Color.slate)
-                                .frame(width: 3, height: 3)
+                            Rectangle()
+                                .fill(look?.mark ?? Color.slate)
+                                .frame(width: look != nil ? 4 : 3, height: look != nil ? 4 : 3)
+                                .clipShape(look != nil ? AnyShape(Rectangle()) : AnyShape(Circle()))
                         } else {
                             Color.clear.frame(width: 3, height: 3)
                         }
@@ -1212,12 +1229,22 @@ struct JournalRow: View {
     var compact = false
     /// The user's term of address, which the Quiet and Tired labels agree with.
     @Environment(\.fernletTermOfAddress) private var termOfAddress
+    /// The World look: a framed swatch and the kit's type.
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Circle().fill(entry.tag.color).frame(width: 10, height: 10)
-                Text(entry.tag.label(addressing: termOfAddress)).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
+                if let look {
+                    // World (b2-journal): the feeling as a framed square swatch, as in the legend.
+                    RoundedRectangle(cornerRadius: 2).fill(entry.tag.color).frame(width: 14, height: 14)
+                        .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(look.ink, lineWidth: 2))
+                } else {
+                    Circle().fill(entry.tag.color).frame(width: 10, height: 10)
+                }
+                Text(entry.tag.label(addressing: termOfAddress))
+                    .font(look != nil ? FernletFramedFont.field : .fernlet(.labelSmall))
+                    .foregroundStyle(look?.dim ?? Color.slate)
                 if compact {
                     Text(FernletDate.shortDate(for: entry.date)).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
                 }
@@ -1238,7 +1265,8 @@ struct JournalRow: View {
                 }
             } else {
                 Text(entry.text)
-                    .font(.fernlet(.body))
+                    .font(look != nil ? FernletFramedFont.field : .fernlet(.body))
+                    .foregroundStyle(look?.text ?? Color.bark)
                     .lineLimit(compact ? 3 : nil)
             }
             if !entry.emotions.isEmpty {
@@ -1290,11 +1318,27 @@ struct DayDetailView: View {
         FernletDate.date(fromDayKey: dateKey) ?? .now
     }
 
-    /// `Text`, not `String`: `.navigationTitle(_:)` takes a `String` through its verbatim overload,
-    /// so "Today" rendered in English in every language.
-    private var navigationTitle: Text {
-        if dateKey == store.todayKey { return Text("Today") }
-        return Text(verbatim: date.formatted(.dateTime.month(.abbreviated).day()))
+    /// The page's title on the World plate: "Today", or the day ("Oct 21"). Resolved here — the
+    /// plate takes a finished string — from the catalog's "Today" and the localized date format, so
+    /// it never renders English in another language.
+    private var plateTitle: String {
+        if dateKey == store.todayKey {
+            return String(localized: "Today")
+        }
+        return date.formatted(.dateTime.month(.abbreviated).day())
+    }
+
+    /// "Edit day": a framed secondary with the pixel pen (`b2-journal-day`), opening ``DayEditSheet``.
+    private var editDayButton: some View {
+        Button { showEditSheet = true } label: {
+            HStack(spacing: 8) {
+                WorldSpriteView(sprite: WorldSprites.pen, scale: 2)
+                    .accessibilityHidden(true)
+                Text("Edit day")
+            }
+            .padding(.horizontal, 22)
+        }
+        .buttonStyle(ActionPillButtonStyle(.secondary))
     }
 
     /// The review card's heading. `Text` for the same reason as ``navigationTitle``; the weekday is
@@ -1420,6 +1464,10 @@ struct DayDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                // World (b2-journal-day): the plate carries the title and Back, so Edit day sits at
+                // the top of the page as a framed secondary, right-aligned.
+                editDayButton
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                 reviewCard
                 // Nutrition cards only when there is nutrition: an untracked day showed a full
                 // macro card of targets (read as intake) and a micronutrient warning about meals
@@ -1446,45 +1494,23 @@ struct DayDetailView: View {
                 journalsSection
                 careCard
             }
-            .padding(20)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
         }
-        .background(Color.parchment)
-        .navigationTitle(navigationTitle)
+        .fernletPageBackground()
+        // World: the plate's title ("Today", or "Oct 21") with Back to the Private panel; outside a
+        // plate this is the inline navigation title it always was.
+        .fernletPushedPage(verbatim: plateTitle)
         .navigationBarTitleDisplayMode(.inline)
-        // Opaque parchment bar: without it the review card's score pills scrolled up THROUGH the
-        // transparent title bar, between the back button and "Edit day".
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarBackground(Color.parchment, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { showEditSheet = true } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "pencil")
-                        Text("Edit day")
-                    }
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.bark)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(Color.cream.opacity(0.9), in: Capsule())
-                    .overlay(Capsule().stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-            }
-        }
         .sheet(isPresented: $showEditSheet, onDismiss: refresh) {
             DayEditSheet(store: store, dateKey: dateKey, initialDay: day)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheet()
                 .environment(captureProtection)
         }
         .sheet(item: $editingJournal, onDismiss: refresh) { target in
             // `.large` only — see the note on JournalView's presentation of the same sheet.
             JournalEntryEditorSheet(store: store, dateKey: target.dateKey, entry: target.entry)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheet()
                 .environment(captureProtection)
         }
     }
@@ -1524,28 +1550,24 @@ struct DayDetailView: View {
         FernletCard {
             VStack(alignment: .leading, spacing: 10) {
                 reviewTitle
-                    .font(.fernlet(.header))
-                    .foregroundStyle(Color.bark)
+                    .font(FernletFramedFont.sheetTitle)
+                    .foregroundStyle(WorldPalette.bark)
                 Text(reviewBlurb)
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.field)
+                    .foregroundStyle(WorldPalette.dim)
                     .fixedSize(horizontal: false, vertical: true)
-                Divider()
-                    .overlay(Color.bark.opacity(0.08))
+                FernletDottedRule()
                     .padding(.vertical, 2)
                 if hasLoggedData {
                     HStack {
-                        Text("Daily score")
-                            .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.slate)
-                            .tracking(0.5)
-                            .textCase(.uppercase)
+                        SectionLabel("Daily score")
                         Spacer()
                         Text("\(Int(dayScore * 100))%")
-                            .font(.fernlet(.stat))
-                            .foregroundStyle(scoreState.color)
+                            .font(FernletFramedFont.field.weight(.bold))
+                            .foregroundStyle(WorldPalette.mossInk)
                     }
-                    HealthBar(state: scoreState, value: dayScore)
+                    // World (b2-journal-day): the day's score as the status plate's six hearts.
+                    DayScoreHearts(score: dayScore)
                 } else {
                     // A day nobody logged isn't a bad day — never grade it.
                     Text("No score — nothing was logged")
@@ -1583,12 +1605,8 @@ struct DayDetailView: View {
                             }
                         }
                         Spacer()
-                        Text(verbatim: meal.mealType.displayName)
-                            .font(.fernlet(.labelSmall))
-                            .foregroundStyle(meal.mealType.color)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(meal.mealType.color.opacity(0.12), in: Capsule())
+                        // World (b2-journal-day): the meal type as a framed tag.
+                        FernletTag(text: Text(verbatim: meal.mealType.displayName))
                     }
                     .padding(.vertical, 4)
                     if index < day.meals.count - 1 { FernletRowDivider() }
@@ -1626,11 +1644,10 @@ struct DayDetailView: View {
                 HStack {
                     SectionLabel("Water")
                     Spacer()
-                    // Filled when logged, outlined when not: the shape carries the state at full
-                    // strength instead of a 30% ink at 1.48:1.
-                    Image(systemName: day.bottleCount > 0 ? "drop.fill" : "drop")
-                        .font(.caption)
-                        .foregroundStyle(Color.slate)
+                    // Filled when logged, outlined when not: the pixel drop carries the state at
+                    // full strength (World, b2-journal-day).
+                    WorldSpriteView(sprite: WorldSprites.drop, scale: 3, variant: .drop(full: day.bottleCount > 0))
+                        .accessibilityHidden(true)
                 }
                 (day.bottleCount == 0 ? Text("None logged") : Text(verbatim: Self.bottleCountText(day.bottleCount)))
                     .font(.fernlet(.stat))
@@ -1650,9 +1667,10 @@ struct DayDetailView: View {
                 HStack {
                     SectionLabel("Rest")
                     Spacer()
-                    Image(systemName: day.sleep != nil ? "moon.fill" : "moon")
-                        .font(.caption)
-                        .foregroundStyle(Color.slate)
+                    // The pixel moon in the dim ink token: the sprite's own cream all but vanishes on
+                    // light paper. The line below says whether the night was logged.
+                    WorldSpriteView(sprite: WorldSprites.moon, scale: 3, tint: WorldPalette.dim)
+                        .accessibilityHidden(true)
                 }
                 if let sleep = day.sleep {
                     Text(sleep.quality.label)
@@ -1996,7 +2014,7 @@ struct DayEditSheet: View {
                 dismiss()
             }
         }
-        .background(Color.parchment)
+        .fernletSheetStyle()
         .overlay(alignment: .top) {
             if let journalPromptNotification {
                 JournalPromptNotificationView(notification: journalPromptNotification) {
@@ -2029,8 +2047,8 @@ struct DayEditSheet: View {
                 }
                 SheetTextEditor(text: limitedJournalText, placeholder: "Add a note about this day…", minHeight: 100)
                 Text("\(journalText.count)/800")
-                    .font(.fernlet(.stat))
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.body)
+                    .foregroundStyle(WorldPalette.dim)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
@@ -2055,58 +2073,35 @@ struct DayEditSheet: View {
                 TextField("Workout name (optional)", text: $workoutName, prompt: .fieldPrompt("Workout name (optional)"))
                     .submitLabel(.done)
                     .sheetTextInput()
+                // World (b3-day-edit): the type and intensity as framed dropdowns.
                 HStack(spacing: 8) {
-                    Menu {
-                        ForEach(WorkoutType.allCases) { type in
-                            Button {
-                                workoutType = type
-                                workoutTouched = true
-                            } label: {
-                                Text(verbatim: type.displayName)
-                            }
-                        }
-                    } label: {
-                        menuLabel(workoutType.displayName)
-                    }
-
-                    Menu {
-                        ForEach(WorkoutIntensity.allCases) { intensity in
-                            Button(intensity.displayWord.localizedCapitalized) {
-                                workoutIntensity = intensity
-                                workoutTouched = true
-                            }
-                        }
-                    } label: {
-                        menuLabel(workoutIntensity.displayWord.localizedCapitalized)
-                    }
+                    FernletDropdown("Workout type", selection: touchedBinding($workoutType), options: WorkoutType.allCases,
+                                    showsLabel: false, fullWidth: true) { Text(verbatim: $0.displayName) }
+                    FernletDropdown("Intensity", selection: touchedBinding($workoutIntensity), options: WorkoutIntensity.allCases,
+                                    showsLabel: false, fullWidth: true) { Text(verbatim: $0.displayWord.localizedCapitalized) }
                 }
             }
         }
     }
 
-    /// The shared chrome for the two workout menus (title + chevron in a cream capsule).
-    private func menuLabel(_ title: String) -> some View {
-        HStack {
-            Text(title)
-                .foregroundStyle(Color.bark)
-            Spacer()
-            Image(systemName: "chevron.up.chevron.down")
-                .font(.caption)
-                .foregroundStyle(Color.slate)
-        }
-        .font(.fernlet(.label))
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+    /// A dropdown's binding that also marks the workout as touched, so choosing a type or intensity
+    /// alone still logs the workout (what the two menus did).
+    private func touchedBinding<Value>(_ binding: Binding<Value>) -> Binding<Value> {
+        Binding(get: { binding.wrappedValue }, set: { binding.wrappedValue = $0; workoutTouched = true })
     }
 
-    /// The water-bottle stepper (0…30).
+    /// The water-bottle stepper (0…30). World (b3-day-edit): "Water" in a framed card, the bottles on
+    /// the framed stepper.
     private var waterField: some View {
-        SheetField("Water") {
-            Stepper("Bottles: \(bottleCount)", value: $bottleCount, in: 0...30)
-                .padding(14)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+        FernletCard {
+            HStack {
+                Text("Water")
+                    .font(FernletFramedFont.rowTitle.weight(.bold))
+                    .foregroundStyle(WorldPalette.bark)
+                Spacer(minLength: 8)
+                FernletStepper("Bottles: \(bottleCount)", value: $bottleCount, in: 0...30, step: 1,
+                               display: Text("Bottles: \(bottleCount)"))
+            }
         }
     }
 
@@ -2138,20 +2133,17 @@ struct DayEditSheet: View {
             PersonalCareTaskGrid {
                 ForEach(store.personalCareTasks) { task in
                     Button { togglePersonalCareTask(task) } label: {
-                        // `displayLabel`: see the same chip on ``DayDetailView``'s care card.
-                        Label(task.displayLabel, systemImage: task.systemImage)
-                            .font(.fernlet(.labelSmall))
-                            .lineLimit(1)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .foregroundStyle(completedPersonalCareTaskIDs.contains(task.id) ? Color.moss : Color.slate)
-                            .background(
-                                completedPersonalCareTaskIDs.contains(task.id) ? Color.moss.opacity(0.12) : Color.bark.opacity(0.04),
-                                in: RoundedRectangle(cornerRadius: 10)
-                            )
+                        // `displayLabel`: see the same chip on ``DayDetailView``'s care card. World
+                        // (b3-day-edit): a framed chip with the task's pixel icon.
+                        HStack(spacing: 6) {
+                            WorldSpriteView(sprite: PersonalCareSprites.sprite(forSymbol: task.systemImage), scale: 2)
+                                .accessibilityHidden(true)
+                            Text(task.displayLabel)
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(ChipButtonStyle(selected: completedPersonalCareTaskIDs.contains(task.id)))
                 }
             }
         }

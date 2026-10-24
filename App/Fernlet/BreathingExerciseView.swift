@@ -213,25 +213,31 @@ struct BreathingExerciseView: View {
     /// headroom that still keeps the loop's maximum visible at the loop.
     private static let maxCycles = 16
 
-    /// Top highlight stop of the core sphere gradient (mockup #AECC9F / #9DC08F) — a surface-local
-    /// hue, so it's a plain constant rather than a shared token, per the GroundingView pattern.
-    private static let mintHighlight = Color(light: Color(red: 0.682, green: 0.800, blue: 0.624),
-                                             dark:  Color(red: 0.616, green: 0.753, blue: 0.561))
+    /// Done in the header once a session finishes (`b3-breathe-done`): back to setup, then out of the
+    /// tool; nil (no Done) before that, where Back is the way out.
+    private var doneAction: (() -> Void)? {
+        guard isFinished else { return nil }
+        return { finishToSetup(); dismiss() }
+    }
 
     var body: some View {
-        Group {
-            if isFinished {
-                finishedScreen
-            } else if isRunning {
-                runningScreen
-            } else {
-                setupScreen
+        VStack(spacing: 0) {
+            // World (b3-breathe-*): "‹ First aid", the title in the sheet, and Done once finished.
+            FirstAidToolHeader(title: Text("Slow breathing"), onDone: doneAction)
+            Group {
+                if isFinished {
+                    finishedScreen
+                } else if isRunning {
+                    runningScreen
+                } else {
+                    setupScreen
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.parchment)
+        .fernletSheetStyle()
         .navigationTitle("Slow breathing")
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             // The persisted length is user defaults, i.e. arbitrary storage: `startSession` refuses
             // anything outside 1…3, so a stray value would make Begin a silent no-op.
@@ -286,28 +292,26 @@ struct BreathingExerciseView: View {
                         }
                         .onDisappear { idleBreathing = false }
                     Text("Ready when you are.")
-                        .font(.custom(FernletFontName.instrumentSerifItalic, size: 19, relativeTo: .body))
-                        .foregroundStyle(Color.slate)
+                        .font(FernletFramedFont.field)
+                        .foregroundStyle(WorldPalette.dim)
                 }
 
                 Spacer(minLength: 8)
 
                 setupControls
 
+                // World (b3-breathe-setup): Begin is the full-width framed moss primary.
                 Button {
                     startSession()
                 } label: {
                     Text("Begin")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.parchmentInk)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(Color.moss, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ActionPillButtonStyle(.primary))
                 .accessibilityIdentifier("firstAid.breathing.begin")
             }
-            .padding(20)
+            .padding(.horizontal, 18)
+            .padding(.bottom, 20)
         }
         .scrollBounceBehavior(.basedOnSize)
     }
@@ -324,8 +328,9 @@ struct BreathingExerciseView: View {
             // 2.03:1 on parchment — every other muted label in this file already uses slate
             // (PRIV-24 completion, caught by the 2026-08-22 accessibility audit).
             Button("End early") { stopSession() }
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.button)
+                .foregroundStyle(WorldPalette.mossInk)
+                .fernletTapTarget()
                 .padding(.bottom, 20)
         }
         .padding(.horizontal, 20)
@@ -345,16 +350,18 @@ struct BreathingExerciseView: View {
     /// "End early" — the session's only exit — and leave a blind user inside a three-minute exercise
     /// with no way out. The grouping stops above the button.
     private var pacer: some View {
-        VStack(spacing: 0) {
-            Text(phaseLabel)
-                .font(.fernlet(.displayMedium))
-                .foregroundStyle(Color.moss)
-                .animation(.easeInOut(duration: 0.3), value: phaseLabel)
-                .padding(.top, 90)
-
+        // World (b3-breathe-session): the rings first, the phase word under them in big Fraunces.
+        VStack(spacing: 22) {
+            Spacer(minLength: 0)
             breathingCircle
-                .frame(maxHeight: .infinity)
+                .frame(height: 300)
+            Text(phaseLabel)
+                .font(.custom(FernletFontName.frauncesSemiBold, size: 40, relativeTo: .largeTitle))
+                .foregroundStyle(WorldPalette.mossInk)
+                .animation(.easeInOut(duration: 0.3), value: phaseLabel)
+            Spacer(minLength: 0)
         }
+        .frame(maxHeight: .infinity)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(BreathingCopy.pacerLabel))
         .accessibilityValue(Text(phaseLabel))
@@ -369,256 +376,192 @@ struct BreathingExerciseView: View {
             Spacer()
 
             checkMedallion
-                .padding(.bottom, 30)
+                .padding(.bottom, 24)
 
             Text(BreathingCopy.allDone)
-                .font(.fernlet(.display))
-                .foregroundStyle(Color.bark)
-                .padding(.bottom, 12)
+                .font(.custom(FernletFontName.frauncesSemiBold, size: 40, relativeTo: .largeTitle))
+                .foregroundStyle(WorldPalette.bark)
+                .padding(.bottom, 10)
 
             Text(BreathingCopy.finished(minutes: minutes))
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.field)
+                .foregroundStyle(WorldPalette.dim)
                 .multilineTextAlignment(.center)
                 .fernletWrappingText()
-                .frame(maxWidth: 260)
-                .padding(.bottom, 34)
 
+            Spacer()
+
+            // World (b3-breathe-done): "Once more" is the full-width framed primary at the foot; Done
+            // (which leaves the tool, exactly as Grounding's does) moved to the header's top right.
             Button {
                 startSession()
             } label: {
                 Text("Once more")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.parchmentInk)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 15)
-                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
             }
-            .buttonStyle(.plain)
-            .frame(maxWidth: 300)
-            .padding(.bottom, 10)
-
-            // "Done" leaves the tool, exactly as Grounding's does — the two sibling exercises used
-            // to give their identically-placed secondary action two different meanings ("Done for
-            // now" quietly rewound to this tool's own setup screen). "Once more" above is the
-            // repeat.
-            Button("Done") {
-                finishToSetup()
-                dismiss()
-            }
-            .font(.fernlet(.label))
-            .foregroundStyle(Color.slate)
-
-            Spacer()
+            .buttonStyle(ActionPillButtonStyle(.primary))
         }
-        .padding(.horizontal, 34)
-        .padding(.vertical, 40)
+        .padding(.horizontal, 18)
+        .padding(.bottom, 20)
         .transition(.opacity.combined(with: .offset(y: 14)))
     }
 
     /// Nested translucent moss circles with a soft highlight — the "breath" made visible.
     /// In setup it eases idly (a calm resting scale); in running it swells with `circleScale`.
     private var breathingCircle: some View {
+        // World (b3-breathe-setup, -session): three framed moss rings, pale to deep, that swell and
+        // settle together with `circleScale`.
         ZStack {
-            // Feathered outer rings — fern fading to clear, so the halo has no hard edge.
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [Color.fern.opacity(0.14), Color.fern.opacity(0)],
-                        center: .center,
-                        startRadius: 59,
-                        endRadius: 101
-                    )
-                )
-                .frame(width: 280, height: 280)
-                .scaleEffect(circleScale)
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [Color.fern.opacity(0.22), Color.fern.opacity(0)],
-                        center: .center,
-                        startRadius: 49,
-                        endRadius: 84
-                    )
-                )
-                .frame(width: 216, height: 216)
-                .scaleEffect(circleScale)
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [Self.mintHighlight, Color.fern, Color.moss],
-                        center: UnitPoint(x: 0.42, y: 0.36),
-                        startRadius: 4,
-                        endRadius: 100
-                    )
-                )
-                .frame(width: 150, height: 150)
-                .scaleEffect(circleScale)
-                .shadow(color: Color.moss.opacity(0.28), radius: 22, x: 0, y: 12)
-                .overlay(
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [Color.white.opacity(0.5), Color.white.opacity(0)],
-                                center: .center,
-                                startRadius: 0,
-                                endRadius: 28
-                            )
-                        )
-                        .frame(width: 56, height: 56)
-                        .offset(x: -22, y: -22)
-                        .scaleEffect(circleScale)
-                )
+            breathingRing(diameter: 250, fill: Self.ringPale)
+            breathingRing(diameter: 196, fill: Self.ringMid)
+            breathingRing(diameter: 140, fill: Self.ringDeep)
         }
         .accessibilityHidden(true)
     }
 
-    /// A soft moss medallion with a gentle amber halo, cradling a check — the finish reward.
+    /// One ring of the pacer: a moss disc in the 3-pt ink frame, scaled with the breath.
+    private func breathingRing(diameter: CGFloat, fill: Color) -> some View {
+        Circle()
+            .fill(fill)
+            .overlay(Circle().strokeBorder(WorldPalette.ink, lineWidth: 3 / max(circleScale, 0.3)))
+            .frame(width: diameter, height: diameter)
+            .scaleEffect(circleScale)
+    }
+
+    /// The rings' three moss tones (`b3-breathe-*`, the kit's `#DCE6D2`, `#B9D1A8`, `#8DB879`), with
+    /// darker greens on dark paper.
+    private static let ringPale = Color(light: Color(red: 0.863, green: 0.902, blue: 0.824),
+                                        dark: Color(red: 0.231, green: 0.282, blue: 0.204))
+    private static let ringMid = Color(light: Color(red: 0.725, green: 0.820, blue: 0.659),
+                                       dark: Color(red: 0.322, green: 0.416, blue: 0.267))
+    private static let ringDeep = Color(light: Color(red: 0.553, green: 0.722, blue: 0.475),
+                                        dark: Color(red: 0.420, green: 0.565, blue: 0.341))
+
+    /// The finish reward (`b3-breathe-done`): a moss medal in the ink frame with its shadow, cradling
+    /// the white pixel tick.
     private var checkMedallion: some View {
         ZStack {
-            // Feathered amber halo — goldenrod fading to clear, no hard disc edge.
             Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [Color.goldenrod.opacity(0.14), Color.goldenrod.opacity(0)],
-                        center: .center,
-                        startRadius: 32,
-                        endRadius: 56
-                    )
-                )
-                .frame(width: 150, height: 150)
+                .fill(WorldPalette.ink.opacity(0.22))
+                .frame(width: 112, height: 112)
+                .offset(y: 5)
             Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [Self.mintHighlight, Color.fern, Color.moss],
-                        center: UnitPoint(x: 0.42, y: 0.36),
-                        startRadius: 4,
-                        endRadius: 70
-                    )
-                )
-                .frame(width: 104, height: 104)
-                .shadow(color: Color.moss.opacity(0.28), radius: 18, x: 0, y: 10)
-            Image(systemName: "checkmark")
-                .font(.system(size: 40, weight: .semibold))
-                .foregroundStyle(Color.parchment)
+                .fill(WorldPalette.moss)
+                .frame(width: 112, height: 112)
+                .overlay(Circle().strokeBorder(WorldPalette.ink, lineWidth: 3))
+            WorldSpriteView(sprite: WorldSprites.check, scale: 6, tint: Color.white)
         }
         .accessibilityHidden(true)
     }
 
+    /// Pattern, length and haptics in one framed card (`b3-breathe-setup`).
     private var setupControls: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            VStack(alignment: .leading, spacing: 10) {
-                SectionLabel("Pattern")
-                HStack(spacing: 10) {
-                    ForEach(BreathingPreset.all) { candidate in
-                        patternTile(candidate)
+        FernletCard {
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 10) {
+                    SectionLabel("Pattern")
+                    HStack(spacing: 10) {
+                        ForEach(BreathingPreset.all) { candidate in
+                            patternTile(candidate)
+                        }
                     }
                 }
-            }
-
-            VStack(alignment: .leading, spacing: 10) {
-                SectionLabel("Length")
-                HStack(spacing: 8) {
-                    ForEach(1...3, id: \.self) { candidate in
-                        lengthPill(candidate)
+                VStack(alignment: .leading, spacing: 10) {
+                    SectionLabel("Length")
+                    HStack(spacing: 8) {
+                        ForEach(1...3, id: \.self) { candidate in
+                            lengthPill(candidate)
+                        }
                     }
                 }
+                hapticsRow
             }
-
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Haptics")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.bark)
-                    Text("soft taps in, one tap out",
-                         comment: "Under the breathing screen's Haptics switch: what the haptics feel like. Several soft taps while breathing in, a single tap as the breath goes out, nothing while holding.")
-                        .font(.fernlet(.bubble))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-                    // Owner's decision 5: this switch stays, under the app-wide level. When that
-                    // level is Off, an "on" switch here plays nothing, so say why.
-                    if appHapticsLevel == .off {
-                        Text("Haptics are off for all of Fernlet in Settings.")
-                            .font(.fernlet(.bubble))
-                            .foregroundStyle(Color.slate)
-                            .fernletWrappingText()
-                            .accessibilityIdentifier("breathing.hapticsOffNote")
-                    }
-                }
-                Spacer()
-                // The switch draws with its label hidden — the "Haptics" heading to its left is the
-                // visible one — but it still needs a NAME. As `Toggle("", isOn:)` VoiceOver read it
-                // as an anonymous "switch button, on" and Voice Control had nothing to say to press
-                // it. `labelsHidden()` keeps the layout identical and gives it the word back.
-                Toggle("Haptics", isOn: $hapticsEnabled)
-                    .labelsHidden()
-                    // The system switch: its label is hidden, and the framed style draws it.
-                    .toggleStyle(.switch)
-                    .tint(Color.moss)
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .fernletSmallShadow()
     }
 
+    /// Haptics: what the taps feel like, the app-wide-off note, and the switch.
+    private var hapticsRow: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Haptics")
+                    .font(FernletFramedFont.rowTitle.weight(.bold))
+                    .foregroundStyle(WorldPalette.bark)
+                Text("soft taps in, one tap out",
+                     comment: "Under the breathing screen's Haptics switch: what the haptics feel like. Several soft taps while breathing in, a single tap as the breath goes out, nothing while holding.")
+                    .font(FernletFramedFont.rowValue)
+                    .foregroundStyle(WorldPalette.dim)
+                    .fernletWrappingText()
+                // Owner's decision 5: this switch stays, under the app-wide level. When that
+                // level is Off, an "on" switch here plays nothing, so say why.
+                if appHapticsLevel == .off {
+                    Text("Haptics are off for all of Fernlet in Settings.")
+                        .font(FernletFramedFont.rowValue)
+                        .foregroundStyle(WorldPalette.dim)
+                        .fernletWrappingText()
+                        .accessibilityIdentifier("breathing.hapticsOffNote")
+                }
+            }
+            Spacer()
+            // The switch draws with its label hidden — the "Haptics" heading to its left is the
+            // visible one — but it still needs a NAME. As `Toggle("", isOn:)` VoiceOver read it
+            // as an anonymous "switch button, on" and Voice Control had nothing to say to press
+            // it. `labelsHidden()` keeps the layout identical and gives it the word back. World: the
+            // framed switch the app root sets.
+            Toggle("Haptics", isOn: $hapticsEnabled)
+                .labelsHidden()
+        }
+    }
+
+    /// One pattern tile (`b3-breathe-setup`): a framed paper tile, the chosen one framed in moss with
+    /// the pixel tick.
     private func patternTile(_ candidate: BreathingPreset) -> some View {
         let selected = preset == candidate
+        let shape = RoundedRectangle(cornerRadius: 10)
         return Button {
             presetID = candidate.id
         } label: {
             VStack(alignment: .leading, spacing: 3) {
-                Text(candidate.name)
-                    .font(.custom(FernletFontName.dmSerifDisplay, size: 17, relativeTo: .body))
-                    .foregroundStyle(Color.bark)
+                HStack(alignment: .top) {
+                    Text(candidate.name)
+                        .font(FernletFramedFont.rowTitle.weight(.bold))
+                        .foregroundStyle(WorldPalette.bark)
+                    Spacer(minLength: 4)
+                    if selected {
+                        WorldSpriteView(sprite: WorldSprites.check, scale: 2)
+                            .accessibilityHidden(true)
+                    }
+                }
                 Text(candidate.caption)
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.rowDetail)
+                    .foregroundStyle(WorldPalette.dim)
                     .fernletWrappingText()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 13)
-            .background(Color.parchment, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-            .background(Color.moss.opacity(selected ? 0.10 : 0), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 15, style: .continuous)
-                    .stroke(Color.moss.opacity(selected ? 1 : 0), lineWidth: 2)
-            )
-            .overlay(alignment: .topTrailing) {
-                if selected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(Color.moss)
-                        .padding(9)
-                }
-            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 11)
+            .background(WorldPalette.paperLight, in: shape)
+            .overlay(shape.strokeBorder(WorldPalette.ink, lineWidth: 2.5))
+            .padding(selected ? 3 : 0)
+            .overlay { if selected { RoundedRectangle(cornerRadius: 13).strokeBorder(WorldPalette.moss, lineWidth: 3) } }
+            .contentShape(shape)
         }
         .buttonStyle(.plain)
         // T1-5: a hand-rolled selection tile — the checkmark glyph is otherwise the only signal.
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
+    /// One length chip (`b3-breathe-setup`): the app's framed chip, filled when chosen.
     private func lengthPill(_ candidate: Int) -> some View {
         let selected = minutes == candidate
         return Button {
             minutes = candidate
         } label: {
             Text("\(candidate) min")
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.bark)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 11)
-                .background(Color.parchment, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .background(Color.moss.opacity(selected ? 0.10 : 0), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.moss.opacity(selected ? 1 : 0), lineWidth: 2)
-                )
         }
-        .buttonStyle(.plain)
-        // T1-5: a hand-rolled selection pill — the stroke/tint is otherwise the only signal.
+        .buttonStyle(ChipButtonStyle(selected: selected))
+        // T1-5: a selection chip — the fill is otherwise the only signal (the chip style also adds
+        // the selected trait; saying it here keeps the contract visible).
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 

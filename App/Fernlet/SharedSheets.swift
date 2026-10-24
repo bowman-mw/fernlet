@@ -77,7 +77,8 @@ struct WaterSheet: View {
             // 2026-10-18). The header's Cancel is one swipe away.
             .accessibilityAction(.escape) { dismiss() }
         }
-        .background(Color.parchment)
+        // World (b3-water): the sheet's paper.
+        .fernletSheetStyle()
         // Keyed to the seeded baseline, not the live count: an external +1 must not re-block the
         // swipe (the draft it would "discard" is not an edit of the user's).
         .interactiveDismissDisabled(draft != seeded)
@@ -103,13 +104,14 @@ struct WaterSheet: View {
     /// the layout branch it mirrors.
     private var heroCount: some View {
         VStack(spacing: 2) {
+            // World (b3-water): today's bottles in Fraunces 76 over the word in dim ink.
             Text("\(draft)")
-                .font(.fernletTimer(size: 56))
-                .foregroundStyle(Color.bark)
+                .font(.custom(FernletFontName.frauncesSemiBold, size: 76, relativeTo: .largeTitle))
+                .foregroundStyle(WorldPalette.bark)
                 .contentTransition(.numericText())
             Text(draft == 1 ? "bottle" : "bottles")
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.field)
+                .foregroundStyle(WorldPalette.dim)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityCustomContent("Total today", Text("\(totalOz) oz"))
@@ -162,14 +164,12 @@ struct WaterSheet: View {
         HStack(spacing: 8) {
             ForEach(0..<glyphCount, id: \.self) { index in
                 // Filled for each bottle in the draft, outlined for the rest: the count is carried by
-                // shape at full strength, not by a 25% ink at 1.38:1.
-                Image(systemName: index < draft ? "waterbottle.fill" : "waterbottle")
-                    .font(.title2)
-                    .foregroundStyle(Color.slate)
+                // shape at full strength. World (b3-water): pixel bottles, a gold mark after the target.
+                WorldSpriteView(sprite: index < draft ? WorldSprites.bottle : WorldSprites.bottleEmpty, scale: 4)
                 if index == target - 1 && target < glyphCount {
-                    Capsule()
-                        .fill(Color.goldenrod)
-                        .frame(width: 3, height: 24)
+                    Rectangle()
+                        .fill(WorldPalette.carbs)
+                        .frame(width: 3, height: 28)
                 }
             }
         }
@@ -235,12 +235,14 @@ struct WaterSheet: View {
         return Button {
             withAnimation(FernletMotion.fast) { action() }
         } label: {
+            // World (b3-water): big framed squares, − on paper in moss ink, + on moss in white.
             Image(systemName: systemImage)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(ink)
-                .frame(width: side, height: side)
-                .background(fill.opacity(disabled ? 0.45 : 1), in: Circle())
-                .overlay(Circle().stroke(Color.bark.opacity(stroke), lineWidth: 1))
+                .font(.title2.weight(.heavy))
+                .foregroundStyle(systemImage == "plus" ? WorldPalette.onAccent : WorldPalette.mossInk)
+                .frame(width: max(side, 64), height: max(side, 64))
+                .background((systemImage == "plus" ? WorldPalette.accent : WorldPalette.paperLight)
+                    .opacity(disabled ? 0.45 : 1), in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(WorldPalette.ink, lineWidth: 2.5))
         }
         .buttonStyle(.plain)
         .disabled(disabled)
@@ -250,8 +252,8 @@ struct WaterSheet: View {
     /// The one italic total line — "Plenty." only once the target is met (2c).
     private var totalLine: some View {
         Text(draft >= target ? "\(totalOz) oz today. Plenty." : "\(totalOz) oz today.")
-            .font(.fernlet(.bubble))
-            .foregroundStyle(Color.slate)
+            .font(FernletFramedFont.field)
+            .foregroundStyle(WorldPalette.dim)
     }
 
     /// Enough glyphs to show the target and the count, floored at 4 and capped at 12 (2c keeps the
@@ -318,7 +320,8 @@ struct SleepSheet: View {
 
             SheetSaveBar { save() }
         }
-        .background(Color.parchment)
+        // World (b3-sleep): the sheet's paper.
+        .fernletSheetStyle()
         .fernletDraftGuard(isDirty: draft != original, title: "Sleep") { dismiss() }
     }
 
@@ -339,8 +342,8 @@ struct SleepSheet: View {
                     }
                 }
                 Text(quality.description)
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.field)
+                    .foregroundStyle(WorldPalette.dim)
                     .fernletWrappingText()
             }
         }
@@ -499,35 +502,37 @@ struct HygieneSheet: View {
                 .padding(.bottom, 10)
             }
         }
-        .background(Color.parchment)
+        // World (b3-hygiene): the sheet's paper.
+        .fernletSheetStyle()
     }
 
-    /// One tap-to-toggle completion row with the checkmark state exposed to VoiceOver.
+    /// One tap-to-toggle completion row with the checkmark state exposed to VoiceOver. World
+    /// (b3-hygiene): a framed row with the task's pixel icon; a done row turns moss with a framed tick.
     private func careTaskRow(_ task: PersonalCareTask) -> some View {
         let isDone = store.isPersonalCareTaskCompleted(task)
         return Button { store.togglePersonalCareTask(task) } label: {
-            HStack {
+            HStack(spacing: 12) {
                 // At accessibility sizes the glyph gives way (the unwell row's convention): beside
                 // it, a one-word task like "Deodorant" was wider than the space left and was cut.
                 // Only the glyph is conditional, so the title stays the same view at every size.
                 if !dynamicTypeSize.isAccessibilitySize {
-                    Image(systemName: task.systemImage)
-                        .foregroundStyle(Color.bark)
+                    WorldSpriteView(sprite: PersonalCareSprites.sprite(forSymbol: task.systemImage), scale: 2)
+                        .frame(minWidth: 20)
                 }
                 Text(task.displayLabel)
-                    .foregroundStyle(Color.bark)
+                    .font(FernletFramedFont.rowTitle.weight(.semibold))
+                    .foregroundStyle(WorldPalette.bark)
                 Spacer()
-                if isDone {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(Color.moss)
-                }
+                CareTickBox(isDone: isDone)
             }
-            .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, 14)
+            .frame(minHeight: 54)
+            .background(isDone ? WorldPalette.sage : WorldPalette.paperLight, in: RoundedRectangle(cornerRadius: 12))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(isDone ? Color.moss.opacity(0.3) : Color.bark.opacity(0.08), lineWidth: 1)
+                    .strokeBorder(isDone ? WorldPalette.moss : WorldPalette.ink, lineWidth: 2.5)
             )
+            .contentShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
         // The checkmark glyph was the only "done" cue and it carries no label, so VoiceOver read a

@@ -23,6 +23,16 @@ enum PrivateHubSection: String, CaseIterable, Hashable, Identifiable {
     case worryBox = "Worry box"
     var id: String { rawValue }
 
+    /// The page's name for the World plate's Back on a page pushed from it (`b2-journal-day`:
+    /// "‹ Journal"), resolved from the catalog: the raw value is a token.
+    var plateBackTitle: String {
+        switch self {
+        case .journal: String(localized: "Journal")
+        case .cycle: String(localized: "Cycle")
+        case .worryBox: String(localized: "Worry box")
+        }
+    }
+
     /// The single source of truth for hub section visibility. `PrivateHubView.body` used to inline a
     /// second, near-identical copy of this filter that was the one actually running (the helper was
     /// only reached by tests) — so the tests could pass while the UI diverged. There is one filter now.
@@ -79,6 +89,8 @@ struct PrivateHubView: View {
     /// a screenshot of the LOCKED (or not-yet-configured) hub must never spend the
     /// once-per-session nudge on a banner drawn invisibly beneath that overlay.
     @Environment(FernletLockService.self) private var lockService
+    /// The World panel's plate navigation: while a day page is pushed, the section tabs step aside.
+    @Environment(\.fernletPlateNavigation) private var plateNavigation
 
     var body: some View {
         let visibleSections = PrivateHubSection.visibleSections(visibility: store.sensitiveSurfaceVisibility)
@@ -100,10 +112,14 @@ struct PrivateHubView: View {
         // iOS 26.5). Stacked, the page simply starts below the picker; the picker is opaque, so
         // content that used to scroll beneath it looked exactly like content clipped at its edge.
         VStack(spacing: 0) {
-            HubSectionPicker(
-                sections: Array(visibleSections),
-                selection: $section
-            ) { $0.rawValue }
+            // World (b2-journal-day, b2-cycle-day): a day page pushed under the plate covers the
+            // tabs, as the design draws it; Back on the plate returns to them.
+            if plateNavigation?.top == nil {
+                HubSectionPicker(
+                    sections: Array(visibleSections),
+                    selection: $section
+                ) { $0.rawValue }
+            }
             Group {
                 if isActive {
                     sectionPage(visibleSections: visibleSections)
@@ -113,7 +129,9 @@ struct PrivateHubView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(Color.parchment)
+        // World (b2-journal, b2-cycle, b2-worry-box): the panel's dotted page shows through, as on
+        // every panel; without the framed look it is today's parchment.
+        .fernletPageBackground()
         // Capture FRICTION (never a security control) over the whole hub — the three pages and
         // their pushed details share this one presentation host, so one attachment covers them
         // all; the five sensitive sheets present in their own contexts and attach at their own
@@ -130,10 +148,17 @@ struct PrivateHubView: View {
         // `.privateHub` is the scope that owns the sealed content key — unlocking the progress-photo
         // strip or App-lock settings does NOT open this tab (and vice versa).
         .fernletLockGate(scope: .privateHub, active: lockGateIsActive, privateHubOpener: privateHubOpener)
-        .onAppear { resetUnavailableSectionIfNeeded() }
+        .onAppear {
+            #if DEBUG
+            if let requested = UITestSupport.initialPrivateHubSection { section = requested }
+            #endif
+            resetUnavailableSectionIfNeeded()
+        }
         .onChange(of: store.sensitiveSurfaceVisibility) { _, _ in
             resetUnavailableSectionIfNeeded()
         }
+        // World: a day page's Back names the tab it came from ("‹ Journal", "‹ Cycle"), not the panel.
+        .task(id: section) { plateNavigation?.rootTitle = section.plateBackTitle }
     }
 
     /// Only the selected private page exists. The former nested page `TabView` retained Journal,

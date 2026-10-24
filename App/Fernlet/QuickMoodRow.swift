@@ -29,6 +29,8 @@ struct QuickMoodRow: View {
     /// The user's term of address, which the Quiet and Tired chips agree with (in what they draw,
     /// what VoiceOver says and what Voice Control answers to).
     @Environment(\.fernletTermOfAddress) private var termOfAddress
+    /// The World look (set at the app root): framed chips with ink-ringed feeling dots.
+    @Environment(\.fernletFramedLook) private var look
 
     private var currentTag: FeelingTag? {
         store.day.journals.last?.tag
@@ -38,8 +40,8 @@ struct QuickMoodRow: View {
         VStack(alignment: .leading, spacing: 8) {
             if showsLabel {
                 Text("How's today feeling?")
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
+                    .font(look != nil ? FernletFramedFont.field : .fernlet(.labelSmall))
+                    .foregroundStyle(look?.dim ?? Color.slate)
             }
             // Wraps rather than scrolls: as a horizontal scroller only the first four chips fit and
             // the fourth ended flush with the card edge, so nothing hinted that the two HARDER
@@ -88,12 +90,14 @@ struct QuickMoodRow: View {
     /// the Journal screen keep one mood-chip treatment. Shape, fill, ink and the selected trait all
     /// come from ``ChipButtonStyle`` now; this is content only.
     private func moodChipLabel(_ tag: FeelingTag) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: look != nil ? 7 : 6) {
+            // World (b2-journal, b2-log): the feeling's colour in an ink-ringed dot, as drawn.
             Circle()
                 .fill(tag.color)
-                .frame(width: 8, height: 8)
+                .frame(width: look != nil ? 14 : 8, height: look != nil ? 14 : 8)
+                .overlay { if let look { Circle().strokeBorder(look.ink, lineWidth: 2) } }
             Text(tag.label(addressing: termOfAddress))
-                .font(.fernlet(.label))
+                .font(look != nil ? FernletFramedFont.field.weight(.semibold) : .fernlet(.label))
                 .lineLimit(1)
         }
     }

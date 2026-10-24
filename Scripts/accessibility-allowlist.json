@@ -79,12 +79,6 @@
  },
  {
   "rule": "A8-MUTED-SLATE",
-  "path": "App/Fernlet/GroundingView.swift",
-  "line_contains": "stepIndex == 0 ? Color.slate.opacity(0.35)",
-  "reason": "DISABLED-STATE ink on an inactive control, which WCAG 1.4.3 and 1.4.11 both exempt: the dim branch of this ternary is taken exactly when the control's own `.disabled(stepIndex == 0)` is true, so VoiceOver announces it as dimmed and it cannot be activated. The ENABLED branch is the readable one (full-strength `slate`, 4.78:1 on parchment). If the `.disabled` predicate and this ternary ever stop being the same condition, this entry is wrong — delete it and decide the site again."
- },
- {
-  "rule": "A8-MUTED-SLATE",
   "path": "App/Fernlet/GuidedWorkoutEditorSheet.swift",
   "line_contains": "canMoveUp ? Color.moss : Color.slate.opacity(0.3)",
   "reason": "DISABLED-STATE ink on an inactive control, which WCAG 1.4.3 and 1.4.11 both exempt: the dim branch of this ternary is taken exactly when the control's own `.disabled(!canMoveUp)` is true, so VoiceOver announces it as dimmed and it cannot be activated. The ENABLED branch is the readable one (`moss`). If the `.disabled` predicate and this ternary ever stop being the same condition, this entry is wrong — delete it and decide the site again."
@@ -142,12 +136,6 @@
   "path": "App/Fernlet/JournalView.swift",
   "line_contains": ".background(Color.slate.opacity(0.10), in: Circle())",
   "reason": "A BACKDROP, not ink: a slate@0.10 circle behind a full-strength `Color.slate` ✕ glyph that is the control's only visible content and is named by its `.accessibilityLabel(\"Dismiss the prompt\")`. The glyph measures 4.22:1 against the composited circle in the worst case (default light, card on parchment), 4.52:1 on cream, ≥4.96:1 in dark and ≥5.96:1 under Increase Contrast — all above the 3:1 non-text floor. The circle itself measures ~1.14:1 against its card and carries no information."
- },
- {
-  "rule": "A8-MUTED-SLATE",
-  "path": "App/Fernlet/CycleTrackerView.swift",
-  "line_contains": ".background(Color.slate.opacity(0.10), in: Capsule())",
-  "reason": "A BACKDROP under full-strength TEXT, kept because the text clears the 4.5:1 floor on the surface this chip actually sits on: the \"Not now\" capsule inside the period-aware-care primer's `FernletCard`. Full `Color.slate` on slate@0.10 composited over cream measures 4.52:1 in default light, 4.96:1 in dark and 6.38:1 under Increase Contrast. Over PARCHMENT the same chip would be 4.22:1 and fail, which is why `MoveView`'s rework chip, which sits on parchment, was moved to a cream fill instead. If this chip ever leaves its card, delete this entry and re-measure."
  },
  {
   "rule": "A8-MUTED-SLATE",

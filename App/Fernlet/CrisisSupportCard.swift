@@ -26,41 +26,24 @@ struct CrisisSupportCard: View {
     /// The host's accessibility-identifier prefix; each button appends `.<action id>`.
     let identifierPrefix: String
 
-    private let cardRadius: CGFloat = 22
-    private let pillRadius: CGFloat = 13
-
-    // Surface-local warm hues: the card keeps every element in one amber-brown family.
-    private static let headingInk = Color(light: Color(red: 0.353, green: 0.263, blue: 0.133),
-                                          dark:  Color(red: 0.941, green: 0.875, blue: 0.706))
-    private static let proseInk = Color(light: Color(red: 0.416, green: 0.325, blue: 0.200),
-                                        dark:  Color(red: 0.796, green: 0.725, blue: 0.561))
-    private static let outlineInk = Color(light: Color(red: 0.353, green: 0.263, blue: 0.133),
-                                          dark:  Color(red: 0.878, green: 0.722, blue: 0.376))
-    /// Secondary button outline stroke — brown @0.35 in light, goldenrod @0.4 in dark (mockup §1a).
-    private static let outlineStroke = Color(light: Color(red: 0.353, green: 0.263, blue: 0.133).opacity(0.35),
-                                             dark:  Color(red: 0.878, green: 0.722, blue: 0.376).opacity(0.40))
-    /// On-accent ink for the filled Call button — parchment in light, near-black in dark.
-    private static let filledInk = Color(light: Color(red: 0.961, green: 0.937, blue: 0.878),
-                                         dark:  Color(red: 0.102, green: 0.082, blue: 0.055))
-
     var body: some View {
         let resource = CrisisResources.resource(for: Locale.current.region)
         VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 10) {
-                Image(systemName: "heart")
-                    .font(.system(size: 17, weight: .regular))
-                    .foregroundStyle(Color.goldenrod)
+                // World (b3-first-aid): the small pixel heart, decorative beside the heading.
+                WorldSpriteView(sprite: WorldSprites.heartSm, scale: 2)
+                    .accessibilityHidden(true)
                 Text("If things feel heavy")
-                    .font(.fernlet(.headerMedium))
-                    .foregroundStyle(Self.headingInk)
+                    .font(FernletFramedFont.rowTitle.weight(.bold))
+                    .foregroundStyle(WorldPalette.bark)
                     // T2-19: the card's heading, so a distressed user reaches the crisis line by
                     // heading navigation instead of swiping through everything above it.
                     .accessibilityAddTraits(.isHeader)
                     .accessibilityHeading(.h2)
             }
             Text(resource.blurb)
-                .font(.fernlet(.body))
-                .foregroundStyle(Self.proseInk)
+                .font(FernletFramedFont.field)
+                .foregroundStyle(WorldPalette.dim)
                 .lineSpacing(2)
                 .fernletWrappingText()
                 .padding(.bottom, FernletMetrics.spaceXs)
@@ -72,45 +55,25 @@ struct CrisisSupportCard: View {
                 }
             }
         }
-        .padding(20)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            LinearGradient(
-                colors: [Color.goldenrod.opacity(0.18), Color.goldenrod.opacity(0.11)],
-                startPoint: .top,
-                endPoint: .bottom
-            ),
-            in: RoundedRectangle(cornerRadius: cardRadius, style: .continuous)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: cardRadius, style: .continuous)
-                .stroke(Color.goldenrod.opacity(0.32), lineWidth: 1)
-        )
+        // World (b3-first-aid): the framed card of the design language.
+        .fernletFramed(WorldTheme.framedLook, fill: WorldPalette.paper, cornerRadius: FernletFramedLook.cardRadius)
     }
 
     /// One call/text button. The URL is already resolved by ``CrisisResources``, so there is no
-    /// optional-URL branch that could silently render nothing.
+    /// optional-URL branch that could silently render nothing. World: the first (Call) is the framed
+    /// moss primary, the rest framed secondaries.
     private func supportLink(_ action: CrisisResourceAction, filled: Bool) -> some View {
         Link(destination: action.url) {
             HStack(spacing: 8) {
                 Image(systemName: action.systemImage)
                     .font(.subheadline.weight(.semibold))
                 Text(action.title)
-                    .font(.fernlet(.label))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .foregroundStyle(filled ? Self.filledInk : Self.outlineInk)
-            .background {
-                if filled {
-                    RoundedRectangle(cornerRadius: pillRadius, style: .continuous)
-                        .fill(Color.moss)
-                } else {
-                    RoundedRectangle(cornerRadius: pillRadius, style: .continuous)
-                        .stroke(Self.outlineStroke, lineWidth: 1.5)
-                }
-            }
         }
+        .buttonStyle(ActionPillButtonStyle(filled ? .primary : .secondary))
         .accessibilityIdentifier("\(identifierPrefix).\(action.id)")
     }
 }
