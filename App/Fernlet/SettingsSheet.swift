@@ -72,8 +72,6 @@ struct SettingsSheet: View {
     /// `colorScheme` (nil for `.system`) to `preferredColorScheme`, so "System" really does follow
     /// the phone; the legacy Dark-mode Bool is migrated once at launch.
     @AppStorage(FernletAppearanceMode.storageKey) private var appearanceMode: FernletAppearanceMode = .system
-    @AppStorage(FernletThemeDefaults.customLightBackgroundKey) private var customLightBackgroundHex = FernletThemeDefaults.lightBackgroundHex
-    @AppStorage(FernletThemeDefaults.customDarkBackgroundKey) private var customDarkBackgroundHex = FernletThemeDefaults.darkBackgroundHex
     /// This screen's own "delete everything" wipe state (busy / success / failure) plus the shared
     /// confirmation glue — deliberately per-screen, never shared with ``PrivacyDataSettingsView``'s.
     @State private var deleteFlow = DeleteEverythingFlow()
@@ -98,10 +96,6 @@ struct SettingsSheet: View {
     @State private var showDeleteEverything = false
     /// Sub-labels drop at accessibility sizes (5a·AX3): the breadcrumb line is the first casualty.
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    /// Read for the Appearance page's live "Contrast" readout only. The renderer's colour providers
-    /// already forward `trait.accessibilityContrast`; this is the SwiftUI-side spelling of the same
-    /// axis, so the number the picker quotes is the number the user will actually get.
-    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     /// The World's framed look (set at the app's root): Settings draws its own framed search field
     /// and framed rows under it, and today's system chrome without it.
     @Environment(\.fernletFramedLook) private var framedLook
@@ -168,8 +162,9 @@ struct SettingsSheet: View {
             }
         }
         // No swipe-to-dismiss mid-wipe: a wipe is multi-second and the sheet must not close (or re-run)
-        // out from under it.
+        // out from under it. In a World panel the plate's ✕ is held off the same way.
         .interactiveDismissDisabled(deleteFlow.isDeleting)
+        .worldPanelHeld(deleteFlow.isDeleting)
         .destructiveConfirmation($pendingDestructiveAction)
         // Success ("Done") dismisses the sheet — the visit is over; failure keeps it put for a retry.
         .deleteEverythingAlerts(deleteFlow, successButtonTitle: "Done", successButtonRole: nil) {
@@ -639,40 +634,17 @@ struct SettingsSheet: View {
             SectionLabel("Companion feelings")
             // A change re-derives the widget's emotion timeline, so republish it at once.
             CompanionFeelingsSettingsCard(onChange: { store.publishWidgetSnapshot() })
-            SectionLabel("Backgrounds")
-            Text("Choose separate backgrounds for light and dark mode. Cards and input boxes stay in the same color family so the existing text colors remain readable.")
-                .font(FernletFramedFont.note)
-                .foregroundStyle(framedLook?.dim ?? Color.slate)
-                .fernletWrappingText()
-                .padding(.horizontal, 4)
-            // `b2-colors` (App colors: paper, wood and accent) is not built yet; today's two
-            // background pickers stay here as framed rows until it is.
+            // `b2-settings-appearance` (redrawn with `b2-colors`): today's two background pickers
+            // moved into App colors (Paper, with Wood and Accent), one row here that pushes it.
+            SectionLabel("Colors")
             FernletFramedSection(header: nil) {
-                themeColorRow(
-                    title: "Light mode",
-                    color: themeColorBinding(
-                        keyPath: \.customLightBackgroundHex,
-                        defaultHex: FernletThemeDefaults.lightBackgroundHex
-                    ),
-                    hex: customLightBackgroundHex,
-                    defaultHex: FernletThemeDefaults.lightBackgroundHex,
-                    isDarkRow: false
-                ) {
-                    customLightBackgroundHex = FernletThemeDefaults.lightBackgroundHex
+                NavigationLink {
+                    AppColorsPage(store: store)
+                } label: {
+                    AppColorsSettingsRow()
                 }
-
-                themeColorRow(
-                    title: "Dark mode",
-                    color: themeColorBinding(
-                        keyPath: \.customDarkBackgroundHex,
-                        defaultHex: FernletThemeDefaults.darkBackgroundHex
-                    ),
-                    hex: customDarkBackgroundHex,
-                    defaultHex: FernletThemeDefaults.darkBackgroundHex,
-                    isDarkRow: true
-                ) {
-                    customDarkBackgroundHex = FernletThemeDefaults.darkBackgroundHex
-                }
+                .buttonStyle(FernletRowButtonStyle(showsChevron: true))
+                .accessibilityIdentifier("settings.appColors")
             }
             todayPanelSection
         }
@@ -690,153 +662,6 @@ struct SettingsSheet: View {
                 .fernletWrappingText()
         }
         .settingsCard()
-    }
-
-    /// One background row: the colour picker, its hex, the live contrast line and Reset.
-    ///
-    /// `title` is a `LocalizedStringKey`, not a `String`: as a `String` it took `ColorPicker`'s
-    /// verbatim initializer, so "Light mode" and "Dark mode" never reached the catalog.
-    private func themeColorRow(title: LocalizedStringKey, color: Binding<Color>, hex: String, defaultHex: String, isDarkRow: Bool, reset: @escaping () -> Void) -> some View {
-        // One framed row (`.sr`): the picker with its name, the hex and contrast line, then a small
-        // framed Reset.
-        HStack(spacing: 12) {
-            ColorPicker(title, selection: color, supportsOpacity: false)
-                .font(FernletFramedFont.rowTitle)
-                .foregroundStyle(framedLook?.text ?? Color.bark)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(hex.uppercased())
-                    .font(.fernlet(.stat))
-                    .foregroundStyle(framedLook?.dim ?? Color.slate)
-                themeContrastLine(hex: hex, defaultHex: defaultHex, isDarkRow: isDarkRow)
-            }
-            Button("Reset", action: reset)
-                .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
-                // Voice Control: both colour rows draw "Reset"; the row's title tells them apart.
-                .accessibilityInputLabels([Text("Reset"), Text("Reset \(Text(title))")])
-                .disabled(hex.caseInsensitiveCompare(defaultHex) == .orderedSame)
-        }
-        .padding(.vertical, 10)
-    }
-
-    /// T2-7's live readout: what the picked background will actually measure, computed from the
-    /// same ``FernletThemePalette/fitted(background:contrast:)`` the renderer uses, while the
-    /// picker is open — **on the same contrast axis the reader is running**.
-    ///
-    /// Before the ink-fit guardrail, a mid-grey like `#B3B3B3` fell on the dark-ink side of one
-    /// binary luminance threshold and produced 1.79:1 primary ink and 1.13:1 secondary — on every
-    /// screen, including the Reset button that would undo it. The fit means the *ink* is now safe
-    /// whatever the user picks, and this line is how they can see that rather than take it on
-    /// trust. The residual risk the fit cannot cover is the **accents**, which are fixed hues that
-    /// do not adapt to a custom background, so the line calls that out separately when one of them
-    /// drops under the 3:1 non-text floor.
-    ///
-    /// The contrast axis is forwarded because it changes the answer: with Increase Contrast on, the
-    /// palette the renderer builds is fitted to raised targets (and the *default* background swaps
-    /// to the approved high-contrast secondary ink), so a readout computed at `.unspecified` quotes
-    /// a number the user will never see. A settings line that disagrees with what the app actually
-    /// renders is worse than no line — the same reason the default hex takes the default palette
-    /// below rather than the fitted one.
-    @ViewBuilder
-    private func themeContrastLine(hex: String, defaultHex: String, isDarkRow: Bool) -> some View {
-        #if canImport(UIKit)
-        if let background = UIColor(hex: hex) {
-            // SwiftUI's spelling of the axis, in UIKit's. `.increased` is `.high`; `.standard` and
-            // anything the environment cannot answer stay `.unspecified`, which is what every
-            // palette call in the app meant before it carried a contrast at all.
-            let contrast: UIAccessibilityContrast = colorSchemeContrast == .increased ? .high : .unspecified
-            // The DEFAULT hex takes the default palette, not the fitted one — the two differ by a
-            // few tenths, and a settings line that disagrees with what the app actually renders is
-            // worse than no line. `fitted()` only ever runs on a genuinely custom colour, exactly
-            // as `current(for:contrast:)` does.
-            let palette = hex.caseInsensitiveCompare(defaultHex) == .orderedSame
-                ? FernletThemePalette.current(for: isDarkRow ? .dark : .light, contrast: contrast)
-                : FernletThemePalette.fitted(background: background, contrast: contrast)
-            // The WORST of the four pairs, not the flattering one. Text is drawn on both surfaces
-            // and in both inks, so the number a user needs is the one they will actually struggle
-            // with — reporting `primary on box` would have read 12:1 for the mid-grey background
-            // whose *secondary ink on the page* was 1.13:1.
-            let ratio = Self.ratioText(Self.worstInkContrast(palette))
-            // Two separate `Text` literals rather than a ternary INSIDE one: a ternary of two
-            // interpolated literals infers `String`, which silently opts the line out of the string
-            // catalog (the localization wall's sharpest edge). Each literal here is its own
-            // `LocalizedStringKey` and each harvests as its own "Contrast %@:1…" format string.
-            if Self.accentsFallBelowFloor(on: background) {
-                Text("Contrast \(ratio):1 · accents may be hard to see")
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.goldenrodInk)
-                    // Wraps rather than truncating: at large content sizes this sentence needs more
-                    // than two lines and the audit reported it clipped. A contrast readout that
-                    // truncates is a particularly poor thing to lose at large text sizes.
-                    .fernletWrappingText()
-            } else {
-                Text("Contrast \(ratio):1")
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-            }
-        }
-        #endif
-    }
-
-    /// The ratio rendered to one decimal place, locale-formatted (Phase 0 ships comma decimals).
-    private static func ratioText(_ ratio: CGFloat) -> String {
-        (Double(ratio)).formatted(.number.precision(.fractionLength(1)))
-    }
-
-    /// The worst of the four ink/surface pairs a fitted palette produces — primary and secondary
-    /// ink against both the page background and the card box.
-    private static func worstInkContrast(_ palette: FernletThemePalette) -> CGFloat {
-        min(
-            min(palette.primaryText.contrastRatio(to: palette.background),
-                palette.primaryText.contrastRatio(to: palette.box)),
-            min(palette.secondaryText.contrastRatio(to: palette.background),
-                palette.secondaryText.contrastRatio(to: palette.box))
-        )
-    }
-
-    /// Whether either of the two accents that carry *meaning* on a background — moss (the app's
-    /// affirmative tint, 179 foreground sites) and terracotta (destructive) — falls under the 3:1
-    /// WCAG non-text floor on either surface the chosen colour produces.
-    ///
-    /// Accents are fixed hues with no dependence on the background, so unlike the inks they cannot
-    /// be fitted; the honest move is to warn rather than to silently recolour the whole design
-    /// system out from under the user's choice. This is the one risk the T2-7 guardrail does not
-    /// remove, which is exactly why the line says so.
-    ///
-    /// Deliberately takes no contrast argument, unlike the ratio beside it: the two colours it
-    /// measures against are the background itself and `palette.box`, and `boxColor(from:…)` is a
-    /// fixed 0.97/0.17 brightness pin with no contrast axis at all. Only the *inks* move with
-    /// Increase Contrast, so threading it here would imply a dependence that does not exist.
-    private static func accentsFallBelowFloor(on background: UIColor) -> Bool {
-        let palette = FernletThemePalette.fitted(background: background)
-        let isDark = background.relativeLuminance < FernletThemePalette.inkFamilyCrossover
-        let moss = isDark
-            ? UIColor(red: 0.498, green: 0.690, blue: 0.412, alpha: 1)
-            : UIColor(red: 0.369, green: 0.518, blue: 0.302, alpha: 1)
-        let terracotta = isDark
-            ? UIColor(red: 0.839, green: 0.459, blue: 0.345, alpha: 1)
-            : UIColor(red: 0.724, green: 0.329, blue: 0.239, alpha: 1)
-        let worst = [moss, terracotta]
-            .flatMap { [$0.contrastRatio(to: background), $0.contrastRatio(to: palette.box)] }
-            .min() ?? 21
-        return worst < 3.0
-    }
-
-    private func themeColorBinding(keyPath: ReferenceWritableKeyPath<SettingsSheet, String>, defaultHex: String) -> Binding<Color> {
-        Binding(
-            get: {
-                #if canImport(UIKit)
-                return Color(UIColor(hex: self[keyPath: keyPath]) ?? UIColor(hex: defaultHex) ?? .systemBackground)
-                #else
-                return Color.parchment
-                #endif
-            },
-            set: { newValue in
-                #if canImport(UIKit)
-                self[keyPath: keyPath] = UIColor(newValue).hexString ?? defaultHex
-                #endif
-            }
-        )
     }
 
     /// The Today panel's row on the Appearance page (World build, design `b1-today-editor`, approved

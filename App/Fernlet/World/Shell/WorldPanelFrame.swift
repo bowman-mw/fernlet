@@ -70,6 +70,7 @@ struct WorldPanelFrame<Content: View>: View {
                 FernletBackButton(verbatim: navigation.topBackTitle, compact: FernletBackButton.isCompact(title: page.title)) {
                     navigation.popTop()
                 }
+                    .disabled(navigation.isHeld)
                     .padding(.trailing, 6)
                 plateText(page.title)
             } else {
@@ -81,7 +82,9 @@ struct WorldPanelFrame<Content: View>: View {
                 WorldDoneButton(action: onClose)
             } else {
                 // A pushed page holding unsaved work (the Creation Studio's paint) asks first.
+                // Off while a page holds the panel (Delete everything's wipe is running).
                 WorldCloseButton { if navigation.allowsClose() { onClose() } }
+                    .disabled(navigation.isHeld)
             }
         }
         .padding(EdgeInsets(top: 4, leading: 16, bottom: 13, trailing: 12))

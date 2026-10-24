@@ -274,6 +274,9 @@ struct PrivacyDataSettingsView: View {
         // applies from a pushed child of the sheet.
         .navigationBarBackButtonHidden(deleteFlow.isDeleting)
         .interactiveDismissDisabled(deleteFlow.isDeleting)
+        // In a World panel the plate's Back and ✕ (and the edge swipe) are the escapes: held off
+        // until the wipe ends.
+        .worldPanelHeld(deleteFlow.isDeleting)
         .sheet(isPresented: $isShowingDisableConfirmation) {
             disableICloudConfirmationSheet
         }

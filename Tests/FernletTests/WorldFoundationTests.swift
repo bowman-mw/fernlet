@@ -163,6 +163,23 @@ struct WorldFoundationTests {
         #expect(nav.allowsClose() && paint.asked == 2)
     }
 
+    /// A held plate (Delete everything's wipe running on Settings or Privacy & Data): Back pops nothing
+    /// and ✕ may not close; released, both work again.
+    @Test func aHeldPlateKeepsItsPageAndThePanel() {
+        let clock = Clock()
+        let nav = plate(clock)
+        var popped = 0
+        nav.show(id: UUID(), title: "Privacy & Data", pop: { popped += 1 })
+        nav.isHeld = true
+        nav.popTop()
+        #expect(popped == 0 && nav.top?.title == "Privacy & Data", "held: Back does nothing")
+        #expect(!nav.allowsClose(), "held: the panel's ✕ stays shut")
+        nav.isHeld = false
+        #expect(nav.allowsClose())
+        nav.popTop()
+        #expect(popped == 1)
+    }
+
     /// The studio's unsaved paint and how often its close guard asked, for the test above.
     @MainActor final class StudioPaint {
         var unsaved = true

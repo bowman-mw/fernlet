@@ -7,8 +7,9 @@ import FernletUI
 /// colour picker) with the hex, the contrast line and Reset; then Wood and Accent (``AppWoodCard``,
 /// ``AppAccentCard``), stored through ``WorldAppColors``.
 ///
-/// Opens from Customize (and is meant to replace Appearance's Backgrounds). It writes the same two
-/// stored backgrounds the Appearance page does (``FernletThemeDefaults``), so both stay in step.
+/// Opens from Settings › Appearance (``AppColorsSettingsRow``, the approved path) and from Customize.
+/// It writes today's two stored backgrounds (``FernletThemeDefaults``), which Appearance's pickers
+/// used to.
 struct AppColorsPage: View {
     var store: FernletStore
     @AppStorage(FernletThemeDefaults.customLightBackgroundKey) private var lightHex = FernletThemeDefaults.lightBackgroundHex
@@ -125,8 +126,82 @@ private struct AppPaperRow: View {
         let worst = min(min(palette.primaryText.contrastRatio(to: palette.background), palette.primaryText.contrastRatio(to: palette.box)),
                         min(palette.secondaryText.contrastRatio(to: palette.background), palette.secondaryText.contrastRatio(to: palette.box)))
         let ratio = Double(worst).formatted(.number.precision(.fractionLength(1)))
+        // Today's Appearance warning, kept when the backgrounds moved here: the meaning accents (moss,
+        // terracotta) cannot be fitted to a custom paper, so the line says when they drop under 3:1.
+        guard !AppPaperContrast.accentsFallBelowFloor(on: background) else {
+            return String(localized: "Contrast \(ratio):1 · accents may be hard to see",
+                          comment: "App colors (and formerly Appearance): the worst text contrast the chosen paper gives, when the meaning accents fall under 3:1 on it")
+        }
         return String(localized: "appColors.contrast", defaultValue: "Contrast \(ratio):1",
                       comment: "App colors: the worst text contrast the chosen paper gives, after its hex ('Contrast 12.7:1')")
+    }
+}
+
+/// The accent check today's Appearance page ran beside a custom background, moved here with the
+/// backgrounds (`b2-colors`).
+nonisolated enum AppPaperContrast {
+    /// Whether either of the two accents that carry *meaning* on a background — moss (the app's
+    /// affirmative tint, 179 foreground sites) and terracotta (destructive) — falls under the 3:1
+    /// WCAG non-text floor on either surface the chosen colour produces.
+    ///
+    /// Accents are fixed hues with no dependence on the background, so unlike the inks they cannot
+    /// be fitted; the honest move is to warn rather than to silently recolour the whole design
+    /// system out from under the user's choice. This is the one risk the T2-7 guardrail does not
+    /// remove, which is exactly why the line says so.
+    ///
+    /// Deliberately takes no contrast argument, unlike the ratio beside it: the two colours it
+    /// measures against are the background itself and `palette.box`, and `boxColor(from:…)` is a
+    /// fixed 0.97/0.17 brightness pin with no contrast axis at all. Only the *inks* move with
+    /// Increase Contrast, so threading it here would imply a dependence that does not exist.
+    static func accentsFallBelowFloor(on background: UIColor) -> Bool {
+        let palette = FernletThemePalette.fitted(background: background)
+        let isDark = background.relativeLuminance < FernletThemePalette.inkFamilyCrossover
+        let moss = isDark
+            ? UIColor(red: 0.498, green: 0.690, blue: 0.412, alpha: 1)
+            : UIColor(red: 0.369, green: 0.518, blue: 0.302, alpha: 1)
+        let terracotta = isDark
+            ? UIColor(red: 0.839, green: 0.459, blue: 0.345, alpha: 1)
+            : UIColor(red: 0.724, green: 0.329, blue: 0.239, alpha: 1)
+        let worst = [moss, terracotta]
+            .flatMap { [$0.contrastRatio(to: background), $0.contrastRatio(to: palette.box)] }
+            .min() ?? 21
+        return worst < 3.0
+    }
+}
+
+/// Settings › Appearance's one Colors row (`b2-settings-appearance`, redrawn with `b2-colors`): "App
+/// colors" with its line, and four small swatches of what is chosen now (light paper, dark paper,
+/// wood, accent). It pushes ``AppColorsPage``.
+struct AppColorsSettingsRow: View {
+    @AppStorage(FernletThemeDefaults.customLightBackgroundKey) private var lightHex = FernletThemeDefaults.lightBackgroundHex
+    @AppStorage(FernletThemeDefaults.customDarkBackgroundKey) private var darkHex = FernletThemeDefaults.darkBackgroundHex
+    @Environment(\.worldAppColors) private var appColors
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                label
+                swatches
+            }
+            label
+        }
+    }
+
+    private var label: some View {
+        FernletRowLabel(title: Text("App colors"),
+                        detail: Text("Paper, wood and accent, for light and dark mode.",
+                                     comment: "Settings › Appearance: the App colors row's second line"))
+    }
+
+    /// The four chosen colours, decorative (the page they open names them).
+    private var swatches: some View {
+        HStack(spacing: 4) {
+            AppColorSwatchChip(colour: Color(UIColor(hex: lightHex) ?? .systemBackground), size: 18)
+            AppColorSwatchChip(colour: Color(UIColor(hex: darkHex) ?? .black), size: 18)
+            AppColorSwatchChip(colour: appColors.wood.tones.wood, size: 18)
+            AppColorSwatchChip(colour: appColors.accent.tones.accent, size: 18)
+        }
+        .accessibilityHidden(true)
     }
 }
 

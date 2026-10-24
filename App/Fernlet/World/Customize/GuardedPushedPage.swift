@@ -66,8 +66,9 @@ private final class PlateBackGate {
     var onBlocked: (() -> Void)?
 }
 
-/// Turns the navigation controller's edge swipe off while the page is guarded, and back on after.
-private struct EdgeSwipeGate: UIViewControllerRepresentable {
+/// Turns the navigation controller's edge swipe off while the page is guarded (or the panel is held,
+/// ``SwiftUI/View/worldPanelHeld(_:)``), and back on after.
+struct EdgeSwipeGate: UIViewControllerRepresentable {
     let isEnabled: Bool
 
     func makeUIViewController(context: Context) -> GateController {

@@ -3347,9 +3347,10 @@ struct LocalizationBoundaryTests {
                      role: "the Ask an AI card's two bullets"),
         // Spanish round, settings lane (2026-10-20): `String` helpers on the Settings pages whose
         // literal callers never reached the catalog.
-        ForkedMember(path: "App/Fernlet/SettingsSheet.swift",
-                     declaration: "private func themeColorRow(title: LocalizedStringKey, color: Binding<Color>, hex: String, defaultHex: String, isDarkRow: Bool, reset: @escaping () -> Void) -> some View {",
-                     role: "Appearance's background rows: the colour picker's name and the row's Reset Voice Control label"),
+        // The background rows moved from Appearance to App colors' Paper card (World build, `b2-colors`).
+        ForkedMember(path: "App/Fernlet/World/Customize/AppColorsPage.swift",
+                     declaration: "let title: LocalizedStringKey",
+                     role: "App colors' Paper rows (formerly Appearance's background rows): the row's name and its Reset Voice Control label"),
         ForkedMember(path: "App/Fernlet/SettingsSheet.swift",
                      declaration: "private var connectionInspectorModeDescription: LocalizedStringKey {",
                      role: "the Connection Inspector mode picker's explanation line"),
@@ -3590,8 +3591,8 @@ struct LocalizationBoundaryTests {
     static let settingsLaneForkKeys: [HarvestedKey] = {
         let app = "App/Fernlet/Localizable.xcstrings"
         let appKeys: [(key: String, source: String)] = [
-            ("Light mode", "SettingsSheet.themeColorRow, forked String → LocalizedStringKey"),
-            ("Dark mode", "SettingsSheet.themeColorRow, forked String → LocalizedStringKey"),
+            ("Light mode", "AppColorsPage's AppPaperRow (was SettingsSheet.themeColorRow), forked String → LocalizedStringKey"),
+            ("Dark mode", "AppColorsPage's AppPaperRow (was SettingsSheet.themeColorRow), forked String → LocalizedStringKey"),
             ("No overlay and no saved history.", "SettingsSheet.connectionInspectorModeDescription"),
             ("Records session history without showing the live overlay.", "SettingsSheet.connectionInspectorModeDescription"),
             ("Records session history and shows the live inspector when you open it manually.",

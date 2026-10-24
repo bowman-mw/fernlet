@@ -48,6 +48,10 @@ public final class FernletPlateNavigation {
 
     /// The plate's own title: where Back from the first pushed page goes.
     public var rootTitle: String
+    /// Whether a page is running something the person must not walk away from (Delete everything's
+    /// wipe): the plate's Back and the panel's ✕ are off while it is set (``popTop()`` does nothing and
+    /// ``allowsClose()`` answers false). The page that sets it clears it.
+    public var isHeld = false
     /// The recorded pages, bottom first.
     public private(set) var pages: [Page] = []
     /// The close guards of pages holding unsaved work, by page (``setCloseGuard(id:_:)``). Only the
@@ -110,7 +114,7 @@ public final class FernletPlateNavigation {
     /// Back on the plate: pops the page showing. A bottom page goes at once, since the page under it may
     /// never have been recorded (a stack opened deep).
     public func popTop() {
-        guard let index = topIndex else { return }
+        guard !isHeld, let index = topIndex else { return }
         pages[index].pop()
         if index == 0 { pages.remove(at: 0) }
     }
@@ -125,10 +129,12 @@ public final class FernletPlateNavigation {
         closeGuards[id] = closeGuard
     }
 
-    /// Whether the panel's ✕ may close the panel now: the page showing answers through its close guard
-    /// when it has one (false: it is asking the person first); every other page lets it close. Only
-    /// the page on screen is asked, since only it can show its question.
+    /// Whether the panel's ✕ may close the panel now: never while the plate is held (``isHeld``);
+    /// otherwise the page showing answers through its close guard when it has one (false: it is asking
+    /// the person first), and every other page lets it close. Only the page on screen is asked, since
+    /// only it can show its question.
     public func allowsClose() -> Bool {
+        guard !isHeld else { return false }
         guard let top, let closeGuard = closeGuards[top.id] else { return true }
         return closeGuard()
     }
