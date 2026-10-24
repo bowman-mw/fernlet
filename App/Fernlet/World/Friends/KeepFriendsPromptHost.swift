@@ -43,8 +43,9 @@ import SwiftUI
 /// while one is open and a prompt that is up is withdrawn, unanswered, when one starts.
 struct KeepFriendsPromptHost: ViewModifier {
     var store: FernletStore
-    /// Whether one of the root's own presentations covers the tabs (the root sheet, the connection
-    /// inspector, a recipe share review, a Messages import…).
+    /// Whether one of the root's other presentations covers the tabs (the root sheet, the connection
+    /// inspector, a recipe share review, a Messages import…). Never this prompt itself: its watchdog's
+    /// withdrawal would then read as a covering sheet going away and re-arm the check without bound.
     var isRootSheetUp: Bool
     /// Whether the launch screen has finished.
     var launchComplete: Bool

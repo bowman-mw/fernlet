@@ -46,6 +46,10 @@ struct CompanionEmotionPrivacyTests {
         // World build step 3: the map's companion reads the feeling, as Home's does, for its sleeping
         // pose and its VoiceOver value. It neither persists nor sends it.
         "App/Fernlet/World/Home/WorldMapCompanion.swift",
+        // World Review refinement `ref-comp-close` (lane refine): the companion up close reads the
+        // feeling exactly as the map's companion does, for its asleep pose, its status line and its
+        // VoiceOver value. It neither persists nor sends it.
+        "App/Fernlet/World/Companion/WorldCompanionCloseUp.swift",
         // World build, the camera on your own (lane friends-solo): reads only the companion's sleep
         // window (`CompanionEmotionPreferences.sleepWindow()`) to time when a solo photo shows. It never
         // reads, persists or sends the emotion itself.

@@ -335,7 +335,7 @@ struct ContentView: View {
             // included (owner, 2026-10-24), once per session end; never over a root presentation or a
             // cover, never in a decoy.
             .modifier(KeepFriendsPromptHost(
-                store: store, isRootSheetUp: rootSheetIsCoveringTabs, launchComplete: launcher.isDone,
+                store: store, isRootSheetUp: rootPresentationOtherThanKeepPromptIsUp, launchComplete: launcher.isDone,
                 isCoverUp: isWorldCameraOpen || isAlbumCoverUp, keepFriendsPromptPresented: $isKeepFriendsPromptUp
             ))
     }
@@ -914,13 +914,19 @@ struct ContentView: View {
     /// only while `activeSheet` is nil, so checking the pending queue directly covers it in
     /// both states.
     private var rootSheetIsCoveringTabs: Bool {
+        rootPresentationOtherThanKeepPromptIsUp || isKeepFriendsPromptUp
+    }
+
+    /// The root's presentations except the keep-as-friends prompt: what that prompt waits out. Its own
+    /// flag stays out, or its watchdog's withdrawal would read as a covering sheet going away and
+    /// re-arm the check without bound.
+    private var rootPresentationOtherThanKeepPromptIsUp: Bool {
         activeSheet != nil
             || store.showConnectionInspector
             || store.recipeShareManager.pendingRecipeShares.first != nil
             || adjustingLoggedMeal != nil
             || messagesRecipeImport != nil
             || messagesWorkoutPlanImport != nil
-            || isKeepFriendsPromptUp
     }
 
     private var tabPages: some View {

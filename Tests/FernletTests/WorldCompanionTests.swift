@@ -38,6 +38,9 @@ struct WorldCompanionTests {
         let drowsy = WorldCompanionPainter.paint(state: .okay, look: look, pose: WorldCompanionPose(drowsy: true))
         #expect(drowsy != WorldCompanionPainter.paint(state: .okay, look: look, pose: WorldCompanionPose()))
         #expect(drowsy.cells.contains(WorldCompanionLook.stateHex(.okay)), "winding down keeps the band's colour")
+        let thriving = WorldCompanionLook(body: WorldCompanionLook.stateHex(.thriving))
+        let sleepy = WorldCompanionPainter.paint(state: .thriving, look: thriving, pose: WorldCompanionPose(drowsy: true))
+        #expect(!sleepy.cells.contains(WorldCompanionPainter.blush), "the sleepy face drops a bright day's blush")
         var facts = WorldMapLine.Facts(sky: .rain)
         let rain = WorldMapLine.line(facts)
         facts.isNight = true

@@ -775,9 +775,9 @@ struct FriendsViewLastMemberReviewPresentationTests {
         )
         manager.leaveSession()
         try #require(photos.pendingFriendReview?.entries.count == 1 && !photos.hasOutstandingPhotoReview)
-        let (window, hosting) = OverlayTestSupport.window(on: scene, root: FriendsView(
-            store: store, activeSheet: .constant(nil), isTabBarCompact: .constant(false), tabResetToken: .constant(0)
-        ))
+        // The prompt is the root's since the owner's answer of 2026-10-24 (wherever you are, Home
+        // included): host it the way ContentView does.
+        let (window, hosting) = OverlayTestSupport.window(on: scene, root: KeepFriendsPromptRootHarness(store: store))
         defer { OverlayTestSupport.close(window, hosting) }
         try await OverlayTestSupport.waitUntil { hosting.presentedViewController != nil }
         try #require(hosting.presentedViewController != nil, "precondition: the keep-friends prompt is up")
@@ -843,6 +843,19 @@ final class ForeignCoverModel {
     var isChildSheetUp = false
     /// The root router's slot, bound to `FriendsView.activeSheet` exactly as ContentView binds it.
     var rootSheet: FernletSheet?
+}
+
+/// The root's keep-as-friends prompt hosted as ContentView hangs it (``KeepFriendsPromptHost``), with
+/// nothing else up: the launch done, no root presentation, no cover.
+struct KeepFriendsPromptRootHarness: View {
+    let store: FernletStore
+    @State private var isPromptUp = false
+
+    var body: some View {
+        Color.clear
+            .modifier(KeepFriendsPromptHost(store: store, isRootSheetUp: false, launchComplete: true, isCoverUp: false,
+                                            keepFriendsPromptPresented: $isPromptUp))
+    }
 }
 
 /// `FriendsView` inside a container whose sheets the cell drives: a root-router slot bound to

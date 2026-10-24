@@ -96,7 +96,8 @@ nonisolated struct WorldCompanionPose: Equatable, Sendable {
     /// Asleep at night: closed eyes, whatever the band.
     var asleep = false
     /// Winding down (`b1-home-night`): the map's night, or the companion's own bedtime before it falls
-    /// asleep. Closed eyes in the band's own colour; asleep adds the night's body colour.
+    /// asleep. The sleepy face (closed eyes, the resting mouth, no blush) in the band's own colour;
+    /// asleep adds the night's body colour.
     var drowsy = false
 }
 
@@ -170,8 +171,11 @@ nonisolated enum WorldCompanionPainter {
             }
         }
         let row = state == .sick ? mouthRow - 1 : mouthRow
-        for (x, dy) in mouth(for: state) { grid.put(x, row + dy, ink) }
-        if state == .thriving {
+        // Winding down (`b1-home-night`) draws the sleepy face whatever the band: the resting mouth, no
+        // blush. A sick day keeps its own face.
+        let face = pose.drowsy && state != .sick ? CompanionState.resting : state
+        for (x, dy) in mouth(for: face) { grid.put(x, row + dy, ink) }
+        if face == .thriving {
             grid.put(5, mouthRow - 1, blush)
             grid.put(14, mouthRow - 1, blush)
         }

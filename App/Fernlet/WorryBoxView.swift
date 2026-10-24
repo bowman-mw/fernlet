@@ -730,7 +730,7 @@ struct WorryBoxView: View {
     private func worryCard(_ worry: WorryNarrative) -> some View {
         let releasing = releasingWorry?.id == worry.id
         return HStack(alignment: .top, spacing: 12) {
-            // World: the pixel box on a small framed tile.
+            // World: the pixel box on a small tile, bare inside the card (the frame rule).
             FernletIconTile(size: 34) {
                 WorldSpriteView(sprite: WorldSprites.box, scale: 2)
             }

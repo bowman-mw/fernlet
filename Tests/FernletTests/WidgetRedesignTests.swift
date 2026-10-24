@@ -81,13 +81,14 @@ struct WidgetRedesignTests {
 
     /// The widget's pixel companion wears the glasses as the map's does (World Review Batch 4): drawn
     /// unless the eyes are closed lines (resting, sick or asleep), line for line with the app's painter.
+    /// The map adds its night wind-down (`pose.drowsy`, `b1-home-night`), which the widget does not draw.
     @Test func theWidgetWearsTheGlassesAsTheMapDoes() throws {
         let widget = try RepoRoot.source(Self.figurePath)
         let app = try RepoRoot.source(Self.appPainterPath)
         #expect(widget.contains("if look.topper == .glasses && !closesEyes(state: face, asleep: asleep) { paintGlasses(&grid, eyeRow: eyeRow) }"))
         #expect(app.contains("if look.topper == .glasses && !closesEyes(state: state, pose: pose) { paintGlasses(&grid, eyeRow: eyeRow) }"))
         #expect(widget.contains("asleep || state == .resting || state == .sick")
-                    && app.contains("pose.asleep || state == .resting || state == .sick"),
+                    && app.contains("pose.asleep || pose.drowsy || state == .resting || state == .sick"),
                 "the closed-eyes rule drifted between the widget's painter and the map's")
     }
 
