@@ -1348,7 +1348,7 @@ public struct FernletLockView: View {
 
     public var body: some View {
         ZStack {
-            Color.parchment.ignoresSafeArea()
+            FernletLockPageBackground()
 
             // ~272pt of keypad before the header, the error line, the attempts warning and either
             // lockout card, on a screen the user cannot skip, in an app that declares landscape on
@@ -1475,21 +1475,12 @@ public struct FernletLockView: View {
     private var header: some View {
         VStack(spacing: 10) {
             // T1-8 (carried from A1's review): decorative and redundant with the title text right
-            // below it — without this it was its own focusable VoiceOver stop, labelled "Lock".
-            Image(systemName: "lock.fill")
-                .font(.system(size: 36, weight: .semibold))
-                .foregroundStyle(Color.moss)
-                .frame(width: 72, height: 72)
-                .background(Color.moss.opacity(0.10), in: Circle())
-                .accessibilityHidden(true)
+            // below it — hidden from VoiceOver inside the glyph. World: the framed pixel lock.
+            FernletLockGlyph(systemName: "lock.fill", symbolSize: 36, diameter: 72)
 
-            Text(FernletLockCopy.Unlock.title)
-                .font(.fernlet(.header))
-                .foregroundStyle(Color.bark)
+            FernletLockTitle(text: Text(FernletLockCopy.Unlock.title))
 
-            Text(FernletLockCopy.Unlock.prompt(credential: credentialLabel))
-                .font(.fernlet(.bubble))
-                .foregroundStyle(Color.slate)
+            FernletLockPrompt(text: Text(FernletLockCopy.Unlock.prompt(credential: credentialLabel)))
         }
     }
 
@@ -1676,12 +1667,10 @@ public struct FernletLockView: View {
         Button {
             triggerBiometric()
         } label: {
-            Label(
-                biometricName(lockService.biometricType),
-                systemImage: biometricSystemImage(lockService.biometricType)
-            )
-            .font(.fernlet(.label))
-            .foregroundStyle(Color.moss)
+            // World (`b2-private-pin`): the moss-ink word beside a pixel face; today's symbol label
+            // without the framed look.
+            FernletBiometricLabel(title: biometricName(lockService.biometricType),
+                                  systemImage: biometricSystemImage(lockService.biometricType))
         }
         .buttonStyle(.plain)
         .disabled(isCheckingBiometric)
@@ -1870,16 +1859,10 @@ public struct FernletLockView: View {
 /// handful of decorative circles, and a VoiceOver user typing a PIN has no way to tell how many
 /// digits have landed — the one piece of feedback the masked field exists to give.
 private func pinDotsRow(current: String, total: Int) -> some View {
-    HStack(spacing: 16) {
-        ForEach(0..<total, id: \.self) { index in
-            Circle()
-                .fill(index < current.count ? Color.bark : Color.clear)
-                .frame(width: 14, height: 14)
-                .overlay(Circle().stroke(Color.bark.opacity(0.35), lineWidth: 1.5))
-        }
-    }
-    .accessibilityElement(children: .ignore)
-    .accessibilityLabel(FernletLockCopy.Unlock.pinProgress(entered: current.count, total: total))
+    // World (`b2-private-pin`): framed squares under the framed look; today's circles without it.
+    FernletPinDots(entered: current.count, total: total)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(FernletLockCopy.Unlock.pinProgress(entered: current.count, total: total))
 }
 
 // MARK: - Numeric pad
@@ -1922,15 +1905,18 @@ public struct FernletNumericPad: View {
     private static let keyMinWidth: CGFloat = 76
     private static let keyMinHeight: CGFloat = 56
 
+    /// The World look (`b2-private-pin`), when the app root sets one: framed keys, set wider apart.
+    @Environment(\.fernletFramedLook) private var look
+
     public init(value: Binding<String>, maxLength: Int) {
         self._value = value
         self.maxLength = maxLength
     }
 
     public var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: look != nil ? 16 : 12) {
             ForEach(rows, id: \.self) { row in
-                HStack(spacing: 16) {
+                HStack(spacing: look != nil ? 24 : 16) {
                     ForEach(row, id: \.self) { key in
                         padKey(key)
                     }
@@ -1976,16 +1962,12 @@ public struct FernletNumericPad: View {
                     .font(.title2.weight(.medium))
             } else {
                 Text(verbatim: key)
-                    .font(.custom(FernletFontName.dmSansMedium, size: 24, relativeTo: .title2))
+                    .font(.custom(FernletFontName.dmSansMedium, size: look != nil ? 30 : 24, relativeTo: .title2))
             }
         }
-        .foregroundStyle(Color.bark)
-        .frame(minWidth: Self.keyMinWidth, minHeight: Self.keyMinHeight)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(Color.bark.opacity(0.08), lineWidth: 1)
-        )
+        .foregroundStyle(look?.text ?? Color.bark)
+        // World (`b2-private-pin`): framed paper tiles, 72 pt, under the framed look.
+        .modifier(FernletPadKeyChrome(minWidth: Self.keyMinWidth, minHeight: Self.keyMinHeight))
     }
 
     private func handleKey(_ key: String) {

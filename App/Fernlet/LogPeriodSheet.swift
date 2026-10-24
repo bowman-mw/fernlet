@@ -219,12 +219,15 @@ struct LogPeriodSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     // Frozen once the entry is written — see ``savedWithCaveat``.
+                    // World (b3-log-period, draft 2): the common fields always; the rest with
+                    // Advanced period tracking on, or whenever the entry already holds them.
                     Group {
                         healthNotice
                         dateField
                         flowLevelField
                         cycleDetailsField
                         symptomsField
+                        advancedHint
                         observationsField
                         temperatureField
                         noteField
@@ -248,7 +251,7 @@ struct LogPeriodSheet: View {
                 if savedWithCaveat { dismiss() } else { Task { await save() } }
             }
         }
-        .background(Color.parchment)
+        .fernletSheetStyle()
         // No Apple Health prompt here any more (owner question Q4, default "remove it"): cycle sharing
         // is turned on only in Settings › Health. Reinstating the contextual ask is one call to
         // `HealthAccessGrant.requestInContext(.cycleTracking, …)` in this task.
@@ -270,15 +273,32 @@ struct LogPeriodSheet: View {
     /// Which day is being logged. Without it the sheet silently logged "today" — a user catching up
     /// on yesterday had to back out, find the day on the calendar, open it, and tap Edit.
     private var dateField: some View {
-        SheetField("Date") {
+        // World (b3-log-period): "Date" on the left, the day as a compact picker on the right.
+        PrivateDateRow(title: "Date") {
             DatePicker("Date", selection: $eventDate, in: ...Date(), displayedComponents: .date)
                 .labelsHidden()
-                .tint(Color.moss)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                .datePickerStyle(.compact)
+                .tint(WorldPalette.mossInk)
+        }
+    }
+
+    /// Whether Advanced period tracking is on (`b3-period-settings`): device-only, and always off in a
+    /// decoy session. Read on every render, so the Settings switch takes effect the next time the
+    /// sheet draws.
+    private var isAdvanced: Bool {
+        CyclePreferences.advancedTracking(duressSessionActive: lockService.isDuressSessionActive)
+    }
+
+    /// With Advanced period tracking off, the line that says where the rest of the fields went.
+    @ViewBuilder
+    private var advancedHint: some View {
+        if !isAdvanced {
+            Text("More symptoms, cervical mucus, ovulation tests and temperature: turn on Advanced period tracking in Settings.",
+                 comment: "Log period sheet, under the symptoms, while Advanced period tracking is off: where the hidden fields can be turned on. 'Advanced period tracking' is the Settings switch's name (Settings › Period & sensitive content).")
+                .font(FernletFramedFont.note)
+                .foregroundStyle(WorldPalette.dim)
+                .fernletWrappingText()
+                .accessibilityIdentifier("logPeriod.advancedHint")
         }
     }
 
@@ -313,7 +333,7 @@ struct LogPeriodSheet: View {
     private var flowLevelField: some View {
         SheetField("Flow level") {
             FlowLayout(spacing: 8) {
-                ForEach(PeriodFlowLevel.allCases) { level in
+                ForEach(LogPeriodFieldVisibility.flowLevels(advanced: isAdvanced, selected: flowLevel)) { level in
                     // `displayName` (the app-target fork in CycleTrackerView.swift), not `title`,
                     // which is `rawValue.capitalized` — a storage token wearing paint. The calendar
                     // that READS this value was forked in the same round; leaving the SETTER on
@@ -335,24 +355,28 @@ struct LogPeriodSheet: View {
         }
     }
 
+    /// First day of cycle in a framed card; spotting between periods beside it with Advanced period
+    /// tracking (or when the entry already says so).
     private var cycleDetailsField: some View {
-        SheetField("Cycle details") {
+        FernletCard {
             VStack(spacing: 0) {
                 periodToggle("First day of cycle", isOn: $isCycleStart)
-                Divider()
-                periodToggle("Intermenstrual bleeding", isOn: $hasIntermenstrualBleeding)
+                if LogPeriodFieldVisibility.showsSpotting(advanced: isAdvanced, isOn: hasIntermenstrualBleeding) {
+                    FernletDottedRule()
+                    periodToggle("Intermenstrual bleeding", isOn: $hasIntermenstrualBleeding)
+                }
             }
-            .padding(.horizontal, 14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
         }
     }
 
-    /// One toggle per symptom, each revealing a 1…10 intensity stepper while it is on.
+    /// One toggle per symptom, each revealing a 1…10 intensity stepper while it is on: the common four
+    /// by default, every symptom with Advanced period tracking (`b3-log-period` draft 2).
     private var symptomsField: some View {
-        SheetField("Symptoms") {
+        let shown = LogPeriodFieldVisibility.symptoms(advanced: isAdvanced, selected: symptoms)
+        return SheetField("Symptoms") {
+            FernletCard {
             VStack(spacing: 0) {
-                ForEach(PeriodSymptom.allCases) { symptom in
+                ForEach(shown) { symptom in
                     VStack(alignment: .leading, spacing: 8) {
                         periodToggle(verbatim: symptom.displayName, isOn: Binding(
                             get: { symptoms.contains(symptom) },
@@ -367,25 +391,21 @@ struct LogPeriodSheet: View {
                         ))
 
                         if symptoms.contains(symptom) {
-                            Stepper(value: Binding(
+                            // World: the framed stepper, right-aligned under its switch.
+                            FernletStepper("Intensity \(customScales[symptom] ?? 5)", value: Binding(
                                 get: { customScales[symptom] ?? 5 },
                                 set: { customScales[symptom] = $0 }
-                            ), in: 1...10) {
-                                Text("Intensity \(customScales[symptom] ?? 5)")
-                                    .font(.fernlet(.label))
-                                    .foregroundStyle(Color.bark)
-                            }
+                            ), in: 1...10, step: 1, display: Text("Intensity \(customScales[symptom] ?? 5)"))
+                            .frame(maxWidth: .infinity, alignment: .trailing)
                             .padding(.bottom, 12)
                         }
                     }
-                    if symptom != PeriodSymptom.allCases.last {
-                        Divider()
+                    if symptom != shown.last {
+                        FernletDottedRule()
                     }
                 }
             }
-            .padding(.horizontal, 14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+            }
         }
     }
 
@@ -394,7 +414,16 @@ struct LogPeriodSheet: View {
     /// A bare `Picker` outside a `Form` drops its title and renders in the system accent, so this
     /// read as two stacked, unexplained blue "None" menus. Each row now names itself and carries a
     /// moss chip showing the current value.
+    @ViewBuilder
     private var observationsField: some View {
+        if LogPeriodFieldVisibility.showsObservations(advanced: isAdvanced, hasMucus: mucusQuality != nil,
+                                                      hasOvulationTest: ovulationResult != nil) {
+            observationsCard
+        }
+    }
+
+    /// The two observation rows in one framed card.
+    private var observationsCard: some View {
         SheetField("Observations") {
             VStack(spacing: 0) {
                 // `displayName` (the app-target forks in CycleTrackerView.swift), not `title`,
@@ -408,7 +437,7 @@ struct LogPeriodSheet: View {
                         Button(quality.displayName) { mucusQuality = quality }
                     }
                 }
-                Divider()
+                FernletDottedRule()
                 observationRow("Ovulation test", value: ovulationResult?.displayName ?? noneObservationName) {
                     Button(noneObservationName) { ovulationResult = nil }
                     ForEach(OvulationTestResult.allCases) { result in
@@ -418,9 +447,9 @@ struct LogPeriodSheet: View {
             }
             .padding(.horizontal, 14)
             .frame(maxWidth: .infinity)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-            .tint(Color.moss)
+            // World: the framed card of the design language.
+            .fernletFramed(WorldTheme.framedLook, fill: WorldPalette.paper, cornerRadius: FernletFramedLook.cardRadius)
+            .tint(WorldPalette.mossInk)
         }
     }
 
@@ -457,17 +486,17 @@ struct LogPeriodSheet: View {
             Menu {
                 options()
             } label: {
-                HStack(spacing: 6) {
+                // World: the value as a framed dropdown face with the pixel chevron.
+                HStack(spacing: 8) {
                     Text(value)
-                        .font(.fernlet(.label))
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.caption2)
+                        .font(FernletFramedFont.sheetControl)
+                    FernletIcon(.chevronDown, scale: 2)
                 }
-                .foregroundStyle(Color.moss)
-                .padding(.horizontal, 14)
+                .foregroundStyle(WorldPalette.bark)
+                .padding(.horizontal, 12)
                 .frame(minHeight: 44)
-                .background(Color.moss.opacity(0.10), in: Capsule())
-                .contentShape(Capsule())
+                .fernletFramed(WorldTheme.framedLook, cornerRadius: 9)
+                .contentShape(Rectangle())
             }
             // `Text(title)` rather than `title`: a `LocalizedStringKey` cannot be interpolated into
             // another `LocalizedStringKey` (the compiler rejects it outright — the interpolation
@@ -478,19 +507,20 @@ struct LogPeriodSheet: View {
         .padding(.vertical, 8)
     }
 
+    @ViewBuilder
     private var temperatureField: some View {
-        SheetField("Basal body temperature") {
-            HStack(spacing: 10) {
-                TextField("Optional", text: $temperatureText, prompt: .fieldPrompt("Optional"))
-                    .keyboardType(.decimalPad)
-                    .sheetTextInput(font: .fernlet(.label))
-                Picker("Unit", selection: $temperatureUnit) {
-                    ForEach(PeriodTemperatureUnit.allCases) { unit in
-                        Text(unit.symbol).tag(unit)
+        if LogPeriodFieldVisibility.showsTemperature(advanced: isAdvanced, temperatureText: temperatureText) {
+            SheetField("Basal body temperature") {
+                HStack(spacing: 10) {
+                    TextField("Optional", text: $temperatureText, prompt: .fieldPrompt("Optional"))
+                        .keyboardType(.decimalPad)
+                        .sheetTextInput(font: .fernlet(.label))
+                    // World: the framed segmented control.
+                    FernletSegmentedPicker("Unit", selection: $temperatureUnit, options: PeriodTemperatureUnit.allCases) {
+                        Text($0.symbol)
                     }
+                    .frame(width: 120)
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 110)
             }
         }
     }
@@ -549,7 +579,7 @@ struct LogPeriodSheet: View {
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)
-            .background(Color.parchment)
+            .background(WorldPalette.paper)
         }
     }
 
@@ -583,10 +613,13 @@ struct LogPeriodSheet: View {
     private func periodToggle(label: Text, isOn: Binding<Bool>) -> some View {
         Toggle(isOn: isOn) { label }
             // Without these the label rendered in system SF, next to DM Sans everywhere else.
-            .font(.fernlet(.label))
-            .foregroundStyle(Color.bark)
+            .font(FernletFramedFont.rowTitle.weight(.semibold))
+            .foregroundStyle(WorldPalette.bark)
             .tint(Color.moss)
-            .padding(.vertical, 12)
+            // World (b3-log-period): the framed switch, stated here because a sheet the root
+            // presents does not inherit the root's toggle style.
+            .toggleStyle(FernletFramedToggleStyle())
+            .padding(.vertical, 8)
     }
 
     /// Seeds the temperature field from a record's stored reading, converted from the unit it was

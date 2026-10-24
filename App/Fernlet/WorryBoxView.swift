@@ -49,65 +49,47 @@ struct WorryEntryView: View {
     private var tuckDuration: Duration { reduceMotion ? .milliseconds(600) : .milliseconds(2200) }
 
     var body: some View {
-        VStack(spacing: 20) {
-            switch phase {
-            case .writing:
-                composer
-            case .releasing:
-                TuckIntoBoxView(worryText: releasedText)
-            case .tucked:
-                letGoConfirmation
+        VStack(spacing: 0) {
+            // World (b3-worry-write, b3-worry-sealed): "‹ First aid", the title in the sheet, and
+            // Done top right once the worry is tucked away.
+            FirstAidToolHeader(title: Text("Worry box"), onDone: phase == .tucked ? doneAction : nil)
+            Group {
+                switch phase {
+                case .writing:
+                    composer
+                case .releasing:
+                    TuckIntoBoxView(worryText: releasedText)
+                case .tucked:
+                    letGoConfirmation
+                }
             }
+            .padding(.horizontal, 18)
+            .padding(.bottom, 20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-        .background(Color.parchment)
+        .fernletSheetStyle()
         .navigationTitle("Worry box")
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
         // Return adds a line in the worry editor, which focuses itself on arrival, so the accessory
         // is the way to put the keyboard away. On the page: it is pushed inside First aid's stack,
         // where the sheet chrome's Done never reaches.
         .keyboardDoneToolbar()
     }
 
+    /// Done on the confirmation: leaves the tool, back to the First aid menu.
+    private var doneAction: () -> Void {
+        { dismiss() }
+    }
+
+    /// The writing page: the prompt, the editor and the notes scroll; Let it go stays at the foot,
+    /// riding above the keyboard, so the header never slides away under it.
     private var composer: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("What's circling around?")
-                .font(.fernlet(.header))
-                .foregroundStyle(Color.bark)
-                .fernletWrappingText()
-
-            Text("Write it down — the box can hold it for a while, so you don't have to.")
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
-
-            worryEditor
-
-            if text.count > 260 {
-                Text("The box holds about 300 characters.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
+        VStack(spacing: 12) {
+            ScrollView {
+                composerFields
+                    .padding(.top, 4)
             }
-
-            HStack(spacing: 8) {
-                Image(systemName: "lock")
-                    .font(.caption)
-                    .foregroundStyle(Color.slate)
-                Text("Stays sealed on this device only — worries never sync anywhere.")
-                    .font(.fernlet(.bubble))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-            }
-
-            if let gentleError {
-                Text(gentleError)
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.terracotta)
-                    .fernletWrappingText()
-            }
-
+            .scrollBounceBehavior(.basedOnSize)
             letGoButton
         }
         // Arriving here from First aid is a heavy moment — the keyboard should already be up
@@ -115,25 +97,65 @@ struct WorryEntryView: View {
         .onAppear { isEditorFocused = true }
     }
 
-    /// The worry text editor: placeholder overlay, the 300-character cap, and its a11y label.
+    /// The prompt, the editor, the 300-character note, the sealed note and any error.
+    private var composerFields: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("What's circling around?")
+                .font(.custom(FernletFontName.frauncesSemiBold, size: 26, relativeTo: .title))
+                .foregroundStyle(WorldPalette.bark)
+                .fernletWrappingText()
+
+            Text("Write it down — the box can hold it for a while, so you don't have to.")
+                .font(FernletFramedFont.field)
+                .foregroundStyle(WorldPalette.dim)
+                .fernletWrappingText()
+
+            worryEditor
+
+            if text.count > 260 {
+                Text("The box holds about 300 characters.")
+                    .font(FernletFramedFont.body)
+                    .foregroundStyle(WorldPalette.dim)
+                    .fernletWrappingText()
+            }
+
+            // World: the sealed note as a framed notice with the pixel lock.
+            FernletNotice(text: Text("Stays sealed on this device only — worries never sync anywhere.")) {
+                FernletIcon(.lock, scale: 2)
+            }
+
+            if let gentleError {
+                Text(gentleError)
+                    .font(FernletFramedFont.body)
+                    .foregroundStyle(Color.terracottaInk)
+                    .fernletWrappingText()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The worry text editor: placeholder overlay, the 300-character cap, and its a11y label. World:
+    /// the framed field of the design language.
     private var worryEditor: some View {
         TextEditor(text: $text)
             .focused($isEditorFocused)
-            .frame(minHeight: 180, maxHeight: .infinity)
+            .frame(minHeight: 160, maxHeight: 200)
             .scrollContentBackground(.hidden)
-            .font(.fernlet(.body))
+            .font(FernletFramedFont.field)
+            .foregroundStyle(WorldPalette.bark)
             .overlay(alignment: .topLeading) {
                 if text.isEmpty {
                     Text("It's alright. Just start typing…")
-                        .font(.custom(FernletFontName.instrumentSerifItalic, size: 17, relativeTo: .body))
-                        .foregroundStyle(Color.slate)
+                        .font(FernletFramedFont.field)
+                        .foregroundStyle(WorldPalette.dim)
                         .padding(.horizontal, 5)
                         .padding(.top, 8)
                         .allowsHitTesting(false)
                 }
             }
             .padding(12)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .background(WorldPalette.paperLight, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(WorldPalette.ink, lineWidth: 2.5))
             .onChange(of: text) { _, newValue in
                 if newValue.count > Self.characterLimit {
                     text = String(newValue.prefix(Self.characterLimit))
@@ -142,61 +164,50 @@ struct WorryEntryView: View {
             .accessibilityLabel("Worry text")
     }
 
-    /// The "Let it go" button — disabled until there is something to seal.
+    /// The "Let it go" button — disabled until there is something to seal. World: the full-width
+    /// framed moss primary, faded while there is nothing to seal.
     private var letGoButton: some View {
         Button {
             letGo()
         } label: {
-            let disabled = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             Text("Let it go")
-                .font(.fernlet(.label))
-                .foregroundStyle(disabled ? Color.moss.opacity(0.55) : Color.parchmentInk)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(disabled ? Color.moss.opacity(0.18) : Color.moss,
-                            in: RoundedRectangle(cornerRadius: 15, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ActionPillButtonStyle(.primary))
         .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         .accessibilityIdentifier("firstAid.worry.letGo")
     }
 
     private var letGoConfirmation: some View {
         VStack(spacing: 0) {
+            Spacer()
+
             SealedBoxView()
-                .padding(.bottom, 30)
+                .padding(.bottom, 18)
 
             Text("Tucked away.")
-                .font(.fernlet(.display))
-                .foregroundStyle(Color.bark)
+                .font(.custom(FernletFontName.frauncesSemiBold, size: 40, relativeTo: .largeTitle))
+                .foregroundStyle(WorldPalette.bark)
                 .padding(.bottom, 12)
 
             Text("You can set it down for now. It's kept safe in the Worry box on your Private tab, sealed on this device.")
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.field)
+                .foregroundStyle(WorldPalette.dim)
                 .multilineTextAlignment(.center)
                 .fernletWrappingText()
-                .frame(maxWidth: 280)
-                .padding(.bottom, 34)
 
+            Spacer()
+
+            // World (b3-worry-sealed): Write another is the full-width framed primary; Done moved to
+            // the header's top right.
             Button {
                 text = ""
                 withAnimation(.easeOut(duration: 0.3)) { phase = .writing }
             } label: {
                 Text("Write another")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.parchmentInk)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 15)
-                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
             }
-            .buttonStyle(.plain)
-            .frame(maxWidth: 300)
-            .padding(.bottom, 10)
-
-            Button("Done") { dismiss() }
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.slate)
+            .buttonStyle(ActionPillButtonStyle(.primary))
         }
         .transition(.opacity)
     }
@@ -255,16 +266,16 @@ private struct TuckIntoBoxView: View {
     @State private var sealGlow = false    // amber halo blooms once sealed
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    // Warm wood tones for the box — outside the shared palette, so kept local.
-    private let boxBody = Color(red: 0.745, green: 0.561, blue: 0.322)
-    private let boxLid = Color(red: 0.796, green: 0.627, blue: 0.388)
-    private let boxInside = Color(red: 0.306, green: 0.227, blue: 0.133)
+    // World (b3-worry-sealed): the box is drawn in the same wood as the plates.
+    private let boxBody = WorldPalette.woodLow
+    private let boxLid = WorldPalette.wood
+    private let boxInside = WorldPalette.ink
 
     var body: some View {
         VStack(spacing: 0) {
             Text("Letting it go…")
-                .font(.custom(FernletFontName.instrumentSerifItalic, size: 18, relativeTo: .body))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.field)
+                .foregroundStyle(WorldPalette.dim)
                 .padding(.bottom, 30)
 
             ZStack(alignment: .bottom) {
@@ -411,40 +422,42 @@ private struct SealedBoxView: View {
     @State private var pulse = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private let boxBody = Color(red: 0.745, green: 0.561, blue: 0.322)
-    private let boxLid = Color(red: 0.796, green: 0.627, blue: 0.388)
-
     var body: some View {
         ZStack {
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [Color.goldenrod.opacity(0.22), Color.goldenrod.opacity(0)],
-                        center: .center, startRadius: 0, endRadius: 95
+                        colors: [WorldPalette.carbs.opacity(0.30), WorldPalette.carbs.opacity(0)],
+                        center: .center, startRadius: 0, endRadius: 110
                     )
                 )
-                .frame(width: 180, height: 180)
+                .frame(width: 220, height: 220)
                 .scaleEffect(pulse ? 1.06 : 0.94)
                 .opacity(pulse ? 0.9 : 0.55)
 
-            VStack(spacing: 0) {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(LinearGradient(colors: [boxLid, boxBody], startPoint: .top, endPoint: .bottom))
-                    .frame(width: 138, height: 30)
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(LinearGradient(colors: [boxLid, boxBody], startPoint: .top, endPoint: .bottom))
-                    .frame(width: 134, height: 74)
-                    .offset(y: -2)
+            // World (b3-worry-sealed): the plates' wood — the lid in wood with its highlight, the box
+            // in the darker wood, both in the ink frame, and the gold latch between them.
+            VStack(spacing: 2) {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(WorldPalette.wood)
+                    .overlay(alignment: .top) { WorldPalette.woodHigh.frame(height: 3).padding(.horizontal, 3).padding(.top, 3) }
+                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(WorldPalette.ink, lineWidth: 3))
+                    .frame(width: 158, height: 30)
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(WorldPalette.woodLow)
+                    .overlay(alignment: .bottom) { WorldPalette.ink.opacity(0.15).frame(height: 6).padding(3) }
+                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(WorldPalette.ink, lineWidth: 3))
+                    .frame(width: 142, height: 88)
             }
-            .overlay(alignment: .center) {
+            .overlay(alignment: .top) {
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(Color.goldenrod)
-                    .frame(width: 18, height: 15)
-                    .offset(y: 6)
+                    .fill(WorldPalette.gameCream)
+                    .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(WorldPalette.ink, lineWidth: 3))
+                    .frame(width: 20, height: 22)
+                    .offset(y: 20)
             }
-            .shadow(color: Color(red: 0.353, green: 0.267, blue: 0.133).opacity(0.28), radius: 14, x: 0, y: 10)
         }
-        .frame(width: 180, height: 150)
+        .frame(width: 220, height: 170)
         .accessibilityHidden(true)
         .onAppear {
             // A forever-repeating halo is exactly the continuous motion Reduce Motion exists to
@@ -454,6 +467,7 @@ private struct SealedBoxView: View {
         }
     }
 }
+
 
 // MARK: - Hub section (Personal tab)
 
@@ -538,8 +552,8 @@ struct WorryBoxView: View {
                 ScreenHeader(title: "Worry box", subtitle: "Set it down for a while.", identifier: "screen.worryBox")
 
                 Text("Worries you've set down. The box keeps them — releasing one lets it go for good.")
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.field)
+                    .foregroundStyle(WorldPalette.dim)
                     .fernletWrappingText()
 
                 composer
@@ -562,9 +576,11 @@ struct WorryBoxView: View {
                     .animation(.easeOut(duration: 0.45), value: visibleWorries.count)
                 }
             }
-            .padding(20)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
         }
-        .background(Color.parchment)
+        // World (b2-worry-box): the panel's dotted page.
+        .fernletPageBackground()
         .overlay(alignment: .bottom) { keepItToast }
         // Return adds a line in the composer, so the accessory is the way to put the keyboard away.
         // Declared here because this page is a tab page with no stack and no sheet chrome around it:
@@ -617,8 +633,7 @@ struct WorryBoxView: View {
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 10)
-            .background(Color.cream, in: Capsule())
-            .fernletSmallShadow()
+            .modifier(WorryCardFrame())
             .padding(.horizontal, 20)
             .padding(.bottom, 16)
             .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -632,7 +647,8 @@ struct WorryBoxView: View {
                           prompt: .fieldPrompt("Something circling around?"), axis: .vertical)
                     .focused($isComposeFocused)
                     .lineLimit(1...4)
-                    .font(.fernlet(.body))
+                    // World (b2-worry-box): the framed field of the design language.
+                    .sheetTextInput()
                     // R3: the same cap the sealed-store entry point enforces, applied where the
                     // text enters so the field cannot grow without bound.
                     .onChange(of: composeText) { _, newValue in
@@ -652,15 +668,10 @@ struct WorryBoxView: View {
                 Button {
                     sealComposedWorry()
                 } label: {
-                    Label("Let it go", systemImage: "archivebox")
-                        .font(.fernlet(.label))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .foregroundStyle(composeEmpty ? Color.moss.opacity(0.55) : Color.parchmentInk)
-                        .background(composeEmpty ? Color.moss.opacity(0.18) : Color.moss,
-                                    in: RoundedRectangle(cornerRadius: 12))
+                    // World: the framed moss primary with the pixel box; disabled fades the fill.
+                    WorryLetGoLabel()
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ActionPillButtonStyle(.primary))
                 .disabled(composeEmpty)
             }
         }
@@ -694,35 +705,36 @@ struct WorryBoxView: View {
     }
 
     private var emptyState: some View {
-        HStack(spacing: 20) {
-            Image(systemName: "archivebox")
-                .font(.system(size: 34, weight: .light))
-                // `goldenrodInk`: plain goldenrod is 2.22:1 on parchment even at full strength.
-                .foregroundStyle(Color.goldenrodInk)
-                .frame(width: 56)
-            VStack(alignment: .leading, spacing: 5) {
-                Text("The box is empty right now.")
-                    .font(.fernlet(.headerMedium))
-                    .foregroundStyle(Color.bark)
-                Text("That's a good thing. Write one above whenever something feels heavy.")
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
+        // World (b2-worry-box): a framed card with the pixel box on a framed tile.
+        FernletCard {
+            HStack(alignment: .top, spacing: 16) {
+                FernletIconTile(size: 48) {
+                    WorldSpriteView(sprite: WorldSprites.box, scale: 3)
+                }
+                .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("The box is empty right now.")
+                        .font(.custom(FernletFontName.frauncesSemiBold, size: 24, relativeTo: .title2))
+                        .foregroundStyle(WorldPalette.bark)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("That's a good thing. Write one above whenever something feels heavy.")
+                        .font(FernletFramedFont.field)
+                        .foregroundStyle(WorldPalette.dim)
+                        .fernletWrappingText()
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(24)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
     private func worryCard(_ worry: WorryNarrative) -> some View {
         let releasing = releasingWorry?.id == worry.id
         return HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "archivebox")
-                .font(.system(size: 15, weight: .regular))
-                .foregroundStyle(Color.goldenrod)
-                .frame(width: 30, height: 30)
-                .background(Color.goldenrod.opacity(0.16), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            // World: the pixel box on a small framed tile.
+            FernletIconTile(size: 34) {
+                WorldSpriteView(sprite: WorldSprites.box, scale: 2)
+            }
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 10) {
                 Text(worry.text)
@@ -753,8 +765,7 @@ struct WorryBoxView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .fernletSmallShadow()
+        .modifier(WorryCardFrame())
         // The row lifts away like an ember on release: its words dim under a soft veil while a
         // warm ember rises and fades. When the ember has lifted, the store removes the row and
         // the list closes the gap.

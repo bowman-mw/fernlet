@@ -114,6 +114,34 @@ enum UITestSupport {
     /// capture-protection UI tests. Consumed by `JournalView` (DEBUG-only presenter).
     static var shouldOpenDayEditSheet: Bool { env["FERNLET_UI_TEST_OPEN_DAY_EDIT"] == "1" }
 
+    /// `FERNLET_UI_TEST_PRIVATE_SECTION=journal|cycle|worryBox` — open the Private panel on that page
+    /// (World screenshots of Batch 2's Private tabs; the picker is otherwise only reachable by a tap).
+    /// Consumed by `PrivateHubView`. An unknown or hidden page leaves the selection alone.
+    static var initialPrivateHubSection: PrivateHubSection? {
+        switch env["FERNLET_UI_TEST_PRIVATE_SECTION"] {
+        case "journal": .journal
+        case "cycle": .cycle
+        case "worryBox": .worryBox
+        default: nil
+        }
+    }
+
+    /// `FERNLET_UI_TEST_PRIVATE_DAY=1` — push today's day page from the Private page that opens
+    /// (Journal's day, or Cycle's day), for the World screenshots of `b2-journal-day` and
+    /// `b2-cycle-day`. Consumed by `JournalView` and `CycleTrackerView`.
+    static var opensPrivateDayPage: Bool { env["FERNLET_UI_TEST_PRIVATE_DAY"] == "1" }
+
+    /// `FERNLET_UI_TEST_SEED_PIN=1` — after the app-lock reset (only with
+    /// `FERNLET_UI_TEST_RESET_APP_LOCK=1`), configure a throwaway 6-digit test PIN, so the NEXT launch
+    /// (without the reset) meets the passcode pad on the Private panel (World screenshot of
+    /// `b2-private-pin`). Consumed by `UITestPrivateHubSeed`; the PIN lives there.
+    static var seedsTestPIN: Bool { env["FERNLET_UI_TEST_SEED_PIN"] == "1" }
+
+    /// `FERNLET_UI_TEST_TODAY_PAGE=trends|bodySignals` — push that page in the World Today panel once
+    /// it opens (with `FERNLET_UI_TEST_WORLD_PANEL=today`), for the screenshots of `b2-trends` and
+    /// `b2-stress`. Consumed by `HomeView`.
+    static var initialTodayPage: String? { env["FERNLET_UI_TEST_TODAY_PAGE"] }
+
     /// `FERNLET_UI_TEST_SEED_STUDIO_CANVAS=1` — open the Creation Studio's editor with a pre-painted
     /// canvas. XCUITest can't drive the custom zoomable canvas's paint gesture, and "Next" stays disabled
     /// while the canvas is blank, so without this the naming / shop-listing confirmation step (and its
@@ -236,6 +264,10 @@ enum UITestSupport {
     static var forceCaptureCover: Bool { false }
     static var shouldOpenJournalEditor: Bool { false }
     static var shouldOpenDayEditSheet: Bool { false }
+    static var initialPrivateHubSection: PrivateHubSection? { nil }
+    static var opensPrivateDayPage: Bool { false }
+    static var seedsTestPIN: Bool { false }
+    static var initialTodayPage: String? { nil }
     static var shouldOpenCustomize: Bool { false }
     static var shouldSeedStudioCanvas: Bool { false }
     static var shouldOpenWorldMapHarness: Bool { false }
@@ -273,6 +305,9 @@ extension FernletSheet {
         case "sillyStats":        self = .sillyStats
         case "stressExplainer":   self = .stressExplainer
         case "firstAid":          self = .firstAid(nil)
+        case "firstAid.breathing": self = .firstAid(.breathing)
+        case "firstAid.grounding": self = .firstAid(.grounding)
+        case "firstAid.worryBox":  self = .firstAid(.worryBox)
         case "logPeriod":         self = .logPeriod(targetDate: nil, editingRecord: nil)
         case "logIntimacy":       self = .logIntimacy
         case "editRecipe":        self = .editRecipe(Self.uiTestRecipeFixture())

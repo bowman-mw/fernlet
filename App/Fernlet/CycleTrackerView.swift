@@ -286,7 +286,7 @@ struct CycleTrackerView: View {
                     .fernletTabBarBottomClearance()
             }
             .fernletTabBarCompaction($isTabBarCompact, resetToken: $scrollToTopToken)
-            .background(Color.parchment)
+            .fernletPageBackground()
             .toolbar(isInHub ? .hidden : .visible, for: .navigationBar)
             .navigationDestination(item: $selectedDay) { day in
                 dayDetail(for: day)
@@ -383,7 +383,14 @@ struct CycleTrackerView: View {
                 }
             }
         }
-        .padding(20)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        #if DEBUG
+        // World screenshots of `b2-cycle-day` (FERNLET_UI_TEST_PRIVATE_DAY): push today's day once.
+        .task {
+            if UITestSupport.opensPrivateDayPage, selectedDay == nil { selectedDay = SelectedCycleDay(date: .now) }
+        }
+        #endif
     }
 
     /// The "not enough cycles yet" line, under the calendar. A card's worth of chrome for one
@@ -392,8 +399,8 @@ struct CycleTrackerView: View {
     private var predictionHint: some View {
         if showsPrediction, periodStore.prediction == nil {
             Text("Log at least 3 cycles to see predictions.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.body)
+                .foregroundStyle(WorldPalette.dim)
                 .fernletWrappingText()
         }
     }
@@ -515,9 +522,9 @@ struct CycleTrackerView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .top) {
+        HStack(alignment: .center, spacing: 12) {
             ScreenHeader(title: Text("Cycle"), subtitle: headerSubtitle, identifier: "screen.cycle")
-            Spacer()
+            Spacer(minLength: 0)
             logButton
         }
     }
@@ -552,25 +559,19 @@ struct CycleTrackerView: View {
                     Label("Log intimacy", systemImage: "heart.fill")
                 }
             } label: {
-                // Mirrors HeaderActionButton's chrome so the pill looks identical either way.
-                Image(systemName: "plus")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(Color.bark)
-                    .frame(minWidth: 58, minHeight: 58)
-                    .background(Color.cream.opacity(0.9), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 28, style: .continuous)
-                            .stroke(Color.bark.opacity(0.08), lineWidth: 1)
-                    )
+                // World (b2-cycle): "+ Log" as the framed moss primary, as Journal's "+ Write".
+                PrivateActionLabel(title: "Log")
             }
-            .buttonStyle(.plain)
+            .menuStyle(.button)
+            .buttonStyle(ActionPillButtonStyle(.primary))
+            .frame(maxWidth: 200)
             .accessibilityLabel("Log")
         } else if store.isPeriodTrackingVisible {
-            HeaderActionButton(systemImage: "plus", accessibilityLabel: "Log period") {
+            PrivatePageActionButton(title: "Log", accessibilityLabel: "Log period") {
                 activeSheet = .logPeriod(targetDate: nil, editingRecord: nil)
             }
         } else if store.isIntimacyTrackingVisible {
-            HeaderActionButton(systemImage: "plus", accessibilityLabel: "Log intimacy") { activeSheet = .logIntimacy }
+            PrivatePageActionButton(title: "Log", accessibilityLabel: "Log intimacy") { activeSheet = .logIntimacy }
         }
     }
 
@@ -581,39 +582,29 @@ struct CycleTrackerView: View {
         if !store.settings.periodContextPrimerSeen {
             FernletCard {
                 VStack(alignment: .leading, spacing: 10) {
-                    Label("Period-aware care", systemImage: "sparkles")
-                        .font(.fernlet(.header))
-                        .foregroundStyle(Color.bark)
+                    // World (b2-cycle): the pixel star beside a Fraunces title.
+                    HStack(spacing: 10) {
+                        WorldSpriteView(sprite: WorldSprites.star, scale: 3)
+                            .accessibilityHidden(true)
+                        Text("Period-aware care")
+                            .font(FernletFramedFont.sheetTitle)
+                            .foregroundStyle(WorldPalette.bark)
+                            .accessibilityAddTraits(.isHeader)
+                    }
                     Text("Once you've logged a few cycles, Fernlet can gently soften your daily score on the phases that tend to be harder for you, and show a cycle chip and outlook on Home. It's optional, stays on this device, and never leaves the app.")
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.slate)
+                        .font(FernletFramedFont.field)
+                        .foregroundStyle(WorldPalette.dim)
                         .fernletWrappingText()
                     HStack(spacing: 10) {
-                        Button {
+                        Button("Turn on") {
                             store.setPeriodAwareScoringEnabled(true)
                             store.markPeriodContextPrimerSeen()
-                        } label: {
-                            Text("Turn on")
-                                .font(.fernlet(.label))
-                                .foregroundStyle(Color.onMoss)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
-                                // `mossFill`, the filled-button half of the `onMoss` pair: white on
-                                // plain `moss` measured 4.30:1, on `mossFill` 5.37:1.
-                                .background(Color.mossFill, in: Capsule())
                         }
-                        .buttonStyle(.plain)
-                        Button {
+                        .buttonStyle(ActionPillButtonStyle(.primary, size: .small))
+                        Button("Not now") {
                             store.markPeriodContextPrimerSeen()
-                        } label: {
-                            Text("Not now")
-                                .font(.fernlet(.label))
-                                .foregroundStyle(Color.slate)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
-                                .background(Color.slate.opacity(0.10), in: Capsule())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
                     }
                 }
             }
@@ -946,6 +937,8 @@ private struct CycleCalendarCard: View {
     var showsFlowLegend: Bool
     var showsIntimacyLegend: Bool
     var onDayTapped: (Date) -> Void
+    /// The World look: the legend's framed swatches and the pixel heart.
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
         let model = CycleMonthModel(
@@ -979,21 +972,23 @@ private struct CycleCalendarCard: View {
                     (Color.dustyRose.opacity(0.40), PeriodFlowLevel.medium),
                     (Color.dustyRose.opacity(0.60), PeriodFlowLevel.heavy)
                 ], id: \.1) { color, level in
-                    HStack(spacing: 4) {
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(color)
-                            .frame(width: 10, height: 10)
-                        Text(verbatim: level.displayName).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
-                    }
-                    .fixedSize(horizontal: true, vertical: false)
+                    // World (b2-cycle): framed square swatches, as on the Journal legend.
+                    PrivateLegendSwatch(fill: color, label: Text(verbatim: level.displayName))
                 }
             }
             if showsIntimacyLegend {
                 HStack(spacing: 4) {
-                    Image(systemName: "heart.fill")
-                        .font(.system(size: 8))
-                        .foregroundStyle(Color.terracotta)
-                    Text("Intimacy").font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
+                    if look != nil {
+                        WorldSpriteView(sprite: WorldSprites.heartSm, scale: 2)
+                            .accessibilityHidden(true)
+                    } else {
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 8))
+                            .foregroundStyle(Color.terracotta)
+                    }
+                    Text("Intimacy")
+                        .font(look != nil ? FernletFramedFont.rowDetail.weight(.medium) : .fernlet(.labelSmall))
+                        .foregroundStyle(look?.dim ?? Color.slate)
                 }
                 .fixedSize(horizontal: true, vertical: false)
             }
@@ -1021,26 +1016,31 @@ private struct CycleCalendarCell: View {
     /// the text. `relativeTo: .subheadline` is the text style `.fernlet(.stat)` — the numeral in
     /// this very cell — resolves against, so glyph and numeral now move together.
     @ScaledMetric(relativeTo: .subheadline) private var intimacyMarkerSize: CGFloat = 6
+    /// The World look (`b2-cycle`): framed cells, flow in three rose tones, a pixel heart for intimacy.
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
         Button(action: onTap) {
             ZStack {
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(cell.fill)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 5)
-                            .stroke(cell.isToday ? Color.moss : Color.clear, lineWidth: 1.5)
-                    )
+                if let look {
+                    PrivateCalendarCellBackground(fill: cell.framedFill(look: look), isToday: cell.isToday)
+                } else {
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(cell.fill)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 5)
+                                .stroke(cell.isToday ? Color.moss : Color.clear, lineWidth: 1.5)
+                        )
+                }
                 if let day = cell.day {
                     Text("\(day)")
                         // Today's numeral gets real weight via the heavier bundled Fraunces face
                         // — `.fontWeight(.bold)` is a silent no-op on the single-weight DM Sans
                         // Medium that `.stat` resolves to.
-                        .font(cell.isToday
-                              ? .custom(FernletFontName.frauncesSemiBold, size: 14, relativeTo: .subheadline)
-                              : .fernlet(.stat))
+                        .font(PrivateCalendarCellBackground.numeralFont(isToday: cell.isToday, framed: look != nil))
                         .foregroundStyle(
                             cell.isFuture ? Color.bark.opacity(0.28)
+                                : look != nil ? (look?.text ?? Color.bark)
                                 : cell.isToday ? Color.moss
                                 : Color.bark.opacity(0.68)
                         )
@@ -1049,10 +1049,8 @@ private struct CycleCalendarCell: View {
             }
             .overlay(alignment: .bottom) {
                 if cell.hasIntimacyEvent {
-                    Image(systemName: "heart.fill")
-                        .font(.system(size: intimacyMarkerSize))
-                        .foregroundStyle(Color.terracotta)
-                        .padding(.bottom, 1.5)
+                    intimacyMarker
+                        .padding(.bottom, look != nil ? 3 : 1.5)
                 }
             }
         }
@@ -1060,6 +1058,18 @@ private struct CycleCalendarCell: View {
         .aspectRatio(1, contentMode: .fit)
         .disabled(cell.day == nil || cell.isFuture)
         .accessibilityLabel(cell.accessibilityLabel)
+    }
+
+    /// The intimacy mark under the numeral: the small pixel heart in the World look, today's SF heart
+    /// otherwise. Decorative; the cell's label names the event.
+    @ViewBuilder private var intimacyMarker: some View {
+        if look != nil {
+            WorldSpriteView(sprite: WorldSprites.heartSm, scale: 1)
+        } else {
+            Image(systemName: "heart.fill")
+                .font(.system(size: intimacyMarkerSize))
+                .foregroundStyle(Color.terracotta)
+        }
     }
 }
 
