@@ -57,6 +57,10 @@ struct WorkoutLocationSetupView: View {
     @State private var trainHereID: UUID?
     @State private var customName = ""
     @State private var pendingDestructiveAction: DestructiveConfirmation?
+    /// The answer to the workout-space pin question, read once as the sheet opens (nil = not asked).
+    @State private var pinAnswer: Bool? = WorldMapPreferences.rememberSpaces()
+    /// World build: the sheet's paper and framed rows.
+    @Environment(\.fernletFramedLook) private var look
 
     init(store: FernletStore) {
         self.store = store
@@ -90,7 +94,7 @@ struct WorkoutLocationSetupView: View {
             case .equipment: equipmentStep
             }
         }
-        .background(Color.parchment)
+        .background((look?.paper ?? Color.parchment).ignoresSafeArea())
         .destructiveConfirmation($pendingDestructiveAction)
     }
 
@@ -118,6 +122,14 @@ struct WorkoutLocationSetupView: View {
                             ForEach(Array(locations.enumerated()), id: \.element.id) { index, location in
                                 savedSpaceRow(location, index: index)
                             }
+                        }
+                    }
+
+                    // `b1-pin-question`: asked once, here, until answered (never in a decoy session).
+                    if WorkoutSpacePinQuestion.asks(answer: pinAnswer, decoy: store.duressSessionActive) {
+                        WorkoutSpacePinQuestionCard { yes in
+                            WorldMapPreferences.setRememberSpaces(yes)
+                            pinAnswer = yes
                         }
                     }
 
@@ -755,10 +767,16 @@ private struct SavedSpaceRow: View {
     var body: some View {
         Button(action: onSelect) {
             HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "mappin.and.ellipse")
-                    .font(.system(size: 18))
-                    .foregroundStyle(Color.moss)
-                    .padding(.top, 2)
+                Group {
+                    if look != nil {
+                        WorldSpriteView(sprite: WorldSprites.pin, scale: 3)
+                    } else {
+                        Image(systemName: "mappin.and.ellipse")
+                            .font(.system(size: 18))
+                            .foregroundStyle(Color.moss)
+                    }
+                }
+                .padding(.top, 2)
                 VStack(alignment: .leading, spacing: 3) {
                     if dynamicTypeSize.isAccessibilitySize {
                         Text(location.displayedName)
@@ -788,11 +806,7 @@ private struct SavedSpaceRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 18))
-            .overlay(
-                RoundedRectangle(cornerRadius: 18)
-                    .stroke(isActive ? Color.moss.opacity(0.5) : Color.bark.opacity(0.07), lineWidth: isActive ? 2 : 1)
-            )
+            .modifier(SavedSpaceRowFrame(isActive: isActive))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("workout.location.card")
@@ -819,13 +833,50 @@ private struct SavedSpaceRow: View {
         return Text("\(count) items · \(summary)")
     }
 
-    private var inUseBadge: some View {
-        Text("In use")
-            .font(.fernlet(.labelSmall))
-            .foregroundStyle(Color.moss)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(Color.moss.opacity(0.14), in: Capsule())
+    @ViewBuilder private var inUseBadge: some View {
+        if let look {
+            // `b1-pin-question`: a framed sage tag in the link ink.
+            Text("In use")
+                .font(FernletFramedFont.tag)
+                .foregroundStyle(look.link)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(look.sage, in: RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth))
+        } else {
+            Text("In use")
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.moss)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.moss.opacity(0.14), in: Capsule())
+        }
+    }
+
+    @Environment(\.fernletFramedLook) private var look
+}
+
+/// A saved space's card: World build, framed paper with the accent frame on the space in use
+/// (`b1-pin-question`); today, cream with a moss edge on the active one.
+private struct SavedSpaceRowFrame: ViewModifier {
+    let isActive: Bool
+    @Environment(\.fernletFramedLook) private var look
+
+    func body(content: Content) -> some View {
+        if let look {
+            let shape = RoundedRectangle(cornerRadius: FernletFramedLook.cardRadius, style: .continuous)
+            content
+                .background(look.paper, in: shape)
+                .overlay(shape.strokeBorder(isActive ? look.accent : look.ink, lineWidth: isActive ? 3 : FernletFramedLook.frameWidth))
+                .background { shape.fill(look.shadow).offset(y: 3) }
+        } else {
+            content
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 18))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18)
+                        .stroke(isActive ? Color.moss.opacity(0.5) : Color.bark.opacity(0.07), lineWidth: isActive ? 2 : 1)
+                )
+        }
     }
 }
 

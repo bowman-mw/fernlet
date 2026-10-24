@@ -46,14 +46,16 @@ struct MessagesWorkoutPlanImportReviewSheet: View {
                     planHeader
                     schedulingControls
                     reviewContent
-                    if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
+                    if let errorMessage {
+                        Text(errorMessage).foregroundStyle(errorInk)
+                    }
                     importButton
                 }
-                .padding()
+                .padding(20)
             }
-            .navigationTitle("Review workout plan")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { dismissButton }
+            .background(paperColor.ignoresSafeArea())
+            // World build (`b3-messages-plan`): Cancel top left (off while adding) and the title in the sheet.
+            .fernletSheetToolbar(title: "Review workout plan", onCancel: cancelAction)
             .task { await refreshPreview() }
             .onChange(of: startDayKey) { _, _ in Task { await refreshPreview() } }
             .onChange(of: collisionPolicy) { _, _ in Task { await refreshPreview() } }
@@ -61,14 +63,31 @@ struct MessagesWorkoutPlanImportReviewSheet: View {
         .interactiveDismissDisabled(isImporting)
     }
 
+    /// World build: the sheet's paper and the framed pieces.
+    @Environment(\.fernletFramedLook) private var look
+
+    /// Cancel: closes the review without adding anything — none while the plan is being added.
+    private var cancelAction: (() -> Void)? {
+        guard !isImporting else { return nil }
+        return { dismiss() }
+    }
+
+    /// The sheet's ground: the look's paper, the system background without it.
+    private var paperColor: Color { look?.paper ?? Color(.systemBackground) }
+
+    /// An error line's ink: terracotta's text token under the look, red today.
+    private var errorInk: Color { look == nil ? Color.red : Color.terracottaInk }
+
     private var startDayKey: String { FernletDate.dayKey(for: startDate) }
 
     private var planHeader: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(record.packet.plan.title).font(.title2.weight(.semibold))
-            Text(senderLabel).foregroundStyle(.secondary)
+            Text(record.packet.plan.title)
+                .font(look == nil ? .title2.weight(.semibold) : FernletFramedFont.cardTitle)
+                .foregroundStyle(look?.text ?? Color.primary)
+            Text(senderLabel).foregroundStyle(look?.dim ?? Color.secondary)
             Text("\(record.packet.plan.days.count) days · \(record.packet.plan.sessionCount) workouts")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(look?.dim ?? Color.secondary)
         }
     }
 
@@ -76,15 +95,36 @@ struct MessagesWorkoutPlanImportReviewSheet: View {
         record.packet.plan.coachDisplayName.isEmpty ? "Sender not specified" : record.packet.plan.coachDisplayName
     }
 
-    private var schedulingControls: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            DatePicker("Start date", selection: $startDate, displayedComponents: .date)
-            Picker("If workouts collide", selection: $collisionPolicy) {
-                Text("Keep existing workouts").tag(WorkoutPlanCollisionPolicy.keepExistingWorkouts)
-                Text("Add alongside").tag(WorkoutPlanCollisionPolicy.addAlongside)
-                Text("Replace future conflicts").tag(WorkoutPlanCollisionPolicy.replaceFutureConflicts)
+    @ViewBuilder private var schedulingControls: some View {
+        if look != nil {
+            // `b3-messages-plan`: the start date and the collision rule as framed rows.
+            FernletFramedSection {
+                DatePicker("Start date", selection: $startDate, displayedComponents: .date)
+                    .tint(Color.moss)
+                FernletDropdown("If workouts collide", selection: $collisionPolicy,
+                                options: [.keepExistingWorkouts, .addAlongside, .replaceFutureConflicts]) { policy in
+                    Self.policyText(policy)
+                }
             }
-            .pickerStyle(.menu)
+        } else {
+            VStack(alignment: .leading, spacing: 10) {
+                DatePicker("Start date", selection: $startDate, displayedComponents: .date)
+                Picker("If workouts collide", selection: $collisionPolicy) {
+                    Text("Keep existing workouts").tag(WorkoutPlanCollisionPolicy.keepExistingWorkouts)
+                    Text("Add alongside").tag(WorkoutPlanCollisionPolicy.addAlongside)
+                    Text("Replace future conflicts").tag(WorkoutPlanCollisionPolicy.replaceFutureConflicts)
+                }
+                .pickerStyle(.menu)
+            }
+        }
+    }
+
+    /// A collision rule's words, as the menu draws them.
+    static func policyText(_ policy: WorkoutPlanCollisionPolicy) -> Text {
+        switch policy {
+        case .keepExistingWorkouts: Text("Keep existing workouts")
+        case .addAlongside: Text("Add alongside")
+        case .replaceFutureConflicts: Text("Replace future conflicts")
         }
     }
 
@@ -106,15 +146,23 @@ struct MessagesWorkoutPlanImportReviewSheet: View {
             Text(changeCounts(for: preview))
             safetyFlags(for: preview)
         }
+        .foregroundStyle(look?.text ?? Color.primary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(look == nil ? 0 : 15)
+        .modifier(MessagesPlanCardFrame(isFramed: look != nil))
     }
 
     private func safetyFlags(for preview: WorkoutPlanImportPreview) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             if !preview.review.safetyFlags.isEmpty {
-                Text("Check these against your limits").font(.headline)
+                if look != nil {
+                    SectionLabel("Check these against your limits")
+                } else {
+                    Text("Check these against your limits").font(.headline)
+                }
                 ForEach(preview.review.safetyFlags) { flag in
                     Text("• \(flag.exerciseName): \(flag.reason)")
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(look == nil ? Color.orange : Color.terracottaInk)
                 }
             }
         }
@@ -126,6 +174,13 @@ struct MessagesWorkoutPlanImportReviewSheet: View {
         if let landedLine {
             ImportLandedLine(text: landedLine)
                 .font(.headline)
+        } else if look != nil {
+            Button(action: beginImport) {
+                Text(isImporting ? "Adding workout plan…" : "Add workout plan")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(ActionPillButtonStyle(.primary))
+            .disabled(isLoadingPreview || preview == nil || isImporting)
         } else {
             Button(action: beginImport) {
                 Text(isImporting ? "Adding workout plan…" : "Add workout plan")
@@ -133,13 +188,6 @@ struct MessagesWorkoutPlanImportReviewSheet: View {
             }
             .buttonStyle(.borderedProminent)
             .disabled(isLoadingPreview || preview == nil || isImporting)
-        }
-    }
-
-    @ToolbarContentBuilder
-    private var dismissButton: some ToolbarContent {
-        ToolbarItem(placement: .cancellationAction) {
-            Button("Cancel") { dismiss() }.disabled(isImporting)
         }
     }
 
@@ -248,5 +296,18 @@ struct MessagesWorkoutPlanImportReviewSheet: View {
             localized: "messagesWorkoutPlanImport.failed",
             defaultValue: "Fernlet couldn't add this workout plan.",
             comment: "Shown in the Messages workout plan review sheet when adding the plan failed for any reason other than the calendar changing."))
+    }
+}
+
+/// The plan preview's card under the World look (`b3-messages-plan`); nothing around it today.
+private struct MessagesPlanCardFrame: ViewModifier {
+    let isFramed: Bool
+
+    func body(content: Content) -> some View {
+        if isFramed {
+            content.modifier(MoveInsetCardFrame())
+        } else {
+            content
+        }
     }
 }

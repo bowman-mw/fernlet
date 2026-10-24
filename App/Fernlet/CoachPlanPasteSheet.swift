@@ -53,13 +53,10 @@ struct CoachPlanPasteSheet: View {
                 // screens below the fold.
                 readBar
             }
-            .background(Color.parchment)
-            .navigationTitle("Paste a plan")
-            .navigationBarTitleDisplayMode(.inline)
+            .background((look?.paper ?? Color.parchment).ignoresSafeArea())
+            // World build (`b3-coach-paste`): Cancel top left and the title in the sheet.
+            .fernletSheetToolbar(title: "Paste a plan", onCancel: { dismiss() })
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
                     Button("Done") { editorFocused = false }
@@ -67,6 +64,8 @@ struct CoachPlanPasteSheet: View {
             }
         }
     }
+
+    @Environment(\.fernletFramedLook) private var look
 
     private var intro: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -92,9 +91,8 @@ struct CoachPlanPasteSheet: View {
                 // page under it.
                 .frame(minHeight: 220, maxHeight: 320)
                 .padding(10)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: FernletMetrics.radiusMd))
-                .overlay(RoundedRectangle(cornerRadius: FernletMetrics.radiusMd)
-                    .stroke(Color.bark.opacity(0.08), lineWidth: 1))
+                // The framed field under the World look; today's cream box without it.
+                .modifier(MoveInsetCardFrame(cornerRadius: look == nil ? FernletMetrics.radiusMd : 10))
                 .focused($editorFocused)
                 .accessibilityIdentifier("coachPaste.editor")
                 .accessibilityLabel("Pasted plan")
@@ -196,18 +194,13 @@ struct CoachPlanPasteSheet: View {
                 problem = Self.problem(for: error, pastedText: text)
             }
         } label: {
-            Text("Read plan")
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.parchment)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 13)
-                .background(text.isEmpty ? Color.slate.opacity(0.4) : Color.moss,
-                            in: RoundedRectangle(cornerRadius: FernletMetrics.radiusSm))
+            Text("Read plan").frame(maxWidth: .infinity)
         }
-        .buttonStyle(.plain)
+        // The framed primary under the World look (faded while there is nothing to read).
+        .buttonStyle(ActionPillButtonStyle(.primary))
         .disabled(text.isEmpty)
         .accessibilityIdentifier("coachPaste.read")
         .padding(20)
-        .background(Color.parchment)
+        .background((look?.paper ?? Color.parchment).ignoresSafeArea(edges: .bottom))
     }
 }

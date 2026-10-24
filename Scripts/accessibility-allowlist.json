@@ -61,18 +61,6 @@
  },
  {
   "rule": "A8-MUTED-SLATE",
-  "path": "App/Fernlet/CoachPlanPasteSheet.swift",
-  "line_contains": "text.isEmpty ? Color.slate.opacity(0.4)",
-  "reason": "DISABLED-STATE ink on an inactive control, which WCAG 1.4.3 and 1.4.11 both exempt: the dim branch of this ternary is taken exactly when the control's own `.disabled(text.isEmpty)` is true, so VoiceOver announces it as dimmed and it cannot be activated. The ENABLED branch is the readable one (a solid `moss` fill under `parchment` ink). If the `.disabled` predicate and this ternary ever stop being the same condition, this entry is wrong — delete it and decide the site again."
- },
- {
-  "rule": "A8-MUTED-SLATE",
-  "path": "App/Fernlet/CoachPlanReviewView.swift",
-  "line_contains": "review.isImportable ? Color.moss : Color.slate.opacity(0.4)",
-  "reason": "DISABLED-STATE ink on an inactive control, which WCAG 1.4.3 and 1.4.11 both exempt: the dim branch of this ternary is taken exactly when the control's own `.disabled(!review.isImportable)` is true, so VoiceOver announces it as dimmed and it cannot be activated. The ENABLED branch is the readable one (a solid `moss` fill under `parchment` ink). If the `.disabled` predicate and this ternary ever stop being the same condition, this entry is wrong — delete it and decide the site again."
- },
- {
-  "rule": "A8-MUTED-SLATE",
   "path": "App/Fernlet/CreationStudioView.swift",
   "line_contains": "undoStack.isEmpty ? Color.slate.opacity(0.4)",
   "reason": "DISABLED-STATE ink on an inactive control, which WCAG 1.4.3 and 1.4.11 both exempt: the dim branch of this ternary is taken exactly when the control's own `.disabled(undoStack.isEmpty)` is true, so VoiceOver announces it as dimmed and it cannot be activated. The ENABLED branch is the readable one (`fern`). If the `.disabled` predicate and this ternary ever stop being the same condition, this entry is wrong — delete it and decide the site again."

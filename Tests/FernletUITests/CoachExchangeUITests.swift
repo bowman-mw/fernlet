@@ -88,7 +88,9 @@ final class CoachExchangeUITests: XCTestCase {
         XCTAssertTrue(share.isHittable, "the Share pill is not tappable")
         share.tap()
 
-        XCTAssertTrue(app.navigationBars["Share with a trainer"].waitForExistence(timeout: 8),
+        // The World look draws the title inside the sheet (no navigation bar), so wait on the screen's
+        // always-present Prepare button instead of the bar.
+        XCTAssertTrue(element("trainer.prepare", in: app).waitForExistence(timeout: 8),
                       "the trainer screen did not open")
         return app
     }

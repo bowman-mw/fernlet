@@ -64,16 +64,11 @@ struct CoachPlanReviewView: View {
                         .accessibilityLabel("Preparing the plan review")
                 }
             }
-            .background(Color.parchment)
-            .navigationTitle("Review plan")
-            .navigationBarTitleDisplayMode(.inline)
+            .background((look?.paper ?? Color.parchment).ignoresSafeArea())
+            // World build (`b3-coach-review`): Cancel top left and the title in the sheet.
+            .fernletSheetToolbar(title: "Review plan", onCancel: { dismiss() })
             .onAppear { refreshReview() }
             .onChange(of: startDayKey) { _, _ in refreshReview() }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-            }
             .alert("Couldn't add this plan", isPresented: $applyFailed) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -121,14 +116,25 @@ struct CoachPlanReviewView: View {
             }
             // No trust badge and no verified-sender line: this plan was pasted, so Fernlet knows
             // nothing about who wrote it. Saying so is more honest than showing a name as if it
-            // had been checked.
-            Text("Pasted in by you — Fernlet can't check who wrote this, so read it before you accept.")
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 2)
+            // had been checked. World build: a framed terracotta notice (`b3-coach-review`).
+            if look != nil {
+                FernletNotice("Pasted in by you — Fernlet can't check who wrote this, so read it before you accept.",
+                              tone: .warn) {
+                    WorldSpriteView(sprite: WorldSprites.flag, scale: 2)
+                }
+                .padding(.top, 4)
+            } else {
+                Text("Pasted in by you — Fernlet can't check who wrote this, so read it before you accept.")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
+            }
         }
     }
+
+    /// World build (`b3-coach-review`): the sheet's paper, framed cards and the warning notice.
+    @Environment(\.fernletFramedLook) private var look
 
     /// The one-line description under the title.
     ///
@@ -515,15 +521,10 @@ struct CoachPlanReviewView: View {
                     applyFailed = true
                 }
             } label: {
-                Text("Add to my plan")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.parchment)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 13)
-                    .background(review.isImportable ? Color.moss : Color.slate.opacity(0.4),
-                                in: RoundedRectangle(cornerRadius: FernletMetrics.radiusSm))
+                Text("Add to my plan").frame(maxWidth: .infinity)
             }
-            .buttonStyle(.plain)
+            // The framed primary under the World look (faded while the plan can't be added).
+            .buttonStyle(ActionPillButtonStyle(.primary))
             .disabled(!review.isImportable)
             .accessibilityIdentifier("coachPlan.accept")
 
@@ -589,14 +590,18 @@ struct CoachPlanReviewView: View {
         VStack(alignment: .leading, spacing: 10) { content() }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: FernletMetrics.radiusMd))
-            .overlay(RoundedRectangle(cornerRadius: FernletMetrics.radiusMd).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+            .modifier(MoveInsetCardFrame(cornerRadius: look == nil ? FernletMetrics.radiusMd : FernletFramedLook.cardRadius))
     }
 
     /// A card's caption. `LocalizedStringKey`: every caller passes a literal, which a `String`
-    /// parameter would have kept out of the catalog.
+    /// parameter would have kept out of the catalog. World build: the section label's look.
+    @ViewBuilder
     private func cardTitle(_ text: LocalizedStringKey) -> some View {
-        Text(text).font(.fernlet(.label)).foregroundStyle(Color.slate)
+        if look != nil {
+            SectionLabel(text)
+        } else {
+            Text(text).font(.fernlet(.label)).foregroundStyle(Color.slate)
+        }
     }
 
     /// One bulleted line of runtime text (an issue's already-localized detail, a new exercise's
