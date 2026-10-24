@@ -155,8 +155,8 @@ struct RecipeServingCard: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 7)
         .padding(.horizontal, 4)
-        .background(look?.raised ?? Color.cream, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(look?.ink ?? Color.clear, lineWidth: 2))
+        // The frame rule (`ref-frames-recipe`): inside the card the tile keeps its tint, not a frame.
+        .fernletFrameRulePiece(.tile, fill: look?.raised ?? Color.cream, cornerRadius: 8)
         .accessibilityElement(children: .combine)
     }
 }

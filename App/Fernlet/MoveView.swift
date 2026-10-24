@@ -3352,8 +3352,8 @@ struct WorkoutExerciseRow: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
-            .background(look.raised, in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth))
+            // The frame rule: inside its workout card the row keeps its raised fill, not a frame.
+            .fernletFrameRulePiece(.tile, fill: look.raised, cornerRadius: 8)
         } else {
             HStack(spacing: 10) {
                 Image(systemName: "checkmark.circle.fill")
@@ -4253,7 +4253,7 @@ struct ExerciseSearchResultRow: View {
     /// The trailing glyph: a framed pixel + (or ✕ to clear the pick) under the World look, today's symbol.
     @ViewBuilder private var rowGlyph: some View {
         if look != nil {
-            FernletIconTile(size: 32) { FernletIcon(isSelected ? .close : .plus, scale: 2) }
+            FernletIconTile(size: 32, isControl: true) { FernletIcon(isSelected ? .close : .plus, scale: 2) }
         } else {
             Image(systemName: isSelected ? "xmark.circle" : "plus.circle")
                 .font(.caption.weight(.semibold))

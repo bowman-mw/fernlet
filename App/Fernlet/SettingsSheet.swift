@@ -1707,14 +1707,14 @@ struct SettingsSheet: View {
                             detail: Text(memory.sourceDate.formatted(.dateTime.month(.abbreviated).day().year())))
                 .padding(.vertical, 10)
             Button { editingMemory = memory } label: {
-                FernletIconTile(size: 32) { WorldSpriteView(sprite: WorldSprites.pen, scale: 2) }
+                FernletIconTile(size: 32, isControl: true) { WorldSpriteView(sprite: WorldSprites.pen, scale: 2) }
             }
             .buttonStyle(.plain)
             .fernletIconButton("Edit memory")
             // A memory is saved user data, so removing it is confirmed like every other delete —
             // it used to vanish on one tap with no undo.
             Button { confirmDeleteMemory(memory) } label: {
-                FernletIconTile(size: 32) { FernletIcon(.close, scale: 2) }
+                FernletIconTile(size: 32, isControl: true) { FernletIcon(.close, scale: 2) }
             }
             .buttonStyle(.plain)
             .fernletIconButton("Delete memory")

@@ -394,7 +394,7 @@ struct WeeklyMealPlannerView: View {
             }
             Spacer()
             Button { pickingForDay = DayPick(id: key) } label: {
-                RecipeSpriteTile(sprite: WorldSprites.plus, size: 34)
+                RecipeSpriteTile(sprite: WorldSprites.plus, size: 34, isControl: true)
                     .frame(minWidth: 44, minHeight: 44)
                     .contentShape(Rectangle())
             }

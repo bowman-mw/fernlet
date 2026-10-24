@@ -26,6 +26,10 @@ public struct FernletCard<Content: View>: View {
     @Environment(\.colorSchemeContrast) private var contrast
     /// The World build's framed look, when the surface opted in (``FernletFramedLook``).
     @Environment(\.fernletFramedLook) private var framedLook
+    /// Whether this card sits inside another section (the frame rule: then it draws no frame).
+    @Environment(\.fernletInFramedSection) private var inSection
+    /// Whether it is one row of a framed section, whose hairlines already part it from its neighbours.
+    @Environment(\.fernletInFramedRow) private var inRow
 
     public init(@ViewBuilder content: () -> Content) {
         self.content = content()
@@ -33,21 +37,35 @@ public struct FernletCard<Content: View>: View {
 
     public var body: some View {
         if let framedLook {
-            framed(framedLook)
+            if inSection { nested } else { framed(framedLook) }
         } else {
             standard
         }
     }
 
-    /// The look's card: paper in a 2-pt ink frame with a solid shadow 3 pt down, 14/15-pt padding.
-    /// The frame is the edge at every contrast setting, so it needs no Increase Contrast branch.
+    /// The look's card, one section (the frame rule, ``FernletFrameRule``): paper in a 2-pt ink frame
+    /// with a solid shadow 3 pt down, 14/15-pt padding. The frame is the edge at every contrast setting,
+    /// so it needs no Increase Contrast branch. Its content is inside a section, so the pieces in it
+    /// (a nested card, an icon square, a note) drop their own frames.
     private func framed(_ look: FernletFramedLook) -> some View {
-        let shape = RoundedRectangle(cornerRadius: FernletFramedLook.cardRadius, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: FernletFrameRule.cornerRadius, style: .continuous)
         return content
-            .padding(EdgeInsets(top: 14, leading: 15, bottom: 14, trailing: 15))
+            .environment(\.fernletInFramedSection, true)
+            .padding(FernletFrameRule.padding)
             .background(look.paper, in: shape)
-            .overlay(shape.strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth))
-            .background { shape.fill(look.shadow).offset(y: 3) }
+            .overlay(shape.strokeBorder(look.ink, lineWidth: FernletFrameRule.frameWidth))
+            .background { shape.fill(look.shadow).offset(y: FernletFrameRule.shadowOffset) }
+    }
+
+    /// A card inside a section (the frame rule's `.ac .ac`): no frame, fill or shadow; a full-width
+    /// hairline above it and 10 pt of air under that, or, as a section's row, the row's own 10 pt above
+    /// and below.
+    private var nested: some View {
+        VStack(alignment: .leading, spacing: FernletFrameRule.rowSpacing) {
+            if !inRow { FernletDottedRule() }
+            content
+        }
+        .padding(.vertical, inRow ? FernletFrameRule.rowSpacing : 0)
     }
 
     private var standard: some View {

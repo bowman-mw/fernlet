@@ -43,7 +43,8 @@ public struct FernletFramedLook: Sendable {
     public var page: Color
     /// The page's dot grid.
     public var pageDot: Color
-    /// The dotted separator between rows (`.sr`, `.kv`): ink at a quarter in light mode, cream in dark.
+    /// The 1-pt hairline between rows (`.sr`, `.kv`; the frame rule, ``FernletFrameRule``): ink at 16 %
+    /// in light mode, cream at 16 % in dark, 40 % under Increase Contrast.
     public var rule: Color
     /// Accent as text: Done in a sheet, links and quiet buttons on paper ("Adjust targets").
     public var link: Color
@@ -73,7 +74,7 @@ public struct FernletFramedLook: Sendable {
         self.dim = dim
         self.page = page ?? paper
         self.pageDot = pageDot ?? ink.opacity(0.07)
-        self.rule = rule ?? ink.opacity(0.25)
+        self.rule = rule ?? ink.opacity(FernletFrameRule.hairlineOpacity(increasedContrast: false))
         self.link = link ?? accent
         self.wood = wood ?? raised
         self.woodHigh = woodHigh ?? raised

@@ -3703,7 +3703,7 @@ struct MealSheet: View {
             // Clear BOTH the preview image and the sealed-ready bytes: `attachPhoto` prefers the byte
             // path, so leaving `mealPhotoData` set would re-attach a photo the user explicitly removed.
             Button { mealPhoto = nil; mealPhotoData = nil } label: {
-                FernletIconTile(size: 36) { FernletIcon(.close, scale: 2) }
+                FernletIconTile(size: 36, isControl: true) { FernletIcon(.close, scale: 2) }
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }

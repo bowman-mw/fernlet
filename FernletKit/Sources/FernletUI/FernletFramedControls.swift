@@ -324,7 +324,8 @@ public struct FernletStepper: View {
 // MARK: - Notice, key-value row, tag
 
 /// A notice box (`.notice3`): an icon and a line on raised paper in a 2-pt ink frame; `.warn` on the
-/// warning fill (`.notice3.warn`). Not a control and not a card: it says something about the screen it
+/// warning fill (`.notice3.warn`). Inside a section it keeps its fill and drops the frame (the frame
+/// rule, ``FernletFrameRule``). Not a control and not a card: it says something about the screen it
 /// sits on ("No catalog matches.", "Goals are crafted entirely on your device").
 public struct FernletNotice<Icon: View>: View {
     /// The notice's fill.
@@ -352,7 +353,6 @@ public struct FernletNotice<Icon: View>: View {
     }
 
     public var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 10)
         HStack(alignment: .top, spacing: 10) {
             icon
             text
@@ -363,8 +363,8 @@ public struct FernletNotice<Icon: View>: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(fill, in: shape)
-        .overlay { if let look { shape.strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth) } }
+        // The frame rule: framed on a page, its tint alone inside a section.
+        .fernletFrameRulePiece(.note, fill: fill, cornerRadius: 10)
         .accessibilityElement(children: .combine)
     }
 
@@ -415,8 +415,9 @@ public struct FernletKeyValueRow: View {
                 .multilineTextAlignment(.trailing)
         }
         .font(FernletFramedFont.keyValue)
-        .padding(.vertical, 6)
-        .overlay(alignment: .top) { if showsRule { FernletDottedRule().offset(y: -1) } }
+        // The frame rule: 10 pt above and below each row, a hairline between rows.
+        .padding(.vertical, look == nil ? 6 : FernletFrameRule.rowSpacing)
+        .overlay(alignment: .top) { if showsRule { FernletDottedRule() } }
         .accessibilityElement(children: .combine)
     }
 }
@@ -540,23 +541,26 @@ public struct FernletTileGrid<Content: View>: View {
 
 /// A framed icon tile (`.icci`, `.icsq`, `.ingr .is`): an icon centred on raised paper in a 2-pt ink
 /// frame with 9-pt corners, 42 pt by default (30 for an ingredient, 32 for a row's small action).
+///
+/// The frame rule (``FernletFrameRule``): inside a section a decorative tile sits bare, the icon alone
+/// with no fill or frame; a tile that is a control's face (pass `isControl: true`: a row's + or ✕, a
+/// swap, a camera's flash) keeps its frame everywhere, as buttons do.
 public struct FernletIconTile<Content: View>: View {
     var size: CGFloat
     var fill: Color?
+    var isControl: Bool
     let content: Content
-    @Environment(\.fernletFramedLook) private var look
 
-    public init(size: CGFloat = 42, fill: Color? = nil, @ViewBuilder content: () -> Content) {
+    public init(size: CGFloat = 42, fill: Color? = nil, isControl: Bool = false, @ViewBuilder content: () -> Content) {
         self.size = size
         self.fill = fill
+        self.isControl = isControl
         self.content = content()
     }
 
     public var body: some View {
-        let shape = RoundedRectangle(cornerRadius: size < 36 ? 6 : 9)
         content
             .frame(width: size, height: size)
-            .background(fill ?? look?.raised ?? Color.cream, in: shape)
-            .overlay { if let look { shape.strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth) } }
+            .fernletFrameRulePiece(isControl ? .button : .iconSquare, fill: fill, cornerRadius: size < 36 ? 6 : 9)
     }
 }

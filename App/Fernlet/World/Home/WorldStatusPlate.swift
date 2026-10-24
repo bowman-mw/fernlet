@@ -19,18 +19,10 @@ struct WorldStatusPlate: View {
 
     var body: some View {
         Button(action: onOpenToday) {
-            VStack(alignment: .leading, spacing: 5) {
-                hearts
-                macros
-                water
-            }
-            .padding(EdgeInsets(top: 7, leading: 9, bottom: 7, trailing: 9))
-            .background(WorldPalette.paper, in: RoundedRectangle(cornerRadius: 9))
-            .overlay(alignment: .bottom) { WorldPalette.paperShade.frame(height: 3).padding(.horizontal, 3).padding(.bottom, 3) }
-            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(WorldPalette.ink, lineWidth: 3))
-            .background {
-                RoundedRectangle(cornerRadius: 9)
-                    .fill(Color(.sRGB, red: 74 / 255, green: 46 / 255, blue: 28 / 255, opacity: 0.4)).offset(y: 3)
+            // Refinement 4 (`ref-plate`): the wood "Today ›" tab hangs under the plate's left edge.
+            VStack(alignment: .leading, spacing: 0) {
+                plate
+                WorldTodayTab().padding(.leading, 10)
             }
         }
         .buttonStyle(.plain)
@@ -44,6 +36,23 @@ struct WorldStatusPlate: View {
     }
 
     private var isLarge: Bool { dynamicTypeSize.isAccessibilitySize }
+
+    /// The plate itself: hearts, macros and water on paper in its ink frame.
+    private var plate: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            hearts
+            macros
+            water
+        }
+        .padding(EdgeInsets(top: 7, leading: 9, bottom: 7, trailing: 9))
+        .background(WorldPalette.paper, in: RoundedRectangle(cornerRadius: 9))
+        .overlay(alignment: .bottom) { WorldPalette.paperShade.frame(height: 3).padding(.horizontal, 3).padding(.bottom, 3) }
+        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(WorldPalette.ink, lineWidth: 3))
+        .background {
+            RoundedRectangle(cornerRadius: 9)
+                .fill(Color(.sRGB, red: 74 / 255, green: 46 / 255, blue: 28 / 255, opacity: 0.4)).offset(y: 3)
+        }
+    }
 
     /// Six hearts (four at the largest sizes), then the gold hearts.
     private var hearts: some View {

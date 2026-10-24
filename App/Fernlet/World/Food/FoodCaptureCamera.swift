@@ -139,7 +139,7 @@ struct FoodCaptureCameraView: View {
 
     private var libraryButton: some View {
         Button { showingLibrary = true } label: {
-            FernletIconTile(size: 52) { WorldSpriteView(sprite: FoodSprites.library, scale: 3) }
+            FernletIconTile(size: 52, isControl: true) { WorldSpriteView(sprite: FoodSprites.library, scale: 3) }
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

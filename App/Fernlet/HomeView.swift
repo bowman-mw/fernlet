@@ -841,6 +841,8 @@ struct HomeView: View {
                 firstAidChip("archivebox", "Worry box", tool: .worryBox)
             }
         }
+        // A hand-drawn section: its icon square sits bare inside it (the frame rule).
+        .environment(\.fernletInFramedSection, framedLook != nil)
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
@@ -1380,16 +1382,9 @@ struct HomeView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .background(
-                framedLook?.rose ?? Color.dustyRose.opacity(isUnwell ? 0.18 : 0.10),
-                in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-            )
-            .overlay {
-                if let framedLook {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(framedLook.ink, lineWidth: FernletFramedLook.frameWidth)
-                }
-            }
+            // The frame rule (`ref-frames-today`): a note inside the Today card keeps its rose tint, no frame.
+            .fernletFrameRulePiece(.note, fill: framedLook?.rose ?? Color.dustyRose.opacity(isUnwell ? 0.18 : 0.10),
+                                   cornerRadius: 12)
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)

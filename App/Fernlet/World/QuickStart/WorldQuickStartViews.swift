@@ -30,7 +30,9 @@ nonisolated enum WorldQuickStartType {
 
 /// The blue quick-start button, bottom right over the map (design `b1-home-day`: 60 × 60 pt, teal in
 /// its own dark frame, a white pixel icon). It quick-starts what the person usually does where they
-/// stand (``WorldQuickStart``); it never badges, buzzes or notifies.
+/// stand (``WorldQuickStart``); it never badges, buzzes or notifies. When its action changes to the
+/// camera, a workout or a run, the word slides out beside it for three seconds
+/// (``WorldQuickStartLabel``), and VoiceOver hears "Quick start, Camera" as its name.
 struct WorldQuickStartButton: View {
     let glyph: WorldQuickStartGlyph
     let action: () -> Void
@@ -50,7 +52,9 @@ struct WorldQuickStartButton: View {
                 }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(Text(WorldQuickStartCopy.buttonLabel))
+        // Refinement 6 (`ref-blue-how`): the action's word slides out when it changes; the name always says it.
+        .worldQuickStartLabel(for: glyph)
+        .accessibilityLabel(Text(verbatim: WorldQuickStartLabel.buttonName(for: glyph)))
         .accessibilityHint(Text(WorldQuickStartCopy.buttonHint))
         .accessibilityInputLabels([Text(WorldQuickStartCopy.buttonLabel)])
         .accessibilityIdentifier("world.quickStart")

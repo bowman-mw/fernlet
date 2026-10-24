@@ -194,7 +194,9 @@ enum UITestSupport {
     /// companion), `friend` (a nearby friend, "Sam"), `solo` / `session` (the quick start with the
     /// camera of your own, now on by default, or as if in a session with Sam and Rae; display only),
     /// `qs` (opens the quick-start card), `walk` (starts Walk together), `hold` (the companion's line
-    /// stays up instead of fading after six seconds). Consumed by `WorldMapHome` and `WorldMapCompanion`;
+    /// stays up instead of fading after six seconds), `closeup` (opens the companion up close), `label`
+    /// (the blue button's action word shows and stays). Consumed by `WorldMapHome`, `WorldMapCompanion`
+    /// and the blue button's label;
     /// `FERNLET_UI_TEST_WORLD_MAP_PHASE` fixes its time of day too.
     static var worldHomeScenes: Set<String> {
         Set((env["FERNLET_UI_TEST_WORLD_HOME"] ?? "").split(separator: ",").map(String.init))

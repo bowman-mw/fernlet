@@ -3,40 +3,32 @@
 //  FernletUI
 //
 //  Rows and sections in the one design language (`kit-b1.css` `.srs` / `.sr`, `kit-v3.css`): a framed
-//  paper card whose rows are 54 pt or taller, 16 pt in, split by dotted rules; and the `Form` style that
+//  paper card whose rows are 54 pt or taller, 16 pt in, split by 1-pt hairlines (the frame rule); and the `Form` style that
 //  draws every Form that way under the look.
 //
 
 import SwiftUI
 
-/// The dotted rule between rows (`.sr`, `.kv`, `.ingr`): 2-pt round dots every 4 pt in the look's
-/// ``FernletFramedLook/rule``. A faint hairline without the look.
+/// The rule between rows (`.sr`, `.kv`, `.ingr`). Since the frame rule (``FernletFrameRule``, owner,
+/// 2026-10-24) it is a 1-pt full-width hairline in the look's ``FernletFramedLook/rule`` (ink at 16 %,
+/// cream at 16 % in dark mode, 40 % under Increase Contrast), where it was a dotted line; the name stays
+/// so every screen that draws one follows. A faint hairline without the look.
 public struct FernletDottedRule: View {
     @Environment(\.fernletFramedLook) private var look
 
     public init() {}
 
     public var body: some View {
-        DottedLine()
-            .stroke(look?.rule ?? Color.bark.opacity(0.12),
-                    style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [0, 4]))
-            .frame(height: 2)
+        Rectangle()
+            .fill(look?.rule ?? Color.bark.opacity(0.12))
+            .frame(height: FernletFrameRule.hairlineWidth)
+            .frame(maxWidth: .infinity)
             .accessibilityHidden(true)
     }
 }
 
-/// A horizontal line through the middle of its frame, starting one point in so the first dot is whole.
-nonisolated private struct DottedLine: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX + 1, y: rect.midY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
-        return path
-    }
-}
-
 /// A framed section (`.srs`): an optional section label, then the rows on one paper card in a 2-pt ink
-/// frame with a solid shadow, each row at least 54 pt tall and 16 pt in, dotted rules between them,
+/// frame with a solid shadow, each row at least 54 pt tall and 16 pt in, 1-pt hairlines between them,
 /// and an optional note below.
 ///
 /// ```swift
@@ -74,9 +66,12 @@ public struct FernletFramedSection<Content: View>: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 0) {
             if let header {
-                SectionLabel(header).padding(.horizontal, 4)
+                // The frame rule: the label sits 6 pt above its frame (10 without the look, as before).
+                SectionLabel(header)
+                    .padding(.horizontal, 4)
+                    .padding(.bottom, look == nil ? 10 : FernletFrameRule.labelGap)
             }
             FernletFramedRows { content }
             if let footer {
@@ -85,41 +80,46 @@ public struct FernletFramedSection<Content: View>: View {
                     .foregroundStyle(look?.dim ?? Color.slate)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 6)
+                    .padding(.top, 10)
             }
         }
     }
 }
 
 /// The card under ``FernletFramedSection`` and the framed `Form` style: every subview of `content` one
-/// row, dotted rules between rows.
+/// row, 1-pt hairlines between rows (the frame rule, ``FernletFrameRule``). Inside another section it
+/// draws no frame of its own: its rows join the outer section's, flush with its padding.
 struct FernletFramedRows<Content: View>: View {
     let content: Content
     @Environment(\.fernletFramedLook) private var look
+    @Environment(\.fernletInFramedSection) private var inSection
 
     init(@ViewBuilder content: () -> Content) {
         self.content = content()
     }
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: look == nil ? FernletMetrics.radiusMd : FernletFramedLook.cardRadius,
+        let shape = RoundedRectangle(cornerRadius: look == nil ? FernletMetrics.radiusMd : FernletFrameRule.cornerRadius,
                                      style: .continuous)
+        let nested = look != nil && inSection
         Group(subviews: content) { rows in
             VStack(spacing: 0) {
                 ForEach(rows) { row in
                     if row.id != rows.first?.id { separator }
                     row
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, nested ? 0 : 16)
                         .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
                 }
             }
         }
         .environment(\.fernletInFramedRow, true)
-        .background(look?.paper ?? Color.cream, in: shape)
-        .overlay { if let look { shape.strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth) } }
-        .background { if let look { shape.fill(look.shadow).offset(y: 3) } }
+        .environment(\.fernletInFramedSection, look != nil)
+        .background(nested ? Color.clear : (look?.paper ?? Color.cream), in: shape)
+        .overlay { if let look, !nested { shape.strokeBorder(look.ink, lineWidth: FernletFrameRule.frameWidth) } }
+        .background { if let look, !nested { shape.fill(look.shadow).offset(y: FernletFrameRule.shadowOffset) } }
     }
 
-    /// The dotted rule under the look, a hairline inset 16 pt without it.
+    /// The hairline under the look, a system divider inset 16 pt without it.
     @ViewBuilder
     private var separator: some View {
         if look != nil {
@@ -226,8 +226,9 @@ public struct FernletRowLabel: View {
 }
 
 /// Draws every `Form` below it as framed sections under the look (`.srs` / `.sr`): each section's
-/// header, then its rows on one framed card with dotted rules, then its footer as a dim note, in a
-/// scroll view 16 pt in from the edges, on the dotted page. Links and buttons take
+/// header 6 pt above its rows on one framed card with hairlines, then its footer as a dim note, the
+/// sections 16 pt apart (the frame rule, ``FernletFrameRule``), in a scroll view 16 pt in from
+/// the edges, on the dotted page. Links and buttons take
 /// ``FernletRowButtonStyle`` (a chevron); switches take the framed switch. Without the look it is the
 /// system's grouped Form.
 ///
@@ -248,7 +249,7 @@ public struct FernletFormStyle: FormStyle {
         var body: some View {
             if let look {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: FernletFrameRule.sectionSpacing) {
                         ForEach(sections: configuration.content) { section in
                             FramedFormSection(section: section, look: look)
                         }
@@ -259,6 +260,8 @@ public struct FernletFormStyle: FormStyle {
                 }
                 // The page's dotted parchment, over any plain background the Form was given.
                 .fernletPageBackground()
+                // A Form is a page, never part of a section, even when presented from inside one.
+                .environment(\.fernletInFramedSection, false)
             } else {
                 Form(configuration).formStyle(.grouped)
             }
@@ -272,10 +275,13 @@ public struct FernletFormStyle: FormStyle {
 
         var body: some View {
             VStack(alignment: .leading, spacing: 10) {
-                section.header
-                    .padding(.horizontal, 4)
-                FernletFramedRows { section.content }
-                    .buttonStyle(FernletRowButtonStyle())
+                // The frame rule: the label 6 pt above its frame.
+                VStack(alignment: .leading, spacing: FernletFrameRule.labelGap) {
+                    section.header
+                        .padding(.horizontal, 4)
+                    FernletFramedRows { section.content }
+                        .buttonStyle(FernletRowButtonStyle())
+                }
                 section.footer
                     .font(FernletFramedFont.note)
                     .foregroundStyle(look.dim)
@@ -289,7 +295,7 @@ public struct FernletFormStyle: FormStyle {
 public extension View {
     /// One row of a framed list (`.listStyle(.plain)`), for a list that needs what only `List` does
     /// (drag to reorder, swipe actions): the rows together draw one framed card 16 pt in from the edges,
-    /// the first with the top corners, the last with the bottom corners and the solid shadow, dotted
+    /// the first with the top corners, the last with the bottom corners and the solid shadow, hairlines
     /// rules between. Pass each row's place; without the look it changes nothing.
     ///
     /// ```swift
