@@ -320,7 +320,7 @@ struct SoloCameraTests {
 
     /// The whole Delete everything funnel. Off until the integrator adds the leg to
     /// `deletePhotoCorpora` (`FernletStore.swift` is one writer's; lane friends-solo ledger, Need 1).
-    @Test(.disabled("Turns on with the deletePhotoCorpora leg (lane friends-solo ledger, Need 1)"))
+    @Test
     func deleteEverythingClearsTheSoloCorpus() async throws {
         let store = makeTestStore()
         defer { Self.remove(store.soloCameraDirectory) }

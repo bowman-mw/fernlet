@@ -112,6 +112,7 @@ struct PrivacyWipeCoverageTests {
         // The session photos' (`meshFeatures.photos`, FernletSocial's); the purge empties the mesh's
         // live roster in the same step.
         "photos.purgeHeldSessionPhotosForDeleteAll",
+        "purgeSoloCameraForDeleteAll",
         "sharedRecipeImportQueue.clear",
         // The un-consumed Messages deep-link request (destination + inbox id). Its own token, and
         // NOT the enclosing `clearMessagesImportInboxes` spelling: that helper is registered in

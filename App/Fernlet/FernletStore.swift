@@ -240,6 +240,8 @@ final class FernletStore {
             #endif
             // The World map's fog follows the decoy on the same flag: history hidden, nothing written.
             worldFog.setDecoy(duressSessionActive)
+            // The solo camera's decoy keeps its shots in memory and drops them when the decoy ends.
+            soloCamera.setDecoy(duressSessionActive)
             // A walk recording when the decoy opens or closes is dropped: neither side keeps the other's.
             if worldWalk.isRecording {
                 worldWalk.cancel()
@@ -772,6 +774,10 @@ final class FernletStore {
     /// Where the person's workout spaces are (`SpacePinStore`; `FernletStore+WorldPins`), in the same
     /// vault as the fog and cleared with it.
     @ObservationIgnored private(set) lazy var worldSpacePins = SpacePinStore(vault: worldMapVault)
+    /// The disposable camera's roll on your own (`SoloCameraRoll`; `FernletStore+SoloCamera`): today's
+    /// film, the sealed device-only solo corpus, and a decoy's shots in memory. Follows the decoy above.
+    @ObservationIgnored private(set) lazy var soloCamera = SoloCameraRoll(
+        store: SoloCameraPhotoStore(directory: soloCameraDirectory), isDecoy: duressSessionActive)
     /// Recipe ids whose web-image download is currently in flight. Guards the entry to
     /// ``fetchRecipeWebImageIfNeeded(for:)`` so the paste-import fire-and-forget task and the
     /// detail's first-open task — both of which can hold the same not-yet-attempted recipe copy —
@@ -6788,6 +6794,12 @@ final class FernletStore {
         // own-photo row: an emptied store's key protects nothing.
         if !meshFeatures.photos.purgeHeldSessionPhotosForDeleteAll() {
             outcome.incompleteStores.append("session photos you hadn't chosen yet")
+        }
+        // 4e. Photos from the disposable camera used on your own (World build): the sealed,
+        // device-only solo corpus and its film count, keyless. Its key row survives like the
+        // pending row (an emptied store's key protects nothing).
+        if !purgeSoloCameraForDeleteAll() {
+            outcome.incompleteStores.append("photos from the camera on your own")
         }
     }
 
