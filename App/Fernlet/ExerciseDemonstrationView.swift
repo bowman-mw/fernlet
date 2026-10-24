@@ -356,7 +356,7 @@ struct ExerciseDemonstrationPlaceholder: View {
                 EquipmentGlyph(item: Self.glyph(for: target), size: ExerciseDemonstrationLayout.glyphSize)
                     .foregroundStyle(look?.text ?? Color.softTaupe)
                 Text(verbatim: ExerciseHowToCatalog.displayName(for: exerciseName))
-                    .font(.fernlet(.headerMedium))
+                    .font(look == nil ? .fernlet(.headerMedium) : MoveFont.rowTitle)
                     .foregroundStyle(look?.text ?? Color.bark)
                     .multilineTextAlignment(.center)
                     .lineLimit(3)
@@ -370,8 +370,7 @@ struct ExerciseDemonstrationPlaceholder: View {
             }
             .padding(20)
         }
-        .aspectRatio(1, contentMode: .fit)
-        .frame(maxWidth: side)
+        .modifier(ExerciseDemonstrationPlaceholderShape(isFramed: look != nil, side: side))
         .overlay {
             if let look {
                 RoundedRectangle(cornerRadius: ExerciseDemonstrationLayout.cornerRadius)
@@ -398,6 +397,28 @@ struct ExerciseDemonstrationPlaceholder: View {
         case .machine: return target.requiredGear.first ?? .chestPress
         case .cardio: return target.requiredGear.first ?? .treadmill
         case .bodyweight, .none: return target.requiredGear.first ?? .yogaMat
+        }
+    }
+}
+
+/// The placeholder tile's shape: today's square the size of a real demonstration, or under the World look
+/// (`b3-howto` draft 2) a full-width card no taller than the kit's, so the steps and the run's footer
+/// stay in view. A real demonstration keeps its square either way.
+private struct ExerciseDemonstrationPlaceholderShape: ViewModifier {
+    let isFramed: Bool
+    let side: CGFloat
+    /// The kit's card height in points.
+    private static let framedHeight: CGFloat = 168
+
+    func body(content: Content) -> some View {
+        if isFramed {
+            content
+                .frame(maxWidth: .infinity)
+                .frame(height: min(side, Self.framedHeight))
+        } else {
+            content
+                .aspectRatio(1, contentMode: .fit)
+                .frame(maxWidth: side)
         }
     }
 }

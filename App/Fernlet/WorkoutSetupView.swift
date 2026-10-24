@@ -513,6 +513,7 @@ private struct OneRepMaxOptIn: View {
                 Text("True max at monthly strength checks")
                     .foregroundStyle(Color.bark)
             }
+            .toggleStyle(FernletFramedToggleStyle())
             .accessibilityIdentifier("workout.setup.oneRepMax")
             Text("Off, the check is a few lighter sets and one hard set — easier on you, and usually the better guide to your training weights.")
                 .font(.fernlet(.labelSmall))

@@ -1249,8 +1249,16 @@ struct WorkoutSheet: View {
                 liftFields
             }
         }
-        .onAppear { refreshLiftLastTime() }
-        .onChange(of: draft.exercise) { _, _ in refreshLiftLastTime() }
+        .onAppear {
+            refreshLiftLastTime()
+            if setsDraft == nil { resetSetsDraft(for: draft.exercise) }
+        }
+        .onChange(of: draft.exercise) { _, exercise in
+            refreshLiftLastTime()
+            // The pick happens on this page, while the list page under it is covered and may not run its
+            // own onChange: build the set rows here too (the reset is a no-op when they already match).
+            resetSetsDraft(for: exercise)
+        }
     }
 
     /// The chosen exercise's fields on its page, then Change (a new pick) or Remove (a listed row).
@@ -1291,15 +1299,17 @@ struct WorkoutSheet: View {
         Toggle(isOn: $logsBySet) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Log set by set")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.bark)
+                    .font(look == nil ? .fernlet(.label) : MoveFont.rowTitle)
+                    .foregroundStyle(look?.text ?? Color.bark)
                 Text("Each set gets its own reps and weight.")
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
+                    .font(look == nil ? .fernlet(.labelSmall) : FernletFramedFont.rowDetail)
+                    .foregroundStyle(look?.dim ?? Color.slate)
                     .fernletWrappingText()
             }
         }
         .tint(Color.moss)
+        // The routed sheet sits above the root that sets the framed switch; the system switch without the look.
+        .toggleStyle(FernletFramedToggleStyle())
         // Voice Control: the spoken label runs on into the explainer line.
         .accessibilityInputLabels([Text("Log set by set"), Text("Set by set")])
         .accessibilityIdentifier("workout.log.bySet")
@@ -1980,7 +1990,7 @@ struct WorkoutSuggestionSheet: View {
             // World build: the framed link card the Move pages use (`b2-move-root`'s history link).
             MoveLinkCard(title: Text("Equipment & limits"), sprite: WorldSprites.dumbbell,
                          detail: Text(verbatim: store.settings.activeWorkoutLocation.displayedName),
-                         identifier: "workout.setup.open") { showingSetup = true }
+                         inksSprite: true, identifier: "workout.setup.open") { showingSetup = true }
         } else {
             plainEquipmentLimitsButton
         }
@@ -2618,12 +2628,12 @@ struct WorkoutSuggestionSheet: View {
                     if store.needsRestToday {
                         Text(MoveRestDayCopy.suggestSheetLine)
                             .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
+                            .foregroundStyle(suggestLook?.dim ?? Color.slate)
                             .fernletWrappingText()
                     } else if let rec = recommendedIntensity {
                         Text("Today's readiness suggests \(rec.displayWord).")
                             .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
+                            .foregroundStyle(suggestLook?.dim ?? Color.slate)
                     }
                     feelingChips
                 }
@@ -3622,8 +3632,9 @@ private struct MoveContextSegment: View {
                     if let value {
                         Text(value)
                             // Two lines, not one: at default size an accepted goal already truncated
-                            // to "Complete 3 gene…" with no way to read the rest.
-                            .font(look == nil ? .fernlet(.label) : MoveFont.rowTitle)
+                            // to "Complete 3 gene…" with no way to read the rest. The World card's value
+                            // is the kit's 15-pt strong face, so "Full gym · 22 items" fits its half.
+                            .font(look == nil ? .fernlet(.label) : MoveFont.body)
                             .foregroundStyle(look?.text ?? Color.bark)
                             .lineLimit(valueLineLimit)
                             .truncationMode(.tail)
@@ -3638,7 +3649,7 @@ private struct MoveContextSegment: View {
                 }
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, look == nil ? 14 : 12)
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
@@ -5582,7 +5593,8 @@ struct WorkoutPlanSheet: View {
     /// Strength or Cardio & activity, a framed switch kept consistent with the chosen split.
     private var kindField: some View {
         FernletSegmentedPicker("Kind", selection: $logMode, options: WorkoutMode.allCases) { mode in
-            Text(verbatim: mode.label)
+            // `b3-workout-plan` draft 2: "Strength" beside "Cardio & activity", as on the Log sheet.
+            mode == .strengthTraining ? Text("Strength") : Text(verbatim: mode.label)
         }
         .accessibilityIdentifier("plan.kind")
     }

@@ -156,7 +156,9 @@ struct GuidedWorkoutEditorSheet: View {
             lastTimeLine(for: row.name)
 
             if row.fromCatalog {
-                HStack(alignment: .center, spacing: 12) {
+                // Top-aligned under the look, so the Sets and Reps labels share a line over a stepper and a
+                // taller field.
+                HStack(alignment: look == nil ? .center : .top, spacing: 12) {
                     stepperField(title: "Sets", value: "\(row.sets)",
                                  decrementLabel: "Fewer sets", incrementLabel: "More sets",
                                  onDecrement: { setSets(index, row.sets - 1) },
@@ -717,7 +719,9 @@ private struct GuidedEditorRowControls: View {
     }
 
     var body: some View {
-        Group {
+        // Under the look the 32-pt tiles sit 6 pt apart (`b3-guided-editor`) while each keeps its 44-pt
+        // target: the targets overlap by the difference. Today's spacing is the card row's 8 pt.
+        HStack(spacing: look == nil ? 8 : -6) {
             Button {
                 onMoveUp()
             } label: {

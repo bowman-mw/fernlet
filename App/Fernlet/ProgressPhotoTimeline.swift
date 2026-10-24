@@ -391,7 +391,7 @@ struct ProgressPhotoSection: View {
                 // World build: a dashed ink frame around a pixel photo and the word (`b2-progress-photos`).
                 .strokeBorder(look?.text ?? Color.moss.opacity(0.5),
                               style: StrokeStyle(lineWidth: look == nil ? 1.5 : 2, dash: look == nil ? [6, 5] : [7, 5]))
-                .frame(width: ProgressPhotoCard.cardWidth, height: ProgressPhotoCard.cardHeight)
+                .frame(width: ProgressPhotoCard.width(framed: look != nil), height: ProgressPhotoCard.height(framed: look != nil))
                 .overlay {
                     VStack(spacing: 8) {
                         if look != nil {
@@ -593,6 +593,12 @@ struct ProgressPhotoCard: View {
     /// match.
     static let labelSpacing: CGFloat = 8
 
+    /// The card's width as drawn: ``cardWidth`` today; under the World look the approved strip's
+    /// narrower print (`b2-progress-photos`), so three show where today's strip shows two and a half.
+    static func width(framed: Bool) -> CGFloat { framed ? 110 : cardWidth }
+    /// The card's picture height as drawn, beside ``width(framed:)``.
+    static func height(framed: Bool) -> CGFloat { framed ? 130 : cardHeight }
+
     @Environment(\.displayScale) private var displayScale
     @Environment(\.fernletFramedLook) private var look
     @State private var image: UIImage?
@@ -606,7 +612,7 @@ struct ProgressPhotoCard: View {
         VStack(alignment: .leading, spacing: Self.labelSpacing) {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color.parchment)
-                .frame(width: Self.cardWidth, height: Self.cardHeight)
+                .frame(width: Self.width(framed: look != nil), height: Self.height(framed: look != nil))
                 .overlay {
                     if let image {
                         Image(uiImage: image)
@@ -639,7 +645,8 @@ struct ProgressPhotoCard: View {
             // ~8 MB bitmap behind a 132pt thumbnail — one per card scrolled past, for as long as the
             // strip lived. These are decrypted body photos, so the footprint matters twice.
             guard image == nil, let data = loadData() else { return }
-            let pixelSize = CGSize(width: Self.cardWidth * displayScale, height: Self.cardHeight * displayScale)
+            let pixelSize = CGSize(width: Self.width(framed: look != nil) * displayScale,
+                                   height: Self.height(framed: look != nil) * displayScale)
             image = await UIImage(data: data)?.byPreparingThumbnail(ofSize: pixelSize)
         }
         .accessibilityElement(children: .ignore)
@@ -666,7 +673,7 @@ struct ProgressPhotoCardLabels: View {
     /// The label column: the card's width, widened at accessibility sizes, where one word of a
     /// caption ("Feeling") or a two-digit date chip was already wider than the 132pt card.
     private var columnWidth: CGFloat {
-        dynamicTypeSize.isAccessibilitySize ? 220 : ProgressPhotoCard.cardWidth
+        dynamicTypeSize.isAccessibilitySize ? 220 : ProgressPhotoCard.width(framed: look != nil)
     }
 
     var body: some View {

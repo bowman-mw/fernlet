@@ -49,6 +49,9 @@ struct MoveLinkCard: View {
     let sprite: WorldSprite
     /// A dim line under the title ("22 pieces of equipment"), when the card has one.
     var detail: Text? = nil
+    /// Draws the sprite in the look's ink: for the blue button's white sprites (the dumbbell), which
+    /// would vanish on the paper tile in their own colour.
+    var inksSprite = false
     let identifier: String
     let action: () -> Void
     @Environment(\.fernletFramedLook) private var look
@@ -57,7 +60,9 @@ struct MoveLinkCard: View {
         Button(action: action) {
             FernletCard {
                 HStack(spacing: 14) {
-                    FernletIconTile(size: 42) { WorldSpriteView(sprite: sprite, scale: 2) }
+                    FernletIconTile(size: 42) {
+                        WorldSpriteView(sprite: sprite, scale: 2, tint: inksSprite ? look?.text : nil)
+                    }
                     VStack(alignment: .leading, spacing: 2) {
                         title
                             .font(MoveFont.rowTitle)
@@ -223,7 +228,7 @@ nonisolated enum MoveSprites {
     static let wand = WorldSprite(rows: ["....k.k", ".....k.", "....k.k", "...k...", "..k....", ".k.....", "k......"],
                                   palette: ["k": 0xFFFFFF])
     /// The "i" on an exercise's how-to button (`b3-runner-set`).
-    static let info = WorldSprite(rows: ["kkkkkkk", "k..k..k", "kkkkkkk", "k.kk..k", "k.kk..k", "k.kk..k", "kkkkkkk"],
+    static let info = WorldSprite(rows: ["kkkkkkk", "k..k..k", "k.....k", "k.kk..k", "k..k..k", "k.kkk.k", "kkkkkkk"],
                                   palette: ["k": WorldSprite.ink])
 }
 

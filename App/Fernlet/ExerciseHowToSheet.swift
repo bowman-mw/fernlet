@@ -182,10 +182,10 @@ struct ExerciseHowToFacts: View {
     var body: some View {
         if let target, look != nil {
             VStack(spacing: 0) {
-                FernletKeyValueRow("Main muscles", value: Text(verbatim: Self.muscles(of: target)),
-                                   showsRule: Self.equipment(of: target) != nil)
+                // The row draws its rule above itself, so the rule between the two facts is the second's.
+                FernletKeyValueRow("Main muscles", value: Text(verbatim: Self.muscles(of: target)), showsRule: false)
                 if let equipment = Self.equipment(of: target) {
-                    FernletKeyValueRow("Equipment", value: Text(verbatim: equipment), showsRule: false)
+                    FernletKeyValueRow("Equipment", value: Text(verbatim: equipment))
                 }
             }
             .padding(.horizontal, 15)

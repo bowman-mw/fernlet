@@ -9,47 +9,63 @@ import FernletUI
 struct WorkoutExercisePreferencesEntry: View {
     var store: FernletStore
     @State private var showing = false
+    /// World build (`b3-workout-setup` draft 2): the entry is a framed link card with a pixel icon.
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
         SheetField("Your exercises") {
-            Button { showing = true } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "list.bullet.rectangle")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.moss)
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Exercises and swaps", comment: "Workout setup: entry to custom exercises, hidden exercises and saved swaps")
-                            .font(.fernlet(.headerMedium))
-                            .foregroundStyle(Color.bark)
-                            .fernletWrappingText()
-                        Text("Add your own, and choose what Fernlet suggests.",
-                             comment: "Workout setup: what the exercises entry holds")
-                            .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.slate)
-                            .fernletWrappingText()
-                    }
-                    Spacer(minLength: 8)
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color.slate)
-                        .accessibilityHidden(true)
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+            if look != nil {
+                MoveLinkCard(title: Text("Exercises and swaps", comment: "Workout setup: entry to custom exercises, hidden exercises and saved swaps"),
+                             sprite: WorldSprites.diary,
+                             detail: Text("Add your own, and choose what Fernlet suggests.",
+                                          comment: "Workout setup: what the exercises entry holds"),
+                             identifier: "workout.setup.exercises") { showing = true }
+                    .accessibilityInputLabels([Text("Exercises and swaps"), Text("Your exercises")])
+            } else {
+                plainEntry
             }
-            .buttonStyle(.plain)
-            .accessibilityInputLabels([Text("Exercises and swaps"), Text("Your exercises")])
-            .accessibilityIdentifier("workout.setup.exercises")
         }
         .sheet(isPresented: $showing) {
+            // Full height on paper with the wooden grabber; today's full-height sheet without the look.
             WorkoutExercisePreferencesSheet(store: store)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .fernletSheet()
                 .presentationCornerRadius(20)
         }
+    }
+
+    /// Today's entry row: a cream card with the list symbol, the two lines and a chevron.
+    private var plainEntry: some View {
+        Button { showing = true } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "list.bullet.rectangle")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.moss)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Exercises and swaps", comment: "Workout setup: entry to custom exercises, hidden exercises and saved swaps")
+                        .font(.fernlet(.headerMedium))
+                        .foregroundStyle(Color.bark)
+                        .fernletWrappingText()
+                    Text("Add your own, and choose what Fernlet suggests.",
+                         comment: "Workout setup: what the exercises entry holds")
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.slate)
+                        .fernletWrappingText()
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.slate)
+                    .accessibilityHidden(true)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityInputLabels([Text("Exercises and swaps"), Text("Your exercises")])
+        .accessibilityIdentifier("workout.setup.exercises")
     }
 }
 

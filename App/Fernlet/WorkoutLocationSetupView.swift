@@ -187,7 +187,40 @@ struct WorkoutLocationSetupView: View {
 
     /// The ONE "Add a location" tile the four always-shown preset cards collapsed into (MOVE-34);
     /// presets now live behind it, filtered to the ones not already saved.
-    private var addLocationTile: some View {
+    @ViewBuilder private var addLocationTile: some View {
+        if let look {
+            framedAddLocationTile(look)
+        } else {
+            plainAddLocationTile
+        }
+    }
+
+    /// World build (`b1-pin-question`): the dashed ink card with the pixel plus in a sage tile, the
+    /// Fraunces name and the pixel chevron.
+    private func framedAddLocationTile(_ look: FernletFramedLook) -> some View {
+        let shape = RoundedRectangle(cornerRadius: FernletFramedLook.cardRadius, style: .continuous)
+        return Button { step = .add } label: {
+            HStack(spacing: 14) {
+                WorldSpriteView(sprite: WorldSprites.plus, scale: 3)
+                    .frame(width: 36, height: 36)
+                    .background(look.sage, in: RoundedRectangle(cornerRadius: 8))
+                Text("Add a location")
+                    .font(.custom(FernletFontName.frauncesSemiBold, size: 20, relativeTo: .title3))
+                    .foregroundStyle(look.text)
+                    .fernletWrappingText()
+                Spacer(minLength: 0)
+                FernletIcon(.chevron)
+            }
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .padding(16)
+            .overlay(shape.strokeBorder(look.ink, style: StrokeStyle(lineWidth: FernletFramedLook.frameWidth, dash: [6, 5])))
+            .contentShape(shape)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("workout.location.add")
+    }
+
+    private var plainAddLocationTile: some View {
         Button { step = .add } label: {
             HStack(spacing: 12) {
                 Image(systemName: "plus")

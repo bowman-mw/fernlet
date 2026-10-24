@@ -71,12 +71,12 @@ struct CoachPlanPasteSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Paste the reply")
                 .font(.fernlet(.header))
-                .foregroundStyle(Color.bark)
+                .foregroundStyle(look?.text ?? Color.bark)
             // One literal, not `"…" + "…"`: a concatenated `String` binds `Text`'s verbatim overload
             // and never reaches the catalog.
             Text("Paste what your assistant replied with. Fernlet finds the plan inside it — you don't have to trim off the surrounding text. You'll see the whole plan before anything is added.")
                 .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -85,7 +85,7 @@ struct CoachPlanPasteSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             TextEditor(text: $text)
                 .font(.system(.footnote, design: .monospaced))
-                .foregroundStyle(Color.bark)
+                .foregroundStyle(look?.text ?? Color.bark)
                 .scrollContentBackground(.hidden)
                 // Capped, so a multi-screen reply scrolls INSIDE the editor instead of growing the
                 // page under it.
@@ -128,14 +128,14 @@ struct CoachPlanPasteSheet: View {
                 .foregroundStyle(Color.terracottaInk)
             Text(problem.message)
                 .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.bark)
+                .foregroundStyle(look?.text ?? Color.bark)
                 .fixedSize(horizontal: false, vertical: true)
             if let detail = problem.detail {
                 // The decoding path, kept as a secondary line: useful when reporting a problem,
                 // never the sentence the user is asked to act on.
                 Text(detail)
                     .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
+                    .foregroundStyle(look?.dim ?? Color.slate)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

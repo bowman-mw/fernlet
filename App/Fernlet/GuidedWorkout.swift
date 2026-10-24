@@ -509,7 +509,7 @@ struct GuidedWorkoutSheet: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(20)
+        .padding(look == nil ? 20 : 16)
         // World build (`b3-runner-set`, `b3-runner-hold`): the card is framed paper.
         .modifier(MoveInsetCardFrame(cornerRadius: look == nil ? 16 : 14))
     }
@@ -548,8 +548,9 @@ struct GuidedWorkoutSheet: View {
     /// `Text(verbatim:)` while its "nothing yet" case can be a localized literal.
     @ViewBuilder
     private func exerciseTitle(_ run: GuidedWorkoutRunState, _ exercise: GuidedWorkoutRunState.Exercise) -> some View {
+        // The kit's 30-pt Fraunces name (`b3-runner-set`), so a two-word lift stays on one line.
         let title = Text(verbatim: exercise.displayedName)
-            .font(look == nil ? .fernlet(.displayMedium) : .custom(FernletFontName.frauncesSemiBold, size: 34, relativeTo: .largeTitle))
+            .font(look == nil ? .fernlet(.displayMedium) : .custom(FernletFontName.frauncesSemiBold, size: 30, relativeTo: .largeTitle))
             .foregroundStyle(look?.text ?? Color.bark)
         if dynamicTypeSize.isAccessibilitySize {
             title
@@ -1255,7 +1256,7 @@ private struct GuidedHoldTimer: View {
                 .textCase(.uppercase)
                 .foregroundStyle(look?.link ?? Color.moss)
             if look != nil {
-                FernletBigTime(Text(timerInterval: window, countsDown: true), size: 64, alignment: .leading)
+                FernletBigTime(Text(timerInterval: window, countsDown: true), size: 54, alignment: .leading)
                     .accessibilityIdentifier("workout.guided.holdTimer")
             } else {
                 Text(timerInterval: window, countsDown: true)

@@ -99,12 +99,19 @@ struct MessagesWorkoutPlanImportReviewSheet: View {
         if look != nil {
             // `b3-messages-plan`: the start date and the collision rule as framed rows.
             FernletFramedSection {
-                DatePicker("Start date", selection: $startDate, displayedComponents: .date)
+                DatePicker(selection: $startDate, displayedComponents: .date) { rowLabel(Text("Start date")) }
                     .tint(Color.moss)
-                FernletDropdown("If workouts collide", selection: $collisionPolicy,
-                                options: [.keepExistingWorkouts, .addAlongside, .replaceFutureConflicts]) { policy in
-                    Self.policyText(policy)
+                // The row names the rule; the dropdown shows only the choice (`b3-messages-plan`).
+                HStack(spacing: 12) {
+                    rowLabel(Text("If workouts collide"))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    FernletDropdown("If workouts collide", selection: $collisionPolicy,
+                                    options: [.keepExistingWorkouts, .addAlongside, .replaceFutureConflicts],
+                                    showsLabel: false) { policy in
+                        Self.policyText(policy)
+                    }
                 }
+                .padding(.vertical, 6)
             }
         } else {
             VStack(alignment: .leading, spacing: 10) {
@@ -117,6 +124,14 @@ struct MessagesWorkoutPlanImportReviewSheet: View {
                 .pickerStyle(.menu)
             }
         }
+    }
+
+    /// A framed row's name: the strong face in the look's ink.
+    private func rowLabel(_ text: Text) -> some View {
+        text
+            .font(MoveFont.rowTitle)
+            .foregroundStyle(look?.text ?? Color.primary)
+            .fernletWrappingText()
     }
 
     /// A collision rule's words, as the menu draws them.
@@ -140,13 +155,15 @@ struct MessagesWorkoutPlanImportReviewSheet: View {
     }
 
     private func previewSummary(_ preview: WorkoutPlanImportPreview) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: look == nil ? 12 : 4) {
             Text("\(preview.startDayKey) – \(lastDayKey(for: preview))")
             Text("\(preview.review.collidingDayKeys.count) calendar collisions · \(policyLabel)")
             Text(changeCounts(for: preview))
             safetyFlags(for: preview)
         }
-        .foregroundStyle(look?.text ?? Color.primary)
+        // World build (`b3-messages-plan`): the summary in the small dim face.
+        .font(look == nil ? nil : FernletFramedFont.rowDetail)
+        .foregroundStyle(look?.dim ?? Color.primary)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(look == nil ? 0 : 15)
         .modifier(MessagesPlanCardFrame(isFramed: look != nil))

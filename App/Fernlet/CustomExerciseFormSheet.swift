@@ -335,6 +335,7 @@ private struct CustomExerciseSetFields: View {
                     .foregroundStyle(Color.bark)
                     .fernletWrappingText()
             }
+            .toggleStyle(FernletFramedToggleStyle())
             .accessibilityIdentifier("workout.customExercise.unilateral")
             SheetField("Difficulty") {
                 CustomExerciseChips(

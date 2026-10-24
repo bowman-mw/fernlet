@@ -225,7 +225,8 @@ struct ActivityPickerSection: View {
         if let look {
             FernletIconTile(size: 44) {
                 if let sprite = MoveActivitySprites.sprite(for: type) {
-                    WorldSpriteView(sprite: sprite, scale: 3)
+                    // The blue button's white sprites, drawn in the look's ink on the paper tile.
+                    WorldSpriteView(sprite: sprite, scale: 3, tint: look.text)
                 } else {
                     Image(systemName: type.systemImage)
                         .font(.body.weight(.semibold))

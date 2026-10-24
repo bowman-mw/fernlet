@@ -334,7 +334,7 @@ struct TrainerExportView: View {
             Text(String(localized: "trainerExport.preview.dayCount",
                         defaultValue: "\(previewDayCount) days of training will be included.",
                         comment: "Trainer summary screen: how many days of training the summary will carry. Needs a plural variation."))
-                .font(.fernlet(.labelSmall))
+                .font(look == nil ? .fernlet(.labelSmall) : MoveFont.body)
                 .foregroundStyle(look?.dim ?? Color.slate)
                 .frame(maxWidth: .infinity, alignment: .center)
 
