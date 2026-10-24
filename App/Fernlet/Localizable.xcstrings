@@ -413,6 +413,22 @@
         }
       }
     },
+    "%@ weight, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ weight, %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Peso de %1$@, en %2$@"
+          }
+        }
+      }
+    },
     "%@ · %@" : {
       "localizations" : {
         "en" : {
@@ -549,6 +565,22 @@
         }
       }
     },
+    "%@ · step %lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · step %2$lld of %3$lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ · paso %2$lld de %3$lld"
+          }
+        }
+      }
+    },
     "%@ · with %@" : {
       "localizations" : {
         "en" : {
@@ -596,6 +628,7 @@
       }
     },
     "%@ — step %lld of %lld. Pick up where you left off." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -952,6 +985,22 @@
         }
       }
     },
+    "%@: %lld reps" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$lld reps"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@: %2$lld reps"
+          }
+        }
+      }
+    },
     "%@h" : {
 
     },
@@ -1213,8 +1262,50 @@
       "localizations" : {
         "en" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld days · %2$lld workouts"
+            "state" : "translated",
+            "value" : "%#@days@ · %#@workouts@"
+          },
+          "substitutions" : {
+            "days" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg day"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg days"
+                    }
+                  }
+                }
+              }
+            },
+            "workouts" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg workout"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg workouts"
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "es" : {
@@ -1533,6 +1624,22 @@
         }
       }
     },
+    "%lld of %lld photos left today" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld photos left today"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Te quedan %1$lld de %2$lld fotos hoy"
+          }
+        }
+      }
+    },
     "%lld of %lld · %lld min left" : {
       "localizations" : {
         "en" : {
@@ -1693,6 +1800,32 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%lld personas conectadas"
+          }
+        }
+      }
+    },
+    "%lld photos" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld fotos"
+          }
+        }
+      }
+    },
+    "%lld photos from today appear tonight, after %@ goes to sleep." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld photos from today appear tonight, after %2$@ goes to sleep."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$lld fotos de hoy aparecen esta noche, cuando %2$@ se duerma."
           }
         }
       }
@@ -2130,6 +2263,16 @@
     "+%lld" : {
 
     },
+    "+%lldg" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "+%lld g"
+          }
+        }
+      }
+    },
     "+15 s" : {
       "comment" : "Workout rest button: adds 15 seconds to the rest timer. 's' abbreviates seconds.",
       "localizations" : {
@@ -2218,6 +2361,26 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "1 ejercicio · ~%lld min"
+          }
+        }
+      }
+    },
+    "1 photo" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "1 foto"
+          }
+        }
+      }
+    },
+    "1 photo from today appears tonight, after %@ goes to sleep." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "1 foto de hoy aparece esta noche, cuando %@ se duerma."
           }
         }
       }
@@ -2355,6 +2518,7 @@
       }
     },
     "A couple of readings looked close. Pick the one that fits." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -2782,6 +2946,16 @@
         }
       }
     },
+    "About Open Food Facts" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sobre Open Food Facts"
+          }
+        }
+      }
+    },
     "About ^[%lld song](inflect: true) performed. The acoustics remain incredible." : {
       "comment" : "Silly stat: songs sung in the shower",
       "localizations" : {
@@ -2799,6 +2973,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Sobre este día"
+          }
+        }
+      }
+    },
+    "About this estimate" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sobre esta estimación"
           }
         }
       }
@@ -2967,7 +3151,18 @@
         }
       }
     },
+    "Add a drop set" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Agregar una serie descendente"
+          }
+        }
+      }
+    },
     "Add a food" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -3038,6 +3233,7 @@
       }
     },
     "Add a photo of this recipe" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -3221,12 +3417,32 @@
         }
       }
     },
+    "Add notes" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Agregar notas"
+          }
+        }
+      }
+    },
     "Add personal details" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Agrega tus datos personales"
+          }
+        }
+      }
+    },
+    "Add photo" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Agregar foto"
           }
         }
       }
@@ -3358,6 +3574,26 @@
         }
       }
     },
+    "Add to plan" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Agregar al plan"
+          }
+        }
+      }
+    },
+    "Add to workout" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Agregar al entrenamiento"
+          }
+        }
+      }
+    },
     "Add water" : {
       "localizations" : {
         "es" : {
@@ -3474,12 +3710,32 @@
         }
       }
     },
+    "Adds a lighter set under the last one." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Agrega una serie más ligera debajo de la última."
+          }
+        }
+      }
+    },
     "Adds bottles of water to today's Fernlet diary." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Agrega botellas de agua al registro de hoy en Fernlet."
+          }
+        }
+      }
+    },
+    "Adds it with last time's sets." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lo agrega con las series de la última vez."
           }
         }
       }
@@ -4416,6 +4672,7 @@
       }
     },
     "Backgrounds" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -4920,11 +5177,25 @@
         }
       }
     },
-    "C %lld" : {
-
+    "By hand" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "A mano"
+          }
+        }
+      }
     },
     "C %lldg" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "C %lldg"
+          }
+        }
+      }
     },
     "Calcium" : {
       "localizations" : {
@@ -5114,6 +5385,7 @@
       }
     },
     "Capture food" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -5405,6 +5677,7 @@
       }
     },
     "Check Open Food Facts" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -5420,6 +5693,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Verificar mi edad con Apple"
+          }
+        }
+      }
+    },
+    "Check the items before logging." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Revisa los alimentos antes de registrar."
           }
         }
       }
@@ -5862,6 +6145,16 @@
         }
       }
     },
+    "Colors" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Colores"
+          }
+        }
+      }
+    },
     "Comfortable — could hold a conversation." : {
       "localizations" : {
         "es" : {
@@ -6163,6 +6456,7 @@
       }
     },
     "Contrast %@:1" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -6173,6 +6467,7 @@
       }
     },
     "Contrast %@:1 · accents may be hard to see" : {
+      "comment" : "App colors (and formerly Appearance): the worst text contrast the chosen paper gives, when the meaning accents fall under 3:1 on it",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -6213,6 +6508,7 @@
       }
     },
     "Cook" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -6285,6 +6581,7 @@
       }
     },
     "Cooking in progress" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -6429,7 +6726,18 @@
         }
       }
     },
+    "Copy last week" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Copiar la semana pasada"
+          }
+        }
+      }
+    },
     "Copy previous week" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -6645,6 +6953,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Sin coincidencias"
+          }
+        }
+      }
+    },
+    "Couldn't keep that photo. Try again." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo conservar esa foto. Inténtalo de nuevo."
           }
         }
       }
@@ -8126,6 +8444,16 @@
         }
       }
     },
+    "Done cooking" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Terminar de cocinar"
+          }
+        }
+      }
+    },
     "Done set" : {
       "localizations" : {
         "es" : {
@@ -8203,6 +8531,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Cine de sueños"
+          }
+        }
+      }
+    },
+    "Drop set" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Serie descendente"
           }
         }
       }
@@ -8336,6 +8674,16 @@
         }
       }
     },
+    "Each serving gives" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cada porción aporta"
+          }
+        }
+      }
+    },
     "Each set gets its own reps and weight." : {
       "comment" : "Log workout sheet: the explainer line under the 'Log set by set' switch.",
       "localizations" : {
@@ -8366,6 +8714,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Cada lado: %@"
+          }
+        }
+      }
+    },
+    "Each space gets its pin the first time you work out there, so the blue button can start your plan when you arrive. Pins stay on this iPhone and never sync." : {
+      "comment" : "Your spaces: what saying yes to remembering workout spaces does",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cada espacio recibe su marcador la primera vez que entrenas ahí, para que el botón azul pueda empezar tu plan cuando llegues. Los marcadores se quedan en este iPhone y nunca se sincronizan."
           }
         }
       }
@@ -8599,6 +8958,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Editar recuerdo"
+          }
+        }
+      }
+    },
+    "Edit notes" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Editar notas"
           }
         }
       }
@@ -9149,6 +9518,16 @@
         }
       }
     },
+    "Equipment & limits" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Equipo y límites"
+          }
+        }
+      }
+    },
     "Equipment & limits · %@" : {
       "localizations" : {
         "es" : {
@@ -9449,6 +9828,16 @@
         }
       }
     },
+    "Exercises" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ejercicios"
+          }
+        }
+      }
+    },
     "Exercises and swaps" : {
       "comment" : "Workout setup: entry to custom exercises, hidden exercises and saved swaps",
       "localizations" : {
@@ -9620,11 +10009,15 @@
         }
       }
     },
-    "F %lld" : {
-
-    },
     "F %lldg" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "G %lldg"
+          }
+        }
+      }
     },
     "Face ID needs a Fernlet passcode first. Nothing is locked until you set one." : {
       "localizations" : {
@@ -9965,6 +10358,26 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Fernlet no pudo establecer una conexión segura con %@, así que no se envió nada."
+          }
+        }
+      }
+    },
+    "Fernlet couldn't take that photo. Try again." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo hacer esa foto. Inténtalo otra vez."
+          }
+        }
+      }
+    },
+    "Fernlet didn't find a barcode or a nutrition label in this photo." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no encontró un código de barras ni una etiqueta nutricional en esta foto."
           }
         }
       }
@@ -10667,6 +11080,7 @@
     },
     "Fix any set that went differently. Fernlet plans your next weights from these." : {
       "comment" : "Edit workout: the note above each exercise's sets. Correcting a set changes the weights Fernlet suggests next time.",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -11271,6 +11685,7 @@
       }
     },
     "Give it a name and it'll be here next time you scan." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -12912,6 +13327,16 @@
         }
       }
     },
+    "Ingredients %lld" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ingredientes %lld"
+          }
+        }
+      }
+    },
     "Ink" : {
       "comment" : "App colors: a dark paper colour",
       "localizations" : {
@@ -13115,6 +13540,7 @@
       }
     },
     "It's a meal photo" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -13323,11 +13749,68 @@
       }
     },
     "Just you" : {
+      "comment" : "The name of a set of photos taken with the camera on your own",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Solo tú"
+          }
+        }
+      }
+    },
+    "Just you · %@" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Solo tú · %@"
+          }
+        }
+      }
+    },
+    "Just you, %@" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Solo tú, %@"
+          }
+        }
+      }
+    },
+    "Just you, %@, carousel, %lld photos" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Just you, %1$@, carousel, %2$lld photos"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Solo tú, %1$@, carrusel, %2$lld fotos"
+          }
+        }
+      }
+    },
+    "Just you, %lld photos from today. They appear tonight." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Solo tú, %lld fotos de hoy. Aparecen esta noche."
+          }
+        }
+      }
+    },
+    "Just you, 1 photo from today. It appears tonight." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Solo tú, 1 foto de hoy. Aparece esta noche."
           }
         }
       }
@@ -14213,6 +14696,16 @@
         }
       }
     },
+    "Log it as a meal photo" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Regístrala como foto de comida"
+          }
+        }
+      }
+    },
     "Log journal" : {
       "localizations" : {
         "es" : {
@@ -14406,7 +14899,18 @@
         }
       }
     },
+    "Look it up on Open Food Facts" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Búscalo en Open Food Facts"
+          }
+        }
+      }
+    },
     "Look it up online" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -14427,6 +14931,7 @@
       }
     },
     "Look up the barcode" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -14497,6 +15002,7 @@
       }
     },
     "MACROS" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -14980,6 +15486,7 @@
       }
     },
     "Memory & signals" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -15772,6 +16279,7 @@
       }
     },
     "New to Fernlet" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -16253,6 +16761,26 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "No se encontró ningún Fernlet cerca"
+          }
+        }
+      }
+    },
+    "No notes" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sin notas"
+          }
+        }
+      }
+    },
+    "No notes yet." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Todavía no hay notas."
           }
         }
       }
@@ -16773,6 +17301,26 @@
         }
       }
     },
+    "Notes and the picture go along as set in Settings › Sharing." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Las notas y la foto van según lo que elijas en Configuración › Opciones para compartir."
+          }
+        }
+      }
+    },
+    "Notes included" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Con notas"
+          }
+        }
+      }
+    },
     "Nothing after this one" : {
       "localizations" : {
         "es" : {
@@ -16905,6 +17453,16 @@
         }
       }
     },
+    "Nothing to read here" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aquí no hay nada que leer"
+          }
+        }
+      }
+    },
     "Nothing was changed. Please try pasting the plan again." : {
       "localizations" : {
         "es" : {
@@ -17021,6 +17579,38 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Ahora"
+          }
+        }
+      }
+    },
+    "Now · Set %lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Now · Set %1$lld of %2$lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ahora · Serie %1$lld de %2$lld"
+          }
+        }
+      }
+    },
+    "Now · Set %lld of %lld · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Now · Set %1$lld of %2$lld · %3$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ahora · Serie %1$lld de %2$lld · %3$@"
           }
         }
       }
@@ -17356,6 +17946,16 @@
         }
       }
     },
+    "Only you can see these. They're never shared." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Solo tú puedes verlas. Nunca se comparten."
+          }
+        }
+      }
+    },
     "Open" : {
       "localizations" : {
         "es" : {
@@ -17544,6 +18144,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Abre %@ directamente"
+          }
+        }
+      }
+    },
+    "Opens Arrange Today" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre Ordenar Hoy"
           }
         }
       }
@@ -17798,28 +18408,12 @@
         }
       }
     },
-    "P %lld" : {
-
-    },
     "P %lldg" : {
-
-    },
-    "P %lldg   C %lldg   F %lldg" : {
       "localizations" : {
-        "en" : {
+        "es" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "P %1$lldg   C %2$lldg   F %3$lldg"
-          }
-        }
-      }
-    },
-    "P %lldg  C %lldg  F %lldg" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "P %1$lldg  C %2$lldg  F %3$lldg"
+            "state" : "needs_review",
+            "value" : "P %lldg"
           }
         }
       }
@@ -17845,6 +18439,7 @@
       }
     },
     "PER SERVING" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -17901,6 +18496,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Papel, madera y acento"
+          }
+        }
+      }
+    },
+    "Paper, wood and accent, for light and dark mode." : {
+      "comment" : "Settings › Appearance: the App colors row's second line",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Papel, madera y acento, para el modo claro y el oscuro."
           }
         }
       }
@@ -18568,6 +19174,16 @@
         }
       }
     },
+    "Pick up where you left off" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Retoma donde lo dejaste"
+          }
+        }
+      }
+    },
     "Pick up your last session" : {
       "localizations" : {
         "es" : {
@@ -18852,6 +19468,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Más 15 segundos"
+          }
+        }
+      }
+    },
+    "Point at a barcode or a nutrition label, or take a photo of your meal." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Apunta a un código de barras o a una etiqueta nutricional, o haz una foto de tu comida."
           }
         }
       }
@@ -19518,6 +20144,7 @@
       }
     },
     "Read the label" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -19805,6 +20432,16 @@
         }
       }
     },
+    "Recipes you share" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Recetas que compartes"
+          }
+        }
+      }
+    },
     "Recipes, plans, your photos" : {
       "localizations" : {
         "es" : {
@@ -19925,6 +20562,16 @@
         }
       }
     },
+    "Remember" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Recordar"
+          }
+        }
+      }
+    },
     "Remember it anyway" : {
       "localizations" : {
         "es" : {
@@ -19961,6 +20608,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "¿Te acuerdas de este?"
+          }
+        }
+      }
+    },
+    "Remember where your workout spaces are?" : {
+      "comment" : "Your spaces: the one-time question before Fernlet pins a workout space on the map",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Recordar dónde están tus espacios de entrenamiento?"
           }
         }
       }
@@ -20168,6 +20826,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Quitar una botella"
+          }
+        }
+      }
+    },
+    "Remove drop set" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Quitar la serie descendente"
           }
         }
       }
@@ -20873,6 +21541,16 @@
         }
       }
     },
+    "Rest %lld s next" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Luego, descanso de %lld s"
+          }
+        }
+      }
+    },
     "Rest after this set" : {
       "localizations" : {
         "es" : {
@@ -21056,6 +21734,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Hoy descansas."
+          }
+        }
+      }
+    },
+    "Resting · next %@" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Descansando · luego %@"
           }
         }
       }
@@ -21328,6 +22016,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Aún cabe un poco más"
+          }
+        }
+      }
+    },
+    "Rough estimate" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estimación aproximada"
           }
         }
       }
@@ -21657,6 +22355,7 @@
       }
     },
     "Saved product %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -21945,6 +22644,7 @@
       }
     },
     "Scanning the label fills in the macros — or enter them by hand on the meal sheet." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -22446,6 +23146,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Porciones"
+          }
+        }
+      }
+    },
+    "Servings %lld" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Porciones %lld"
           }
         }
       }
@@ -23254,6 +23964,16 @@
         }
       }
     },
+    "Shutter" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Obturador"
+          }
+        }
+      }
+    },
     "Side item" : {
       "comment" : "Customize: the side-item slot's page title and row name",
       "localizations" : {
@@ -23327,7 +24047,18 @@
         }
       }
     },
+    "Six tiles in Log" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Seis botones en Registrar"
+          }
+        }
+      }
+    },
     "Six tiles on Home" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -23337,7 +24068,18 @@
         }
       }
     },
+    "Six tiles, in this order, in Log." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Seis botones, en este orden, en Registrar."
+          }
+        }
+      }
+    },
     "Six tiles, in this order, on Home." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -24612,6 +25354,16 @@
         }
       }
     },
+    "Suggest one" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sugerir uno"
+          }
+        }
+      }
+    },
     "Suggest something gentle" : {
       "localizations" : {
         "es" : {
@@ -24914,6 +25666,16 @@
         }
       }
     },
+    "Take it again" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hazla otra vez"
+          }
+        }
+      }
+    },
     "Take it at your own pace." : {
       "localizations" : {
         "es" : {
@@ -24951,6 +25713,17 @@
         }
       }
     },
+    "Tap a photo to see it full size, with its date and note." : {
+      "comment" : "Move panel, under the progress-photo strip: how to open a photo.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Toca una foto para verla en grande, con su fecha y su nota."
+          }
+        }
+      }
+    },
     "Tap a slot to change it." : {
       "localizations" : {
         "es" : {
@@ -24978,6 +25751,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Toca cada peso que tengas."
+          }
+        }
+      }
+    },
+    "Tap one to fix any set that went differently. Fernlet plans your next weights from these." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Toca uno para corregir las series que salieron distinto. Fernlet planea tus próximos pesos a partir de estas."
           }
         }
       }
@@ -25535,6 +26318,16 @@
         }
       }
     },
+    "The recipe's photo goes along, if it has one." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La foto de la receta va también, si tiene una."
+          }
+        }
+      }
+    },
     "The recipe, its steps and any photo of it are removed from this device. Meals you already logged from it stay in your diary. Fernlet can't undo this." : {
       "localizations" : {
         "es" : {
@@ -25668,11 +26461,22 @@
       }
     },
     "Theme, backgrounds, companion, Home widgets" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Tema, fondos, compañero, widgets de Inicio"
+          }
+        }
+      }
+    },
+    "Theme, backgrounds, companion, Today panel" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tema, fondos, compañero, panel Hoy"
           }
         }
       }
@@ -26429,6 +27233,16 @@
         }
       }
     },
+    "Time of day" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Momento del día"
+          }
+        }
+      }
+    },
     "Time's up on this part." : {
       "comment" : "Guided cardio, spoken cue: one timed part of a cardio session (an interval's hard or easy part, or a stretch of steady cardio) ran out.",
       "localizations" : {
@@ -26623,6 +27437,16 @@
         }
       }
     },
+    "Tonight" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Esta noche"
+          }
+        }
+      }
+    },
     "Too heavy" : {
       "localizations" : {
         "es" : {
@@ -26684,6 +27508,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Plátano jefe"
+          }
+        }
+      }
+    },
+    "Total" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Total"
           }
         }
       }
@@ -28155,6 +28989,16 @@
         }
       }
     },
+    "What Fernlet keeps" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lo que guarda Fernlet"
+          }
+        }
+      }
+    },
     "What Fernlet shows, reads, and protects." : {
       "localizations" : {
         "es" : {
@@ -28166,6 +29010,7 @@
       }
     },
     "What did you catch?" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -28372,6 +29217,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "La primera vez que lo uses, Fernlet te preguntará antes de enviar a DuckDuckGo el producto que escribiste. Una vez que lo permitas, también podrás tocar para buscar en Open Food Facts un código de barras escaneado que Fernlet no reconozca — solo se envía el número del código de barras. Desactívalo aquí cuando quieras para retirar el permiso."
+          }
+        }
+      }
+    },
+    "Where this recipe came from" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De dónde viene esta receta"
           }
         }
       }
@@ -28607,6 +29462,7 @@
       }
     },
     "Workout exercises" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -30245,6 +31101,16 @@
         }
       }
     },
+    "Your notes go along with the recipe." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tus notas van con la receta."
+          }
+        }
+      }
+    },
     "Your other phone is now showing an answer code. Scan it." : {
       "localizations" : {
         "es" : {
@@ -30311,6 +31177,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Tu estante de fotos está casi lleno"
+          }
+        }
+      }
+    },
+    "Your photos appear tonight, after %@ goes to sleep." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tus fotos aparecen esta noche, cuando %@ se duerma."
           }
         }
       }
@@ -31021,6 +31897,22 @@
         }
       }
     },
+    "^[%lld serving](inflect: true) · ^[%lld ingredient](inflect: true)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "^[%1$lld serving](inflect: true) · ^[%2$lld ingredient](inflect: true)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "^[%1$lld porción](inflect: true) · ^[%2$lld ingrediente](inflect: true)"
+          }
+        }
+      }
+    },
     "^[%lld step](inflect: true)" : {
       "comment" : "Silly stat headline: lifetime steps",
       "localizations" : {
@@ -31028,6 +31920,22 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "^[%lld paso](inflect: true)"
+          }
+        }
+      }
+    },
+    "^[%lld step](inflect: true) · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "^[%1$lld step](inflect: true) · %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "^[%1$lld paso](inflect: true) · %2$@"
           }
         }
       }
@@ -32199,6 +33107,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Ya se está tomando una foto."
+          }
+        }
+      }
+    },
+    "closer, with more light" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "más cerca y con más luz"
           }
         }
       }
@@ -36589,6 +37507,7 @@
       }
     },
     "find the product by its code" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -40098,6 +41017,16 @@
         }
       }
     },
+    "left today" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "quedan hoy"
+          }
+        }
+      }
+    },
     "legacy %@" : {
       "localizations" : {
         "es" : {
@@ -40617,6 +41546,7 @@
       }
     },
     "meal" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -40626,9 +41556,27 @@
         }
       }
     },
+    "mealComposer.camera" : {
+      "comment" : "Log meal sheet: the camera button beside the description field. It reads barcodes and nutrition labels by itself, or takes a meal photo",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Camera: scan a barcode or label, or take a meal photo"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cámara: escanea un código de barras o una etiqueta, o haz una foto de tu comida"
+          }
+        }
+      }
+    },
     "mealComposer.capture.labelUnreadable" : {
       "comment" : "Log meal sheet: a captured photo, sent to the nutrition-label reader, gave no values",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -40646,7 +41594,7 @@
     },
     "mealComposer.capture.noBarcode" : {
       "comment" : "Log meal sheet: a captured photo, sent to barcode lookup, showed no readable barcode",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -41924,6 +42872,106 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Día de descanso. Nada que forzar — deja que tu cuerpo se recupere."
+          }
+        }
+      }
+    },
+    "move.lift.summary.reps" : {
+      "comment" : "Workout sheets, an exercise row's reps when every set had the same, e.g. '8 reps'. Needs a plural variation.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld rep"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld reps"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld rep"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld reps"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "move.lift.summary.repsList" : {
+      "comment" : "Workout sheets, an exercise row's reps set by set, e.g. '10, 9, 8 reps'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ reps"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ reps"
+          }
+        }
+      }
+    },
+    "move.lift.summary.sets" : {
+      "comment" : "Workout sheets, an exercise row's set count, e.g. '3 sets'. Needs a plural variation; English also needs the one-set form.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld set"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld sets"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld serie"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld series"
+                }
+              }
+            }
           }
         }
       }
@@ -43292,6 +44340,7 @@
       }
     },
     "pull the macros from a nutrition-facts label" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -43662,7 +44711,7 @@
     },
     "recipeShare.review.macros" : {
       "comment" : "A shared recipe's total macros on the import review. P, C and F abbreviate protein, carbohydrate and fat; each number is grams.",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -45037,6 +46086,24 @@
         }
       }
     },
+    "settings.search.title.advancedPeriodTracking" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Period & sensitive content page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Advanced period tracking"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Seguimiento avanzado del periodo"
+          }
+        }
+      }
+    },
     "settings.search.title.aiActivityLog" : {
       "comment" : "Settings search result: the name of a setting a search can find, on the AI activity log page. Short, sentence case, like the row it leads to.",
       "extractionState" : "extracted_with_value",
@@ -46023,6 +47090,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Registro rápido"
+          }
+        }
+      }
+    },
+    "settings.search.title.recipesYouShare" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Sharing settings page (whether shared recipes carry your notes and their picture). Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Recipes you share"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Recetas que compartes"
           }
         }
       }
@@ -48822,6 +49907,312 @@
         }
       }
     },
+    "worldFriend.nearby" : {
+      "comment" : "World Home, VoiceOver: a friend's companion beside yours; their first name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@, nearby"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@, cerca"
+          }
+        }
+      }
+    },
+    "worldLine.approximate" : {
+      "comment" : "World Home with approximate location: the companion's speech",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Somewhere around here!"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Por aquí, en algún sitio!"
+          }
+        }
+      }
+    },
+    "worldLine.friend" : {
+      "comment" : "World Home, the companion's speech when a friend comes into range; their first name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@'s here!"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡%@ está aquí!"
+          }
+        }
+      }
+    },
+    "worldLine.off" : {
+      "comment" : "World Home with location off: the companion's speech in its open scene",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Here with you, wherever we are."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aquí contigo, estemos donde estemos."
+          }
+        }
+      }
+    },
+    "worldLine.offline" : {
+      "comment" : "World Home offline: the companion's speech",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No signal? I still know the way."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Sin señal? Igual conozco el camino."
+          }
+        }
+      }
+    },
+    "worldLine.rain" : {
+      "comment" : "World Home, the companion's speech while it rains where the person is",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rain on the map. A cozy indoor day?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Llueve en el mapa. ¿Un día tranquilo en casa?"
+          }
+        }
+      }
+    },
+    "worldLine.snow" : {
+      "comment" : "World Home, the companion's speech while it snows where the person is",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Snow out there. Warm socks day?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nieva afuera. ¿Día de calcetines calentitos?"
+          }
+        }
+      }
+    },
+    "worldLine.unwell" : {
+      "comment" : "World Home, the companion's speech on a day marked unwell",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Staying in today. The map will keep."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy me quedo en casa. El mapa espera."
+          }
+        }
+      }
+    },
+    "worldNotice.approximate" : {
+      "comment" : "World Home notice: the person allowed approximate location only",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Approximate location"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ubicación aproximada"
+          }
+        }
+      }
+    },
+    "worldNotice.approximate.detail" : {
+      "comment" : "World Home notice under 'Approximate location'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The companion stands in your area, not on your street."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu compañero está en tu zona, no en tu calle."
+          }
+        }
+      }
+    },
+    "worldNotice.firstDay" : {
+      "comment" : "World Home notice on the first days, before the first walk",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your map starts here"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu mapa empieza aquí"
+          }
+        }
+      }
+    },
+    "worldNotice.firstDay.detail" : {
+      "comment" : "World Home notice under 'Your map starts here'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "It uncovers as you go, on this iPhone only."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se descubre mientras vas, solo en este iPhone."
+          }
+        }
+      }
+    },
+    "worldNotice.loading" : {
+      "comment" : "World Home notice while Apple's map tiles load",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Loading the map…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cargando el mapa…"
+          }
+        }
+      }
+    },
+    "worldNotice.offline" : {
+      "comment" : "World Home notice: no signal, so the map's tiles are missing",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Offline"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sin conexión"
+          }
+        }
+      }
+    },
+    "worldNotice.offline.detail" : {
+      "comment" : "World Home notice under 'Offline'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Walks still record. The map returns with signal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Las caminatas se siguen grabando. El mapa vuelve con la señal."
+          }
+        }
+      }
+    },
+    "worldNotice.usePrecise" : {
+      "comment" : "World Home approximate-location notice: the button that leads to turning on precise location",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Use precise"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Usar precisa"
+          }
+        }
+      }
+    },
+    "worldNotice.usePrecise.hint" : {
+      "comment" : "World Home approximate-location notice, VoiceOver: what Use precise does",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Opens Fernlet's settings, where Precise Location is."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre los ajustes de Fernlet, donde está Ubicación exacta."
+          }
+        }
+      }
+    },
     "worldPanel.close" : {
       "comment" : "World Home: the ✕ on a panel's title plate, which returns to the map",
       "extractionState" : "extracted_with_value",
@@ -48926,6 +50317,525 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Muro de fotos"
+          }
+        }
+      }
+    },
+    "worldQuickStart.backToWorkout" : {
+      "comment" : "World Home quick start during a guided workout: returns to it; the workout's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Back to %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Volver a %@"
+          }
+        }
+      }
+    },
+    "worldQuickStart.backToWorkout.detail" : {
+      "comment" : "World Home quick start during a guided workout: under 'Back to …'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your workout is still going"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu entrenamiento sigue en marcha"
+          }
+        }
+      }
+    },
+    "worldQuickStart.camera" : {
+      "comment" : "World Home quick start: opens the disposable camera",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Disposable camera"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cámara desechable"
+          }
+        }
+      }
+    },
+    "worldQuickStart.camera.session" : {
+      "comment" : "World Home quick start in a friend session: the shared film's shots left. Plural on the number",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "1 shot left · shared with the session"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld shots left · shared with the session"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Queda 1 foto · compartida con la sesión"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Quedan %lld fotos · compartidas con la sesión"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "worldQuickStart.camera.solo" : {
+      "comment" : "World Home quick start on your own: the disposable camera's rules (10 photos a day, shown after the companion sleeps)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Yours only · 10 a day · they appear tonight"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Solo tuyas · 10 al día · aparecen esta noche"
+          }
+        }
+      }
+    },
+    "worldQuickStart.gentleStretch" : {
+      "comment" : "World Home quick start on a resting day: a guided gentle stretch",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Gentle stretch"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estiramiento suave"
+          }
+        }
+      }
+    },
+    "worldQuickStart.gentleStretch.detail" : {
+      "comment" : "World Home quick start: the gentle stretch's length and what it needs",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "About 8 min · no equipment"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Unos 8 min · sin equipo"
+          }
+        }
+      }
+    },
+    "worldQuickStart.heading.gentle" : {
+      "comment" : "World Home quick-start card heading on a resting or unwell day, away from a workout space",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A gentle day"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un día tranquilo"
+          }
+        }
+      }
+    },
+    "worldQuickStart.heading.savedLine" : {
+      "comment" : "World Home quick-start card heading where one of the person's saved walks starts",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your walk from here"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu caminata desde aquí"
+          }
+        }
+      }
+    },
+    "worldQuickStart.heading.session" : {
+      "comment" : "World Home quick-start card heading in a friend session: the friends' first names, e.g. 'With Sam and Rae'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "With %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Con %@"
+          }
+        }
+      }
+    },
+    "worldQuickStart.heading.walk" : {
+      "comment" : "World Home quick-start card heading when nothing is saved where the person stands",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Go for a walk"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Salir a caminar"
+          }
+        }
+      }
+    },
+    "worldQuickStart.heading.walking" : {
+      "comment" : "World Home quick-start card heading while a walk is recording",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "On your walk"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "En tu caminata"
+          }
+        }
+      }
+    },
+    "worldQuickStart.hint" : {
+      "comment" : "World Home: what the blue quick-start button does, for VoiceOver",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Shows what you can start here."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Muestra lo que puedes empezar aquí."
+          }
+        }
+      }
+    },
+    "worldQuickStart.label" : {
+      "comment" : "World Home: the blue button's name, for VoiceOver and Voice Control",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Quick start"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Inicio rápido"
+          }
+        }
+      }
+    },
+    "worldQuickStart.note.nothingPlanned" : {
+      "comment" : "World Home quick-start card at a workout space with no plan today; the number is how many pieces of equipment the space holds. Plural on the number",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Nothing planned yet. Fernlet can put something together from this space's 1 item."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Nothing planned yet. Fernlet can put something together from this space's %lld items."
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Aún no hay nada planeado. Fernlet puede armar algo con el único elemento de este espacio."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Aún no hay nada planeado. Fernlet puede armar algo con los %lld elementos de este espacio."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "worldQuickStart.note.nothingSaved" : {
+      "comment" : "World Home quick-start card away from any saved place",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nothing saved here yet. It shows up once you've trained, hiked or eaten here a few times."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aún no hay nada guardado aquí. Aparecerá cuando hayas entrenado, caminado o comido aquí varias veces."
+          }
+        }
+      }
+    },
+    "worldQuickStart.note.resting" : {
+      "comment" : "World Home quick-start card on a resting or unwell day, before the gentle choices",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Resting counts today. These are here if you want them."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy descansar cuenta. Esto queda aquí por si quieres."
+          }
+        }
+      }
+    },
+    "worldQuickStart.note.walkedFromHere" : {
+      "comment" : "World Home quick-start card where saved walks start: how many recent walks started here. Plural on the number",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've walked from here once"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've walked from here %lld times"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Has caminado desde aquí una vez"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Has caminado desde aquí %lld veces"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "worldQuickStart.savedLine" : {
+      "comment" : "World Home quick start where a saved walk starts: walk that same line again",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Walk it again"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Caminarla otra vez"
+          }
+        }
+      }
+    },
+    "worldQuickStart.savedLine.detail" : {
+      "comment" : "World Home quick start: under 'Walk it again'; the saved walk's length",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ · your saved line"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ · tu recorrido guardado"
+          }
+        }
+      }
+    },
+    "worldQuickStart.suggest" : {
+      "comment" : "World Home quick start at a workout space: opens Move's workout suggestion for it",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Suggest today's workout"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sugerir el entrenamiento de hoy"
+          }
+        }
+      }
+    },
+    "worldQuickStart.suggest.gentle" : {
+      "comment" : "World Home quick start on a resting day at a workout space: the space's name, then a gentle qualifier",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ · only if you feel up to it"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ · solo si te apetece"
+          }
+        }
+      }
+    },
+    "worldQuickStart.todaysPlan" : {
+      "comment" : "World Home quick start: starts today's guided workout at the named workout space",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Today's plan at %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El plan de hoy en %@"
+          }
+        }
+      }
+    },
+    "worldQuickStart.walk" : {
+      "comment" : "World Home quick start: start a walk with the companion, recorded on the map",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Walk together"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Caminar juntos"
+          }
+        }
+      }
+    },
+    "worldQuickStart.walk.detail" : {
+      "comment" : "World Home quick start: under Walk together; precise location is used for this walk only",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Precise location for this walk only"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ubicación precisa solo para esta caminata"
           }
         }
       }
@@ -49246,6 +51156,114 @@
         }
       }
     },
+    "worldWalk.end" : {
+      "comment" : "World Home walk bar, VoiceOver: the End button stops and logs the walk",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "End walk"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Terminar la caminata"
+          }
+        }
+      }
+    },
+    "worldWalk.logged" : {
+      "comment" : "World Home: the note after a walk ends; its distance and minutes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Walk logged · %1$@ · %2$lld min"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Caminata registrada · %@ · %lld min"
+          }
+        }
+      }
+    },
+    "worldWalk.precise" : {
+      "comment" : "World Home walk bar: precise location is used for this walk only",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Precise location on for this walk"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ubicación precisa activada para esta caminata"
+          }
+        }
+      }
+    },
+    "worldWalk.spoken" : {
+      "comment" : "World Home walk bar, VoiceOver: the walk so far, e.g. 'Walking together, 0.6 kilometres'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Walking together, %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Caminando juntos, %@"
+          }
+        }
+      }
+    },
+    "worldWalk.title" : {
+      "comment" : "World Home walk bar: what is happening while a walk records",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Walking together"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Caminando juntos"
+          }
+        }
+      }
+    },
+    "worldWalk.undone" : {
+      "comment" : "World Home, VoiceOver: said after the walk note's Undo removed the walk",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Walk removed."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Caminata eliminada."
+          }
+        }
+      }
+    },
     "worryBox.error.compose" : {
       "comment" : "Shown and spoken when saving a worry from the compose sheet fails.",
       "extractionState" : "extracted_with_value",
@@ -49388,12 +51406,6 @@
           }
         }
       }
-    },
-    "•" : {
-
-    },
-    "• %@" : {
-
     },
     "• %@: %@" : {
       "comment" : "A warning message for a workout plan import. The first argument is the name of the exercise. The second argument is the reason for the warning.",
