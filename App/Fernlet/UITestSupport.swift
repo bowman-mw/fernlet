@@ -191,8 +191,8 @@ enum UITestSupport {
     /// only), `rain`, `snow` (the weather layer), `sick` (marks today unwell on the demo seed; any list without it, such as `well`,
     /// clears it), `space`
     /// (the first saved workout space stands in for a pinned one), `pin` (its marker near the
-    /// companion), `friend` (a nearby friend, "Sam"), `solo` / `session` (the quick start as if the
-    /// camera of your own existed, or as if in a session with Sam and Rae; display only),
+    /// companion), `friend` (a nearby friend, "Sam"), `solo` / `session` (the quick start with the
+    /// camera of your own, now on by default, or as if in a session with Sam and Rae; display only),
     /// `qs` (opens the quick-start card), `walk` (starts Walk together), `hold` (the companion's line
     /// stays up instead of fading after six seconds). Consumed by `WorldMapHome` and `WorldMapCompanion`;
     /// `FERNLET_UI_TEST_WORLD_MAP_PHASE` fixes its time of day too.

@@ -370,6 +370,9 @@ nonisolated enum DeleteAllStoreNames {
         "session photos you hadn't chosen yet": LocalizedStringResource(
             "deleteAll.store.unchosenSessionPhotos", defaultValue: "session photos you hadn't chosen yet",
             comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "photos from the camera on your own": LocalizedStringResource(
+            "deleteAll.store.soloCameraPhotos", defaultValue: "photos from the camera on your own",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
         "shared recipe inbox": LocalizedStringResource(
             "deleteAll.store.sharedRecipeInbox", defaultValue: "shared recipe inbox",
             comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
