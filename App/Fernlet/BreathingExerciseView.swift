@@ -485,36 +485,35 @@ struct BreathingExerciseView: View {
 
     /// Haptics: what the taps feel like, the app-wide-off note, and the switch.
     private var hapticsRow: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Haptics")
-                    .font(FernletFramedFont.rowTitle.weight(.bold))
-                    .foregroundStyle(WorldPalette.bark)
-                Text("soft taps in, one tap out",
-                     comment: "Under the breathing screen's Haptics switch: what the haptics feel like. Several soft taps while breathing in, a single tap as the breath goes out, nothing while holding.")
-                    .font(FernletFramedFont.rowValue)
-                    .foregroundStyle(WorldPalette.dim)
-                    .fernletWrappingText()
-                // Owner's decision 5: this switch stays, under the app-wide level. When that
-                // level is Off, an "on" switch here plays nothing, so say why.
-                if appHapticsLevel == .off {
-                    Text("Haptics are off for all of Fernlet in Settings.")
+        VStack(alignment: .leading, spacing: 4) {
+            // The switch's own label is the "Haptics" heading and its gloss, so it is never an
+            // anonymous "switch button, on", and Voice Control answers to the one word. (The framed
+            // switch draws its label itself, so a hidden-label switch beside a separate heading drew
+            // the word twice.) Stated here: a sheet the root presents does not inherit the root's
+            // toggle style.
+            Toggle(isOn: $hapticsEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Haptics")
+                        .font(FernletFramedFont.rowTitle.weight(.bold))
+                        .foregroundStyle(WorldPalette.bark)
+                    Text("soft taps in, one tap out",
+                         comment: "Under the breathing screen's Haptics switch: what the haptics feel like. Several soft taps while breathing in, a single tap as the breath goes out, nothing while holding.")
                         .font(FernletFramedFont.rowValue)
                         .foregroundStyle(WorldPalette.dim)
                         .fernletWrappingText()
-                        .accessibilityIdentifier("breathing.hapticsOffNote")
                 }
             }
-            Spacer()
-            // The switch draws with its label hidden — the "Haptics" heading to its left is the
-            // visible one — but it still needs a NAME. As `Toggle("", isOn:)` VoiceOver read it
-            // as an anonymous "switch button, on" and Voice Control had nothing to say to press
-            // it. `labelsHidden()` keeps the layout identical and gives it the word back. World: the
-            // framed switch the app root sets.
-            Toggle("Haptics", isOn: $hapticsEnabled)
-                .labelsHidden()
-                // Stated here: a sheet the root presents does not inherit the root's toggle style.
-                .toggleStyle(FernletFramedToggleStyle())
+            .toggleStyle(FernletFramedToggleStyle())
+            .accessibilityInputLabels([Text("Haptics")])
+            // Owner's decision 5: this switch stays, under the app-wide level. When that
+            // level is Off, an "on" switch here plays nothing, so say why.
+            if appHapticsLevel == .off {
+                Text("Haptics are off for all of Fernlet in Settings.")
+                    .font(FernletFramedFont.rowValue)
+                    .foregroundStyle(WorldPalette.dim)
+                    .fernletWrappingText()
+                    .accessibilityIdentifier("breathing.hapticsOffNote")
+            }
         }
     }
 

@@ -181,7 +181,8 @@ struct FernletPinDots: View {
             ForEach(0..<total, id: \.self) { index in
                 if let look {
                     RoundedRectangle(cornerRadius: 5)
-                        .fill(index < entered ? look.ink : look.raised)
+                        // Entered digits in the text ink: dark on light paper, cream on dark.
+                        .fill(index < entered ? look.text : look.raised)
                         .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(look.ink, lineWidth: 2.5))
                         .frame(width: 22, height: 22)
                 } else {

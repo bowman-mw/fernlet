@@ -128,7 +128,8 @@ struct WorldSignalCard: View {
 }
 
 /// The five-step strength meter in the World look (`b2-trends`): five rounded segments, the filled
-/// ones in ink and the rest in the paper's low tone. Decorative beside the value it repeats.
+/// ones in the text ink (dark on light paper, cream on dark) and the rest in the paper's low tone.
+/// Decorative beside the value it repeats.
 struct WorldSignalMeter: View {
     let strength: Int
     let look: FernletFramedLook
@@ -137,7 +138,7 @@ struct WorldSignalMeter: View {
         HStack(spacing: 6) {
             ForEach(0..<5, id: \.self) { index in
                 Capsule()
-                    .fill(index < strength ? look.ink : look.paperLow)
+                    .fill(index < strength ? look.text : look.paperLow)
                     .frame(height: 9)
             }
         }
