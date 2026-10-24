@@ -19,9 +19,10 @@ import FernletLockUI
 /// The Settings hub: a searchable, four-group Form (2026-08-21 restructure, artboard 5a —
 /// SETT-14/26/28/29) that routes to every settings sub-page. Each row carries a one-line sub-label
 /// breadcrumb saying what is inside it; the groups are **Your day** (Appearance, Goal & nutrition,
-/// Reminders, Personal care tasks, Quick-log shortcuts, Sounds & haptics), **Data & sources** (AI & data sources,
+/// Reminders, Personal care tasks, Quick-log shortcuts, Sounds & haptics), **Friends** (Friends & Blocks,
+/// Nearby friends; `b4-mem-settings-friends`), **Data & sources** (AI & data sources,
 /// Health), **Privacy & data** (Privacy & Data, App lock, Safety & reporting, Privacy Policy, AI
-/// activity log), and **Friends & private** (Nearby friends, Period & sensitive content), followed
+/// activity log), and **Private** (Period & sensitive content), followed
 /// by the Danger zone and — in DEBUG builds only — an Advanced section holding the one Connection
 /// log row (SETT-28 folded Debug + Connection Inspector behind `#if DEBUG`).
 ///
@@ -373,6 +374,10 @@ struct SettingsSheet: View {
             SharingSettingsView(store: store)
         case .nearbyFriends:
             NearbyFriendsSettingsView(store: store)
+        case .friendsBlocks:
+            // The page the Friends tab's header used to push (b2-friend-list), with Back to Settings.
+            FriendListView(store: store, isTabBarCompact: .constant(false), tabResetToken: .constant(0))
+                .fernletPushedPage("Friends & Blocks")
         case .periodSensitive:
             PeriodSensitiveSettingsView(store: store)
         }
@@ -381,6 +386,7 @@ struct SettingsSheet: View {
     private var settingsForm: some View {
         Form {
             yourDaySection
+            friendsSection
             dataSourcesSection
             privacyHubSection
             friendsPrivateSection
@@ -500,17 +506,30 @@ struct SettingsSheet: View {
         .listRowBackground(Color.cream)
     }
 
-    /// "Friends & private": the in-person sharing page and the sensitive-surface gates. Carries
+    /// "Friends" (World Review Batch 4, `b4-mem-settings-friends`): Friends & Blocks — the friend list and
+    /// the name you appear as, which left the Friends tab's header when the tab became the Album — and
+    /// Nearby friends, each saying what it holds now.
+    private var friendsSection: some View {
+        Section {
+            hubLink("Friends & Blocks", subtitle: friendsRowSubtitle, .friendsBlocks)
+                .accessibilityIdentifier("settings.row.friendsBlocks")
+            hubLink("Nearby friends", subtitle: nearbyFriendsRowSubtitle, .nearbyFriends)
+                .accessibilityIdentifier("settings.row.nearbyFriends")
+        } header: {
+            hubSectionHeader("Friends")
+        }
+        .listRowBackground(Color.cream)
+    }
+
+    /// "Private": the sensitive-surface gates (Nearby friends moved up to the Friends group). Carries
     /// the hub's one-sentence standing promise as its footer — the ~90-word paragraph became this
     /// line (SETT-14); the detail moved to the pages that own it.
     private var friendsPrivateSection: some View {
         Section {
-            hubLink("Nearby friends", subtitle: Text("Presence, vibe, hearts, sharing"), .nearbyFriends)
-                .accessibilityIdentifier("settings.row.nearbyFriends")
             hubLink("Period & sensitive content", subtitle: Text("Visibility, gating, app lock"), .periodSensitive)
                 .accessibilityIdentifier("settings.row.periodSensitive")
         } header: {
-            hubSectionHeader("Friends & private")
+            hubSectionHeader("Private")
         } footer: {
             Text("Everything stays on your device unless you turn it on.")
         }
@@ -549,6 +568,18 @@ struct SettingsSheet: View {
         } else {
             Text("Daily check-in off")
         }
+    }
+
+    /// "You appear as Redesign iPhone 17 · 2 friends": the name nearby people see, and how many kept
+    /// friends there are (not blocked, not removed).
+    private var friendsRowSubtitle: Text {
+        let friends = store.trustedProximityPeers.filter { $0.blockedAt == nil && $0.revokedAt == nil }.count
+        return Text("You appear as \(store.resolvedProximityDisplayName) · ^[\(friends) friends](inflect: true)")
+    }
+
+    /// "Presence on" / "Presence off": whether friends can see you're nearby.
+    private var nearbyFriendsRowSubtitle: Text {
+        store.settings.allowNearbyPresence ? Text("Presence on") : Text("Presence off")
     }
 
     /// "N tasks". (The design canvas's "N daily, M weekly" cannot be said truthfully — care tasks
@@ -1347,10 +1378,11 @@ struct SettingsSheet: View {
         }
     }
 
-    /// The Friends-tab debug switch and what turning it on actually exposes.
+    /// The Album tab's debug switch (the Friends tab before `b4-mem-name`) and what turning it on
+    /// actually exposes.
     private var proximityDebugSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionLabel("Friends tab")
+            SectionLabel("Album tab")
             Toggle(
                 "Proximity debug tools",
                 isOn: Binding(
@@ -1358,7 +1390,7 @@ struct SettingsSheet: View {
                     set: { store.setShowProximityDebugTools($0) }
                 )
             )
-            Text("Shows the connection inspector button and a Force override on the Friends tab that bypasses distance requirements.")
+            Text("Shows the connection inspector button and a Force override on Album › Friends nearby that bypasses distance requirements.")
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()

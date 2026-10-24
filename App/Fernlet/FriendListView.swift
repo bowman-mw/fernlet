@@ -36,7 +36,7 @@ private enum FriendListFilter: String, CaseIterable, Identifiable {
 /// The "Friends & Blocks" management screen: every trusted proximity peer, searchable and
 /// filterable, with block/unblock, remove, report, and heart-sending per peer.
 ///
-/// Pushed from the Friends tab header. Rows expand in place into a detail card (accepted/seen
+/// Pushed from Settings' Friends group (`b4-mem-settings-friends`; the Friends tab header before), and from Friends nearby's "Change" while no name is set. Rows expand in place into a detail card (accepted/seen
 /// dates, status timestamps, and the collapsed "Safety code": the one place the app still shows a
 /// fingerprint) whose actions mirror the swipe actions; all
 /// mutations go through ``FernletStore`` (`blockProximityPeer`, `revokeTrustedProximityPeer`,
