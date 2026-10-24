@@ -41,20 +41,36 @@ struct ExerciseSwapSheet: View {
                 .padding(20)
             }
         }
-        .background(Color.parchment)
+        // World build (`b3-exercise-swap`): the sheet's paper; the options share one framed card.
+        .background((look?.paper ?? Color.parchment).ignoresSafeArea())
         .onChange(of: searchSelection) { _, picked in
             guard let picked else { return }
             pick(picked)
         }
     }
 
+    @Environment(\.fernletFramedLook) private var look
+
     @ViewBuilder private var optionsSection: some View {
         if options.isEmpty {
             Text("Nothing else here works the same muscles the same way. Search for any exercise below.",
                  comment: "Swap sheet: no ready alternatives for this exercise at this location")
                 .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .fernletWrappingText()
+        } else if look != nil {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionLabel("Works the same muscles").padding(.horizontal, 4)
+                FernletCard {
+                    VStack(spacing: 0) {
+                        ForEach(options) { option in
+                            if option.id != options.first?.id { FernletDottedRule() }
+                            ExerciseSearchResultRow(exercise: option, isSelected: false, inCard: true) { pick(option) }
+                                .accessibilityIdentifier("workout.swap.option")
+                        }
+                    }
+                }
+            }
         } else {
             SheetField("Works the same muscles") {
                 VStack(spacing: 6) {

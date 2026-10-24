@@ -37,10 +37,9 @@ extension View {
         _ request: Binding<ExerciseHowToRequest?>, sex: BiologicalSex, preferences: FernletStore? = nil
     ) -> some View {
         sheet(item: request) { shown in
+            // World build: full height in the sheet frame, like every sheet (Batch 3).
             ExerciseHowToSheet(exerciseName: shown.name, sex: sex, preferences: preferences)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheet()
         }
     }
 }
@@ -54,12 +53,20 @@ struct ExerciseHowToButton: View {
     /// The frozen catalog name; the spoken label draws its display name.
     let exerciseName: String
     let action: () -> Void
+    /// World build (`b3-runner-set`): a pixel "i" in the ink token.
+    @Environment(\.fernletFramedLook) private var look
+    /// A small control size (a plan's prescription rows, `b3-suggest-plan`) draws the smaller "i".
+    @Environment(\.controlSize) private var controlSize
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: "info.circle")
-                .font(.body.weight(.medium))
-                .foregroundStyle(Color.moss)
+            if look != nil {
+                WorldSpriteView(sprite: MoveSprites.info, scale: controlSize == .small || controlSize == .mini ? 2 : 3)
+            } else {
+                Image(systemName: "info.circle")
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(Color.moss)
+            }
         }
         .buttonStyle(.plain)
         .fernletIconButton("How to do \(ExerciseHowToCatalog.displayName(for: exerciseName))")
@@ -122,10 +129,19 @@ struct ExerciseHowToSheet: View {
                 .padding(20)
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { visibleHeight = $0 }
+            // `b3-howto` draft 2: opened from the runner, the foot keeps where the run is.
+            if let runFooter {
+                HowToRunFooterBar(footer: runFooter)
+            }
         }
-        .background(Color.parchment)
+        // World build: the sheet's paper (full height in the sheet frame).
+        .background((look?.paper ?? Color.parchment).ignoresSafeArea())
         .uxScreenAnchor("sheet.exerciseHowTo")
     }
+
+    /// The guided run's place, when the runner opened this sheet.
+    @Environment(\.exerciseHowToRunFooter) private var runFooter
+    @Environment(\.fernletFramedLook) private var look
 }
 
 /// The demonstration at the top of the how-to sheet (comparison report idea 8).
@@ -160,9 +176,22 @@ struct ExerciseDemonstrationSlot: View {
 /// Draws nothing for an exercise the catalog does not know.
 struct ExerciseHowToFacts: View {
     let target: ExerciseTarget?
+    /// World build (`b3-howto`): the two facts as key-value rows on one framed card.
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
-        if let target {
+        if let target, look != nil {
+            VStack(spacing: 0) {
+                FernletKeyValueRow("Main muscles", value: Text(verbatim: Self.muscles(of: target)),
+                                   showsRule: Self.equipment(of: target) != nil)
+                if let equipment = Self.equipment(of: target) {
+                    FernletKeyValueRow("Equipment", value: Text(verbatim: equipment), showsRule: false)
+                }
+            }
+            .padding(.horizontal, 15)
+            .padding(.vertical, 4)
+            .modifier(MoveInsetCardFrame())
+        } else if let target {
             VStack(alignment: .leading, spacing: 12) {
                 fact("Main muscles", value: Self.muscles(of: target))
                 if let equipment = Self.equipment(of: target) {
@@ -214,19 +243,35 @@ struct ExerciseHowToFacts: View {
 /// safety arms…"), so VoiceOver reads the number with its cue.
 struct ExerciseHowToSteps: View {
     let cues: [String]
+    /// World build (`b3-howto`): each step's number on a framed moss square.
+    @Environment(\.fernletFramedLook) private var look
+
+    /// A step's number: a framed moss square under the World look, moss numerals today.
+    @ViewBuilder private func number(_ index: Int) -> some View {
+        let text = Text(verbatim: (index + 1).formatted())
+        if let look {
+            text
+                .font(FernletFramedFont.buttonSmall)
+                .foregroundStyle(look.onAccent)
+                .frame(minWidth: 26, minHeight: 26)
+                .fernletFramed(look, fill: look.accent, cornerRadius: 6)
+        } else {
+            text
+                .font(.fernlet(.stat))
+                .foregroundStyle(Color.moss)
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel("How to do it")
             // Bounded: an entry carries at most `ExerciseHowToCatalog.maxCues` cues.
             ForEach(Array(cues.enumerated()), id: \.offset) { index, cue in
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(verbatim: (index + 1).formatted())
-                        .font(.fernlet(.stat))
-                        .foregroundStyle(Color.moss)
+                HStack(alignment: look == nil ? .firstTextBaseline : .top, spacing: 10) {
+                    number(index)
                     Text(verbatim: cue)
                         .font(.fernlet(.body))
-                        .foregroundStyle(Color.bark)
+                        .foregroundStyle(look?.text ?? Color.bark)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .fernletWrappingText()
                 }
@@ -269,7 +314,8 @@ struct ExerciseHowToSafetyLine: View {
                 .fernletWrappingText()
         }
         .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+        // World build: the safety card is framed paper; its line stays in the card's ink.
+        .modifier(MoveInsetCardFrame(cornerRadius: 14))
     }
 }
 

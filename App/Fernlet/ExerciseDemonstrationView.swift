@@ -346,28 +346,38 @@ struct ExerciseDemonstrationPlaceholder: View {
     /// The tile's side, from ``ExerciseDemonstrationLayout/side(forVisibleHeight:)``.
     let side: CGFloat
 
+    /// World build (`b3-howto`): a framed tile, the equipment glyph in ink, the name in a framed box.
+    @Environment(\.fernletFramedLook) private var look
+
     var body: some View {
         ZStack {
-            Color.cream
+            look?.raised ?? Color.cream
             VStack(spacing: 14) {
                 EquipmentGlyph(item: Self.glyph(for: target), size: ExerciseDemonstrationLayout.glyphSize)
-                    .foregroundStyle(Color.softTaupe)
+                    .foregroundStyle(look?.text ?? Color.softTaupe)
                 Text(verbatim: ExerciseHowToCatalog.displayName(for: exerciseName))
                     .font(.fernlet(.headerMedium))
-                    .foregroundStyle(Color.bark)
+                    .foregroundStyle(look?.text ?? Color.bark)
                     .multilineTextAlignment(.center)
                     .lineLimit(3)
                     .minimumScaleFactor(0.6)
                     .dynamicTypeSize(...DynamicTypeSize.accessibility1)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(Color.parchment, in: RoundedRectangle(cornerRadius: 10))
-                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.softTaupe, lineWidth: 1))
+                    .background(look?.paper ?? Color.parchment, in: RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(look?.ink ?? Color.softTaupe, lineWidth: look == nil ? 1 : FernletFramedLook.frameWidth))
             }
             .padding(20)
         }
         .aspectRatio(1, contentMode: .fit)
         .frame(maxWidth: side)
+        .overlay {
+            if let look {
+                RoundedRectangle(cornerRadius: ExerciseDemonstrationLayout.cornerRadius)
+                    .strokeBorder(look.ink, lineWidth: 3)
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: ExerciseDemonstrationLayout.cornerRadius))
         .frame(maxWidth: .infinity)
         .accessibilityHidden(true)

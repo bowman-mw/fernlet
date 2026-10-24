@@ -78,7 +78,7 @@ enum GuidedRunLoadLog {
     /// is the run's answer to the Ready screen's food question (G12).
     static func result(for exercise: GuidedWorkoutRunState.Exercise, unfueled: Bool = false) -> ExerciseResult? {
         guard let tracking = exercise.tracking, tracking.skipped != true, exercise.fromCatalog else { return nil }
-        return ExerciseResult(
+        let result = ExerciseResult(
             name: exercise.name, prescribedSets: max(1, exercise.sets), targetReps: tracking.targetReps,
             rangeLow: tracking.rangeLow, rangeHigh: tracking.rangeHigh,
             suggestedWeight: tracking.suggested, selectedWeight: tracking.selected,
@@ -93,6 +93,20 @@ enum GuidedRunLoadLog {
             compoundsBefore: tracking.compoundsBefore,
             unfueled: unfueled
         )
+        return withEditedWeights(result, tracking: tracking)
+    }
+
+    /// `result` with the reps editor's per-set weights recorded (`b3-edit-reps` draft 2): a set at
+    /// another weight, or a drop set, logs set by set ("(did 8 @ 35, 8 @ 25)"), and the working weight
+    /// stays the heaviest set's. Unchanged when the editor kept every set at the selected weight.
+    static func withEditedWeights(_ result: ExerciseResult, tracking: GuidedWorkoutRunState.Tracking) -> ExerciseResult {
+        guard let weights = tracking.actualWeights, !weights.isEmpty else { return result }
+        let reps = tracking.actualReps ?? Array(repeating: tracking.targetReps, count: weights.count)
+        guard reps.count == weights.count else { return result }
+        var recorded = result
+        recorded.record(zip(reps, weights).map { LoggedSet(reps: $0.0, weight: $0.1) },
+                        unit: tracking.unitRaw.flatMap(LoadUnit.init(rawValue:)))
+        return recorded
     }
 
     /// The finished run's log: its text with each tracked lift's own line, and the results — or

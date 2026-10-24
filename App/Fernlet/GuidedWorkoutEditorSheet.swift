@@ -41,6 +41,8 @@ struct GuidedWorkoutEditorSheet: View {
     /// history rollups run once per name-set change (see ``refreshLastTime()``), not on every
     /// sets/reps/rest edit.
     @State private var lastTimeByName: [String: String] = [:]
+    /// World build (`b3-guided-editor`): framed cards, steppers and pixel row controls.
+    @Environment(\.fernletFramedLook) private var look
 
     init(store: FernletStore, session: WorkoutProgram.SessionSuggestion) {
         self.store = store
@@ -98,8 +100,8 @@ struct GuidedWorkoutEditorSheet: View {
                     addExerciseSection
 
                     Self.restDefaultsNote(for: goal)
-                        .font(.fernlet(.bubble))
-                        .foregroundStyle(Color.slate)
+                        .font(look == nil ? .fernlet(.bubble) : FernletFramedFont.note)
+                        .foregroundStyle(look?.dim ?? Color.slate)
                         .fernletWrappingText()
                         .padding(.top, 4)
                 }
@@ -111,7 +113,8 @@ struct GuidedWorkoutEditorSheet: View {
         // view's onAppear/onChange silently never fire (same discipline as ``WorkoutExerciseBuilder``).
         .onAppear { refreshLastTime() }
         .onChange(of: rows.map(\.name)) { _, _ in refreshLastTime() }
-        .background(Color.parchment)
+        // World build (`b3-guided-editor`): the sheet's paper; each lift a framed card.
+        .background((look?.paper ?? Color.parchment).ignoresSafeArea())
         .keyboardDoneToolbar()
         .interactiveDismissDisabled(isDirty)
         .discardConfirmation(isPresented: $showDiscardConfirm) { dismiss() }
@@ -124,9 +127,7 @@ struct GuidedWorkoutEditorSheet: View {
             ExerciseSwapSheet(originalName: request.name, options: request.options) { target in
                 swapRow(request.id, to: target)
             }
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-            .presentationCornerRadius(20)
+            .fernletSheet()
         }
     }
 
@@ -136,8 +137,8 @@ struct GuidedWorkoutEditorSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 8) {
                 Text(verbatim: row.displayName)
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.bark)
+                    .font(look == nil ? .fernlet(.label) : MoveFont.rowTitle)
+                    .foregroundStyle(look?.text ?? Color.bark)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 GuidedEditorRowControls(
                     exerciseName: row.displayName,
@@ -161,9 +162,13 @@ struct GuidedWorkoutEditorSheet: View {
                                  onDecrement: { setSets(index, row.sets - 1) },
                                  onIncrement: { setSets(index, row.sets + 1) })
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("REPS")
-                            .font(.fernlet(.labelSmall)).tracking(0.6)
-                            .foregroundStyle(Color.slate)
+                        if look != nil {
+                            SectionLabel("Reps")
+                        } else {
+                            Text("REPS")
+                                .font(.fernlet(.labelSmall)).tracking(0.6)
+                                .foregroundStyle(Color.slate)
+                        }
                         TextField("8-12", text: repsBinding(index), prompt: .fieldPrompt("8-12"))
                             .sheetTextInput()
                     }
@@ -180,12 +185,12 @@ struct GuidedWorkoutEditorSheet: View {
             } else {
                 Text("Conditioning / mobility — walked as a single step, no rest timer.")
                     .font(.fernlet(.bubble))
-                    .foregroundStyle(Color.slate)
+                    .foregroundStyle(look?.dim ?? Color.slate)
             }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+        .modifier(EditorCardFrame(isFramed: look != nil))
     }
 
     /// - Parameters:
@@ -206,10 +211,27 @@ struct GuidedWorkoutEditorSheet: View {
         fullWidth: Bool = false
     ) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.fernlet(.labelSmall)).tracking(0.6)
-                .foregroundStyle(Color.slate)
-                .textCase(.uppercase)
+            if look != nil {
+                SectionLabel(title)
+                // World build (`b3-guided-editor`): the framed stepper; its value sits between − and +.
+                FernletStepper(title, value: Text(verbatim: value), onDecrement: onDecrement, onIncrement: onIncrement)
+            } else {
+                Text(title)
+                    .font(.fernlet(.labelSmall)).tracking(0.6)
+                    .foregroundStyle(Color.slate)
+                    .textCase(.uppercase)
+                plainStepper(value: value, decrementLabel: decrementLabel, incrementLabel: incrementLabel,
+                             onDecrement: onDecrement, onIncrement: onIncrement, fullWidth: fullWidth)
+            }
+        }
+        .frame(maxWidth: fullWidth ? .infinity : nil, alignment: .leading)
+    }
+
+    /// Today's stepper: two moss circles around the value on parchment.
+    private func plainStepper(value: String, decrementLabel: LocalizedStringKey, incrementLabel: LocalizedStringKey,
+                              onDecrement: @escaping () -> Void, onIncrement: @escaping () -> Void,
+                              fullWidth: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 stepButton(system: "minus", label: decrementLabel, action: onDecrement)
                 Text(value)
@@ -253,8 +275,8 @@ struct GuidedWorkoutEditorSheet: View {
     @ViewBuilder private func lastTimeLine(for name: String) -> some View {
         if let values = lastTimeByName[name] {
             Text("Last time: \(values)")
-                .font(.fernlet(.bubble))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.bubble) : FernletFramedFont.note)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .fernletWrappingText()
                 .accessibilityIdentifier("workout.editor.lastTime")
         }
@@ -632,21 +654,39 @@ private struct GuidedEditorPreferenceActions: View {
             .fernletWrappingText()
     }
 
+    /// World build (`b3-guided-editor`): the words alone, in the look's link ink.
+    @Environment(\.fernletFramedLook) private var look
+
     /// A text button in the moss text ink, with its glyph decorative, grown to a 44pt target.
     private func actionButton(_ title: Text, systemImage: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 6) {
-                Image(systemName: systemImage)
-                    .font(.caption.weight(.semibold))
-                    .accessibilityHidden(true)
+                if look == nil {
+                    Image(systemName: systemImage)
+                        .font(.caption.weight(.semibold))
+                        .accessibilityHidden(true)
+                }
                 title
-                    .font(.fernlet(.label))
+                    .font(look == nil ? .fernlet(.label) : FernletFramedFont.sheetControl)
                     .fernletWrappingText()
             }
-            .foregroundStyle(Color.mossInk)
+            .foregroundStyle(look?.link ?? Color.mossInk)
         }
         .buttonStyle(.plain)
         .fernletTapTarget()
+    }
+}
+
+/// A plan editor card's frame: World build, framed paper (`b3-guided-editor`); today, cream.
+private struct EditorCardFrame: ViewModifier {
+    let isFramed: Bool
+
+    func body(content: Content) -> some View {
+        if isFramed {
+            content.modifier(MoveInsetCardFrame())
+        } else {
+            content.background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+        }
     }
 }
 
@@ -664,16 +704,31 @@ private struct GuidedEditorRowControls: View {
     let onMoveUp: () -> Void
     let onMoveDown: () -> Void
     let onRemove: () -> Void
+    /// World build (`b3-guided-editor`): "Move up, move down and remove are framed pixel buttons."
+    @Environment(\.fernletFramedLook) private var look
+
+    /// A control's framed pixel tile, faded when it can't act.
+    private func tile(_ sprite: WorldSprite, flipped: Bool = false, tint: Color? = nil, enabled: Bool) -> some View {
+        FernletIconTile(size: 32) {
+            WorldSpriteView(sprite: sprite, scale: 2, tint: tint)
+                .rotationEffect(.degrees(flipped ? 180 : 0))
+        }
+        .opacity(enabled ? 1 : 0.35)
+    }
 
     var body: some View {
         Group {
             Button {
                 onMoveUp()
             } label: {
-                Image(systemName: "chevron.up")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(canMoveUp ? Color.moss : Color.slate.opacity(0.3))
-                    .frame(width: 30, height: 30)
+                if look != nil {
+                    tile(WorldSprites.chevD, flipped: true, enabled: canMoveUp)
+                } else {
+                    Image(systemName: "chevron.up")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(canMoveUp ? Color.moss : Color.slate.opacity(0.3))
+                        .frame(width: 30, height: 30)
+                }
             }
             .buttonStyle(.plain)
             .disabled(!canMoveUp)
@@ -683,10 +738,14 @@ private struct GuidedEditorRowControls: View {
             Button {
                 onMoveDown()
             } label: {
-                Image(systemName: "chevron.down")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(canMoveDown ? Color.moss : Color.slate.opacity(0.3))
-                    .frame(width: 30, height: 30)
+                if look != nil {
+                    tile(WorldSprites.chevD, enabled: canMoveDown)
+                } else {
+                    Image(systemName: "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(canMoveDown ? Color.moss : Color.slate.opacity(0.3))
+                        .frame(width: 30, height: 30)
+                }
             }
             .buttonStyle(.plain)
             .disabled(!canMoveDown)
@@ -695,13 +754,17 @@ private struct GuidedEditorRowControls: View {
             Button(role: .destructive) {
                 onRemove()
             } label: {
-                Image(systemName: "trash")
-                    .font(.caption.weight(.semibold))
-                    // The destructive token's row form: terracotta ink, with disabled as an
-                    // opacity drop on the whole glyph — opacity, never a colour change (2b).
-                    .foregroundStyle(Color.terracottaInk)
-                    .frame(width: 30, height: 30)
-                    .opacity(canRemove ? 1 : 0.35)
+                if look != nil {
+                    tile(MoveSprites.trash, tint: WorldPalette.iconInk, enabled: canRemove)
+                } else {
+                    Image(systemName: "trash")
+                        .font(.caption.weight(.semibold))
+                        // The destructive token's row form: terracotta ink, with disabled as an
+                        // opacity drop on the whole glyph — opacity, never a colour change (2b).
+                        .foregroundStyle(Color.terracottaInk)
+                        .frame(width: 30, height: 30)
+                        .opacity(canRemove ? 1 : 0.35)
+                }
             }
             .buttonStyle(.plain)
             .disabled(!canRemove)
