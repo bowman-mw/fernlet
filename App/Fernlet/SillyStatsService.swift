@@ -72,7 +72,17 @@ final class SillyStatsService {
         let steps = await store.lifetimeHealthSteps(since: start, now: now)
         lastHealthSteps = steps
         hasRefreshed = true
+        let held = stamps.count
         update(with: Self.inputs(store: store, days: days, todayKey: todayKey, healthSteps: steps), now: now)
+        Self.publishNewStamps(to: store, held: held, now: stamps.count)
+    }
+
+    /// Republishes the widget snapshot when this check recorded a stamp, so the stamp widget shows it
+    /// now rather than at the next save (the save that earned it published before the debounced
+    /// re-tally ran). No mirror, no publish — `publishWidgetSnapshot()` is silent until it is wired.
+    private static func publishNewStamps(to store: FernletStore, held: Int, now: Int) {
+        guard now != held else { return }
+        store.publishWidgetSnapshot()
     }
 
     /// Re-tallies from the diary and the pat count after a save or a pat, reusing Health's last
@@ -95,7 +105,9 @@ final class SillyStatsService {
             let inputs = Self.inputs(
                 store: store, days: Array(store.loadDays().values), todayKey: FernletDate.dayKey(for: now),
                 healthSteps: self.lastHealthSteps)
+            let held = self.stamps.count
             self.update(with: inputs, now: now)
+            Self.publishNewStamps(to: store, held: held, now: self.stamps.count)
         }
     }
 

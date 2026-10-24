@@ -36,10 +36,11 @@ struct CompanionEmotionPrivacyTests {
         "App/Fernlet/WidgetBridge.swift",
         "App/FernletWidgets/FernletWidgetsBundle.swift",
         "App/FernletWidgets/WidgetSharedModels.swift",
-        // 2026-10-21 widget redesign: the simplified companion draws the feeling's face, the views
-        // pass the entry's feeling to it, and the thought card picks its line by the bedtime feelings.
-        // All three only READ the widget's own `WidgetCompanionEmotion`; none persists or sends it.
-        "App/FernletWidgets/WidgetCompanionFigure.swift",
+        // 2026-10-21 widget redesign: the views read the entry's feeling for its spoken value, and the
+        // thought card picks its line by the bedtime feelings. Both only READ the widget's own
+        // `WidgetCompanionEmotion`; neither persists or sends it. (World Review Batch 4, 2026-10-24:
+        // the vector figure that drew the feeling's face is gone; the pixel companion draws the state
+        // face and asleep only, as Home's map does, so it never names the feeling.)
         "App/FernletWidgets/CompanionWidgetViews.swift",
         "App/FernletWidgets/WidgetThoughtLines.swift",
         // World build step 3: the map's companion reads the feeling, as Home's does, for its sleeping

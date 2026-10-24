@@ -1,58 +1,92 @@
 // WidgetTheme.swift
 // FernletWidgets
 //
-// The Home Screen widgets' light and dark colours, fonts and the care bar (design round 2,
-// 2026-10-21). The Live Activities keep `FernletWidgetPalette`; these are the companion and water
-// widgets' own.
+// The Home Screen and Lock Screen widgets' look in the World design language (World Review Batch 4,
+// approved 2026-10-24): paper in a 3-point ink frame, the World's text inks, Fraunces and DM Sans, in
+// light and dark and under Increase Contrast. The Live Activities keep `FernletWidgetPalette`.
 
 import SwiftUI
 import WidgetKit
 
-/// The companion and water widgets' colours for one appearance.
+/// The widgets' colours for one appearance: the twins of the app's `WorldPalette` tokens as the Batch 4
+/// page draws them on a widget (`.wgp`).
 ///
-/// Muted text measures 6.2:1 on the light card and 8.7:1 on the dark one, and the outline colour
-/// 3.7:1 / 4.8:1 — every pairing clears its WCAG floor (4.5:1 text, 3:1 graphics).
+/// Text measures, light / dark: ``text`` 13:1 / 13:1 on ``paper``; ``muted`` 6.1:1 / 10:1. Under
+/// Increase Contrast both darken (light) or brighten (dark), as the app's do.
 struct WidgetTheme {
-    /// The card behind most widgets.
-    let card: Color
-    /// The slightly deeper card behind the thought widget, so its bubble reads as lifted.
-    let cardAlt: Color
-    /// Primary text.
-    let ink: Color
-    /// Secondary text: labels, the companion's name.
+    /// The widget's face.
+    let paper: Color
+    /// The 3-point frame around it, and the ink of a one-colour icon's outline.
+    let frame: Color
+    /// Primary text: the state word, the count, the stamp's name.
+    let text: Color
+    /// Secondary text: the companion's name, "Water", captions.
     let muted: Color
-    /// Outlines: the care bar's empty segments, the water bottle.
-    let line: Color
-    /// The quiet fill behind a chip or a bubble's edge.
-    let chip: Color
-    /// The "+" button.
-    let accent: Color
-    /// The "+" on the button.
-    let accentInk: Color
+    /// The dashed edge of a stamp still to come.
+    let dashed: Color
 
     /// Parchment and bark.
-    static let light = WidgetTheme(card: Color(token: "#FBF7EE"), cardAlt: Color(token: "#F5EFE0"),
-                                   ink: Color(token: "#3D2E1E"), muted: Color(token: "#6B5A47"),
-                                   line: Color(token: "#8C7D69"), chip: Color(token: "#F5EFE0"),
-                                   accent: Color(token: "#5A7A52"), accentInk: Color(token: "#FBF7EE"))
+    static let light = WidgetTheme(paper: Color(widgetRGB: 0xFFF6E2), frame: Color(widgetRGB: 0x4A2E1C),
+                                   text: Color(widgetRGB: 0x3A2414), muted: Color(widgetRGB: 0x6B5C4A),
+                                   dashed: Color(widgetRGB: 0x3D2E1E).opacity(0.3))
+    /// Night browns.
+    static let dark = WidgetTheme(paper: Color(widgetRGB: 0x2E261D), frame: Color(widgetRGB: 0x120A04),
+                                  text: Color(widgetRGB: 0xFFF1CF), muted: Color(widgetRGB: 0xE2D6C0),
+                                  dashed: Color(widgetRGB: 0xFFF1CF).opacity(0.3))
 
-    /// Warm night browns.
-    static let dark = WidgetTheme(card: Color(token: "#2A2219"), cardAlt: Color(token: "#231C15"),
-                                  ink: Color(token: "#F5EFE0"), muted: Color(token: "#CDBFA8"),
-                                  line: Color(token: "#9C8C76"), chip: Color(token: "#3A3026"),
-                                  accent: Color(token: "#8AAD7E"), accentInk: Color(token: "#1A140E"))
+    /// The theme for the widget's appearance; Increase Contrast deepens both text inks.
+    static func current(_ scheme: ColorScheme, contrast: ColorSchemeContrast = .standard) -> WidgetTheme {
+        let base = scheme == .dark ? dark : light
+        guard contrast == .increased else { return base }
+        let text: UInt32 = scheme == .dark ? 0xFFF8E4 : 0x2A1808
+        let muted: UInt32 = scheme == .dark ? 0xF4EDE0 : 0x4E4030
+        return WidgetTheme(paper: base.paper, frame: base.frame, text: Color(widgetRGB: text),
+                           muted: Color(widgetRGB: muted), dashed: base.dashed)
+    }
 
-    /// The theme for the widget's colour scheme.
-    static func current(_ scheme: ColorScheme) -> WidgetTheme {
-        scheme == .dark ? dark : light
+    /// The one-colour rendering (Lock Screen, tinted and clear Home Screens): white, which iOS tints.
+    static let mono = WidgetTheme(paper: .clear, frame: .white.opacity(0.35), text: .white,
+                                  muted: .white.opacity(0.85), dashed: .white.opacity(0.4))
+}
+
+/// The colours that stay the same in light and dark, as on the Batch 4 page: the speech bubble stays
+/// light paper, the moss button and the ribbon keep their fills, a stamp's disc stays gold.
+enum WidgetFixedInk {
+    /// The speech bubble's paper and text, and its frame (`.tbub`).
+    static let bubblePaper = Color(widgetRGB: 0xFFFBEF)
+    static let bubbleText = Color(widgetRGB: 0x3A2414)
+    static let bubbleFrame = Color(widgetRGB: 0x4A2E1C)
+    /// The shade under a framed bubble or button.
+    static let shade = Color(.sRGB, red: 74 / 255, green: 46 / 255, blue: 28 / 255, opacity: 0.25)
+    /// The "+" button's moss (`.hsbtn`): the white plus on it measures 6.4:1.
+    static let moss = Color(widgetRGB: 0x46683A)
+    /// The "New today" ribbon: white text on it measures 6.6:1.
+    static let ribbon = Color(widgetRGB: 0x9A4632)
+    /// An earned stamp's gold disc (the app's `StampBookArt.stampGold`).
+    static let stampGold = Color(widgetRGB: 0xF2D58A)
+    /// The placeholder's pale ghost of the companion.
+    static let ghost: UInt32 = 0xCDB98F
+}
+
+/// The 3-point ink frame inside the widget's own rounded edge, around content padded clear of it. The
+/// paper itself is the container background, so iOS can swap it for its own material when it tints
+/// the Home Screen; the frame then draws in the one colour (``WidgetTheme/mono``).
+struct WidgetPaperFrame: ViewModifier {
+    let theme: WidgetTheme
+    var padding = EdgeInsets(top: 14, leading: 15, bottom: 14, trailing: 15)
+
+    func body(content: Content) -> some View {
+        content
+            .padding(padding)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .overlay { ContainerRelativeShape().strokeBorder(theme.frame, lineWidth: 3) }
     }
 }
 
-private extension Color {
-    /// A literal design-token hex. Every caller passes a well-formed constant, so the bark fallback
-    /// is unreachable in practice; it keeps the init non-failable without a trap (R5).
-    init(token hex: String) {
-        self = Color(widgetHex: hex) ?? Color(red: 0.239, green: 0.180, blue: 0.118)
+extension View {
+    /// Pads the content clear of the frame and draws the frame (``WidgetPaperFrame``).
+    func widgetPaperFrame(_ theme: WidgetTheme, padding: EdgeInsets = EdgeInsets(top: 14, leading: 15, bottom: 14, trailing: 15)) -> some View {
+        modifier(WidgetPaperFrame(theme: theme, padding: padding))
     }
 }
 
@@ -60,12 +94,12 @@ private extension Color {
 /// files are copied into this extension (an extension cannot read the app's fonts) and registered by
 /// its Info.plist `UIAppFonts`. A missing font falls back to the system face, never a blank.
 enum WidgetFont {
-    /// Fraunces SemiBold: the state word and the water count.
+    /// Fraunces SemiBold: the state word, the water count, a stamp's name.
     static func display(_ size: CGFloat) -> Font {
         .custom("Fraunces-72ptSemiBoldNonWonky", size: size, relativeTo: .title3)
     }
 
-    /// DM Sans: labels and the companion's name.
+    /// DM Sans Medium: labels, the companion's name, the speech bubble.
     static func label(_ size: CGFloat) -> Font {
         .custom("DMSans-14ptMedium", size: size, relativeTo: .caption)
     }
@@ -81,44 +115,9 @@ enum WidgetFont {
     }
 }
 
-/// The twelve-segment care bar, as on Home: the day's care score in the state's colour, empty
-/// segments outlined. No number is drawn; VoiceOver hears the percentage, as on Home.
-struct WidgetCareBar: View {
-    /// The 0–1 care score.
-    let score: Double
-    /// The filled segments' colour.
-    let fill: Color
-    /// The empty segments' outline.
-    let line: Color
-    var height: CGFloat = 8
-
-    /// Twelve segments, like the app's `HealthBar`.
-    static let segments = 12
-
-    private var filled: Int {
-        guard score.isFinite else { return 0 }
-        return Int((min(max(score, 0), 1) * Double(Self.segments)).rounded())
-    }
-
-    var body: some View {
-        HStack(spacing: 2) {
-            ForEach(0..<Self.segments, id: \.self) { index in
-                segment(isFilled: index < filled)
-            }
-        }
-        .frame(height: height)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("Care score"))
-        .accessibilityValue(Text("\(Int((min(max(score, 0), 1) * 100).rounded())) percent"))
-    }
-
-    @ViewBuilder
-    private func segment(isFilled: Bool) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-        if isFilled {
-            shape.fill(fill).widgetAccentable()
-        } else {
-            shape.strokeBorder(line, lineWidth: 1.5)
-        }
-    }
+/// Whether a widget draws in one colour: the Lock Screen's vibrant rendering and the tinted and clear
+/// Home Screens' accented one. Every view takes this as a plain flag so it can be drawn either way.
+extension WidgetRenderingMode {
+    /// True outside full colour.
+    var drawsInOneColour: Bool { self != .fullColor }
 }

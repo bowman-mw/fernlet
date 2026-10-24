@@ -2,10 +2,12 @@
 // FernletWidgets
 //
 // The extension's entry point, the companion widget's timeline, and the palette the widgets and the
-// Live Activities share. Design round 2 (2026-10-21): the companion is drawn as the person dressed
-// it (WidgetCompanionFigure.swift), the small card shows the companion and its care bar, the medium
-// card its thought, the Lock Screen its face alone; water has its own widget and Control Center
-// control (WaterWidget.swift). Companion mood, look and water only — never anything sensitive.
+// Live Activities share. World Review Batch 4 (approved 2026-10-24): the companion is the pixel
+// companion as the person dressed it (WidgetPixelCompanion.swift), with Home's six hearts and a
+// friend's gold hearts after them; the medium card speaks in the pixel speech bubble; the Lock Screen
+// has the face alone and a rectangle with the hearts and water; water has its own widget and Control
+// Center control (WaterWidget.swift); the stamp widget shows a stamp from the book (StampWidget.swift).
+// Companion mood, look, water, gold hearts and stamps only — never anything sensitive, never a place.
 
 import SwiftUI
 import WidgetKit
@@ -22,15 +24,19 @@ enum FernletWidgetKind {
     static let water = "FernletWater"
     /// The Control Center / Action button control (`FernletWaterControl`).
     static let waterControl = "FernletWaterControl"
+    /// The stamp widget (`FernletStampWidget`): a stamp from the book, small and medium.
+    static let stamp = "FernletStamp"
 }
 
-/// The deep links a widget tap opens. The app's `FernletWidgetLinkRouter` reads the same two
+/// The deep links a widget tap opens. The app's `FernletWidgetLinkRouter` reads the same
 /// spellings; `WidgetBridgeTests` pins that they match.
 enum FernletWidgetLink {
     /// Opens the app on Home.
     static let home = URL(string: "fernlet-world://widget/home")
     /// Opens the app's Water sheet, where a mis-tapped bottle can be undone.
     static let water = URL(string: "fernlet-world://widget/water")
+    /// Opens the Stamp book (the stamp widget's tap).
+    static let stamps = URL(string: "fernlet-world://widget/stamps")
 }
 
 /// The extension's `@main` entry point: registers every widget, control and Live Activity this
@@ -44,6 +50,7 @@ struct FernletWidgetsBundle: WidgetBundle {
         FernletCompanionWidget()
         FernletWaterWidget()
         FernletWaterControl()
+        FernletStampWidget()
         WorkoutLiveActivity()
         CookingLiveActivity()
     }
@@ -115,11 +122,27 @@ struct FernletCompanionEntry: TimelineEntry {
         return name.isEmpty ? nil : name
     }
 
-    /// The care score for the bar — nil (no bar) on a stale day, before today has a state, and while
-    /// the companion is asleep, when nothing of the day shows.
+    /// The care score for the hearts — nil (no hearts) on a stale day, before today has a state, and
+    /// while the companion is asleep, when nothing of the day shows.
     var careScore: Double? {
         guard let snapshot, currentDayCompanionState != nil, !hidesTheDay else { return nil }
         return snapshot.score
+    }
+
+    /// A friend's gold hearts showing at THIS entry's date, 0...2 (`b4-gold-widgets`): each published
+    /// end still ahead. Drawn only beside the hearts, so none on a stale day or while asleep.
+    var goldHearts: Int {
+        guard careScore != nil, let ends = snapshot?.goldHeartEnds else { return 0 }
+        return WidgetHearts.gold(ends: ends, at: date)
+    }
+
+    /// The pixel companion for this entry: the person's look in the day's state, asleep or awake. The
+    /// state face only — the drawn face never shows a passing feeling but asleep, as on Home's map — so
+    /// the Lock Screen's state-only rule holds for every family.
+    var companionGrid: WidgetCompanionGrid {
+        let state = currentDayCompanionState
+        let pixelLook = WidgetPixelLook(look: look, state: state, asleep: hidesTheDay)
+        return WidgetCompanionPainter.paint(state: state, look: pixelLook, asleep: hidesTheDay)
     }
 
     /// The written word under the companion: "Asleep" while asleep, else the state's name, else the
@@ -176,6 +199,11 @@ struct FernletCompanionProvider: TimelineProvider {
         // wake time…), so the face changes on time with the app closed. Bounded, and never at `now`.
         let transitions = WidgetEmotionTimeline.transitionDates(in: snapshot?.companionEmotionTimeline ?? [], after: now)
         entries += transitions.map { FernletCompanionEntry(date: $0, snapshot: snapshot) }
+        // A friend's gold heart fades on time with the app closed: one entry at each end (at most two).
+        let goldEnds = (snapshot?.goldHeartEnds ?? []).filter { $0 > now }.prefix(WidgetHearts.maxGold)
+        for end in goldEnds where !entries.contains(where: { $0.date == end }) {
+            entries.append(FernletCompanionEntry(date: end, snapshot: snapshot))
+        }
 
         // Noon (the thought card's morning line gives way to the afternoon one) and the next local
         // midnight (the day gate turns the same snapshot into a fresh, empty day), each from the
@@ -196,12 +224,14 @@ struct FernletCompanionProvider: TimelineProvider {
     }
 }
 
-/// The companion widget: the small companion card, the medium thought card, and the Lock Screen
-/// face.
+/// The companion widget: the small card, the medium card with its speech bubble, the Lock Screen face
+/// and the Lock Screen rectangle with the hearts and water.
 ///
 /// A `StaticConfiguration` (no user options) keyed by ``FernletWidgetKind/companion`` and driven by
 /// ``FernletCompanionProvider``; ``FernletCompanionWidgetView`` picks the per-family layout. The
-/// rectangular Lock Screen card was retired (owner, 2026-10-21): the Lock Screen keeps the face.
+/// rectangle retired on 2026-10-21 returns as the owner's pick of 2026-10-24 (`b4-new-lock-rect`):
+/// hearts and water, its name and hearts hidden until the phone is unlocked. Content margins are off
+/// so the paper's ink frame can sit at the widget's own edge.
 struct FernletCompanionWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: FernletWidgetKind.companion, provider: FernletCompanionProvider()) { entry in
@@ -209,44 +239,57 @@ struct FernletCompanionWidget: Widget {
         }
         .configurationDisplayName("Fernlet")
         .description("Your companion, as you dressed it, and how its day is going.")
-        .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular])
+        .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular])
+        .contentMarginsDisabled()
     }
 }
 
-/// The companion widget's root view: switches on the family and applies the two cross-family
-/// modifiers (privacy redaction and the container background).
+/// The companion widget's root view: switches on the family, applies privacy per family, and sets the
+/// container background (paper on the Home Screen, clear on the Lock Screen).
 ///
 /// `.privacySensitive()` is deliberate policy, not decoration — the companion state encodes
-/// wellbeing (including sickness), so the whole widget redacts on a locked Lock Screen.
+/// wellbeing (including sickness), so every family that shows it redacts on a locked Lock Screen (and
+/// in StandBy while locked). The Lock Screen rectangle redacts only its name and hearts: its water
+/// stays, as the owner chose.
 struct FernletCompanionWidgetView: View {
     @Environment(\.widgetFamily) private var family
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.widgetRenderingMode) private var renderingMode
     let entry: FernletCompanionEntry
 
     var body: some View {
-        Group {
-            switch family {
-            case .accessoryCircular:
-                CompanionLockView(entry: entry)
-            case .systemMedium:
-                if entry.snapshot == nil { PlaceholderView() } else { CompanionThoughtView(entry: entry) }
-            default:
-                if entry.snapshot == nil { PlaceholderView() } else { CompanionSmallView(entry: entry) }
+        content
+            .containerBackground(for: .widget) { containerBackground }
+    }
+
+    @ViewBuilder private var content: some View {
+        let mono = renderingMode.drawsInOneColour
+        switch family {
+        case .accessoryCircular:
+            CompanionLockView(entry: entry).privacySensitive()
+        case .accessoryRectangular:
+            CompanionLockRectView(entry: entry)
+        case .systemMedium:
+            if entry.snapshot == nil {
+                PlaceholderView(mono: mono)
+            } else {
+                CompanionThoughtView(entry: entry, mono: mono).privacySensitive()
+            }
+        default:
+            if entry.snapshot == nil {
+                PlaceholderView(mono: mono)
+            } else {
+                CompanionSmallView(entry: entry, mono: mono).privacySensitive()
             }
         }
-        // Companion state encodes wellbeing (incl. sickness) — redact on a locked Lock Screen.
-        .privacySensitive()
-        .containerBackground(for: .widget) { containerBackground }
     }
 
     @ViewBuilder private var containerBackground: some View {
         switch family {
-        case .accessoryCircular:
+        case .accessoryCircular, .accessoryRectangular:
             Color.clear                 // the Lock Screen draws its own material
-        case .systemMedium:
-            WidgetTheme.current(scheme).cardAlt
         default:
-            WidgetTheme.current(scheme).card
+            WidgetTheme.current(scheme).paper
         }
     }
 }
