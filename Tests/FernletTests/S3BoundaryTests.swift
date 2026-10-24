@@ -79,6 +79,8 @@ struct S3BoundaryTests {
         // Sealed media stores + the pending-narrative buffer/payload and its storage scope.
         "PrivateMediaStore", "MealPhotoStore", "ProgressPhotoStore", "PendingNarrativeBuffer", "PendingNarrativePayload",
         "PendingNarrativeStorageScope",
+        // The disposable camera's photos on your own (World build, 2026-10-24): never handed to the AI.
+        "SoloCameraPhotoStore", "SoloCameraRoll",
         // Raw tier-two behavioral memory record (WI-7b). `TierTwoMemoryRecord` lives in
         // `FernletDomainModel`, a direct dependency of BOTH walled consumers — so the compiler wall
         // cannot keep it out of an AI prompt builder. AI may only receive `MemoryAgent`'s de-identified

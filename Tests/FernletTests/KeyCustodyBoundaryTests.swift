@@ -403,6 +403,30 @@ struct KeyCustodyBoundaryTests {
         #expect(attrs?.synchronizable == false, "the pending session-photo key must never reach iCloud Keychain")
     }
 
+    // MARK: The solo-camera key (World build, 2026-10-24): the row behind the disposable camera's
+    // photos on your own is born device-bound like the pending row — the corpus is excluded from the
+    // backup and never escrowed — and is a key of its own: a solo box never opens under another row.
+    @MainActor
+    @Test func soloCameraKeyIsDeviceBoundAtMint() {
+        #expect(KeychainPrivateMediaKeyProvider.defaultDeviceBinding(for: .soloCameraPhotos),
+                "the solo-camera key must be minted device-bound")
+        let solo = KeychainPrivateMediaKeyProvider(role: .soloCameraPhotos)
+        #expect(solo.deviceBound)
+        let soloBytes = solo.mediaKey().map { $0.withUnsafeBytes { Data($0) } }
+        #expect(soloBytes != nil, "solo-camera key could not be minted/read")
+        let others: [KeychainPrivateMediaKeyProvider.Role] = [.friendWall, .ownPhotos, .pendingSessionPhotos]
+        for role in others {
+            let bytes = KeychainPrivateMediaKeyProvider(role: role).mediaKey().map { $0.withUnsafeBytes { Data($0) } }
+            #expect(soloBytes != bytes, "the solo-camera key is the \(role) key under another name")
+        }
+        let attrs = rowAttributes(account: "com.fernlet.private-media.soloCameraContentKey",
+                                  service: FernletLockService.privateMediaKeychainService)
+        #expect(attrs != nil, "the solo-camera row is not under the service the duress wipe sweeps")
+        #expect(attrs?.accessible == kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String,
+                "the solo-camera key must be AfterFirstUnlockThisDeviceOnly (never backup-restorable)")
+        #expect(attrs?.synchronizable == false, "the solo-camera key must never reach iCloud Keychain")
+    }
+
     // MARK: The duress silent wipe crypto-erases pending photos by sweeping the WHOLE media service.
     // Pinned against the lock's own constant (FernletLock cannot import PrivateMediaStore, so the
     // service is restated there by value): the row the provider really writes must be found under

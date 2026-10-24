@@ -455,6 +455,17 @@ public nonisolated enum FernletCryptoPurpose {
         /// vault's when-unlocked store key: one point per space, keyed by the space's id, never in the
         /// synced settings.
         public static let worldMapPinsV1 = CryptographicPurpose("fernlet.world-map.pins.aead.v1")
+        /// **World build only.** A photo taken with the disposable camera on your own
+        /// (`SoloCameraPhotoStore`, owner 2026-10-24: kept in the Friends area, ten a day, shown after
+        /// the companion sleeps), sealed under the device-bound solo-camera media key. Its own domain,
+        /// so a solo photo can never open as a session photo, a wall photo or an own photo.
+        public static let privateSoloCameraPhotoImageV1 = CryptographicPurpose("fernlet.private-media.solo-camera-photo.image.aead.v1")
+        /// **World build only.** A solo photo's thumbnail, same corpus and key as
+        /// ``privateSoloCameraPhotoImageV1``; separate so a thumbnail cannot stand in for the photo.
+        public static let privateSoloCameraPhotoThumbnailV1 = CryptographicPurpose("fernlet.private-media.solo-camera-photo.thumbnail.aead.v1")
+        /// **World build only.** The solo camera's sealed index (`SoloCameraIndex.sealed`): each photo's
+        /// id, when it was taken and when it shows, plus the day's film count.
+        public static let privateSoloCameraIndexV1 = CryptographicPurpose("fernlet.private-media.solo-camera-photo.index.aead.v1")
         public static let mealPhotoV2 = CryptographicPurpose("fernlet.private-media.meal-photo.aead.v2")
         public static let recipePhotoV2 = CryptographicPurpose("fernlet.private-media.recipe-photo.aead.v2")
         public static let progressPhotoV2 = CryptographicPurpose("fernlet.private-media.progress-photo.aead.v2")
