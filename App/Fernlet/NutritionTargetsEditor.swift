@@ -10,6 +10,8 @@ import FernletUI
 /// carries the user's calorie deficit (``WeightManagementDeficitRow``) above the Calories row.
 struct NutritionTargetsEditor: View {
     @Bindable var store: FernletStore
+    /// The World's framed look (`b3-targets`); nil keeps today's card.
+    @Environment(\.fernletFramedLook) private var look
 
     /// The plan actually in effect (overrides applied). Its `carbs` is the live residual, and each of
     /// its macros is the grey placeholder for the matching row. Placeholders MUST come from here, not a
@@ -116,8 +118,10 @@ struct NutritionTargetsEditor: View {
                             store.scheduleSnapshotSave()
                         } label: {
                             Text("Reset")
-                                .font(.fernlet(.label))
-                                .foregroundStyle(Color.moss)
+                                .font(look == nil ? .fernlet(.label) : FernletFramedFont.button)
+                                .foregroundStyle(look?.link ?? Color.moss)
+                                .frame(minHeight: 44)
+                                .contentShape(Rectangle())
                         }
                         .accessibilityIdentifier("nutritionTargets.reset")
                     }
@@ -127,43 +131,33 @@ struct NutritionTargetsEditor: View {
                 // directly above it (owner, 2026-09-24).
                 if WeightManagementDeficitControl(settings: store.settings).isShown {
                     WeightManagementDeficitRow(store: store)
-                    Divider().overlay(Color.bark.opacity(0.08))
+                    FernletDottedRule()
                 }
 
                 MacroTargetRow(label: "Calories", identifier: "nutritionTargets.calories", unit: "cal", placeholder: applied.calories,
                                maxValue: 9_999, value: binding(\.calorieTargetOverride))
-                Divider().overlay(Color.bark.opacity(0.08))
+                FernletDottedRule()
                 MacroTargetRow(label: "Protein", identifier: "nutritionTargets.protein", unit: "g", placeholder: applied.protein,
                                maxValue: 999, value: binding(\.proteinTargetOverride))
-                Divider().overlay(Color.bark.opacity(0.08))
+                FernletDottedRule()
                 MacroTargetRow(label: "Fat", identifier: "nutritionTargets.fat", unit: "g", placeholder: applied.fat,
                                maxValue: 999, value: binding(\.fatTargetOverride))
-                Divider().overlay(Color.bark.opacity(0.08))
+                FernletDottedRule()
 
                 // Carbs — the residual, never directly editable. Shown live so pinning the others reads
                 // as "carbs rebalanced", not "carbs ignored".
-                HStack {
-                    Text("Carbs")
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.bark)
-                    Spacer()
-                    Text("\(applied.carbs)g")
-                        .font(.fernlet(.stat))
-                        .foregroundStyle(Color.slate)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("nutritionTargets.carbs")
+                carbsRow
 
                 Text(footerText)
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(totalsExceedCalories ? Color.bark : Color.slate)
+                    .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.body)
+                    .foregroundStyle(totalsExceedCalories ? (look?.text ?? Color.bark) : (look?.dim ?? Color.slate))
                     .fernletWrappingText()
                     .accessibilityIdentifier("nutritionTargets.footer")
 
                 if let note = lowTargetNote {
                     Text(note)
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.bark)
+                        .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.body)
+                        .foregroundStyle(look?.text ?? Color.bark)
                         .fernletWrappingText()
                         .accessibilityIdentifier("nutritionTargets.lowTargetNote")
                 }
@@ -185,20 +179,37 @@ struct NutritionTargetsEditor: View {
     /// hiding it would leave the card unable to explain where its own macros come from — and the
     /// shipped targets UI test drives this field directly. What it must not do is read as Fernlet
     /// putting calorie counting in front of someone who opted out, so it says so plainly.
+    /// Carbs, which fill the room the other targets leave: a figure, not a field.
+    private var carbsRow: some View {
+        HStack {
+            Text("Carbs")
+                .font(look == nil ? .fernlet(.body) : FernletFramedFont.rowTitle.weight(.semibold))
+                .foregroundStyle(look?.text ?? Color.bark)
+            Spacer()
+            Text("\(applied.carbs)g")
+                .font(look == nil ? .fernlet(.stat) : FernletFramedFont.field.weight(.bold))
+                .foregroundStyle(look?.text ?? Color.slate)
+                // Lines up with the typed figures above it, before their unit column.
+                .padding(.trailing, look == nil ? 0 : 36)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("nutritionTargets.carbs")
+    }
+
     @ViewBuilder private var caloriesOffNote: some View {
         if !store.settings.showCalories {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Calorie figures stay hidden everywhere else — this one only shapes your protein, fat and carb split.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
+                    .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.note)
+                    .foregroundStyle(look?.dim ?? Color.slate)
                     .fernletWrappingText()
                 Button("Show calories in Fernlet") {
                     store.settings.showCalories = true
                     store.scheduleSnapshotSave()
                 }
                 .buttonStyle(.plain)
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.moss)
+                .font(look == nil ? .fernlet(.labelSmall) : FernletFramedFont.button)
+                .foregroundStyle(look?.link ?? Color.moss)
                 .frame(minHeight: 44, alignment: .leading)
                 .contentShape(Rectangle())
                 .accessibilityIdentifier("nutritionTargets.showCalories")
@@ -243,22 +254,34 @@ private struct MacroTargetRow: View {
     let placeholder: Int
     let maxValue: Int
     @Binding var value: Int?
+    @Environment(\.fernletFramedLook) private var look
+
+    /// The figure's field: a framed field on raised paper in the World look (`.fld`, `b3-targets`),
+    /// today's soft parchment well without it.
+    @ViewBuilder private var fieldShape: some View {
+        let shape = RoundedRectangle(cornerRadius: look == nil ? 8 : 10)
+        if let look {
+            shape.fill(look.raised).overlay(shape.strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth))
+        } else {
+            shape.fill(Color.parchment.opacity(0.65))
+        }
+    }
 
     var body: some View {
         HStack(spacing: 10) {
             Text(label)
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
+                .font(look == nil ? .fernlet(.body) : FernletFramedFont.rowTitle.weight(.semibold))
+                .foregroundStyle(look?.text ?? Color.bark)
             Spacer()
             TextField("\(placeholder)", text: text, prompt: .fieldPrompt("\(placeholder)"))
                 .keyboardType(.numberPad)
                 .multilineTextAlignment(.trailing)
-                .font(.fernlet(.stat))
-                .foregroundStyle(Color.bark)
+                .font(look == nil ? .fernlet(.stat) : FernletFramedFont.field)
+                .foregroundStyle(look?.text ?? Color.bark)
                 .frame(width: 72)
-                .padding(.vertical, 7)
+                .padding(.vertical, look == nil ? 7 : 9)
                 .padding(.horizontal, 10)
-                .background(Color.parchment.opacity(0.65), in: RoundedRectangle(cornerRadius: 8))
+                .background(fieldShape)
                 // T2-8: the placeholder is Fernlet's suggested NUMBER, so the field announced as
                 // "150, text field" with nothing saying which macro it is. The drawn word beside
                 // it becomes the field's name.
@@ -272,8 +295,8 @@ private struct MacroTargetRow: View {
                 .accessibilityLabel(Text(label))
                 .accessibilityIdentifier(identifier)
             Text(unit)
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.labelSmall) : FernletFramedFont.rowValue)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .frame(width: 26, alignment: .leading)
         }
     }

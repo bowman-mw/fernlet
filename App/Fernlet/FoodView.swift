@@ -60,6 +60,8 @@ struct FoodView: View {
     /// The user's term of address (the app root sets it from the body profile), for the root page's
     /// copy that describes them: the retry banner's companion line and the empty-day prompt.
     @Environment(\.fernletTermOfAddress) private var termOfAddress
+    /// The World's framed look (set at the app root); nil draws today's Food page.
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
         foodLifecycle(foodSheets(foodRoot))
@@ -71,22 +73,27 @@ struct FoodView: View {
         NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    // b1-frame-root / b2-cooking-resume order: subtitle, a cook under way, the one
+                    // primary, then the day's macros.
                     headerRow
+                    cookingResumeSection
+                    FoodLogMealButton { activeSheet = .meal }
 
                     macrosSection
 
                     plannedTodaySection
-                    cookingResumeSection
                     pendingRetrySection
                     todayMealsSection
                     recentRecipesSection
                 }
-                .padding(20)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 18)
                 .padding(.bottom, 24)
                 .fernletTabBarBottomClearance()
             }
             .fernletTabBarCompaction($isTabBarCompact, resetToken: $scrollToTopToken)
-            .background(Color.parchment)
+            // The dotted parchment page (b1-frame-root), plain parchment outside the World look.
+            .fernletPageBackground()
             .navigationTitle("")
             .navigationDestination(for: FoodRoute.self) { foodDestination($0) }
         }
@@ -139,13 +146,10 @@ struct FoodView: View {
         path = kept
     }
 
+    /// The subtitle (the plate carries the title). The page's one primary, "+ Log a meal", follows it
+    /// in the stack (`b1-frame-root` draft 3); it replaced the small "+ meal" pill beside the title.
     private var headerRow: some View {
-        HStack(alignment: .top) {
-            ScreenHeader(title: "Food", subtitle: "Eating enough, eating well.", identifier: "screen.food")
-            Spacer()
-            HeaderActionButton(title: "meal", systemImage: "plus") { activeSheet = .meal }
-        }
-        .padding(.top, 4)
+        ScreenHeader(title: "Food", subtitle: "Eating enough, eating well.", identifier: "screen.food")
     }
 
     /// Today's macro totals plus the way in to the targets they're measured against — the card used
@@ -165,8 +169,8 @@ struct FoodView: View {
                 Spacer()
                 Button("Adjust targets") { showingNutritionTargets = true }
                     .buttonStyle(.plain)
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.moss)
+                    .font(look == nil ? .fernlet(.label) : FernletFramedFont.button)
+                    .foregroundStyle(look?.link ?? Color.moss)
                     // The label alone was an 18pt-tall target.
                     .fernletTapTarget()
                     .accessibilityIdentifier("food.adjustTargets")
@@ -180,11 +184,14 @@ struct FoodView: View {
     @ViewBuilder private var plannedTodaySection: some View {
         let items = plannedTodayItems
         if !items.isEmpty {
-            FernletScrollSection("Planned today") {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                        if index > 0 { FernletRowDivider() }
-                        plannedTodayRow(item)
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel("Planned today")
+                FernletCard {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                            if index > 0 { FernletDottedRule().padding(.vertical, 6) }
+                            plannedTodayRow(item)
+                        }
                     }
                 }
             }
@@ -196,8 +203,8 @@ struct FoodView: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.recipe.name)
-                    .font(.fernlet(.headerMedium))
-                    .foregroundStyle(Color.bark)
+                    .font(look == nil ? .fernlet(.headerMedium) : FernletFramedFont.cardTitle)
+                    .foregroundStyle(look?.text ?? Color.bark)
                     .fernletWrappingText()
                 plannedTodayDetailLine(item)
             }
@@ -205,7 +212,7 @@ struct FoodView: View {
             Button("Log") {
                 logRecipe(item.recipe, mealType: item.entry.mealType, isSaved: item.isSaved)
             }
-            .buttonStyle(ActionPillButtonStyle(.secondary))
+            .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
             .accessibilityLabel("Log \(item.recipe.name)")
             .accessibilityIdentifier("food.plannedToday.log")
         }
@@ -221,8 +228,8 @@ struct FoodView: View {
             }
             Text("P \(plannedPerServingProtein(item))g")
         }
-        .font(.fernlet(.labelSmall))
-        .foregroundStyle(Color.slate)
+        .font(look == nil ? .fernlet(.labelSmall) : FernletFramedFont.rowDetail)
+        .foregroundStyle(look?.dim ?? Color.slate)
     }
 
     /// Per-serving protein for a planned recipe: the import's own per-serving figure for a
@@ -299,23 +306,25 @@ struct FoodView: View {
         cookingResume = CookingResumeTarget(recipe: recipe, isSaved: isSaved)
     }
 
+    /// Meals whose AI estimate is waiting to be retried: the count, the companion's line, and Retry.
     @ViewBuilder private var pendingRetrySection: some View {
         if store.pendingRetryCount > 0 {
-            FernletScrollSection {
+            FernletCard {
                 VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Label("\(store.pendingRetryCount) pending", systemImage: "clock.arrow.circlepath")
-                            .font(.fernlet(.header))
-                            .foregroundStyle(Color.bark)
+                    HStack(spacing: 10) {
+                        WorldSpriteView(sprite: FoodSprites.clock, scale: 2)
+                        Text("\(store.pendingRetryCount) pending")
+                            .font(look == nil ? .fernlet(.header) : FernletFramedFont.cardTitle)
+                            .foregroundStyle(look?.text ?? Color.bark)
                         Spacer()
                     }
                     Text(FernletVoice.message(for: .retryAvailable, addressing: termOfAddress))
-                        .font(.fernlet(.bubble))
-                        .foregroundStyle(Color.slate)
+                        .font(look == nil ? .fernlet(.bubble) : FernletFramedFont.body)
+                        .foregroundStyle(look?.dim ?? Color.slate)
                     Button("Retry oldest") {
                         Task { await store.retryOldestMeal() }
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
                 }
             }
         }
@@ -323,39 +332,43 @@ struct FoodView: View {
 
     @ViewBuilder private var todayMealsSection: some View {
         if store.day.meals.isEmpty {
-            FernletScrollSection("Today") {
-                // "When you are ready" describes the user (*lista*): resolved for them, then drawn verbatim.
-                EmptyState(verbatim: AddressedCopy.string("Nothing yet. Describe a meal when you are ready.", addressing: termOfAddress))
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel("Today")
+                FernletCard {
+                    // "When you are ready" describes the user (*lista*): resolved for them, then drawn verbatim.
+                    EmptyState(verbatim: AddressedCopy.string("Nothing yet. Describe a meal when you are ready.", addressing: termOfAddress))
+                }
             }
         } else {
-            // Each meal type is its OWN section card, titled by a distinct small-caps
-            // SectionLabel (not the meal-name font) — separate boxes rather than one long list.
+            // Each meal type is its own section: the slot's label, then one framed card per meal
+            // (b1-frame-root, b2-food-rest), and the slot's total when it holds more than one.
             ForEach(mealsByType) { group in
                 // `displayName`, not `rawValue`: the rawValue is the persisted/prompt token and
                 // was being rendered as a user-visible heading. `verbatim:` because the domain
                 // property has already resolved its own localized string.
-                FernletScrollSection(verbatim: group.type.displayName) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(group.meals.enumerated()), id: \.element.id) { rowIndex, meal in
-                            MealRow(
-                                meal: meal,
-                                showCalories: store.settings.showCalories,
-                                onDelete: { confirmDeleteMeal(meal) },
-                                onCorrect: { correctingMeal = meal },
-                                loadPhotoData: meal.photoID.map { id in { store.mealPhotoData(for: id) } },
-                                hasPhotoSealedFile: meal.photoID.map { id in { store.mealPhotoHasSealedFile(for: id) } },
-                                showsMealTypeBadge: false,
-                                dataAttribution: store.dataAttribution(for: meal)
-                            )
-                            if rowIndex < group.meals.count - 1 {
-                                FernletRowDivider()
-                            }
-                        }
-                        mealTypeSubtotal(group.meals, type: group.type)
+                VStack(alignment: .leading, spacing: 10) {
+                    SectionLabel(verbatim: group.type.displayName)
+                    ForEach(group.meals) { meal in
+                        mealCard(meal)
                     }
+                    mealTypeSubtotal(group.meals, type: group.type)
                 }
             }
         }
+    }
+
+    /// One logged meal's card: a tap opens Adjust, the ✕ asks before removing it.
+    private func mealCard(_ meal: Meal) -> some View {
+        MealRow(
+            meal: meal,
+            showCalories: store.settings.showCalories,
+            onDelete: { confirmDeleteMeal(meal) },
+            onCorrect: { correctingMeal = meal },
+            loadPhotoData: meal.photoID.map { id in { store.mealPhotoData(for: id) } },
+            hasPhotoSealedFile: meal.photoID.map { id in { store.mealPhotoHasSealedFile(for: id) } },
+            showsMealTypeBadge: false,
+            dataAttribution: store.dataAttribution(for: meal)
+        )
     }
 
     private var recentRecipesSection: some View {
@@ -367,8 +380,10 @@ struct FoodView: View {
                 // edit started from the book returns to that recipe instead of dropping to Food root.
                 NavigationLink(value: FoodRoute.recipeBook) {
                     Text("Recipe book")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.moss)
+                        .font(look == nil ? .fernlet(.label) : FernletFramedFont.button)
+                        .foregroundStyle(look?.link ?? Color.moss)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -377,70 +392,49 @@ struct FoodView: View {
                     EmptyState(text: "No recipes yet. Open the recipe book to create one.")
                 }
             } else {
-                FernletCard {
-                    VStack(spacing: 0) {
-                        ForEach(Array(recentRecipePreviews.enumerated()), id: \.element.id) { index, preview in
-                            if index > 0 { FernletRowDivider() }
-                            recentRecipeRow(preview)
-                        }
+                VStack(spacing: 12) {
+                    ForEach(recentRecipePreviews) { preview in
+                        recentRecipeCard(preview)
                     }
                 }
             }
         }
     }
 
-    /// One recent-recipe row, dispatching a manual recipe and a saved/web recipe to the same layout
-    /// with the store half (`isSaved`) that owns it.
-    @ViewBuilder private func recentRecipeRow(_ preview: RecentRecipePreview) -> some View {
+    /// One recent recipe's card (`b2-food-rest`): a manual recipe and a saved/web recipe share the
+    /// card, each logging and sharing through the store half (`isSaved`) that owns it. Tapping the
+    /// summary pushes the read-only detail; the editor is reachable only through its Edit.
+    @ViewBuilder private func recentRecipeCard(_ preview: RecentRecipePreview) -> some View {
         switch preview {
         case .local(let recipe):
-            recentRecipeCard(recipe: recipe, isSaved: false) {
-                RecipeRow(recipe: recipe, totals: store.macroTotals(for: recipe), showCalories: store.settings.showCalories)
-            }
+            let perServing = recipePerServing(recipe)
+            recipeCard(recipe, isSaved: false, perServing: perServing,
+                       calories: store.settings.showCalories ? perServing.calories : nil)
         case .saved(let recipe):
-            // Same trailing-controls layout as `.local` — the two row types interleave in one list
-            // and must not disagree.
-            recentRecipeCard(recipe: recipe, isSaved: true) {
-                SavedRecipeRow(recipe: recipe)
-            }
+            let macros = recipe.webImport?.macros
+            let hasMacros = macros.map { $0.protein > 0 || $0.carbs > 0 || $0.fat > 0 } ?? false
+            recipeCard(recipe, isSaved: true, perServing: hasMacros ? macros : nil, calories: nil)
         }
     }
 
-    /// The shared recent-recipe row: the tappable summary (pushing the read-only detail) above its
-    /// own trailing control line.
-    ///
-    /// Controls sit on their own trailing line rather than beside the row. In one HStack they claimed
-    /// ~88pt of the card, so the row's own trailing edge — and the servings label right-aligned to it —
-    /// stopped ~65% across and read as centered. Costs row height; the smaller title above pays some
-    /// of it back.
-    private func recentRecipeCard<Label: View>(
-        recipe: RecipeDefinition,
-        isSaved: Bool,
-        @ViewBuilder label: () -> Label
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            #if canImport(UIKit)
-            // Tapping a recipe pushes the read-only detail (photo, per-serving macros, ingredients,
-            // notes); the editor is reachable only via the detail's Edit button — and for a saved/web
-            // recipe that Edit opens its notes/delete sheet (no structured ingredients to edit).
-            NavigationLink(value: FoodRoute.recipeDetail(id: recipe.id, isSaved: isSaved)) {
-                label()
-            }
-            .buttonStyle(.plain)
-            #else
-            Button { beginEditing(recipe, isSaved: isSaved) } label: {
-                label()
-            }
-            .buttonStyle(.plain)
-            #endif
-            RecipeRowLogControl(onLog: { mealType in
-                logRecipe(recipe, mealType: mealType, isSaved: isSaved)
-            }) {
-                RecipeShareButton {
-                    recipeShareDraft = store.recipeShareDraft(for: recipe)
-                }
-            }
-        }
+    private func recipeCard(_ recipe: RecipeDefinition, isSaved: Bool, perServing: Macros?, calories: Int?) -> some View {
+        FoodRootRecipeCard(
+            recipe: recipe,
+            isSaved: isSaved,
+            perServing: perServing,
+            calories: calories,
+            onLog: { mealType in logRecipe(recipe, mealType: mealType, isSaved: isSaved) },
+            onShare: { recipeShareDraft = store.recipeShareDraft(for: recipe) }
+        )
+    }
+
+    /// A manual recipe's per-serving macros: the resolved totals over its yield.
+    private func recipePerServing(_ recipe: RecipeDefinition) -> Macros {
+        let totals = store.macroTotals(for: recipe)
+        let divisor = Double(max(recipe.servings, 1))
+        return Macros(protein: Int((Double(totals.protein) / divisor).rounded()),
+                      carbs: Int((Double(totals.carbs) / divisor).rounded()),
+                      fat: Int((Double(totals.fat) / divisor).rounded()))
     }
 
     #if canImport(UIKit)
@@ -502,11 +496,12 @@ struct FoodView: View {
                 // Full height only: at .medium the "Matched items" editor — the thing the user opened
                 // this sheet to fix — sat clipped behind the Save pill until they dragged it up.
                 MealCorrectionSheet(store: store, meal: meal)
-                    .fernletSheetChrome(anchor: "sheet.mealCorrection", detents: [.large])
+                    .fernletFoodSheet(anchor: "sheet.mealCorrection")
             }
             .sheet(isPresented: $showingNutritionTargets) {
+                // Full height (b3-targets): every sheet is, in the World build.
                 NutritionTargetsSheet(store: store)
-                    .fernletSheetChrome(anchor: "sheet.nutritionTargets", detents: [.medium, .large])
+                    .fernletFoodSheet(anchor: "sheet.nutritionTargets")
             }
             .sheet(item: $recipeShareDraft) { draft in
                 ProximityRecipeShareSheet(draft: draft, manager: store.recipeShareManager, store: store)
@@ -578,17 +573,16 @@ struct FoodView: View {
                 // One key with the slot as its argument, so a translator can put "total" where the
                 // language wants it; `verbatim:` here spliced an English word onto a localized one.
                 Text("\(type.displayName) total")
-                    .foregroundStyle(Color.slate)
+                    .foregroundStyle(look?.dim ?? Color.slate)
                 Spacer(minLength: 0)
-                Text("P \(protein)g")
-                    .foregroundStyle(Color.moss)
+                FoodMacroTag(kind: .protein, grams: protein)
                 if store.settings.showCalories {
                     Text("\(calories) cal")
-                        .foregroundStyle(Color.slate)
+                        .foregroundStyle(look?.dim ?? Color.slate)
                 }
             }
-            .font(.fernlet(.stat))
-            .padding(.top, 10)
+            .font(look == nil ? .fernlet(.stat) : FernletFramedFont.rowValue)
+            .padding(.horizontal, 4)
         }
     }
 }
@@ -664,56 +658,73 @@ private struct CookingResumeCard: View {
     var onResume: () -> Void
     var onDiscard: () -> Void
 
+    @Environment(\.fernletFramedLook) private var look
+
     var body: some View {
-        FernletCard {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 12) {
-                    Image(systemName: "flame.fill")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(Color.moss)
-                        .frame(width: 30)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Cooking in progress")
-                            .font(.fernlet(.headerMedium))
-                            .foregroundStyle(Color.bark)
-                        Text("\(recipeName) — step \(stepNumber) of \(stepCount). Pick up where you left off.")
-                            .font(.fernlet(.bubble))
-                            .foregroundStyle(Color.slate)
-                            .fernletWrappingText()
-                    }
-                    Spacer(minLength: 0)
-                }
-
-                HStack(spacing: 12) {
-                    Button(action: onDiscard) {
-                        Text("Discard")
-                            .font(.fernlet(.label))
-                            .foregroundStyle(Color.slate)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 15)
-                            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("cooking.discard")
-
-                    Button(action: onResume) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "play.circle.fill")
-                                .font(.body.weight(.semibold))
-                            Text("Resume")
-                                .font(.fernlet(.label))
-                        }
-                        .foregroundStyle(Color.onMoss)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 15)
-                        .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 14))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("cooking.resume")
-                }
-            }
+        if let look {
+            framed(look)
+        } else {
+            FernletCard { content }
         }
+    }
+
+    /// `b2-cooking-resume` (approved 2026-10-23): the calm sage card at the top of Food, its pan in a
+    /// framed tile, "Pick up where you left off", the recipe and step, then Resume and Done cooking.
+    private func framed(_ look: FernletFramedLook) -> some View {
+        let shape = RoundedRectangle(cornerRadius: FernletFramedLook.cardRadius, style: .continuous)
+        return content
+            .padding(EdgeInsets(top: 14, leading: 15, bottom: 14, trailing: 15))
+            .background(look.sage, in: shape)
+            .overlay(shape.strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth))
+            .background { shape.fill(look.shadow).offset(y: 3) }
+    }
+
+    private var content: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                FernletIconTile(size: 42) {
+                    WorldSpriteView(sprite: WorldSprites.bowl, scale: 3, tint: look?.text ?? Color.bark)
+                }
+                .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Pick up where you left off")
+                        .font(look == nil ? .fernlet(.headerMedium) : FernletFramedFont.cardTitle)
+                        .foregroundStyle(look?.text ?? Color.bark)
+                        .fernletWrappingText()
+                    Text("\(recipeName) · step \(stepNumber) of \(stepCount)")
+                        .font(look == nil ? .fernlet(.bubble) : FernletFramedFont.body)
+                        .foregroundStyle(look?.dim ?? Color.slate)
+                        .fernletWrappingText()
+                }
+                Spacer(minLength: 0)
+            }
+            buttons
+        }
+    }
+
+    /// Resume beside Done cooking (which asks first); one above the other when they don't fit.
+    private var buttons: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) { resumeButton; doneButton }
+            VStack(spacing: 10) { resumeButton; doneButton }
+        }
+    }
+
+    /// Ends the cook: today's Discard, renamed by the design. It still confirms ("Stop cooking …?").
+    private var doneButton: some View {
+        Button(action: onDiscard) {
+            Text("Done cooking").frame(maxWidth: .infinity)
+        }
+        .buttonStyle(ActionPillButtonStyle(.secondary))
+        .accessibilityIdentifier("cooking.discard")
+    }
+
+    private var resumeButton: some View {
+        Button(action: onResume) {
+            Text("Resume").frame(maxWidth: .infinity)
+        }
+        .buttonStyle(ActionPillButtonStyle(.primary))
+        .accessibilityIdentifier("cooking.resume")
     }
 }
 
@@ -725,6 +736,7 @@ private struct CookingResumeCard: View {
 /// a tap away from the numbers it changes, without duplicating the editor.
 private struct NutritionTargetsSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.fernletFramedLook) private var look
     var store: FernletStore
 
     var body: some View {
@@ -734,11 +746,13 @@ private struct NutritionTargetsSheet: View {
                 VStack(alignment: .leading, spacing: 20) {
                     NutritionTargetsEditor(store: store)
                 }
-                .padding(20)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
                 .padding(.bottom, 10)
             }
         }
-        .background(Color.parchment)
+        // b3-targets: the sheet's paper (the framed sheet), parchment outside the World look.
+        .background(look?.paper ?? Color.parchment)
     }
 }
 
@@ -4323,15 +4337,15 @@ struct FoodProductReviewSheet: View {
     }
 }
 
-/// One logged meal in the day list: name, note or component breakdown, macros, a quiet provenance
-/// capsule, optional photo thumb, and the delete / Adjust correction actions.
+/// One logged meal's card on Food (`b1-frame-root`, `b2-food-rest`): the photo thumb in an ink frame,
+/// the name in Fraunces, the note or component breakdown, the macros as coloured tags with a quiet
+/// provenance tag, and the pixel ✕ top right.
 ///
-/// 2026-08-21 (FOOD-15/FOOD-02): the WHOLE summary is the button — tapping it opens Adjust — with
-/// a right-aligned "Adjust ›" on its own trailing 44pt line so it can never wrap. The jargon tag
-/// became a quiet slate capsule in plain words (Estimated / Reviewed / From recipe) and is absent
-/// entirely for seeded demo logs; the X keeps its confirmation but takes the destructive tint. At
-/// accessibility sizes the thumbnail and the C/F figures drop so the name and Adjust stay whole
-/// (4b·AX3).
+/// The WHOLE summary is the button: tapping it opens Adjust (FOOD-15). The approved card dropped the
+/// drawn "Adjust ›" line, so Adjust is the card's tap, its VoiceOver action ("Adjust meal") and its
+/// Voice Control name ("Adjust <meal>"). The provenance tag says it in plain words (Estimated /
+/// Reviewed / From recipe) and is absent for seeded demo logs; the ✕ keeps its confirmation. At
+/// accessibility sizes the thumbnail drops and the tags wrap, so the name stays whole (4b·AX3).
 ///
 /// The photo closures are injected so the row reads the sealed `MealPhotoStore` lazily and can
 /// distinguish a photo on another device from one that's here but unreadable (see
@@ -4353,25 +4367,26 @@ private struct MealRow: View {
     /// already localized by the domain model; nil when none carries one (tracker §2.6).
     var dataAttribution: String? = nil
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        FernletCard {
             HStack(alignment: .top, spacing: 10) {
                 // The whole summary opens Adjust; delete stays OUTSIDE the button so the two
                 // targets can't nest (a Button inside a Button label never fires).
                 Button(action: onCorrect) {
                     summaryContent
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                // Voice Control: the row's name is everything it draws — name, note and three
-                // macros; the meal's name is what a user says.
-                .accessibilityInputLabels([Text(verbatim: meal.name)])
+                .accessibilityAction(named: Text("Adjust meal"), onCorrect)
+                // Voice Control: the meal's name is what a user says; "Adjust <meal>" kept from the
+                // drawn Adjust line the approved card dropped.
+                .accessibilityInputLabels([Text(verbatim: meal.name), Text("Adjust \(meal.name)")])
                 trailingColumn
             }
-            adjustLine
         }
-        .padding(.vertical, 4)
     }
 
     /// The tappable summary: optional thumb beside name/note, breakdown, and the macros line.
@@ -4397,7 +4412,10 @@ private struct MealRow: View {
     private var titleBlock: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(meal.name).font(.fernlet(.header))
+                Text(meal.name)
+                    .font(look == nil ? .fernlet(.header) : FoodFont.cardTitle)
+                    .foregroundStyle(look?.text ?? Color.bark)
+                    .fernletWrappingText()
                 if showsMealTypeBadge {
                     Text(verbatim: meal.mealType.displayName)
                         .font(.fernlet(.labelSmall))
@@ -4407,98 +4425,77 @@ private struct MealRow: View {
                 }
             }
             displayNote
-                .font(.fernlet(.bubble))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.bubble) : FernletFramedFont.body)
+                .foregroundStyle(look?.dim ?? Color.slate)
             if let dataAttribution {
                 Text(verbatim: dataAttribution)
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
+                    .font(look == nil ? .fernlet(.labelSmall) : FernletFramedFont.rowDetail)
+                    .foregroundStyle(look?.dim ?? Color.slate)
                     .accessibilityIdentifier("food.mealRow.attribution")
             }
         }
     }
 
-    /// Calories over the delete X — which keeps its "Remove this meal?" confirmation and now
-    /// carries the destructive tint (2b): it stopped reading as a neutral dismiss.
+    /// Calories over the delete ✕ (the pixel ✕ in ink, top right), which keeps its "Remove this
+    /// meal?" confirmation.
     private var trailingColumn: some View {
-        VStack(alignment: .trailing) {
-            if showCalories {
-                Text("\(meal.calories) cal").font(.fernlet(.stat))
-            }
+        VStack(alignment: .trailing, spacing: 0) {
             Button(role: .destructive, action: onDelete) {
-                Image(systemName: "xmark")
-                    .foregroundStyle(Color.terracottaInk)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
+                // Laid out at the icon's size so the name can run up to it (the approved card), but
+                // touched across 44 pt.
+                FernletIcon(.close, scale: 2)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle().inset(by: -10))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Delete meal")
             // Voice Control: every row has this X, so "Delete meal" alone brings up numbers; the
             // meal's name makes each one sayable on its own.
             .accessibilityInputLabels([Text("Delete meal"), Text("Delete \(meal.name)")])
-        }
-    }
-
-    /// The right-aligned "Adjust ›" on its own trailing line, in a 44pt frame so it can never
-    /// wrap into the macros (FOOD-15). Same action as the row itself — the labelled affordance is
-    /// what makes the correction path discoverable.
-    private var adjustLine: some View {
-        HStack {
-            Spacer(minLength: 0)
-            Button(action: onCorrect) {
-                HStack(spacing: 4) {
-                    Text("Adjust")
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                }
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.moss)
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
+            if showCalories {
+                Text("\(meal.calories) cal")
+                    .font(look == nil ? .fernlet(.stat) : FernletFramedFont.rowValue)
+                    .foregroundStyle(look?.dim ?? Color.bark)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Adjust meal")
-            // Voice Control: "Adjust" is the word drawn; with the meal's name it is unique per row.
-            .accessibilityInputLabels([Text("Adjust"), Text("Adjust \(meal.name)")])
         }
     }
 
-    /// The matched-components breakdown line, when the meal has one.
+    /// The matched-components breakdown line, when the meal has one: a small note on raised paper.
     private func breakdownCard(_ text: String) -> some View {
-        Text(text)
-            .font(.fernlet(.bodySmall))
-            .foregroundStyle(Color.slate)
+        let shape = RoundedRectangle(cornerRadius: 8)
+        return Text(text)
+            .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.note)
+            .foregroundStyle(look?.dim ?? Color.slate)
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.cream.opacity(0.65), in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+            .background(look?.raised ?? Color.cream.opacity(0.65), in: shape)
+            .overlay(shape.strokeBorder(look?.rule ?? Color.bark.opacity(0.08), lineWidth: 1))
     }
 
+    /// The coloured P / C / F tags, then the provenance tag; they wrap rather than drop at the
+    /// largest sizes.
     private var macrosRow: some View {
-        HStack(spacing: 14) {
-            Text("P \(meal.macros.protein)g").foregroundStyle(Color.moss)
-            // C and F give way at accessibility sizes so the name and Adjust stay whole (4b·AX3).
-            if !dynamicTypeSize.isAccessibilitySize {
-                Text("C \(meal.macros.carbs)g")
-                Text("F \(meal.macros.fat)g")
-            }
+        FlowLayout(spacing: 6) {
+            FoodMacroTagRow(macros: meal.macros)
             confidenceTag
-            Spacer(minLength: 0)
         }
-        .font(.fernlet(.stat))
-        .foregroundStyle(Color.slate)
     }
 
-    /// The quiet slate provenance capsule, in plain words (FOOD-02) — absent entirely for seeded
-    /// demo logs, whose provenance is a demo artifact rather than something the user did.
+    /// The provenance tag, in plain words (FOOD-02): absent for seeded demo logs, whose provenance
+    /// is a demo artifact rather than something the user did.
     @ViewBuilder private var confidenceTag: some View {
         if !isSeededDemoMeal {
-            confidenceTagText
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(Color.slate.opacity(0.10), in: Capsule())
+            if look != nil {
+                FernletTag(text: confidenceTagText)
+                    .padding(.vertical, 3)
+            } else {
+                confidenceTagText
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.slate.opacity(0.10), in: Capsule())
+            }
         }
     }
 
@@ -5579,6 +5576,7 @@ private struct MealPhotoThumb: View {
     /// Consulted only when `bytesAvailable == false` — splits "on another device" (no file) from
     /// "couldn't open" (file present but broken).
     @State private var sealedFileExists: Bool = false
+    @Environment(\.fernletFramedLook) private var look
 
     /// The thumbnail is only rendered for a meal that HAS a photo, so the read outcome alone decides
     /// whether the picture is here, on another device, or here-but-unreadable (see MealPhotoPresence).
@@ -5619,6 +5617,8 @@ private struct MealPhotoThumb: View {
                     .overlay(Image(systemName: "fork.knife").font(.caption).foregroundStyle(Color.slate))
             }
         }
+        // The World card's thumb sits in a 2-pt ink frame (b1-frame-root).
+        .overlay { if let look { RoundedRectangle(cornerRadius: 8).strokeBorder(look.ink, lineWidth: 2) } }
         .task {
             guard image == nil else { return }
             guard let data = loadData() else {
