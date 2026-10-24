@@ -161,6 +161,15 @@ public extension View {
     func fernletPushedPage(verbatim title: String) -> some View {
         modifier(FernletPushedPageModifier(title: title))
     }
+
+    /// Keeps the edge swipe going back on a page that hides its navigation bar and draws its own Back:
+    /// a page pushed inside a sheet's own stack (Log meal › Scan a food, Log workout › an exercise's
+    /// sets), where no plate manages the stack. UIKit refuses its interactive pop while the bar is
+    /// hidden; this installs the shared delegate that allows it whenever there is a page to go back to.
+    /// Plate pages (``fernletPushedPage(_:)``) already have it.
+    func fernletEdgeSwipeBack() -> some View {
+        background { FernletEdgeSwipeBackInstaller().frame(width: 0, height: 0).accessibilityHidden(true) }
+    }
 }
 
 /// Implements ``SwiftUI/View/fernletPushedPage(_:)``: reports the page's appearances to the plate, which
@@ -177,7 +186,7 @@ struct FernletPushedPageModifier: ViewModifier {
                 .navigationTitle(Text(verbatim: title))
                 .toolbar(.hidden, for: .navigationBar)
                 // UIKit refuses the edge swipe while the bar is hidden; this gives it back.
-                .background { FernletEdgeSwipeBackInstaller().frame(width: 0, height: 0).accessibilityHidden(true) }
+                .fernletEdgeSwipeBack()
                 .environment(\.fernletPageTitleOnPlate, true)
                 .onAppear { plate.show(id: id, title: title, pop: { [dismiss] in dismiss() }) }
                 .onDisappear { plate.hide(id: id) }

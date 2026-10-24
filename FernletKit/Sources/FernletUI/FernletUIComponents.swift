@@ -1042,14 +1042,21 @@ public struct FlowLayout: Layout {
     }
 
     /// Simulates the row-wrapping pass to report the total size needed at the proposed width.
+    ///
+    /// With no width proposed (`.fixedSize()`, an ideal-size pass, a FlowLayout inside another) every
+    /// item fits one row, and the reported width is that row's own width. Reporting the unbounded
+    /// proposal itself (infinity) made the parent place the layout in an infinite frame, which traps in
+    /// `LayoutSubview.place` (it crashed Check this meal and Adjust meal).
     public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? .infinity
         var x: CGFloat = 0
         var y: CGFloat = 0
         var rowHeight: CGFloat = 0
+        var widestRow: CGFloat = 0
         for view in subviews {
             let size = view.sizeThatFits(.unspecified)
             if x > 0 && x + size.width > width {
+                widestRow = max(widestRow, x - spacing)
                 y += rowHeight + spacing
                 x = 0
                 rowHeight = 0
@@ -1057,7 +1064,8 @@ public struct FlowLayout: Layout {
             x += size.width + spacing
             rowHeight = max(rowHeight, size.height)
         }
-        return CGSize(width: width, height: y + rowHeight)
+        widestRow = max(widestRow, x > 0 ? x - spacing : 0)
+        return CGSize(width: width.isFinite ? width : widestRow, height: y + rowHeight)
     }
 
     /// Places each subview at its ideal size, wrapping to a new row when the next item would
@@ -1206,6 +1214,9 @@ public struct SheetField<Content: View>: View {
     /// Scopes the caption↔control pairing to this row. One namespace per `SheetField` instance, so
     /// two fields in the same sheet can never pair across each other.
     @Namespace private var pairing
+    /// The World build's framed look: the caption is drawn as the framed section label (the small
+    /// framed square, bold ink), as every World sheet's mockup draws a field's label.
+    @Environment(\.fernletFramedLook) private var look
 
     /// The localizing initializer — the one all ~114 sheet call sites use.
     ///
@@ -1268,11 +1279,31 @@ public struct SheetField<Content: View>: View {
         }
     }
 
-    /// The uppercase slate caption, before either half of the pairing is attached.
+    /// The uppercase caption, before either half of the pairing is attached: under the framed look
+    /// ``SectionLabel``'s framed form (the look's mark in a small ink square, then the caption bold in
+    /// ink), without its heading trait (a field's caption names a control, it does not start a
+    /// section); today's slate caption without the look.
+    @ViewBuilder
     private var caption: some View {
-        label
+        if let look {
+            HStack(spacing: 7) {
+                look.mark
+                    .frame(width: 7, height: 7)
+                    .padding(2)
+                    .background(look.ink)
+                    .accessibilityHidden(true)
+                styledCaption(label.fontWeight(.bold), color: look.text)
+            }
+            .accessibilityElement(children: .combine)
+        } else {
+            styledCaption(label, color: Color.slate)
+        }
+    }
+
+    private func styledCaption(_ text: Text, color: Color) -> some View {
+        text
             .font(.fernlet(.labelSmall))
-            .foregroundStyle(Color.slate)
+            .foregroundStyle(color)
             .tracking(0.8)
             // Uppercasing moved off the string and into the environment so it runs *after* the
             // catalog lookup, on the translated caption rather than on the English key — the
@@ -1465,7 +1496,10 @@ public struct ActionPillButtonStyle: ButtonStyle {
 
         private var ink: Color {
             switch kind {
-            case .primary:     return isEnabled ? (look?.onAccent ?? .onMoss) : (look?.text ?? .bark)
+            // The framed look keeps the accent's own text ink while disabled (cream on the faded
+            // accent, as the mockups draw "Remember this food" before a scan); a disabled control is
+            // exempt from the contrast minimum, and the fade is what says it is off.
+            case .primary:     return isEnabled ? (look?.onAccent ?? .onMoss) : (look?.onAccent ?? .bark)
             case .secondary:   return look?.text ?? .bark
             case .destructive: return isEnabled ? .terracottaInk : .softTaupe
             }

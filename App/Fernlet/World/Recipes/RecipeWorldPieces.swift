@@ -9,16 +9,15 @@ import UIKit
 // framed look and falls back to today's colours without it.
 
 /// Protein, carbs and fat as three tags (`b2-recipe-book` draft 3, the owner's note "add some color"):
-/// each a framed square in the macro's colour on a light tint of it, the text in the page's ink so it
-/// keeps its contrast. Calories follow as a plain tag when the person has them on.
+/// the Food screens' own ``FoodMacroTag`` (one tag for both lanes: a framed square in the macro's colour
+/// on a light tint of it, the text in the page's ink so it keeps its contrast). Calories follow as a
+/// plain framed tag when the person has them on.
 struct RecipeMacroTags: View {
     let macros: MacroTotals
     var showsCalories = false
     @Environment(\.fernletFramedLook) private var look
 
-    /// One row of tags, or a column where a row doesn't fit (larger text). A stack, not `FlowLayout`:
-    /// the book card measures its bottom row at its ideal width, and `FlowLayout` asked for an ideal
-    /// width places its tags at an infinite x and traps.
+    /// One row of tags, or a column where a row doesn't fit (larger text).
     var body: some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 5) { tags }
@@ -27,33 +26,34 @@ struct RecipeMacroTags: View {
     }
 
     @ViewBuilder private var tags: some View {
-        tag(Text("P \(macros.protein)g"), colour: WorldPalette.protein, tint: 0.2)
-        tag(Text("C \(macros.carbs)g"), colour: WorldPalette.carbs, tint: 0.24)
-        tag(Text("F \(macros.fat)g"), colour: WorldPalette.fat, tint: 0.2)
+        ForEach(FoodMacroKind.allCases, id: \.self) { kind in
+            FoodMacroTag(kind: kind, grams: grams(of: kind))
+        }
         if showsCalories {
-            tag(Text("\(macros.calories) cal"), colour: nil, tint: 0)
+            calorieTag
         }
     }
 
-    /// One tag (`.mtag3`): 8-pt square framed in ink, then the figure, in a 2-pt ink frame.
-    private func tag(_ text: Text, colour: Color?, tint: Double) -> some View {
+    /// This recipe's grams of `kind`.
+    private func grams(of kind: FoodMacroKind) -> Int {
+        switch kind {
+        case .protein: macros.protein
+        case .carbs: macros.carbs
+        case .fat: macros.fat
+        }
+    }
+
+    /// The calories as a plain tag (`.mtag3` without a colour square) in a 2-pt ink frame.
+    private var calorieTag: some View {
         let ink = look?.ink ?? Color.bark
         let shape = RoundedRectangle(cornerRadius: 7)
-        return HStack(spacing: 5) {
-            if let colour {
-                Rectangle().fill(colour).frame(width: 8, height: 8)
-                    .overlay(Rectangle().strokeBorder(ink, lineWidth: 1.5))
-            }
-            text
-                .font(RecipeType.tag)
-                .foregroundStyle(look?.text ?? Color.bark)
-        }
-        .padding(.leading, colour == nil ? 8 : 6)
-        .padding(.trailing, 8)
-        .padding(.vertical, 2)
-        .background((colour ?? Color.clear).opacity(tint), in: shape)
-        .background(look?.raised ?? Color.cream, in: shape)
-        .overlay(shape.strokeBorder(ink, lineWidth: FernletFramedLook.frameWidth))
+        return Text("\(macros.calories) cal")
+            .font(RecipeType.tag)
+            .foregroundStyle(look?.text ?? Color.bark)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
+            .background(look?.raised ?? Color.cream, in: shape)
+            .overlay(shape.strokeBorder(ink, lineWidth: FernletFramedLook.frameWidth))
     }
 }
 

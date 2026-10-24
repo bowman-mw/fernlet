@@ -204,6 +204,8 @@ struct MoveLiftPage<Content: View>: View {
             page
                 .navigationTitle(title)
                 .toolbar(.hidden, for: .navigationBar)
+                // The bar is hidden, so the edge swipe needs the shared delegate to keep going back.
+                .fernletEdgeSwipeBack()
                 .safeAreaInset(edge: .top, spacing: 0) { backRow }
         } else {
             page

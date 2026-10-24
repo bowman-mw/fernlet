@@ -34,7 +34,7 @@ nonisolated enum FoodMacroKind: CaseIterable, Sendable {
 }
 
 /// One coloured macro tag (`.mtag3`, designs `b2-food-rest` and `b2-recipe-book` draft 3, approved
-/// 2026-10-24): a small framed square of the macro's colour, then "P 28g", on that colour at a fifth in a
+/// 2026-10-24; the recipe screens draw it too, through ``RecipeMacroTags``): a small framed square of the macro's colour, then "P 28g", on that colour at a fifth in a
 /// 2-pt ink frame. The word stays the page's ink, so it reads in light and dark alike.
 ///
 /// The words are today's keys ("P %lldg", "C %lldg", "F %lldg"), so the macro letters follow the
@@ -88,8 +88,8 @@ struct FoodMacroTag: View {
 /// VoiceOver, read as its figures.
 ///
 /// `wraps: false` keeps the tags on one line at their own width, for a row that sits beside other
-/// content (a total, a stepper). Never give the wrapping row `.fixedSize()`: `FlowLayout` asks for all
-/// the width it is offered, and an unbounded offer is an infinite width that SwiftUI traps on.
+/// content (a total, a stepper). (`FlowLayout` now reports its one row's width when offered no width,
+/// so a `.fixedSize()` wrapping row no longer traps; it simply never wraps.)
 struct FoodMacroTagRow: View {
     let macros: Macros
     /// Calories to draw after the tags; nil when Show calories is off.
