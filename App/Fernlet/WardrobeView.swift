@@ -34,6 +34,9 @@ struct WardrobeView: View {
     /// itself from the confirmation step above it, and takes the whole customization sheet down
     /// with it when it tries.
     @State private var editingItemID: UUID?
+    /// Drives the push into Your shop (`b2-shop-editor`, which opens from Friend shops and from here).
+    /// A plain button + `navigationDestination`, like the studio's, so the `List` adds no second chevron.
+    @State private var isShowingShop = false
 
     /// "Wardrobe", the page's title on the plate.
     static let title = LocalizedStringResource("Wardrobe", comment: "Wardrobe page title: the companion's closet of designed items")
@@ -63,6 +66,10 @@ struct WardrobeView: View {
         }
         .navigationDestination(item: $editingItemID) { id in
             editor(forItemID: id)
+        }
+        .navigationDestination(isPresented: $isShowingShop) {
+            YourShopView(store: store)
+                .fernletPushedPage("Your shop")
         }
     }
 
@@ -96,21 +103,33 @@ struct WardrobeView: View {
         }
     }
 
+    /// Your shop (`b2-shop-editor`: the approved editor opens "from Friend shops and from the
+    /// Wardrobe"), then the one-line shop summary, shown only when there is a shop to summarize.
+    private var shopStatusSection: some View {
+        Section {
+            Button { isShowingShop = true } label: {
+                CustomizeLinkCard(sprite: FriendsSprites.shop, title: Text("Your shop"),
+                                  detail: Text("What friends nearby can buy from you"))
+            }
+            .buttonStyle(.plain)
+            .plainClosetRow(insets: EdgeInsets(top: 5, leading: 20, bottom: 5, trailing: 20))
+            shopStatusLine
+        }
+    }
+
     /// The one-line shop summary, shown only when there is a shop to summarize.
     @ViewBuilder
-    private var shopStatusSection: some View {
+    private var shopStatusLine: some View {
         if !store.listedShopItems.isEmpty || store.shopUpdatedToday {
-            Section {
-                HStack(spacing: 6) {
-                    Image(systemName: "bag")
-                        .font(.system(size: 13))
-                        .foregroundStyle(WorldPalette.mossInk)
-                    Text(shopStatusText)
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(WorldPalette.dim)
-                }
-                .plainClosetRow(insets: EdgeInsets(top: 2, leading: 24, bottom: 6, trailing: 24))
+            HStack(spacing: 6) {
+                Image(systemName: "bag")
+                    .font(.system(size: 13))
+                    .foregroundStyle(WorldPalette.mossInk)
+                Text(shopStatusText)
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(WorldPalette.dim)
             }
+            .plainClosetRow(insets: EdgeInsets(top: 2, leading: 24, bottom: 6, trailing: 24))
         }
     }
 
