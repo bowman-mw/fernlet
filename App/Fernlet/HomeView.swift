@@ -2697,6 +2697,9 @@ struct MacroCard: View {
 struct MacroBars: View {
     var totals: MacroTotals
     var targets: NutritionTargets
+    /// At accessibility sizes a row stacks (the name and amount over a full-width bar): side by side,
+    /// an 82-pt name column broke "Protein" and "Carbs" mid-word.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -2719,27 +2722,40 @@ struct MacroBars: View {
                             comment: "World Today panel, macro bars: grams eaten of the day's target, after the bar")
         let spoken = String(localized: "macros.bar.a11y", defaultValue: "\(name), \(current) of \(goal) grams",
                             comment: "World Today panel, macro bars, VoiceOver: one macro's name, then grams eaten of the target")
-        return HStack(spacing: 10) {
-            Text(verbatim: name)
-                .font(.fernlet(.body))
-                .foregroundStyle(WorldPalette.bark)
-                .frame(minWidth: 82, alignment: .leading)
-            GeometryReader { proxy in
-                ZStack(alignment: .leading) {
-                    WorldPalette.paperShade
-                    colour.frame(width: proxy.size.width * fraction)
+        let nameText = Text(verbatim: name).font(.fernlet(.body)).foregroundStyle(WorldPalette.bark)
+        let amountText = Text(verbatim: amount).font(.fernlet(.bodySmall).monospacedDigit())
+            .foregroundStyle(WorldPalette.dim)
+        return Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 6) {
+                    nameText
+                    amountText
+                    bar(fraction: fraction, colour: colour)
+                }
+            } else {
+                HStack(spacing: 10) {
+                    nameText.frame(minWidth: 82, alignment: .leading)
+                    bar(fraction: fraction, colour: colour)
+                    amountText
                 }
             }
-            .frame(height: 10)
-            .padding(2)
-            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(WorldPalette.ink, lineWidth: 2))
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-            Text(verbatim: amount)
-                .font(.fernlet(.bodySmall).monospacedDigit())
-                .foregroundStyle(WorldPalette.dim)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: spoken))
+    }
+
+    /// The framed bar, filled to `fraction` in the macro's colour.
+    private func bar(fraction: Double, colour: Color) -> some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                WorldPalette.paperShade
+                colour.frame(width: proxy.size.width * fraction)
+            }
+        }
+        .frame(height: 10)
+        .padding(2)
+        .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(WorldPalette.ink, lineWidth: 2))
+        .clipShape(RoundedRectangle(cornerRadius: 4))
     }
 }
 

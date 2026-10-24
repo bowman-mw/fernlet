@@ -176,14 +176,16 @@ struct AppColorsSettingsRow: View {
     @AppStorage(FernletThemeDefaults.customLightBackgroundKey) private var lightHex = FernletThemeDefaults.lightBackgroundHex
     @AppStorage(FernletThemeDefaults.customDarkBackgroundKey) private var darkHex = FernletThemeDefaults.darkBackgroundHex
     @Environment(\.worldAppColors) private var appColors
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
+    /// The words take the room and wrap; the swatches keep their size beside them, and step aside at
+    /// accessibility sizes so the words keep the row.
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 10) {
-                label
-                swatches
+        HStack(spacing: 10) {
+            label.frame(maxWidth: .infinity, alignment: .leading)
+            if !dynamicTypeSize.isAccessibilitySize {
+                swatches.fixedSize()
             }
-            label
         }
     }
 
