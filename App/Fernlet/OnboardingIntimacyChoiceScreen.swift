@@ -65,13 +65,13 @@ struct OnboardingIntimacyChoiceScreen: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Fernlet includes a private log for intimate activity. Any notes you add are sealed on this device. It starts turned on.")
                 .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
+                .foregroundStyle(WorldPalette.bark)
                 .fernletWrappingText()
             VStack(spacing: 10) {
                 choiceCard(
                     keep: true,
                     title: "Keep intimacy tracking",
-                    detail: "It stays on your Private tab.",
+                    detail: "It stays on your Private panel.",
                     identifier: "onboarding.intimacy.keep"
                 )
                 choiceCard(
@@ -83,7 +83,7 @@ struct OnboardingIntimacyChoiceScreen: View {
             }
             Text("It's in Settings → Period & sensitive content whenever you want to change it.")
                 .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .foregroundStyle(WorldPalette.dim)
                 .fernletWrappingText()
                 .accessibilityIdentifier("onboarding.intimacy.settingsNote")
         }
@@ -102,34 +102,11 @@ struct OnboardingIntimacyChoiceScreen: View {
         identifier: String
     ) -> some View {
         let isSelected = keepsIntimacyTracking == keep
-        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
         return Button { FernletFeedback.system.select(keep, in: &keepsIntimacyTracking) } label: {
-            HStack(alignment: .top, spacing: 14) {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(isSelected ? Color.moss : Color.slate)
-                    .frame(width: 28, height: 28)
-                    // The selected trait below says the same thing, in words.
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.fernlet(.headerMedium))
-                        .foregroundStyle(Color.bark)
-                        .fernletWrappingText()
-                    Text(detail)
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-                }
-                Spacer(minLength: 8)
-            }
-            .padding(16)
-            .background(isSelected ? Color.moss.opacity(0.07) : Color.cream, in: shape)
-            .overlay(shape.stroke(isSelected ? Color.moss.opacity(0.42) : Color.bark.opacity(0.08), lineWidth: 1))
-            .contentShape(shape)
+            // Design `b2-onb-6b`: a radio card, the tick square at its end.
+            OnboardingRadioCard(title: Text(title), detail: Text(detail), isSelected: isSelected)
         }
         .buttonStyle(.plain)
-        // A hand-rolled selection card: without this the glyph swap and the tint are the only signal.
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityIdentifier(identifier)
     }

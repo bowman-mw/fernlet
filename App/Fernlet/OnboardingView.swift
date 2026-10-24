@@ -125,10 +125,22 @@ extension View {
     /// group holds only two menu pickers, so without it the card hugged its content and rendered at
     /// ~40% width beside the full-width Body profile card above it.
     func profileFieldStyle() -> some View {
-        self
+        modifier(ProfileFieldStyle())
+    }
+}
+
+/// Implements ``SwiftUI/View/profileFieldStyle()``: the framed card under the one design language
+/// (paper in a 2-pt ink frame with its solid shadow), the cream card without it.
+private struct ProfileFieldStyle: ViewModifier {
+    @Environment(\.fernletFramedLook) private var look
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 12)
+        content
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+            .background(look?.paper ?? Color.cream, in: shape)
+            .overlay(shape.strokeBorder(look?.ink ?? Color.bark.opacity(0.10), lineWidth: look == nil ? 1 : FernletFramedLook.frameWidth))
+            .background { if let look { shape.fill(look.shadow).offset(y: 3) } }
     }
 }
