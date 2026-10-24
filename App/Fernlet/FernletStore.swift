@@ -7117,10 +7117,11 @@ final class FernletStore {
         // The World map's sealed location history (fog cells, its locked-phone buffer, the saved walk
         // lines and the workout-space pins, one folder) and both of its device keys, plus its
         // device-only settings. World build only.
-        if !worldFog.clearAll() {
-            incompleteStores.append("your map history")
-        }
+        if !worldFog.clearAll() { incompleteStores.append("your map history") }
         WorldMapPreferences.clearAll()
+        // Advanced period tracking's device-only switch (World build, `b3-period-settings`): how the
+        // person tracks their cycle, so it goes with everything else.
+        CyclePreferences.clearAll()
         // Worry Box notes are the app's most sensitive free-text data and a no-lock user has no
         // other bulk-wipe path — purge the sealed rows + the device-local let-go count. `!= true`
         // like the funnel's sealed hooks: a nil (unwired) hook or a failed row delete must surface,

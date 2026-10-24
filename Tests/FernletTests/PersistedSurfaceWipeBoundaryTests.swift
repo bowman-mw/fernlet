@@ -197,6 +197,8 @@ struct PersistedSurfaceWipeBoundaryTests {
         "fernlet.worldMap.alwaysLowPower": .cleared(token: "WorldMapPreferences.clearAll"),
         "fernlet.worldMap.saveNewRoutes": .cleared(token: "WorldMapPreferences.clearAll"),
         "fernlet.worldMap.rememberSpaces": .cleared(token: "WorldMapPreferences.clearAll"),
+        // World build (2026-10-24): Advanced period tracking's switch (`b3-period-settings`).
+        "fernlet.cycle.advancedTracking": .cleared(token: "CyclePreferences.clearAll"),
         "fernlet.barcodeLastServings.v1": .cleared(token: "BarcodeServingMemory.clearAll"),
         // The companion petting state, all four keys. `clearPersistentState()` existed long before
         // anything on a shipping path called it — see the header.
@@ -509,12 +511,6 @@ struct PersistedSurfaceWipeBoundaryTests {
         ),
         "pastDayJournalScrubAttempts": .openGap(
             reason: "The scrub's retry-budget counter: how many launches sealed at least one day badly. Usually absent (it is removed at every terminal state), but when present it is a trace of app use that the wipe does not reach."
-        ),
-        // World build (lane private, 2026-10-24): `CyclePreferences.clearAll` exists, but the call in
-        // `FernletStore.resetAll` is the integrator's (FernletStore is one-writer); this row flips to
-        // `.cleared(token: "CyclePreferences.clearAll")` in the commit that adds it.
-        "fernlet.cycle.advancedTracking": .openGap(
-            reason: "Advanced period tracking (World b3-period-settings): one device-only Bool saying whether Log period offers every symptom, cervical mucus, ovulation tests and temperature. No cycle data, but a detail of how someone tracks; its clear is written and waits only for its call in the funnel."
         )
         // `FernletMessages.lastRecipeID` (the iMessage composer's last-picked recipe) left this
         // table on 2026-09-23 by leaving the tree: it lived in the extension's OWN defaults domain,

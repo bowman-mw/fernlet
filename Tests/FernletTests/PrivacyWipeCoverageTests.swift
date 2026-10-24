@@ -178,6 +178,8 @@ struct PrivacyWipeCoverageTests {
         // two device-only settings.
         "worldFog.clearAll",
         "WorldMapPreferences.clearAll",
+        // Advanced period tracking's device-only switch (World build, 2026-10-24).
+        "CyclePreferences.clearAll",
         "worryBoxResetHook",
         "BarcodeServingMemory.clearAll",
         "RecentActivityTypeMemory.clearAll",
