@@ -16,6 +16,8 @@ The Live Activities use a second wiring mechanism: dual target membership. The A
 
 Two rendering rules recur throughout: countdowns are always drawn from a fixed, ordered `start...end` window via `Text(timerInterval:)` — never a live `Date()...end` range, whose inverted bounds crash once a deadline passes (over-resting and over-running a step are designed states) — and a stale activity (one that outlived its process via jetsam or force-quit) degrades to a dimmed "Paused / Open Fernlet" register instead of a frozen timer or set count.
 
+Both Live Activities wear the World look (World Review Batch 4, approved 2026-10-24). On the Lock Screen the card is paper inside a 3-point ink frame, light or dark with the Lock Screen and deeper under Increase Contrast (``LiveActivityLook``, ``LiveActivityCard``), with Fraunces for the exercise, the step and the countdowns and DM Sans for the rest (``LiveActivityFont``), pixel icons instead of SF Symbols (``LiveActivitySprites``, drawn by ``LiveActivitySpriteView``), the workout's place as pixel progress squares in the header (``LiveActivityProgressSquares``) and framed buttons (``LiveActivityButtonFace``). The Dynamic Island stays black, as iOS requires; its icons are pixel art in leaf green and its buttons framed (``LiveActivityIslandLook``, ``LiveActivityIslandButtonFace``). Each button is still a plain `Button(intent:)`; only its face is drawn, so the intents run exactly as before. A paused (stale) run shows ``LiveActivityPausedCard``. In DEBUG builds the app's `FERNLET_UI_TEST_LIVE_ACTIVITY=<scene>` launch hook puts one canned activity on screen for screenshots and device checks.
+
 ## Topics
 
 ### Extension entry point
@@ -77,6 +79,22 @@ Two rendering rules recur throughout: countdowns are always drawn from a fixed, 
 - ``PendingWidgetActionWriter``
 - ``AppGroupRunStateStore``
 - ``AppGroupRunStatePersistable``
+
+### Live Activity look
+
+- ``LiveActivityLook``
+- ``LiveActivityIslandLook``
+- ``LiveActivityFont``
+- ``LiveActivityCard``
+- ``LiveActivitySprite``
+- ``LiveActivitySprites``
+- ``LiveActivitySpriteView``
+- ``LiveActivityButtonRole``
+- ``LiveActivityButtonFace``
+- ``LiveActivityIslandButtonFace``
+- ``LiveActivityHeaderLabel``
+- ``LiveActivityProgressSquares``
+- ``LiveActivityPausedCard``
 
 ### Live Activity reflection
 

@@ -2,9 +2,16 @@
 // FernletWidgets (widget target only — renders the activity the app requests).
 //
 // The Lock Screen card + Dynamic Island for cooking mode (F5). Registered in FernletWidgetsBundle
-// alongside WorkoutLiveActivity. Gentle, hands-on copy ("Step 3 of 8", "Timer's up — tap Next"),
-// mirroring Fernlet/CookingMode.swift. The single interactive control is the "Next" button, which
-// runs NextCookingStepIntent in the app process (advancing the shared app-group run state).
+// alongside WorkoutLiveActivity. Gentle, hands-on copy ("Step 3 of 8"), mirroring
+// Fernlet/CookingMode.swift. The single interactive control is the "Next" button, which runs
+// NextCookingStepIntent in the app process (advancing the shared app-group run state).
+//
+// WORLD LOOK (World Review Batch 4, b4-la-cook-* and b4-di-cook*, approved 2026-10-24): the Lock
+// Screen card is paper in an ink frame, light or dark with the Lock Screen, with a pixel flame,
+// "Step 3 of 8" in moss, the step timer in Fraunces and a framed Next with a pixel chevron (Finish with
+// a pixel check). The Dynamic Island stays black, with the pixel flame, Fraunces numbers and a framed
+// leaf-green button. Paused looks like the workout's, with the flame. Every value and control is the
+// same as before.
 //
 // CRASH RULE (inherited from WorkoutLiveActivity): the per-step countdown is ALWAYS rendered from the
 // FIXED `timerStartedAt...timerEndsAt` window — never `Date()...timerEndsAt`, whose lower bound inverts
@@ -28,9 +35,9 @@ import WidgetKit
 struct CookingLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: CookingActivityAttributes.self) { context in
-            CookingLockScreenView(attributes: context.attributes, state: context.state, isStale: context.isStale)
-                .activityBackgroundTint(FernletWidgetPalette.card)
-                .activitySystemActionForegroundColor(FernletWidgetPalette.buttonFill)
+            LiveActivityCard {
+                CookingLockScreenView(attributes: context.attributes, state: context.state, isStale: context.isStale)
+            }
         } dynamicIsland: { context in
             let state = context.state
             let isStale = context.isStale
@@ -41,25 +48,25 @@ struct CookingLiveActivity: Widget {
                 DynamicIslandExpandedRegion(.trailing) {
                     CookingIslandTrailing(state: state, isStale: isStale)
                 }
-                DynamicIslandExpandedRegion(.center) {
-                    CookingIslandCenter(state: state, isStale: isStale)
-                }
                 DynamicIslandExpandedRegion(.bottom) {
-                    CookingIslandBottom(state: state, isStale: isStale)
+                    // The step heads the bottom region, flush left under the header as the design
+                    // draws it, rather than centred under the camera.
+                    VStack(alignment: .leading, spacing: 8) {
+                        CookingIslandCenter(state: state, isStale: isStale)
+                        CookingIslandBottom(state: state, isStale: isStale)
+                    }
                 }
             } compactLeading: {
-                Image(systemName: "flame.fill")
-                    .foregroundStyle(isStale ? FernletWidgetPalette.leaf.opacity(0.5) : FernletWidgetPalette.leaf)
-                    // Compact slots carry no text, so an unlabelled glyph announces its SF Symbol
-                    // name ("flame fill") — this is the only word saying WHICH activity is running,
-                    // and the workout activity's compact leading slot looks identical to VoiceOver.
-                    .accessibilityLabel(Text("Cooking"))
+                // Compact slots carry no text, so the icon's label is the only word saying WHICH
+                // activity is running — and the workout's compact slot sits in the same place.
+                LiveActivitySpriteView(sprite: LiveActivitySprites.flame, scale: 2, label: Text("Cooking"))
+                    .opacity(isStale ? 0.5 : 1)
             } compactTrailing: {
                 CookingIslandCompactTrailing(state: state, isStale: isStale)
             } minimal: {
                 CookingIslandMinimal(state: state, isStale: isStale)
             }
-            .keylineTint(FernletWidgetPalette.leaf)
+            .keylineTint(LiveActivityIslandLook.leaf)
         }
     }
 }
@@ -67,22 +74,21 @@ struct CookingLiveActivity: Widget {
 // MARK: - Dynamic Island regions
 //
 // One private view per Island slot (R4: `body` stays a wiring diagram), mirroring the same split in
-// WorkoutLiveActivity. Each is a pure function of `state`/`isStale` with its modifiers unchanged.
+// WorkoutLiveActivity. Each is a pure function of `state`/`isStale`.
 
-/// Expanded-Island leading slot: the recipe name with the flame glyph, dimmed when stale.
+/// Expanded-Island leading slot: the recipe name with the pixel flame, dimmed when stale.
 private struct CookingIslandLeading: View {
     let recipeName: String
     let isStale: Bool
 
     var body: some View {
-        Label {
-            Text(recipeName)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        HStack(spacing: 6) {
+            LiveActivitySpriteView(sprite: LiveActivitySprites.flame, scale: 2)
+                .opacity(isStale ? 0.5 : 1)
+            Text(verbatim: recipeName)
+                .font(.footnote)
+                .foregroundStyle(LiveActivityIslandLook.soft)
                 .lineLimit(1)
-        } icon: {
-            Image(systemName: "flame.fill")
-                .foregroundStyle(isStale ? FernletWidgetPalette.leaf.opacity(0.5) : FernletWidgetPalette.leaf)
         }
     }
 }
@@ -95,14 +101,14 @@ private struct CookingIslandTrailing: View {
     var body: some View {
         if !isStale {
             Text("Step \(state.stepNumber) of \(state.stepCount)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.footnote)
+                .foregroundStyle(LiveActivityIslandLook.soft)
                 .lineLimit(1)
         }
     }
 }
 
-/// Expanded-Island centre slot: the step text, or a dimmed "Paused" when stale.
+/// Expanded-Island step: the step's words, or a dimmed "Paused" when stale.
 private struct CookingIslandCenter: View {
     let state: CookingActivityAttributes.ContentState
     let isStale: Bool
@@ -111,12 +117,12 @@ private struct CookingIslandCenter: View {
         if isStale {
             Text("Paused")
                 .font(.headline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(LiveActivityIslandLook.soft)
                 .lineLimit(1)
         } else {
-            Text(state.stepText)
-                .font(.subheadline)
-                .foregroundStyle(.primary)
+            Text(verbatim: state.stepText)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(LiveActivityIslandLook.text)
                 .lineLimit(3)
                 .minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -124,7 +130,7 @@ private struct CookingIslandCenter: View {
     }
 }
 
-/// Expanded-Island bottom slot: the step countdown plus the "Next" control, or the gentle
+/// Expanded-Island bottom slot: the step countdown in Fraunces plus the "Next" control, or the gentle
 /// "open Fernlet" line for a stale activity.
 private struct CookingIslandBottom: View {
     let state: CookingActivityAttributes.ContentState
@@ -133,82 +139,70 @@ private struct CookingIslandBottom: View {
     var body: some View {
         if isStale {
             Text("Open Fernlet to pick it back up")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.footnote)
+                .foregroundStyle(LiveActivityIslandLook.soft)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-                .frame(maxWidth: .infinity)
         } else {
-            liveContent
-        }
-    }
-
-    private var liveContent: some View {
-        VStack(spacing: 8) {
-            if hasTimer(state) {
-                StepCountdownText(state: state,
-                                  font: .system(size: 34, weight: .semibold, design: .rounded),
-                                  color: .primary)
+            VStack(alignment: .leading, spacing: 8) {
+                if hasTimer(state) {
+                    StepCountdownText(state: state, font: LiveActivityFont.islandCountdown,
+                                      color: LiveActivityIslandLook.text)
+                        .dynamicTypeSize(...DynamicTypeSize.xLarge)
+                }
+                nextStepButton(state, onIsland: true)
             }
-            nextStepButton(state)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity)
     }
 }
 
-/// Compact-Island trailing slot: pause glyph when stale, else the countdown or the step count.
+/// Compact-Island trailing slot: pixel pause bars when stale, else the countdown or the step count.
 private struct CookingIslandCompactTrailing: View {
     let state: CookingActivityAttributes.ContentState
     let isStale: Bool
 
     var body: some View {
         if isStale {
-            Image(systemName: "pause.circle")
-                .foregroundStyle(.secondary)
-                .accessibilityLabel(Text("Paused"))
+            LiveActivitySpriteView(sprite: LiveActivitySprites.pause, scale: 2, tint: LiveActivityIslandLook.text,
+                                   label: Text("Paused"))
         } else if hasTimer(state) {
             // No label here on purpose: a label REPLACES a timer Text's content, which would trade
             // the live countdown for a fixed phrase. The countdown speaks itself; the compact
             // leading slot supplies the noun.
-            StepCountdownText(state: state,
-                              font: .caption2.monospacedDigit(),
-                              color: .primary,
-                              maxWidth: 44)
+            StepCountdownText(state: state, font: cookingCompactFont, color: LiveActivityIslandLook.text, maxWidth: 44)
         } else {
             Text("\(state.stepNumber)/\(state.stepCount)")
-                .font(.caption2)
-                .monospacedDigit()
-                .foregroundStyle(.primary)
+                .font(cookingCompactFont)
+                .foregroundStyle(LiveActivityIslandLook.text)
                 // "3/8" is read as "three slash eight"; the expanded slot's own wording, spoken.
                 .accessibilityLabel(Text("Step \(state.stepNumber) of \(state.stepCount)"))
         }
     }
 }
 
-/// Minimal-Island slot: pause glyph when stale, the width-clamped countdown while timing, else flame.
+/// Minimal-Island slot: pause bars when stale, the width-clamped countdown while timing, else the flame.
 private struct CookingIslandMinimal: View {
     let state: CookingActivityAttributes.ContentState
     let isStale: Bool
 
     var body: some View {
         if isStale {
-            Image(systemName: "pause.fill")
-                .foregroundStyle(FernletWidgetPalette.leaf.opacity(0.5))
-                .accessibilityLabel(Text("Paused"))
+            LiveActivitySpriteView(sprite: LiveActivitySprites.pause, scale: 2, tint: LiveActivityIslandLook.leaf,
+                                   label: Text("Paused"))
+                .opacity(0.5)
         } else if hasTimer(state) {
-            StepCountdownText(state: state,
-                              font: .caption2.monospacedDigit(),
-                              color: FernletWidgetPalette.leaf,
-                              maxWidth: 34)
+            StepCountdownText(state: state, font: cookingCompactFont, color: LiveActivityIslandLook.text, maxWidth: 34)
         } else {
-            Image(systemName: "flame.fill")
-                .foregroundStyle(FernletWidgetPalette.leaf)
-                .accessibilityLabel(Text("Cooking"))
+            LiveActivitySpriteView(sprite: LiveActivitySprites.flame, scale: 2, label: Text("Cooking"))
         }
     }
 }
 
 // MARK: - Shared helpers
+
+/// The compact and minimal slots' numbers: monospaced and semibold, as the design draws "3/8".
+private let cookingCompactFont = Font.system(.footnote, design: .monospaced).weight(.semibold)
 
 /// A step timer is shown only when the fixed window is present and ordered (see the CRASH RULE).
 private func hasTimer(_ state: CookingActivityAttributes.ContentState) -> Bool {
@@ -259,25 +253,29 @@ private struct StepCountdownText: View {
 /// The interactive "Next" / "Finish" control shared by the Lock Screen card and the Dynamic Island. A
 /// `LiveActivityIntent` the system runs in the app's process, advancing the shared app-group run state
 /// (see CookingLiveActivityIntents). Only ever rendered in a live (non-stale) state, so the run always
-/// exists when a tap lands.
+/// exists when a tap lands. The card's face carries a pixel chevron (a pixel check on the last step);
+/// the island's is the framed leaf-green button.
 @ViewBuilder
-private func nextStepButton(_ state: CookingActivityAttributes.ContentState) -> some View {
+private func nextStepButton(_ state: CookingActivityAttributes.ContentState, onIsland: Bool) -> some View {
+    let title = state.isLastStep ? Text("Finish") : Text("Next")
     Button(intent: NextCookingStepIntent()) {
-        Label(state.isLastStep ? "Finish" : "Next",
-              systemImage: state.isLastStep ? "checkmark" : "chevron.right")
-            .font(.subheadline.weight(.semibold))
-            .frame(maxWidth: .infinity)
+        if onIsland {
+            LiveActivityIslandButtonFace(title: title)
+        } else {
+            LiveActivityButtonFace(title: title,
+                                   icon: state.isLastStep ? LiveActivitySprites.check : LiveActivitySprites.chevronRight)
+        }
     }
-    .buttonStyle(.borderedProminent)
-    .tint(FernletWidgetPalette.buttonFill)
+    .buttonStyle(.plain)
 }
 
 // MARK: - Lock Screen card
 
-/// The Lock Screen / banner presentation of the cooking activity: recipe name, "Step X of Y", the
-/// step text, the countdown, and the "Next" button.
+/// The Lock Screen / banner presentation of the cooking activity, inside ``LiveActivityCard``: the
+/// pixel flame and the recipe's name, "Step X of Y" in moss, the step's words, the step timer in
+/// Fraunces while it runs, and the framed "Next" (or "Finish") button.
 ///
-/// Splits on `isStale` — a live cream card with the interactive control, or a dimmed "Paused / Open
+/// Splits on `isStale` — the live card with the interactive control, or the dimmed "Paused / Open
 /// Fernlet" resting-place for an activity that outlived its process. Used only from
 /// ``CookingLiveActivity``'s `ActivityConfiguration` closure.
 private struct CookingLockScreenView: View {
@@ -286,84 +284,39 @@ private struct CookingLockScreenView: View {
     /// The activity outlived its process (jetsam / force-quit) and its snapshot is stale — render a
     /// dimmed, gentle "paused" card rather than a frozen live timer.
     var isStale: Bool = false
+    @Environment(\.liveActivityLook) private var look
 
     var body: some View {
         if isStale {
-            stalePausedCard
+            LiveActivityPausedCard(icon: LiveActivitySprites.flame, title: attributes.recipeName)
         } else {
             liveCard
         }
     }
 
-    private var stalePausedCard: some View {
-        HStack(alignment: .center, spacing: 16) {
-            VStack(alignment: .leading, spacing: 5) {
-                Label {
-                    Text(attributes.recipeName)
-                        .font(.caption)
-                        .foregroundStyle(FernletWidgetPalette.inkSoft)
-                        .lineLimit(1)
-                } icon: {
-                    Image(systemName: "flame.fill")
-                        .font(.caption)
-                        .foregroundStyle(FernletWidgetPalette.buttonFill.opacity(0.5))
-                }
-                Text("Paused")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(FernletWidgetPalette.inkSoft)
-                Text("Open Fernlet to pick it back up")
-                    .font(.subheadline)
-                    .foregroundStyle(FernletWidgetPalette.inkSoft)
-                    .lineLimit(2)
-            }
-            Spacer(minLength: 8)
-            Image(systemName: "pause.circle")
-                .font(.system(size: 34, weight: .light))
-                .foregroundStyle(FernletWidgetPalette.buttonFill.opacity(0.45))
-                // "Paused" is already written beside it — otherwise this reads "pause circle" into
-                // the middle of the card, which Speak Screen takes as part of the sentence.
-                .accessibilityHidden(true)
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 14)
-    }
-
     private var liveCard: some View {
-        VStack(spacing: 12) {
-            HStack(alignment: .top, spacing: 16) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Label {
-                        Text(attributes.recipeName)
-                            .font(.caption)
-                            .foregroundStyle(FernletWidgetPalette.inkSoft)
-                            .lineLimit(1)
-                    } icon: {
-                        Image(systemName: "flame.fill")
-                            .font(.caption)
-                            .foregroundStyle(FernletWidgetPalette.buttonFill)
-                    }
+        VStack(alignment: .leading, spacing: 8) {
+            LiveActivityHeaderLabel(icon: LiveActivitySprites.flame, title: attributes.recipeName)
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text("Step \(state.stepNumber) of \(state.stepCount)")
-                        .font(.caption)
-                        .foregroundStyle(FernletWidgetPalette.buttonFill)
-                    Text(state.stepText)
-                        .font(.subheadline)
-                        .foregroundStyle(FernletWidgetPalette.ink)
+                        .font(LiveActivityFont.stepCount)
+                        .foregroundStyle(look.moss)
+                    Text(verbatim: state.stepText)
+                        .font(LiveActivityFont.step)
+                        .foregroundStyle(look.ink)
                         .lineLimit(3)
                         .minimumScaleFactor(0.8)
                 }
-
-                Spacer(minLength: 8)
-
+                .frame(maxWidth: .infinity, alignment: .leading)
                 if hasTimer(state) {
-                    StepCountdownText(state: state,
-                                      font: .system(size: 36, weight: .semibold, design: .rounded),
-                                      color: FernletWidgetPalette.ink)
+                    StepCountdownText(state: state, font: LiveActivityFont.countdown, color: look.ink)
+                        .dynamicTypeSize(...DynamicTypeSize.xLarge)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .layoutPriority(1)
                 }
             }
-
-            nextStepButton(state)
+            nextStepButton(state, onIsland: false)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 14)
     }
 }

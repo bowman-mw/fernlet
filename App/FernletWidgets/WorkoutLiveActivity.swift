@@ -5,6 +5,12 @@
 // FernletWidgetsBundle. Gentle, zero-pressure copy ("Rest", "Next up", "Nicely done"), mirroring
 // Fernlet/GuidedWorkout.swift.
 //
+// WORLD LOOK (World Review Batch 4, b4-la-workout-* and b4-di-workout-*, approved 2026-10-24): the
+// Lock Screen card is paper in an ink frame, light or dark with the Lock Screen (LiveActivityLook),
+// with pixel icons, Fraunces for the exercise and the countdown, pixel progress squares in the header
+// and framed buttons. The Dynamic Island stays black; its icons are pixel art in leaf green, its
+// numbers Fraunces, its buttons framed. Every value, control and spoken label is the same as before.
+//
 // CRASH RULE (a prior in-app review caught this exact bug): the rest countdown is ALWAYS rendered
 // from the FIXED `restStartedAt...restEndsAt` window — never `Date()...restEndsAt`, whose lower bound
 // inverts and fatalErrors once the deadline passes. `Text(timerInterval:)` clamps a fixed window to
@@ -39,10 +45,10 @@ import WidgetKit
 struct WorkoutLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: WorkoutActivityAttributes.self) { context in
-            // Lock Screen / banner: cream card + ink text, matching the app's identity.
-            WorkoutLockScreenView(attributes: context.attributes, state: context.state, isStale: context.isStale)
-                .activityBackgroundTint(FernletWidgetPalette.card)
-                .activitySystemActionForegroundColor(FernletWidgetPalette.buttonFill)
+            // Lock Screen / banner: paper in an ink frame, light or dark with the Lock Screen.
+            LiveActivityCard {
+                WorkoutLockScreenView(attributes: context.attributes, state: context.state, isStale: context.isStale)
+            }
         } dynamicIsland: { context in
             let state = context.state
             // Orphaned (jetsammed / force-quit) activities go stale; render a gentle "paused" register
@@ -50,29 +56,31 @@ struct WorkoutLiveActivity: Widget {
             let isStale = context.isStale
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    WorkoutIslandLeading(title: context.attributes.workoutTitle, isStale: isStale)
+                    WorkoutIslandLeading(title: context.attributes.workoutTitle, state: state, isStale: isStale)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     WorkoutIslandTrailing(state: state, isStale: isStale)
                 }
-                DynamicIslandExpandedRegion(.center) {
-                    WorkoutIslandCenter(state: state, isStale: isStale)
-                }
                 DynamicIslandExpandedRegion(.bottom) {
-                    WorkoutIslandBottom(state: state, isStale: isStale)
+                    // The exercise or "Rest" heads the bottom region, flush left under the header as
+                    // the design draws it, rather than centred under the camera.
+                    VStack(alignment: .leading, spacing: 8) {
+                        WorkoutIslandCenter(state: state, isStale: isStale)
+                        WorkoutIslandBottom(state: state, isStale: isStale)
+                    }
                 }
             } compactLeading: {
-                Image(systemName: "leaf.fill")
-                    .foregroundStyle(isStale ? FernletWidgetPalette.leaf.opacity(0.5) : FernletWidgetPalette.leaf)
-                    // Compact slots carry no text, so an unlabelled glyph announces its SF Symbol
-                    // name ("leaf fill") — this is the only word saying WHICH activity is running.
-                    .accessibilityLabel(Text("Workout"))
+                // Compact slots carry no text, so the icon's label is the only word saying WHICH
+                // activity is running.
+                LiveActivitySpriteView(sprite: LiveActivitySprites.dumbbell, scale: 2, tint: LiveActivityIslandLook.leaf,
+                                       label: Text("Workout"))
+                    .opacity(isStale ? 0.5 : 1)
             } compactTrailing: {
                 WorkoutIslandCompactTrailing(state: state, isStale: isStale)
             } minimal: {
                 WorkoutIslandMinimal(state: state, isStale: isStale)
             }
-            .keylineTint(FernletWidgetPalette.leaf)
+            .keylineTint(LiveActivityIslandLook.leaf)
         }
     }
 }
@@ -80,22 +88,23 @@ struct WorkoutLiveActivity: Widget {
 // MARK: - Dynamic Island regions
 //
 // One private view per Island slot (R4: `body` stays a wiring diagram). Each is a pure function of
-// `state`/`isStale` and carries the exact modifiers it had while inlined.
+// `state`/`isStale`.
 
-/// Expanded-Island leading slot: the workout title with the leaf glyph, dimmed when stale.
+/// Expanded-Island leading slot: the workout title with its pixel icon (the dumbbell, or the runner on
+/// a cardio part), dimmed when stale.
 private struct WorkoutIslandLeading: View {
     let title: String
+    let state: WorkoutActivityAttributes.ContentState
     let isStale: Bool
 
     var body: some View {
-        Label {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        HStack(spacing: 6) {
+            LiveActivitySpriteView(sprite: workoutIcon(state), scale: 2, tint: LiveActivityIslandLook.leaf)
+                .opacity(isStale ? 0.5 : 1)
+            Text(verbatim: title)
+                .font(.footnote)
+                .foregroundStyle(LiveActivityIslandLook.soft)
                 .lineLimit(1)
-        } icon: {
-            Image(systemName: "leaf.fill")
-                .foregroundStyle(isStale ? FernletWidgetPalette.leaf.opacity(0.5) : FernletWidgetPalette.leaf)
         }
     }
 }
@@ -110,19 +119,19 @@ private struct WorkoutIslandTrailing: View {
         // No live "Set X of Y" once the snapshot is stale — it would read as if still going.
         if !isStale, let warmUp = state.warmUp {
             warmUpLabel(warmUp)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.footnote)
+                .foregroundStyle(LiveActivityIslandLook.soft)
                 .lineLimit(1)
         } else if !isStale && !isSimpleStep(state) && state.totalSets > 1 {
             Text("Set \(state.setNumber) of \(state.totalSets)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.footnote)
+                .foregroundStyle(LiveActivityIslandLook.soft)
                 .lineLimit(1)
         }
     }
 }
 
-/// Expanded-Island centre slot: "Rest" / the exercise name, or a dimmed "Paused" when stale.
+/// Expanded-Island title: "Rest" in leaf green / the exercise name, or a dimmed "Paused" when stale.
 private struct WorkoutIslandCenter: View {
     let state: WorkoutActivityAttributes.ContentState
     let isStale: Bool
@@ -131,14 +140,17 @@ private struct WorkoutIslandCenter: View {
         if isStale {
             Text("Paused")
                 .font(.headline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(LiveActivityIslandLook.soft)
                 .lineLimit(1)
         } else {
-            Text(state.phase == .resting ? "Rest" : state.exerciseName)
-                .font(.headline)
-                .foregroundStyle(state.phase == .resting ? FernletWidgetPalette.leaf : .primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+            // Two Texts, not one over a ternary: a `String` ternary draws "Rest" verbatim, unlocalized.
+            Group {
+                if state.phase == .resting { Text("Rest") } else { Text(verbatim: state.exerciseName) }
+            }
+            .font(.headline)
+            .foregroundStyle(state.phase == .resting ? LiveActivityIslandLook.leaf : LiveActivityIslandLook.text)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
         }
     }
 }
@@ -152,55 +164,53 @@ private struct WorkoutIslandBottom: View {
     var body: some View {
         if isStale {
             Text("Open Fernlet to pick it back up")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.footnote)
+                .foregroundStyle(LiveActivityIslandLook.soft)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-                .frame(maxWidth: .infinity)
         } else {
             liveContent
         }
     }
 
     private var liveContent: some View {
-        VStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
             if state.phase == .resting {
                 restHeader
                 nextUpLine(state)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.footnote)
+                    .foregroundStyle(LiveActivityIslandLook.soft)
                     .lineLimit(1)
             } else {
                 setRepsLine(state)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .foregroundStyle(LiveActivityIslandLook.soft)
                 if let load = state.load {
                     workingLoadRow(load)
                 }
                 if let zone = state.zone {
-                    WorkoutZoneLine(zone: zone)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    WorkoutZoneLine(zone: zone, color: LiveActivityIslandLook.soft)
                 }
             }
-            guidedActionButton(state)
+            guidedActionButton(state, onIsland: true)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// The rest countdown, beside the set's weight and last time when the lift has them. The
-    /// countdown takes its width first, so the numbers beside it shrink before it ever truncates.
+    /// The rest countdown in Fraunces, beside the set's weight and last time when the lift has them.
+    /// The countdown takes its width first, so the numbers beside it shrink before it ever truncates.
     @ViewBuilder private var restHeader: some View {
-        let countdown = RestCountdownText(state: state,
-                                          font: .system(size: 38, weight: .semibold, design: .rounded),
-                                          color: .primary)
+        let countdown = RestCountdownText(state: state, font: LiveActivityFont.islandCountdown,
+                                          color: LiveActivityIslandLook.text)
+            .dynamicTypeSize(...DynamicTypeSize.xLarge)
         if let load = state.load {
             HStack(alignment: .center, spacing: 12) {
                 countdown
                     .fixedSize(horizontal: true, vertical: false)
                     .layoutPriority(1)
                 Spacer(minLength: 8)
-                WorkoutLoadStack(load: load, showsLastTime: true)
+                WorkoutLoadStack(load: load, showsLastTime: true, weightColor: LiveActivityIslandLook.text,
+                                 detailColor: LiveActivityIslandLook.soft)
             }
         } else {
             countdown
@@ -209,86 +219,88 @@ private struct WorkoutIslandBottom: View {
 
     /// Working a lift: its weight and range at the leading edge, last time's numbers at the trailing.
     private func workingLoadRow(_ load: WorkoutActivityAttributes.ContentState.Load) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .lastTextBaseline, spacing: 8) {
             if WorkoutActivityLoadText.drawsWeight(load) {
-                WorkoutLoadStack(load: load, alignment: .leading)
+                WorkoutLoadStack(load: load, alignment: .leading, weightColor: LiveActivityIslandLook.text,
+                                 detailColor: LiveActivityIslandLook.soft)
             }
             Spacer(minLength: 8)
-            WorkoutLastTimeLine(load: load)
+            WorkoutLastTimeLine(load: load, color: LiveActivityIslandLook.soft)
         }
     }
 }
 
-/// Compact-Island trailing slot: pause glyph when stale, else the countdown, set count, or icon.
+/// Compact-Island trailing slot: pixel pause bars when stale, else the countdown, set count, or the
+/// pixel runner.
 private struct WorkoutIslandCompactTrailing: View {
     let state: WorkoutActivityAttributes.ContentState
     let isStale: Bool
 
     var body: some View {
         if isStale {
-            // Degrade to a still pause glyph — never a frozen timer or set count.
-            Image(systemName: "pause.circle")
-                .foregroundStyle(.secondary)
-                .accessibilityLabel(Text("Paused"))
+            // Degrade to still pause bars — never a frozen timer or set count.
+            LiveActivitySpriteView(sprite: LiveActivitySprites.pause, scale: 2, tint: LiveActivityIslandLook.text,
+                                   label: Text("Paused"))
         } else if state.phase == .resting {
             // No label here on purpose: a label REPLACES a timer Text's content, which would trade
             // the live countdown for a fixed phrase. The countdown speaks itself; the compact
             // leading slot supplies the noun.
-            RestCountdownText(state: state,
-                              font: .caption2.monospacedDigit(),
-                              color: .primary)
+            RestCountdownText(state: state, font: compactIslandFont, color: LiveActivityIslandLook.text)
                 .frame(maxWidth: 44)
         } else if holdWindow(state) != nil {
-            HoldCountdownText(state: state, font: .caption2.monospacedDigit(), color: .primary)
+            HoldCountdownText(state: state, font: compactIslandFont, color: LiveActivityIslandLook.text)
                 .frame(maxWidth: 44)
         } else if let warmUp = state.warmUp {
             Text("\(warmUp.index)/\(warmUp.count)")
-                .font(.caption2)
-                .monospacedDigit()
-                .foregroundStyle(.primary)
+                .font(compactIslandFont)
+                .foregroundStyle(LiveActivityIslandLook.text)
                 // "1/3" on a warm-up set is spoken as the expanded slot's words: "Warm-up 1 of 3".
                 .accessibilityLabel(warmUpLabel(warmUp))
         } else if !isSimpleStep(state) {
             Text("\(state.setNumber)/\(state.totalSets)")
-                .font(.caption2)
-                .monospacedDigit()
-                .foregroundStyle(.primary)
+                .font(compactIslandFont)
+                .foregroundStyle(LiveActivityIslandLook.text)
                 // "3/5" is read as "three slash five"; the expanded slot's own wording, spoken.
                 .accessibilityLabel(Text("Set \(state.setNumber) of \(state.totalSets)"))
         } else {
-            Image(systemName: "figure.strengthtraining.functional")
-                .foregroundStyle(FernletWidgetPalette.leaf)
-                .accessibilityLabel(Text("In progress"))
+            LiveActivitySpriteView(sprite: LiveActivitySprites.runner, scale: 2, tint: LiveActivityIslandLook.leaf,
+                                   label: Text("In progress"))
         }
     }
 }
 
-/// Minimal-Island slot: pause glyph when stale, the width-clamped countdown while resting, else leaf.
+/// Minimal-Island slot: pause bars when stale, the width-clamped countdown while resting or holding,
+/// else the pixel dumbbell.
 private struct WorkoutIslandMinimal: View {
     let state: WorkoutActivityAttributes.ContentState
     let isStale: Bool
 
     var body: some View {
         if isStale {
-            Image(systemName: "pause.fill")
-                .foregroundStyle(FernletWidgetPalette.leaf.opacity(0.5))
-                .accessibilityLabel(Text("Paused"))
+            LiveActivitySpriteView(sprite: LiveActivitySprites.pause, scale: 2, tint: LiveActivityIslandLook.leaf,
+                                   label: Text("Paused"))
+                .opacity(0.5)
         } else if state.phase == .resting {
             // The minimal slot is a tiny circle: clamp the timer's width and scale digits down,
             // or the Text reserves room for its widest possible value ("88:88") and overflows.
-            RestCountdownText(state: state,
-                              font: .caption2.monospacedDigit(),
-                              color: FernletWidgetPalette.leaf,
-                              maxWidth: 34)
+            RestCountdownText(state: state, font: compactIslandFont,
+                              color: LiveActivityIslandLook.text, maxWidth: 34)
         } else if holdWindow(state) != nil {
-            HoldCountdownText(state: state, font: .caption2.monospacedDigit(),
-                              color: FernletWidgetPalette.leaf, maxWidth: 34)
+            HoldCountdownText(state: state, font: compactIslandFont,
+                              color: LiveActivityIslandLook.text, maxWidth: 34)
         } else {
-            Image(systemName: "leaf.fill")
-                .foregroundStyle(FernletWidgetPalette.leaf)
-                .accessibilityLabel(Text("Workout"))
+            LiveActivitySpriteView(sprite: LiveActivitySprites.dumbbell, scale: 2, tint: LiveActivityIslandLook.leaf,
+                                   label: Text("Workout"))
         }
     }
+}
+
+/// The compact and minimal slots' numbers: monospaced and semibold, as the design draws "3/5".
+private let compactIslandFont = Font.system(.footnote, design: .monospaced).weight(.semibold)
+
+/// The workout's pixel icon: the runner on a cardio part, the dumbbell otherwise.
+private func workoutIcon(_ state: WorkoutActivityAttributes.ContentState) -> LiveActivitySprite {
+    state.paceRaw == nil ? LiveActivitySprites.dumbbell : LiveActivitySprites.runner
 }
 
 // MARK: - Shared helpers
@@ -454,17 +466,18 @@ private struct HoldCountdownText: View {
 
 // MARK: - Lock Screen card
 
-/// The Lock Screen / banner presentation of the workout activity: title, exercise or "Rest" line,
-/// last time's numbers, the countdown or progress dots with the set's weight under them, and the
-/// phase-appropriate controls.
+/// The Lock Screen / banner presentation of the workout activity, inside ``LiveActivityCard``: the
+/// header (pixel icon, workout title, and "Exercise 3 of 6" with its progress squares), the exercise
+/// or "Rest" in Fraunces with its lines, the countdown or the set's weight on the right, and the
+/// phase's framed controls.
 ///
-/// Splits on `isStale` — a live cream card with the interactive control, or a dimmed "Paused / Open
+/// Splits on `isStale` — the live card with the interactive control, or the dimmed "Paused / Open
 /// Fernlet" resting-place for an activity that outlived its process. Used only from
 /// ``WorkoutLiveActivity``'s `ActivityConfiguration` closure.
 ///
-/// Larger Text: the countdown is a fixed-size face that takes its width first and never truncates;
-/// the text beside it shrinks or wraps instead, and at accessibility sizes the workout title gives
-/// way (the Island still names it) so the card keeps room for the countdown and the buttons.
+/// Larger Text: the countdown is a capped face that takes its width first and never truncates; the
+/// text beside it shrinks or wraps instead, and at accessibility sizes the workout title gives way
+/// (the Island still names it) so the card keeps room for the countdown and the buttons.
 private struct WorkoutLockScreenView: View {
     let attributes: WorkoutActivityAttributes
     let state: WorkoutActivityAttributes.ContentState
@@ -472,54 +485,22 @@ private struct WorkoutLockScreenView: View {
     /// dimmed, gentle "paused" card rather than a frozen live timer.
     var isStale: Bool = false
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.liveActivityLook) private var look
 
     var body: some View {
         if isStale {
-            stalePausedCard
+            LiveActivityPausedCard(icon: workoutIcon(state), title: attributes.workoutTitle)
         } else {
             liveCard
         }
     }
 
-    /// Dimmed, no-pressure resting-place for an orphaned activity. No timer, no "Set X of Y".
-    private var stalePausedCard: some View {
-        HStack(alignment: .center, spacing: 16) {
-            VStack(alignment: .leading, spacing: 5) {
-                Label {
-                    Text(attributes.workoutTitle)
-                        .font(.caption)
-                        .foregroundStyle(FernletWidgetPalette.inkSoft)
-                        .lineLimit(1)
-                } icon: {
-                    Image(systemName: "leaf.fill")
-                        .font(.caption)
-                        .foregroundStyle(FernletWidgetPalette.buttonFill.opacity(0.5))
-                }
-                Text("Paused")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(FernletWidgetPalette.inkSoft)
-                Text("Open Fernlet to pick it back up")
-                    .font(.subheadline)
-                    .foregroundStyle(FernletWidgetPalette.inkSoft)
-                    .lineLimit(2)
-            }
-            Spacer(minLength: 8)
-            Image(systemName: "pause.circle")
-                .font(.system(size: 34, weight: .light))
-                .foregroundStyle(FernletWidgetPalette.buttonFill.opacity(0.45))
-                // "Paused" is already written beside it — otherwise this reads "pause circle" into
-                // the middle of the card, which Speak Screen takes as part of the sentence.
-                .accessibilityHidden(true)
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 14)
-    }
-
-    /// Spacing and padding are a touch tighter than the stale card's so the load line fits inside the
-    /// Lock Screen's 160-point height.
     private var liveCard: some View {
-        VStack(spacing: 10) {
-            HStack(alignment: .center, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
+            if showsHeader {
+                header
+            }
+            HStack(alignment: .center, spacing: 10) {
                 leadingColumn
                 Spacer(minLength: 8)
                 trailingColumn
@@ -527,76 +508,79 @@ private struct WorkoutLockScreenView: View {
                     // however large the text beside it grows.
                     .layoutPriority(1)
             }
-            guidedActionButton(state)
+            guidedActionButton(state, onIsland: false)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
     }
 
-    /// The title, the exercise or "Rest", the set or next-up line, and last time's numbers.
-    private var leadingColumn: some View {
-        VStack(alignment: .leading, spacing: 4) {
+    /// Whether the header row has anything to draw: the title (hidden at accessibility sizes), or the
+    /// progress squares.
+    private var showsHeader: Bool { !typeSize.isAccessibilitySize || showsProgress }
+
+    /// "Exercise 3 of 6" and its squares sit in the header while a set or a cardio part is worked —
+    /// not while resting or during a timed hold, whose countdown is the card's point.
+    private var showsProgress: Bool {
+        state.phase == .working && (holdWindow(state) == nil || state.paceRaw != nil)
+    }
+
+    private var header: some View {
+        HStack(alignment: .center, spacing: 8) {
             if !typeSize.isAccessibilitySize {
-                Label {
-                    Text(attributes.workoutTitle)
-                        .font(.caption)
-                        .foregroundStyle(FernletWidgetPalette.inkSoft)
-                        .lineLimit(1)
-                } icon: {
-                    Image(systemName: "leaf.fill")
-                        .font(.caption)
-                        .foregroundStyle(FernletWidgetPalette.buttonFill)
-                }
+                LiveActivityHeaderLabel(icon: workoutIcon(state), title: attributes.workoutTitle)
             }
+            Spacer(minLength: 4)
+            if showsProgress {
+                LiveActivityProgressSquares(index: state.exerciseIndex, total: state.totalExercises)
+            }
+        }
+    }
+
+    /// The exercise or "Rest", the set or next-up line, and last time's numbers or the heart rate.
+    private var leadingColumn: some View {
+        VStack(alignment: .leading, spacing: 2) {
             if state.phase == .resting {
                 Text("Rest")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(FernletWidgetPalette.buttonFill)
+                    .font(LiveActivityFont.title)
+                    .foregroundStyle(look.moss)
                 nextUpLine(state)
-                    .font(.subheadline)
-                    .foregroundStyle(FernletWidgetPalette.ink)
+                    .font(LiveActivityFont.line)
+                    .foregroundStyle(look.ink)
                     .lineLimit(state.load == nil ? 2 : 1)
                     .minimumScaleFactor(0.8)
+                if let load = state.load {
+                    WorkoutRestLoadLine(load: load)
+                }
             } else {
-                Text(state.exerciseName)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(FernletWidgetPalette.ink)
+                Text(verbatim: state.exerciseName)
+                    .font(LiveActivityFont.title)
+                    .foregroundStyle(look.ink)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 setRepsLine(state)
-                    .font(.subheadline)
-                    .foregroundStyle(FernletWidgetPalette.inkSoft)
+                    .font(LiveActivityFont.line)
+                    .foregroundStyle(look.soft)
                     .lineLimit(1)
-            }
-            if let load = state.load {
-                WorkoutLastTimeLine(load: load, color: FernletWidgetPalette.inkSoft)
-            }
-            if state.phase == .working, let zone = state.zone {
-                WorkoutZoneLine(zone: zone, color: FernletWidgetPalette.inkSoft)
+                if let load = state.load {
+                    WorkoutLastTimeLine(load: load, color: look.soft)
+                }
+                if let zone = state.zone {
+                    WorkoutZoneLine(zone: zone, color: look.soft)
+                }
             }
         }
     }
 
-    /// The rest or hold countdown — or the progress dots — with the set's weight and range under it.
-    private var trailingColumn: some View {
-        VStack(alignment: .trailing, spacing: 4) {
-            if state.phase == .resting {
-                RestCountdownText(state: state,
-                                  font: .system(size: 40, weight: .semibold, design: .rounded),
-                                  color: FernletWidgetPalette.ink)
-                    .fixedSize(horizontal: true, vertical: false)
-            } else if holdWindow(state) != nil {
-                HoldCountdownText(state: state,
-                                  font: .system(size: 40, weight: .semibold, design: .rounded),
-                                  color: FernletWidgetPalette.ink)
-                    .fixedSize(horizontal: true, vertical: false)
-            } else {
-                ExerciseProgressDots(index: state.exerciseIndex, total: state.totalExercises)
-            }
-            if let load = state.load, WorkoutActivityLoadText.drawsWeight(load) {
-                WorkoutLoadStack(load: load, weightColor: FernletWidgetPalette.ink,
-                                 detailColor: FernletWidgetPalette.inkSoft)
-            }
+    /// The rest or hold countdown in Fraunces, or the set's weight over its range.
+    @ViewBuilder private var trailingColumn: some View {
+        if state.phase == .resting {
+            RestCountdownText(state: state, font: LiveActivityFont.countdown, color: look.ink)
+                .dynamicTypeSize(...DynamicTypeSize.xLarge)
+                .fixedSize(horizontal: true, vertical: false)
+        } else if holdWindow(state) != nil {
+            HoldCountdownText(state: state, font: LiveActivityFont.countdown, color: look.ink)
+                .dynamicTypeSize(...DynamicTypeSize.xLarge)
+                .fixedSize(horizontal: true, vertical: false)
+        } else if let load = state.load, WorkoutActivityLoadText.drawsWeight(load) {
+            WorkoutLoadStack(load: load, weightColor: look.ink, detailColor: look.soft)
         }
     }
 }
@@ -605,23 +589,43 @@ private struct WorkoutLockScreenView: View {
 /// "Next" / "Finish workout") while working, "−15 s" · "Skip rest" · "+15 s" while resting. Each is a
 /// `LiveActivityIntent` the system runs in the app's process, advancing the shared app-group run state
 /// (see GuidedWorkoutLiveActivityIntents). Only ever rendered in a live (non-stale) state, so the run
-/// always exists when a tap lands.
+/// always exists when a tap lands. The faces are the World's framed buttons (``LiveActivityButtonFace``
+/// on the card with a pixel check, ``LiveActivityIslandButtonFace`` on the island's black).
 @ViewBuilder
-private func guidedActionButton(_ state: WorkoutActivityAttributes.ContentState) -> some View {
+private func guidedActionButton(_ state: WorkoutActivityAttributes.ContentState, onIsland: Bool) -> some View {
     if state.phase == .resting {
-        WorkoutRestControls()
+        WorkoutRestControls(onIsland: onIsland)
     } else {
-        // Last set of the last exercise finishes (and logs) the workout.
-        let finishing = state.setNumber >= state.totalSets && state.exerciseIndex >= state.totalExercises - 1
-        // A one-set timed step (a stretch) moves on with "Next"; "Done set" would name a set it is not.
-        let singleHold = holdWindow(state) != nil && state.totalSets <= 1
         Button(intent: GuidedWorkoutMarkSetDoneIntent()) {
-            Label(finishing ? "Finish workout" : (singleHold ? "Next" : "Done set"), systemImage: "checkmark")
-                .font(.subheadline.weight(.semibold))
-                .frame(maxWidth: .infinity)
+            WorkoutButtonFace(title: doneButtonTitle(state), icon: LiveActivitySprites.check, onIsland: onIsland)
         }
-        .buttonStyle(.borderedProminent)
-        .tint(FernletWidgetPalette.buttonFill)
+        .buttonStyle(.plain)
+    }
+}
+
+/// "Finish workout" on the last set of the last exercise (it finishes and logs the workout); "Next" for
+/// a one-set timed step (a stretch: "Done set" would name a set it is not); else "Done set".
+private func doneButtonTitle(_ state: WorkoutActivityAttributes.ContentState) -> Text {
+    let finishing = state.setNumber >= state.totalSets && state.exerciseIndex >= state.totalExercises - 1
+    guard !finishing else { return Text("Finish workout") }
+    let singleHold = holdWindow(state) != nil && state.totalSets <= 1
+    return singleHold ? Text("Next") : Text("Done set")
+}
+
+/// One framed button face, the card's or the island's.
+private struct WorkoutButtonFace: View {
+    let title: Text
+    var icon: LiveActivitySprite? = nil
+    var role: LiveActivityButtonRole = .primary
+    var fillsWidth = true
+    let onIsland: Bool
+
+    var body: some View {
+        if onIsland {
+            LiveActivityIslandButtonFace(title: title, role: role, fillsWidth: fillsWidth)
+        } else {
+            LiveActivityButtonFace(title: title, icon: icon, role: role, fillsWidth: fillsWidth)
+        }
     }
 }
 
@@ -632,37 +636,26 @@ private func guidedActionButton(_ state: WorkoutActivityAttributes.ContentState)
 /// words are terse; VoiceOver hears the whole action ("Add 15 seconds of rest") and Voice Control
 /// answers to the drawn text spoken ("Plus 15 seconds") as well as plain words.
 private struct WorkoutRestControls: View {
+    let onIsland: Bool
+
     var body: some View {
         HStack(spacing: 8) {
             Button(intent: GuidedWorkoutShortenRestIntent()) {
-                Text("−15 s")
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                WorkoutButtonFace(title: Text("−15 s"), role: .secondary, fillsWidth: false, onIsland: onIsland)
             }
-            .buttonStyle(.bordered)
-            .tint(FernletWidgetPalette.leaf)
+            .buttonStyle(.plain)
             .accessibilityLabel(Text("Take 15 seconds off the rest"))
             .accessibilityInputLabels([Text("Minus 15 seconds"), Text("Minus 15"), Text("Shorter rest")])
 
             Button(intent: GuidedWorkoutSkipRestIntent()) {
-                Label("Skip rest", systemImage: "forward.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .frame(maxWidth: .infinity)
+                WorkoutButtonFace(title: Text("Skip rest"), icon: LiveActivitySprites.forward, onIsland: onIsland)
             }
-            .buttonStyle(.bordered)
-            .tint(FernletWidgetPalette.leaf)
+            .buttonStyle(.plain)
 
             Button(intent: GuidedWorkoutAddRestIntent()) {
-                Text("+15 s")
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                WorkoutButtonFace(title: Text("+15 s"), role: .secondary, fillsWidth: false, onIsland: onIsland)
             }
-            .buttonStyle(.bordered)
-            .tint(FernletWidgetPalette.leaf)
+            .buttonStyle(.plain)
             .accessibilityLabel(Text("Add 15 seconds of rest"))
             .accessibilityInputLabels([Text("Plus 15 seconds"), Text("Plus 15"), Text("Longer rest")])
         }
@@ -672,7 +665,7 @@ private struct WorkoutRestControls: View {
 // MARK: - Load (display only)
 
 /// The set's weight over its range ("105 lb" / "95–110 lb"), optionally with last time's numbers
-/// under them — beside the countdown or the progress dots.
+/// under them — beside the set on the card, beside the countdown in the island.
 ///
 /// DISPLAY ONLY (see the LOAD RULE at the top of this file). One VoiceOver element that speaks the
 /// whole load in words ("Suggested weight 105 pounds, range 95 to 110 pounds, last time 3 by 8 at 100
@@ -690,17 +683,17 @@ private struct WorkoutLoadStack: View {
         VStack(alignment: alignment, spacing: 1) {
             if let weight = WorkoutActivityLoadText.weightText(load) {
                 Text(verbatim: weight)
-                    .font(.subheadline.weight(.semibold))
+                    .font(LiveActivityFont.weight)
                     .foregroundStyle(weightColor)
             }
             if let range = WorkoutActivityLoadText.rangeText(load) {
                 Text(verbatim: range)
-                    .font(.caption2)
+                    .font(LiveActivityFont.range)
                     .foregroundStyle(detailColor)
             }
             if showsLastTime, let last = WorkoutActivityLoadText.lastTimeLine(load) {
                 Text(verbatim: last)
-                    .font(.caption2)
+                    .font(LiveActivityFont.range)
                     .foregroundStyle(detailColor)
             }
         }
@@ -708,6 +701,38 @@ private struct WorkoutLoadStack: View {
         .minimumScaleFactor(0.75)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: WorkoutActivityLoadText.spokenSummary(load) ?? ""))
+    }
+}
+
+/// The rest card's weight line under "Next up" ("**25 lb** · 25–30 lb"), the weight in bold — or, for
+/// a lift with no weight to draw, last time's numbers. One VoiceOver element speaking the whole load,
+/// last time included, so nothing the card used to say is lost to VoiceOver.
+private struct WorkoutRestLoadLine: View {
+    let load: WorkoutActivityAttributes.ContentState.Load
+    @Environment(\.liveActivityLook) private var look
+
+    var body: some View {
+        if WorkoutActivityLoadText.drawsWeight(load) {
+            HStack(spacing: 4) {
+                if let weight = WorkoutActivityLoadText.weightText(load) {
+                    Text(verbatim: weight).fontWeight(.bold)
+                }
+                if WorkoutActivityLoadText.weightText(load) != nil, WorkoutActivityLoadText.rangeText(load) != nil {
+                    Text(verbatim: "·")
+                }
+                if let range = WorkoutActivityLoadText.rangeText(load) {
+                    Text(verbatim: range)
+                }
+            }
+            .font(LiveActivityFont.detail)
+            .foregroundStyle(look.soft)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(verbatim: WorkoutActivityLoadText.spokenSummary(load) ?? ""))
+        } else {
+            WorkoutLastTimeLine(load: load, color: look.soft)
+        }
     }
 }
 
@@ -720,7 +745,7 @@ private struct WorkoutLastTimeLine: View {
     var body: some View {
         if let line = WorkoutActivityLoadText.lastTimeLine(load) {
             Text(verbatim: line)
-                .font(.caption)
+                .font(LiveActivityFont.detail)
                 .foregroundStyle(color)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
@@ -730,57 +755,28 @@ private struct WorkoutLastTimeLine: View {
     }
 }
 
-/// A cardio segment's heart-rate cue on one line (see the ZONE RULE at the top of this file): the live
-/// reading, its target and where it sits, or the short talk test. VoiceOver hears the reading in full
-/// words ("Heart rate 118, aiming for 110 to 125, in range"); the talk test speaks as drawn. Static text —
-/// nothing animates, so Reduce Motion has nothing to stop.
+/// A cardio segment's heart-rate cue on one line (see the ZONE RULE at the top of this file): a pixel
+/// heart and the live reading, its target and where it sits, or the short talk test without one.
+/// VoiceOver hears the reading in full words ("Heart rate 118, aiming for 110 to 125, in range"); the
+/// talk test speaks as drawn. Static — nothing animates, so Reduce Motion has nothing to stop.
 private struct WorkoutZoneLine: View {
     let zone: WorkoutActivityAttributes.ContentState.Zone
     var color: Color = .secondary
 
     var body: some View {
         if let line = WorkoutActivityZoneText.line(zone) {
-            Text(verbatim: line)
-                .font(.caption)
-                .foregroundStyle(color)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .accessibilityLabel(Text(verbatim: WorkoutActivityZoneText.spoken(zone) ?? line))
-        }
-    }
-}
-
-/// A gentle "where are we in the session" indicator for the working state (no numbers shouting).
-///
-/// Dots are capped at 8 so a long session can't overflow the card, while the label above reports the
-/// true uncapped position ("Exercise 10 of 10"). Only shown on the Lock Screen card's working state.
-private struct ExerciseProgressDots: View {
-    let index: Int
-    let total: Int
-
-    // Dots are capped at 8 so a long session can't overflow the card…
-    private var dotTotal: Int { max(1, min(total, 8)) }
-    private var dotIndex: Int { max(0, min(index, dotTotal - 1)) }
-    // …but the LABEL reports the true position, uncapped — a 10-exercise day reads "Exercise 10 of 10",
-    // never a clamped "Exercise 8 of 8".
-    private var labelTotal: Int { max(1, total) }
-    private var labelIndex: Int { max(0, min(index, labelTotal - 1)) }
-
-    var body: some View {
-        VStack(alignment: .trailing, spacing: 6) {
-            Text("Exercise \(labelIndex + 1) of \(labelTotal)")
-                .font(.caption2)
-                .foregroundStyle(FernletWidgetPalette.inkSoft)
-                .lineLimit(1)
-            HStack(spacing: 4) {
-                ForEach(0..<dotTotal, id: \.self) { i in
-                    Circle()
-                        .fill(i <= dotIndex
-                              ? FernletWidgetPalette.buttonFill
-                              : FernletWidgetPalette.buttonFill.opacity(0.22))
-                        .frame(width: 6, height: 6)
+            HStack(spacing: 5) {
+                if zone.isLive {
+                    LiveActivitySpriteView(sprite: LiveActivitySprites.heart, scale: 2)
                 }
+                Text(verbatim: line)
+                    .font(LiveActivityFont.detail)
+                    .foregroundStyle(color)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(verbatim: WorkoutActivityZoneText.spoken(zone) ?? line))
         }
     }
 }
