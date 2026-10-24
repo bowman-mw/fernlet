@@ -45,7 +45,7 @@ extension WorldDisposableCamera {
 }
 
 /// Presents the disposable camera over the World Home: the one presenter (``WorldDisposableCamera``).
-/// The camera keeps today's own chrome and its own ways out; a session that ends while it is open
+/// The camera keeps its own chrome and its own ways out (its ✕); a session that ends while it is open
 /// closes it, as the Friends panel's camera closes today.
 struct WorldDisposableCameraCover: ViewModifier {
     var store: FernletStore
@@ -54,14 +54,9 @@ struct WorldDisposableCameraCover: ViewModifier {
     func body(content: Content) -> some View {
         content
             .fullScreenCover(isPresented: Binding(get: { mode != nil }, set: { if !$0 { mode = nil } })) {
-                ZStack(alignment: .topTrailing) {
-                    WorldDisposableCamera.view(store: store, mode: mode ?? .session)
-                    // INTEGRATOR: today's camera draws its chat button in this corner; lane FRIENDS'
-                    // `b3-camera-session` draft 2 removes it. Drop this ✕ if their camera draws its own.
-                    FernletCloseButton { mode = nil }
-                        .padding(.top, 8)
-                        .padding(.trailing, 16)
-                }
+                // The camera draws its own framed ✕ top right (`b3-camera-session`); it dismisses the
+                // cover, which clears `mode`.
+                WorldDisposableCamera.view(store: store, mode: mode ?? .session)
             }
             .onChange(of: store.meshNetworkManager.isInSession) { _, inSession in
                 if mode == .session && !inSession { mode = nil }

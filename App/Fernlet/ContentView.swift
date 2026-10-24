@@ -1080,14 +1080,10 @@ struct ContentView: View {
     private func loggingSheet(for sheet: FernletSheet) -> some View {
         switch sheet {
         case .meal:
-            // At accessibility sizes the six 80pt meal-type chips overflow the medium detent, so
-            // the sheet opens .large instead of hiding a control (artboard 4a·AX3). The reporter, not
-            // a bare closure: a meal kept without its photo lands on the toast as a caveat.
+            // Full height like every World sheet (`b3-meal`; the chrome no longer reads detents). The
+            // reporter, not a bare closure: a meal kept without its photo lands on the toast as a caveat.
             MealSheet(store: store, onLogged: mealLogReporter)
-                .fernletSheetChrome(
-                    anchor: "sheet.meal",
-                    detents: dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large]
-                )
+                .fernletSheetChrome(anchor: "sheet.meal", detents: [.large])
         case .recipe:
             // "Log & save" reports its meal to the toast, which shows once this sheet has closed.
             RecipeSheet(store: store, onMealsLogged: mealLogReporter)

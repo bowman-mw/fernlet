@@ -13,7 +13,7 @@ import FernletDomainModel
 /// One photographed meal to show in the "Recent bites" strip — just the fields the polaroid and its
 /// tap-through viewer need. Carries the meal's `photoID` (non-nil by construction) rather than any bytes,
 /// so building the list never touches the sealed `MealPhotoStore`.
-struct RecentBite: Identifiable, Equatable {
+struct RecentBite: Identifiable, Hashable {
     /// The meal's own id — stable across the strip and the presented viewer.
     let id: UUID
     let name: String

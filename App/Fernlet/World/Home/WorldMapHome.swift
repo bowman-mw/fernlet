@@ -82,10 +82,10 @@ struct WorldMapHome: View {
             // here would draw a second band.
             CompanionCustomizationSheet(store: store, petCount: $customizePetCount)
         }
-        .sheet(item: $guidedSession) { session in
-            // INTEGRATOR: present the runner the way Move's restyled presenter does (lane MOVE).
+        // The runner is a focused flow (`b3-runner-*`), presented full screen with no grabber as Move
+        // presents it; its ✕ ends it.
+        .fullScreenCover(item: $guidedSession) { session in
             GuidedWorkoutSheet(store: store, session: session, sessionsRemain: store.worldGuidedSessionsRemain(after: session))
-                .fernletSheet()
         }
         .worldDisposableCamera(store: store, mode: $cameraMode)
         .environment(\.worldTileStatus, tiles)

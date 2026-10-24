@@ -143,6 +143,8 @@ struct HomeView: View {
             .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
             // Milestones and Silly stats open one page, the Stamp book (design `b2-milestones`, draft 2).
             .stampBookDestination(isPresented: $isStampBookOpen, store: store)
+            // A Recent bites polaroid pushes its photo under the plate ("‹ Today", `b2-meal-photo`).
+            .navigationDestination(item: $selectedBite) { bite in recentBiteDetail(bite) }
             // Customize is a page inside the Today panel (design `b2-customize`): Customize → a slot,
             // Wardrobe, Creation Studio → Save item all push under the plate. The map's hold still opens
             // it as a sheet (`CompanionCustomizationSheet`).
@@ -220,6 +222,20 @@ struct HomeView: View {
         }
     }
     #endif
+
+    /// A Recent bites photo, pushed in the panel's stack (`b2-meal-photo`: the plate's Back returns).
+    @ViewBuilder
+    private func recentBiteDetail(_ bite: RecentBite) -> some View {
+        #if canImport(UIKit)
+        MealPhotoDetailView(
+            name: bite.name,
+            loggedAt: bite.loggedAt,
+            loadData: { store.mealPhotoData(for: bite.photoID) },
+            hasSealedData: { store.mealPhotoHasSealedFile(for: bite.photoID) },
+            isPushed: true
+        )
+        #endif
+    }
 
     /// The World Today panel's pushed pages: Trends and Body signals (``WorldTodayPushedPages``).
     private var todayPushedPages: WorldTodayPushedPages {
@@ -986,16 +1002,6 @@ struct HomeView: View {
                 }
             }
         }
-        #if canImport(UIKit)
-        .sheet(item: $selectedBite) { bite in
-            MealPhotoDetailView(
-                name: bite.name,
-                loggedAt: bite.loggedAt,
-                loadData: { store.mealPhotoData(for: bite.photoID) },
-                hasSealedData: { store.mealPhotoHasSealedFile(for: bite.photoID) }
-            )
-        }
-        #endif
         // Keyed on today's day key so the six prior-day fetches run once now and once per midnight
         // rollover — never on every body pass. Today's bites remain live from `store.day`.
         .task(id: FernletDate.dayKey(for: Date())) {
