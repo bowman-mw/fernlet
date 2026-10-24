@@ -17,9 +17,9 @@ import Foundation
 ///
 /// Scenes: `workout-set`, `workout-rest`, `workout-cardio`, `workout-hold`, `workout-warmup`,
 /// `workout-step`, `workout-paused`, `cook-step`, `cook-notimer`, `cook-last`, `cook-paused`, and `both`
-/// (a rest and a timed step at once, for the minimal island). A paused scene posts a snapshot that goes
-/// stale two seconds later, which is how an orphaned run looks. Every activity of both kinds is ended
-/// first, so one launch shows exactly one scene.
+/// (a rest and a timed step at once, for the minimal island). A paused scene's snapshot goes stale and is
+/// re-posted, which is how an orphaned run looks. Every activity of both kinds is ended first,
+/// so one launch shows exactly one scene.
 @MainActor
 enum LiveActivityDemoHarness {
     #if DEBUG
@@ -53,7 +53,20 @@ enum LiveActivityDemoHarness {
             Task { await activity.end(nil, dismissalPolicy: .immediate) }
         }
         let now = Date()
-        let stale = scene.hasSuffix("-paused") ? now.addingTimeInterval(2) : nil
+        let paused = scene.hasSuffix("-paused")
+        let stale = paused ? now.addingTimeInterval(3) : nil
+        if paused {
+            // The system does not redraw an activity when its stale date passes, and refuses a request
+            // that is stale already; re-posting the same content once it is stale shows the paused card.
+            Task { @MainActor in
+                do {
+                    try await Task.sleep(for: .seconds(settleSeconds))
+                } catch {
+                    return
+                }
+                await markStale()
+            }
+        }
         if scene == "both" {
             // A rest and a timed step at once: the island shows one compact and the other minimal.
             request(WorkoutActivityAttributes(workoutTitle: "Upper body"), workoutState("workout-rest", now: now), stale: nil)
@@ -63,6 +76,17 @@ enum LiveActivityDemoHarness {
         } else {
             let title = scene == "workout-cardio" ? "Easy run-walk" : (scene == "workout-hold" ? "Stretch" : "Upper body")
             request(WorkoutActivityAttributes(workoutTitle: title), workoutState(scene, now: now), stale: stale)
+        }
+    }
+
+    /// Re-post every activity's content with a stale date already passed, so it is drawn as paused.
+    private static func markStale() async {
+        let past = Date().addingTimeInterval(-1)
+        for activity in Activity<WorkoutActivityAttributes>.activities {
+            await activity.update(ActivityContent(state: activity.content.state, staleDate: past))
+        }
+        for activity in Activity<CookingActivityAttributes>.activities {
+            await activity.update(ActivityContent(state: activity.content.state, staleDate: past))
         }
     }
 

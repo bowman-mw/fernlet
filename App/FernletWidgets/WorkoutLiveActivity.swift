@@ -56,15 +56,19 @@ struct WorkoutLiveActivity: Widget {
             let isStale = context.isStale
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
+                    // Both header slots stand clear of the island's rounded corners, which clipped the
+                    // dumbbell's first column and the count's last digit.
                     WorkoutIslandLeading(title: context.attributes.workoutTitle, state: state, isStale: isStale)
+                        .padding(.leading, 6)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     WorkoutIslandTrailing(state: state, isStale: isStale)
+                        .padding(.trailing, 8)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    // The exercise or "Rest" heads the bottom region, flush left under the header as
-                    // the design draws it, rather than centred under the camera.
-                    VStack(alignment: .leading, spacing: 8) {
+                    // The exercise heads the bottom region, flush left under the header as the design
+                    // draws it, rather than centred under the camera.
+                    VStack(alignment: .leading, spacing: 3) {
                         WorkoutIslandCenter(state: state, isStale: isStale)
                         WorkoutIslandBottom(state: state, isStale: isStale)
                     }
@@ -105,6 +109,7 @@ private struct WorkoutIslandLeading: View {
                 .font(.footnote)
                 .foregroundStyle(LiveActivityIslandLook.soft)
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
     }
 }
@@ -131,7 +136,7 @@ private struct WorkoutIslandTrailing: View {
     }
 }
 
-/// Expanded-Island title: "Rest" in leaf green / the exercise name, or a dimmed "Paused" when stale.
+/// Expanded-Island title: the exercise name, or a dimmed "Paused" when stale; nothing while resting.
 private struct WorkoutIslandCenter: View {
     let state: WorkoutActivityAttributes.ContentState
     let isStale: Bool
@@ -142,15 +147,13 @@ private struct WorkoutIslandCenter: View {
                 .font(.headline)
                 .foregroundStyle(LiveActivityIslandLook.soft)
                 .lineLimit(1)
-        } else {
-            // Two Texts, not one over a ternary: a `String` ternary draws "Rest" verbatim, unlocalized.
-            Group {
-                if state.phase == .resting { Text("Rest") } else { Text(verbatim: state.exerciseName) }
-            }
-            .font(.headline)
-            .foregroundStyle(state.phase == .resting ? LiveActivityIslandLook.leaf : LiveActivityIslandLook.text)
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
+        } else if state.phase == .working {
+            // While resting, "Rest" sits beside the countdown instead (WorkoutIslandBottom).
+            Text(verbatim: state.exerciseName)
+                .font(.headline)
+                .foregroundStyle(LiveActivityIslandLook.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
     }
 }
@@ -173,18 +176,22 @@ private struct WorkoutIslandBottom: View {
         }
     }
 
+    /// Spaced tight: the expanded island stops at 160 points, and a region that would grow past it
+    /// is dropped whole, so a set, a rest and a cooking step each fit with room to spare.
     private var liveContent: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
             if state.phase == .resting {
                 restHeader
                 nextUpLine(state)
                     .font(.footnote)
                     .foregroundStyle(LiveActivityIslandLook.soft)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             } else {
                 setRepsLine(state)
-                    .font(.subheadline)
+                    .font(.footnote)
                     .foregroundStyle(LiveActivityIslandLook.soft)
+                    .lineLimit(1)
                 if let load = state.load {
                     workingLoadRow(load)
                 }
@@ -193,36 +200,42 @@ private struct WorkoutIslandBottom: View {
                 }
             }
             guidedActionButton(state, onIsland: true)
+                .padding(.top, 2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// The rest countdown in Fraunces, beside the set's weight and last time when the lift has them.
-    /// The countdown takes its width first, so the numbers beside it shrink before it ever truncates.
-    @ViewBuilder private var restHeader: some View {
-        let countdown = RestCountdownText(state: state, font: LiveActivityFont.islandCountdown,
-                                          color: LiveActivityIslandLook.text)
-            .dynamicTypeSize(...DynamicTypeSize.xLarge)
-        if let load = state.load {
-            HStack(alignment: .center, spacing: 12) {
-                countdown
-                    .fixedSize(horizontal: true, vertical: false)
-                    .layoutPriority(1)
-                Spacer(minLength: 8)
-                WorkoutLoadStack(load: load, showsLastTime: true, weightColor: LiveActivityIslandLook.text,
-                                 detailColor: LiveActivityIslandLook.soft)
+    /// "Rest" and the countdown in Fraunces on one line, beside the set's weight and last time when the
+    /// lift has them. The countdown has its own slot, so the numbers beside it shrink before it does.
+    private var restHeader: some View {
+        HStack(alignment: .center, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("Rest")
+                    .font(.headline)
+                    .foregroundStyle(LiveActivityIslandLook.leaf)
+                RestCountdownText(state: state, font: LiveActivityFont.islandCountdown,
+                                  color: LiveActivityIslandLook.text)
+                    .countdownSlot(width: 96, alignment: .leading)
             }
-        } else {
-            countdown
+            Spacer(minLength: 6)
+            if let load = state.load {
+                VStack(alignment: .trailing, spacing: 1) {
+                    WorkoutWeightLine(load: load, weightColor: LiveActivityIslandLook.text,
+                                      color: LiveActivityIslandLook.soft)
+                    if WorkoutActivityLoadText.drawsWeight(load) {
+                        WorkoutLastTimeLine(load: load, color: LiveActivityIslandLook.soft)
+                    }
+                }
+            }
         }
     }
 
-    /// Working a lift: its weight and range at the leading edge, last time's numbers at the trailing.
+    /// Working a lift, on one line: its weight and range at the leading edge, last time's numbers at
+    /// the trailing.
     private func workingLoadRow(_ load: WorkoutActivityAttributes.ContentState.Load) -> some View {
-        HStack(alignment: .lastTextBaseline, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
             if WorkoutActivityLoadText.drawsWeight(load) {
-                WorkoutLoadStack(load: load, alignment: .leading, weightColor: LiveActivityIslandLook.text,
-                                 detailColor: LiveActivityIslandLook.soft)
+                WorkoutWeightLine(load: load, weightColor: LiveActivityIslandLook.text, color: LiveActivityIslandLook.soft)
             }
             Spacer(minLength: 8)
             WorkoutLastTimeLine(load: load, color: LiveActivityIslandLook.soft)
@@ -547,7 +560,7 @@ private struct WorkoutLockScreenView: View {
                     .lineLimit(state.load == nil ? 2 : 1)
                     .minimumScaleFactor(0.8)
                 if let load = state.load {
-                    WorkoutRestLoadLine(load: load)
+                    WorkoutWeightLine(load: load, weightColor: look.soft, color: look.soft)
                 }
             } else {
                 Text(verbatim: state.exerciseName)
@@ -573,12 +586,10 @@ private struct WorkoutLockScreenView: View {
     @ViewBuilder private var trailingColumn: some View {
         if state.phase == .resting {
             RestCountdownText(state: state, font: LiveActivityFont.countdown, color: look.ink)
-                .dynamicTypeSize(...DynamicTypeSize.xLarge)
-                .fixedSize(horizontal: true, vertical: false)
+                .countdownSlot(width: 104, alignment: .trailing)
         } else if holdWindow(state) != nil {
             HoldCountdownText(state: state, font: LiveActivityFont.countdown, color: look.ink)
-                .dynamicTypeSize(...DynamicTypeSize.xLarge)
-                .fixedSize(horizontal: true, vertical: false)
+                .countdownSlot(width: 104, alignment: .trailing)
         } else if let load = state.load, WorkoutActivityLoadText.drawsWeight(load) {
             WorkoutLoadStack(load: load, weightColor: look.ink, detailColor: look.soft)
         }
@@ -664,8 +675,7 @@ private struct WorkoutRestControls: View {
 
 // MARK: - Load (display only)
 
-/// The set's weight over its range ("105 lb" / "95–110 lb"), optionally with last time's numbers
-/// under them — beside the set on the card, beside the countdown in the island.
+/// The set's weight over its range ("105 lb" / "95–110 lb") — beside the set on the Lock Screen card.
 ///
 /// DISPLAY ONLY (see the LOAD RULE at the top of this file). One VoiceOver element that speaks the
 /// whole load in words ("Suggested weight 105 pounds, range 95 to 110 pounds, last time 3 by 8 at 100
@@ -674,8 +684,6 @@ private struct WorkoutRestControls: View {
 private struct WorkoutLoadStack: View {
     let load: WorkoutActivityAttributes.ContentState.Load
     var alignment: HorizontalAlignment = .trailing
-    /// Draw last time's numbers under the range — the expanded Island, which has no other line for them.
-    var showsLastTime = false
     var weightColor: Color = .primary
     var detailColor: Color = .secondary
 
@@ -691,11 +699,6 @@ private struct WorkoutLoadStack: View {
                     .font(LiveActivityFont.range)
                     .foregroundStyle(detailColor)
             }
-            if showsLastTime, let last = WorkoutActivityLoadText.lastTimeLine(load) {
-                Text(verbatim: last)
-                    .font(LiveActivityFont.range)
-                    .foregroundStyle(detailColor)
-            }
         }
         .lineLimit(1)
         .minimumScaleFactor(0.75)
@@ -704,18 +707,22 @@ private struct WorkoutLoadStack: View {
     }
 }
 
-/// The rest card's weight line under "Next up" ("**25 lb** · 25–30 lb"), the weight in bold — or, for
-/// a lift with no weight to draw, last time's numbers. One VoiceOver element speaking the whole load,
-/// last time included, so nothing the card used to say is lost to VoiceOver.
-private struct WorkoutRestLoadLine: View {
+/// The set's weight and range on one line ("**25 lb** · 25–30 lb"), the weight in bold — under "Next
+/// up" on the rest card, and in the island — or, for a lift with no weight to draw, last time's
+/// numbers. One VoiceOver element speaking the whole load, last time included, so nothing the card
+/// used to say is lost to VoiceOver.
+private struct WorkoutWeightLine: View {
     let load: WorkoutActivityAttributes.ContentState.Load
-    @Environment(\.liveActivityLook) private var look
+    /// The weight's colour (the island draws it brighter than the range).
+    var weightColor: Color
+    /// The range's and the separator's colour.
+    var color: Color
 
     var body: some View {
         if WorkoutActivityLoadText.drawsWeight(load) {
             HStack(spacing: 4) {
                 if let weight = WorkoutActivityLoadText.weightText(load) {
-                    Text(verbatim: weight).fontWeight(.bold)
+                    Text(verbatim: weight).font(LiveActivityFont.detailBold).foregroundStyle(weightColor)
                 }
                 if WorkoutActivityLoadText.weightText(load) != nil, WorkoutActivityLoadText.rangeText(load) != nil {
                     Text(verbatim: "·")
@@ -725,13 +732,13 @@ private struct WorkoutRestLoadLine: View {
                 }
             }
             .font(LiveActivityFont.detail)
-            .foregroundStyle(look.soft)
+            .foregroundStyle(color)
             .lineLimit(1)
             .minimumScaleFactor(0.75)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Text(verbatim: WorkoutActivityLoadText.spokenSummary(load) ?? ""))
         } else {
-            WorkoutLastTimeLine(load: load, color: look.soft)
+            WorkoutLastTimeLine(load: load, color: color)
         }
     }
 }

@@ -74,7 +74,11 @@ struct LiveActivityWorldLookTests {
     @Test func theCardKeepsEveryValue() throws {
         let workout = try RepoRoot.source(Self.workout)
         #expect(workout.contains("} else if holdWindow(state) != nil {\n            HoldCountdownText(state: state, font: LiveActivityFont.countdown"))
-        #expect(workout.contains("WorkoutRestLoadLine(load: load)"))
+        #expect(workout.contains("WorkoutWeightLine(load: load, weightColor: look.soft, color: look.soft)"))
+        // A timer is never sized to fit on either card: that dropped the whole Lock Screen card on 26.5.
+        for source in [workout, try RepoRoot.source(Self.cooking)] {
+            #expect(!source.contains(".fixedSize("), "a countdown is sized to fit again")
+        }
         #expect(workout.contains("LiveActivityProgressSquares(index: state.exerciseIndex, total: state.totalExercises)"))
     }
 

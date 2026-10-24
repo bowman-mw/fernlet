@@ -116,6 +116,9 @@ enum LiveActivityFont {
     static let line = Font.custom(dmSans, size: 13.5, relativeTo: .subheadline)
     /// Last time, the heart rate, the rest's weight (`.lsoft` 12.5): DM Sans 12.5.
     static let detail = Font.custom(dmSans, size: 12.5, relativeTo: .caption)
+    /// The weight inside that line ("**25 lb** · 25–30 lb"): DM Sans bold 12.5. The extension carries no
+    /// regular-weight bold, so the bold rides on the medium face, as the app's framed fonts do.
+    static let detailBold = Font.custom(dmSansMedium, size: 12.5, relativeTo: .caption).weight(.bold)
     /// "Exercise 3 of 6" (`.lsoft` 11.5): DM Sans 11.5.
     static let progress = Font.custom(dmSansMedium, size: 11.5, relativeTo: .caption2).weight(.semibold)
     /// A cooking step's words: DM Sans 14.5.

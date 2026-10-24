@@ -43,15 +43,19 @@ struct CookingLiveActivity: Widget {
             let isStale = context.isStale
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
+                    // Both header slots stand clear of the island's rounded corners, which clipped the
+                    // flame's first column and the count's last digit.
                     CookingIslandLeading(recipeName: context.attributes.recipeName, isStale: isStale)
+                        .padding(.leading, 6)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     CookingIslandTrailing(state: state, isStale: isStale)
+                        .padding(.trailing, 8)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     // The step heads the bottom region, flush left under the header as the design
                     // draws it, rather than centred under the camera.
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 6) {
                         CookingIslandCenter(state: state, isStale: isStale)
                         CookingIslandBottom(state: state, isStale: isStale)
                     }
@@ -89,6 +93,7 @@ private struct CookingIslandLeading: View {
                 .font(.footnote)
                 .foregroundStyle(LiveActivityIslandLook.soft)
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
     }
 }
@@ -123,7 +128,7 @@ private struct CookingIslandCenter: View {
             Text(verbatim: state.stepText)
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(LiveActivityIslandLook.text)
-                .lineLimit(3)
+                .lineLimit(2)
                 .minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -144,14 +149,17 @@ private struct CookingIslandBottom: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         } else {
-            VStack(alignment: .leading, spacing: 8) {
+            // The countdown sits beside Next rather than over it: the expanded island stops at 160
+            // points, and three lines of step, a countdown and a button stacked would not fit.
+            HStack(alignment: .center, spacing: 12) {
                 if hasTimer(state) {
                     StepCountdownText(state: state, font: LiveActivityFont.islandCountdown,
                                       color: LiveActivityIslandLook.text)
-                        .dynamicTypeSize(...DynamicTypeSize.xLarge)
+                        .countdownSlot(width: 112, alignment: .leading)
                 }
                 nextStepButton(state, onIsland: true)
             }
+            .padding(.top, 2)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -311,8 +319,7 @@ private struct CookingLockScreenView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 if hasTimer(state) {
                     StepCountdownText(state: state, font: LiveActivityFont.countdown, color: look.ink)
-                        .dynamicTypeSize(...DynamicTypeSize.xLarge)
-                        .fixedSize(horizontal: true, vertical: false)
+                        .countdownSlot(width: 112, alignment: .trailing)
                         .layoutPriority(1)
                 }
             }

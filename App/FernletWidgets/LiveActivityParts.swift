@@ -68,8 +68,8 @@ struct LiveActivityIslandButtonFace: View {
             .minimumScaleFactor(0.7)
             .foregroundStyle(primary ? LiveActivityIslandLook.buttonInk : LiveActivityIslandLook.secondaryInk)
             .padding(.horizontal, 12)
-            .padding(.vertical, 9)
-            .frame(maxWidth: fillsWidth ? .infinity : nil, minHeight: 40)
+            .padding(.vertical, 8)
+            .frame(maxWidth: fillsWidth ? .infinity : nil, minHeight: 36)
             .background(shape.fill(primary ? LiveActivityIslandLook.buttonFill : LiveActivityIslandLook.secondaryFill))
             .overlay(shape.strokeBorder(primary ? LiveActivityIslandLook.buttonEdge : LiveActivityIslandLook.secondaryEdge,
                                         lineWidth: 2))
@@ -129,6 +129,21 @@ struct LiveActivityProgressSquares: View {
             .padding(.horizontal, 1)
             .accessibilityHidden(true)
         }
+    }
+}
+
+extension View {
+    /// A countdown's own slot: one line, a fixed width, shrinking rather than truncating.
+    ///
+    /// A `Text(timerInterval:)` sizes itself to its widest possible value, and a sized-to-fit timer
+    /// (`fixedSize`) in a Fraunces face broke the whole Lock Screen card on iOS 26.5 (the card dropped its
+    /// padding, frame, countdown and buttons). A fixed slot is the shape WidgetKit lays out reliably;
+    /// past an hour, or at the largest text, the digits scale down to fit it.
+    func countdownSlot(width: CGFloat, alignment: Alignment) -> some View {
+        lineLimit(1)
+            .minimumScaleFactor(0.5)
+            .multilineTextAlignment(alignment == .leading ? .leading : .trailing)
+            .frame(width: width, alignment: alignment)
     }
 }
 
