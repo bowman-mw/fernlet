@@ -5265,6 +5265,8 @@ struct MealReviewSheet: View {
                             .font(look == nil ? .fernlet(.bubble) : FernletFramedFont.note)
                             .foregroundStyle(look?.dim ?? Color.slate)
                             .fixedSize(horizontal: false, vertical: true)
+                            // One line while it fits: the line takes its width before the spacer.
+                            .layoutPriority(1)
                         infoButton
                         Spacer(minLength: 0)
                     }
