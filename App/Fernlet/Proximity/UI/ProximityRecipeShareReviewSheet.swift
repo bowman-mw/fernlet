@@ -34,86 +34,87 @@ struct ProximityRecipeShareReviewSheet: View {
     /// The "added" line, set when the import landed; the sheet holds it for a beat, then closes.
     @State private var landedLine: String?
 
+    /// World build (`b3-recipe-incoming`, approved 2026-10-24): the sheet frame with Decline where
+    /// Cancel goes and the shared recipe's name inside, the summary card with its tags, the details in
+    /// framed cards, and Import at the bottom right.
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        ScreenHeader(
-                            // PEER-SUPPLIED data arriving over the mesh. `Text(verbatim:)` is
-                            // load-bearing, not stylistic: it guarantees the string is never
-                            // interpreted as a format key or a catalog lookup, which a
-                            // peer-controlled value reaching either would make a format-string
-                            // hazard. Do not "simplify" this to `Text(recipe.title)`.
-                            title: Text(verbatim: share.payload.recipe.title),
-                            subtitle: Text("Shared by \(share.senderDisplayName)"),
-                            subtitleFirst: false,
-                            // A peer-supplied recipe name, so the same three-line allowance the
-                            // sending sheet gives its own: truncating what arrived hides the very
-                            // thing the user is deciding whether to import.
-                            titleLineLimit: 3
-                        )
-
+                    VStack(alignment: .leading, spacing: 14) {
                         summaryCard
 
                         // Hidden once the import landed: the recipe it just added would otherwise
                         // read as a duplicate of itself for the beat the "added" line holds.
                         if landedLine == nil, let duplicateWarning {
-                            Text(duplicateWarning)
-                                .font(.fernlet(.bubble))
-                                .foregroundStyle(Color.slate)
-                                .fernletWrappingText()
+                            FernletNotice(text: Text(verbatim: duplicateWarning), tone: .warn) { EmptyView() }
                         }
 
                         sourceHostField
-
                         notesField
-
                         ingredientsField
-
                         stepsField
 
                         if let notice {
-                            Text(notice)
-                                .font(.fernlet(.bubble))
-                                .foregroundStyle(Color.slate)
-                                .fernletWrappingText()
+                            FernletNotice(text: Text(verbatim: notice), tone: .warn) { EmptyView() }
                         }
                     }
-                    .padding(20)
+                    .padding(.horizontal, 18)
+                    .padding(.top, 6)
                     .padding(.bottom, 10)
                 }
 
                 importBar
             }
-            .background(Color.parchment)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Decline") {
-                        manager.dismissRecipeShare(share)
-                        dismiss()
-                    }
-                    .disabled(landedLine != nil)
-                }
-            }
+            .background(WorldPalette.paper)
+            .toolbar(.hidden, for: .navigationBar)
+            .safeAreaInset(edge: .top, spacing: 0) { header }
         }
         // A landed import whose sheet goes away early — swiped down, or covered by another root
         // sheet, which would re-queue it — is consumed here, so an imported share never comes back.
         .onDisappear { if landedLine != nil { manager.dismissRecipeShare(share) } }
     }
 
-    /// The Import bar, or — once the import landed — the "added" line in its place.
+    /// The sheet's header: Decline in Cancel's place, the recipe's name and who shared it.
+    private var header: some View {
+        SheetHeader(
+            // PEER-SUPPLIED data arriving over the mesh. `Text(verbatim:)` is load-bearing, not
+            // stylistic: it guarantees the string is never interpreted as a format key or a catalog
+            // lookup, which a peer-controlled value reaching either would make a format-string
+            // hazard. Do not "simplify" this to `Text(recipe.title)`.
+            title: Text(verbatim: share.payload.recipe.title),
+            subtitle: Text("Shared by \(share.senderDisplayName)")
+        ) {
+            Button("Decline") {
+                manager.dismissRecipeShare(share)
+                dismiss()
+            }
+            .font(FernletFramedFont.sheetControl)
+            .foregroundStyle(WorldPalette.dim)
+            .frame(minHeight: 44)
+            .disabled(landedLine != nil)
+            .accessibilityIdentifier("recipeShare.review.decline")
+        }
+    }
+
+    /// The Import button at the bottom right, or — once the import landed — the "added" line in its
+    /// place.
     @ViewBuilder
     private var importBar: some View {
         if let landedLine {
             ImportLandedLine(text: landedLine)
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
-                .padding(20)
-                .background(Color.parchment)
+                .font(FernletFramedFont.body)
+                .foregroundStyle(WorldPalette.bark)
+                .padding(18)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(WorldPalette.paper)
         } else {
-            SheetSaveBar(label: duplicateWarning == nil ? "Import" : "Import anyway") {
-                importShare()
+            FernletSheetFooter {
+                Button { importShare() } label: {
+                    if duplicateWarning == nil { Text("Import") } else { Text("Import anyway") }
+                }
+                .buttonStyle(ActionPillButtonStyle(.primary))
+                .accessibilityIdentifier("recipeShare.review.import")
             }
         }
     }
@@ -121,20 +122,22 @@ struct ProximityRecipeShareReviewSheet: View {
     /// Kind, servings, ingredient count and macros — the at-a-glance card above the details.
     private var summaryCard: some View {
         FernletCard {
-            VStack(alignment: .leading, spacing: 12) {
-                Label(recipeKindLabel, systemImage: recipeKindIcon)
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.moss)
-                HStack(spacing: 12) {
-                    NutritionPill(title: "Servings", value: "\(share.payload.recipe.servings)")
-                    NutritionPill(title: "Ingredients", value: "\(share.payload.recipe.ingredientCount)")
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    WorldSpriteView(sprite: recipeKindSprite, scale: 2)
+                    Text(recipeKindLabel)
+                        .font(FernletFramedFont.rowTitle.weight(.bold))
+                        .foregroundStyle(WorldPalette.bark)
                 }
-                if let macrosText {
-                    Text(macrosText)
-                        .font(.fernlet(.stat))
-                        .foregroundStyle(Color.slate)
+                FlowLayout(spacing: 8) {
+                    FernletTag(text: Text("Servings \(share.payload.recipe.servings)"))
+                    FernletTag(text: Text("Ingredients \(share.payload.recipe.ingredientCount)"))
+                }
+                if let sharedMacros {
+                    RecipeMacroTags(macros: sharedMacros)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -142,10 +145,11 @@ struct ProximityRecipeShareReviewSheet: View {
     @ViewBuilder
     private var notesField: some View {
         if let notesText, !notesText.isEmpty {
-            SheetField("Notes") {
-                Text(notesText)
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.bark)
+            RecipeReviewCard(title: "Notes") {
+                // Peer-supplied: drawn verbatim, never as a catalog key.
+                Text(verbatim: notesText)
+                    .font(FernletFramedFont.body)
+                    .foregroundStyle(WorldPalette.bark)
                     .fernletWrappingText()
             }
         }
@@ -157,10 +161,10 @@ struct ProximityRecipeShareReviewSheet: View {
     @ViewBuilder
     private var sourceHostField: some View {
         if let sourceHost {
-            SheetField("Source") {
-                Text(sourceHost)
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.bark)
+            RecipeReviewCard(title: "Source") {
+                Text(verbatim: sourceHost)
+                    .font(FernletFramedFont.body)
+                    .foregroundStyle(WorldPalette.bark)
                     .fernletWrappingText()
             }
         }
@@ -171,7 +175,7 @@ struct ProximityRecipeShareReviewSheet: View {
     @ViewBuilder
     private var stepsField: some View {
         if !sharedSteps.isEmpty {
-            SheetField("Steps") {
+            RecipeReviewCard(title: "Steps") {
                 VStack(alignment: .leading, spacing: 8) {
                     if let sharedParts {
                         ForEach(Array(sharedParts.enumerated()), id: \.offset) { index, part in
@@ -190,8 +194,8 @@ struct ProximityRecipeShareReviewSheet: View {
 
     /// The ingredient list exactly as shared; a multipart share lists each part's under its heading.
     private var ingredientsField: some View {
-        SheetField("Ingredients") {
-            VStack(alignment: .leading, spacing: 8) {
+        RecipeReviewCard(title: "Ingredients") {
+            VStack(alignment: .leading, spacing: 6) {
                 if let sharedParts {
                     ForEach(Array(sharedParts.enumerated()), id: \.offset) { index, part in
                         if !part.ingredients.isEmpty {
@@ -209,8 +213,8 @@ struct ProximityRecipeShareReviewSheet: View {
     private func stepRows(_ steps: [RecipeStep]) -> some View {
         ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
             Text("\(index + 1). \(step.text)")
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
+                .font(FernletFramedFont.body)
+                .foregroundStyle(WorldPalette.bark)
                 .fernletWrappingText()
         }
     }
@@ -218,8 +222,8 @@ struct ProximityRecipeShareReviewSheet: View {
     private func ingredientRows(_ lines: [String]) -> some View {
         ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
             Text("- \(line)")
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
+                .font(FernletFramedFont.body)
+                .foregroundStyle(WorldPalette.bark)
                 .fernletWrappingText()
         }
     }
@@ -244,10 +248,11 @@ struct ProximityRecipeShareReviewSheet: View {
         }
     }
 
-    private var recipeKindIcon: String {
+    /// The kind's pixel icon: the onigiri for a Fernlet recipe, the page for a saved web recipe.
+    private var recipeKindSprite: WorldSprite {
         switch share.payload.recipe.kind {
-        case .local: "fork.knife"
-        case .saved: "doc.text.magnifyingglass"
+        case .local: WorldSprites.onigiri
+        case .saved: WorldSprites.doc
         }
     }
 
@@ -285,30 +290,23 @@ struct ProximityRecipeShareReviewSheet: View {
         }
     }
 
-    private var macrosText: String? {
+    /// The shared recipe's macros as the World build's coloured tags draw them (`b3-recipe-incoming`),
+    /// every figure clamped; nil when the share carries none.
+    private var sharedMacros: MacroTotals? {
+        let macros: MacroTotals
         switch share.payload.recipe.kind {
         case .local:
             guard let ingredients = share.payload.recipe.local?.ingredients else { return nil }
-            let protein = Self.boundedMacroSum(ingredients, \.protein)
-            let carbs = Self.boundedMacroSum(ingredients, \.carbs)
-            let fat = Self.boundedMacroSum(ingredients, \.fat)
-            guard protein > 0 || carbs > 0 || fat > 0 else { return nil }
-            return Self.macrosLine(protein: protein, carbs: carbs, fat: fat)
+            macros = MacroTotals(protein: Self.boundedMacroSum(ingredients, \.protein),
+                                 carbs: Self.boundedMacroSum(ingredients, \.carbs),
+                                 fat: Self.boundedMacroSum(ingredients, \.fat))
         case .saved:
             guard let saved = share.payload.recipe.saved else { return nil }
-            let protein = Self.boundedMacro(saved.protein)
-            let carbs = Self.boundedMacro(saved.carbs)
-            let fat = Self.boundedMacro(saved.fat)
-            guard protein > 0 || carbs > 0 || fat > 0 else { return nil }
-            return Self.macrosLine(protein: protein, carbs: carbs, fat: fat)
+            macros = MacroTotals(protein: Self.boundedMacro(saved.protein), carbs: Self.boundedMacro(saved.carbs),
+                                 fat: Self.boundedMacro(saved.fat))
         }
-    }
-
-    /// "Macros: P 12g · C 30g · F 8g" as ONE key, so a translator can rename the letters and
-    /// reorder the three grams.
-    private static func macrosLine(protein: Int, carbs: Int, fat: Int) -> String {
-        String(localized: "recipeShare.review.macros", defaultValue: "Macros: P \(protein)g · C \(carbs)g · F \(fat)g",
-               comment: "A shared recipe's total macros on the import review. P, C and F abbreviate protein, carbohydrate and fat; each number is grams.")
+        guard macros.protein > 0 || macros.carbs > 0 || macros.fat > 0 else { return nil }
+        return macros
     }
 
     /// Sums a peer's per-ingredient macros without trusting them: every term is clamped into

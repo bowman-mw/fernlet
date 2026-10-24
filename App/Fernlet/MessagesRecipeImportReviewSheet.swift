@@ -31,39 +31,61 @@ struct MessagesRecipeImportReviewSheet: View {
         self.onCompleted = onCompleted
     }
 
+    /// World build (`b3-messages-recipe`, approved 2026-10-24): the sheet frame with Cancel top left and
+    /// "Import recipe" inside, the recipe's name and counts, its notes in a framed card, the one-copy
+    /// line and the primary Save recipe.
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 14) {
                     recipeDetails
+                    notesCard
                     duplicatePolicyNote
-                    if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
+                    if let errorMessage {
+                        FernletNotice(text: Text(verbatim: errorMessage), tone: .warn) { EmptyView() }
+                    }
                     saveButton
                 }
-                .padding()
+                .padding(.horizontal, 18)
+                .padding(.top, 6)
+                .padding(.bottom, 24)
             }
-            .navigationTitle("Import recipe")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { dismissButton }
+            .background(WorldPalette.paper)
+            // Cancel does nothing while a save is under way, as its disabled toolbar button did.
+            .fernletSheetToolbar(title: "Import recipe", onCancel: { if !isImporting { dismiss() } })
         }
         .interactiveDismissDisabled(isImporting)
     }
 
     private var recipeDetails: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(record.packet.recipe.name).font(.title2.weight(.semibold))
-            Text("\(record.packet.recipe.servings) servings · \(record.packet.recipe.ingredients.count) ingredients")
-            Text("\(record.packet.recipe.steps?.count ?? 0) steps · \(notesStatus)")
-            // A recipe made in parts names them, in making order — a dressing first, then the salad.
-            // The names are the sender's own words; the payload's decode bounded them.
-            if let parts = record.packet.recipe.components, !parts.isEmpty {
-                Text("Parts: \(parts.map(\.name).joined(separator: " · "))")
+        VStack(alignment: .leading, spacing: 6) {
+            // The sender's own words: drawn verbatim, never as a catalog key.
+            Text(verbatim: record.packet.recipe.name)
+                .font(RecipeType.display(24))
+                .foregroundStyle(WorldPalette.bark)
+                .fixedSize(horizontal: false, vertical: true)
+            Group {
+                Text("^[\(record.packet.recipe.servings) serving](inflect: true) · ^[\(record.packet.recipe.ingredients.count) ingredient](inflect: true)")
+                Text("^[\(record.packet.recipe.steps?.count ?? 0) step](inflect: true) · \(notesStatus)")
+                // A recipe made in parts names them, in making order — a dressing first, then the
+                // salad. The names are the sender's own words; the payload's decode bounded them.
+                if let parts = record.packet.recipe.components, !parts.isEmpty {
+                    Text("Parts: \(parts.map(\.name).joined(separator: " · "))")
+                }
             }
-            if record.packet.includesNotes, !record.packet.recipe.notes.isEmpty {
-                Text("Notes")
-                    .font(.headline)
-                Text(record.packet.recipe.notes)
-                    .foregroundStyle(.secondary)
+            .font(FernletFramedFont.body)
+            .foregroundStyle(WorldPalette.dim)
+        }
+    }
+
+    /// The sender's notes, when the card carries them.
+    @ViewBuilder
+    private var notesCard: some View {
+        if record.packet.includesNotes, !record.packet.recipe.notes.isEmpty {
+            RecipeReviewCard(title: "Notes") {
+                Text(verbatim: record.packet.recipe.notes)
+                    .font(FernletFramedFont.body)
+                    .foregroundStyle(WorldPalette.bark)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -74,33 +96,32 @@ struct MessagesRecipeImportReviewSheet: View {
     private var saveButton: some View {
         if let landedLine {
             ImportLandedLine(text: landedLine)
-                .font(.headline)
+                .font(FernletFramedFont.body.weight(.semibold))
+                .foregroundStyle(WorldPalette.bark)
         } else {
             Button(action: beginImport) {
-                Text(isImporting ? "Saving recipe…" : "Save recipe")
-                    .frame(maxWidth: .infinity)
+                Group {
+                    if isImporting { Text("Saving recipe…") } else { Text("Save recipe") }
+                }
+                .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(ActionPillButtonStyle(.primary))
             .disabled(isImporting)
+            .accessibilityIdentifier("messagesRecipeImport.save")
         }
     }
 
-    private var notesStatus: String {
-        record.packet.includesNotes ? "Notes included" : "No notes"
+    /// "Notes included" or "No notes", as text that reaches the catalog (a `String` here was spliced
+    /// into the line verbatim, English in every language).
+    private var notesStatus: Text {
+        record.packet.includesNotes ? Text("Notes included") : Text("No notes")
     }
 
     private var duplicatePolicyNote: some View {
         Text("If this exact recipe is already in Fernlet, it will stay a single copy.")
-            .font(.footnote)
-            .foregroundStyle(.secondary)
-    }
-
-    @ToolbarContentBuilder
-    private var dismissButton: some ToolbarContent {
-        ToolbarItem(placement: .cancellationAction) {
-            Button("Cancel") { dismiss() }
-                .disabled(isImporting)
-        }
+            .font(FernletFramedFont.body)
+            .foregroundStyle(WorldPalette.dim)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     /// Saves the recipe and hands the outcome to ``ImportReviewLanding``. `isImporting` stays set

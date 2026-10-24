@@ -224,7 +224,9 @@ private final class PlayedLog {
     /// create branch then leaves the spoken confirmation to the toast.
     @Test func logAndSaveReportsItsMeal() throws {
         let food = try RepoRoot.source("App/Fernlet/FoodView.swift")
-        let action = try #require(region(food, from: "Button(\"Log & save\") {", to: "finishAfterSave(named: name)"))
+        // The World editor (b3-recipe-new) draws the button with a full-width label, so the pin reads
+        // its action from the line that creates the recipe it logs.
+        let action = try #require(region(food, from: "let recipe = addDraftRecipe()", to: "finishAfterSave(named: name)"))
         #expect(action.contains("onMealsLogged([meal])"), "\"Log & save\" logs without reporting to the toast")
         #expect(food.contains("onMealsLogged: onMealsLogged.then(onCreatedRecipeLogged)"),
                 "the book's create branch no longer learns that \"Log & save\" logged")
