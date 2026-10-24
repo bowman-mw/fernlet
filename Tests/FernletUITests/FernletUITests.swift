@@ -32,7 +32,7 @@ final class FernletUITests: XCTestCase {
         XCTAssertTrue(exerciseSearch.waitForExistence(timeout: 3))
         XCTAssertEqual(exerciseSearch.value as? String, "Search exercise or muscle")
 
-        app.buttons["workout.kind.activity"].tap()
+        app.buttons["Cardio & activity"].tap()
         let activitySearch = app.textFields["activity.search"]
         XCTAssertTrue(activitySearch.waitForExistence(timeout: 3))
         XCTAssertEqual(activitySearch.value as? String, "Search workout type")
@@ -51,7 +51,7 @@ final class FernletUITests: XCTestCase {
         let app = launchCompletedApp()
         openWorkoutSheet(in: app)
 
-        app.buttons["workout.kind.activity"].tap()
+        app.buttons["Cardio & activity"].tap()
         XCTAssertTrue(app.textFields["activity.search"].waitForExistence(timeout: 3))
         XCTAssertFalse(app.buttons["Save"].isEnabled)
 

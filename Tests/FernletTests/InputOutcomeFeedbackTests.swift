@@ -190,8 +190,15 @@ private final class SpokenLog {
     /// exercise form, the ready screen's food question, the set editor's effort and reason, the
     /// Activities chips, and Settings' care-task group and memory category chips (2026-10-21; the care-task group is the framed segmented control since the World build).
     @Test func theRemainingSelectionChipsChooseThroughTheSharedHelper() throws {
+        // World build (Batch 3 draft 2): the log, edit and plan sheets' Kind, Intensity and Split chips
+        // became FernletSegmentedPicker / FernletDropdown, which tick through the same helper inside
+        // FernletUI; the Suggest sheet's feeling chips still call it here.
+        let move = try RepoRoot.source("App/Fernlet/MoveView.swift")
+        let framedChoices = move.components(separatedBy: "FernletSegmentedPicker(").count - 1
+            + move.components(separatedBy: "FernletDropdown(").count - 1
+        #expect(framedChoices >= 4, "Move's sheets choose kind, intensity and split through the framed controls")
         let pins: [(path: String, selects: Int)] = [
-            ("App/Fernlet/MoveView.swift", 5),
+            ("App/Fernlet/MoveView.swift", 1),
             ("App/Fernlet/WorkoutSetupView.swift", 2),
             ("App/Fernlet/WorkoutSessionSection.swift", 2),
             ("App/Fernlet/WorkoutWeightInventorySection.swift", 1),

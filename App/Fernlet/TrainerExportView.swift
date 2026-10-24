@@ -42,6 +42,8 @@ struct TrainerExportView: View {
     /// Whether the "What's included" list is expanded. The intro promises control over the contents;
     /// this is where the contents are actually named.
     @State private var showsIncluded = false
+    /// World build (`b3-trainer-export`): the sheet's paper, framed cards and buttons.
+    @Environment(\.fernletFramedLook) private var look
     @State private var sheet: TrainerSheet?
     /// A plan decoded by the paste sheet, held until that sheet has finished dismissing.
     ///
@@ -90,9 +92,12 @@ struct TrainerExportView: View {
             case .share(let payload):
                 ActivityShareView(items: [payload.url]) { onShareFinished(payload.url) }
             case .paste:
+                // World build: the paste and review sheets in the sheet frame, full height.
                 CoachPlanPasteSheet { plan in onDecoded(plan) }
+                    .fernletSheet()
             case .review(let plan):
                 CoachPlanReviewView(store: store, plan: plan) { result in onImported(result) }
+                    .fernletSheet()
             }
         }
     }
@@ -141,16 +146,11 @@ struct TrainerExportView: View {
             ScrollView {
                 sections
             }
-            .background(Color.parchment)
-            .navigationTitle("Share with a trainer")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    // Leaving with a prepared-but-never-shared summary shouldn't strand the plaintext
-                    // file either. Swipe-to-dismiss still falls through to the purge backstops.
-                    Button("Done") { discardPreparedFile(); dismiss() }
-                }
-            }
+            .background((look?.paper ?? Color.parchment).ignoresSafeArea())
+            // World build (`b3-trainer-export`, redrawn for the button rule): the title in the sheet and
+            // Done top right. Leaving with a prepared-but-never-shared summary shouldn't strand the
+            // plaintext file either; swipe-to-dismiss still falls through to the purge backstops.
+            .fernletSheetToolbar(title: "Share with a trainer", onDone: { discardPreparedFile(); dismiss() })
             .sheet(item: $sheet, onDismiss: {
                 // Hand the just-decoded plan to the review gate only once the paste sheet is gone.
                 if let plan = pendingPlan {
@@ -322,7 +322,7 @@ struct TrainerExportView: View {
                 .foregroundStyle(Color.bark)
             Text("Prepare a summary of your workouts and nutrition to give to a trainer or nutritionist. You control exactly what goes in it, and nothing is shared until you choose to.")
                 .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -334,8 +334,8 @@ struct TrainerExportView: View {
             Text(String(localized: "trainerExport.preview.dayCount",
                         defaultValue: "\(previewDayCount) days of training will be included.",
                         comment: "Trainer summary screen: how many days of training the summary will carry. Needs a plural variation."))
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.labelSmall) : MoveFont.body)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .frame(maxWidth: .infinity, alignment: .center)
 
             includedDisclosure
@@ -347,14 +347,10 @@ struct TrainerExportView: View {
                 Button {
                     sheet = .share(SharePayload(url: url))
                 } label: {
-                    Label("Share summary…", systemImage: "square.and.arrow.up")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.parchment)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 13)
-                        .background(Color.moss, in: RoundedRectangle(cornerRadius: FernletMetrics.radiusSm))
+                    Text("Share summary…").frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.plain)
+                // The framed primary under the World look; today's moss bar without it.
+                .buttonStyle(ActionPillButtonStyle(.primary))
                 .accessibilityIdentifier("trainer.share")
             } else {
                 Button {
@@ -363,20 +359,15 @@ struct TrainerExportView: View {
                     // "Share again" after a completed share: the button reverting to its untouched
                     // label read as the summary having been lost, when what happened is that the
                     // plaintext file was deleted on purpose.
-                    Text(didShare ? "Share again" : "Prepare summary")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.parchment)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 13)
-                        .background(Color.moss, in: RoundedRectangle(cornerRadius: FernletMetrics.radiusSm))
+                    Text(didShare ? "Share again" : "Prepare summary").frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ActionPillButtonStyle(.primary))
                 .accessibilityIdentifier("trainer.prepare")
 
                 if didShare {
                     Text("Shared — the file has been removed from Fernlet.")
                         .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
+                        .foregroundStyle(look?.dim ?? Color.slate)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -396,12 +387,17 @@ struct TrainerExportView: View {
             } label: {
                 HStack(spacing: 6) {
                     Text("What's included")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.bark)
-                    Image(systemName: showsIncluded ? "chevron.down" : "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color.slate)
-                    Spacer(minLength: 0)
+                        .font(look == nil ? .fernlet(.label) : MoveFont.rowTitle)
+                        .foregroundStyle(look?.text ?? Color.bark)
+                    if look != nil {
+                        Spacer(minLength: 0)
+                        FernletIcon(showsIncluded ? .chevronDown : .chevron)
+                    } else {
+                        Image(systemName: showsIncluded ? "chevron.down" : "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(look?.dim ?? Color.slate)
+                        Spacer(minLength: 0)
+                    }
                 }
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())
@@ -416,12 +412,16 @@ struct TrainerExportView: View {
                     }
                     Text("Change what's included in Settings › Sharing.")
                         .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
+                        .foregroundStyle(look?.dim ?? Color.slate)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        // World build: the list sits in its own framed card (`b3-trainer-export`).
+        .padding(.horizontal, look == nil ? 0 : 15)
+        .padding(.vertical, look == nil ? 0 : 6)
+        .modifier(TrainerCardFrame(isFramed: look != nil))
     }
 
     /// What this summary would carry right now — the always-included core plus whichever optional
@@ -465,7 +465,7 @@ struct TrainerExportView: View {
             cardTitle("Ask an AI for a plan")
             Text("Copy your training summary along with instructions, paste it into an AI assistant, and paste the plan it writes back into Fernlet below.")
                 .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .fixedSize(horizontal: false, vertical: true)
             bullet("Includes the last 8 weeks of workouts, 2 weeks of meals, and how each exercise has progressed — plus your targets, equipment and weights, session length, and the muscles, movements and areas you avoid or train around.",
                    tint: Color.moss)
@@ -475,15 +475,10 @@ struct TrainerExportView: View {
             Button {
                 showCopyConfirm = true
             } label: {
-                Label(didCopy ? "Copied — copy again" : "Copy summary + prompt",
-                      systemImage: didCopy ? "checkmark" : "doc.on.doc")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.parchment)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 13)
-                    .background(Color.moss, in: RoundedRectangle(cornerRadius: FernletMetrics.radiusSm))
+                Text(didCopy ? "Copied — copy again" : "Copy summary + prompt")
             }
-            .buttonStyle(.plain)
+            // `b3-trainer-export`: a framed secondary — Prepare summary stays the screen's one primary.
+            .buttonStyle(ActionPillButtonStyle(look == nil ? .primary : .secondary))
             .accessibilityIdentifier("trainer.copyForAI")
         }
     }
@@ -494,22 +489,15 @@ struct TrainerExportView: View {
             cardTitle("Bring a plan back")
             Text("Paste a workout plan and Fernlet will show it to you day by day — checked against the muscles and movements you avoid and the equipment you have — before anything is added.")
                 .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .fixedSize(horizontal: false, vertical: true)
 
             Button {
                 sheet = .paste
             } label: {
-                Label("Paste a plan…", systemImage: "square.and.arrow.down")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.bark)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 13)
-                    .background(Color.parchment, in: RoundedRectangle(cornerRadius: FernletMetrics.radiusSm))
-                    .overlay(RoundedRectangle(cornerRadius: FernletMetrics.radiusSm)
-                        .stroke(Color.bark.opacity(0.15), lineWidth: 1))
+                Text("Paste a plan…")
             }
-            .buttonStyle(.plain)
+            .buttonStyle(ActionPillButtonStyle(.secondary))
             .accessibilityIdentifier("trainer.pastePlan")
         }
     }
@@ -517,7 +505,7 @@ struct TrainerExportView: View {
     private var comingSoonNote: some View {
         Text("Sharing in person with a coach who uses Fernlet Coach is coming soon.")
             .font(.fernlet(.labelSmall))
-            .foregroundStyle(Color.slate)
+            .foregroundStyle(look?.dim ?? Color.slate)
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(.top, 4)
     }
@@ -528,15 +516,16 @@ struct TrainerExportView: View {
         VStack(alignment: .leading, spacing: 10) { content() }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: FernletMetrics.radiusMd))
-            .overlay(RoundedRectangle(cornerRadius: FernletMetrics.radiusMd).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+            .modifier(MoveInsetCardFrame(cornerRadius: look == nil ? FernletMetrics.radiusMd : FernletFramedLook.cardRadius))
     }
 
     /// A card's heading line. Takes `LocalizedStringKey` so every literal title localizes and
     /// harvests into the string catalog automatically — a `String` parameter would silently render
     /// verbatim English forever (the localization wall's call-site opt-out trap).
     private func cardTitle(_ text: LocalizedStringKey) -> some View {
-        Text(text).font(.fernlet(.label)).foregroundStyle(Color.slate)
+        Text(text)
+            .font(look == nil ? .fernlet(.label) : MoveFont.rowTitle)
+            .foregroundStyle(look?.text ?? Color.slate)
     }
 
     /// The prepared summary's URL, wrapped `Identifiable` so `.sheet(item:)` can present the share
@@ -559,10 +548,28 @@ struct TrainerExportView: View {
 
     private func bulletRow(_ text: Text, tint: Color) -> some View {
         HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "circle.fill").font(.system(size: 5)).foregroundStyle(tint).padding(.top, 7)
-            text.font(.fernlet(.bodySmall)).foregroundStyle(Color.bark)
+            if look != nil {
+                // World build: a pixel square in an ink frame, in the bullet's colour.
+                MoveSwatch(color: tint, size: 12).padding(.top, 4)
+            } else {
+                Image(systemName: "circle.fill").font(.system(size: 5)).foregroundStyle(tint).padding(.top, 7)
+            }
+            text.font(.fernlet(.bodySmall)).foregroundStyle(look?.text ?? Color.bark)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
+        }
+    }
+}
+
+/// The trainer screen's "What's included" card under the World look; nothing around it today.
+private struct TrainerCardFrame: ViewModifier {
+    let isFramed: Bool
+
+    func body(content: Content) -> some View {
+        if isFramed {
+            content.modifier(MoveInsetCardFrame())
+        } else {
+            content
         }
     }
 }

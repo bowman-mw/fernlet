@@ -134,23 +134,21 @@ struct ExerciseHistoryView: View {
             }
             .padding(20)
         }
-        .background(Color.parchment)
-        // The page draws its own ScreenHeader (matching the Move root), so the bar carries only
-        // the back button rather than repeating the title directly above the big one.
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
+        // World build (`b2-exercise-history`): the dotted page, and the title and Back on the plate (the
+        // ScreenHeader then shows only its description line).
+        .fernletPageBackground()
+        .fernletPushedPage("Exercise history")
         .onAppear { rows = ExerciseHistoryRowModel.rows(from: store.exerciseHistoryEntries()) }
     }
 
-    /// The rows, divided — or the quiet factual empty line.
+    /// The rows in one framed card with dotted rules — or the quiet factual empty line.
     private var historySection: some View {
-        FernletScrollSection {
+        FernletFramedSection {
             if rows.isEmpty {
                 EmptyState(text: "No exercises logged yet.")
             } else {
-                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                ForEach(rows) { row in
                     ExerciseHistoryRow(row: row)
-                    if index < rows.count - 1 { FernletRowDivider() }
                 }
             }
         }
@@ -183,25 +181,28 @@ struct ExerciseHistoryRow: View {
         return Text("Logged \(row.sessions) times · first on \(row.firstDateText)")
     }
 
+    /// World build (`b2-exercise-history`): the name semibold in ink over dim detail lines.
+    @Environment(\.fernletFramedLook) private var look
+
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(verbatim: row.displayName)
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
+                .font(look == nil ? .fernlet(.body) : MoveFont.rowTitle)
+                .foregroundStyle(look?.text ?? Color.bark)
             lastLine
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.labelSmall) : FernletFramedFont.rowDetail)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .fernletWrappingText()
             if let best = row.bestValues {
                 Text("Best: \(best)")
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
+                    .font(look == nil ? .fernlet(.labelSmall) : FernletFramedFont.rowDetail)
+                    .foregroundStyle(look?.dim ?? Color.slate)
             }
             frequencyLine
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.labelSmall) : FernletFramedFont.rowDetail)
+                .foregroundStyle(look?.dim ?? Color.slate)
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, look == nil ? 6 : 12)
         .accessibilityElement(children: .combine)
     }
 }

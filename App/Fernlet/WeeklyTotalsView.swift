@@ -127,12 +127,15 @@ struct WeeklyTotalsView: View {
             }
             .padding(20)
         }
-        .background(Color.parchment)
-        // The page draws its own ScreenHeader, so the bar carries only the back button.
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
+        // World build (`b2-weekly-totals`): the dotted page, and the title and Back on the panel's plate
+        // (the ScreenHeader then shows only its description line).
+        .fernletPageBackground()
+        .fernletPushedPage(Self.title)
         .onAppear { days = store.loadDays() }
     }
+
+    /// The page's title on the plate: the same key and note as the ScreenHeader and the Move link.
+    static let title = LocalizedStringResource("Weekly totals", comment: "Title of the Move tab screen with one week's sets per muscle and aerobic minutes; also the label of the link that opens it.")
 }
 
 /// The week being shown, between the step-back and step-forward buttons.
@@ -143,6 +146,8 @@ struct WeeklyTotalsView: View {
 struct WeeklyTotalsWeekHeader: View {
     var summary: WeeklyTrainingSummary
     @Binding var weeksBack: Int
+    /// World build: the week in Fraunces between pixel chevrons (`b2-weekly-totals`).
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
         HStack(alignment: .center, spacing: 4) {
@@ -150,14 +155,14 @@ struct WeeklyTotalsWeekHeader: View {
                        available: weeksBack < WeeklyTrainingSummaryBuilder.maxWeeksBack) { weeksBack += 1 }
             VStack(spacing: 2) {
                 Text(verbatim: WeeklyTotalsCopy.weekRange(start: summary.weekStart, end: summary.weekEnd))
-                    .font(.fernlet(.headerMedium))
-                    .foregroundStyle(Color.bark)
+                    .font(look == nil ? .fernlet(.headerMedium) : .custom(FernletFontName.frauncesSemiBold, size: 19, relativeTo: .title3))
+                    .foregroundStyle(look?.text ?? Color.bark)
                     .multilineTextAlignment(.center)
                     .fernletWrappingText()
                 if weeksBack == 0 {
                     Text("This week", comment: "Weekly totals screen: caption under the date range when it is the current week.")
                         .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
+                        .foregroundStyle(look?.dim ?? Color.slate)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -173,11 +178,17 @@ struct WeeklyTotalsWeekHeader: View {
     ) -> some View {
         if available {
             Button(action: action) {
-                Image(systemName: symbol)
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(Color.slate)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
+                Group {
+                    if look != nil {
+                        FernletIcon(symbol == "chevron.left" ? .back : .chevron)
+                    } else {
+                        Image(systemName: symbol)
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(Color.slate)
+                    }
+                }
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(label)
@@ -196,35 +207,34 @@ struct WeeklySetsSection: View {
     var muscleSets: [WeeklyTrainingSummary.MuscleSets]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            WeeklySectionHeading("Hard sets per muscle")
-            FernletScrollSection { card }
-        }
+        // World build (`b2-weekly-totals`): the section label, then one framed card whose first row is
+        // the reference range and the rest one muscle each; how sets are counted is the note under it.
+        FernletFramedSection(header: Text("Hard sets per muscle"), footer: howCounted) { card }
     }
 
-    /// The card: the reference line, the rows (or the quiet empty line), and how sets are counted.
+    /// The card's rows: the reference line, then the muscles (or the quiet empty line).
     @ViewBuilder private var card: some View {
         Text(verbatim: WeeklyTotalsCopy.setsReference)
-            .font(.fernlet(.labelSmall))
-            .foregroundStyle(Color.slate)
+            .font(FernletFramedFont.note)
+            .foregroundStyle(look?.dim ?? Color.slate)
             .fernletWrappingText()
-            .padding(.vertical, 6)
+            .padding(.vertical, 10)
         if muscleSets.isEmpty {
             EmptyState(text: "No lifting sets logged.")
         } else {
             ForEach(muscleSets) { row in
-                FernletRowDivider()
                 WeeklyMuscleSetsRow(row: row)
             }
         }
-        FernletRowDivider()
+    }
+
+    /// How the per-muscle counts are worked out, under the card.
+    private var howCounted: Text {
         Text("A set counts in full for the muscles a lift mainly works, and as half a set for the muscles that help. A guided session marked done counts the sets it planned. Warm-ups, stretches, holds and ramp-up sets aren't counted.",
              comment: "Weekly totals screen: how the per-muscle set counts are worked out. 'Marked done' = the guided session's Mark done button, used instead of running it set by set.")
-            .font(.fernlet(.labelSmall))
-            .foregroundStyle(Color.slate)
-            .fernletWrappingText()
-            .padding(.vertical, 6)
     }
+
+    @Environment(\.fernletFramedLook) private var look
 }
 
 /// One muscle's row: its name and its set count. VoiceOver reads it as one element, the name then
@@ -232,17 +242,18 @@ struct WeeklySetsSection: View {
 /// under the name instead of squeezing beside it.
 struct WeeklyMuscleSetsRow: View {
     var row: WeeklyTrainingSummary.MuscleSets
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
         AdaptiveStack(spacing: 4, horizontalAlignment: .leading) {
             Text(verbatim: row.muscle.displayName)
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
+                .font(look == nil ? .fernlet(.body) : FernletFramedFont.rowTitle)
+                .foregroundStyle(look?.text ?? Color.bark)
                 .fernletWrappingText()
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text(verbatim: WeeklyTotalsCopy.setsNumber(row.sets))
-                .font(.fernlet(.stat))
-                .foregroundStyle(Color.bark)
+                .font(look == nil ? .fernlet(.stat) : MoveFont.rowValue)
+                .foregroundStyle(look?.text ?? Color.bark)
         }
         .padding(.vertical, 6)
         .accessibilityElement(children: .ignore)
@@ -257,68 +268,40 @@ struct WeeklyMuscleSetsRow: View {
 struct WeeklyAerobicSection: View {
     var minutes: Int
 
+    @Environment(\.fernletFramedLook) private var look
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            WeeklySectionHeading("Aerobic minutes")
-            FernletScrollSection { card }
-        }
+        // World build: "Aerobic minutes follow below, unchanged" (`b2-weekly-totals`), in the same frame.
+        FernletFramedSection(header: Text("Aerobic minutes"), footer: whatCounts) { card }
     }
 
-    /// The card: the total over its bar (or the quiet empty line), then the guideline and what counts.
+    /// The card's rows: the total over its bar (or the quiet empty line), then the guideline.
     @ViewBuilder private var card: some View {
         if minutes > 0 {
             VStack(alignment: .leading, spacing: 8) {
                 Text(verbatim: WeeklyTotalsCopy.aerobicLine(minutes: minutes))
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.bark)
+                    .font(look == nil ? .fernlet(.body) : FernletFramedFont.rowTitle)
+                    .foregroundStyle(look?.text ?? Color.bark)
                     .fernletWrappingText()
                 WeeklyAerobicBar(fraction: WeeklyTotalsCopy.aerobicFraction(minutes: minutes))
             }
-            .padding(.vertical, 6)
+            .padding(.vertical, 10)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Text(verbatim: WeeklyTotalsCopy.aerobicSpoken(minutes: minutes)))
         } else {
             EmptyState(text: "No aerobic minutes logged.")
         }
-        FernletRowDivider()
         Text(verbatim: WeeklyTotalsCopy.aerobicReference)
-            .font(.fernlet(.labelSmall))
-            .foregroundStyle(Color.slate)
+            .font(FernletFramedFont.note)
+            .foregroundStyle(look?.dim ?? Color.slate)
             .fernletWrappingText()
-            .padding(.top, 6)
+            .padding(.vertical, 10)
+    }
+
+    /// Which workouts the minutes include, under the card.
+    private var whatCounts: Text {
         Text("Counts cardio, sports and dance, including workouts from Apple Health. A strength session adds only the planned minutes of a cardio block inside it; yoga, Pilates and other mind-body sessions aren't counted.",
              comment: "Weekly totals screen: which workouts the aerobic minutes include. A 'cardio block' is a cardio part inside a lifting session, such as 'Easy cardio - 20 min'; its minutes count as planned.")
-            .font(.fernlet(.labelSmall))
-            .foregroundStyle(Color.slate)
-            .fernletWrappingText()
-            .padding(.vertical, 6)
-    }
-}
-
-/// A section heading on the Weekly totals screen: sentence case in the label face, read by VoiceOver
-/// as a heading (h2, under the screen's h1 title).
-///
-/// Not the shared uppercase ``SectionLabel`` (a titled `FernletScrollSection`'s header). In the
-/// accessibility audit's Dynamic Type pass that caption, tracked and uppercased by `.textCase`,
-/// reported "HARD SETS PER MUSCLE" as clipped once it wrapped at accessibility sizes (bundle 6,
-/// 2026-10-20), the same finding the frozen audit baselines carry for other long captions ("WHAT
-/// DID YOU EAT?", "PERSONAL CARE TASKS"). Plain text with no tracking and no case transform wraps
-/// as it measures.
-struct WeeklySectionHeading: View {
-    let title: LocalizedStringKey
-
-    init(_ title: LocalizedStringKey) {
-        self.title = title
-    }
-
-    var body: some View {
-        Text(title)
-            .font(.fernlet(.label))
-            .foregroundStyle(Color.slate)
-            .fernletWrappingText()
-            .padding(.horizontal, 4)
-            .accessibilityAddTraits(.isHeader)
-            .accessibilityHeading(.h2)
     }
 }
 
@@ -346,8 +329,20 @@ struct WeeklyAerobicBar: View {
 /// so the two navigation rows read alike. Opens ``WeeklyTotalsView``.
 struct WeeklyTotalsLink: View {
     var action: () -> Void
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
+        if look != nil {
+            // World build (`b2-move-root`): a framed link card with the pixel book.
+            MoveLinkCard(title: Text("Weekly totals", comment: "Title of the Move tab screen with one week's sets per muscle and aerobic minutes; also the label of the link that opens it."),
+                         sprite: WorldSprites.diary, identifier: "move.weeklyTotals", action: action)
+        } else {
+            plainLink
+        }
+    }
+
+    /// Today's quiet link row, outside the World look.
+    private var plainLink: some View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Image(systemName: "calendar")

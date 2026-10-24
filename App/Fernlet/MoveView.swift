@@ -53,6 +53,8 @@ struct MoveView: View {
     // Drives the Suggest sheet's detents: accessibility sizes open .large — grow the sheet, never
     // hide a control (1b·AX3).
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// The World build's framed look (`b2-move-root`); nil draws today's Move tab.
+    @Environment(\.fernletFramedLook) private var look
 
     /// The Move-root "Today's workout" card appears only once the user has APPROVED today's plan (or
     /// started it from the card) — so a plan generated just to look at, then closed, doesn't silently
@@ -130,28 +132,45 @@ struct MoveView: View {
     ///
     /// The action pills sit in an ``AdaptiveStack`` so they stack into a column at accessibility text
     /// sizes rather than squeezing side by side (where "Share" broke to "Shar/e").
-    private var headerRow: some View {
-        HStack(alignment: .top) {
-            ScreenHeader(title: "Move", subtitle: "Enough to feel it, not enough to drain.", identifier: "screen.move")
-            Spacer(minLength: 8)
-            AdaptiveStack(spacing: 10, horizontalAlignment: .trailing, verticalAlignment: .top) {
-                HeaderActionButton(title: "Log") { activeSheet = .workout }
-                // Suggest moved into ``WorkoutPlanSheet`` — asking for a workout belongs
-                // beside planning one, not in the tab header. The header slot it freed
-                // goes to the trainer/coach handoff, which is the tab's other top-level
-                // action and previously sat in a card halfway down the scroll.
-                HeaderActionButton(title: "Share") {
-                    presentedTrainerAction = nil
-                    showingTrainerShare = true
+    @ViewBuilder private var headerRow: some View {
+        if look != nil {
+            framedHeaderRow
+        } else {
+            HStack(alignment: .top) {
+                ScreenHeader(title: "Move", subtitle: "Enough to feel it, not enough to drain.", identifier: "screen.move")
+                Spacer(minLength: 8)
+                AdaptiveStack(spacing: 10, horizontalAlignment: .trailing, verticalAlignment: .top) {
+                    HeaderActionButton(title: "Log") { activeSheet = .workout }
+                    // Suggest moved into ``WorkoutPlanSheet`` — asking for a workout belongs
+                    // beside planning one, not in the tab header. The header slot it freed
+                    // goes to the trainer/coach handoff, which is the tab's other top-level
+                    // action and previously sat in a card halfway down the scroll.
+                    HeaderActionButton(title: "Share", action: openTrainerShare)
+                        .modifier(MoveShareAccessibility())
                 }
-                    .accessibilityIdentifier("move.trainerShare")
-                    .accessibilityLabel("Share with a trainer")
-                    // T2-12: the label is longer than the drawn word, so Voice Control's spoken
-                    // name and the visible one had diverged; "Share" is what a user reads and says.
-                    .accessibilityInputLabels([Text("Share")])
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    /// World build (`b2-move-root`): the plate names the panel, so the page opens on its one-line
+    /// description, then Log and Share as two framed buttons side by side (stacked at accessibility sizes).
+    private var framedHeaderRow: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ScreenHeader(title: "Move", subtitle: "Enough to feel it, not enough to drain.", identifier: "screen.move")
+            AdaptiveStack(spacing: 10, horizontalAlignment: .leading) {
+                MoveIconButton(title: Text("Log"), sprite: WorldSprites.plus) { activeSheet = .workout }
+                    .accessibilityIdentifier("move.log")
+                MoveIconButton(title: Text("Share"), sprite: WorldSprites.box, action: openTrainerShare)
+                    .modifier(MoveShareAccessibility())
             }
         }
-        .padding(.top, 4)
+    }
+
+    /// Share opens the trainer / coach handoff with no Shortcut action waiting.
+    private func openTrainerShare() {
+        presentedTrainerAction = nil
+        showingTrainerShare = true
     }
 
     /// Resume-a-run card, else the approved "Today's workout" card, else the SAME card in its
@@ -221,11 +240,11 @@ struct MoveView: View {
 
     /// Today's planned rows then today's logged rows, divided.
     private var todaysMovementSection: some View {
-        FernletScrollSection("Today's movement") {
+        MoveCardList(header: Text("Today's movement")) {
             if store.day.plannedWorkouts.isEmpty && store.day.workouts.isEmpty {
                 EmptyState(text: "No workouts today. No rush.")
             } else {
-                ForEach(Array(store.day.plannedWorkouts.enumerated()), id: \.element.id) { index, plannedWorkout in
+                ForEach(store.day.plannedWorkouts) { plannedWorkout in
                     PlannedWorkoutRow(
                         plannedWorkout: plannedWorkout,
                         showsPlanSourceTag: showsCoachPlanSourceTag,
@@ -243,20 +262,14 @@ struct MoveView: View {
                         },
                         onStart: startAction(for: plannedWorkout)
                     )
-                    if index < store.day.plannedWorkouts.count - 1 || !store.day.workouts.isEmpty {
-                        FernletRowDivider()
-                    }
                 }
-                ForEach(Array(store.day.workouts.enumerated()), id: \.element.id) { index, workout in
+                ForEach(store.day.workouts) { workout in
                     WorkoutRow(
                         store: store,
                         workout: workout,
                         date: store.todayKey,
                         onChanged: { refreshAllDays() }
                     )
-                    if index < store.day.workouts.count - 1 {
-                        FernletRowDivider()
-                    }
                 }
             }
         }
@@ -296,7 +309,18 @@ struct MoveView: View {
     /// The quiet "Exercise history" link under the week strip — the factual per-exercise recall
     /// list (``ExerciseHistoryView``). The same row chrome as the plan sheet's "Equipment & limits"
     /// entry, so a navigation row reads the same everywhere in Move.
-    private var exerciseHistoryLink: some View {
+    @ViewBuilder private var exerciseHistoryLink: some View {
+        if look != nil {
+            MoveLinkCard(title: Text("Exercise history"), sprite: WorldSprites.chart, identifier: "move.exerciseHistory") {
+                path.append(MoveRoute.exerciseHistory)
+            }
+        } else {
+            plainExerciseHistoryLink
+        }
+    }
+
+    /// Today's quiet link row, outside the World look.
+    private var plainExerciseHistoryLink: some View {
         Button {
             path.append(MoveRoute.exerciseHistory)
         } label: {
@@ -323,7 +347,7 @@ struct MoveView: View {
 
     /// The Move root's scrolling column, in order.
     private var scrollContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: look == nil ? 16 : 18) {
             headerRow
 
             MoveContextStrip(
@@ -357,12 +381,10 @@ struct MoveView: View {
         .padding(20)
     }
 
-    /// The guided runner sheet for `session`, with the "other sessions remain" copy resolved.
+    /// The guided runner for `session`, with the "other sessions remain" copy resolved. World build
+    /// (`b3-runner-*`): a focused flow, presented full screen with no grabber (the ✕ ends it).
     private func guidedRunnerSheet(_ session: WorkoutProgram.SessionSuggestion) -> some View {
         GuidedWorkoutSheet(store: store, session: session, sessionsRemain: otherSessionsRemain(after: session))
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-            .presentationCornerRadius(20)
     }
 
     /// Whether other sessions of today's committed plan still need doing after `session` — the runner's
@@ -434,7 +456,8 @@ struct MoveView: View {
                     .fernletTabBarBottomClearance()
             }
             .fernletTabBarCompaction($isTabBarCompact, resetToken: $scrollToTopToken)
-            .background(Color.parchment)
+            // World build: the dotted page under the panel's plate (plain parchment without the look).
+            .fernletPageBackground()
             .navigationTitle("")
             .navigationDestination(for: String.self) { dayDetail($0) }
             .navigationDestination(for: MoveRoute.self) { routedScreen($0) }
@@ -458,9 +481,7 @@ struct MoveView: View {
         }
         .sheet(isPresented: $showingLocations) {
             WorkoutLocationSetupView(store: store)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheet()
         }
         .sheet(isPresented: $showingTrainerShare, onDismiss: {
             // An imported plan writes planned workouts straight into day records, which the
@@ -471,21 +492,16 @@ struct MoveView: View {
             openRequestedTrainerExportIfNeeded()
         }) {
             TrainerExportView(store: store, initialAction: presentedTrainerAction)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheet()
         }
-        .sheet(item: $guidedSession) { session in
+        .fullScreenCover(item: $guidedSession) { session in
             guidedRunnerSheet(session)
         }
         .sheet(isPresented: $showingSuggestSheet) {
             // The root-card empty state's Suggest entry (FLOW-03), presented locally the way the
-            // plan sheet presents it. Accessibility sizes open .large: the chips alone outgrow the
-            // medium detent, and the sheet grows rather than hiding a control (1b·AX3).
+            // plan sheet presents it. World build: full height in the sheet frame, like every sheet.
             WorkoutSuggestionSheet(store: store)
-                .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheet()
         }
         .onChange(of: store.day.workouts.count) { refreshAllDays() }
         .onChange(of: store.day.plannedWorkouts.count) { refreshAllDays() }
@@ -630,45 +646,63 @@ struct ResumeWorkoutCard: View {
     var title: String
     var isResting: Bool
     var onResume: () -> Void
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
         FernletCard {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 12) {
-                    Image(systemName: "figure.strengthtraining.traditional")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(Color.moss)
-                        .frame(width: 30)
-                        // Decorative, as on `StartTodaysWorkoutCard`: the header names the card.
-                        .accessibilityHidden(true)
+                HStack(alignment: look == nil ? .center : .top, spacing: 12) {
+                    Group {
+                        if look != nil {
+                            FernletIconTile(size: 44) { WorldSpriteView(sprite: WorldSprites.shoe, scale: 3) }
+                        } else {
+                            Image(systemName: "figure.strengthtraining.traditional")
+                                .font(.system(size: 22, weight: .semibold))
+                                .foregroundStyle(Color.moss)
+                                .frame(width: 30)
+                        }
+                    }
+                    // Decorative, as on `StartTodaysWorkoutCard`: the header names the card.
+                    .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Workout in progress")
-                            .font(.fernlet(.headerMedium))
-                            .foregroundStyle(Color.bark)
+                            .font(look == nil ? .fernlet(.headerMedium) : FernletFramedFont.cardTitle)
+                            .foregroundStyle(look?.text ?? Color.bark)
                             .accessibilityAddTraits(.isHeader)
                         Text(isResting ? "\(title) — you're resting between sets." : "\(title) — pick up where you left off.")
-                            .font(.fernlet(.bubble))
-                            .foregroundStyle(Color.slate)
+                            .font(look == nil ? .fernlet(.bubble) : FernletFramedFont.body)
+                            .foregroundStyle(look?.dim ?? Color.slate)
                             .fernletWrappingText()
                     }
                     Spacer(minLength: 0)
                 }
 
-                Button(action: onResume) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "play.circle.fill")
-                            .font(.body.weight(.semibold))
-                        Text("Resume workout")
-                            .font(.fernlet(.label))
-                    }
-                    .foregroundStyle(Color.onMoss)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 15)
-                    .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 14))
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("workout.resume")
+                resumeButton
             }
+        }
+    }
+
+    /// Resume: the framed primary under the World look, today's moss bar without it.
+    @ViewBuilder private var resumeButton: some View {
+        if look != nil {
+            Button(action: onResume) { Text("Resume workout").frame(maxWidth: .infinity) }
+                .buttonStyle(ActionPillButtonStyle(.primary))
+                .accessibilityIdentifier("workout.resume")
+        } else {
+            Button(action: onResume) {
+                HStack(spacing: 8) {
+                    Image(systemName: "play.circle.fill")
+                        .font(.body.weight(.semibold))
+                    Text("Resume workout")
+                        .font(.fernlet(.label))
+                }
+                .foregroundStyle(Color.onMoss)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 15)
+                .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 14))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("workout.resume")
         }
     }
 }
@@ -724,27 +758,22 @@ struct StartTodaysWorkoutCard: View {
     /// Opens the runner (`.ready`) or the Suggest flow (`.noPlan`) — the parent decides.
     var onStart: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
         FernletCard {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 12) {
-                    Image(systemName: iconName)
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(accentColor)
-                        .frame(width: 30)
-                        // Decorative: the header beside it names the card. Left visible, the
-                        // audit heard the symbol's name read aloud ("Label not human-readable").
-                        .accessibilityHidden(true)
+                HStack(alignment: look == nil ? .center : .top, spacing: 12) {
+                    cardIcon
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Today's workout")
-                            .font(.fernlet(.headerMedium))
-                            .foregroundStyle(Color.bark)
+                            .font(look == nil ? .fernlet(.headerMedium) : FernletFramedFont.cardTitle)
+                            .foregroundStyle(look?.text ?? Color.bark)
                             // The guided workout's way in, findable from the Headings rotor.
                             .accessibilityAddTraits(.isHeader)
                         subtitle
-                            .font(.fernlet(.bubble))
-                            .foregroundStyle(Color.slate)
+                            .font(look == nil ? .fernlet(.bubble) : FernletFramedFont.body)
+                            .foregroundStyle(look?.dim ?? Color.slate)
                             .fernletWrappingText()
                     }
                     Spacer(minLength: 0)
@@ -757,6 +786,31 @@ struct StartTodaysWorkoutCard: View {
         }
     }
 
+    /// The card's icon: World build, a pixel shoe (a tick when done, a leaf for a gentle day) in a framed
+    /// tile (`b2-move-root`); today, the symbol. Decorative either way: the header beside it names the
+    /// card. Left visible, the audit heard the symbol's name read aloud ("Label not human-readable").
+    @ViewBuilder private var cardIcon: some View {
+        if look != nil {
+            FernletIconTile(size: 44) { WorldSpriteView(sprite: iconSprite, scale: 3) }
+                .accessibilityHidden(true)
+        } else {
+            Image(systemName: iconName)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(accentColor)
+                .frame(width: 30)
+                .accessibilityHidden(true)
+        }
+    }
+
+    /// The pixel twin of ``iconName``.
+    private var iconSprite: WorldSprite {
+        switch state {
+        case .ready, .noPlan: WorldSprites.shoe
+        case .allComplete: WorldSprites.check
+        case .noneToGuide: WorldSprites.leaf
+        }
+    }
+
     /// `.ready` and `.noPlan` both carry a primary; the other states are read-only.
     private var showsPrimary: Bool {
         switch state {
@@ -766,21 +820,28 @@ struct StartTodaysWorkoutCard: View {
     }
 
     /// One button geometry for both actionable states — only label and identifier differ.
-    private var primaryButton: some View {
-        Button(action: onStart) {
-            HStack(spacing: 8) {
-                Image(systemName: "play.circle.fill")
-                    .font(.body.weight(.semibold))
-                primaryLabel
-                    .font(.fernlet(.label))
+    @ViewBuilder private var primaryButton: some View {
+        if look != nil {
+            // World build: the framed primary, full width, the word alone (`b2-move-root`).
+            Button(action: onStart) { primaryLabel.frame(maxWidth: .infinity) }
+                .buttonStyle(ActionPillButtonStyle(.primary))
+                .accessibilityIdentifier(state == .noPlan ? "workout.suggestToday" : "workout.startToday")
+        } else {
+            Button(action: onStart) {
+                HStack(spacing: 8) {
+                    Image(systemName: "play.circle.fill")
+                        .font(.body.weight(.semibold))
+                    primaryLabel
+                        .font(.fernlet(.label))
+                }
+                .foregroundStyle(Color.onMoss)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 15)
+                .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 14))
             }
-            .foregroundStyle(Color.onMoss)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 15)
-            .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 14))
+            .buttonStyle(.plain)
+            .accessibilityIdentifier(state == .noPlan ? "workout.suggestToday" : "workout.startToday")
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier(state == .noPlan ? "workout.suggestToday" : "workout.startToday")
     }
 
     /// 1a·AX3: labels shorten at accessibility sizes so they hold one line in the button.
@@ -886,9 +947,19 @@ struct WorkoutSheet: View {
     /// "Log set by set" (idea 6): the picked lift takes one row per set instead of the Sets / Reps /
     /// Weight fields, and saves the same structured record a guided run does. Off by default, so the
     /// free-text entry works exactly as before.
-    @State private var logsBySet = false
+    /// World build (`b3-workout-exercise`): on by default, as the approved page draws a lift's sets row
+    /// by row; the switch still offers the quick Sets / Reps / Weight line.
+    @State private var logsBySet = true
     /// The picked lift's set rows while ``logsBySet`` is on; rebuilt whenever the pick changes.
     @State private var setsDraft: ExerciseSetsDraft?
+    /// The sheet's stack (`b3-workout-log` draft 2): empty on the list, `.lift` while one exercise's
+    /// own page is open. Leaving that page with Back drops what it held.
+    @State private var liftPath: [WorkoutLiftRoute] = []
+    /// The listed row the open page is changing, or nil while it adds a new exercise.
+    @State private var editingRowID: UUID?
+    /// "Last time" for the open page's exercise, read once per pick.
+    @State private var liftLastTime: String?
+    @Environment(\.fernletFramedLook) private var look
 
     var intensity: WorkoutIntensity {
         if logMode == .activity {
@@ -949,31 +1020,20 @@ struct WorkoutSheet: View {
         dynamicTypeSize >= .accessibility5 ? Text("Log") : Text("Log workout")
     }
 
-    /// The strength / activity mode chips. At AX5 the "Kind" caption goes and the two chips
-    /// render unlabelled — they are self-describing at that size (3b·AX5).
-    @ViewBuilder private var kindField: some View {
-        if dynamicTypeSize >= .accessibility5 {
-            kindChips
-        } else {
-            SheetField("Kind") { kindChips }
-        }
-    }
-
-    /// The chip row itself, shared by both Kind presentations.
-    private var kindChips: some View {
-        FlowLayout(spacing: 8) {
-            ForEach(WorkoutMode.allCases) { mode in
-                Button { FernletFeedback.system.select(mode, in: &logMode) } label: { kindChipLabel(mode) }
-                    .buttonStyle(ChipButtonStyle(selected: logMode == mode))
-                    .accessibilityIdentifier("workout.kind.\(mode.rawValue)")
-            }
-        }
+    /// Strength or Cardio & activity (`b3-workout-log` draft 2: "a framed two-way switch"). It stacks at
+    /// accessibility sizes; without the World look it is the system segmented control.
+    private var kindField: some View {
+        FernletSegmentedPicker("Kind", selection: $logMode, options: WorkoutMode.allCases) { kindChipLabel($0) }
+            .accessibilityIdentifier("workout.kind")
     }
 
     /// 1f·AX3: at accessibility sizes "Cardio & activity" would wrap inside its own pill, so the
     /// chips shorten to "Strength" / "Cardio"; default sizes keep the full mode labels.
     private func kindChipLabel(_ mode: WorkoutMode) -> Text {
-        guard dynamicTypeSize.isAccessibilitySize else { return Text(verbatim: mode.label) }
+        guard dynamicTypeSize.isAccessibilitySize else {
+            // World build (`b3-workout-log`): "Strength" beside "Cardio & activity" in the segmented bar.
+            return look != nil && mode == .strengthTraining ? Text("Strength") : Text(verbatim: mode.label)
+        }
         switch mode {
         case .strengthTraining: return Text("Strength")
         case .activity: return Text("Cardio")
@@ -999,7 +1059,21 @@ struct WorkoutSheet: View {
     /// The Recent chips above the exercise search (MOVE-08): the last five distinct exercises,
     /// each carrying its last sets×reps×weight, one tap prefilling the builder's draft.
     @ViewBuilder private var recentExerciseChips: some View {
-        if !recentEntries.isEmpty {
+        if !recentEntries.isEmpty, look != nil {
+            // World build (`b3-workout-log` draft 2): full rows with a framed +, so nothing is cut off;
+            // + adds the lift straight to the list with last time's sets.
+            FernletCard {
+                VStack(alignment: .leading, spacing: 0) {
+                    SectionLabel("Recent").padding(.bottom, 4)
+                    ForEach(recentEntries, id: \.name) { entry in
+                        if entry.name != recentEntries.first?.name { FernletDottedRule() }
+                        MoveRecentLiftRow(name: ExerciseHowToCatalog.displayName(for: entry.name),
+                                          recall: entry.lastTimeRecallValues,
+                                          identifier: "workout.recentExercise.\(entry.name)") { addRecent(entry) }
+                    }
+                }
+            }
+        } else if !recentEntries.isEmpty {
             SheetField("Recent") {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -1010,6 +1084,14 @@ struct WorkoutSheet: View {
                 }
             }
         }
+    }
+
+    /// A Recent row's +: the lift joins the list with last time's sets, weight and unit, as one line.
+    private func addRecent(_ entry: TrainerExportBundle.ExerciseHistoryEntry) {
+        prefillDraft(from: entry)
+        guard draft.commit(into: &exerciseRows, includingSetsAndReps: true) else { return }
+        setsDraft = nil
+        FernletFeedback.system.play(.done)
     }
 
     /// One 44pt Recent chip: name over the factual last-time values. At accessibility sizes the
@@ -1093,41 +1175,123 @@ struct WorkoutSheet: View {
     /// on, the builder keeps its picker (which also takes a typed name) and the set rows replace its
     /// Sets / Reps / Weight fields. The switch sits under the builder, so the quick path above it —
     /// Kind, Recent and the search — still fits the medium detent (artboard 3b).
-    @ViewBuilder private var strengthSection: some View {
-        WorkoutExerciseBuilder(
-            selectedExercise: $draft.exercise,
-            sets: $draft.sets,
-            reps: $draft.reps,
-            weight: $draft.weight,
-            speed: $draft.speed,
-            incline: $draft.incline,
-            details: $draft.details,
-            resetToken: $draft.resetToken,
-            mode: logMode,
-            showAddButton: !logsBySet,
-            historyStore: store,
-            showsStrengthFields: !logsBySet,
-            allowsTypedExercise: logsBySet,
-            onAdd: addDraftExercise
-        )
-
-        bySetToggle
-
-        if logsBySet {
-            bySetEntry
+    /// World build (`b3-workout-log` draft 2): the sheet is a list. Each exercise is one row with its sets
+    /// in one line; Add exercise and tapping a row open that exercise's own page, where its sets are
+    /// entered (``liftPage``).
+    private var strengthSection: some View {
+        MoveLiftCard(header: Text("Exercises")) {
+            ForEach(exerciseRows) { entry in
+                // An exercise added set by set reads "3 sets · 10, 9, 8 reps · 35 lb" (b3-workout-log d2).
+                MoveLiftListRow(name: entry.exercise.displayName,
+                                detail: entry.result.flatMap { WorkoutSetSummary.line(for: $0) }
+                                    ?? WorkoutMeasurementEntry.displayedSpeeds(in: entry.detailSummary),
+                                color: entry.exercise.category.color,
+                                identifier: "workout.log.row",
+                                onRemove: { exerciseRows.removeAll { $0.id == entry.id } }) { openLift(entry) }
+            }
+        } footer: {
+            MoveAddExerciseButton(identifier: "workout.log.addExercise") { openLift(nil) }
         }
+    }
 
-        if !exerciseRows.isEmpty {
-            SheetField("Workout exercises") {
-                VStack(spacing: 8) {
-                    ForEach(exerciseRows) { entry in
-                        LoggedExerciseRow(entry: entry) {
-                            exerciseRows.removeAll { $0.id == entry.id }
-                        }
-                    }
-                }
+    /// Opens the exercise page: blank for a new exercise, or holding `entry`'s exercise and sets.
+    private func openLift(_ entry: WorkoutExerciseEntry?) {
+        draft.clear()
+        setsDraft = nil
+        editingRowID = entry?.id
+        if let entry {
+            draft.exercise = entry.exercise
+            draft.sets = entry.sets
+            draft.reps = entry.reps
+            draft.weight = entry.weight
+            draft.speed = entry.speed
+            draft.incline = entry.incline
+            draft.details = entry.details
+            logsBySet = entry.result != nil
+            setsDraft = entry.result.map {
+                ExerciseSetsDraft(result: $0, index: 0, defaultUnit: WorkoutLoadContextBuilder.defaultUnit(for: .current))
             }
         }
+        liftPath = [.lift]
+    }
+
+    /// The page's button: the exercise joins the list, or replaces the row it was opened from.
+    private func commitLift() {
+        let before = exerciseRows.count
+        addDraftExercise()
+        guard exerciseRows.count > before else { return }
+        if let id = editingRowID, let old = exerciseRows.firstIndex(where: { $0.id == id }) {
+            let updated = exerciseRows.removeLast()
+            exerciseRows[old] = updated
+        }
+        editingRowID = nil
+        liftPath = []
+    }
+
+    /// The page's Remove: the row it was opened from leaves the list.
+    private func removeOpenLift() {
+        if let id = editingRowID { exerciseRows.removeAll { $0.id == id } }
+        editingRowID = nil
+        liftPath = []
+    }
+
+    /// One exercise's own page (`b3-workout-exercise`): its name and last time, then its sets row by row
+    /// (or the quick Sets / Reps / Weight line, or a treadmill's speed and incline), and Add to workout.
+    private var liftPage: some View {
+        MoveLiftPage(title: draft.exercise.map { Text(verbatim: $0.displayName) } ?? Text("Add exercise"),
+                     subtitle: liftLastTime.map { Text("Last time: \($0)") },
+                     buttonLabel: editingRowID == nil ? "Add to workout" : "Save",
+                     buttonDisabled: draft.exercise == nil, back: logSheetTitle, onButton: commitLift) {
+            if draft.exercise == nil {
+                ExerciseSearchPicker(selectedExercise: $draft.exercise, resetToken: $draft.resetToken,
+                                     autofocus: true, allowsTypedExercise: true)
+            } else {
+                liftFields
+            }
+        }
+        .onAppear {
+            refreshLiftLastTime()
+            if setsDraft == nil { resetSetsDraft(for: draft.exercise) }
+        }
+        .onChange(of: draft.exercise) { _, exercise in
+            refreshLiftLastTime()
+            // The pick happens on this page, while the list page under it is covered and may not run its
+            // own onChange: build the set rows here too (the reset is a no-op when they already match).
+            resetSetsDraft(for: exercise)
+        }
+    }
+
+    /// The chosen exercise's fields on its page, then Change (a new pick) or Remove (a listed row).
+    @ViewBuilder private var liftFields: some View {
+        if draft.exercise?.inputKind == .strength {
+            bySetToggle
+            if logsBySet {
+                bySetEntry
+            }
+        }
+        if draft.exercise?.inputKind != .strength || !logsBySet {
+            WorkoutExerciseBuilder(
+                selectedExercise: $draft.exercise, sets: $draft.sets, reps: $draft.reps, weight: $draft.weight,
+                speed: $draft.speed, incline: $draft.incline, details: $draft.details, resetToken: $draft.resetToken,
+                mode: logMode, showAddButton: false, showsPicker: false, onAdd: addDraftExercise
+            )
+        }
+        if editingRowID == nil {
+            Button("Change") { draft.exercise = nil }
+                .font(FernletFramedFont.sheetControl)
+                .foregroundStyle(look?.link ?? Color.moss)
+                .fernletTapTarget()
+                .accessibilityIdentifier("workout.log.changeExercise")
+        } else {
+            Button(role: .destructive, action: removeOpenLift) { Text("Remove").frame(maxWidth: .infinity) }
+                .buttonStyle(ActionPillButtonStyle(.destructive))
+                .accessibilityIdentifier("workout.log.removeExercise")
+        }
+    }
+
+    /// Reads "last time" for the page's exercise.
+    private func refreshLiftLastTime() {
+        liftLastTime = draft.exercise.flatMap { store.exerciseHistoryEntry(named: $0.name)?.lastTimeRecallValues }
     }
 
     /// The "Log set by set" switch above the builder.
@@ -1135,15 +1299,17 @@ struct WorkoutSheet: View {
         Toggle(isOn: $logsBySet) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Log set by set")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.bark)
+                    .font(look == nil ? .fernlet(.label) : MoveFont.rowTitle)
+                    .foregroundStyle(look?.text ?? Color.bark)
                 Text("Each set gets its own reps and weight.")
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
+                    .font(look == nil ? .fernlet(.labelSmall) : FernletFramedFont.rowDetail)
+                    .foregroundStyle(look?.dim ?? Color.slate)
                     .fernletWrappingText()
             }
         }
         .tint(Color.moss)
+        // The routed sheet sits above the root that sets the framed switch; the system switch without the look.
+        .toggleStyle(FernletFramedToggleStyle())
         // Voice Control: the spoken label runs on into the explainer line.
         .accessibilityInputLabels([Text("Log set by set"), Text("Set by set")])
         .accessibilityIdentifier("workout.log.bySet")
@@ -1152,21 +1318,13 @@ struct WorkoutSheet: View {
     /// The picked lift's set rows and its Add button, while "Log set by set" is on. A treadmill pick
     /// keeps the builder's own speed and incline fields; the button adds it the usual way.
     @ViewBuilder private var bySetEntry: some View {
-        if let exercise = draft.exercise, exercise.inputKind == .strength, let binding = Binding($setsDraft) {
-            ExerciseSetsEditor(draft: binding, identifier: "workout.log.sets", showsName: false)
+        if let exercise = draft.exercise, exercise.inputKind == .strength, let current = setsDraft {
+            // The page's footer adds it (Add to workout), so the card carries no button of its own.
+            // Never a force-unwrapping binding of the optional draft: Add to workout clears the draft while the
+            // page is still leaving the stack, and an unwrapping binding read then traps.
+            ExerciseSetsEditor(draft: Binding(get: { setsDraft ?? current }, set: { setsDraft = $0 }),
+                               identifier: "workout.log.sets", showsName: look != nil)
         }
-        Button(action: addDraftExercise) {
-            Label("Add exercise", systemImage: "plus.circle.fill")
-                .font(.fernlet(.label))
-                .foregroundStyle(draft.exercise == nil ? Color.bark : Color.moss)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-        .disabled(draft.exercise == nil)
-        .accessibilityIdentifier("workout.log.sets.add")
     }
 
     /// A fresh set-by-set draft for the newly picked lift (nil when the pick was cleared), in the
@@ -1176,6 +1334,8 @@ struct WorkoutSheet: View {
             setsDraft = nil
             return
         }
+        // A listed lift reopened on its page keeps the sets it was logged with.
+        guard setsDraft?.name != exercise.name else { return }
         setsDraft = ExerciseSetsDraft.blank(
             name: exercise.name, unit: WorkoutLoadContextBuilder.defaultUnit(for: .current),
             equipment: exercise.equipment)
@@ -1264,21 +1424,41 @@ struct WorkoutSheet: View {
     }
 
     var body: some View {
+        // The exercise page is built here, inside this body, so every state it draws (its set rows, the
+        // switch, last time) is read by this view: built lazily in the destination closure, a change to
+        // state only that page read never re-rendered it, and a picked lift showed no set rows.
+        let page = liftPage
+        // World build (`b3-workout-log` draft 2): a stack, so an exercise's sets open on their own page
+        // with Back naming the sheet. The list keeps the sheet's header (Cancel, the title) and Save.
+        NavigationStack(path: $liftPath) {
+            listPage
+                .navigationTitle(logSheetTitle)
+                .toolbar(.hidden, for: .navigationBar)
+                .navigationDestination(for: WorkoutLiftRoute.self) { _ in page }
+        }
+        .onChange(of: liftPath) { _, path in
+            // Back from an exercise's page drops what it held; Add to workout already took it.
+            guard path.isEmpty else { return }
+            draft.clear()
+            setsDraft = nil
+            editingRowID = nil
+        }
+    }
+
+    /// The sheet's list page: Kind, the exercises (or the activity), the name, and the rest.
+    private var listPage: some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    // Ordered per artboard 3b, which overrides 1f's drawn stacking where the two
-                    // disagree: Kind, Recent and the search fit inside the medium detent so the
-                    // quick path from the Home tile is never a sheet the user has to drag open
-                    // first; the optional name and the Log-again card live below the fold, where
-                    // they belong. The category preview reads beside the metrics it summarizes.
+                    // Draft 2 order (`b3-workout-log`): Kind, the exercise list, Recent, then the
+                    // name and metrics; Log it again, the category preview and notes further down.
                     kindField
 
                     if logMode == .strengthTraining {
-                        recentExerciseChips
                         strengthSection
-                        logAgainCard
+                        recentExerciseChips
                         workoutNameField
+                        strengthMetricsRow
                     } else {
                         ActivityPickerSection(
                             selectedActivityType: $selectedActivityType,
@@ -1288,19 +1468,15 @@ struct WorkoutSheet: View {
                             effort: $effort,
                             showsEnergyField: store.settings.showCalories
                         )
-                        logAgainCard
                         workoutNameField
                     }
+
+                    notesField
+                    logAgainCard
 
                     if hasCategoryInput {
                         WorkoutCategoryPreview(category: inferredCategory)
                     }
-
-                    if logMode == .strengthTraining {
-                        strengthMetricsRow
-                    }
-
-                    notesField
                 }
                 .padding(20)
                 .padding(.bottom, 10)
@@ -1308,7 +1484,7 @@ struct WorkoutSheet: View {
 
             SheetSaveBar(disabled: saveDisabled) { saveWorkout() }
         }
-        .background(Color.parchment)
+        .background((look?.paper ?? Color.parchment).ignoresSafeArea())
         // NOT `keyboardDoneToolbar()` here: this sheet is presented both by the root router (where
         // `fernletSheetChrome` already supplies one) and by the day detail (which supplies its own).
         // Declaring a second `ToolbarItemGroup(placement: .keyboard)` inside the same hierarchy puts
@@ -1622,10 +1798,10 @@ struct LogAgainCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Log it again")
                         .font(.fernlet(.label))
-                        .foregroundStyle(Color.bark)
+                        .foregroundStyle(look?.text ?? Color.bark)
                     Text(verbatim: headline)
                         .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
+                        .foregroundStyle(look?.dim ?? Color.slate)
                 }
                 Spacer(minLength: 8)
                 if !dynamicTypeSize.isAccessibilitySize {
@@ -1635,7 +1811,7 @@ struct LogAgainCard: View {
             if let summary {
                 summary
                     .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
+                    .foregroundStyle(look?.dim ?? Color.slate)
                     .lineLimit(2)
             }
             if dynamicTypeSize.isAccessibilitySize {
@@ -1645,13 +1821,14 @@ struct LogAgainCard: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        .modifier(MoveInsetCardFrame())
     }
+
+    @Environment(\.fernletFramedLook) private var look
 
     private var logAgainButton: some View {
         Button("Log again", action: onLogAgain)
-            .buttonStyle(ActionPillButtonStyle(.secondary))
+            .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
             .accessibilityIdentifier("workout.logAgain")
     }
 
@@ -1706,6 +1883,8 @@ struct LogAgainCard: View {
 struct WorkoutSuggestionSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// World build (`b3-suggest-config`, `b3-suggest-plan`): the sheet's paper and framed pieces.
+    @Environment(\.fernletFramedLook) private var suggestLook
     var store: FernletStore
     @State private var energy: WorkoutIntensity = .moderate
     @State private var context = ""
@@ -1770,24 +1949,30 @@ struct WorkoutSuggestionSheet: View {
             // width to wrap in: side by side at AX5 they read "Full gy…" and "Chang/e".
             AdaptiveStack(spacing: 10, horizontalAlignment: .leading) {
                 HStack(spacing: 10) {
-                    Image(systemName: "mappin.and.ellipse")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color.moss)
-                        // Decorative. Unhidden, VoiceOver read the symbol's system description —
-                        // "Remove Map Pin" — beside a row that removes nothing (dry run, 2026-10-18).
-                        .accessibilityHidden(true)
+                    Group {
+                        if suggestLook != nil {
+                            WorldSpriteView(sprite: WorldSprites.pin, scale: 2)
+                        } else {
+                            Image(systemName: "mappin.and.ellipse")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Color.moss)
+                        }
+                    }
+                    // Decorative. Unhidden, VoiceOver read the symbol's system description —
+                    // "Remove Map Pin" — beside a row that removes nothing (dry run, 2026-10-18).
+                    .accessibilityHidden(true)
                     // Localizing interpolation, never a verbatim String build: "items" is display
                     // copy; the location name interpolates as data.
                     Text("\(store.settings.activeWorkoutLocation.displayedName) · \(store.settings.activeWorkoutLocation.ownedEquipment.count) items")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.bark)
+                        .font(suggestLook == nil ? .fernlet(.label) : MoveFont.rowTitle)
+                        .foregroundStyle(suggestLook?.text ?? Color.bark)
                         .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 8)
                 Button("Change") { showingSpaces = true }
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.moss)
+                    .font(suggestLook == nil ? .fernlet(.label) : FernletFramedFont.sheetControl)
+                    .foregroundStyle(suggestLook?.link ?? Color.moss)
                     .buttonStyle(.plain)
                     .fixedSize()
                     .fernletTapTarget()
@@ -1795,9 +1980,8 @@ struct WorkoutSuggestionSheet: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(Color.cream.opacity(0.86), in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+            .padding(.vertical, suggestLook == nil ? 6 : 10)
+            .modifier(MoveInsetCardFrame(cornerRadius: suggestLook == nil ? 10 : 12))
         }
     }
 
@@ -1805,7 +1989,18 @@ struct WorkoutSuggestionSheet: View {
     /// frequency, experience, injuries). Kept on the committed-plan branch, so the full setup stays
     /// reachable once a plan is pinned (change it here, then "Rework today's plan" to regenerate
     /// against the new setup); the configurator now states the space inline instead (MOVE-34).
-    private var equipmentLimitsButton: some View {
+    @ViewBuilder private var equipmentLimitsButton: some View {
+        if suggestLook != nil {
+            // World build: the framed link card the Move pages use (`b2-move-root`'s history link).
+            MoveLinkCard(title: Text("Equipment & limits"), sprite: WorldSprites.dumbbell,
+                         detail: Text(verbatim: store.settings.activeWorkoutLocation.displayedName),
+                         inksSprite: true, identifier: "workout.setup.open") { showingSetup = true }
+        } else {
+            plainEquipmentLimitsButton
+        }
+    }
+
+    private var plainEquipmentLimitsButton: some View {
         Button {
             showingSetup = true
         } label: {
@@ -1887,6 +2082,47 @@ struct WorkoutSuggestionSheet: View {
     /// 1d·AX3: Edit and Save for later unstack to full width (``AdaptiveStack``), and the
     /// "Already did this" tertiary and the one-line caption move below the primary.
     @ViewBuilder private func committedPlanActionBar(_ dayPlan: WorkoutProgram.DayPlan) -> some View {
+        if suggestLook != nil {
+            framedPlanActionBar(dayPlan)
+        } else {
+            plainPlanActionBar(dayPlan)
+        }
+    }
+
+    /// World build (`b3-suggest-plan` draft 2): Edit and Start now side by side, then Save full width.
+    /// "Already did this — log it" is gone (the owner's note on draft 1); the gentle stretch stays.
+    private func framedPlanActionBar(_ dayPlan: WorkoutProgram.DayPlan) -> some View {
+        let editTarget = guidableSession(in: dayPlan) ?? dayPlan.sessions.first
+        return VStack(spacing: 10) {
+            gentleStretchButton(in: dayPlan)
+            AdaptiveStack(spacing: 10) {
+                if store.canReworkTodaysGuidedPlan, let editTarget {
+                    Button { editingSession = editTarget } label: { Text("Edit").frame(maxWidth: .infinity) }
+                        .buttonStyle(ActionPillButtonStyle(.secondary))
+                        .disabled(isAdjusting)
+                        .accessibilityIdentifier("workout.editPlan")
+                }
+                if let guidable = guidableSession(in: dayPlan) {
+                    startNowButton(guidable)
+                }
+            }
+            Button {
+                store.approveTodaysGuidedPlan()
+                dismiss()
+            } label: {
+                Text("Save").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(ActionPillButtonStyle(.secondary))
+            .accessibilityIdentifier("workout.approvePlan")
+            if dynamicTypeSize.isAccessibilitySize { startOrSaveCaption }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 20)
+    }
+
+    /// Today's committed-plan bar.
+    @ViewBuilder private func plainPlanActionBar(_ dayPlan: WorkoutProgram.DayPlan) -> some View {
         let editTarget = guidableSession(in: dayPlan) ?? dayPlan.sessions.first
         // Sessions not yet logged (guided runner, card, a prior log, or — after a relaunch — a matching
         // tagged workout already in the day record), so "Log as already done" never double-logs.
@@ -2013,30 +2249,51 @@ struct WorkoutSuggestionSheet: View {
     /// generated. At AX5 the label drops to "Suggest" — the primary grows rather than wrapping
     /// (1b·AX5, the exception recorded on 2d).
     @ViewBuilder private var suggestActionBar: some View {
-        HStack {
-            Spacer()
-            Button(action: startSuggesting) {
-                HStack(spacing: 8) {
-                    if isSuggesting {
-                        // The button's own label already changes while it runs; the spinner is the
-                        // visual half of the same fact and has nothing of its own to say.
-                        ProgressView().controlSize(.small).tint(Color.onMoss)
-                            .accessibilityHidden(true)
+        if suggestLook != nil {
+            // `b3-suggest-config`: the framed primary at the bottom right, like every sheet's save.
+            HStack {
+                Spacer()
+                Button(action: startSuggesting) {
+                    HStack(spacing: 8) {
+                        if isSuggesting {
+                            ProgressView().controlSize(.small).accessibilityHidden(true)
+                        } else if let suggestLook {
+                            WorldSpriteView(sprite: MoveSprites.wand, scale: 2, tint: suggestLook.onAccent)
+                        }
+                        suggestLabel
                     }
-                    suggestLabel
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.onMoss)
                 }
-                .padding(.horizontal, 28)
-                .padding(.vertical, 16)
-                .background(Color.mossFill.opacity(isSuggesting ? 0.6 : 1), in: RoundedRectangle(cornerRadius: 16))
+                .buttonStyle(ActionPillButtonStyle(.primary))
+                .disabled(isSuggesting)
+                .accessibilityIdentifier("workout.suggest")
             }
-            .buttonStyle(.plain)
-            .disabled(isSuggesting)
-            .accessibilityIdentifier("workout.suggest")
+            .padding(20)
+        } else {
+            HStack {
+                Spacer()
+                Button(action: startSuggesting) {
+                    HStack(spacing: 8) {
+                        if isSuggesting {
+                            // The button's own label already changes while it runs; the spinner is the
+                            // visual half of the same fact and has nothing of its own to say.
+                            ProgressView().controlSize(.small).tint(Color.onMoss)
+                                .accessibilityHidden(true)
+                        }
+                        suggestLabel
+                            .font(.fernlet(.label))
+                            .foregroundStyle(Color.onMoss)
+                    }
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 16)
+                    .background(Color.mossFill.opacity(isSuggesting ? 0.6 : 1), in: RoundedRectangle(cornerRadius: 16))
+                }
+                .buttonStyle(.plain)
+                .disabled(isSuggesting)
+                .accessibilityIdentifier("workout.suggest")
+            }
+            .padding(20)
+            .background(Color.parchment)
         }
-        .padding(20)
-        .background(Color.parchment)
     }
 
     /// The Suggest primary's label across its states and sizes. A rest day asks for "something
@@ -2078,29 +2335,22 @@ struct WorkoutSuggestionSheet: View {
     private func sessionCard(_ session: WorkoutProgram.SessionSuggestion) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(session.displayedName)
-                .font(.fernlet(.headerMedium))
-                .foregroundStyle(Color.bark)
+                .font(suggestLook == nil ? .fernlet(.headerMedium) : FernletFramedFont.cardTitle)
+                .foregroundStyle(suggestLook?.text ?? Color.bark)
             sessionMetaLine(session)
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
-            VStack(alignment: .leading, spacing: 8) {
-                let warmUp = session.exercises.filter { $0.block == .warmUp }
-                let coolDown = session.exercises.filter { $0.block == .coolDown }
-                if !warmUp.isEmpty {
-                    blockSummaryRow(Text("Warm-up · \(warmUp.count) stretches"), minutes: WorkoutSessionBlocks.minutes(of: warmUp))
-                }
-                // A lift's warm-up sets fold into one row ("Back squat · 3 warm-up sets").
-                ForEach(GuidedPlanRow.rows(session.exercises.filter { $0.block != .warmUp && $0.block != .coolDown })) { row in
-                    if row.warmUpCount > 0 {
-                        GuidedWarmUpPlanRow(name: row.step.name, count: row.warmUpCount)
-                    } else {
-                        sessionExerciseRow(row.step)
+                .font(suggestLook == nil ? .fernlet(.labelSmall) : FernletFramedFont.body)
+                .foregroundStyle(suggestLook?.dim ?? Color.slate)
+            // World build (`b3-suggest-plan`): a dotted rule above every row, compact rows, and the
+            // small "i" (`.controlSize(.small)` is what ExerciseHowToButton reads for it).
+            Group(subviews: sessionRows(session)) { rows in
+                VStack(alignment: .leading, spacing: suggestLook == nil ? 8 : 0) {
+                    ForEach(rows) { row in
+                        if suggestLook != nil { FernletDottedRule().padding(.vertical, 4) }
+                        row.frame(minHeight: suggestLook == nil ? nil : 36)
                     }
                 }
-                if !coolDown.isEmpty {
-                    blockSummaryRow(Text("Cool-down · \(coolDown.count) stretches"), minutes: WorkoutSessionBlocks.minutes(of: coolDown))
-                }
             }
+            .controlSize(suggestLook == nil ? .regular : .small)
             if !session.suggestion.notes.isEmpty {
                 Text(CoachPlanNoteStamp.displayedNotes(session.suggestion.notes))
                     .font(.fernlet(.bubble))
@@ -2110,20 +2360,52 @@ struct WorkoutSuggestionSheet: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+        // World build (`b3-suggest-plan`): the session is one framed card.
+        .modifier(MoveInsetCardFrame(cornerRadius: suggestLook == nil ? 14 : 12))
     }
+
+    /// The session's rows, top to bottom: the warm-up, each movement, the cool-down.
+    @ViewBuilder private func sessionRows(_ session: WorkoutProgram.SessionSuggestion) -> some View {
+        let warmUp = session.exercises.filter { $0.block == .warmUp }
+        let coolDown = session.exercises.filter { $0.block == .coolDown }
+        if !warmUp.isEmpty {
+            blockSummaryRow(Text("Warm-up · \(warmUp.count) stretches"), minutes: WorkoutSessionBlocks.minutes(of: warmUp))
+        }
+        // A lift's warm-up sets fold into one row ("Back squat · 3 warm-up sets").
+        ForEach(GuidedPlanRow.rows(session.exercises.filter { $0.block != .warmUp && $0.block != .coolDown })) { row in
+            if row.warmUpCount > 0 {
+                GuidedWarmUpPlanRow(name: row.step.name, count: row.warmUpCount)
+            } else {
+                sessionExerciseRow(row.step)
+            }
+        }
+        if !coolDown.isEmpty {
+            blockSummaryRow(Text("Cool-down · \(coolDown.count) stretches"), minutes: WorkoutSessionBlocks.minutes(of: coolDown))
+        }
+    }
+
+    /// A row's name font: the World look's body face, or today's body.
+    private var sessionNameFont: Font { suggestLook == nil ? .fernlet(.body) : FernletFramedFont.body }
+
+    /// A row's trailing figure ("4 × 8–12", "~8 min"): bold in the ink under the World look
+    /// (`b3-suggest-plan`), today's small slate without it.
+    private var sessionFigureFont: Font {
+        suggestLook == nil ? .fernlet(.labelSmall) : MoveFont.body
+    }
+
+    private var sessionFigureColor: Color { suggestLook?.text ?? Color.slate }
 
     /// The warm-up or cool-down as one row ("Warm-up · 23 stretches" beside "~9 min"): the stretches
     /// themselves are walked one at a time in the run, not listed here.
     private func blockSummaryRow(_ label: Text, minutes: Int) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             label
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
+                .font(sessionNameFont)
+                .foregroundStyle(suggestLook?.text ?? Color.bark)
             Spacer(minLength: 8)
             Text("~\(minutes) min")
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
+                .font(sessionFigureFont)
+                .foregroundStyle(sessionFigureColor)
         }
     }
 
@@ -2169,20 +2451,20 @@ struct WorkoutSuggestionSheet: View {
                 sessionHowToButton(exercise)
             }
         } else {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
+            HStack(alignment: suggestLook == nil ? .firstTextBaseline : .center, spacing: 10) {
                 Text(verbatim: drawnName)
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.bark)
+                    .font(sessionNameFont)
+                    .foregroundStyle(suggestLook?.text ?? Color.bark)
                 if let side = GuidedSideLabel(raw: exercise.side?.rawValue) {
                     side.text
                         .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
+                        .foregroundStyle(suggestLook?.dim ?? Color.slate)
                 }
                 Spacer(minLength: 8)
                 if let prescription {
                     Text(verbatim: prescription)
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
+                        .font(sessionFigureFont)
+                        .foregroundStyle(sessionFigureColor)
                 }
                 sessionHowToButton(exercise)
             }
@@ -2201,26 +2483,40 @@ struct WorkoutSuggestionSheet: View {
 
     /// "Start now" — the screen's ONE green, and the only route into the runner (MOVE-17/MOVE-01).
     /// Lives in the bottom bar; the explanation is the single italic line in the scroll content.
-    private func startNowButton(_ guidable: WorkoutProgram.SessionSuggestion) -> some View {
-        Button {
-            // Starting now also approves the plan, so the Move-root "Today's
-            // workout" card surfaces it if the user backs out and returns.
-            store.approveTodaysGuidedPlan()
-            guidedSession = guidable
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "play.circle.fill")
-                    .font(.body.weight(.semibold))
-                Text("Start now")
-                    .font(.fernlet(.label))
+    @ViewBuilder private func startNowButton(_ guidable: WorkoutProgram.SessionSuggestion) -> some View {
+        if let look = suggestLook {
+            Button { startNow(guidable) } label: {
+                HStack(spacing: 8) {
+                    WorldSpriteView(sprite: MoveSprites.flag, scale: 2, tint: look.onAccent)
+                    Text("Start now")
+                }
+                .frame(maxWidth: .infinity)
             }
-            .foregroundStyle(Color.onMoss)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 15)
-            .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 14))
+            .buttonStyle(ActionPillButtonStyle(.primary))
+            .accessibilityIdentifier("workout.startGuided")
+        } else {
+            Button { startNow(guidable) } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "play.circle.fill")
+                        .font(.body.weight(.semibold))
+                    Text("Start now")
+                        .font(.fernlet(.label))
+                }
+                .foregroundStyle(Color.onMoss)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 15)
+                .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 14))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("workout.startGuided")
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("workout.startGuided")
+    }
+
+    /// Start now: approves the plan, so the Move-root "Today's workout" card surfaces it if the user
+    /// backs out and returns, and opens the runner on `guidable`.
+    private func startNow(_ guidable: WorkoutProgram.SessionSuggestion) {
+        store.approveTodaysGuidedPlan()
+        guidedSession = guidable
     }
 
     /// The natural-language "Adjust with AI" field over a committed plan.
@@ -2336,12 +2632,12 @@ struct WorkoutSuggestionSheet: View {
                     if store.needsRestToday {
                         Text(MoveRestDayCopy.suggestSheetLine)
                             .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
+                            .foregroundStyle(suggestLook?.dim ?? Color.slate)
                             .fernletWrappingText()
                     } else if let rec = recommendedIntensity {
                         Text("Today's readiness suggests \(rec.displayWord).")
                             .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
+                            .foregroundStyle(suggestLook?.dim ?? Color.slate)
                     }
                     feelingChips
                 }
@@ -2354,7 +2650,24 @@ struct WorkoutSuggestionSheet: View {
     /// A one-line menu rather than a fifth chip row, so the configurator stays short; the caption
     /// names the menu, so VoiceOver reads "How long?, 30 min, pop-up button" and Voice Control
     /// answers to "Tap How long". Hidden on a rest day, whose gentle plan has no length to fit.
-    private var sessionLengthField: some View {
+    @ViewBuilder private var sessionLengthField: some View {
+        if suggestLook != nil {
+            // `b3-suggest-config`: one framed dropdown, full width, under its section label.
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel("How long?").padding(.horizontal, 4)
+                FernletDropdown("How long?", selection: $sessionLength, options: WorkoutSessionLength.allCases,
+                                showsLabel: false, fullWidth: true) { length in
+                    Text(length.displayName)
+                }
+                .accessibilityIdentifier("workout.suggest.length")
+            }
+        } else {
+            plainSessionLengthField
+        }
+    }
+
+    /// Today's menu picker for the session length.
+    private var plainSessionLengthField: some View {
         SheetField("How long?", namesControl: true) {
             Picker(selection: $sessionLength) {
                 ForEach(WorkoutSessionLength.allCases) { length in
@@ -2431,9 +2744,6 @@ struct WorkoutSuggestionSheet: View {
             // fully logged.
             onFinishedDone: { dismiss() }
         )
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
-        .presentationCornerRadius(20)
     }
 
     /// Closes the whole Suggest flow once every session of the plan is accounted for.
@@ -2505,32 +2815,27 @@ struct WorkoutSuggestionSheet: View {
                 suggestActionBar
             }
         }
-        .background(Color.parchment)
+        .background((suggestLook?.paper ?? Color.parchment).ignoresSafeArea())
         .interactiveDismissDisabled(isConfiguratorDirty)
         .discardConfirmation(isPresented: $showDiscardConfirm) { dismiss() }
         .onAppear { seedIntensityOnce(preferCommitted: true) }
         .sheet(isPresented: $showingSetup) {
             WorkoutSetupSheet(store: store)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheet()
         }
         .sheet(isPresented: $showingSpaces) {
             // The space row's Change (MOVE-34) — straight to the Your-spaces list (1c), not the
             // full setup sheet.
             WorkoutLocationSetupView(store: store)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheet()
         }
-        .sheet(item: $guidedSession, onDismiss: dismissIfPlanFullyLogged) { session in
+        // World build (`b3-runner-*`): the runner is a focused flow, full screen with no grabber.
+        .fullScreenCover(item: $guidedSession, onDismiss: dismissIfPlanFullyLogged) { session in
             guidedRunnerSheet(session)
         }
         .sheet(item: $editingSession) { session in
             GuidedWorkoutEditorSheet(store: store, session: session)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheet()
         }
     }
 
@@ -2575,6 +2880,8 @@ struct WorkoutRow: View {
     @State private var showRemoveConfirm = false
     @State private var showEditSheet = false
     @State private var showHealthRefusalAlert = false
+    /// World build (`b2-move-day`): a Fraunces title, a framed RPE tag, framed exercise rows.
+    @Environment(\.fernletFramedLook) private var look
 
     private var category: WorkoutType {
         WorkoutExerciseCatalog.inferredCategory(for: workout)
@@ -2640,9 +2947,19 @@ struct WorkoutRow: View {
     /// Name plus the RPE capsule.
     private var titleRow: some View {
         HStack(alignment: .top) {
-            Text(workout.displayedName).font(.fernlet(.headerMedium))
+            Text(workout.displayedName)
+                .font(look == nil ? .fernlet(.headerMedium) : .custom(FernletFontName.frauncesSemiBold, size: 20, relativeTo: .title3))
+                .foregroundStyle(look?.text ?? Color.bark)
             Spacer()
-            if let rpe = workout.rpe {
+            if let rpe = workout.rpe, let look {
+                // World build (`b2-move-day`): RPE is a framed tag.
+                Text("RPE \(rpe, specifier: "%.1g")")
+                    .font(FernletFramedFont.buttonSmall)
+                    .foregroundStyle(look.text)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4)
+                    .fernletFramed(look, cornerRadius: 8)
+            } else if let rpe = workout.rpe {
                 // The hues' TEXT inks: plain `moss` on its own 12% tint measured 3.44:1 (bundle 6,
                 // 2026-10-20); `mossInk` and `terracottaInk` are the 4.5:1 text tokens for these hues.
                 Text("RPE \(rpe, specifier: "%.1g")")
@@ -2660,18 +2977,26 @@ struct WorkoutRow: View {
     /// 2026-10-20) and less for goldenrod and dusty rose; the word itself carries the category. The
     /// distance is stored in miles and read in the device's units ("3.1 mi", "5 km").
     private var metaRow: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: look == nil ? 12 : 6) {
             Text(verbatim: category.displayName)
-            if let duration = workout.duration { Text("\(duration) min") }
+            if let duration = workout.duration { metaDot; Text("\(duration) min") }
             if let miles = workout.distanceMiles, miles > 0 {
+                metaDot
                 Text(verbatim: WorkoutMeasurementEntry.distanceText(miles: miles))
             }
+            metaDot
             // Both halves of the fork are now localized: `WorkoutType.displayName` exists and this
             // site was still rendering the FROZEN `rawValue` beside the translated intensity word.
             Text(verbatim: workout.intensity.displayWord)
         }
-        .font(.fernlet(.labelSmall))
-        .foregroundStyle(Color.slate)
+        .font(look == nil ? .fernlet(.labelSmall) : FernletFramedFont.body)
+        .foregroundStyle(look?.dim ?? Color.slate)
+    }
+
+    /// The World look's middle dot between the meta words (`b2-move-day`); nothing without it, where
+    /// the wider spacing alone separates them. Never spoken.
+    @ViewBuilder private var metaDot: some View {
+        if look != nil { Text(verbatim: "·").accessibilityHidden(true) }
     }
 
     /// The logged exercise lines, the target summary, and any note.
@@ -2685,13 +3010,13 @@ struct WorkoutRow: View {
         }
         if !targetSummary.isEmpty {
             Text("Targets: \(targetSummary)")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.body)
+                .foregroundStyle(look?.dim ?? Color.slate)
         }
         if !workout.notes.isEmpty {
             Text(workout.displayedNotes)
-                .font(.fernlet(.bubble))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.bubble) : FernletFramedFont.body)
+                .foregroundStyle(look?.dim ?? Color.slate)
         }
     }
 
@@ -2709,14 +3034,15 @@ struct WorkoutRow: View {
             }
             .padding(.top, 2)
         } else {
-            HStack(spacing: 10) {
+            HStack(spacing: look == nil ? 10 : 18) {
                 Button("Edit") { showEditSheet = true }
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.moss)
+                    .font(look == nil ? .fernlet(.label) : FernletFramedFont.sheetControl)
+                    .foregroundStyle(look?.link ?? Color.moss)
                     .fernletTapTarget()
                     .accessibilityIdentifier("workout.log.edit")
                 Button("Remove", role: .destructive) { showRemoveConfirm = true }
-                    .font(.fernlet(.label))
+                    .font(look == nil ? .fernlet(.label) : FernletFramedFont.sheetControl)
+                    .foregroundStyle(look?.text ?? Color.terracottaInk)
                     .fernletTapTarget()
                     .accessibilityIdentifier("workout.log.remove")
             }
@@ -2763,9 +3089,7 @@ struct WorkoutRow: View {
             // .large only, like Log and Plan: at .medium the notes field sat below the fold with no
             // cue that there was anything under it.
             EditWorkoutSheet(store: store, workout: workout, date: date, onSaved: onChanged)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheet()
         }
     }
 }
@@ -2800,6 +3124,9 @@ struct EditWorkoutSheet: View {
     private let originalSetDrafts: [ExerciseSetsDraft]
     @State private var showHealthRefusalAlert = false
     @State private var showDiscardConfirm = false
+    /// The sheet's stack: the lift whose sets are open on their own page (`b3-workout-edit` draft 2).
+    @State private var liftPath: [UUID] = []
+    @Environment(\.fernletFramedLook) private var look
 
     init(store: FernletStore, workout: Workout, date: String, onSaved: @escaping () -> Void = {}) {
         self.store = store
@@ -2829,12 +3156,14 @@ struct EditWorkoutSheet: View {
 
     /// Any editable field diverges from the row this sheet opened on.
     private var isDirty: Bool {
-        name != workout.displayedName
+        // The set drafts first, so this body always reads them: the lift pages pushed from it draw them,
+        // and a page re-renders only when state this view read changes.
+        setDrafts != originalSetDrafts
+            || name != workout.displayedName
             || intensity != workout.intensity
             || duration != (workout.duration.map(String.init) ?? "")
             || rpe != Self.rpeText(workout.rpe)
             || notes != workout.notes
-            || setDrafts != originalSetDrafts
     }
 
     private func attemptCancel() {
@@ -2855,42 +3184,60 @@ struct EditWorkoutSheet: View {
                 .accessibilityIdentifier("workout.edit.name")
             if isGuided {
                 Text("Name stays put — it's how your guided plan keeps track of this one.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
+                    .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.note)
+                    .foregroundStyle(look?.dim ?? Color.slate)
                     .fernletWrappingText()
             }
         }
     }
 
-    /// The intensity chip row.
+    /// Light · Moderate · Hard (`b3-workout-edit` draft 2: "a framed three-way switch").
     private var intensityField: some View {
         SheetField("Intensity") {
-            FlowLayout(spacing: 8) {
-                ForEach(WorkoutIntensity.allCases) { level in
-                    Button(level.displayWord.localizedCapitalized) { FernletFeedback.system.select(level, in: &intensity) }
-                        .buttonStyle(ChipButtonStyle(selected: intensity == level))
-                        .accessibilityIdentifier("workout.edit.intensity.\(level.rawValue)")
+            FernletSegmentedPicker("Intensity", selection: $intensity, options: WorkoutIntensity.allCases) { level in
+                Text(verbatim: level.displayWord.localizedCapitalized)
+            }
+            .accessibilityIdentifier("workout.edit.intensity")
+        }
+    }
+
+    /// Each editable lift — a guided lift, one logged set by set, or a hand-written line that reads
+    /// as sets × reps — as one row; tapping one opens its sets on their own page (`b3-workout-edit`
+    /// draft 2). Absent for a row with none (an activity, or a guided log from before load tracking,
+    /// whose lines are the plan rather than a record).
+    private var setsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel("Exercises").padding(.horizontal, 4)
+            Text("Tap one to fix any set that went differently. Fernlet plans your next weights from these.")
+                .font(FernletFramedFont.body)
+                .foregroundStyle(look?.dim ?? Color.slate)
+                .fernletWrappingText()
+                .padding(.horizontal, 4)
+            FernletFramedSection {
+                ForEach(setDrafts) { draft in
+                    MoveLiftListRow(name: ExerciseHowToCatalog.displayName(for: draft.name),
+                                    detail: WorkoutSetSummary.line(for: draft),
+                                    color: WorkoutExerciseCatalog.exercise(named: draft.name)?.category.color ?? Color.moss,
+                                    identifier: "workout.edit.lift") { liftPath = [draft.id] }
                 }
             }
         }
     }
 
-    /// Each editable lift's sets — a guided lift, one logged set by set, or a hand-written line that
-    /// reads as sets × reps. Absent for a row with none (an activity, or a guided log from before
-    /// load tracking, whose lines are the plan rather than a record).
-    private var setsSection: some View {
-        SheetField("Sets") {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Fix any set that went differently. Fernlet plans your next weights from these.")
-                    .font(.fernlet(.bubble))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-                ForEach($setDrafts) { $draft in
-                    let index = setDrafts.firstIndex { $0.id == draft.id } ?? 0
-                    ExerciseSetsEditor(draft: $draft, identifier: "workout.edit.sets.\(index)")
-                        .padding(14)
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                }
+    /// One lift's sets on their own page, edited in place; Back returns to the list, Save keeps them.
+    @ViewBuilder private func liftPage(_ id: UUID) -> some View {
+        if let index = setDrafts.firstIndex(where: { $0.id == id }) {
+            let current = setDrafts[index]
+            MoveLiftPage(title: Text(verbatim: ExerciseHowToCatalog.displayName(for: current.name)),
+                         subtitle: Text("Change only the sets that went differently."), buttonLabel: nil,
+                         back: Text("Edit workout")) {
+                // By id, never `$setDrafts[index]`, so a page still leaving the stack never reads past the list.
+                ExerciseSetsEditor(draft: Binding(get: { setDrafts.first { $0.id == id } ?? current },
+                                                  set: { updated in
+                                                      guard let at = setDrafts.firstIndex(where: { $0.id == id }) else { return }
+                                                      setDrafts[at] = updated
+                                                  }),
+                                   identifier: "workout.edit.sets.\(index)")
             }
         }
     }
@@ -2918,14 +3265,28 @@ struct EditWorkoutSheet: View {
     }
 
     var body: some View {
+        // World build (`b3-workout-edit` draft 2): a stack, so a lift's sets open on their own page.
+        NavigationStack(path: $liftPath) {
+            listPage
+                .navigationTitle(Text("Edit workout"))
+                .toolbar(.hidden, for: .navigationBar)
+                .navigationDestination(for: UUID.self) { liftPage($0) }
+        }
+        .keyboardDoneToolbar()
+        .interactiveDismissDisabled(isDirty)
+        .discardConfirmation(isPresented: $showDiscardConfirm) { dismiss() }
+        .alert("This one lives in Apple Health", isPresented: $showHealthRefusalAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("It came from Health, so manage it in the Health app.")
+        }
+    }
+
+    /// The sheet's list page: the header (Cancel and the title in the sheet), the fields, the lifts, Save.
+    private var listPage: some View {
         VStack(spacing: 0) {
-            SheetCancelBar { attemptCancel() }
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    Text("Edit workout")
-                        .font(.fernlet(.displayMedium))
-                        .foregroundStyle(Color.bark)
-
                     nameField
 
                     intensityField
@@ -2963,15 +3324,11 @@ struct EditWorkoutSheet: View {
 
             SheetSaveBar(disabled: trimmedName.isEmpty) { saveEdits() }
         }
-        .background(Color.parchment)
-        .keyboardDoneToolbar()
-        .interactiveDismissDisabled(isDirty)
-        .discardConfirmation(isPresented: $showDiscardConfirm) { dismiss() }
-        .alert("This one lives in Apple Health", isPresented: $showHealthRefusalAlert) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("It came from Health, so manage it in the Health app.")
+        .background((look?.paper ?? Color.parchment).ignoresSafeArea())
+        .safeAreaInset(edge: .top, spacing: 0) {
+            SheetHeader(title: Text("Edit workout"), onCancel: attemptCancel)
         }
+        .accessibilityAction(.escape) { attemptCancel() }
     }
 }
 
@@ -2981,22 +3338,38 @@ struct EditWorkoutSheet: View {
 /// with.
 struct WorkoutExerciseRow: View {
     var exercise: String
+    /// World build (`b2-move-day`): a framed row with a moss pixel tick.
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color.moss)
-            // The stored line is frozen plan text; it is drawn with the planner's descriptors in the
-            // user's language and a treadmill's mph in km/h on a metric device.
-            Text(WorkoutMeasurementEntry.drawnLine(exercise))
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        if let look {
+            HStack(spacing: 10) {
+                WorldSpriteView(sprite: WorldSprites.check, scale: 2, tint: WorldPalette.mossInk)
+                Text(WorkoutMeasurementEntry.drawnLine(exercise))
+                    .font(FernletFramedFont.rowTitle)
+                    .foregroundStyle(look.text)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(look.raised, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth))
+        } else {
+            HStack(spacing: 10) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.moss)
+                // The stored line is frozen plan text; it is drawn with the planner's descriptors in the
+                // user's language and a treadmill's mph in km/h on a metric device.
+                Text(WorkoutMeasurementEntry.drawnLine(exercise))
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.bark)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(12)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
         }
-        .padding(12)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
     }
 }
 
@@ -3009,19 +3382,25 @@ struct WorkoutExerciseRow: View {
 struct WorkoutCategoryPreview: View {
     var category: WorkoutType
 
+    @Environment(\.fernletFramedLook) private var look
+
     var body: some View {
         HStack(spacing: 10) {
-            Circle()
-                .fill(category.color)
-                .frame(width: 10, height: 10)
+            if look != nil {
+                MoveSwatch(color: category.color, size: 12)
+            } else {
+                Circle()
+                    .fill(category.color)
+                    .frame(width: 10, height: 10)
+            }
             VStack(alignment: .leading, spacing: 2) {
                 Text("Category")
                     .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
+                    .foregroundStyle(look?.dim ?? Color.slate)
                 // `displayName`, not `rawValue`: the raw value is the persisted category token.
                 Text(verbatim: category.displayName)
                     .font(.fernlet(.body))
-                    .foregroundStyle(Color.bark)
+                    .foregroundStyle(look?.text ?? Color.bark)
             }
             Spacer()
             // A text ink, not the category's accent hue: on its own 12% tint over cream the hue
@@ -3037,8 +3416,7 @@ struct WorkoutCategoryPreview: View {
                 .background(category.color.opacity(0.12), in: Capsule())
         }
         .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        .modifier(MoveInsetCardFrame())
     }
 }
 
@@ -3073,6 +3451,7 @@ struct MoveContextStrip: View {
     var onEditGoal: () -> Void
     var onEditSpace: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.fernletFramedLook) fileprivate var look
 
     /// Goal segment value; nil renders the empty "Tap to plan" treatment so a first-run goal reads as
     /// an invitation, not a set value.
@@ -3116,6 +3495,7 @@ struct MoveContextStrip: View {
         AdaptiveStack(spacing: 0, horizontalAlignment: .leading) {
             MoveContextSegment(
                 icon: "target",
+                sprite: WorldSprites.target,
                 label: "Goal",
                 value: goalValue,
                 emptyPrompt: "Tap to plan",
@@ -3136,6 +3516,7 @@ struct MoveContextStrip: View {
 
             MoveContextSegment(
                 icon: "mappin.and.ellipse",
+                sprite: WorldSprites.pin,
                 label: "Space",
                 value: spaceValue,
                 emptyPrompt: "Set up your space",
@@ -3150,15 +3531,38 @@ struct MoveContextStrip: View {
             // matched on it would break the moment it exercised the rename it's there to check.
             .accessibilityIdentifier("move.space")
         }
-        .background(Color.cream.opacity(0.86), in: RoundedRectangle(cornerRadius: FernletMetrics.radiusSm))
-        .overlay(RoundedRectangle(cornerRadius: FernletMetrics.radiusSm).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+        .modifier(MoveContextStripFrame())
+    }
+}
+
+/// The context strip's card: World build, one framed paper card (`b2-move-root`: "the goal and space
+/// sit side by side in one framed card"); today, the quiet cream strip.
+private struct MoveContextStripFrame: ViewModifier {
+    @Environment(\.fernletFramedLook) private var look
+
+    func body(content: Content) -> some View {
+        if let look {
+            let shape = RoundedRectangle(cornerRadius: FernletFramedLook.cardRadius, style: .continuous)
+            content
+                .padding(.vertical, 2)
+                .background(look.paper, in: shape)
+                .overlay(shape.strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth))
+                .background { shape.fill(look.shadow).offset(y: 3) }
+        } else {
+            content
+                .background(Color.cream.opacity(0.86), in: RoundedRectangle(cornerRadius: FernletMetrics.radiusSm))
+                .overlay(RoundedRectangle(cornerRadius: FernletMetrics.radiusSm).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+        }
     }
 }
 
 extension MoveContextStrip {
     /// The hairline between the two segments: vertical beside them, horizontal once they stack.
+    /// The World card draws no line beside them (`b2-move-root`), a dotted rule once they stack.
     @ViewBuilder fileprivate var divider: some View {
-        if dynamicTypeSize.isAccessibilitySize {
+        if look != nil {
+            if dynamicTypeSize.isAccessibilitySize { FernletDottedRule().padding(.horizontal, 14) }
+        } else if dynamicTypeSize.isAccessibilitySize {
             Rectangle()
                 .fill(Color.bark.opacity(0.10))
                 .frame(height: 1)
@@ -3179,6 +3583,8 @@ extension MoveContextStrip {
 /// prompt so a first-run segment reads as an invitation, not a set value.
 private struct MoveContextSegment: View {
     var icon: String
+    /// The World build's pixel icon in place of `icon` (`b2-move-root`).
+    var sprite: WorldSprite
     /// The uppercase caption. `LocalizedStringKey`: both callers pass a literal, which the `String`
     /// this used to be kept out of the catalog (so `.textCase` ran on English).
     var label: LocalizedStringKey
@@ -3193,41 +3599,63 @@ private struct MoveContextSegment: View {
     /// value has the whole width to wrap in.
     private var valueLineLimit: Int? { dynamicTypeSize.isAccessibilitySize ? nil : 2 }
 
+    @Environment(\.fernletFramedLook) private var look
+
+    /// The segment's icon: the pixel sprite under the World look, today's symbol without it.
+    @ViewBuilder private var iconView: some View {
+        if look != nil {
+            WorldSpriteView(sprite: sprite, scale: 2)
+        } else {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(value == nil ? Color.slate : Color.moss)
+        }
+    }
+
+    /// The caption: under the World look the section label's small framed square before the word.
+    private var caption: some View {
+        HStack(spacing: 6) {
+            if let look {
+                look.mark.frame(width: 7, height: 7).padding(2).background(look.ink).accessibilityHidden(true)
+            }
+            // `.textCase` on a `LocalizedStringKey` caption: the transform runs after the
+            // catalog lookup, on the translation. (F5: as a `String` parameter it ran on
+            // nothing, because a `String` never reaches the catalog at all.)
+            Text(label)
+                .textCase(.uppercase)
+                .font(look == nil ? .fernlet(.labelSmall) : MoveFont.caption)
+                .tracking(0.6)
+                .foregroundStyle(look?.text ?? Color.slate)
+        }
+    }
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 9) {
-                Image(systemName: icon)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(value == nil ? Color.slate : Color.moss)
+                iconView
                 VStack(alignment: .leading, spacing: 2) {
-                    // `.textCase` on a `LocalizedStringKey` caption: the transform runs after the
-                    // catalog lookup, on the translation. (F5: as a `String` parameter it ran on
-                    // nothing, because a `String` never reaches the catalog at all.)
-                    Text(label)
-                        .textCase(.uppercase)
-                        .font(.fernlet(.labelSmall))
-                        .tracking(0.6)
-                        .foregroundStyle(Color.slate)
+                    caption
                     if let value {
                         Text(value)
                             // Two lines, not one: at default size an accepted goal already truncated
-                            // to "Complete 3 gene…" with no way to read the rest.
-                            .font(.fernlet(.label))
-                            .foregroundStyle(Color.bark)
+                            // to "Complete 3 gene…" with no way to read the rest. The World card's value
+                            // is the kit's 15-pt strong face, so "Full gym · 22 items" fits its half.
+                            .font(look == nil ? .fernlet(.label) : MoveFont.body)
+                            .foregroundStyle(look?.text ?? Color.bark)
                             .lineLimit(valueLineLimit)
                             .truncationMode(.tail)
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
                         Text(emptyPrompt)
-                            .font(.fernlet(.bubble))
-                            .foregroundStyle(Color.slate)
+                            .font(look == nil ? .fernlet(.bubble) : FernletFramedFont.body)
+                            .foregroundStyle(look?.dim ?? Color.slate)
                             .lineLimit(valueLineLimit)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, look == nil ? 14 : 12)
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
@@ -3455,6 +3883,9 @@ struct WorkoutExerciseBuilder: View {
     var showsStrengthFields = true
     /// Forwarded to ``ExerciseSearchPicker`` — lets a typed name stand as the exercise.
     var allowsTypedExercise = false
+    /// Draws the search picker above the fields. Off on an exercise's own page (`b3-workout-exercise`),
+    /// whose title already names the pick.
+    var showsPicker = true
     var onAdd: () -> Void
 
     /// The resolved recall values for the current pick — held as state so the rollup runs once per
@@ -3543,14 +3974,16 @@ struct WorkoutExerciseBuilder: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            ExerciseSearchPicker(
-                selectedExercise: $selectedExercise,
-                resetToken: $resetToken,
-                title: pickerTitle,
-                placeholder: searchPlaceholder,
-                autofocus: autofocusSearch,
-                allowsTypedExercise: allowsTypedExercise
-            )
+            if showsPicker {
+                ExerciseSearchPicker(
+                    selectedExercise: $selectedExercise,
+                    resetToken: $resetToken,
+                    title: pickerTitle,
+                    placeholder: searchPlaceholder,
+                    autofocus: autofocusSearch,
+                    allowsTypedExercise: allowsTypedExercise
+                )
+            }
 
             if let lastTimeValues {
                 Text("Last time: \(lastTimeValues)")
@@ -3775,39 +4208,71 @@ struct ExerciseSearchPicker: View {
 struct ExerciseSearchResultRow: View {
     var exercise: ExerciseTarget
     var isSelected: Bool
+    /// World build (`b3-exercise-swap`): the row sits in a shared framed card, which draws the frame and
+    /// the dotted rules, so the row draws none of its own.
+    var inCard = false
     var action: () -> Void
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
         Button(action: action) {
-            HStack(alignment: .top, spacing: 10) {
-                Circle()
-                    .fill(exercise.category.color)
-                    .frame(width: 9, height: 9)
-                    .padding(.top, 5)
+            HStack(alignment: look == nil ? .top : .center, spacing: 10) {
+                if look != nil {
+                    MoveSwatch(color: exercise.category.color, size: 14)
+                } else {
+                    Circle()
+                        .fill(exercise.category.color)
+                        .frame(width: 9, height: 9)
+                        .padding(.top, 5)
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(verbatim: exercise.displayName)
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.bark)
+                        .font(look == nil ? .fernlet(.body) : MoveFont.rowTitle)
+                        .foregroundStyle(look?.text ?? Color.bark)
                     // `displayName`, not `rawValue` — the seventh site of this class in this file.
                     // The harvested key here is "%@ - %@", so the row LOOKS localized while its
                     // first argument is the frozen persisted category token.
                     Text("\(exercise.category.displayName) - \(exercise.muscles.joined(separator: ", "))")
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
+                        .font(look == nil ? .fernlet(.labelSmall) : FernletFramedFont.rowDetail)
+                        .foregroundStyle(look?.dim ?? Color.slate)
                 }
                 Spacer()
-                Image(systemName: isSelected ? "xmark.circle" : "plus.circle")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(isSelected ? Color.slate : Color.moss)
+                rowGlyph
             }
-            .padding(10)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+            .padding(inCard ? 0 : 10)
+            .padding(.vertical, inCard ? 8 : 0)
+            .modifier(SearchRowFrame(isFramed: !inCard))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         // Voice Control: the row's name runs on through its category and every muscle it works;
         // the exercise's name is what a user says.
         .accessibilityInputLabels([Text(verbatim: exercise.displayName)])
+    }
+
+    /// The trailing glyph: a framed pixel + (or ✕ to clear the pick) under the World look, today's symbol.
+    @ViewBuilder private var rowGlyph: some View {
+        if look != nil {
+            FernletIconTile(size: 32) { FernletIcon(isSelected ? .close : .plus, scale: 2) }
+        } else {
+            Image(systemName: isSelected ? "xmark.circle" : "plus.circle")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(isSelected ? Color.slate : Color.moss)
+        }
+    }
+}
+
+/// A search result row's own card when it stands alone (World: framed paper; today: cream with a
+/// hairline), or nothing when a shared card holds it.
+private struct SearchRowFrame: ViewModifier {
+    let isFramed: Bool
+
+    func body(content: Content) -> some View {
+        if isFramed {
+            content.modifier(MoveInsetCardFrame(cornerRadius: 10))
+        } else {
+            content
+        }
     }
 }
 
@@ -3857,30 +4322,54 @@ struct LoggedExerciseRow: View {
 /// ``WorkoutPlanSheet`` can re-fold the rows into its plan-steps text.
 struct EditablePlannedExerciseRow: View {
     @Binding var entry: WorkoutExerciseEntry
+    /// The name, muscles and ✕ on a card. Off on the exercise's own page (`b3-workout-plan` draft 2),
+    /// whose title names it and which ends with Remove.
+    var showsHeader = true
     var onRemove: () -> Void
     var onChange: () -> Void
 
     var body: some View {
+        if showsHeader {
+            fields
+                .padding(14)
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        } else {
+            VStack(alignment: .leading, spacing: 18) {
+                Text(entry.exercise.muscles.joined(separator: ", "))
+                    .font(FernletFramedFont.body)
+                    .foregroundStyle(entry.exercise.category.color)
+                fields
+                Button(role: .destructive, action: onRemove) { Text("Remove").frame(maxWidth: .infinity) }
+                    .buttonStyle(ActionPillButtonStyle(.destructive))
+                    .accessibilityIdentifier("plan.removeExercise")
+            }
+        }
+    }
+
+    private var fields: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(verbatim: entry.exercise.displayName)
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.bark)
-                    Text(entry.exercise.muscles.joined(separator: ", "))
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(entry.exercise.category.color)
+            if showsHeader {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(verbatim: entry.exercise.displayName)
+                            .font(.fernlet(.body))
+                            .foregroundStyle(Color.bark)
+                        Text(entry.exercise.muscles.joined(separator: ", "))
+                            .font(.fernlet(.labelSmall))
+                            .foregroundStyle(entry.exercise.category.color)
+                    }
+                    Spacer()
+                    Button(action: onRemove) {
+                        Image(systemName: "xmark")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color.slate)
+                    }
+                    .buttonStyle(.plain)
+                    .fernletIconButton("Remove \(entry.exercise.displayName)")
+                    // T2-12, as on ``LoggedExerciseRow``.
+                    .accessibilityInputLabels([Text("Remove")])
                 }
-                Spacer()
-                Button(action: onRemove) {
-                    Image(systemName: "xmark")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color.slate)
-                }
-                .buttonStyle(.plain)
-                .fernletIconButton("Remove \(entry.exercise.displayName)")
-                // T2-12, as on ``LoggedExerciseRow``.
-                .accessibilityInputLabels([Text("Remove")])
             }
 
             switch entry.exercise.inputKind {
@@ -3901,10 +4390,9 @@ struct EditablePlannedExerciseRow: View {
 
             editableField("Details", text: $entry.details)
         }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
     }
+
+    @Environment(\.fernletFramedLook) private var look
 
     private func editableField(
         _ label: LocalizedStringKey,
@@ -3914,7 +4402,7 @@ struct EditablePlannedExerciseRow: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
                 .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
+                .foregroundStyle(look?.dim ?? Color.slate)
             TextField(label, text: text, prompt: .fieldPrompt(label))
                 .keyboardType(keyboard)
                 // Tabular DM Sans for the numeric fields, per the shared field idiom.
@@ -3963,39 +4451,41 @@ struct WorkoutCalendarCard: View {
         }
     }
 
+    /// World build (`b2-move-root`): pixel chevrons, a Fraunces week title, framed day cells.
+    @Environment(\.fernletFramedLook) private var look
+
+    /// One week-step chevron: pixel under the World look, the symbol without it.
+    private func weekStepButton(forward: Bool) -> some View {
+        Button {
+            displayedWeek = cal.date(byAdding: .weekOfYear, value: forward ? 1 : -1, to: displayedWeek) ?? displayedWeek
+        } label: {
+            Group {
+                if look != nil {
+                    FernletIcon(forward ? .chevron : .back)
+                } else {
+                    Image(systemName: forward ? "chevron.right" : "chevron.left")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(Color.slate)
+                }
+            }
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(forward ? Text("Next week") : Text("Previous week"))
+    }
+
     var body: some View {
         let model = WorkoutWeekModel(date: displayedWeek, allDays: allDays, todayKey: todayKey)
         return FernletCard {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .center) {
-                    Button {
-                        displayedWeek = cal.date(byAdding: .weekOfYear, value: -1, to: displayedWeek) ?? displayedWeek
-                    } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(Color.slate)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Previous week")
-
+                    weekStepButton(forward: false)
                     Text(model.weekTitle)
-                        .font(.fernlet(.headerMedium))
-                        .foregroundStyle(Color.bark)
+                        .font(look == nil ? .fernlet(.headerMedium) : .custom(FernletFontName.frauncesSemiBold, size: 19, relativeTo: .title3))
+                        .foregroundStyle(look?.text ?? Color.bark)
                         .frame(maxWidth: .infinity)
-
-                    Button {
-                        displayedWeek = cal.date(byAdding: .weekOfYear, value: 1, to: displayedWeek) ?? displayedWeek
-                    } label: {
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(Color.slate)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Next week")
+                    weekStepButton(forward: true)
                 }
 
                 weekStrip(model)
@@ -4046,10 +4536,13 @@ struct WorkoutCalendarCard: View {
                             .font(.system(size: 9, weight: .black))
                             .foregroundStyle(split.color)
                             .frame(width: 10, height: 10)
+                    } else if look != nil {
+                        // `.legend i`: a pixel square in an ink frame.
+                        MoveSwatch(color: split.color, size: 9)
                     } else {
                         Circle().fill(split.color).frame(width: 8, height: 8)
                     }
-                    Text(split.title).font(.fernlet(.labelSmall)).foregroundStyle(Color.slate)
+                    Text(split.title).font(.fernlet(.labelSmall)).foregroundStyle(look?.dim ?? Color.slate)
                 }
                 .fixedSize()
             }
@@ -4107,6 +4600,8 @@ private struct WorkoutCategoryMark: View {
     /// Passed in rather than read here, so the environment is read once per cell instead of once
     /// per dot.
     var differentiateWithoutColor: Bool
+    /// World build: the mark is a pixel square (`.cal span.dot`), not a dot.
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
         if differentiateWithoutColor {
@@ -4114,6 +4609,10 @@ private struct WorkoutCategoryMark: View {
                 .font(.system(size: 7, weight: .black))
                 .foregroundStyle(category.color)
                 .frame(width: 8, height: 8)
+        } else if look != nil {
+            Rectangle()
+                .fill(planned ? category.color.opacity(0.38) : category.color)
+                .frame(width: 5, height: 5)
         } else {
             Circle()
                 .fill(planned ? category.color.opacity(0.38) : category.color)
@@ -4138,13 +4637,15 @@ struct WorkoutCalendarCell: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     // Read ONCE per cell and handed down to every mark — see ``WorkoutCategoryMark``.
     @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
+    /// World build (`b2-move-root`): framed day cells, today outlined in ink.
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: 5) {
                 Text(cell.weekdayText)
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
+                    .font(look == nil ? .fernlet(.labelSmall) : MoveFont.caption)
+                    .foregroundStyle(look?.dim ?? Color.slate)
                 dayTile
                 if !dynamicTypeSize.isAccessibilitySize {
                     summaryLine
@@ -4165,15 +4666,26 @@ struct WorkoutCalendarCell: View {
     }
 
     /// The rounded day tile: fill, today ring, the day numeral and the category marks.
-    private var dayTile: some View {
-        RoundedRectangle(cornerRadius: 8)
-            .fill(cell.fill)
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(cell.isToday ? Color.moss : Color.clear, lineWidth: 1.5)
-            )
-            .overlay { tileContents }
-            .frame(height: 46)
+    @ViewBuilder private var dayTile: some View {
+        if let look {
+            // `.cal span`: recessed paper, today raised in a 2-pt ink frame, a day ahead unfilled.
+            RoundedRectangle(cornerRadius: 7)
+                .fill(cell.isFuture ? Color.clear : (cell.isToday ? look.raised : look.paperLow))
+                .overlay {
+                    if cell.isToday { RoundedRectangle(cornerRadius: 7).strokeBorder(look.ink, lineWidth: 2) }
+                }
+                .overlay { tileContents }
+                .frame(height: 46)
+        } else {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(cell.fill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(cell.isToday ? Color.moss : Color.clear, lineWidth: 1.5)
+                )
+                .overlay { tileContents }
+                .frame(height: 46)
+        }
     }
 
     /// What sits inside the tile: the day numeral over the category marks.
@@ -4188,7 +4700,8 @@ struct WorkoutCalendarCell: View {
         VStack(spacing: 4) {
             Text("\(cell.day)")
                 .font(.fernlet(cell.isFuture ? .labelSmall : .stat))
-                .foregroundStyle(Color.bark)
+                .fontWeight(look != nil && cell.isToday ? .bold : nil)
+                .foregroundStyle(look.map { cell.isFuture ? $0.dim : $0.text } ?? Color.bark)
             categoryMarks
         }
     }
@@ -4218,7 +4731,7 @@ struct WorkoutCalendarCell: View {
             .font(.fernlet(.labelSmall))
             .lineLimit(1)
             .minimumScaleFactor(0.7)
-            .foregroundStyle(Color.slate)
+            .foregroundStyle(look?.dim ?? Color.slate)
     }
 }
 
@@ -4390,6 +4903,17 @@ struct MoveDayDetailView: View {
     @State private var reloadToken = 0
     /// The guided run a today's plan's Start opened (`PlannedWorkoutRun.swift`). nil = closed.
     @State private var plannedRunSession: WorkoutProgram.SessionSuggestion?
+    /// World build (`b2-move-day`); nil draws today's day page.
+    @Environment(\.fernletFramedLook) private var look
+
+    /// The page's name on the panel's plate: "Today", or the day's short date.
+    private var plateTitle: String {
+        if dateKey == store.todayKey {
+            return String(localized: "Today")
+        }
+        let date = FernletDate.date(fromDayKey: dateKey) ?? .now
+        return date.formatted(.dateTime.month(.abbreviated).day())
+    }
 
     private var day: FernletDay {
         _ = reloadToken
@@ -4454,7 +4978,7 @@ struct MoveDayDetailView: View {
 
     /// The day's plan: an empty-state that opens the planner, or the planned rows.
     private var planSection: some View {
-        FernletScrollSection("Plan") {
+        MoveCardList(header: Text("Plan")) {
             if day.plannedWorkouts.isEmpty {
                 Button {
                     editingPlannedWorkout = nil
@@ -4464,9 +4988,8 @@ struct MoveDayDetailView: View {
                 }
                 .buttonStyle(.plain)
             } else {
-                ForEach(Array(day.plannedWorkouts.enumerated()), id: \.element.id) { index, workout in
+                ForEach(day.plannedWorkouts) { workout in
                     plannedRow(workout)
-                    if index < day.plannedWorkouts.count - 1 { FernletRowDivider() }
                 }
             }
         }
@@ -4475,21 +4998,47 @@ struct MoveDayDetailView: View {
     /// The day's logged workouts — hidden on future days (you can plan ahead, not log ahead).
     @ViewBuilder private var workoutsSection: some View {
         if !isFuture {
-            FernletScrollSection("Workouts") {
+            MoveCardList(header: Text("Workouts")) {
                 if day.workouts.isEmpty {
                     EmptyState(text: "No workouts logged")
                 } else {
-                    ForEach(Array(day.workouts.enumerated()), id: \.element.id) { index, workout in
+                    ForEach(day.workouts) { workout in
                         WorkoutRow(
                             store: store,
                             workout: workout,
                             date: dateKey,
                             onChanged: { reloadToken += 1 }
                         )
-                        if index < day.workouts.count - 1 { FernletRowDivider() }
                     }
                 }
             }
+        }
+    }
+
+    /// World build (`b2-move-day`): Plan and Log sit under the date as two framed buttons, instead of
+    /// crowding the bar (the plate hides it). Log is offered on today and past days only.
+    private var framedActions: some View {
+        AdaptiveStack(spacing: 10, horizontalAlignment: .leading) {
+            MoveIconButton(title: Text("Plan"), sprite: WorldSprites.diary) {
+                editingPlannedWorkout = nil
+                showPlanSheet = true
+            }
+            .accessibilityIdentifier("move.day.plan")
+            if !isFuture {
+                MoveIconButton(title: Text("Log"), sprite: WorldSprites.plus) { showWorkoutSheet = true }
+                    .accessibilityIdentifier("move.day.log")
+            }
+        }
+    }
+
+    /// The page's heading: World build, the big title and date with Plan and Log under them; today, the
+    /// ScreenHeader (Plan and Log ride in the bar).
+    @ViewBuilder private var pageHeader: some View {
+        if look != nil {
+            MovePageTitle(title: navigationTitle, subtitle: Text(verbatim: headerSubtitle))
+            framedActions
+        } else {
+            ScreenHeader(title: navigationTitle, subtitle: Text(verbatim: headerSubtitle))
         }
     }
 
@@ -4528,23 +5077,16 @@ struct MoveDayDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                ScreenHeader(title: navigationTitle, subtitle: Text(verbatim: headerSubtitle))
+                pageHeader
                 planSection
                 workoutsSection
             }
             .padding(20)
         }
-        .background(Color.parchment)
-        // The page draws its own ScreenHeader (matching the Move root), so the bar carries only
-        // back + Plan/Log rather than repeating "Today" directly above the big one.
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar { toolbarItems }
+        .modifier(MoveDayChrome(isFramed: look != nil, plateTitle: plateTitle) { toolbarItems })
         .sheet(isPresented: $showWorkoutSheet) {
             WorkoutSheet(store: store, dateKey: dateKey)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheet()
                 // The sheet no longer declares its own (the root router's `fernletSheetChrome` does
                 // for the other presentation), so this presentation supplies it — the RPE and
                 // Duration number pads have no return key of their own.
@@ -4557,16 +5099,12 @@ struct MoveDayDetailView: View {
                 showsPlanSourceTag: showsPlanSourceTag,
                 editingPlan: editingPlannedWorkout
             )
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheet()
         }
         // A finished run completes the planned row: re-read the day when the runner closes.
-        .sheet(item: $plannedRunSession, onDismiss: { reloadToken += 1 }) { session in
+        // World build (`b3-runner-*`): the runner is a focused flow, full screen.
+        .fullScreenCover(item: $plannedRunSession, onDismiss: { reloadToken += 1 }) { session in
             GuidedWorkoutSheet(store: store, session: session)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
         }
     }
 }
@@ -4607,16 +5145,25 @@ struct PlannedWorkoutRow: View {
                 // moves somewhere else with nothing said about why.
                 TaskConfirmation.workoutLogged.announce()
             } label: {
-                ZStack {
-                    Circle()
-                        .fill(plannedWorkout.workoutType.color.opacity(0.14))
+                if let look {
+                    // World build: a framed check box in the plan's colour, a pixel tick inside.
+                    WorldSpriteView(sprite: WorldSprites.check, scale: 2, tint: look.text)
                         .frame(width: 34, height: 34)
-                    Circle()
-                        .stroke(plannedWorkout.workoutType.color, lineWidth: 2)
-                        .frame(width: 34, height: 34)
-                    Image(systemName: "checkmark")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(plannedWorkout.workoutType.color)
+                        .fernletFramed(look, fill: plannedWorkout.workoutType.color.opacity(0.22), cornerRadius: 8)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                } else {
+                    ZStack {
+                        Circle()
+                            .fill(plannedWorkout.workoutType.color.opacity(0.14))
+                            .frame(width: 34, height: 34)
+                        Circle()
+                            .stroke(plannedWorkout.workoutType.color, lineWidth: 2)
+                            .frame(width: 34, height: 34)
+                        Image(systemName: "checkmark")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(plannedWorkout.workoutType.color)
+                    }
                 }
             }
             .buttonStyle(.plain)
@@ -4635,8 +5182,8 @@ struct PlannedWorkoutRow: View {
     private var titleBlock: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(plannedWorkout.displayedName)
-                .font(.fernlet(.headerMedium))
-                .foregroundStyle(Color.bark)
+                .font(look == nil ? .fernlet(.headerMedium) : .custom(FernletFontName.frauncesSemiBold, size: 20, relativeTo: .title3))
+                .foregroundStyle(look?.text ?? Color.bark)
             HStack(spacing: 8) {
                 Text(plannedWorkout.split.title)
                 if showsPlanSourceTag {
@@ -4646,8 +5193,8 @@ struct PlannedWorkoutRow: View {
                     Text("\(duration) min")
                 }
             }
-            .font(.fernlet(.labelSmall))
-            .foregroundStyle(Color.slate)
+            .font(look == nil ? .fernlet(.labelSmall) : FernletFramedFont.body)
+            .foregroundStyle(look?.dim ?? Color.slate)
         }
     }
 
@@ -4657,8 +5204,8 @@ struct PlannedWorkoutRow: View {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(Array(stepLines.prefix(4).enumerated()), id: \.offset) { _, line in
                     Text(WorkoutMeasurementEntry.drawnLine(line))
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.bark.opacity(0.82))
+                        .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.body)
+                        .foregroundStyle(look?.text ?? Color.bark.opacity(0.82))
                         .lineLimit(2)
                 }
             }
@@ -4666,8 +5213,8 @@ struct PlannedWorkoutRow: View {
 
         if !plannedWorkout.notes.isEmpty {
             Text(plannedWorkout.displayedNotes)
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.note)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .fernletWrappingText()
         }
     }
@@ -4675,7 +5222,13 @@ struct PlannedWorkoutRow: View {
     /// "Start" — a filled capsule, the row's one primary — runs the plan in the guided runner. The spoken
     /// name says which plan; Voice Control answers to the drawn word.
     @ViewBuilder private var startButton: some View {
-        if let onStart {
+        if let onStart, look != nil {
+            Button("Start", action: onStart)
+                .buttonStyle(ActionPillButtonStyle(.primary, size: .small))
+                .accessibilityLabel("Start \(plannedWorkout.displayedName), guided")
+                .accessibilityInputLabels([Text("Start"), Text("Start plan"), Text("Start workout")])
+                .accessibilityIdentifier("workout.plan.start")
+        } else if let onStart {
             Button(action: onStart) {
                 Label("Start", systemImage: "play.fill")
                     .font(.fernlet(.label))
@@ -4694,19 +5247,22 @@ struct PlannedWorkoutRow: View {
 
     /// Start (today's plans), Edit, Remove — stacked at accessibility text sizes rather than squeezed.
     private var actionRow: some View {
-        AdaptiveStack(spacing: 10, horizontalAlignment: .leading) {
+        AdaptiveStack(spacing: look == nil ? 10 : 18, horizontalAlignment: .leading) {
             startButton
             Button("Edit", action: onEdit)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.moss)
+                .font(look == nil ? .fernlet(.label) : FernletFramedFont.sheetControl)
+                .foregroundStyle(look?.link ?? Color.moss)
                 .fernletTapTarget()
             Button("Remove", role: .destructive) { confirmRemove() }
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.terracottaInk)
+                .font(look == nil ? .fernlet(.label) : FernletFramedFont.sheetControl)
+                .foregroundStyle(look?.text ?? Color.terracottaInk)
                 .fernletTapTarget()
                 .accessibilityIdentifier("workout.plan.remove")
         }
     }
+
+    /// World build (`b2-move-day`): a Fraunces title, the framed Start, link-coloured Edit.
+    @Environment(\.fernletFramedLook) private var look
 
     private func confirmRemove() {
         pendingDestructiveAction = DestructiveConfirmation(
@@ -4767,6 +5323,9 @@ struct WorkoutPlanSheet: View {
     /// Presents ``WorkoutSuggestionSheet`` — the flow that used to sit behind the Move header's
     /// "Suggest" pill. It lives here now because asking for a workout belongs beside planning one.
     @State private var showingSuggestion = false
+    /// The sheet's stack: a planned exercise's own page (`b3-workout-plan` draft 2).
+    @State private var liftPath: [WorkoutLiftRoute] = []
+    @Environment(\.fernletFramedLook) private var look
     private let previousWeekPlan: PlannedWorkout?
     /// The plan the name field was seeded from: the one being edited, or the one "Copy previous week"
     /// copied. The field draws its `displayedName`; ``plannedName`` hands the stored name back while
@@ -4913,118 +5472,163 @@ struct WorkoutPlanSheet: View {
         editingPlan == nil && dateKey == store.todayKey
     }
 
-    /// Title, target day, and the "User plan" tag when coach-sourced plans exist.
-    private var planHeader: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(editingPlan == nil ? "Plan workout" : "Edit plan")
-                .font(.fernlet(.displayMedium))
-                .foregroundStyle(Color.bark)
-            Text(targetDateTitle)
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.slate)
-            if showsPlanSourceTag {
-                Text("User plan")
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.moss)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.moss.opacity(0.12), in: Capsule())
+    /// Copy last week and Suggest one, side by side (stacked at accessibility sizes), when offered.
+    @ViewBuilder private var quickStarts: some View {
+        if previousWeekPlan != nil || showsSuggestEntry {
+            AdaptiveStack(spacing: 10, horizontalAlignment: .leading) {
+                if let previousWeekPlan {
+                    entryCard(icon: "arrow.turn.down.right",
+                              title: "Copy last week",
+                              subtitle: previousWeekPlan.displayedName) {
+                        copyPreviousWeekPlan(previousWeekPlan)
+                    }
+                    .accessibilityIdentifier("plan.copyPreviousWeek")
+                }
+                if showsSuggestEntry {
+                    entryCard(icon: "wand.and.stars",
+                              title: "Suggest one",
+                              subtitle: String(localized: "move.plan.suggest.subtitle",
+                                               defaultValue: "Built from your split, equipment, and limits",
+                                               comment: "Plan sheet, the Suggest a workout card's second line")) {
+                        showingSuggestion = true
+                    }
+                    .accessibilityIdentifier("plan.suggest")
+                }
             }
         }
     }
 
-    /// The shared chrome behind "Copy previous week" and "Suggest a workout".
+    /// A planned row's binding by id: reads the row while it is listed (`fallback` once it is gone) and
+    /// writes only into a row that is still there.
+    private func plannedRowBinding(_ id: UUID, fallback: WorkoutExerciseEntry) -> Binding<WorkoutExerciseEntry> {
+        Binding(
+            get: { exerciseRows.first { $0.id == id } ?? fallback },
+            set: { updated in
+                guard let index = exerciseRows.firstIndex(where: { $0.id == id }) else { return }
+                exerciseRows[index] = updated
+            }
+        )
+    }
+
+    /// The new-exercise page's Add to plan: the exercise joins the list and the plan steps.
+    private func commitPlannedLift() {
+        addDraftExercise()
+        liftPath = []
+    }
+
+    /// Takes a planned row off the list, and out of the plan steps it was folded into.
+    private func removePlannedRow(_ id: UUID) {
+        exerciseRows.removeAll { $0.id == id }
+        plannedExerciseText = exerciseRows.map(\.summary).joined(separator: "\n")
+    }
+
+    /// The exercise page's back word: the plan sheet's own title.
+    private var planBackLabel: Text { Text(editingPlan == nil ? "Plan workout" : "Edit plan") }
+
+    /// The plan sheet's exercise page: a new exercise (search, then its prescription, Add to plan), or a
+    /// listed one edited in place (Back keeps the change; Remove takes it off the plan).
+    @ViewBuilder private func planLiftPage(_ route: WorkoutLiftRoute) -> some View {
+        switch route {
+        case .lift:
+            MoveLiftPage(title: draft.exercise.map { Text(verbatim: $0.displayName) } ?? Text("Add exercise"),
+                         subtitle: nil, buttonLabel: "Add to plan", buttonDisabled: draft.exercise == nil,
+                         back: planBackLabel, onButton: commitPlannedLift) {
+                WorkoutExerciseBuilder(
+                    selectedExercise: $draft.exercise, sets: $draft.sets, reps: $draft.reps, weight: $draft.weight,
+                    speed: $draft.speed, incline: $draft.incline, details: $draft.details, resetToken: $draft.resetToken,
+                    mode: logMode, showAddButton: false, autofocusSearch: true, historyStore: store, onAdd: addDraftExercise
+                )
+            }
+        case .row(let id):
+            if let entry = exerciseRows.first(where: { $0.id == id }) {
+                MoveLiftPage(title: Text(verbatim: entry.exercise.displayName), subtitle: nil, buttonLabel: nil,
+                             back: planBackLabel) {
+                    // By id, never `$exerciseRows[index]`: Remove takes the row out while the page is
+                    // still leaving the stack, and an index binding read then runs off the array.
+                    EditablePlannedExerciseRow(entry: plannedRowBinding(id, fallback: entry), showsHeader: false) {
+                        removePlannedRow(id)
+                        liftPath = []
+                    } onChange: {
+                        plannedExerciseText = exerciseRows.map(\.summary).joined(separator: "\n")
+                    }
+                }
+            }
+        }
+    }
+
+    /// The "User plan" tag when coach-sourced plans exist (the title and day are in the sheet's header).
+    @ViewBuilder private var planHeader: some View {
+        if showsPlanSourceTag {
+            FernletTag("User plan")
+        }
+    }
+
+    /// The shared chrome behind "Copy last week" and "Suggest one" (`b3-workout-plan` draft 2: two small
+    /// framed buttons in one row). The second line is spoken as the button's hint.
     private func entryCard(icon: String, title: LocalizedStringKey, subtitle: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(Color.moss)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.bark)
-                    Text(subtitle)
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
-                        .lineLimit(1)
-                }
-                Spacer()
+                    .accessibilityHidden(true)
+                Text(title)
+                    .multilineTextAlignment(.center)
             }
-            .padding(12)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+            .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ActionPillButtonStyle(.secondary))
+        .accessibilityHint(Text(verbatim: subtitle))
     }
 
-    /// The split chip row — strength only.
+    /// The split as one framed dropdown — strength only (`b3-workout-plan` draft 2, instead of eight chips).
     ///
-    /// The "Workout" chip is deliberately absent: it duplicated the Kind row (picking it flipped Kind,
+    /// The "Workout" split is deliberately absent: it duplicated the Kind row (picking it flipped Kind,
     /// and picking Kind flipped it back), so two controls mirrored one piece of state. Split is now
     /// only asked for when it means something, which is a strength plan.
     private var splitField: some View {
-        SheetField("Split") {
-            FlowLayout(spacing: 8) {
-                ForEach(strengthSplits) { option in
-                    Button(option.title) { FernletFeedback.system.select(option, in: &split) }
-                        .buttonStyle(ChipButtonStyle(selected: split == option))
-                }
-            }
+        FernletDropdown("Split", selection: $split, options: strengthSplits) { option in
+            Text(verbatim: option.title)
         }
+        .accessibilityIdentifier("plan.split")
     }
 
     private var strengthSplits: [WorkoutSplit] {
         WorkoutSplit.allCases.filter { $0 != .workout }
     }
 
-    /// The strength / activity chip row, kept consistent with the chosen split.
+    /// Strength or Cardio & activity, a framed switch kept consistent with the chosen split.
     private var kindField: some View {
-        SheetField("Kind") {
-            FlowLayout(spacing: 8) {
-                ForEach(WorkoutMode.allCases) { mode in
-                    Button(mode.label) {
-                        FernletFeedback.system.select(mode, in: &logMode)
-                        if mode == .activity {
-                            split = .workout
-                        } else if split == .workout {
-                            split = .fullBody
-                        }
-                    }
-                        .buttonStyle(ChipButtonStyle(selected: logMode == mode))
-                }
-            }
+        FernletSegmentedPicker("Kind", selection: $logMode, options: WorkoutMode.allCases) { mode in
+            // `b3-workout-plan` draft 2: "Strength" beside "Cardio & activity", as on the Log sheet.
+            mode == .strengthTraining ? Text("Strength") : Text(verbatim: mode.label)
+        }
+        .accessibilityIdentifier("plan.kind")
+    }
+
+    /// The split that goes with a change of kind: an activity is a `.workout`; strength leaves it.
+    private func syncSplit(to mode: WorkoutMode) {
+        if mode == .activity {
+            split = .workout
+        } else if split == .workout {
+            split = .fullBody
         }
     }
 
-    /// Exercise builder, the editable planned rows, and the free-text plan steps they stay in sync with.
+    /// The planned exercises (the same list as Log workout, each opening its own page), then the
+    /// free-text plan steps they stay in sync with.
     @ViewBuilder private var strengthPlanFields: some View {
-        WorkoutExerciseBuilder(
-            selectedExercise: $draft.exercise,
-            sets: $draft.sets,
-            reps: $draft.reps,
-            weight: $draft.weight,
-            speed: $draft.speed,
-            incline: $draft.incline,
-            details: $draft.details,
-            resetToken: $draft.resetToken,
-            mode: logMode,
-            historyStore: store,
-            onAdd: addDraftExercise
-        )
-
-        if !exerciseRows.isEmpty {
-            SheetField("Planned exercises") {
-                VStack(spacing: 8) {
-                    ForEach($exerciseRows) { $entry in
-                        EditablePlannedExerciseRow(entry: $entry) {
-                            exerciseRows.removeAll { $0.id == entry.id }
-                            plannedExerciseText = exerciseRows.map(\.summary).joined(separator: "\n")
-                        } onChange: {
-                            plannedExerciseText = exerciseRows.map(\.summary).joined(separator: "\n")
-                        }
-                    }
-                }
+        MoveLiftCard(header: Text("Planned exercises")) {
+            ForEach(exerciseRows) { entry in
+                MoveLiftListRow(name: entry.exercise.displayName,
+                                detail: WorkoutMeasurementEntry.displayedSpeeds(in: entry.detailSummary),
+                                color: entry.exercise.category.color,
+                                identifier: "plan.row",
+                                onRemove: { removePlannedRow(entry.id) }) { liftPath = [.row(entry.id)] }
+            }
+        } footer: {
+            MoveAddExerciseButton(identifier: "plan.addExercise") {
+                draft.clear()
+                liftPath = [.lift]
             }
         }
 
@@ -5067,24 +5671,7 @@ struct WorkoutPlanSheet: View {
         VStack(alignment: .leading, spacing: 22) {
             planHeader
 
-            if let previousWeekPlan {
-                entryCard(icon: "arrow.turn.down.right",
-                          title: "Copy previous week",
-                          subtitle: previousWeekPlan.displayedName) {
-                    copyPreviousWeekPlan(previousWeekPlan)
-                }
-            }
-
-            if showsSuggestEntry {
-                entryCard(icon: "wand.and.stars",
-                          title: "Suggest a workout",
-                          subtitle: String(localized: "move.plan.suggest.subtitle",
-                                           defaultValue: "Built from your split, equipment, and limits",
-                                           comment: "Plan sheet, the Suggest a workout card's second line")) {
-                    showingSuggestion = true
-                }
-                .accessibilityIdentifier("plan.suggest")
-            }
+            quickStarts
 
             // Kind first, then Split — Split only qualifies a strength plan.
             kindField
@@ -5146,15 +5733,13 @@ struct WorkoutPlanSheet: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            SheetCancelBar { attemptCancel() }
-            ScrollView {
-                planForm
-            }
-
-            SheetSaveBar(label: editingPlan == nil ? "Save plan" : "Update plan") { savePlan() }
+        // World build (`b3-workout-plan` draft 2): a stack, so a planned exercise opens on its own page.
+        NavigationStack(path: $liftPath) {
+            listPage
+                .navigationTitle(Text(editingPlan == nil ? "Plan workout" : "Edit plan"))
+                .toolbar(.hidden, for: .navigationBar)
+                .navigationDestination(for: WorkoutLiftRoute.self) { planLiftPage($0) }
         }
-        .background(Color.parchment)
         .keyboardDoneToolbar()
         .interactiveDismissDisabled(isDirty)
         .discardConfirmation(isPresented: $showDiscardConfirm) { dismiss() }
@@ -5162,16 +5747,34 @@ struct WorkoutPlanSheet: View {
             // Presented from THIS sheet rather than routed through the tab's `activeSheet` slot:
             // that route would have to dismiss the plan sheet first, throwing away a part-filled
             // plan. The suggestion flow commits its own plan and closes itself, so on return the
-            // user is back on the plan they were writing. Accessibility sizes open .large — grow
-            // the sheet, never hide a control (1b·AX3).
+            // user is back on the plan they were writing. Full height, like every sheet.
             WorkoutSuggestionSheet(store: store)
-                .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheet()
         }
-        .onChange(of: logMode) { _, _ in
+        .onChange(of: logMode) { _, mode in
             draft.clear()
+            syncSplit(to: mode)
         }
+        .onChange(of: liftPath) { _, path in
+            // Back from a new exercise's page drops what it held; Add to plan already took it.
+            if path.isEmpty { draft.clear() }
+        }
+    }
+
+    /// The sheet's list page under its header (Cancel, the title and the day in the sheet), with Save.
+    private var listPage: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                planForm
+            }
+            SheetSaveBar(label: editingPlan == nil ? "Save plan" : "Update plan") { savePlan() }
+        }
+        .background((look?.paper ?? Color.parchment).ignoresSafeArea())
+        .safeAreaInset(edge: .top, spacing: 0) {
+            SheetHeader(title: Text(editingPlan == nil ? "Plan workout" : "Edit plan"),
+                        subtitle: Text(verbatim: targetDateTitle), onCancel: attemptCancel)
+        }
+        .accessibilityAction(.escape) { attemptCancel() }
     }
 
     /// Folds the current draft into the planned rows AND back into the free-text plan.
@@ -5209,21 +5812,40 @@ struct WorkoutPlanSheet: View {
 /// Rendered in the goals sheet's list (SharedSheets); editing happens there, not on the row.
 struct GoalRow: View {
     var goal: FitnessGoal
+    /// World build (`b3-goals`): each proposed goal on a framed card.
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(goal.goal).font(.fernlet(.headerMedium))
-            Text("\(goal.timeframe) - \(goal.metric)")
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
-            if !goal.milestones.isEmpty {
-                Text(goal.milestones.joined(separator: " - "))
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.moss)
+        if look != nil {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(goal.goal).font(FernletFramedFont.cardTitle).foregroundStyle(look?.text ?? Color.bark)
+                Text("\(goal.timeframe) - \(goal.metric)")
+                    .font(FernletFramedFont.rowDetail)
+                    .foregroundStyle(look?.dim ?? Color.slate)
+                if !goal.milestones.isEmpty {
+                    Text(goal.milestones.joined(separator: " - "))
+                        .font(FernletFramedFont.rowDetail)
+                        .foregroundStyle(look?.link ?? Color.moss)
+                }
             }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .modifier(MoveInsetCardFrame())
+        } else {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(goal.goal).font(.fernlet(.headerMedium))
+                Text("\(goal.timeframe) - \(goal.metric)")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+                if !goal.milestones.isEmpty {
+                    Text(goal.milestones.joined(separator: " - "))
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.moss)
+                }
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.parchment, in: RoundedRectangle(cornerRadius: 10))
         }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.parchment, in: RoundedRectangle(cornerRadius: 10))
     }
 }

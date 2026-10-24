@@ -31,6 +31,9 @@ struct GuidedWorkoutSheet: View {
     /// The user's term of address (the app root sets it from the body profile), for the runner's
     /// lines that describe them: the rest-over announcement and the gentle-stretch intro.
     @Environment(\.fernletTermOfAddress) private var termOfAddress
+    /// World build (`b3-runner-*`): a focused flow on the dotted page — no grabber, the framed ✕ top
+    /// right (Done there once finished), framed cards, and the primary pinned at the bottom.
+    @Environment(\.fernletFramedLook) private var look
 
     var store: FernletStore
     let session: WorkoutProgram.SessionSuggestion
@@ -111,9 +114,18 @@ struct GuidedWorkoutSheet: View {
             if isLive {
                 bottomBar
                     .accessibilityAction(.escape) { closeTapped() }
+            } else if run == nil, look != nil {
+                // `b3-runner-ready`: Start is pinned at the bottom, like the run's own bar.
+                readyBar
             }
         }
-        .background(Color.parchment)
+        .background {
+            if look != nil {
+                FernletDottedPage().ignoresSafeArea()
+            } else {
+                Color.parchment.ignoresSafeArea()
+            }
+        }
         // Cooking's rule, for the same reason: while a run is live and this sheet is in front the
         // screen stays on, so a phone propped on a bench does not lock mid-rest — locked, the app is
         // suspended, its in-app cues cannot play and the warm-up's hands-free advance stops. Scoped to
@@ -127,6 +139,8 @@ struct GuidedWorkoutSheet: View {
         // The store lets the how-to sheet offer "Don't suggest this" (N6). It only changes plans
         // built later: this run is its own stored copy and goes on as it is.
         .exerciseHowToSheet($howTo, sex: store.effectiveUserProfile.sex, preferences: store)
+        // `b3-howto` draft 2: the how-to keeps where the run is at its foot, with the runner's primary.
+        .environment(\.exerciseHowToRunFooter, howToFooter)
         .modifier(GuidedRunnerAlerts(
             showEndConfirm: $showEndConfirm,
             showReplaceConfirm: $showReplaceConfirm,
@@ -183,21 +197,60 @@ struct GuidedWorkoutSheet: View {
     // MARK: Header
 
     private var header: some View {
-        HStack {
+        HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.displayedName)
-                    .font(.fernlet(.headerMedium))
-                    .foregroundStyle(Color.bark)
+                    .font(look == nil ? .fernlet(.headerMedium) : FernletFramedFont.flowTitle)
+                    .foregroundStyle(look?.text ?? Color.bark)
+                    .fernletWrappingText()
                 if let run, run.isWorking || run.isResting {
                     progressLine(run)
                 }
             }
+            .padding(.top, look == nil ? 0 : 6)
             Spacer()
-            closeButton
+            if look != nil, run?.isDone == true, run?.completedNaturally == true {
+                // `b3-runner-done`: Done top right, by the button rule; the bottom has no button.
+                Button("Done", action: finishDone)
+                    .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
+                    .accessibilityIdentifier("workout.guided.close")
+            } else {
+                closeButton
+            }
         }
         .padding(.horizontal, 20)
-        .padding(.top, 18)
+        .padding(.top, look == nil ? 18 : 8)
         .padding(.bottom, 8)
+    }
+
+    /// Where the live run is, for the how-to sheet opened from it (`b3-howto` draft 2): the set and its
+    /// reps with the rest that follows, or the rest that is running, and the bar's own primary. Nil when
+    /// no run is live (the Ready screen's how-to has no bar).
+    private var howToFooter: HowToRunFooter? {
+        guard let run, isLive, let exercise = run.currentExercise else { return nil }
+        if run.isResting {
+            return HowToRunFooter(now: Text("Resting · next \(exercise.displayedName)"), next: nil, actionLabel: "Skip rest") {
+                announcingTransition(store.guidedSkipRest, cue: .skip)
+            }
+        }
+        let set = exercise.reps.isEmpty
+            ? Text("Now · Set \(run.currentSet) of \(run.totalSetsForCurrent)")
+            : Text("Now · Set \(run.currentSet) of \(run.totalSetsForCurrent) · \(exercise.reps)")
+        let rests = run.currentSet < run.totalSetsForCurrent && exercise.restSeconds > 0
+        return HowToRunFooter(now: set, next: rests ? Text("Rest \(exercise.restSeconds) s next") : nil,
+                              actionLabel: doneSetLabel(run)) {
+            announcingTransition(store.guidedMarkSetDone, cue: .setDone)
+        }
+    }
+
+    /// The done screen's Done: clears the finished run and closes (and a nested presenter with it).
+    private func finishDone() {
+        store.clearGuidedRun()
+        dismiss()
+        // MOVE-01: a nested presenter (the Suggest flow) closes itself too, so finishing
+        // lands on the Move root with the session logged — always, not only when the whole
+        // plan is fully logged.
+        onFinishedDone?()
     }
 
     /// "Exercise 1 of 5 · 38 min left" — abbreviated to "1 of 5 · 38 min left" at accessibility
@@ -213,8 +266,8 @@ struct GuidedWorkoutSheet: View {
                 full
             }
         }
-        .font(.fernlet(.labelSmall))
-        .foregroundStyle(Color.slate)
+        .font(look == nil ? .fernlet(.labelSmall) : FernletFramedFont.rowDetail)
+        .foregroundStyle(look?.dim ?? Color.slate)
         // T2-2: the shortened form drops the noun that says what "1 of 5" counts, and this line sits
         // beside a rest countdown and a set counter that are also "n of m". The drawn text keeps the
         // accessibility-size treatment; the spoken one keeps the noun.
@@ -248,11 +301,20 @@ struct GuidedWorkoutSheet: View {
 
     private var closeButton: some View {
         Button(action: closeTapped) {
-            Image(systemName: "xmark")
-                .font(.body.weight(.semibold))
-                .foregroundStyle(Color.slate)
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
+            if let look {
+                // The focused flow's framed ✕ (`.focus3 .ftop`), spoken as what it does here.
+                FernletIcon(.close, scale: 2)
+                    .frame(width: 44, height: 44)
+                    .background(look.raised, in: RoundedRectangle(cornerRadius: 9))
+                    .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth))
+                    .contentShape(Rectangle())
+            } else {
+                Image(systemName: "xmark")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(Color.slate)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
         }
         .buttonStyle(.plain)
         .accessibilityLabel("End session")
@@ -277,11 +339,12 @@ struct GuidedWorkoutSheet: View {
     private var readyView: some View {
         VStack(alignment: .leading, spacing: 20) {
             Text("Ready when you are")
-                .font(.fernlet(.displayMedium))
-                .foregroundStyle(Color.bark)
+                .font(look == nil ? .fernlet(.displayMedium) : FernletFramedFont.sheetTitle)
+                .foregroundStyle(look?.text ?? Color.bark)
+                .fernletWrappingText()
             GuidedReadyIntro.text(for: session, addressing: termOfAddress)
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.body) : FernletFramedFont.body)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .fernletWrappingText()
 
             // A planned workout lists its lines as written; the app's own sessions, their steps.
@@ -293,17 +356,38 @@ struct GuidedWorkoutSheet: View {
                 GuidedFuelQuestion(answer: $fuelAnswer)
             }
 
-            primaryButton("Start", identifier: "workout.guided.start") {
-                // Another session's run may still be live — after a relaunch the Suggest sheet mints a
-                // fresh session, so this Start can arrive with sets already done elsewhere. Ask first.
-                if store.activeGuidedRunBlockingStart(of: session) != nil {
-                    showReplaceConfirm = true
-                } else if !store.startGuidedRun(session, unfueled: fuelAnswer == false) {
-                    // R7: the only refusal left is a run that became blocking between the check and
-                    // the start — ask before throwing it away, instead of a Start that does nothing.
-                    showReplaceConfirm = true
-                }
+            if look == nil {
+                primaryButton("Start", identifier: "workout.guided.start", action: startTapped)
             }
+        }
+    }
+
+    /// The pinned Start under the World look (`b3-runner-ready`): the framed primary with a pixel flag.
+    private var readyBar: some View {
+        Button(action: startTapped) {
+            HStack(spacing: 8) {
+                WorldSpriteView(sprite: MoveSprites.flag, scale: 2, tint: look?.onAccent)
+                Text("Start")
+            }
+            .frame(maxWidth: .infinity, minHeight: 34)
+        }
+        .buttonStyle(ActionPillButtonStyle(.primary))
+        .accessibilityIdentifier("workout.guided.start")
+        .padding(.horizontal, 20)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+    }
+
+    /// Start: begins the run, or asks first when another session's run is still going.
+    private func startTapped() {
+        // Another session's run may still be live — after a relaunch the Suggest sheet mints a
+        // fresh session, so this Start can arrive with sets already done elsewhere. Ask first.
+        if store.activeGuidedRunBlockingStart(of: session) != nil {
+            showReplaceConfirm = true
+        } else if !store.startGuidedRun(session, unfueled: fuelAnswer == false) {
+            // R7: the only refusal left is a run that became blocking between the check and
+            // the start — ask before throwing it away, instead of a Start that does nothing.
+            showReplaceConfirm = true
         }
     }
 
@@ -330,8 +414,8 @@ struct GuidedWorkoutSheet: View {
                 }
 
                 encouragement(run)
-                    .font(.fernlet(.bubble))
-                    .foregroundStyle(Color.slate)
+                    .font(look == nil ? .fernlet(.bubble) : FernletFramedFont.body)
+                    .foregroundStyle(look?.dim ?? Color.slate)
                     .fernletWrappingText()
             }
         }
@@ -421,12 +505,13 @@ struct GuidedWorkoutSheet: View {
             } else {
                 Text("Take it at your own pace.")
                     .font(.fernlet(.body))
-                    .foregroundStyle(Color.slate)
+                    .foregroundStyle(look?.dim ?? Color.slate)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(20)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 16))
+        .padding(look == nil ? 20 : 16)
+        // World build (`b3-runner-set`, `b3-runner-hold`): the card is framed paper.
+        .modifier(MoveInsetCardFrame(cornerRadius: look == nil ? 16 : 14))
     }
 
     /// The card's head: the exercise name with its how-to button (a catalog exercise only: the cues, the
@@ -463,9 +548,10 @@ struct GuidedWorkoutSheet: View {
     /// `Text(verbatim:)` while its "nothing yet" case can be a localized literal.
     @ViewBuilder
     private func exerciseTitle(_ run: GuidedWorkoutRunState, _ exercise: GuidedWorkoutRunState.Exercise) -> some View {
+        // The kit's 30-pt Fraunces name (`b3-runner-set`), so a two-word lift stays on one line.
         let title = Text(verbatim: exercise.displayedName)
-            .font(.fernlet(.displayMedium))
-            .foregroundStyle(Color.bark)
+            .font(look == nil ? .fernlet(.displayMedium) : .custom(FernletFontName.frauncesSemiBold, size: 30, relativeTo: .largeTitle))
+            .foregroundStyle(look?.text ?? Color.bark)
         if dynamicTypeSize.isAccessibilitySize {
             title
                 .accessibilityCustomContent("Last time", lastWeightValue(exercise))
@@ -511,25 +597,29 @@ struct GuidedWorkoutSheet: View {
     @ViewBuilder private func restPreview(_ run: GuidedWorkoutRunState, _ exercise: GuidedWorkoutRunState.Exercise) -> some View {
         if run.isWorking, run.currentSet < run.totalSetsForCurrent, exercise.restSeconds > 0 {
             VStack(alignment: .leading, spacing: 2) {
-                Text(dynamicTypeSize.isAccessibilitySize ? "Rest next" : "Rest after this set")
-                    .font(.fernlet(.labelSmall))
-                    .tracking(0.6)
-                    .textCase(.uppercase)
-                    .foregroundStyle(Color.slate)
+                if look != nil {
+                    SectionLabel(dynamicTypeSize.isAccessibilitySize ? "Rest next" : "Rest after this set")
+                } else {
+                    Text(dynamicTypeSize.isAccessibilitySize ? "Rest next" : "Rest after this set")
+                        .font(.fernlet(.labelSmall))
+                        .tracking(0.6)
+                        .textCase(.uppercase)
+                        .foregroundStyle(Color.slate)
+                }
                 if dynamicTypeSize.isAccessibilitySize {
                     Text("\(exercise.restSeconds) seconds")
                         .font(.fernlet(.body))
-                        .foregroundStyle(Color.bark)
+                        .foregroundStyle(look?.text ?? Color.bark)
                 } else {
                     Text("\(exercise.restSeconds) seconds — I'll count it for you")
                         .font(.fernlet(.body))
-                        .foregroundStyle(Color.bark)
+                        .foregroundStyle(look?.text ?? Color.bark)
                         .fernletWrappingText()
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
-            .background(Color.cream.opacity(0.7), in: RoundedRectangle(cornerRadius: 12))
+            .modifier(MoveInsetCardFrame())
         }
     }
 
@@ -543,50 +633,45 @@ struct GuidedWorkoutSheet: View {
     private func restingView(_ run: GuidedWorkoutRunState) -> some View {
         VStack(alignment: .center, spacing: 22) {
             Text("Rest")
-                .font(.fernlet(.headerMedium))
-                .foregroundStyle(Color.moss)
+                .font(look == nil ? .fernlet(.headerMedium) : FernletFramedFont.cardTitle)
+                .foregroundStyle(look?.link ?? Color.moss)
                 .accessibilityAddTraits(.isHeader)
 
             if let restStartedAt = run.restStartedAt, let restEndsAt = run.restEndsAt, restStartedAt <= restEndsAt {
-                // A fixed window: Text(timerInterval:) clamps to 0:00 once it expires, and the range
-                // stays valid however long the user over-rests. A live `Date()` lower bound would invert
-                // past the deadline and trap on the next body re-evaluation.
-                // The design system's timer face (DM Sans, monospaced digits) rather than SF Rounded:
-                // the largest text on this screen shouldn't be the one glyph set that isn't ours.
-                Text(timerInterval: restStartedAt...restEndsAt, countsDown: true)
-                    .font(.fernletTimer(size: 68))
-                    .foregroundStyle(Color.bark)
-                    // Without it VoiceOver keeps the time it read when the cursor arrived, as the
-                    // Live Activity's own timer already notes (`WorkoutLiveActivity.swift`).
-                    .accessibilityAddTraits(.updatesFrequently)
-                    .accessibilityIdentifier("workout.guided.restTimer")
-                    .task(id: restEndsAt) { await announceRestOver(at: restEndsAt) }
+                restTimer(restStartedAt...restEndsAt)
                 GuidedRestAdjustRow(store: store)
             }
 
             if let exercise = run.currentExercise {
                 VStack(spacing: 4) {
-                    Text("Next up")
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
+                    if look != nil {
+                        SectionLabel("Next up")
+                    } else {
+                        Text("Next up")
+                            .font(.fernlet(.labelSmall))
+                            .foregroundStyle(Color.slate)
+                    }
                     Text(verbatim: exercise.displayedName)
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.bark)
+                        .font(look == nil ? .fernlet(.body) : MoveFont.rowTitle)
+                        .foregroundStyle(look?.text ?? Color.bark)
                     if exercise.fromCatalog && exercise.sets >= 1 {
                         restingSetLine(run)
                             .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.slate)
+                            .foregroundStyle(look?.dim ?? Color.slate)
                     }
                     if exercise.tracking != nil {
                         GuidedEditRepsButton(store: store, exercise: exercise, label: Text("Edit reps so far"))
                             .padding(.top, 6)
                     }
                 }
+                .frame(maxWidth: .infinity)
+                .padding(look == nil ? 0 : 16)
+                .modifier(RunnerCardFrame(isFramed: look != nil))
             }
 
             Text("Rest as long as you need — the timer's only a nudge.")
-                .font(.fernlet(.bubble))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.bubble) : FernletFramedFont.body)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .multilineTextAlignment(.center)
                 .fernletWrappingText()
         }
@@ -594,33 +679,66 @@ struct GuidedWorkoutSheet: View {
         .padding(.top, 12)
     }
 
+    /// The rest countdown over a fixed window: Text(timerInterval:) clamps to 0:00 once it expires, and
+    /// the range stays valid however long the user over-rests. A live `Date()` lower bound would invert
+    /// past the deadline and trap on the next body re-evaluation. World build (`b3-runner-rest`): big
+    /// Fraunces in a framed ring; today, the design system's timer face (DM Sans, monospaced digits).
+    @ViewBuilder private func restTimer(_ window: ClosedRange<Date>) -> some View {
+        let timer = Text(timerInterval: window, countsDown: true)
+        if look != nil {
+            FernletRing(diameter: 210) {
+                FernletBigTime(timer, size: 66)
+                    .accessibilityIdentifier("workout.guided.restTimer")
+                    .task(id: window.upperBound) { await announceRestOver(at: window.upperBound) }
+            }
+        } else {
+            timer
+                .font(.fernletTimer(size: 68))
+                .foregroundStyle(Color.bark)
+                // Without it VoiceOver keeps the time it read when the cursor arrived, as the
+                // Live Activity's own timer already notes (`WorkoutLiveActivity.swift`).
+                .accessibilityAddTraits(.updatesFrequently)
+                .accessibilityIdentifier("workout.guided.restTimer")
+                .task(id: window.upperBound) { await announceRestOver(at: window.upperBound) }
+        }
+    }
+
     private var doneView: some View {
         VStack(spacing: 16) {
+            doneMedal
+            Text("Nicely done")
+                .font(look == nil ? .fernlet(.displayMedium) : .custom(FernletFontName.frauncesSemiBold, size: 34, relativeTo: .largeTitle))
+                .foregroundStyle(look?.text ?? Color.bark)
+                .accessibilityAddTraits(.isHeader)
+            completionMessage
+                .font(look == nil ? .fernlet(.body) : FernletFramedFont.body)
+                .foregroundStyle(look?.dim ?? Color.slate)
+                .multilineTextAlignment(.center)
+                .fernletWrappingText()
+            if look == nil {
+                primaryButton("Done", identifier: "workout.guided.close", action: finishDone)
+                    .padding(.top, 8)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, look == nil ? 30 : 110)
+    }
+
+    /// The finish's leaf: World build, a pixel leaf on a sage medal in a 3-pt ink frame (`b3-runner-done`).
+    @ViewBuilder private var doneMedal: some View {
+        if let look {
+            WorldSpriteView(sprite: WorldSprites.leaf, scale: 6)
+                .frame(width: 92, height: 92)
+                .background(look.sage, in: Circle())
+                .overlay(Circle().strokeBorder(look.ink, lineWidth: 3))
+                .background { Circle().fill(look.shadow).offset(y: 4) }
+                .accessibilityHidden(true)
+        } else {
             Image(systemName: "leaf.fill")
                 .font(.system(size: 40))
                 .foregroundStyle(Color.moss)
                 .accessibilityHidden(true)
-            Text("Nicely done")
-                .font(.fernlet(.displayMedium))
-                .foregroundStyle(Color.bark)
-                .accessibilityAddTraits(.isHeader)
-            completionMessage
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.slate)
-                .multilineTextAlignment(.center)
-                .fernletWrappingText()
-            primaryButton("Done", identifier: "workout.guided.close") {
-                store.clearGuidedRun()
-                dismiss()
-                // MOVE-01: a nested presenter (the Suggest flow) closes itself too, so finishing
-                // lands on the Move root with the session logged — always, not only when the whole
-                // plan is fully logged.
-                onFinishedDone?()
-            }
-            .padding(.top, 8)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 30)
     }
 
     private var completionMessage: Text {
@@ -661,25 +779,38 @@ struct GuidedWorkoutSheet: View {
             .padding(.horizontal, 20)
             .padding(.top, 10)
             .padding(.bottom, 8)
-            .background(Color.parchment)
+            .background { if look == nil { Color.parchment } }
             .overlay(alignment: .top) {
-                Rectangle().fill(Color.bark.opacity(0.08)).frame(height: 1)
+                if look == nil { Rectangle().fill(Color.bark.opacity(0.08)).frame(height: 1) }
             }
         }
     }
 
-    /// The bar's 56pt filled primary — thumb reach, unmoved as the set count changes (MOVE-26).
+    /// The bar's 56pt filled primary — thumb reach, unmoved as the set count changes (MOVE-26). World
+    /// build: the framed primary, full width, on the dotted page.
+    @ViewBuilder
     private func barPrimary(_ label: LocalizedStringKey, identifier: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.onMoss)
-                .frame(maxWidth: .infinity, minHeight: 56)
-                .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 16))
+        if look != nil {
+            Button(action: action) {
+                Text(label).frame(maxWidth: .infinity, minHeight: 34)
+            }
+            .buttonStyle(ActionPillButtonStyle(.primary))
+            .accessibilityIdentifier(identifier)
+        } else {
+            Button(action: action) {
+                Text(label)
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.onMoss)
+                    .frame(maxWidth: .infinity, minHeight: 56)
+                    .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 16))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier(identifier)
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier(identifier)
     }
+
+    /// The quiet secondaries' ink: the look's link colour, today's slate.
+    private var quietInk: Color { look?.link ?? Color.slate }
 
     /// The quiet "Skip to next exercise" secondary ("Skip" at accessibility sizes). Faded out —
     /// not removed — on the last exercise, so the bar's height never jumps.
@@ -688,8 +819,8 @@ struct GuidedWorkoutSheet: View {
             announcingTransition(store.guidedSkipToNextExercise, cue: .skip)
         } label: {
             Text(dynamicTypeSize.isAccessibilitySize ? "Skip" : "Skip to next exercise")
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.label) : FernletFramedFont.sheetControl)
+                .foregroundStyle(quietInk)
         }
         .buttonStyle(.plain)
         .fernletTapTarget()
@@ -714,8 +845,8 @@ struct GuidedWorkoutSheet: View {
             announcingTransition(store.guidedSkipBlock, cue: .skip)
         } label: {
             skip.label
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.label) : FernletFramedFont.sheetControl)
+                .foregroundStyle(quietInk)
         }
         .buttonStyle(.plain)
         .fernletTapTarget()
@@ -730,8 +861,8 @@ struct GuidedWorkoutSheet: View {
         } label: {
             Text("Skip warm-up sets",
                  comment: "Guided workout: the quiet secondary on a warm-up set that skips the lift's remaining warm-up sets and goes to its first working set.")
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.label) : FernletFramedFont.sheetControl)
+                .foregroundStyle(quietInk)
         }
         .buttonStyle(.plain)
         .fernletTapTarget()
@@ -829,21 +960,28 @@ struct GuidedWorkoutSheet: View {
         lastWeightByName = values
     }
 
+    /// A Set / Reps / Last time pill. World build (`b3-runner-set`): a framed pill on raised paper.
+    @ViewBuilder
     private func metricPill(title: LocalizedStringKey, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        let content = VStack(alignment: .leading, spacing: 2) {
             Text(title)
                 .font(.fernlet(.labelSmall))
                 .tracking(0.6)
                 .textCase(.uppercase)
-                .foregroundStyle(Color.slate)
+                .foregroundStyle(look?.dim ?? Color.slate)
             Text(verbatim: value)
                 .font(.fernlet(.stat))
-                .foregroundStyle(Color.bark)
+                .foregroundStyle(look?.text ?? Color.bark)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(Color.parchment, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+        if let look {
+            content.fernletFramed(look, cornerRadius: 10)
+        } else {
+            content
+                .background(Color.parchment, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+        }
     }
 
     private func primaryButton(_ label: LocalizedStringKey, identifier: String, action: @escaping () -> Void) -> some View {
@@ -890,6 +1028,19 @@ private struct GuidedRunnerAlerts: ViewModifier {
             } message: {
                 Text(replaceConfirmMessage)
             }
+    }
+}
+
+/// A runner card's frame under the World look (`b3-runner-rest`'s Next up card); none today.
+private struct RunnerCardFrame: ViewModifier {
+    let isFramed: Bool
+
+    func body(content: Content) -> some View {
+        if isFramed {
+            content.modifier(MoveInsetCardFrame())
+        } else {
+            content
+        }
     }
 }
 
@@ -944,26 +1095,44 @@ private struct GuidedSetStrip: View {
     let total: Int
     /// Sets already done (0...total).
     let completed: Int
+    /// World build (`b3-runner-set`): "The sets strip is framed pixel bars."
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Sets")
-                .font(.fernlet(.labelSmall))
-                .tracking(0.6)
-                .textCase(.uppercase)
-                .foregroundStyle(Color.slate)
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
+            if look != nil {
+                SectionLabel("Sets")
+            } else {
+                Text("Sets")
+                    .font(.fernlet(.labelSmall))
+                    .tracking(0.6)
+                    .textCase(.uppercase)
+                    .foregroundStyle(Color.slate)
+            }
+            HStack(spacing: look == nil ? 6 : 4) {
                 // Bounded: `total` is a per-exercise set count, capped by the session editor/plan.
                 ForEach(0..<max(1, total), id: \.self) { index in
-                    Capsule()
-                        .fill(segmentColor(index))
-                        .frame(height: 10)
+                    segment(index)
                 }
             }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Sets")
         .accessibilityValue("\(completed) of \(total) done")
+    }
+
+    /// One set's bar: a square-cornered framed bar under the look, a capsule today.
+    @ViewBuilder private func segment(_ index: Int) -> some View {
+        if let look {
+            Rectangle()
+                .fill(index < completed ? look.accent : (index == completed ? look.accent.opacity(0.35) : look.raised))
+                .overlay(Rectangle().strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth))
+                .frame(height: 14)
+        } else {
+            Capsule()
+                .fill(segmentColor(index))
+                .frame(height: 10)
+        }
     }
 
     private func segmentColor(_ index: Int) -> Color {
@@ -979,21 +1148,28 @@ private struct GuidedSetStrip: View {
 /// is the last one.
 private struct GuidedUpNextList: View {
     let exercises: [GuidedWorkoutRunState.Exercise]
+    /// World build (`b3-runner-hold`): a section label and framed rows with a moss marker.
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
         if !exercises.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Up next")
-                    .font(.fernlet(.labelSmall))
-                    .tracking(0.6)
-                    .textCase(.uppercase)
-                    .foregroundStyle(Color.slate)
+                if look != nil {
+                    SectionLabel("Up next")
+                } else {
+                    Text("Up next")
+                        .font(.fernlet(.labelSmall))
+                        .tracking(0.6)
+                        .textCase(.uppercase)
+                        .foregroundStyle(Color.slate)
+                }
                 ForEach(exercises) { exercise in
                     HStack(spacing: 10) {
+                        if look != nil { MoveSwatch(color: WorldPalette.moss.opacity(0.6), size: 14) }
                         VStack(alignment: .leading, spacing: 2) {
                             Text(verbatim: exercise.displayedName)
-                                .font(.fernlet(.body))
-                                .foregroundStyle(Color.bark)
+                                .font(look == nil ? .fernlet(.body) : MoveFont.rowTitle)
+                                .foregroundStyle(look?.text ?? Color.bark)
                             if let side = GuidedSideLabel(raw: exercise.sideRaw) {
                                 side.text
                                     .font(.fernlet(.labelSmall))
@@ -1014,8 +1190,9 @@ private struct GuidedUpNextList: View {
                         Spacer(minLength: 8)
                         prescription(exercise)
                     }
-                    .padding(12)
-                    .background(Color.cream.opacity(0.7), in: RoundedRectangle(cornerRadius: 12))
+                    .padding(look == nil ? 12 : 14)
+                    .modifier(RunnerCardFrame(isFramed: look != nil))
+                    .background { if look == nil { RoundedRectangle(cornerRadius: 12).fill(Color.cream.opacity(0.7)) } }
                 }
             }
         }
@@ -1068,18 +1245,26 @@ private struct GuidedHoldTimer: View {
         return holding ? GuidedSegmentWords.caption(paceRaw) : Text("Get ready")
     }
 
+    /// World build (`b3-runner-hold`): "The countdown is big Fraunces type in a framed card."
+    @Environment(\.fernletFramedLook) private var look
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             caption
-                .font(.fernlet(.labelSmall))
+                .font(look == nil ? .fernlet(.labelSmall) : MoveFont.caption)
                 .tracking(0.6)
                 .textCase(.uppercase)
-                .foregroundStyle(Color.moss)
-            Text(timerInterval: window, countsDown: true)
-                .font(.fernletTimer(size: 56))
-                .foregroundStyle(Color.bark)
-                .accessibilityAddTraits(.updatesFrequently)
-                .accessibilityIdentifier("workout.guided.holdTimer")
+                .foregroundStyle(look?.link ?? Color.moss)
+            if look != nil {
+                FernletBigTime(Text(timerInterval: window, countsDown: true), size: 54, alignment: .leading)
+                    .accessibilityIdentifier("workout.guided.holdTimer")
+            } else {
+                Text(timerInterval: window, countsDown: true)
+                    .font(.fernletTimer(size: 56))
+                    .foregroundStyle(Color.bark)
+                    .accessibilityAddTraits(.updatesFrequently)
+                    .accessibilityIdentifier("workout.guided.holdTimer")
+            }
         }
         .task(id: window.lowerBound) { await waitForHoldStart() }
     }
@@ -1136,20 +1321,41 @@ private struct GuidedReadyList: View {
         }
     }
 
+    /// World build (`b3-runner-ready`): "Each step of the plan is a framed row with a moss marker."
+    @Environment(\.fernletFramedLook) private var look
+
     private func row(_ text: Text) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Circle()
-                .fill(Color.moss.opacity(0.5))
-                .frame(width: 7, height: 7)
-                .padding(.top, 7)
-                .accessibilityHidden(true)
+            if look != nil {
+                MoveSwatch(color: WorldPalette.moss, size: 14)
+                    .padding(.top, 3)
+            } else {
+                Circle()
+                    .fill(Color.moss.opacity(0.5))
+                    .frame(width: 7, height: 7)
+                    .padding(.top, 7)
+                    .accessibilityHidden(true)
+            }
             text
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
+                .font(look == nil ? .fernlet(.body) : FernletFramedFont.rowTitle)
+                .foregroundStyle(look?.text ?? Color.bark)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(12)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+        .padding(look == nil ? 12 : 14)
+        .modifier(RunnerReadyRowFrame(isFramed: look != nil))
+    }
+}
+
+/// A Ready-list row's card: framed paper under the World look, today's plain cream card otherwise.
+private struct RunnerReadyRowFrame: ViewModifier {
+    let isFramed: Bool
+
+    func body(content: Content) -> some View {
+        if isFramed {
+            content.modifier(MoveInsetCardFrame(cornerRadius: 10))
+        } else {
+            content.background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+        }
     }
 }
 

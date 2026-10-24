@@ -208,6 +208,14 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         /// when the location's weights say nothing, and in a run persisted before they were carried —
         /// optional, so such a run still decodes.
         var loads: [Double]?
+        /// Each set's weight when the reps editor changed one (`b3-edit-reps` draft 2: a set lifted at
+        /// another weight, or a drop set), lined up with ``actualReps``. Nil = every set at ``selected``,
+        /// and in a run persisted before the editor carried weights — optional, so such a run decodes.
+        var actualWeights: [Double]?
+        /// Which of the edited sets are drop sets (a lighter set straight after the one before it), so
+        /// the editor marks them again when reopened. Nil when there are none. Display only: the log
+        /// records a drop set as one more set at its weight.
+        var actualDrops: [Bool]?
 
         /// Sets an edit may carry at most.
         static let maxSets = 20
@@ -784,6 +792,24 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         if tracking.calibrationRaw == CalibrationToken.attempt, clean.allSatisfy({ $0 == 0 }) {
             dropAttempts(after: index)
         }
+    }
+
+    /// Each set's reps and weight from the reps editor (`b3-edit-reps` draft 2), with which sets are
+    /// drop sets. The weights are kept only for a lift that takes a load and only when one differs from
+    /// ``Tracking/selected`` (or nothing was selected); the drop marks only when there is one. The reps
+    /// go through ``setActualReps(_:forExercise:)``, so a drop set — one more set — always reads as edited.
+    mutating func setActualSets(reps: [Int], weights: [Double], drops: [Bool], forExercise id: UUID) {
+        guard let index = index(of: id), var tracking = exercises[index].tracking else { return }
+        let count = min(reps.count, Tracking.maxSets)
+        let cleanWeights = weights.prefix(count).map { $0.isFinite ? max(0, $0) : 0 }
+        let differs = tracking.selected.map { selected in cleanWeights.contains { abs($0 - selected) > 0.01 } }
+            ?? cleanWeights.contains { $0 > 0 }
+        let keepsWeights = tracking.isLoadable && cleanWeights.count == count && differs
+        tracking.actualWeights = keepsWeights ? Array(cleanWeights) : nil
+        let cleanDrops = Array(drops.prefix(count))
+        tracking.actualDrops = cleanDrops.contains(true) ? cleanDrops : nil
+        exercises[index].tracking = tracking
+        setActualReps(Array(reps.prefix(count)), forExercise: id)
     }
 
     /// How the lift felt; nil clears it.

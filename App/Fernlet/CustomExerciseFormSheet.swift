@@ -25,6 +25,7 @@ struct CustomExerciseFormSheet: View {
     @State private var draft: CustomExerciseDraft
     @State private var attemptedSave = false
     private let initialDraft: CustomExerciseDraft
+    @Environment(\.fernletFramedLook) private var look
 
     init(store: FernletStore, editing: ExerciseTarget?) {
         self.store = store
@@ -59,8 +60,8 @@ struct CustomExerciseFormSheet: View {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Fernlet plans and checks this like its own exercises: your equipment and the areas you work around decide when it fits.",
                          comment: "Custom exercise form: what the fields are for")
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
+                        .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.body)
+                        .foregroundStyle(look?.dim ?? Color.slate)
                         .fernletWrappingText()
                     if issues.contains(.atCapacity) { CustomExerciseIssueLine(issue: .atCapacity) }
                     nameField
@@ -75,7 +76,8 @@ struct CustomExerciseFormSheet: View {
             }
             saveBar
         }
-        .background(Color.parchment)
+        // World build (`b3-custom-exercise`): the sheet's paper; chips, fields and the save bar are framed.
+        .background((look?.paper ?? Color.parchment).ignoresSafeArea())
         .tint(Color.moss)
         .keyboardDoneToolbar()
         .fernletDraftGuard(isDirty: draft != initialDraft,
@@ -333,6 +335,7 @@ private struct CustomExerciseSetFields: View {
                     .foregroundStyle(Color.bark)
                     .fernletWrappingText()
             }
+            .toggleStyle(FernletFramedToggleStyle())
             .accessibilityIdentifier("workout.customExercise.unilateral")
             SheetField("Difficulty") {
                 CustomExerciseChips(

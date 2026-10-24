@@ -75,7 +75,11 @@ struct ProgressPhotoSection: View {
     /// Hide the app-switcher snapshot of body photos while the app isn't frontmost.
     private var redactForSnapshot: Bool { scenePhase != .active }
 
-    var body: some View {
+    /// The World build's framed look (`b2-progress-photos`); nil draws today's section.
+    @Environment(\.fernletFramedLook) private var look
+
+    /// Today's section: one cream card holding the nudge and the strip.
+    private var plainSection: some View {
         FernletScrollSection("Progress photos") {
             switch content {
             case .locked:
@@ -88,6 +92,38 @@ struct ProgressPhotoSection: View {
                     revealedContent
                 }
             }
+        }
+    }
+
+    /// World build (`b2-progress-photos`): the section label, the lock nudge as its own sage card, the
+    /// strip in a framed card, and how to open a photo under it.
+    private var framedSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionLabel("Progress photos").padding(.horizontal, 4)
+            switch content {
+            case .locked:
+                FernletCard { lockedPlaceholder }
+            case .revealed(let offersLockNudge):
+                if offersLockNudge {
+                    ProgressPhotoLockNudgeCard(onSetUpLock: lockNudge.setUpLock, onNotNow: lockNudge.notNow)
+                }
+                FernletCard { revealedContent }
+                if !records.isEmpty {
+                    Text("Tap a photo to see it full size, with its date and note.",
+                         comment: "Move panel, under the progress-photo strip: how to open a photo.")
+                        .font(FernletFramedFont.body)
+                        .foregroundStyle(look?.dim ?? Color.slate)
+                        .fernletWrappingText()
+                        .frame(maxWidth: .infinity)
+                        .multilineTextAlignment(.center)
+                }
+            }
+        }
+    }
+
+    var body: some View {
+        Group {
+            if look != nil { framedSection } else { plainSection }
         }
         .onAppear {
             sectionIsVisible = true
@@ -179,7 +215,7 @@ struct ProgressPhotoSection: View {
                 // Top-aligned, so every picture starts on one line and a card with no caption ends
                 // short instead of drifting down to the middle. The stack's HEIGHT comes from its
                 // first child, which is why `addTile` reserves the tallest label block.
-                LazyHStack(alignment: .top, spacing: 14) {
+                LazyHStack(alignment: .top, spacing: look == nil ? 14 : 12) {
                     PhotoCaptureControl(
                         onCameraCapture: onCapture,
                         onLibraryPickData: onCaptureData,
@@ -216,34 +252,45 @@ struct ProgressPhotoSection: View {
     /// tap-to-unlock, so nobody handed the unlocked phone can scroll the body-photo timeline.
     private var lockedPlaceholder: some View {
         VStack(spacing: 14) {
-            Image(systemName: "lock.fill")
-                .font(.system(size: 26, weight: .semibold))
-                .foregroundStyle(Color.moss)
+            if look != nil {
+                FernletIconTile(size: 44) { WorldSpriteView(sprite: WorldSprites.lock, scale: 3) }
+                    .accessibilityHidden(true)
+            } else {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(Color.moss)
+            }
             Text("Your progress photos are private")
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
+                .font(look == nil ? .fernlet(.body) : FernletFramedFont.cardTitle)
+                .foregroundStyle(look?.text ?? Color.bark)
             Text("These body photos sit behind your Fernlet lock. Unlock to see your timeline.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.body)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .multilineTextAlignment(.center)
                 .fernletWrappingText()
-            Button {
-                showingUnlock = true
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "lock.open.fill")
-                        .font(.system(size: 15, weight: .semibold))
-                    Text("Unlock to view")
-                        .font(.fernlet(.label))
+            if look != nil {
+                Button("Unlock to view") { showingUnlock = true }
+                    .buttonStyle(ActionPillButtonStyle(.primary))
+                    .accessibilityIdentifier("move.progressPhotos.unlock")
+            } else {
+                Button {
+                    showingUnlock = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "lock.open.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                        Text("Unlock to view")
+                            .font(.fernlet(.label))
+                    }
+                    .foregroundStyle(Color.onMoss)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+                    .background(Color.moss, in: Capsule())
+                    .fernletSmallShadow()
                 }
-                .foregroundStyle(Color.onMoss)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 12)
-                .background(Color.moss, in: Capsule())
-                .fernletSmallShadow()
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("move.progressPhotos.unlock")
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("move.progressPhotos.unlock")
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
@@ -289,18 +336,35 @@ struct ProgressPhotoSection: View {
         }
     }
 
-    private func addLabel(prominent: Bool) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "camera.fill")
-                .font(.system(size: 16, weight: .semibold))
-            Text("Add progress photo")
-                .font(.fernlet(.label))
+    @ViewBuilder private func addLabel(prominent: Bool) -> some View {
+        if let look {
+            // World build: the framed primary (the capture control is the button, so this only draws it).
+            let shape = RoundedRectangle(cornerRadius: 10)
+            HStack(spacing: 8) {
+                WorldSpriteView(sprite: WorldSprites.photo, scale: 2, tint: look.onAccent)
+                Text("Add progress photo")
+                    .font(FernletFramedFont.button)
+            }
+            .foregroundStyle(look.onAccent)
+            .padding(.horizontal, 22)
+            .padding(.vertical, 12)
+            .frame(minHeight: 44)
+            .background(look.accent, in: shape)
+            .overlay(shape.strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth))
+            .background { shape.fill(look.ink.opacity(0.3)).offset(y: 3) }
+        } else {
+            HStack(spacing: 8) {
+                Image(systemName: "camera.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                Text("Add progress photo")
+                    .font(.fernlet(.label))
+            }
+            .foregroundStyle(Color.onMoss)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .background(Color.moss, in: Capsule())
+            .fernletSmallShadow()
         }
-        .foregroundStyle(Color.onMoss)
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
-        .background(Color.moss, in: Capsule())
-        .fernletSmallShadow()
     }
 
     /// The leading "＋" tile in the populated strip: a card-sized box over the TALLEST label block any
@@ -324,16 +388,22 @@ struct ProgressPhotoSection: View {
     private var addTile: some View {
         VStack(alignment: .leading, spacing: ProgressPhotoCard.labelSpacing) {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Color.moss.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
-                .frame(width: ProgressPhotoCard.cardWidth, height: ProgressPhotoCard.cardHeight)
+                // World build: a dashed ink frame around a pixel photo and the word (`b2-progress-photos`).
+                .strokeBorder(look?.text ?? Color.moss.opacity(0.5),
+                              style: StrokeStyle(lineWidth: look == nil ? 1.5 : 2, dash: look == nil ? [6, 5] : [7, 5]))
+                .frame(width: addTileWidth, height: ProgressPhotoCard.height(framed: look != nil))
                 .overlay {
                     VStack(spacing: 8) {
-                        Image(systemName: "camera.fill")
-                            .font(.system(size: 22, weight: .semibold))
+                        if look != nil {
+                            WorldSpriteView(sprite: WorldSprites.photo, scale: 3)
+                        } else {
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 22, weight: .semibold))
+                        }
                         Text("Add")
-                            .font(.fernlet(.label))
+                            .font(look == nil ? .fernlet(.label) : FernletFramedFont.sheetControl)
                     }
-                    .foregroundStyle(Color.moss)
+                    .foregroundStyle(look?.link ?? Color.moss)
                 }
             ZStack(alignment: .topLeading) {
                 ForEach(reservedDateLabels, id: \.self) { date in
@@ -347,8 +417,15 @@ struct ProgressPhotoSection: View {
             }
             .hidden()
             .accessibilityHidden(true)
+            // The reservation is the cards' height, never their width: under the look the add tile is
+            // narrower than a print.
+            .frame(width: addTileWidth, alignment: .topLeading)
         }
     }
+
+    /// The add tile's width: a card's today; under the World look the approved strip's narrower tile
+    /// (`b2-progress-photos`), so the tile and two prints fit the card.
+    private var addTileWidth: CGFloat { look == nil ? ProgressPhotoCard.cardWidth : 84 }
 
     /// Every distinct date chip the strip renders, in a stable order: what `addTile` reserves.
     private var reservedDateLabels: [String] {
@@ -407,33 +484,31 @@ struct ProgressPhotoLockNudgeCard: View {
     let onSetUpLock: () -> Void
     /// Answers the nudge without a lock; the card does not come back.
     let onNotNow: () -> Void
+    /// World build (`b2-progress-photos`): a sage card in an ink frame, the pixel lock in a tile.
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "lock.shield")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(Color.moss)
-                    // Decorative: the heading says what the card is about.
-                    .accessibilityHidden(true)
+            HStack(alignment: .top, spacing: look == nil ? 10 : 12) {
+                icon
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Protect your progress photos")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.bark)
+                        .font(look == nil ? .fernlet(.label) : .custom(FernletFontName.frauncesSemiBold, size: 18, relativeTo: .headline))
+                        .foregroundStyle(look?.text ?? Color.bark)
                         .fernletWrappingText()
                         .accessibilityAddTraits(.isHeader)
                     Text("Progress photos can sit behind Fernlet's app lock, so nobody holding your unlocked phone can scroll through them. You can keep adding photos either way, and set the lock up any time in Settings.")
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
+                        .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.body)
+                        .foregroundStyle(look?.dim ?? Color.slate)
                         .fernletWrappingText()
                 }
             }
             AdaptiveStack(horizontalAlignment: .leading) {
-                Button("Set up lock", action: onSetUpLock)
+                Button(action: onSetUpLock) { Text("Set up lock").frame(maxWidth: look == nil ? nil : .infinity) }
                     .buttonStyle(ActionPillButtonStyle(.primary))
                     .accessibilityHint("Creates a passcode for Fernlet's app lock.")
                     .accessibilityIdentifier("move.progressPhotos.lockNudge.setUp")
-                Button("Not now", action: onNotNow)
+                Button(action: onNotNow) { Text("Not now").frame(maxWidth: look == nil ? nil : .infinity) }
                     .buttonStyle(ActionPillButtonStyle(.secondary))
                     .accessibilityHint("Hides this suggestion. You can set up the lock later in Settings.")
                     .accessibilityIdentifier("move.progressPhotos.lockNudge.notNow")
@@ -441,13 +516,42 @@ struct ProgressPhotoLockNudgeCard: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.moss.opacity(0.07), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.moss.opacity(0.3), lineWidth: 1)
-        )
+        .modifier(NudgeCardFrame())
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("move.progressPhotos.lockNudge")
+    }
+
+    /// The card's icon. Decorative: the heading says what the card is about.
+    @ViewBuilder private var icon: some View {
+        if look != nil {
+            FernletIconTile(size: 44) { WorldSpriteView(sprite: WorldSprites.lock, scale: 3) }
+                .accessibilityHidden(true)
+        } else {
+            Image(systemName: "lock.shield")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(Color.moss)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+/// The lock nudge's card: World build, the look's sage in a 2-pt ink frame with its solid shadow (the
+/// kit's `.ac.sage`); today, a faint moss wash.
+private struct NudgeCardFrame: ViewModifier {
+    @Environment(\.fernletFramedLook) private var look
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: look == nil ? 14 : FernletFramedLook.cardRadius, style: .continuous)
+        if let look {
+            content
+                .background(look.sage, in: shape)
+                .overlay(shape.strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth))
+                .background { shape.fill(look.shadow).offset(y: 3) }
+        } else {
+            content
+                .background(Color.moss.opacity(0.07), in: shape)
+                .overlay(shape.stroke(Color.moss.opacity(0.3), lineWidth: 1))
+        }
     }
 }
 
@@ -496,7 +600,14 @@ struct ProgressPhotoCard: View {
     /// match.
     static let labelSpacing: CGFloat = 8
 
+    /// The card's width as drawn: ``cardWidth`` today; under the World look the approved strip's
+    /// narrower print (`b2-progress-photos`), so three show where today's strip shows two and a half.
+    static func width(framed: Bool) -> CGFloat { framed ? 110 : cardWidth }
+    /// The card's picture height as drawn, beside ``width(framed:)``.
+    static func height(framed: Bool) -> CGFloat { framed ? 130 : cardHeight }
+
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.fernletFramedLook) private var look
     @State private var image: UIImage?
 
     /// The date chip's text: abbreviated month and day, e.g. "Sep 9".
@@ -508,7 +619,7 @@ struct ProgressPhotoCard: View {
         VStack(alignment: .leading, spacing: Self.labelSpacing) {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color.parchment)
-                .frame(width: Self.cardWidth, height: Self.cardHeight)
+                .frame(width: Self.width(framed: look != nil), height: Self.height(framed: look != nil))
                 .overlay {
                     if let image {
                         Image(uiImage: image)
@@ -526,9 +637,13 @@ struct ProgressPhotoCard: View {
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(
+                    // World build: each photo in an ink frame with a solid shadow (`.photo3`).
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.bark.opacity(0.10), lineWidth: 1)
+                        .strokeBorder(look?.ink ?? Color.bark.opacity(0.10), lineWidth: look == nil ? 1 : 2)
                 )
+                .background {
+                    if let look { RoundedRectangle(cornerRadius: 12, style: .continuous).fill(look.shadow).offset(y: 3) }
+                }
             ProgressPhotoCardLabels(date: Self.dateLabel(for: record.capturedAt), caption: record.caption)
         }
         .task {
@@ -537,7 +652,8 @@ struct ProgressPhotoCard: View {
             // ~8 MB bitmap behind a 132pt thumbnail — one per card scrolled past, for as long as the
             // strip lived. These are decrypted body photos, so the footprint matters twice.
             guard image == nil, let data = loadData() else { return }
-            let pixelSize = CGSize(width: Self.cardWidth * displayScale, height: Self.cardHeight * displayScale)
+            let pixelSize = CGSize(width: Self.width(framed: look != nil) * displayScale,
+                                   height: Self.height(framed: look != nil) * displayScale)
             image = await UIImage(data: data)?.byPreparingThumbnail(ofSize: pixelSize)
         }
         .accessibilityElement(children: .ignore)
@@ -559,22 +675,24 @@ struct ProgressPhotoCardLabels: View {
     /// truncates; at them it wraps.
     let caption: String?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.fernletFramedLook) private var look
 
     /// The label column: the card's width, widened at accessibility sizes, where one word of a
     /// caption ("Feeling") or a two-digit date chip was already wider than the 132pt card.
     private var columnWidth: CGFloat {
-        dynamicTypeSize.isAccessibilitySize ? 220 : ProgressPhotoCard.cardWidth
+        dynamicTypeSize.isAccessibilitySize ? 220 : ProgressPhotoCard.width(framed: look != nil)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(date)
                 .font(.fernlet(.label))
-                .foregroundStyle(Color.bark)
+                .fontWeight(look == nil ? nil : .bold)
+                .foregroundStyle(look?.text ?? Color.bark)
             if let caption {
                 Text(caption)
                     .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
+                    .foregroundStyle(look?.dim ?? Color.slate)
                     .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -607,6 +725,8 @@ struct ProgressPhotoDetailView: View {
     @State private var capturedAt: Date
     @State private var pendingDestructiveAction: DestructiveConfirmation?
     @FocusState private var captionFocused: Bool
+    /// World build: the page's ink and the framed field and button take the look.
+    @Environment(\.fernletFramedLook) private var look
 
     private var gateActive: Bool {
         lockService.isLockConfigured && !UITestSupport.bypassPrivateLockGate
@@ -643,7 +763,7 @@ struct ProgressPhotoDetailView: View {
 
                 Text(capturedAt.formatted(.dateTime.weekday(.wide).month(.wide).day().year()))
                     .font(.fernlet(.displayMedium))
-                    .foregroundStyle(Color.bark)
+                    .foregroundStyle(look?.text ?? Color.bark)
 
                 dateTakenField
                 noteField
@@ -651,7 +771,7 @@ struct ProgressPhotoDetailView: View {
             }
             .padding(20)
         }
-        .background(Color.parchment)
+        .fernletPageBackground()
         // Opaque cover over the WHOLE detail while backgrounded so the app-switcher snapshot can't leak
         // any of it — the previous cover redacted only the picture, leaving the capture date and the
         // caption (free text about the user's body) readable in the snapshot.
@@ -660,7 +780,8 @@ struct ProgressPhotoDetailView: View {
                 snapshotRedactionOverlay
             }
         }
-        .navigationTitle("Progress photo")
+        // World build (`b2-progress-photos`): opened "in the same frame", its title and Back on the plate.
+        .fernletPushedPage("Progress photo")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if captionFocused {
@@ -766,16 +887,10 @@ struct ProgressPhotoDetailView: View {
             SectionLabel("Note")
             TextField("A word about this one — optional", text: limitedCaption,
                       prompt: .fieldPrompt("A word about this one — optional"), axis: .vertical)
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
                 .lineLimit(1...4)
                 .focused($captionFocused)
-                .padding(12)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.bark.opacity(0.10), lineWidth: 1)
-                )
+                // The sheet field: framed under the World look, today's cream field without it.
+                .sheetTextInput()
                 // No `.onSubmit` here: a multiline (axis: .vertical) TextField treats Return as a
                 // newline and never fires onSubmit, so the save affordance is the keyboard-toolbar
                 // "Done" below (plus the onDisappear backstop).
@@ -798,14 +913,10 @@ struct ProgressPhotoDetailView: View {
                 }
             )
         } label: {
-            Label("Delete this photo", systemImage: "trash")
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.dustyRose)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Color.dustyRose.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            Text("Delete this photo").frame(maxWidth: .infinity)
         }
-        .buttonStyle(.plain)
+        // The destructive pill: framed under the World look.
+        .buttonStyle(ActionPillButtonStyle(.destructive))
         .accessibilityIdentifier("progressPhoto.delete")
     }
 
