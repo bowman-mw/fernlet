@@ -6,10 +6,10 @@ import FernletUI
 /// 2026-10-23; World app plan step 4). It replaces Settings' Home widgets editor and opens from the
 /// bottom of the Today panel and from Settings → Appearance → Today panel.
 ///
-/// One list: the cards Today shows, in their order, then the ones it hides. Drag handles reorder the
-/// shown cards and a switch shows or hides each one, in place of the old arrows and ✕. The companion
-/// lives on the map and Quick log moved to Log, so neither is in the list; both keep their place in
-/// the stored order, which is the same `homeWidgets` array with the same ids, so a saved layout
+/// One list: the cards Today shows, in their order, then the ones it hides. Holding and dragging a
+/// shown card (its pixel grip says so) reorders it, and a switch shows or hides each one, in place of
+/// the old arrows and ✕. The companion lives on the map and Quick log moved to Log, so neither is in
+/// the list; both keep their place in the stored order, which is the same `homeWidgets` array with the same ids, so a saved layout
 /// carries over unchanged (``TodayLayout``).
 ///
 /// VoiceOver and Voice Control: each row is its switch, named for the card, with "Move up" and "Move
@@ -34,10 +34,11 @@ struct WorldTodayEditor: View {
             note("The companion lives on the map, and Quick log moved to Log, so neither is in this list.")
                 .padding(.top, 8)
         }
+        // Not edit mode: a shown card moves by holding and dragging it (or its pixel grip), as the
+        // approved editor draws it, so no system handle crowds the frame's right edge.
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .fernletPageBackground()
-        .environment(\.editMode, .constant(.active))
         .accessibilityIdentifier("world.todayEditor")
     }
 
@@ -60,13 +61,18 @@ struct WorldTodayEditor: View {
     /// The cards Today hides, in their catalogue order.
     private var hidden: [HomeWidget] { TodayLayout.hidden(store.settings.homeWidgets) }
 
-    /// One card: its name (dimmed when hidden) and its switch, with the move actions.
+    /// One card: its grip (shown cards move; hidden ones keep the grip's room), its name (dimmed when
+    /// hidden) and its switch, with the move actions.
     private func row(_ widget: HomeWidget, isShown: Bool) -> some View {
         Toggle(isOn: Binding(get: { isShown }, set: { apply(TodayLayout.setting(store.settings.homeWidgets, widget, shown: $0)) })) {
-            Text(verbatim: widget.title)
-                .font(.fernlet(.label))
-                .foregroundStyle(isShown ? WorldPalette.bark : WorldPalette.dim)
-                .fernletWrappingText()
+            HStack(spacing: 14) {
+                WorldSpriteView(sprite: WorldSprites.grip, scale: 3)
+                    .opacity(isShown ? 1 : 0)
+                Text(verbatim: widget.title)
+                    .font(.fernlet(.label))
+                    .foregroundStyle(isShown ? WorldPalette.bark : WorldPalette.dim)
+                    .fernletWrappingText()
+            }
         }
         .accessibilityAction(named: Text("Move up")) { move(widget, by: -1) }
         .accessibilityAction(named: Text("Move down")) { move(widget, by: 1) }
