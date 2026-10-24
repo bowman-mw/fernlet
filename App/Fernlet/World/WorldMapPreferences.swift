@@ -10,6 +10,9 @@ import Foundation
 ///   this iPhone. Off stops new lines only: the walk still lifts the fog and logs its distance.
 /// - **Remember where your workout spaces are** (asked once, in workout-space setup; step 6a): not asked
 ///   (nil), yes or no. Until it is yes nothing pins a space.
+/// - **The map intro answered** (step 5c, `b1-loc-intro`): the intro shows once, before iOS asks; Turn on
+///   location and Not now both answer it.
+/// - **The companion hint shown** (`ref-hint`): "Tap me to say hi!" shows once on this iPhone.
 ///
 /// Device-only `UserDefaults`, never in the synced settings: they describe this phone's location
 /// behaviour. Every key is cleared by the delete funnel (``clearAll(in:)``,
@@ -21,6 +24,28 @@ nonisolated enum WorldMapPreferences {
         static let alwaysLowPower = "fernlet.worldMap.alwaysLowPower"
         static let saveNewRoutes = "fernlet.worldMap.saveNewRoutes"
         static let rememberSpaces = "fernlet.worldMap.rememberSpaces"
+        static let locationIntroAnswered = "fernlet.worldMap.locationIntroAnswered"
+        static let companionHintShown = "fernlet.worldMap.companionHintShown"
+    }
+
+    /// Whether the map intro has been answered on this iPhone (Turn on location or Not now).
+    static func locationIntroAnswered(in defaults: UserDefaults = .standard) -> Bool {
+        defaults.bool(forKey: Key.locationIntroAnswered)
+    }
+
+    /// Records that the map intro was answered.
+    static func setLocationIntroAnswered(in defaults: UserDefaults = .standard) {
+        defaults.set(true, forKey: Key.locationIntroAnswered)
+    }
+
+    /// Whether the one-time "Tap me to say hi!" hint has had its turn on this iPhone.
+    static func companionHintShown(in defaults: UserDefaults = .standard) -> Bool {
+        defaults.bool(forKey: Key.companionHintShown)
+    }
+
+    /// Records that the companion hint has had its turn.
+    static func setCompanionHintShown(in defaults: UserDefaults = .standard) {
+        defaults.set(true, forKey: Key.companionHintShown)
     }
 
     /// Whether the fog lifts as you go (default on).
@@ -72,5 +97,7 @@ nonisolated enum WorldMapPreferences {
         defaults.removeObject(forKey: Key.alwaysLowPower)
         defaults.removeObject(forKey: Key.saveNewRoutes)
         defaults.removeObject(forKey: Key.rememberSpaces)
+        defaults.removeObject(forKey: Key.locationIntroAnswered)
+        defaults.removeObject(forKey: Key.companionHintShown)
     }
 }

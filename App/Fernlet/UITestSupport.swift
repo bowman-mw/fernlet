@@ -120,7 +120,7 @@ enum UITestSupport {
     /// capture-protection UI tests. Consumed by `JournalView` (DEBUG-only presenter).
     static var shouldOpenDayEditSheet: Bool { env["FERNLET_UI_TEST_OPEN_DAY_EDIT"] == "1" }
 
-    /// `FERNLET_UI_TEST_PRIVATE_SECTION=journal|cycle|worryBox` — open the Private panel on that page
+    /// `FERNLET_UI_TEST_PRIVATE_SECTION=journal|cycle|worryBox|places` — open the Private panel on that page
     /// (World screenshots of Batch 2's Private tabs; the picker is otherwise only reachable by a tap).
     /// Consumed by `PrivateHubView`. An unknown or hidden page leaves the selection alone.
     static var initialPrivateHubSection: PrivateHubSection? {
@@ -128,6 +128,7 @@ enum UITestSupport {
         case "journal": .journal
         case "cycle": .cycle
         case "worryBox": .worryBox
+        case "places": .places
         default: nil
         }
     }
@@ -201,8 +202,11 @@ enum UITestSupport {
     /// camera of your own, now on by default, or as if in a session with Sam and Rae; display only),
     /// `qs` (opens the quick-start card), `walk` (starts Walk together), `hold` (the companion's line
     /// stays up instead of fading after six seconds), `closeup` (opens the companion up close), `label`
-    /// (the blue button's action word shows and stays). Consumed by `WorldMapHome`, `WorldMapCompanion`
-    /// and the blue button's label;
+    /// (the blue button's action word shows and stays), `intro` (the map intro may show under the test
+    /// harness, which otherwise holds it back), `hint` (the one-time "Tap me to say hi!" may show), `run`
+    /// (a saved run route starts here, display only), `photo` (three solo photos stand in beside the
+    /// companion as a photo marker, display only). Consumed by `WorldMapHome`, `WorldMapCompanion`,
+    /// `WorldLocationIntroPresenter` and the blue button's label;
     /// `FERNLET_UI_TEST_WORLD_MAP_PHASE` fixes its time of day too.
     static var worldHomeScenes: Set<String> {
         Set((env["FERNLET_UI_TEST_WORLD_HOME"] ?? "").split(separator: ",").map(String.init))

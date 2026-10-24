@@ -197,6 +197,9 @@ struct PersistedSurfaceWipeBoundaryTests {
         "fernlet.worldMap.alwaysLowPower": .cleared(token: "WorldMapPreferences.clearAll"),
         "fernlet.worldMap.saveNewRoutes": .cleared(token: "WorldMapPreferences.clearAll"),
         "fernlet.worldMap.rememberSpaces": .cleared(token: "WorldMapPreferences.clearAll"),
+        // Step 5c (2026-10-24): the map intro's answer (`b1-loc-intro`) and the one-time companion hint (`ref-hint`).
+        "fernlet.worldMap.locationIntroAnswered": .cleared(token: "WorldMapPreferences.clearAll"),
+        "fernlet.worldMap.companionHintShown": .cleared(token: "WorldMapPreferences.clearAll"),
         // World build (2026-10-24): Advanced period tracking's switch (`b3-period-settings`).
         "fernlet.cycle.advancedTracking": .cleared(token: "CyclePreferences.clearAll"),
         "fernlet.barcodeLastServings.v1": .cleared(token: "BarcodeServingMemory.clearAll"),

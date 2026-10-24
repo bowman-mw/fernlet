@@ -16,6 +16,17 @@ nonisolated struct WorldFix: Equatable, Sendable {
     let isPrecise: Bool
 }
 
+/// A stop iOS noticed in Always mode's low-power visits, in plain values: where, how sure, and when the
+/// person arrived (World build step 5c: background visits fill "Where you've been").
+nonisolated struct WorldVisit: Equatable, Sendable {
+    /// Where.
+    let point: GeoPoint
+    /// How sure, in metres.
+    let accuracy: Double
+    /// When the person arrived.
+    let arrived: Date
+}
+
 /// The person's location answer, as the World map reads it.
 nonisolated enum WorldLocationPermission: Equatable, Sendable {
     /// Not asked yet.
@@ -37,17 +48,20 @@ nonisolated enum WorldLocationPermission: Equatable, Sendable {
 /// - **Always, low power (opt-in, off by default):** iOS's visit and significant-change updates
 ///   (``setLowPowerAlways(_:)``), which need no `location` background mode and use little battery.
 /// - **Asking:** ``requestWhileUsing()`` and ``requestAlways()`` are called only from the approved
-///   permission screens (step 5c); nothing here asks on its own.
-/// - **A walk** (``startWalk()`` / ``stopWalk()``, plan step 5b): updates keep running while a walk the
-///   person started records, even when the map leaves the screen. With approximate location it asks for
-///   precise location for this walk only (temporary full accuracy), and it holds a background activity
-///   session so a walk with the phone in a pocket keeps its line. Both need their Info.plist half (the
-///   temporary-accuracy purpose and the `location` background mode), which arrive with the approved
-///   permission strings (step 5c); until then each is skipped, never crashed into.
+///   permission screens (step 5c: the map intro's Turn on location, and Settings → Home map's background
+///   mapping after its explainer); nothing here asks on its own.
+/// - **A walk or run** (``startWalk()`` / ``stopWalk()``, plan step 5b): updates keep running while a walk
+///   or run the person started records, even when the map leaves the screen. With approximate location it
+///   asks for precise location for this walk only (temporary full accuracy, purpose `WorldWalk`), and it
+///   holds a background activity session (the `location` background mode) so a walk with the phone in a
+///   pocket keeps its line. Both Info.plist halves ship with the approved strings (step 5c); a build
+///   without one skips it, never crashes into it.
+/// - **Background mapping on** (``WorldMapPreferences/alwaysLowPower(in:)``) arms the low-power mode as soon
+///   as Always is allowed, including when iOS relaunches the app for a visit.
 ///
-/// Every reading goes to ``onFix`` as a ``WorldFix``; what to do with it (lift the fog or not) is the
-/// fog keeper's call. Delegate callbacks arrive off the main actor and hop to it with the values they
-/// carry, as `WeatherKitService` does.
+/// Every reading goes to ``onFix`` as a ``WorldFix``, and every low-power visit to ``onVisit`` as a
+/// ``WorldVisit``; what to do with them (lift the fog, note a stop) is the keepers' call. Delegate
+/// callbacks arrive off the main actor and hop to it with the values they carry, as `WeatherKitService` does.
 @MainActor
 @Observable
 final class WorldLocationSource: NSObject {
@@ -59,9 +73,14 @@ final class WorldLocationSource: NSObject {
     private(set) var latest: WorldFix?
     /// Called with every reading.
     @ObservationIgnored var onFix: ((WorldFix) -> Void)?
+    /// Called with every low-power visit (Always mode).
+    @ObservationIgnored var onVisit: ((WorldVisit) -> Void)?
 
     /// Whether a walk is recording (updates keep running off the map).
     private(set) var isWalking = false
+
+    /// Whether the readings now are the map's own: updates running for the map on screen, not for a walk.
+    var isFollowingMap: Bool { isUpdating && !isWalking }
 
     @ObservationIgnored private let manager = CLLocationManager()
     @ObservationIgnored private var isUpdating = false
@@ -79,9 +98,13 @@ final class WorldLocationSource: NSObject {
         apply(status: manager.authorizationStatus, accuracy: manager.accuracyAuthorization)
     }
 
+    /// Whether iOS's location prompt is up: asked for, not answered yet (the companion hint waits for it).
+    private(set) var isAsking = false
+
     /// Asks for While Using (the approved permission screen's button).
     func requestWhileUsing() {
         guard permission == .notAsked else { return }
+        isAsking = true
         manager.requestWhenInUseAuthorization()
     }
 
@@ -161,7 +184,12 @@ final class WorldLocationSource: NSObject {
     private func apply(status: CLAuthorizationStatus, accuracy: CLAccuracyAuthorization) {
         permission = Self.permission(for: status)
         isPrecise = accuracy == .fullAccuracy
-        guard permission != .always else { return }
+        if permission != .notAsked { isAsking = false }
+        guard permission != .always else {
+            // Background mapping, when the person turned it on, runs as soon as Always is allowed.
+            if WorldMapPreferences.alwaysLowPower() { setLowPowerAlways(true) }
+            return
+        }
         setLowPowerAlways(false)
         if permission == .denied || permission == .notAsked {
             stopWalk()
@@ -174,6 +202,13 @@ final class WorldLocationSource: NSObject {
         guard fix.point.isValid, fix.accuracy.isFinite, fix.accuracy >= 0 else { return }
         latest = fix
         onFix?(fix)
+    }
+
+    /// Hands a low-power visit on, as plain values (a visit with no known time is dropped).
+    private func deliverVisit(_ visit: WorldVisit) {
+        guard visit.point.isValid, visit.accuracy.isFinite, visit.accuracy >= 0,
+              visit.arrived != .distantPast, visit.arrived != .distantFuture else { return }
+        onVisit?(visit)
     }
 
     /// The World map's reading of a CoreLocation status.
@@ -203,9 +238,15 @@ extension WorldLocationSource: CLLocationManagerDelegate {
 
     nonisolated func locationManager(_ manager: CLLocationManager, didVisit visit: CLVisit) {
         let precise = manager.accuracyAuthorization == .fullAccuracy
-        let fix = WorldFix(point: GeoPoint(visit.coordinate.latitude, visit.coordinate.longitude),
-                           accuracy: visit.horizontalAccuracy, at: visit.arrivalDate, isPrecise: precise)
-        Task { @MainActor in self.deliver(fix) }
+        let point = GeoPoint(visit.coordinate.latitude, visit.coordinate.longitude)
+        // iOS marks an unknown arrival with the distant past; such a visit is a departure seen alone.
+        let arrived = visit.arrivalDate == .distantPast ? visit.departureDate : visit.arrivalDate
+        let fix = WorldFix(point: point, accuracy: visit.horizontalAccuracy, at: arrived, isPrecise: precise)
+        let stop = WorldVisit(point: point, accuracy: visit.horizontalAccuracy, arrived: arrived)
+        Task { @MainActor in
+            self.deliver(fix)
+            self.deliverVisit(stop)
+        }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {

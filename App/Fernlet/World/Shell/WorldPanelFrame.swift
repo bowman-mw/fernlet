@@ -26,6 +26,8 @@ struct WorldPanelFrame<Content: View>: View {
     let panel: WorldPanel
     /// The title on the plate, when it is not the panel's own (Arrange Today).
     var title: String? = nil
+    /// The plate's icon, when it is not the panel's own (the map intro's pin, `b1-loc-intro`).
+    var icon: WorldSprite? = nil
     /// Whether the plate closes with ✕ (back to the map) or Done (an editor).
     var closesWithDone = false
     /// Whether the wooden plate shows (false while the disposable camera fills the screen).
@@ -83,7 +85,7 @@ struct WorldPanelFrame<Content: View>: View {
                     .padding(.trailing, 6)
                 plateText(plateTitle)
             } else {
-                WorldSpriteView(sprite: theme.icon(for: panel), scale: theme.scale(accessibilitySize: dynamicTypeSize.isAccessibilitySize))
+                WorldSpriteView(sprite: icon ?? theme.icon(for: panel), scale: theme.scale(accessibilitySize: dynamicTypeSize.isAccessibilitySize))
                 plateText(plateTitle)
             }
             Spacer(minLength: 8)
