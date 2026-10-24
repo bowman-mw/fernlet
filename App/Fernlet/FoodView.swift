@@ -669,10 +669,13 @@ private struct CookingResumeCard: View {
     }
 
     /// `b2-cooking-resume` (approved 2026-10-23): the calm sage card at the top of Food, its pan in a
-    /// framed tile, "Pick up where you left off", the recipe and step, then Resume and Done cooking.
+    /// tile (bare inside the card, the frame rule), "Pick up where you left off", the recipe and step,
+    /// then Resume and Done cooking.
     private func framed(_ look: FernletFramedLook) -> some View {
         let shape = RoundedRectangle(cornerRadius: FernletFramedLook.cardRadius, style: .continuous)
         return content
+            // The frame rule (ref-frames-rule): pieces inside this card draw flat.
+            .environment(\.fernletInFramedSection, true)
             .padding(EdgeInsets(top: 14, leading: 15, bottom: 14, trailing: 15))
             .background(look.sage, in: shape)
             .overlay(shape.strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth))

@@ -78,17 +78,26 @@ struct RecipeEditorActionLabel: View {
 
 /// The framed card an open ingredient editor, a step and a part sit in (`b3-recipe-new`: "each
 /// ingredient is a framed card"): paper in a 2-pt ink frame with the look's solid shadow, or today's
-/// cream card without the look.
+/// cream card without the look. Under the look it is a section of its own; inside another section (a
+/// part's card, the Share screen's ``FernletCard``) it is one of that section's rows (the frame rule,
+/// `ref-frames-rule`): no fill, frame or shadow, a hairline above it.
 struct RecipeEditorCardFrame: ViewModifier {
     var radius: CGFloat = FernletFramedLook.cardRadius
     @Environment(\.fernletFramedLook) private var look
+    @Environment(\.fernletInFramedSection) private var inSection
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        content
-            .background(look?.paper ?? Color.cream, in: shape)
-            .overlay(shape.strokeBorder(look?.ink ?? Color.bark.opacity(0.10), lineWidth: look == nil ? 1 : 2))
-            .background { shape.fill(look?.shadow ?? Color.clear).offset(y: 3) }
+        if look != nil, inSection {
+            content.overlay(alignment: .top) { FernletDottedRule() }
+        } else {
+            content
+                // The frame rule (ref-frames-rule): pieces inside this card draw flat.
+                .environment(\.fernletInFramedSection, look != nil)
+                .background(look?.paper ?? Color.cream, in: shape)
+                .overlay(shape.strokeBorder(look?.ink ?? Color.bark.opacity(0.10), lineWidth: look == nil ? 1 : 2))
+                .background { shape.fill(look?.shadow ?? Color.clear).offset(y: 3) }
+        }
     }
 }
 
@@ -201,6 +210,8 @@ struct RecipePartEditorCard: View {
             subheading("Steps (optional)")
             steps
         }
+        // The frame rule (ref-frames-rule): pieces inside this card draw flat.
+        .environment(\.fernletInFramedSection, true)
         .padding(14)
         .background(WorldPalette.sage.opacity(0.5), in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(WorldPalette.moss, lineWidth: 2))

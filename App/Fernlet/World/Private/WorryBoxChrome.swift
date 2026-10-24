@@ -8,7 +8,10 @@ struct WorryCardFrame: ViewModifier {
 
     func body(content: Content) -> some View {
         if let look {
-            content.fernletFramed(look, fill: look.paper, cornerRadius: FernletFramedLook.cardRadius)
+            content
+                // The frame rule (ref-frames-rule): pieces inside this card draw flat.
+                .environment(\.fernletInFramedSection, true)
+                .fernletFramed(look, fill: look.paper, cornerRadius: FernletFramedLook.cardRadius)
         } else {
             content
                 .background(Color.cream, in: RoundedRectangle(cornerRadius: 18, style: .continuous))

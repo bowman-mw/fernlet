@@ -257,6 +257,9 @@ struct SessionMenuCard: View {
             ScrollView { cardContent }
         }
         .frame(maxWidth: 420, alignment: .leading)
+        // The frame rule (ref-frames-rule): pieces inside this card draw flat (its rows are buttons,
+        // which keep their frames; their icon squares sit bare).
+        .environment(\.fernletInFramedSection, true)
         .background(WorldPalette.paper, in: shape)
         .overlay(shape.strokeBorder(WorldPalette.ink, lineWidth: 3))
         .background { shape.fill(WorldPalette.ink.opacity(0.25)).offset(y: 4) }

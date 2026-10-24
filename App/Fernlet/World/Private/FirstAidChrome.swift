@@ -48,7 +48,8 @@ struct FirstAidToolHeader: View {
 }
 
 /// One tool on the First aid menu (`b3-first-aid`): a framed row with the tool's pixel icon on a
-/// framed tile, its name in bold, the one-line caption in dim ink, and the pixel chevron.
+/// tile (bare inside the row, the frame rule), its name in bold, the one-line caption in dim ink, and
+/// the pixel chevron.
 struct FirstAidToolCardLabel: View {
     let sprite: WorldSprite
     let title: LocalizedStringKey
@@ -76,6 +77,8 @@ struct FirstAidToolCardLabel: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
+        // The frame rule (ref-frames-rule): pieces inside this card draw flat.
+        .environment(\.fernletInFramedSection, true)
         .fernletFramed(WorldTheme.framedLook, fill: WorldPalette.paper, cornerRadius: FernletFramedLook.cardRadius)
         .contentShape(Rectangle())
     }

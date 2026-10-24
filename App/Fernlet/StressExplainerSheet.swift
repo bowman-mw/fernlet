@@ -126,7 +126,7 @@ struct StressExplainerSheet: View {
                 onFirstAid()
             } label: {
                 HStack(spacing: 14) {
-                    // World (b2-stress): the pixel aid heart on a framed tile, the pixel chevron.
+                    // World (b2-stress): the pixel aid heart (its tile bare inside the card), the pixel chevron.
                     FernletIconTile(size: 48) {
                         WorldSpriteView(sprite: WorldSprites.aid, scale: 3)
                     }
@@ -146,6 +146,8 @@ struct StressExplainerSheet: View {
                 }
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                // The frame rule (ref-frames-rule): pieces inside this card draw flat.
+                .environment(\.fernletInFramedSection, true)
                 .fernletFramed(WorldTheme.framedLook, fill: WorldPalette.paper, cornerRadius: FernletFramedLook.cardRadius)
             }
             .buttonStyle(.plain)

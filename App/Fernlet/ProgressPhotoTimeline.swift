@@ -544,6 +544,8 @@ private struct NudgeCardFrame: ViewModifier {
         let shape = RoundedRectangle(cornerRadius: look == nil ? 14 : FernletFramedLook.cardRadius, style: .continuous)
         if let look {
             content
+                // The frame rule (ref-frames-rule): pieces inside this card draw flat.
+                .environment(\.fernletInFramedSection, true)
                 .background(look.sage, in: shape)
                 .overlay(shape.strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth))
                 .background { shape.fill(look.shadow).offset(y: 3) }
