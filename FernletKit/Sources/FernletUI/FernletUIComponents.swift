@@ -372,6 +372,8 @@ public struct ScreenHeader: View {
     /// World build: a panel root's title is on its wooden plate already (`fernletTitleOnPlate`); a
     /// pushed page or a sheet is presented and keeps its own.
     @Environment(\.fernletTitleOnPlate) private var titleOnPlate
+    /// A pushed page whose title is on the plate (`fernletPushedPage(_:)`) drops it as the root does.
+    @Environment(\.fernletPageTitleOnPlate) private var pageTitleOnPlate
     @Environment(\.isPresented) private var isPresented
     @Environment(\.fernletFramedLook) private var look
 
@@ -423,7 +425,7 @@ public struct ScreenHeader: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if subtitleFirst { subtitleView }
-            if !(titleOnPlate && !isPresented) {
+            if !(titleOnPlate && (!isPresented || pageTitleOnPlate)) {
                 title
                     .font(.fernlet(.display))
                     .foregroundStyle(look?.text ?? Color.bark)
@@ -471,6 +473,7 @@ public struct HeaderActionButton: View {
     /// VoiceOver label; overrides the drawn title. Required in practice for icon-only buttons.
     var axLabel: Text?
     var action: () -> Void
+    @Environment(\.fernletFramedLook) private var look
 
     /// Both text parameters are `LocalizedStringKey`, so a literal at the call site is harvested
     /// into the calling target's string catalog and resolved against `Bundle.main` — the app bundle,
@@ -495,18 +498,45 @@ public struct HeaderActionButton: View {
 
     public var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
-                if let systemImage {
-                    Image(systemName: systemImage)
-                        .font(.title3.weight(.semibold))
-                }
-                if let title {
-                    title
-                        .font(.fernlet(.label))
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-                }
+            if let look {
+                framedLabel(look)
+            } else {
+                standardLabel
             }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(resolvedAccessibilityLabel)
+    }
+
+    /// The glyph and the word, in the caller's chosen order.
+    private var content: some View {
+        HStack(spacing: 6) {
+            if let systemImage {
+                Image(systemName: systemImage)
+                    .font(.title3.weight(.semibold))
+            }
+            if let title {
+                title
+                    .font(look == nil ? .fernlet(.label) : FernletFramedFont.chip)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+        }
+    }
+
+    /// World build: under the framed look a header action is a framed chip (`.achip` in the one design
+    /// language): raised paper in a 2-pt ink frame with a solid shadow, a 44-pt target.
+    private func framedLabel(_ look: FernletFramedLook) -> some View {
+        content
+            .foregroundStyle(look.text)
+            .padding(.horizontal, title == nil ? 0 : 12)
+            .frame(minWidth: 44, minHeight: 44)
+            .fernletFramed(look, cornerRadius: 10)
+            .contentShape(Rectangle())
+    }
+
+    private var standardLabel: some View {
+        content
             .foregroundStyle(Color.bark)
             .frame(minWidth: title == nil ? 58 : 72, minHeight: 58)
             .padding(.horizontal, title == nil ? 0 : 10)
@@ -515,9 +545,6 @@ public struct HeaderActionButton: View {
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
                     .stroke(Color.bark.opacity(0.08), lineWidth: 1)
             )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(resolvedAccessibilityLabel)
     }
 
     /// The VoiceOver label, resolved through the same precedence the old `??` chain expressed:
@@ -633,11 +660,10 @@ public struct PolaroidTile: View {
 }
 
 public extension View {
+    /// A sheet's scroll surface: no system background, the sheet's paper behind it (the look's paper,
+    /// or parchment without the look), and the moss tint.
     func fernletSheetStyle() -> some View {
-        self
-            .scrollContentBackground(.hidden)
-            .background(Color.parchment)
-            .tint(Color.moss)
+        modifier(FernletSheetStyleModifier())
     }
 
     func fernletWrappingText() -> some View {
@@ -653,17 +679,11 @@ public extension View {
     /// `font: .fernlet(.label)` for numeric fields (the tabular DM Sans reads better for digits);
     /// the parameter defaults to `nil` and resolves inside the body, because a `@MainActor`
     /// expression can never be a default argument in this module.
+    ///
+    /// Under the framed look it is the kit's field (`.fld`): DM Sans 16 on raised paper in a 2-pt ink
+    /// frame with 10-pt corners, 13/14 pt in. Every entry sheet's fields take it from here.
     func sheetTextInput(font: Font? = nil) -> some View {
-        self
-            .font(font ?? .fernlet(.body))
-            .textInputAutocapitalization(.sentences)
-            .autocorrectionDisabled(false)
-            .textContentType(.none)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        modifier(SheetTextInputModifier(font: font))
     }
 
     /// A keyboard accessory toolbar carrying a single moss "Done" (checkmark) button that dismisses the
@@ -842,6 +862,55 @@ public extension View {
     }
 }
 
+/// Implements ``SwiftUI/View/fernletSheetStyle()``: the look's paper under the look, parchment without.
+public struct FernletSheetStyleModifier: ViewModifier {
+    @Environment(\.fernletFramedLook) private var look
+
+    public init() {}
+
+    public func body(content: Content) -> some View {
+        content
+            .scrollContentBackground(.hidden)
+            .background(look?.paper ?? Color.parchment)
+            .tint(Color.moss)
+    }
+}
+
+/// Implements ``SwiftUI/View/sheetTextInput(font:)``: the cream card, or the framed field under the look.
+public struct SheetTextInputModifier: ViewModifier {
+    let font: Font?
+    @Environment(\.fernletFramedLook) private var look
+
+    public init(font: Font?) {
+        self.font = font
+    }
+
+    public func body(content: Content) -> some View {
+        let field = content
+            .textInputAutocapitalization(.sentences)
+            .autocorrectionDisabled(false)
+            .textContentType(.none)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        if let look {
+            let shape = RoundedRectangle(cornerRadius: 10)
+            field
+                .font(font ?? FernletFramedFont.field)
+                .foregroundStyle(look.text)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 13)
+                .background(look.raised, in: shape)
+                .overlay(shape.strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth))
+        } else {
+            field
+                .font(font ?? .fernlet(.body))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        }
+    }
+}
+
 /// Implements ``SwiftUI/View/fernletDraftGuard(isDirty:showsCancelBar:onDismiss:)`` — see there.
 ///
 /// Owns the discard-prompt flag itself so call sites don't each declare a `@State showDiscardConfirm`;
@@ -858,6 +927,7 @@ public struct FernletDraftGuardModifier: ViewModifier {
     /// Optional trailing Done for a draft sheet's dismiss-only state; nil hides the slot.
     var onDone: (() -> Void)?
     @State private var askingToDiscard = false
+    @Environment(\.fernletFramedLook) private var look
 
     public init(isDirty: Bool, showsCancelBar: Bool = true, onDismiss: @escaping () -> Void) {
         self.isDirty = isDirty
@@ -907,7 +977,7 @@ public struct FernletDraftGuardModifier: ViewModifier {
             SheetHeader(title: title, subtitle: subtitle, onCancel: cancelTapped, onDone: onDone)
         } else if showsCancelBar {
             SheetCancelBar(action: cancelTapped)
-                .background(Color.parchment)
+                .background(look?.paper ?? Color.parchment)
         }
     }
 
@@ -924,16 +994,24 @@ public struct FernletDraftGuardModifier: ViewModifier {
 /// accessibility identifier for UI tests.
 public struct SheetCancelBar: View {
     let action: () -> Void
+    /// World build: under the framed look the bar sits on the sheet's paper (`b1-frame-sheet`); the
+    /// grabber above it comes from `fernletSheet()`.
+    @Environment(\.fernletFramedLook) private var look
 
     public init(action: @escaping () -> Void) {
         self.action = action
     }
 
     public var body: some View {
+        cancelRow
+            .modifier(FernletSheetPresentationChrome(fallbackIndicator: nil))
+    }
+
+    private var cancelRow: some View {
         HStack {
             Button(FernletUICopy.cancel, action: action)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.label) : FernletFramedFont.sheetControl)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .buttonStyle(.plain)
                 // T2-19: Escape leaves the sheet, matching ``SheetHeader``'s Cancel. Only one of
                 // the two bars is ever mounted (see `fernletDraftGuard(showsCancelBar:)`), so the
@@ -942,8 +1020,8 @@ public struct SheetCancelBar: View {
                 .accessibilityIdentifier("sheet.cancel")
             Spacer()
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 14)
+        .padding(.horizontal, look == nil ? 20 : 16)
+        .padding(.top, look == nil ? 14 : 4)
         .padding(.bottom, 2)
     }
 }
@@ -1263,14 +1341,15 @@ public struct ChipButtonStyle: ButtonStyle {
             }
         }
 
-        /// The framed look's chip: raised paper (the accent when selected) in a 2-pt ink frame with a
-        /// solid shadow; a destructive chip keeps its terracotta ink.
+        /// The framed look's chip (`.chip` in `kit-v3.css`): DM Sans semibold 14.5, 11/6 pt in, raised
+        /// paper (the accent when selected) in a 2-pt ink frame with a 2-pt solid shadow; a destructive
+        /// chip keeps its terracotta ink.
         private func framed(_ look: FernletFramedLook) -> some View {
             let ink: Color = destructive ? .terracottaInk : (selected ? look.onAccent : look.text)
             return configuration.label
-                .font(.fernlet(.label))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
+                .font(FernletFramedFont.chip)
+                .padding(.horizontal, 11)
+                .padding(.vertical, 6)
                 .foregroundStyle(ink)
                 .fernletFramed(look, fill: selected ? look.accent : nil, cornerRadius: 8)
                 .frame(minHeight: 44)
@@ -1322,6 +1401,15 @@ public enum FernletActionPillKind {
     case destructive
 }
 
+/// How big an ``ActionPillButtonStyle`` draws under the framed look (the kit's `.pxbtn` and
+/// `.pxbtn.sm`). Without the look every pill is the one size.
+nonisolated public enum FernletActionPillSize: Sendable {
+    /// The screen's buttons: DM Sans bold 16, 22/12 pt in.
+    case regular
+    /// A card's own action or a pair of small steps: DM Sans bold 14.5, 13/8 pt in; still a 44-pt target.
+    case small
+}
+
 /// The style for a real call-to-action button: a 44pt-tall pill in one of three roles.
 ///
 /// ```swift
@@ -1341,18 +1429,23 @@ public enum FernletActionPillKind {
 /// form would do. Disabled destructive stays an opacity drop, never a red error (artboard 2b).
 public struct ActionPillButtonStyle: ButtonStyle {
     var kind: FernletActionPillKind
+    var size: FernletActionPillSize
 
-    public init(_ kind: FernletActionPillKind = .primary) {
+    /// - Parameter size: `.small` is the kit's `.pxbtn.sm` (a −15 s / +15 s pair, a card's own action);
+    ///   it only changes the framed look.
+    public init(_ kind: FernletActionPillKind = .primary, size: FernletActionPillSize = .regular) {
         self.kind = kind
+        self.size = size
     }
 
     public func makeBody(configuration: Configuration) -> some View {
-        Pill(kind: kind, configuration: configuration)
+        Pill(kind: kind, size: size, configuration: configuration)
     }
 
     /// Nested so the style can read `isEnabled` — a `ButtonStyle` itself has no environment.
     private struct Pill: View {
         let kind: FernletActionPillKind
+        let size: FernletActionPillSize
         let configuration: ButtonStyleConfiguration
         @Environment(\.isEnabled) private var isEnabled
         /// §4.2, same reason as ``ChipButtonStyle``'s `Chip`: the style itself has no environment.
@@ -1390,20 +1483,33 @@ public struct ActionPillButtonStyle: ButtonStyle {
 
         var body: some View {
             if let look {
-                // The framed look's button: a 10-pt rounded plate in a 2-pt ink frame with a solid shadow.
-                configuration.label
-                    .font(.fernlet(.label).weight(.bold))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(ink)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 12)
-                    .frame(minHeight: 44)
-                    .fernletFramed(look, fill: kind == .secondary ? look.raised : fill, cornerRadius: 10)
-                    .contentShape(RoundedRectangle(cornerRadius: 10))
-                    .opacity(configuration.isPressed ? 0.78 : 1.0)
+                framed(look)
             } else {
                 standard
             }
+        }
+
+        /// The framed look's button (`.pxbtn`, `.pxbtn.sec`, `.pxbtn.sm`): DM Sans bold 16 (14.5 small),
+        /// 22/12 pt in (13/8 small), a 10-pt plate in a 2-pt ink frame, a 3-pt solid shadow and a 3-pt
+        /// darker band inside its bottom edge.
+        private func framed(_ look: FernletFramedLook) -> some View {
+            let shape = RoundedRectangle(cornerRadius: 10)
+            let small = size == .small
+            return configuration.label
+                .font(small ? FernletFramedFont.buttonSmall : FernletFramedFont.button)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(ink)
+                .padding(.horizontal, small ? 13 : 22)
+                .padding(.vertical, small ? 8 : 12)
+                .frame(minHeight: small ? 36 : 44)
+                .background(kind == .secondary ? look.raised : fill, in: shape)
+                .overlay(alignment: .bottom) { Color.black.opacity(0.18).frame(height: 3) }
+                .clipShape(shape)
+                .overlay(shape.strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth))
+                .background { shape.fill(look.ink.opacity(0.3)).offset(y: 3) }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+                .opacity(configuration.isPressed ? 0.78 : 1.0)
         }
 
         private var standard: some View {
@@ -1434,6 +1540,8 @@ public struct SheetTextEditor: View {
     /// shape as ``SheetField``/``SectionLabel``.
     var placeholder: Text
     var minHeight: CGFloat
+    /// World build: under the framed look the editor is the kit's field (`.fld`).
+    @Environment(\.fernletFramedLook) private var look
 
     /// The localizing initializer. The literal is harvested into the calling target's string
     /// catalog and looked up in `Bundle.main` — correct for the app-target sheets that own every
@@ -1467,9 +1575,9 @@ public struct SheetTextEditor: View {
                 // the cream field. The italic and the slate-vs-bark ink keep it from reading as text
                 // the user typed.
                 placeholder
-                    .font(.fernlet(.body))
-                    .italic()
-                    .foregroundStyle(Color.slate)
+                    .font(look == nil ? .fernlet(.body) : FernletFramedFont.field)
+                    .italic(look == nil)
+                    .foregroundStyle(look?.dim ?? Color.slate)
                     .padding(14)
                     .allowsHitTesting(false)
                     // The drawn placeholder is not the control's name — it vanishes the moment
@@ -1490,8 +1598,32 @@ public struct SheetTextEditor: View {
                 // sighted user reads before typing.
                 .accessibilityLabel(placeholder)
         }
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        .modifier(FramedFieldFont(isFramed: look != nil))
+        .background(look?.raised ?? Color.cream, in: RoundedRectangle(cornerRadius: look == nil ? 12 : 10))
+        .overlay { frame }
+    }
+
+    /// The faint hairline, or the look's 2-pt ink frame (`.fld`).
+    @ViewBuilder
+    private var frame: some View {
+        if let look {
+            RoundedRectangle(cornerRadius: 10).strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth)
+        } else {
+            RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1)
+        }
+    }
+}
+
+/// Sets the field's DM Sans 16 under the framed look and leaves the caller's font alone without it.
+private struct FramedFieldFont: ViewModifier {
+    let isFramed: Bool
+
+    func body(content: Content) -> some View {
+        if isFramed {
+            content.font(FernletFramedFont.field)
+        } else {
+            content
+        }
     }
 }
 
@@ -1619,6 +1751,8 @@ public struct HubSectionPicker<Section: Hashable>: View {
     @Binding var selection: Section
     var label: (Section) -> String
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// World build: under the framed look the pills are the kit's section tabs (`.tabs3`).
+    @Environment(\.fernletFramedLook) private var look
 
     public init(sections: [Section], selection: Binding<Section>, label: @escaping (Section) -> String) {
         self.sections = sections
@@ -1630,9 +1764,25 @@ public struct HubSectionPicker<Section: Hashable>: View {
         reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.8)
     }
 
+    /// The chosen pill's ground: a cream capsule, or under the look paper in a 2-pt ink frame with a
+    /// 2-pt shadow (`.tabs3 span.on`).
+    @ViewBuilder
+    private func tabBackground(isSelected: Bool) -> some View {
+        if let look {
+            let shape = RoundedRectangle(cornerRadius: 9)
+            if isSelected {
+                shape.fill(look.paper)
+                    .overlay(shape.strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth))
+                    .background { shape.fill(look.shadow).offset(y: 2) }
+            }
+        } else {
+            RoundedRectangle(cornerRadius: 20, style: .continuous).fill(isSelected ? Color.cream : Color.clear)
+        }
+    }
+
     public var body: some View {
         ScrollView(.horizontal) {
-            HStack(spacing: 4) {
+            HStack(spacing: look == nil ? 4 : 6) {
                 ForEach(sections.indices, id: \.self) { index in
                     let section = sections[index]
                     let isSelected = selection == section
@@ -1642,16 +1792,13 @@ public struct HubSectionPicker<Section: Hashable>: View {
                         }
                     } label: {
                         Text(label(section))
-                            .font(.fernlet(.label))
+                            .font(look == nil ? .fernlet(.label) : FernletFramedFont.tab)
                             .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
-                            .foregroundStyle(isSelected ? Color.bark : Color.slate)
-                            .padding(.horizontal, 14)
+                            .foregroundStyle(isSelected ? (look?.text ?? Color.bark) : (look?.dim ?? Color.slate))
+                            .padding(.horizontal, look == nil ? 14 : 13)
                             .padding(.vertical, 7)
-                            .background(
-                                isSelected ? Color.cream : Color.clear,
-                                in: RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            )
+                            .background { tabBackground(isSelected: isSelected) }
                             .animation(selectionAnimation, value: isSelected)
                             // Transparent margin that lifts the tap target to 44pt without
                             // fattening the capsule the user sees.
@@ -1668,7 +1815,8 @@ public struct HubSectionPicker<Section: Hashable>: View {
         .scrollIndicators(.hidden)
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.parchment)
+        // Under the look the tabs sit on the page itself, dots and all.
+        .background(look == nil ? Color.parchment : Color.clear)
     }
 }
 
@@ -1976,6 +2124,31 @@ public struct SheetSaveBar: View {
     }
 
     public var body: some View {
+        if let look {
+            framed(look)
+        } else {
+            standard
+        }
+    }
+
+    /// The framed look's footer (`.sft`): the sheet's paper, no hairline, 12/18 pt in, and the kit's
+    /// primary button (``ActionPillButtonStyle``) at the end — full width at accessibility sizes.
+    private func framed(_ look: FernletFramedLook) -> some View {
+        let fullWidth = dynamicTypeSize.isAccessibilitySize
+        return HStack {
+            if !fullWidth { Spacer() }
+            Button(action: action) {
+                label.frame(maxWidth: fullWidth ? .infinity : nil)
+            }
+            .buttonStyle(ActionPillButtonStyle(.primary))
+            .disabled(disabled)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .background(look.paper)
+    }
+
+    private var standard: some View {
         // 2a·AX3: the commit stays bottom-right until its label would wrap, then goes full
         // width — at accessibility sizes the grown label wins the whole strip.
         let fullWidth = dynamicTypeSize.isAccessibilitySize
@@ -1985,23 +2158,11 @@ public struct SheetSaveBar: View {
                 .buttonStyle(.plain)
                 .font(.fernlet(.label))
                 .multilineTextAlignment(.center)
-                .foregroundStyle(disabled ? (look?.text ?? Color.bark) : (look?.onAccent ?? Color.onMoss))
+                .foregroundStyle(disabled ? Color.bark : Color.onMoss)
                 .padding(.horizontal, 28)
                 .padding(.vertical, 16)
                 .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: 52)
-                .background(
-                    (look?.accent ?? Color.mossFill).opacity(disabled ? 0.55 : 1),
-                    in: RoundedRectangle(cornerRadius: look == nil ? 16 : 10)
-                )
-                // The framed look's primary button: a 2-pt ink frame and a solid shadow (b1-language).
-                .overlay {
-                    if let look {
-                        RoundedRectangle(cornerRadius: 10).strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth)
-                    }
-                }
-                .background {
-                    if let look { RoundedRectangle(cornerRadius: 10).fill(look.shadow).offset(y: 3) }
-                }
+                .background(Color.mossFill.opacity(disabled ? 0.55 : 1), in: RoundedRectangle(cornerRadius: 16))
                 // The pill is 52pt tall and draws as one target, but `.buttonStyle(.plain)` leaves
                 // the hit region on the LABEL — so the commit button every sheet in the app ends
                 // with was reporting a sub-44pt target while looking twice that size. Handing the

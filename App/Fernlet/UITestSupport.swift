@@ -125,6 +125,11 @@ enum UITestSupport {
     /// World app plan's step 1a screenshots. Consumed by `FernletApp`.
     static var shouldOpenWorldMapHarness: Bool { env["FERNLET_UI_TEST_WORLD_MAP_HARNESS"] == "1" }
 
+    /// `FERNLET_UI_TEST_WORLD_GALLERY=rows|push|push2|controls|sheet|legacySheet|toolbarSheet|keyboard|focus`
+    /// — render the World foundation gallery (`WorldFoundationGallery`) at that scene in place of the
+    /// whole app: every framed primitive, no store load. Consumed by `FernletApp`.
+    static var worldFoundationGallery: String? { env["FERNLET_UI_TEST_WORLD_GALLERY"] }
+
     /// `FERNLET_UI_TEST_WORLD_MAP_PLAIN=1` — the harness draws the plain (offline) base map instead of
     /// Apple's.
     static var worldMapHarnessPlain: Bool { env["FERNLET_UI_TEST_WORLD_MAP_PLAIN"] == "1" }
@@ -234,6 +239,7 @@ enum UITestSupport {
     static var shouldOpenCustomize: Bool { false }
     static var shouldSeedStudioCanvas: Bool { false }
     static var shouldOpenWorldMapHarness: Bool { false }
+    static var worldFoundationGallery: String? { nil }
     static var worldMapHarnessPlain: Bool { false }
     static var worldMapHarnessPhase: CompanionDayPhase? { nil }
     static var initialWorldPanel: WorldPanel? { nil }

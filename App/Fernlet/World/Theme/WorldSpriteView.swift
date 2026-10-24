@@ -34,7 +34,13 @@ nonisolated enum WorldHeartFill: Equatable, Sendable {
     case full, half, empty, gold
 }
 
-/// Draws a ``WorldSprite`` crisply: each key one `scale`-point square, no smoothing.
+/// Draws a ``WorldSprite`` crisply: each key one `scale`-point square, no smoothing. This is the one
+/// place the World's pixel icons are drawn, the framed FernletUI primitives' icons included
+/// (``WorldTheme/iconRenderer``).
+///
+/// A one-colour ink icon (``WorldSprite/isMonoInk``) takes the ink token, ``WorldPalette/iconInk``,
+/// unless it is given a tint: ink on light paper, cream on dark (World Review Batch 2 draft 2, built
+/// on Batch 1 screens too). Every other sprite keeps its own colours.
 ///
 /// Decoration to VoiceOver: the element that carries the sprite says what it means.
 struct WorldSpriteView: View {
@@ -42,18 +48,18 @@ struct WorldSpriteView: View {
     /// Points per sprite pixel (whole numbers keep the art crisp).
     var scale: CGFloat = 3
     var variant: WorldSpriteVariant = .plain
-    /// A one-colour icon's ink (✕, chevrons, plus): every pixel in this colour, which follows Dark
-    /// Mode. Batch 2 build note: one-colour pixel icons take the ink token, never a fixed hex, or they
-    /// vanish on dark paper.
+    /// One colour for every pixel (white on an accent fill). Nil keeps the sprite's own colours, or the
+    /// ink token for a one-colour icon. Never a fixed hex for ink, or the icon vanishes on dark paper.
     var tint: Color? = nil
 
     var body: some View {
+        let ink: Color? = tint ?? (variant == .plain && sprite.isMonoInk ? WorldPalette.iconInk : nil)
         Canvas { context, _ in
             for (y, row) in sprite.rows.enumerated() {
                 for (x, key) in row.enumerated() where key != "." {
                     guard let base = sprite.palette[key] else { continue }
                     let rect = CGRect(x: CGFloat(x) * scale, y: CGFloat(y) * scale, width: scale, height: scale)
-                    context.fill(Path(rect), with: .color(tint ?? WorldPalette.rgb(variant.colour(for: key, column: x) ?? base)))
+                    context.fill(Path(rect), with: .color(ink ?? WorldPalette.rgb(variant.colour(for: key, column: x) ?? base)))
                 }
             }
         }

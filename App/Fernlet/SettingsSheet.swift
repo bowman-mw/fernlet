@@ -601,7 +601,7 @@ struct SettingsSheet: View {
     /// The scroll-wrapped page shell shared by the inline tabs. `title` is `LocalizedStringKey`
     /// (never `String` — same rule as ``hubLink(_:_:)``); every call site passes a literal.
     private func settingsDestination<Content: View>(
-        title: LocalizedStringKey,
+        title: LocalizedStringResource,
         @ViewBuilder content: () -> Content
     ) -> some View {
         ScrollView {
@@ -611,7 +611,9 @@ struct SettingsSheet: View {
         }
         .scrollContentBackground(.hidden)
         .background(Color.parchment)
-        .navigationTitle(title)
+        // In the World panel the title and Back go on the wooden plate (`b1-frame-push`); in the
+        // Settings sheet it is the navigation title, as before.
+        .fernletPushedPage(title)
     }
 
     private var appearanceTab: some View {
