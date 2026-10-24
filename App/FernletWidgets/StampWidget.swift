@@ -346,9 +346,13 @@ struct WidgetStampDisc: View {
     }
 
     private func artPaint(_ sprite: WidgetSprite) -> WidgetSpritePaint {
-        // In one colour the art keeps only its ink outline, so the duck still reads as a duck; art
-        // with no ink key (the leaf) is drawn whole.
-        if mono { return sprite.palette["k"] == nil ? .solid(0xFFFFFF) : .outline(0xFFFFFF) }
+        // In one colour the art is a silhouette with its ink cut out (the duck keeps its eye), as the
+        // companion's face is; art that is mostly ink (the note, the wheel) is drawn whole.
+        if mono {
+            let keys = sprite.rows.joined().filter { $0 != "." }
+            let ink = keys.filter { $0 == "k" }.count
+            return keys.count - ink >= ink ? .cutout(0xFFFFFF) : .solid(0xFFFFFF)
+        }
         return sprite.isMonoInk ? .solid(WidgetSprite.ink) : .plain
     }
 }

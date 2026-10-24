@@ -70,8 +70,9 @@ enum WidgetSpritePaint: Equatable {
     case drop(full: Bool)
     /// Every key one colour (the white plus on the moss button, the placeholder's ghost).
     case solid(UInt32)
-    /// The ink outline (`k`) alone, in one colour: a stamp's art in the one-colour renderings.
-    case outline(UInt32)
+    /// Everything but the ink (`k`) in one colour, the ink cut out — a stamp's art in the one-colour
+    /// renderings, as the companion's face is cut out of its silhouette.
+    case cutout(UInt32)
     /// A heart in one colour: outline, filled or half filled, gold checked.
     case monoHeart(WidgetHeartFill)
     /// A drop in one colour: filled, or its outline alone.
@@ -93,8 +94,8 @@ enum WidgetSpritePaint: Equatable {
             return monoInk && dark ? Self.darkInk : base
         case .solid(let hex):
             return hex
-        case .outline(let hex):
-            return key == "k" ? hex : nil
+        case .cutout(let hex):
+            return key == "k" ? nil : hex
         case .heart(let fill):
             return Self.heartColour(fill, key: key, x: x, base: base)
         case .drop(let full):
