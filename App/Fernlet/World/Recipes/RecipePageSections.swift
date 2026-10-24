@@ -91,6 +91,10 @@ struct RecipePhotoSlot: View {
                     .font(FernletFramedFont.rowDetail.weight(.bold))
                     .foregroundStyle(look?.link ?? Color.moss)
                     .multilineTextAlignment(.center)
+                    // The slot stays 110 pt; at the largest sizes the words shrink rather than cut off.
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.5)
+                    .padding(.horizontal, 6)
             }
             .frame(width: 110, height: 110)
             .overlay(shape.strokeBorder(look?.ink ?? Color.moss, style: StrokeStyle(lineWidth: 2, dash: [6, 5])))
