@@ -1,19 +1,27 @@
 import FernletUI
 import SwiftUI
 
-/// The frame every World panel opens in (designs `b1-frame-root`, `-push` and `-keyboard`, draft 3,
-/// approved 2026-10-23): it covers the whole screen, status bar and item bar included, with a wooden
-/// title plate under the iOS status bar (the panel's pixel icon, its Fraunces title and a 44-pt ✕) and
-/// the page below on parchment with a faint dot grid. Closing returns to the map; there's no switching
-/// panels from inside one.
+/// The frame every World panel opens in (designs `b1-frame-root`, draft 3, `b1-frame-push` and
+/// `b1-frame-keyboard`, draft 2, approved 2026-10-23): it covers the whole screen, status bar and item
+/// bar included, with a wooden title plate under the iOS status bar (the panel's pixel icon, its
+/// Fraunces title and a 44-pt ✕) and the page below on parchment with a faint dot grid. Closing returns
+/// to the map; there's no switching panels from inside one.
+///
+/// **Going deeper.** A page pushed inside the panel's stack with `fernletPushedPage(_:)` keeps this
+/// plate: its Back (arrow and the name of the page it returns to, Batch 2's 7-pt gap and 13-pt end) takes
+/// the icon's place, its title takes the panel's, and the ✕ stays. The plate learns of pushes through
+/// ``FernletPlateNavigation``, which it owns and hands down. Swipe from the left edge still goes back.
+///
+/// **The keyboard.** The plate stays put and the page ends at the keyboard's top, so a pinned save bar
+/// rides above the keyboard and nothing hides behind it.
 ///
 /// **The seam.** Every panel goes through this one view, so a revision of the frame lands here and
 /// nowhere else. During the disposable camera the Friends panel hides its plate, because the camera
 /// stays full screen (design batch 2). A page that edits something (Arrange Today) names itself and
 /// closes with Done instead of ✕ (design `b1-today-editor`).
 ///
-/// VoiceOver lands on the title when a panel opens, so it hears the screen's name first (the approved
-/// frame's accessibility note).
+/// VoiceOver lands on the title when a panel opens and again when a page is pushed or popped, so it
+/// hears the screen's name first (the approved frame's accessibility note).
 struct WorldPanelFrame<Content: View>: View {
     let panel: WorldPanel
     /// The title on the plate, when it is not the panel's own (Arrange Today).
@@ -27,6 +35,8 @@ struct WorldPanelFrame<Content: View>: View {
     @Environment(\.worldTheme) private var theme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @AccessibilityFocusState private var isTitleFocused: Bool
+    /// The pages pushed under this plate (their titles and Backs).
+    @State private var navigation = FernletPlateNavigation()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -36,22 +46,33 @@ struct WorldPanelFrame<Content: View>: View {
                 .environment(\.fernletTabBarClearance, 0)
                 // The plate names the panel, so its root page draws only its subtitle (ScreenHeader).
                 .environment(\.fernletTitleOnPlate, showsPlate)
+                .environment(\.fernletPlateNavigation, showsPlate ? navigation : nil)
         }
         .background { WorldPageBackground().ignoresSafeArea() }
-        .onAppear { isTitleFocused = showsPlate }
+        .onAppear {
+            navigation.rootTitle = plateTitle
+            isTitleFocused = showsPlate
+        }
+        .onChange(of: navigation.top?.id) { _, _ in isTitleFocused = showsPlate }
     }
 
-    /// The wooden title plate: icon, title, ✕ (or Done).
+    /// The panel's own title on the plate.
+    private var plateTitle: String { title ?? panel.title }
+
+    /// The wooden title plate (`.pt`): icon and title, or Back and the pushed page's title; then ✕ (or
+    /// Done). 4 pt under the status bar, 10 pt above its 4-pt dark band and 3-pt ink edge.
     private var plate: some View {
         HStack(spacing: 10) {
-            WorldSpriteView(sprite: theme.icon(for: panel), scale: theme.scale(accessibilitySize: dynamicTypeSize.isAccessibilitySize))
-            Text(verbatim: title ?? panel.title)
-                .font(WorldType.plateTitle)
-                .foregroundStyle(WorldPalette.bark)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityFocused($isTitleFocused)
+            if let page = navigation.top {
+                FernletBackButton(verbatim: navigation.topBackTitle, compact: FernletBackButton.isCompact(title: page.title)) {
+                    navigation.popTop()
+                }
+                    .padding(.trailing, 6)
+                plateText(page.title)
+            } else {
+                WorldSpriteView(sprite: theme.icon(for: panel), scale: theme.scale(accessibilitySize: dynamicTypeSize.isAccessibilitySize))
+                plateText(plateTitle)
+            }
             Spacer(minLength: 8)
             if closesWithDone {
                 WorldDoneButton(action: onClose)
@@ -59,7 +80,7 @@ struct WorldPanelFrame<Content: View>: View {
                 WorldCloseButton(action: onClose)
             }
         }
-        .padding(EdgeInsets(top: 10, leading: 16, bottom: 12, trailing: 12))
+        .padding(EdgeInsets(top: 4, leading: 16, bottom: 13, trailing: 12))
         .background {
             WorldPalette.wood
                 .overlay(alignment: .bottom) { WorldPalette.woodLow.frame(height: 4).padding(.bottom, 3) }
@@ -70,6 +91,21 @@ struct WorldPanelFrame<Content: View>: View {
             Color(.sRGB, red: 40 / 255, green: 20 / 255, blue: 8 / 255, opacity: 0.18).frame(height: 3).offset(y: 3)
         }
         .zIndex(1)
+    }
+
+    /// The plate's title (Fraunces 25): one line, or up to three at accessibility sizes, where it wraps rather
+    /// than shrinks (`b1-frame-push`'s accessibility note).
+    private func plateText(_ text: String) -> some View {
+        Text(verbatim: text)
+            .font(WorldType.plateTitle)
+            .foregroundStyle(WorldPalette.bark)
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
+            .minimumScaleFactor(dynamicTypeSize.isAccessibilitySize ? 1 : 0.7)
+            // The approved largest-text plate draws its title at 31 pt, not the full accessibility size,
+            // so a one-word title ("Appearance") never breaks inside the word.
+            .dynamicTypeSize(...WorldType.plateTitleCap)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityFocused($isTitleFocused)
     }
 }
 
@@ -120,21 +156,11 @@ struct WorldDoneButton: View {
     }
 }
 
-/// A World page: parchment with a faint dot grid every 14 pt (design language, "Pages").
+/// A World page: parchment with a faint dot grid every 14 pt (design language, "Pages"), in the World
+/// palette whatever the environment says. FernletUI's ``FernletDottedPage`` draws it.
 struct WorldPageBackground: View {
     var body: some View {
-        Canvas { context, size in
-            context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(WorldPalette.page))
-            let step: CGFloat = 14
-            var dots = Path()
-            let columns = min(Int(size.width / step) + 1, 200), rows = min(Int(size.height / step) + 1, 200)
-            for row in 0..<rows {
-                for column in 0..<columns {
-                    dots.addEllipse(in: CGRect(x: CGFloat(column) * step + 6, y: CGFloat(row) * step + 6, width: 2.4, height: 2.4))
-                }
-            }
-            context.fill(dots, with: .color(WorldPalette.pageDot))
-        }
-        .accessibilityHidden(true)
+        FernletDottedPage()
+            .environment(\.fernletFramedLook, WorldTheme.framedLook)
     }
 }

@@ -51,6 +51,17 @@ nonisolated enum WorldPalette {
     static let sage = adaptive(light: 0xE6ECD2, dark: 0x2F3829)
     /// The gentle-day row's paper ("I'm unwell today").
     static let rose = adaptive(light: 0xF6E1DA, dark: 0x46302A)
+    /// A warning notice's paper (`.notice3.warn`, World Review Batch 3).
+    static let warn = adaptive(light: 0xF6DCD3, dark: 0x4A2A22)
+    /// One-colour pixel icons (✕, chevrons, the back arrow, plus, search): ink on light paper, the cream
+    /// text ink on dark paper (World Review Batch 2 draft 2: drawn in fixed ink they vanished in dark mode).
+    static let iconInk = adaptive(light: 0x4A2E1C, dark: 0xFFF1CF, darkHC: 0xFFF8E4)
+    /// The dotted rule between rows: ink at a quarter on light paper, cream at a sixth on dark.
+    static let rule = Color(UIColor { @Sendable trait in
+        trait.userInterfaceStyle == .dark
+            ? UIColor(red: 1, green: 241 / 255, blue: 207 / 255, alpha: 0.16)
+            : UIColor(red: 74 / 255, green: 46 / 255, blue: 28 / 255, alpha: 0.25)
+    })
 
     // MARK: Data colours (one set everywhere)
 

@@ -480,6 +480,8 @@ struct FernletApp: App {
     private var content: some View {
         if UITestSupport.shouldOpenWorldMapHarness {
             worldMapHarnessContent
+        } else if let scene = UITestSupport.worldFoundationGallery {
+            worldFoundationGalleryContent(scene: scene)
         } else if shouldOpenPrivacyDataForUITest {
             privacyDataTestContent
         } else {
@@ -528,6 +530,14 @@ struct FernletApp: App {
     private var worldMapHarnessContent: some View {
         #if DEBUG
         WorldMapHarnessView()
+        #endif
+    }
+
+    /// DEBUG-only: the World foundation gallery at one scene (`FERNLET_UI_TEST_WORLD_GALLERY`).
+    @ViewBuilder
+    private func worldFoundationGalleryContent(scene: String) -> some View {
+        #if DEBUG
+        WorldFoundationGallery(scene: scene)
         #endif
     }
 

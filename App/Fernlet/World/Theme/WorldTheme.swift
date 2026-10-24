@@ -57,26 +57,58 @@ nonisolated enum WorldType {
     /// The largest the status plate's letters grow: the plate sits on the map, so its text follows the
     /// approved design's fixed steps rather than growing without bound.
     static let plateTextCap = DynamicTypeSize.xLarge
+
+    /// The largest a panel's plate title grows: 25 pt Fraunces reaches the approved largest-text 31 pt
+    /// at this size (`.ph.ax .pt h4`), and stops there.
+    static let plateTitleCap = DynamicTypeSize.xxxLarge
 }
 
 extension WorldTheme {
-    /// The design language for cards inside World panels (``FernletFramedLook``, `b1-language`): paper
-    /// in a 2-pt ink frame with a solid shadow, in this theme's palette. A panel opts in with
-    /// `.environment(\.fernletFramedLook, WorldTheme.framedLook)` as its own redesign lands.
+    /// The design language for everything in the World build (``FernletFramedLook``, `b1-language`):
+    /// paper in a 2-pt ink frame with a solid shadow, dotted parchment pages, wood for the sheet's
+    /// grabber, in this theme's palette. Set once at the root by `worldDesignLanguage()`.
     @MainActor static var framedLook: FernletFramedLook {
         FernletFramedLook(paper: WorldPalette.paper, paperLow: WorldPalette.paperShade, raised: WorldPalette.paperLight,
                           ink: WorldPalette.ink, text: WorldPalette.bark, shadow: WorldPalette.ink.opacity(0.22),
                           sage: WorldPalette.sage, rose: WorldPalette.rose, mark: WorldPalette.moss,
-                          accent: WorldPalette.accent, onAccent: WorldPalette.onAccent, dim: WorldPalette.dim)
+                          accent: WorldPalette.accent, onAccent: WorldPalette.onAccent, dim: WorldPalette.dim,
+                          page: WorldPalette.page, pageDot: WorldPalette.pageDot, rule: WorldPalette.rule,
+                          link: WorldPalette.mossInk, wood: WorldPalette.wood, woodHigh: WorldPalette.woodHigh,
+                          warn: WorldPalette.warn)
+    }
+
+    /// Draws the framed primitives' icons as this theme's pixel sprites, through ``WorldSpriteView`` (the
+    /// one place World pixel icons are drawn, so one-colour icons take the ink token in dark mode).
+    static let iconRenderer = FernletIconRenderer { icon, scale, tint in
+        AnyView(WorldSpriteView(sprite: WorldSprites.sprite(for: icon), scale: scale, tint: tint))
+    }
+}
+
+extension WorldSprites {
+    /// The pixel sprite for one of FernletUI's framed icons.
+    static func sprite(for icon: FernletFramedIcon) -> WorldSprite {
+        switch icon {
+        case .close: xx
+        case .back: chevL
+        case .chevron: chevR
+        case .chevronDown: chevD
+        case .plus: plus
+        case .check: check
+        case .search: search
+        case .lock: lock
+        }
     }
 }
 
 extension View {
-    /// The one design language (`b1-language`) for everything below: framed cards, chips, buttons and
-    /// switches in this theme's palette (``WorldTheme/framedLook``, `FernletFramedToggleStyle`).
+    /// The one design language (`b1-language`) for everything below: framed cards, chips, buttons,
+    /// switches, fields, Forms (``FernletFormStyle``) and sheets in this theme's palette
+    /// (``WorldTheme/framedLook``), with its pixel icons (``WorldTheme/iconRenderer``).
     func worldDesignLanguage() -> some View {
         environment(\.fernletFramedLook, WorldTheme.framedLook)
+            .environment(\.fernletIconRenderer, WorldTheme.iconRenderer)
             .toggleStyle(FernletFramedToggleStyle())
+            .formStyle(FernletFormStyle())
     }
 }
 

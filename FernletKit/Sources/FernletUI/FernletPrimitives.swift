@@ -106,6 +106,12 @@ public struct SectionLabel: View {
         self.text = Text(verbatim: text)
     }
 
+    /// The `Text` initializer, for a label a component was handed as `Text` (``FernletFramedSection``'s
+    /// header). `Text` is not a literal, so this never steals a call site that meant to localize.
+    public init(_ text: Text) {
+        self.text = text
+    }
+
     /// The World build's framed look, when the surface opted in: the label goes bold in ink, after a
     /// small framed square (``FernletFramedLook``).
     @Environment(\.fernletFramedLook) private var framedLook

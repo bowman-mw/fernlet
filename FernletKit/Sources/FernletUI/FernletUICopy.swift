@@ -64,6 +64,28 @@ public enum FernletUICopy {
                comment: "Default label of the green commit bar at the bottom of an entry sheet, for sheets that do not name their own commit verb.")
     }
 
+    /// The ✕ that leaves a focused flow (the runner, cooking mode, the camera, breathing): its spoken
+    /// name and the word Voice Control says.
+    public static var close: String {
+        String(localized: "ui.action.close", defaultValue: "Close", bundle: .module,
+               comment: "Accessibility name of the ✕ at the top right of a full-screen flow (a workout, cooking mode, the camera). Leaves the flow.")
+    }
+
+    /// The plate's Back when it has no word beside its arrow, and the word Voice Control says.
+    public static var back: String {
+        String(localized: "ui.action.back", defaultValue: "Back", bundle: .module,
+               comment: "Button at the top left of a page inside a panel. Returns to the page before it.")
+    }
+
+    /// The plate's Back read in full: "Back to Settings".
+    ///
+    /// - Parameter page: The page Back returns to, already in the reader's language.
+    /// - Returns: The spoken label.
+    public static func backTo(_ page: String) -> String {
+        String(localized: "ui.action.backTo", defaultValue: "Back to \(page)", bundle: .module,
+               comment: "VoiceOver name of the Back button at the top left of a page inside a panel. The argument is the name of the page it returns to, e.g. 'Back to Settings'.")
+    }
+
     // MARK: Discard prompt
 
     /// The copy of the shared "you have unsaved edits" alert.

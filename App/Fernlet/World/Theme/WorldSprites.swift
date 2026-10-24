@@ -16,6 +16,14 @@ nonisolated struct WorldSprite: Equatable, Sendable {
     var width: Int { rows.first?.count ?? 0 }
     /// Height in sprite pixels.
     var height: Int { rows.count }
+
+    /// The design's ink, the one colour of a one-colour icon.
+    static let ink: UInt32 = 0x4A2E1C
+
+    /// Whether this is a one-colour ink icon (✕, chevrons, plus, search, check): every key the design's
+    /// ink. ``WorldSpriteView`` draws these in the ink token so they stay visible on dark paper (World
+    /// Review Batch 2 draft 2, the kit's `.pk` rule).
+    var isMonoInk: Bool { palette == ["k": Self.ink] }
 }
 
 /// The approved sprites (World Review Batch 1, draft 3). Each is the design page's `SPR` entry.
@@ -79,6 +87,8 @@ nonisolated enum WorldSprites {
     static let lock = WorldSprite(rows: ["..kkkk..", ".k....k.", ".k....k.", "kkkkkkkk", "kGGGGGGk", "kGGkkGGk", "kGGGGGGk", "kkkkkkkk"],
                                   palette: ["G": 0xB67073, "k": 0x4A2E1C])
     static let chevR = WorldSprite(rows: ["k...", "kk..", ".kk.", "..kk", ".kk.", "kk..", "k..."],
+                                  palette: ["k": 0x4A2E1C])
+    static let chevD = WorldSprite(rows: ["kk...kk", ".kk.kk.", "..kkk..", "...k..."],
                                   palette: ["k": 0x4A2E1C])
     static let chevL = WorldSprite(rows: ["...k", "..kk", ".kk.", "kk..", ".kk.", "..kk", "...k"],
                                   palette: ["k": 0x4A2E1C])
