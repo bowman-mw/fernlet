@@ -9,16 +9,17 @@ import FernletFoundation
 /// live, how they are sealed and opened, and how files the corpus no longer names are swept.
 ///
 /// Extracted from ``PrivateMediaStore`` (the friend photo WALL) so the sealed pending corpus
-/// (``PendingSessionPhotoStore``, session photos nobody has chosen yet) runs the same
-/// decompression-bomb checks, the same thumbnail path and the same orphan sweep instead of a second
-/// copy of each. The two corpora differ only in what is injected here:
+/// (``PendingSessionPhotoStore``, session photos nobody has chosen yet) and the solo camera corpus
+/// (``SoloCameraPhotoStore``, World build) run the same decompression-bomb checks, the same
+/// thumbnail path and the same orphan sweep instead of a second copy of each. The corpora differ
+/// only in what is injected here:
 ///
-/// | | Wall | Pending |
-/// | --- | --- | --- |
-/// | Directories | `MeshPhotos/`, `MeshPhotoThumbnails/` beside the wall index | `Photos/`, `Thumbnails/` inside `PendingSessionPhotos/` |
-/// | Purposes | `privateFriendPhoto{Image,Thumbnail}V2` | `privatePendingSessionPhoto{Image,Thumbnail}V1` |
-/// | Legacy plaintext | read and re-sealed in place (the wall predates sealing) | refused (born sealed) |
-/// | Key | the friend-wall row | the device-bound pending row |
+/// | | Wall | Pending | Solo camera |
+/// | --- | --- | --- | --- |
+/// | Directories | `MeshPhotos/`, `MeshPhotoThumbnails/` beside the wall index | `Photos/`, `Thumbnails/` inside `PendingSessionPhotos/` | `Photos/`, `Thumbnails/` inside `SoloCameraPhotos/` |
+/// | Purposes | `privateFriendPhoto{Image,Thumbnail}V2` | `privatePendingSessionPhoto{Image,Thumbnail}V1` | `privateSoloCameraPhoto{Image,Thumbnail}V1` |
+/// | Legacy plaintext | read and re-sealed in place (the wall predates sealing) | refused (born sealed) | refused (born sealed) |
+/// | Key | the friend-wall row | the device-bound pending row | the device-bound solo-camera row |
 ///
 /// Files are named `<id>.jpg` by the corpus's own photo id. Nothing here knows about an index:
 /// each owner keeps its own, and calls ``removeOrphanedFiles(keeping:)`` only after its index write

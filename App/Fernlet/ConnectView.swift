@@ -107,6 +107,11 @@ struct FriendsView: View {
     @State private var keptFriendFingerprints: Set<String> = []
     @State private var keepFriendsPromptPresented = false
     @State private var selectedAlbumPostID: UUID?
+    /// The solo camera's photos in this album (`b4-mem-solo-waiting`, `-revealed`, `-open`): the
+    /// "Just you" sets and the count still held until tonight. Empty in a decoy.
+    @State private var soloAlbum = SoloAlbumModel()
+    /// The "Just you" set opened full screen, if any.
+    @State private var openSoloSetID: String?
     @State private var sessionSearchText = ""
     @State private var cacheWarningDismissed = false
     /// P7 item 5: the restore card is dismissable for this instance of the surface; the value it
@@ -244,7 +249,7 @@ struct FriendsView: View {
     /// Read by the heal arm and by ``presentDisconnectReviewIfNeeded()``, which is the other site
     /// that requests a presentation and therefore the other site that can lose one.
     private var aPresentationIsUp: Bool {
-        keepFriendsPromptPresented || selectedAlbumPostID != nil || cameraPresented
+        keepFriendsPromptPresented || selectedAlbumPostID != nil || cameraPresented || openSoloSetID != nil
     }
 
     /// The **layout** half of the session transition: what surface the Social tab draws.
@@ -364,9 +369,41 @@ struct FriendsView: View {
             RoutedDeliveryHoldBanner(hold: manager.routedDeliveryHold)
             if !features.photos.meshPhotos.isEmpty {
                 cacheWarningBanner
+            }
+            if !features.photos.meshPhotos.isEmpty || !soloAlbum.sets.isEmpty {
                 FriendsSearchField(prompt: "Search by friend or session name", text: $sessionSearchText)
             }
+            // The solo camera's photos still held (b4-mem-solo-waiting): when they show, in the
+            // camera's own words.
+            if soloAlbum.heldCount > 0 {
+                SoloWaitingNote(count: soloAlbum.heldCount, companionName: companionName)
+            }
         }
+    }
+
+    /// The companion's own name, or Fernlet (as the Today card says it).
+    private var companionName: String {
+        let chosen = store.settings.companionName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return chosen.isEmpty ? "Fernlet" : chosen
+    }
+
+    /// DEBUG screenshots (the hooks answer nil / false in Release, and the demo seed is DEBUG-only):
+    /// one page pushed, the camera on your own as Home's blue button opens it, or a solo album scene.
+    private func applyScreenshotHooks() {
+        if let route = FriendsUITestHooks.initialRoute, path.isEmpty { path = [route] }
+        plantSoloAlbumDemoIfAsked()
+        if FriendsUITestHooks.opensSoloCamera, !manager.isInSession { cameraPresented = true }
+    }
+
+    /// DEBUG screenshots: plants the solo album's demo photos, reads them, and opens the first set for
+    /// the open scene. Empty in Release (the seed is DEBUG-only).
+    private func plantSoloAlbumDemoIfAsked() {
+        #if DEBUG
+        guard let raw = FriendsUITestHooks.soloAlbumScene, let scene = SoloAlbumDemoSeed.Scene(rawValue: raw),
+              !store.duressSessionActive, SoloAlbumDemoSeed.plant(scene, in: store) else { return }
+        soloAlbum.refresh(roll: store.soloCameraRoll())
+        if scene == .open { openSoloSetID = soloAlbum.sets.first?.id }
+        #endif
     }
 
     private var photoAlbumView: some View {
@@ -375,11 +412,12 @@ struct FriendsView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     albumHeader
                         .padding(.horizontal, 16)
-                    if features.photos.meshPhotos.isEmpty {
+                    if features.photos.meshPhotos.isEmpty && soloAlbum.isEmpty {
                         emptyAlbumView
                             .padding(.horizontal, 16)
                     } else {
-                        // Edge to edge, three across, 2-pt gaps (b2-friends-root draft 3).
+                        // Edge to edge, three across, 2-pt gaps (b2-friends-root draft 3), the
+                        // "Just you" sets among the hangouts (b4-mem-solo-revealed).
                         photoGrid
                     }
                 }
@@ -396,13 +434,18 @@ struct FriendsView: View {
             path.removeAll()
         }
         .task(id: friendShopClosesAt) { await closeFriendShopWhenWindowLapses() }
-        // DEBUG screenshots (nil in Release): open one page deep.
-        .task { if let route = FriendsUITestHooks.initialRoute, path.isEmpty { path = [route] } }
+        // DEBUG screenshots (nothing in Release): a pushed page, the camera alone, a solo album scene.
+        .task { applyScreenshotHooks() }
         // The session camera (b3-friends-session): full screen over the panel, the album untouched
         // beneath it. It closes itself when the session ends, and this presenter lowers it too.
         .fullScreenCover(isPresented: $cameraPresented) {
             DisposableCameraView(store: store, presentsOwnSheet: $cameraPresentsOwnSheet)
         }
+        // The solo camera's photos (b4-mem-solo-*): read on appear, when the camera closes and when
+        // the decoy flips; a decoy reads nothing. A tapped "Just you" set opens full screen.
+        .modifier(SoloAlbumHost(album: soloAlbum, openSetID: $openSoloSetID,
+                                refreshKey: [cameraPresented, store.duressSessionActive],
+                                roll: { store.duressSessionActive ? nil : store.soloCameraRoll() }))
         // The session's prompts (join requests, the session alert, removal requests) while this
         // panel is the surface on screen; Home's session button and the camera host them otherwise.
         .modifier(SessionPromptsModifier(
@@ -779,21 +822,51 @@ struct FriendsView: View {
         GridItem(.flexible(), spacing: 2)
     ]
 
+    /// The album's tiles: while solo photos are held, the "Tonight" tile first (b4-mem-solo-waiting);
+    /// then the hangouts and the "Just you" sets, newest first (b4-mem-solo-revealed).
     private var photoGrid: some View {
         LazyVGrid(columns: columns, spacing: 2) {
-            ForEach(filteredPhotoWallPosts) { post in
-                // A real Button, not a tap gesture on a colour: VoiceOver could neither name nor
-                // activate the old cells, so the album was unopenable without sight.
-                Button {
-                    selectedAlbumPostID = post.id
-                } label: {
-                    albumPhotoCell(post)
+            if soloAlbum.heldCount > 0, SoloAlbum.matches(sessionSearchText) {
+                SoloWaitingTile(count: soloAlbum.heldCount)
+            }
+            ForEach(albumEntries) { entry in
+                switch entry {
+                case .post(let post):
+                    postTile(post)
+                case .solo(let photoSet):
+                    Button {
+                        openSoloSetID = photoSet.id
+                    } label: {
+                        SoloSetTile(photoSet: photoSet, thumbnail: { soloAlbum.thumbnailData(for: $0) })
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(SoloSetTile.accessibilityLabel(for: photoSet))
+                    .accessibilityInputLabels(SoloSetTile.inputLabels)
+                    .accessibilityIdentifier("friends.soloSet")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(albumCellLabel(post))
-                .accessibilityInputLabels(albumCellInputLabels(post))
             }
         }
+    }
+
+    /// The hangouts' posts and the "Just you" sets the search keeps, merged newest first.
+    private var albumEntries: [FriendsAlbumEntry<FriendPhotoWallPost>] {
+        let sets = SoloAlbum.matches(sessionSearchText) ? soloAlbum.sets : []
+        return SoloAlbum.merged(posts: filteredPhotoWallPosts,
+                                date: { $0.session?.startedAt ?? $0.coverPhoto.addedAt },
+                                sets: sets)
+    }
+
+    /// One hangout's tile: a real Button, not a tap gesture on a colour — VoiceOver could neither name
+    /// nor activate the old cells, so the album was unopenable without sight.
+    private func postTile(_ post: FriendPhotoWallPost) -> some View {
+        Button {
+            selectedAlbumPostID = post.id
+        } label: {
+            albumPhotoCell(post)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(albumCellLabel(post))
+        .accessibilityInputLabels(albumCellInputLabels(post))
     }
 
     /// Short spoken alternatives for one album cell — the Voice Control half of T2-12.
@@ -1143,9 +1216,10 @@ private struct FriendPhotoFeedView: View {
 /// flow for the photo's sender; filing it blocks them on this phone and deletes the photo from the
 /// wall (`FernletStore.reportWallPhoto(_:reason:)`). This device's own photos carry no flag.
 ///
-/// Tracks its own selected page and auto-fading chrome (page counter + dots), and re-anchors the
-/// selection when a deletion removes the current page — the post id is stable for aggregated
-/// sessions, so the view is reused without re-init. Saving rehydrates the metadata-only payload
+/// Tracks its own selected page — the pager, its auto-fading counter and dots, the action buttons and
+/// the card are the shared album post parts (`AlbumPostParts.swift`), which the solo camera's "Just
+/// you" sets draw too — and re-anchors the selection when a deletion removes the current page — the
+/// post id is stable for aggregated sessions, so the view is reused without re-init. Saving rehydrates the metadata-only payload
 /// from the encrypted disk cache (`MeshSessionPhotos.hydratedPhotos`) before handing bytes to
 /// `FriendPhotoLibrarySaver`, and never reports a false success when decryption fails.
 private struct FriendPhotoCarouselPostView: View {
@@ -1159,8 +1233,6 @@ private struct FriendPhotoCarouselPostView: View {
     let requestReport: (PeerReportSubject) -> Void
 
     @State private var selectedPhotoID: UUID
-    @State private var chromeVisible = true
-    @State private var chromeTask: Task<Void, Never>?
     @State private var pendingDeletePhotoID: UUID?
     @State private var saveErrorMessage: PhotoSaveFailure?
     @State private var savedPhotoIDs: Set<UUID> = []
@@ -1182,23 +1254,16 @@ private struct FriendPhotoCarouselPostView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TabView(selection: $selectedPhotoID) {
-                ForEach(post.photos) { photo in
+            AlbumPostPager(ids: post.photos.map(\.id), selection: $selectedPhotoID, height: width * 1.25) { id in
+                if let photo = post.photos.first(where: { $0.id == id }) {
                     carouselPhoto(photo)
-                        .tag(photo.id)
                 }
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: width * 1.25)
-            .overlay(alignment: .topTrailing) { pageCounterOverlay }
-            .overlay(alignment: .bottom) { pageDotsOverlay }
 
             header
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
         }
-        .onAppear { scheduleChromeFade() }
-        .onChange(of: selectedPhotoID) { _, _ in scheduleChromeFade() }
         .onChange(of: post.photos) { _, newPhotos in
             // A deleted photo can leave selectedPhotoID pointing at a now-missing page (the post id
             // is stable for aggregated sessions, so this view is reused without re-init). Re-anchor
@@ -1207,7 +1272,6 @@ private struct FriendPhotoCarouselPostView: View {
                 selectedPhotoID = newPhotos.first?.id ?? post.coverPhoto.id
             }
         }
-        .onDisappear { chromeTask?.cancel() }
         // An `alert`, not a `confirmationDialog`: on iOS 26 the dialog renders as a popover that
         // suppresses the `.cancel`-role button, so the user saw a lone red "Delete" and no way out —
         // and the popover anchored to the view root rather than the picture being deleted.
@@ -1220,40 +1284,6 @@ private struct FriendPhotoCarouselPostView: View {
             Text("This removes it from this device. It can't be undone.")
         }
         .photoSaveFailureAlert("Couldn't Save Photo", failure: $saveErrorMessage)
-    }
-
-    /// The "n / total" pill, shown with the auto-fading chrome on multi-photo posts.
-    @ViewBuilder
-    private var pageCounterOverlay: some View {
-        if chromeVisible, post.photos.count > 1 {
-            Text("\(selectedIndex + 1) / \(post.photos.count)")
-                .font(FernletFramedFont.buttonSmall)
-                .monospacedDigit()
-                .foregroundStyle(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(.black.opacity(0.72), in: Capsule())
-                .padding(14)
-                .transition(.opacity)
-        }
-    }
-
-    /// The page marks: one small framed square per photo, the current one filled white (the pixel
-    /// dots of `b2-album-post`), shown with the auto-fading chrome on multi-photo posts.
-    @ViewBuilder
-    private var pageDotsOverlay: some View {
-        if chromeVisible, post.photos.count > 1 {
-            HStack(spacing: 4) {
-                ForEach(post.photos) { photo in
-                    Rectangle()
-                        .fill(photo.id == selectedPhotoID ? Color.white : Color.white.opacity(0.45))
-                        .frame(width: 10, height: 10)
-                        .overlay(Rectangle().strokeBorder(WorldPalette.ink, lineWidth: 1.5))
-                }
-            }
-            .padding(.bottom, 14)
-            .transition(.opacity)
-        }
     }
 
     /// Actions of the per-photo delete confirmation dialog.
@@ -1269,8 +1299,7 @@ private struct FriendPhotoCarouselPostView: View {
     /// The paper card under the photo: the friend's name and the date, then Save, Favorite, Delete and
     /// Report as framed pixel-icon buttons for the photo on screen (`b2-album-post`).
     private var header: some View {
-        let shape = RoundedRectangle(cornerRadius: FernletFramedLook.cardRadius, style: .continuous)
-        return ViewThatFits(in: .horizontal) {
+        ViewThatFits(in: .horizontal) {
             HStack(spacing: 10) {
                 nameAndDate
                 Spacer(minLength: 6)
@@ -1281,11 +1310,7 @@ private struct FriendPhotoCarouselPostView: View {
                 photoActions(selectedPhoto)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(EdgeInsets(top: 12, leading: 15, bottom: 12, trailing: 12))
-        .background(WorldPalette.paper, in: shape)
-        .overlay(shape.strokeBorder(WorldPalette.ink, lineWidth: FernletFramedLook.frameWidth))
-        .background { shape.fill(WorldPalette.ink.opacity(0.22)).offset(y: 3) }
+        .albumPostCard()
     }
 
     /// The sender's name over the date the photo was added.
@@ -1356,18 +1381,8 @@ private struct FriendPhotoCarouselPostView: View {
         selected: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 9, style: .continuous)
-        return Button(action: action) {
-            WorldSpriteView(sprite: sprite, scale: 2)
-                .frame(width: 44, height: 44)
-                .background(WorldPalette.paperLight, in: shape)
-                .overlay(shape.strokeBorder(WorldPalette.ink, lineWidth: FernletFramedLook.frameWidth))
-                .contentShape(shape)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(accessibilityLabel)
-        // A filled heart is the ONLY thing that said "favorited"; the trait says it out loud.
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        // The shared album post action (`AlbumPostParts.swift`), which the "Just you" sets use too.
+        AlbumPostActionButton(sprite: sprite, accessibilityLabel: accessibilityLabel, selected: selected, action: action)
     }
 
     private func savePhoto(_ photo: FriendPhotoPayload) {
@@ -1410,63 +1425,6 @@ private struct FriendPhotoCarouselPostView: View {
         post.photos[selectedIndex]
     }
 
-    private func scheduleChromeFade() {
-        chromeTask?.cancel()
-        withAnimation(.easeInOut(duration: 0.2)) {
-            chromeVisible = true
-        }
-        // `assistive: nil` — this fade REMOVES CONTROLS from the accessibility tree rather than
-        // retiring a notice: the close, save and share buttons go with the chrome. A stretched
-        // timer would only delay deleting the screen's only controls out from under a VoiceOver
-        // user mid-swipe, so while an assistive technology is running the chrome simply stays.
-        guard let window = FernletDismissalWindow.system
-            .windowUnlessAssistive(standard: .seconds(5)) else { return }
-        chromeTask = Task {
-            // The sleep result IS the cancellation check: `Task.sleep` throws exactly when the task
-            // is cancelled, so a cancelled fade simply returns (R7 — no swallowed error).
-            do {
-                try await Task.sleep(for: window)
-            } catch {
-                return
-            }
-            withAnimation(.easeInOut(duration: 0.3)) {
-                chromeVisible = false
-            }
-        }
-    }
-}
-
-/// Loads a photo's bytes lazily through a closure and shows a placeholder glyph until decoded.
-///
-/// `shouldLoad` lets the carousel defer decoding to the current page ± 1 so a long post never
-/// decodes every image at once; the load task re-fires when the flag flips to true.
-private struct LazyFriendPhotoImage: View {
-    let loadData: () -> Data?
-    let contentMode: ContentMode
-    var shouldLoad = true
-
-    @State private var image: UIImage?
-
-    var body: some View {
-        Group {
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: contentMode)
-                    // T2-10: a friend photo inverted is a colour negative of a person's face. The
-                    // `photo` placeholder below is a tinted glyph and is left to invert normally.
-                    .accessibilityIgnoresInvertColors()
-            } else {
-                Image(systemName: "photo")
-                    .font(.largeTitle)
-                    .foregroundStyle(Color.white.opacity(0.7))
-            }
-        }
-        .task(id: shouldLoad) {
-            guard shouldLoad, image == nil, let data = loadData() else { return }
-            image = UIImage(data: data)
-        }
-    }
 }
 
 // MARK: - Nearby slot row

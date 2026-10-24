@@ -575,10 +575,12 @@ enum DisposableCameraOrientation {
 /// or messages buttons; the session's prompts still ride it (``SessionPromptsModifier``) while it is
 /// the surface on screen.
 ///
-/// **On your own** (no session) it is the same camera without Develop & finish, titled "Just you";
-/// the approved solo design's ten photos a day and "they appear after the companion sleeps" wait on a
-/// sealed solo store (lane ledger), so until then a shot alone is held for the same review a session's
-/// photos get, and in a decoy session a shot alone is kept nowhere at all.
+/// **On your own** (no session; `b3-camera-solo` draft 2, owner 2026-10-24) it is the same camera
+/// without Develop & finish, titled "Just you" (or "Just you · <place>" when the presenter names one):
+/// ten photos a local day ("7 of 10 / left today"), each sealed the moment it is taken into the
+/// Friends area's device-only solo corpus (``SoloCameraRoll`` over `SoloCameraPhotoStore`) and held
+/// until the companion goes to sleep, which the line at the bottom says. No review, no Develop. At 0
+/// the shutter reads "No film left"; a decoy session's shots live in memory only.
 ///
 /// Owns a ``CameraCaptureController`` as `@State` and renders the wind-to-arm control, the shutter
 /// with a shared per-session film counter (`MeshSessionPhotos.filmRemaining`), and the develop flow:
@@ -606,6 +608,10 @@ struct DisposableCameraView: View {
     var presentsOwnSheet: Binding<Bool> = .constant(false)
     /// Closes the camera; nil uses the environment's dismiss (a full-screen cover's presenter).
     var onClose: (() -> Void)? = nil
+    /// On your own, the place the camera opened at ("Just you · Oak Park"): Home's blue button knows
+    /// the hike, the run, the workout space or the restaurant. Nil shows "Just you". Shown only; never
+    /// stored with a photo.
+    var placeName: String? = nil
 
     @State private var camera = CameraCaptureController()
     @State private var flashOpacity: Double = 0
@@ -639,6 +645,11 @@ struct DisposableCameraView: View {
     @State private var photoReportSubject: PeerReportSubject?
     /// Whether this camera opened over a session: it closes itself when that session ends.
     @State private var opensInSession = false
+    /// The roll a shot alone goes into (``SoloCameraRoll``), taken from the store when the camera
+    /// opens with no session; nil in a session.
+    @State private var soloRoll: SoloCameraRoll?
+    /// A shot alone that could not be kept: its alert is up.
+    @State private var soloShotFailed = false
     /// F10: this file is the repo's own cited exemplar for the `TimelineView(.animation(paused:))`
     /// idiom — it should exemplify Reduce Motion too, not just the isArmed gating it already had.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -681,10 +692,7 @@ struct DisposableCameraView: View {
         GeometryReader { geometry in
             cameraSurface(geometry: geometry)
         }
-        .onAppear {
-            opensInSession = manager.isInSession
-            if !reviewCoordinator.isShowing { camera.startSession() }
-        }
+        .onAppear(perform: handleAppear)
         .onDisappear {
             camera.stopSession()
             // Leaving the hierarchy takes every sheet of this view with it — the Develop review
@@ -705,9 +713,15 @@ struct DisposableCameraView: View {
         .onChange(of: manager.pendingRemovalProposals) { _, _ in
             presentNextRemovalProposalIfNeeded()
         }
+        .onChange(of: store.duressSessionActive) { _, decoy in soloRoll?.setDecoy(decoy) }
         .sheet(isPresented: $reviewPresented, onDismiss: resumeCameraAfterCancelledReview) { reviewSheet }
+        .alert("Couldn't keep that photo. Try again.", isPresented: $soloShotFailed) {
+            Button("OK", role: .cancel) {}
+        }
+        // The session's prompts only in a session: alone, a stale mesh notice is not this camera's.
         .modifier(SessionPromptsModifier(
             manager: manager,
+            isActive: manager.isInSession,
             activeRemovalProposal: $activeRemovalProposal,
             leaveSessionConfirm: $leaveSessionConfirm,
             onConfirmEnd: beginDevelop
@@ -720,20 +734,43 @@ struct DisposableCameraView: View {
         if let onClose { onClose() } else { dismiss() }
     }
 
+    /// Opening: notes whether this camera shoots for a session, takes the solo roll when it does
+    /// not, and starts the capture session unless the session-end review is up.
+    private func handleAppear() {
+        opensInSession = manager.isInSession
+        if !opensInSession {
+            let roll = store.soloCameraRoll()
+            roll.refresh()
+            soloRoll = roll
+        }
+        if !reviewCoordinator.isShowing { camera.startSession() }
+    }
+
     /// Whether any sheet or alert this view hangs is up: its Develop review, the end-session and
     /// removal-seconding alerts, and the manager-driven admission sheet and session alert — the
     /// same conditions their presenters read. What ``presentsOwnSheet`` reports.
     private var ownPresentationIsUp: Bool {
-        reviewPresented || leaveSessionConfirm || activeRemovalProposal != nil
+        reviewPresented || leaveSessionConfirm || activeRemovalProposal != nil || soloShotFailed
             || (!manager.pendingAdmissionRequests.isEmpty && manager.currentMesh != nil)
             || manager.meshError != nil || manager.routedShareRefusal != nil
     }
 
-    /// Whether a shot can be kept here: only in a session for now. On your own a shot would be held
-    /// for the session review, which would draw over the camera at once — the opposite of the
-    /// approved solo camera (no Develop; the photos appear after the companion sleeps), whose sealed
-    /// store is not built yet (lane ledger). Until it is, the camera alone says "Camera off".
-    private var canShootHere: Bool { manager.isInSession }
+    /// Whether a shot can be kept here: in a session the session's photos hold it; on your own the
+    /// solo roll does, once its sealed corpus can be read (until then the camera alone says "Camera
+    /// off").
+    private var canShootHere: Bool {
+        manager.isInSession || soloRoll?.shotsLeft(at: Date()) != nil
+    }
+
+    /// Whether this camera is shooting on your own (no session): the solo film, no Develop.
+    private var isSolo: Bool { !manager.isInSession }
+
+    /// Film left for the shutter: the session's shared film, or today's solo film (none while the
+    /// solo corpus cannot be read).
+    private var filmRemaining: Int {
+        guard isSolo else { return features.photos.filmRemaining }
+        return soloRoll?.shotsLeft(at: Date()) ?? 0
+    }
 
     /// The Develop review's photos: the snapshotted ids still awaiting an answer, wherever the
     /// session photos hold them (`MeshSessionPhotos.photosAwaitingAnswer(among:)`).
@@ -798,9 +835,12 @@ struct DisposableCameraView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    /// "Picnic · with Sam and Rae" in a session; "Just you" on your own.
+    /// "Picnic · with Sam and Rae" in a session; "Just you" (or "Just you · Oak Park") on your own.
     private var titleText: Text {
-        guard manager.isInSession else { return Text("Just you") }
+        guard manager.isInSession else {
+            guard let placeName, !placeName.isEmpty else { return Text("Just you") }
+            return Text("Just you · \(placeName)")
+        }
         let names = manager.sessionParticipants.filter { !$0.isLocal }.map {
             PeerNameDisplay.firstName($0.displayName, fingerprint: $0.fingerprint, placeholder: .met, in: .fernlet)
         }
@@ -812,20 +852,44 @@ struct DisposableCameraView: View {
     }
 
     private var portraitControls: some View {
-        HStack(alignment: .bottom) {
-            Group {
-                if manager.isInSession { developButton } else { Color.clear.frame(height: 1) }
-            }
-            .frame(width: 112)
-            Spacer(minLength: 0)
-            shutterButton
-            Spacer(minLength: 0)
-            filmColumn(isLandscape: false)
+        VStack(spacing: 18) {
+            HStack(alignment: .bottom) {
+                Group {
+                    if manager.isInSession { developButton } else { Color.clear.frame(height: 1) }
+                }
                 .frame(width: 112)
+                Spacer(minLength: 0)
+                shutterButton
+                Spacer(minLength: 0)
+                filmColumn(isLandscape: false)
+                    .frame(width: 112)
+            }
+            if isSolo { soloFooter }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         .padding(.horizontal, 12)
-        .padding(.bottom, 24)
+        .padding(.bottom, isSolo ? 12 : 24)
+    }
+
+    /// The room the solo line takes under the controls, kept clear of the viewfinder.
+    private static let soloFooterReserve: CGFloat = 44
+
+    /// On your own, when the photos show (`b3-camera-solo`): after the companion goes to sleep.
+    private var soloFooter: some View {
+        Text("Your photos appear tonight, after \(companionName) goes to sleep.")
+            .font(FernletFramedFont.note)
+            .foregroundStyle(Self.cream.opacity(0.88))
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: 460)
+            .padding(.horizontal, 12)
+            .accessibilityIdentifier("camera.soloFooter")
+    }
+
+    /// The companion's own name, or Fernlet (as the Today card says it).
+    private var companionName: String {
+        let chosen = store.settings.companionName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return chosen.isEmpty ? "Fernlet" : chosen
     }
 
     private var landscapeControls: some View {
@@ -844,14 +908,27 @@ struct DisposableCameraView: View {
                 developButton
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                     .padding(22)
+            } else {
+                // Alone, the line sits under the viewfinder, in the room its frame leaves for it.
+                soloFooter
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, 6)
             }
         }
     }
 
-    /// The gold film badge over the wind control and its caption ("Ready" once wound).
+    /// The gold film badge over the wind control and its caption ("Ready" once wound). Alone, "left
+    /// today" sits under the badge (`b3-camera-solo`).
     private func filmColumn(isLandscape: Bool) -> some View {
         VStack(spacing: 8) {
             filmCounterBadge
+            if isSolo {
+                // The badge's label already says it for VoiceOver.
+                Text("left today")
+                    .font(FernletFramedFont.buttonSmall)
+                    .foregroundStyle(Self.ledGreen)
+                    .accessibilityHidden(true)
+            }
             windIndicator(isLandscape: isLandscape)
         }
     }
@@ -860,13 +937,13 @@ struct DisposableCameraView: View {
         let shape = RoundedRectangle(cornerRadius: 9, style: .continuous)
         return HStack(spacing: 6) {
             WorldSpriteView(sprite: FriendsSprites.film, scale: 2, tint: Self.frameBrown)
-            Text("\(features.photos.filmRemaining)")
+            filmCountText
                 .font(FernletFramedFont.button)
                 .monospacedDigit()
                 .foregroundStyle(Self.frameBrown)
             // The always-visible half of the kept-photo notice: a glyph, with the sentence itself
-            // in the badge's accessibility label.
-            if features.photos.photosKeptOnThisPhone > 0 {
+            // in the badge's accessibility label. A session's notice only.
+            if !isSolo && features.photos.photosKeptOnThisPhone > 0 {
                 Image(systemName: "iphone")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Self.frameBrown)
@@ -874,16 +951,23 @@ struct DisposableCameraView: View {
         }
         .padding(.horizontal, 12)
         .frame(minHeight: 40)
-        .background(features.photos.filmRemaining > 0 ? Self.filmGold : Self.filmGold.opacity(0.55), in: shape)
+        .background(filmRemaining > 0 ? Self.filmGold : Self.filmGold.opacity(0.55), in: shape)
         .overlay(shape.strokeBorder(Self.frameBrown, lineWidth: 2))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(filmCounterAccessibilityLabel)
         .accessibilityIdentifier("camera.filmCounter")
     }
 
+    /// The badge's count: the session's shots left, or "7 of 10" of today's film alone.
+    private var filmCountText: Text {
+        guard isSolo else { return Text("\(features.photos.filmRemaining)") }
+        return Text("\(filmRemaining) of \(SoloCameraRules.photosPerDay)")
+    }
+
     /// The badge's label, with the kept-photo sentence appended when there is one — `Text`
-    /// interpolating `Text`, so both halves are harvested (review T2-1).
+    /// interpolating `Text`, so both halves are harvested (review T2-1). Alone, today's film.
     private var filmCounterAccessibilityLabel: Text {
+        if isSolo { return Text("\(filmRemaining) of \(SoloCameraRules.photosPerDay) photos left today") }
         guard let kept = RoutedShareRefusalCopy.photoKeptNotice(count: features.photos.photosKeptOnThisPhone) else {
             return Text("Film remaining: \(features.photos.filmRemaining)")
         }
@@ -902,18 +986,23 @@ struct DisposableCameraView: View {
     ///   - size: The safe-area size the camera lays out in.
     ///   - safeArea: The safe-area insets.
     ///   - landscape: Whether the camera is in its landscape layout.
+    ///   - bottomReserve: Room kept clear under the window for a line of text (the solo camera's
+    ///     "Your photos appear tonight…"); 0 for the session camera.
     /// - Returns: The window's rectangle.
-    static func viewfinderRect(in size: CGSize, safeArea: EdgeInsets, landscape: Bool) -> CGRect {
+    static func viewfinderRect(in size: CGSize, safeArea: EdgeInsets, landscape: Bool,
+                               bottomReserve: CGFloat = 0) -> CGRect {
+        let reserve = max(0, bottomReserve)
         guard landscape else {
             let width = max(0, size.width - 48)
-            let maxHeight = max(0, size.height - 64 - 200)
+            let maxHeight = max(0, size.height - 64 - 200 - reserve)
             let height = min(width * 1.21, maxHeight)
             return CGRect(x: safeArea.leading + 24, y: safeArea.top + 64, width: width, height: height)
         }
-        let height = max(0, size.height - 24)
+        let height = max(0, size.height - 24 - reserve)
         let width = min(height * 4 / 3, max(0, size.width - 260))
         let fitted = min(height, width * 3 / 4)
-        return CGRect(x: safeArea.leading + (size.width - width) / 2, y: safeArea.top + (size.height - fitted) / 2,
+        return CGRect(x: safeArea.leading + (size.width - width) / 2,
+                      y: safeArea.top + (size.height - reserve - fitted) / 2,
                       width: width, height: fitted)
     }
 
@@ -921,7 +1010,8 @@ struct DisposableCameraView: View {
     /// cream corner marks and the green light, and the permission prompt inside it when needed.
     private func cameraStage(geometry: GeometryProxy) -> some View {
         let openness = camera.isArmed ? 1.0 : camera.windProgress
-        let window = Self.viewfinderRect(in: geometry.size, safeArea: geometry.safeAreaInsets, landscape: isLandscape)
+        let window = Self.viewfinderRect(in: geometry.size, safeArea: geometry.safeAreaInsets, landscape: isLandscape,
+                                         bottomReserve: isSolo ? Self.soloFooterReserve : 0)
         let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
         let showsPermissionPrompt = camera.needsCameraPermissionPrompt && (isLandscape || openness > 0.85)
         return ZStack {
@@ -1074,7 +1164,7 @@ struct DisposableCameraView: View {
     }
 
     private var shutterButton: some View {
-        let canShoot = camera.isArmed && features.photos.filmRemaining > 0 && camera.canCapturePhoto && canShootHere
+        let canShoot = camera.isArmed && filmRemaining > 0 && camera.canCapturePhoto && canShootHere
         return Button {
             guard canShoot else { return }
             Task { await takePhoto() }
@@ -1089,19 +1179,7 @@ struct DisposableCameraView: View {
                         .fill(canShoot ? Self.shutterCream : Self.cream.opacity(0.14))
                         .overlay(Circle().strokeBorder(Self.frameBrown, lineWidth: 3))
                         .frame(width: 66, height: 66)
-                    if !camera.isArmed && features.photos.filmRemaining > 0 {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(Self.cream.opacity(0.6))
-                    } else if features.photos.filmRemaining == 0 {
-                        Image(systemName: "film.slash")
-                            .font(.system(size: 18))
-                            .foregroundStyle(Color.terracotta)
-                    } else if !camera.canCapturePhoto {
-                        Image(systemName: "camera.slash")
-                            .font(.system(size: 18))
-                            .foregroundStyle(Self.cream.opacity(0.6))
-                    }
+                    shutterGlyph
                 }
                 // Captions replace cryptic glyphs: name each shutter state in words.
                 Text(shutterCaption(canShoot: canShoot))
@@ -1117,12 +1195,38 @@ struct DisposableCameraView: View {
         .accessibilityIdentifier("camera.shutter")
     }
 
+    /// The glyph inside a shutter that cannot fire: a camera that cannot keep a shot here, the film
+    /// to wind, the film used up, or the camera off.
+    @ViewBuilder
+    private var shutterGlyph: some View {
+        if !canShootHere {
+            Image(systemName: "camera.slash")
+                .font(.system(size: 18))
+                .foregroundStyle(Self.cream.opacity(0.6))
+        } else if !camera.isArmed && filmRemaining > 0 {
+            Image(systemName: "arrow.clockwise")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(Self.cream.opacity(0.6))
+        } else if filmRemaining == 0 {
+            Image(systemName: "film.slash")
+                .font(.system(size: 18))
+                .foregroundStyle(Color.terracotta)
+        } else if !camera.canCapturePhoto {
+            Image(systemName: "camera.slash")
+                .font(.system(size: 18))
+                .foregroundStyle(Self.cream.opacity(0.6))
+        }
+    }
+
     /// A short caption under the shutter, so its ring state reads without decoding a glyph. A key,
     /// not a `String`: `Text(String)` is the verbatim overload, which kept all four out of the catalog.
+    /// A camera that cannot keep a shot here (the solo corpus unreadable right now) says so before
+    /// the film does.
     private func shutterCaption(canShoot: Bool) -> LocalizedStringKey {
         if canShoot { return "Tap to shoot" }
-        if features.photos.filmRemaining == 0 { return "No film left" }
-        if !camera.canCapturePhoto || !canShootHere { return "Camera off" }
+        if !canShootHere { return "Camera off" }
+        if filmRemaining == 0 { return "No film left" }
+        if !camera.canCapturePhoto { return "Camera off" }
         return "Wind to arm"
     }
 
@@ -1130,8 +1234,9 @@ struct DisposableCameraView: View {
     /// through the verbatim overload, so none of these four states was ever harvested.
     private func shutterAccessibilityLabel(canShoot: Bool) -> Text {
         if canShoot { return Text("Take photo") }
-        if features.photos.filmRemaining == 0 { return Text("No film remaining") }
-        if !camera.canCapturePhoto || !canShootHere { return Text("Camera unavailable") }
+        if !canShootHere { return Text("Camera unavailable") }
+        if filmRemaining == 0 { return Text("No film remaining") }
+        if !camera.canCapturePhoto { return Text("Camera unavailable") }
         return Text("Wind camera first")
     }
 
@@ -1241,7 +1346,9 @@ struct DisposableCameraView: View {
     // MARK: - Photo capture
 
     private func takePhoto() async {
-        guard camera.isArmed, features.photos.filmRemaining > 0, camera.canCapturePhoto, canShootHere else { return }
+        guard camera.isArmed, filmRemaining > 0, camera.canCapturePhoto, canShootHere else { return }
+        // Where this shot goes is decided at the tap: the session's film, or today's solo film.
+        let solo = isSolo
         camera.disarm()  // openness → 0: the viewfinder fades until the film is wound again.
         flashShutter()
         do {
@@ -1250,13 +1357,36 @@ struct DisposableCameraView: View {
             // can disturb the camera while it is capturing, and the white flash above already
             // answered the tap. Owed a device check: that this never blurs a shot.
             FernletFeedback.system.play(.shutter)
-            // A decoy keeps nothing: a shot taken alone in a duress session is never held.
-            guard !(store.duressSessionActive && !manager.isInSession) else { return }
+            guard !solo else {
+                keepSoloShot(data)
+                return
+            }
             features.photos.addPhoto(data)
         } catch {
-            manager.meshError = error.localizedDescription
-            // The session alert shows the error; this is its haptic. Only here, not on every
-            // `meshError`: most of those are the mesh's own news, which plays nothing.
+            if solo {
+                soloShotFailed = true
+            } else {
+                manager.meshError = error.localizedDescription
+            }
+            // The alert shows the error; this is its haptic. Only here, not on every `meshError`:
+            // most of those are the mesh's own news, which plays nothing.
+            FernletFeedback.system.play(.failed)
+        }
+    }
+
+    /// A shot alone: sealed at once into the solo roll and held until the companion's sleep (in a
+    /// decoy, memory only). A shot that could not be kept says so and uses no film.
+    private func keepSoloShot(_ data: Data) {
+        guard let soloRoll else {
+            soloShotFailed = true
+            return
+        }
+        switch soloRoll.takePhoto(data) {
+        case .kept, .noFilmLeft:
+            // A used-up film shows on the badge and the shutter; nothing else to say.
+            return
+        case .notKept:
+            soloShotFailed = true
             FernletFeedback.system.play(.failed)
         }
     }
@@ -1318,10 +1448,16 @@ struct DisposableCameraView: View {
     }
 
     /// Stops the capture session while the app-wide session-end review is up, and restarts it when
-    /// the review goes only if this session is live and the Develop review is not up.
+    /// the review goes only if this session is live (or the camera shoots on its own) and the
+    /// Develop review is not up.
     private func handleOverlayChange(showing: Bool) {
         guard !showing else {
             camera.stopSession()
+            return
+        }
+        // Alone there is no session to be live: the camera restarts as soon as the review goes.
+        if isSolo, !reviewPresented {
+            camera.startSession()
             return
         }
         guard manager.isSessionLive, !reviewPresented else { return }

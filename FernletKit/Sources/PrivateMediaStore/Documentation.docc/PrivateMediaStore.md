@@ -1,6 +1,6 @@
 # ``PrivateMediaStore``
 
-At-rest AES-256-GCM-sealed photo storage for Fernlet's most personal images — friends' shared photos, session photos nobody has chosen yet, meal photos, and gym progress (body) photos.
+At-rest AES-256-GCM-sealed photo storage for Fernlet's most personal images — friends' shared photos, session photos nobody has chosen yet, photos from the disposable camera used on your own, meal photos, and gym progress (body) photos.
 
 ## Overview
 
@@ -20,6 +20,11 @@ It holds four kinds of media, each with its own store type but one shared at-res
   the wall before that. Its own directory, its own device-bound key, excluded from the device
   backup. It shares the wall's file machinery (bomb checks, thumbnails, orphan sweep) through the
   internal `FriendPhotoCorpusFiles`, so those exist once.
+- ``SoloCameraPhotoStore`` (World build, owner 2026-10-24) — the **solo camera corpus**: photos
+  from the disposable camera used on your own, ten a day, sealed the moment they are taken and held
+  until the companion's sleep. Built on the pending corpus's pattern and custody (its own directory,
+  its own born-device-bound key, excluded from backup, never escrowed); see "The solo camera
+  corpus" below.
 - ``MealPhotoStore`` — the user's **own photos**, keyed by caller-owned ids: meal photos
   (referenced from `Meal.photoID`) and, in a second instance, recipe photos keyed by recipe id.
   Photos are normalized on the way in (ImageIO thumbnail-path downscale to a bounded JPEG, so a
@@ -40,7 +45,7 @@ decision stays at its own call site. Note this module does NOT use `FernletCrypt
 it seals via CryptoKit directly with its own keychain key. `UIImage` helpers for outbound
 friend-photo sizing round out the module.
 
-### Three media keys, not one (security-hardening Phase 5; the pending row 2026-09-30)
+### Four media keys, not one (security-hardening Phase 5; the pending row 2026-09-30; the solo-camera row 2026-10-24)
 
 There used to be exactly one media key behind all four corpora, deliberately backup-restorable, so
 the user's own meal and body photos were readable by anyone who could restore the device backup.
@@ -51,6 +56,7 @@ Phase 5 splits custody in two while leaving the friend wall byte-for-byte alone:
 | ``KeychainPrivateMediaKeyProvider/Role/friendWall`` | `…private-media.contentKey` (original) | `AfterFirstUnlock`, non-sync — **backup-restorable, permanently** | the friend photowall cache |
 | ``KeychainPrivateMediaKeyProvider/Role/ownPhotos`` | `…private-media.ownContentKey` (new) | minted `AfterFirstUnlock`, **re-bound in place to `AfterFirstUnlockThisDeviceOnly`** once its gate holds (step 5c) | meal, recipe, progress bytes + the progress index |
 | ``KeychainPrivateMediaKeyProvider/Role/pendingSessionPhotos`` | `…private-media.pendingContentKey` (2026-09-30) | **born `AfterFirstUnlockThisDeviceOnly`**, non-sync — no gate, because nothing pending is escrowed or meant to travel | the pending corpus: held photos, thumbnails, and its index |
+| ``KeychainPrivateMediaKeyProvider/Role/soloCameraPhotos`` | `…private-media.soloCameraContentKey` (World build, 2026-10-24) | **born `AfterFirstUnlockThisDeviceOnly`**, non-sync — the pending row's custody, for the pending row's reason | the solo camera corpus: photos, thumbnails, and its index (with the day's film count) |
 
 The wall keeps the original row precisely so nothing about it changes: no re-encryption, no
 migration, and the survives-delete-all / never-deleted-by-wipe properties hold verbatim. The
@@ -163,6 +169,34 @@ photo. An index that a PRESENT key still cannot open is the opposite case,
 ``PrivateMediaStore/IndexLoad/unrecoverable``: nothing can ever name its photo files again, so the read
 sweeps them at once (2026-10-17), as the pending corpus already purges in the same case, rather than
 leaving sealed friend photos on disk, and in device backups, until some later save happens to sweep them.
+
+### The solo camera corpus (World build)
+
+The disposable camera opened with no session (owner, 2026-10-24: "I think the photos can be saved in
+the friend area") keeps its photos in ``SoloCameraPhotoStore``, under
+`<proximitySupportDirectory>/SoloCameraPhotos/` (`Photos/`, `Thumbnails/`, `SoloCameraIndex.sealed`
+— frozen names). There is no review and no Develop step: a shot is sealed the moment it is taken.
+
+- **Why not an own-photo corpus.** The own corpora are minted under a backup-restorable key that is
+  escrowed once its gate holds, and ``OwnPhotoCorpusLayout``'s fixed location set feeds the format
+  pass, the census and the binding gate — widening it for a born-sealed corpus with no legacy
+  generation would only add risk. The owner asked for device-only, so the corpus takes the pending
+  corpus's custody instead: its own born-device-bound row, a directory excluded from the backup,
+  never escrowed, synced, exported or handed to the AI.
+- **The film lives in the sealed index.** ``SoloCameraIndex/film`` counts the shots of one local day
+  (``SoloCameraFilm``); ``SoloCameraPhotoStore/add(_:imageData:filmDay:dailyLimit:)`` checks and
+  spends it in the same sealed write that adds the photo, against the index read afresh from disk.
+  No `UserDefaults` key: the count is sealed, device-only and wiped with the photos.
+- **Held, then shown.** Each ``SoloCameraPhoto`` carries `revealsAt`, fixed at capture by the app
+  (the first time the companion falls asleep after the shot), and `revealedAt`, which
+  ``SoloCameraPhotoStore/reveal(asOf:)`` stamps once the photo is due so it stays shown.
+- **Fail-closed like the pending corpus.** Deferred when it cannot be read right now, purged only on
+  an AEAD failure under a present key (which is how the duress wipe's crypto-erase ends), capped at
+  ``SoloCameraPhotoStore/maxPhotos`` (a refusal, never an eviction).
+- **Wipes.** ``SoloCameraPhotoStore/purgeAll()`` is the Delete everything leg; the duress silent
+  wipe crypto-erases the row with the rest of the service; the recovery lock keeps it, as it keeps
+  every sibling photo corpus. A decoy session never opens it (the app keeps a decoy's shots in
+  memory).
 
 ### The binding gate (step 5c)
 
@@ -315,6 +349,13 @@ provider instance across isolation domains.
 - ``HeldSessionPhoto``
 - ``HeldPhotoKey``
 - ``AnsweredSessionPhoto``
+
+### Solo camera photos
+
+- ``SoloCameraPhotoStore``
+- ``SoloCameraIndex``
+- ``SoloCameraPhoto``
+- ``SoloCameraFilm``
 
 ### At-rest key management
 
