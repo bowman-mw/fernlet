@@ -72,6 +72,9 @@ struct WorkoutLiveActivity: Widget {
                         WorkoutIslandCenter(state: state, isStale: isStale)
                         WorkoutIslandBottom(state: state, isStale: isStale)
                     }
+                    // A paused island is short, so its last line meets the lower corner's curve.
+                    .padding(.leading, isStale ? 10 : 0)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             } compactLeading: {
                 // Compact slots carry no text, so the icon's label is the only word saying WHICH
