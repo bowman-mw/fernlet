@@ -11,11 +11,16 @@ import UIKit
 /// reason API use; it was removed on 2026-09-23 rather than moved, and the compact strip now pins
 /// the card picked in the current composer session from memory instead. Its only writes are the
 /// review-inbox records `FernletExchange` coordinates, which the app's wipe clears.
-final class FernletMessagesViewController: MSMessagesAppViewController, UISearchBarDelegate {
+///
+/// Drawn in the World design language since World Review Batch 4 (`b4-msg-*`, owner, 2026-10-24):
+/// the pixel fern and "Fernlet" over a Fraunces title, framed cards with pixel icons, framed
+/// Recipes | Workouts and Share, and Dark Mode (``FernletMessagesLook``). What it reads and writes
+/// did not change.
+final class FernletMessagesViewController: MSMessagesAppViewController, UITextFieldDelegate {
     /// Which half of the App Group catalog the composer is showing.
     ///
-    /// The `Int` raw values are the `UISegmentedControl` indices, so the segment order and this
-    /// declaration order are one fact, not two.
+    /// The `Int` raw values are the segment indices of Recipes | Workouts, so the segment order and
+    /// this declaration order are one fact, not two.
     private enum CatalogMode: Int {
         case recipes
         case workouts
@@ -35,23 +40,24 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         case received
     }
 
-    /// The composer's colours — the same `UIColor`s the card artwork is drawn in, which moved to
-    /// `FernletMessagesPalette` when the card builder became shared with the app (2026-09-30).
-    private typealias Palette = FernletMessagesPalette
-
-    private let brandLabel = UILabel()
-    private let titleLabel = UILabel()
-    private let statusLabel = UILabel()
-    private let modeControl = UISegmentedControl(
-        items: [FernletMessagesCopy.modeRecipes, FernletMessagesCopy.modeWorkouts]
+    private let brandView = FernletMessagesBrandView()
+    private let titleLabel = FernletMessagesLayout.label(font: FernletMessagesLook.title, colour: FernletMessagesLook.text)
+    private let statusLabel = FernletMessagesLayout.label(font: FernletMessagesLook.body, colour: FernletMessagesLook.dim)
+    private let modeControl = FernletMessagesSegmentedControl(
+        titles: [FernletMessagesCopy.modeRecipes, FernletMessagesCopy.modeWorkouts]
     )
-    private let searchBar = UISearchBar()
-    private let previewLabel = UILabel()
+    private let searchField = FernletMessagesSearchField()
+    private let previewLabel = FernletMessagesLayout.label(font: FernletMessagesLook.preview, colour: FernletMessagesLook.link)
+    private let noticeCard = FernletMessagesNoticeCard(sprite: .bowl, font: FernletMessagesLook.body,
+                                                       colour: FernletMessagesLook.text)
+    private let detailCard = FernletMessagesNoticeCard(sprite: nil, font: FernletMessagesLook.body,
+                                                       colour: FernletMessagesLook.dim)
+    private let infoRow = UIView()
     private let headerStack = UIStackView()
     private let itemStack = UIStackView()
-    private let browseButton = UIButton(type: .system)
-    private let insertButton = UIButton(type: .system)
-    private let reviewButton = UIButton(type: .system)
+    private let browseButton = FernletMessagesButton(kind: .text)
+    private let insertButton = FernletMessagesButton(kind: .primary, sprite: .share)
+    private let reviewButton = FernletMessagesButton(kind: .primary)
     private var catalog: FernletMessagesCatalog?
     private var selectedRecipeID: UUID?
     private var selectedWorkoutID: UUID?
@@ -60,10 +66,7 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
     private var panelState = PanelState.opening
     private var hasReadCatalog = false
     private var catalogUnavailableMessage: String?
-
-    private var catalogMode: CatalogMode {
-        CatalogMode(rawValue: modeControl.selectedSegmentIndex) ?? .recipes
-    }
+    private var catalogMode = CatalogMode.recipes
 
     /// Builds the view and shows the opening state — no catalog read, no composer. Until 2026-09-30
     /// this read and validated the whole App Group catalog and built a card per recipe (up to 100 in
@@ -112,13 +115,20 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         renderComposer()
     }
 
-    func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+    /// The search field's Search key puts the keyboard away; the list already follows every keystroke.
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        textField.resignFirstResponder()
+        return true
+    }
+
+    @objc private func searchChanged() {
         guard presentationStyle == .expanded, panelState == .composer else { return }
         renderComposer()
     }
 
-    @objc private func modeChanged() {
-        searchBar.text = ""
+    private func modeChanged(to index: Int) {
+        catalogMode = CatalogMode(rawValue: index) ?? .recipes
+        searchField.textField.text = ""
         renderComposer()
     }
 
@@ -143,95 +153,78 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         }
     }
 
+    /// The panel: an ink edge along its top, then one scrolling column on the page's parchment —
+    /// the header, the status line, Recipes | Workouts, search, the preview, the notice, the cards,
+    /// the received card's counts, Browse and Review. Each state shows only its own pieces.
     private func configureView() {
-        view.backgroundColor = Palette.paper
-        configureLabels()
-        configureButtons()
+        view.backgroundColor = FernletMessagesLook.page
+        configureControls()
         configureHeader()
         let contentStack = UIStackView(arrangedSubviews: [
-            headerStack, statusLabel, modeControl, searchBar, previewLabel, itemStack, browseButton, reviewButton
+            headerStack, statusLabel, modeControl, searchField, previewLabel, noticeCard, itemStack, detailCard,
+            browseButton, reviewButton
         ])
         contentStack.axis = .vertical
-        contentStack.spacing = 14
+        contentStack.spacing = 12
         let scrollView = UIScrollView()
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.alwaysBounceVertical = true
-        scrollView.indicatorStyle = .black
+        scrollView.keyboardDismissMode = .onDrag
         contentStack.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(scrollView)
         scrollView.addSubview(contentStack)
-        NSLayoutConstraint.activate(scrollConstraints(for: scrollView, contentStack: contentStack))
+        let edge = UIView()
+        edge.backgroundColor = FernletMessagesLook.ink
+        edge.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(edge)
+        NSLayoutConstraint.activate(scrollConstraints(for: scrollView, contentStack: contentStack) + [
+            edge.topAnchor.constraint(equalTo: view.topAnchor),
+            edge.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            edge.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            edge.heightAnchor.constraint(equalToConstant: 3)
+        ])
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) {
+            (controller: FernletMessagesViewController, _: UITraitCollection) in controller.textSizeChanged()
+        }
     }
 
-    private func configureLabels() {
-        brandLabel.text = FernletMessagesCopy.brand
-        brandLabel.font = .preferredFont(forTextStyle: .caption1)
-        brandLabel.textColor = Palette.moss
-        brandLabel.adjustsFontForContentSizeCategory = true
-        titleLabel.font = .preferredFont(forTextStyle: .title2)
-        titleLabel.textColor = Palette.ink
-        titleLabel.adjustsFontForContentSizeCategory = true
-        statusLabel.font = .preferredFont(forTextStyle: .subheadline)
-        statusLabel.textColor = Palette.muted
-        statusLabel.adjustsFontForContentSizeCategory = true
-        statusLabel.numberOfLines = 0
-        previewLabel.font = .preferredFont(forTextStyle: .footnote)
-        previewLabel.textColor = Palette.moss
-        previewLabel.adjustsFontForContentSizeCategory = true
-        previewLabel.numberOfLines = 0
-        modeControl.selectedSegmentIndex = CatalogMode.recipes.rawValue
-        modeControl.selectedSegmentTintColor = Palette.sage
-        modeControl.backgroundColor = Palette.card
-        modeControl.setTitleTextAttributes([.foregroundColor: Palette.ink], for: .normal)
-        modeControl.addTarget(self, action: #selector(modeChanged), for: .valueChanged)
+    private func configureControls() {
+        modeControl.onChange = { [weak self] index in self?.modeChanged(to: index) }
+        searchField.textField.delegate = self
+        searchField.textField.addTarget(self, action: #selector(searchChanged), for: .editingChanged)
         itemStack.axis = .vertical
-        itemStack.spacing = 10
-        searchBar.delegate = self
-        searchBar.searchBarStyle = .minimal
-        searchBar.tintColor = Palette.moss
-        searchBar.searchTextField.backgroundColor = Palette.card
-        searchBar.searchTextField.textColor = Palette.ink
-        searchBar.searchTextField.layer.cornerRadius = 14
-        searchBar.searchTextField.layer.masksToBounds = true
-    }
-
-    private func configureButtons() {
+        itemStack.spacing = 12
         browseButton.addTarget(self, action: #selector(browseItems), for: .touchUpInside)
-        browseButton.configuration = textButtonConfiguration(title: FernletMessagesCopy.browseLibrary)
+        browseButton.setTitle(FernletMessagesCopy.browseLibrary)
         browseButton.accessibilityHint = FernletMessagesCopy.browseHint
         insertButton.addTarget(self, action: #selector(insertSelectedItem), for: .touchUpInside)
+        insertButton.setTitle(FernletMessagesCopy.shareItem)
         insertButton.accessibilityHint = FernletMessagesCopy.insertHint
-        reviewButton.configuration = filledButtonConfiguration(title: FernletMessagesCopy.reviewInFernlet)
+        reviewButton.setTitle(FernletMessagesCopy.reviewInFernlet)
         reviewButton.addTarget(self, action: #selector(openReceivedItemInFernlet), for: .touchUpInside)
         reviewButton.accessibilityHint = FernletMessagesCopy.reviewHint
     }
 
+    /// The brand mark, the ⓘ of a card that can't be opened (hidden otherwise) and the title on the
+    /// left; Share on the right.
     private func configureHeader() {
-        let titleStack = UIStackView(arrangedSubviews: [brandLabel, titleLabel])
+        let infoTile = FernletMessagesIconTile(side: 56, sprite: .info, pixel: 3)
+        infoRow.addSubview(infoTile)
+        NSLayoutConstraint.activate([
+            infoTile.centerXAnchor.constraint(equalTo: infoRow.centerXAnchor),
+            infoTile.topAnchor.constraint(equalTo: infoRow.topAnchor, constant: 6),
+            infoTile.bottomAnchor.constraint(equalTo: infoRow.bottomAnchor, constant: -4)
+        ])
+        let titleStack = UIStackView(arrangedSubviews: [brandView, infoRow, titleLabel])
         titleStack.axis = .vertical
-        titleStack.spacing = 3
+        titleStack.spacing = 4
         headerStack.addArrangedSubview(titleStack)
         headerStack.addArrangedSubview(insertButton)
         headerStack.axis = .horizontal
         headerStack.alignment = .top
         headerStack.spacing = 12
         insertButton.setContentHuggingPriority(.required, for: .horizontal)
-    }
-
-    private func textButtonConfiguration(title: String) -> UIButton.Configuration {
-        var configuration = UIButton.Configuration.plain()
-        configuration.title = title
-        configuration.baseForegroundColor = Palette.moss
-        return configuration
-    }
-
-    private func filledButtonConfiguration(title: String) -> UIButton.Configuration {
-        var configuration = UIButton.Configuration.filled()
-        configuration.title = title
-        configuration.baseBackgroundColor = Palette.moss
-        configuration.baseForegroundColor = Palette.paper
-        configuration.cornerStyle = .capsule
-        return configuration
+        insertButton.setContentCompressionResistancePriority(.required, for: .horizontal)
     }
 
     private func scrollConstraints(for scrollView: UIScrollView, contentStack: UIStackView) -> [NSLayoutConstraint] {
@@ -242,10 +235,34 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
             scrollView.bottomAnchor.constraint(equalTo: view.layoutMarginsGuide.bottomAnchor),
             contentStack.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
             contentStack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
-            contentStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
-            contentStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            contentStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 4),
+            // Room for the last card's drop shadow and the picked card's ring.
+            contentStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -8),
             contentStack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor)
         ]
+    }
+
+    /// Hides every piece a state chooses to show, so each state starts from the brand, the title and
+    /// the status line and turns on only its own.
+    private func hideStatePieces() {
+        let pieces: [UIView] = [
+            modeControl, searchField, previewLabel, noticeCard, itemStack, detailCard, browseButton, insertButton,
+            reviewButton, infoRow
+        ]
+        pieces.forEach { $0.isHidden = true }
+    }
+
+    /// Centres the title, status and preview (the card that can't be opened), or sets them back.
+    private func setCentred(_ centred: Bool) {
+        let alignment: NSTextAlignment = centred ? .center : .natural
+        [titleLabel, statusLabel, previewLabel].forEach { $0.textAlignment = alignment }
+    }
+
+    /// The grid is two cards wide, or one at accessibility text sizes; a text size change redraws it
+    /// while the composer is up.
+    private func textSizeChanged() {
+        guard panelState == .composer else { return }
+        renderComposer()
     }
 
     /// The panel before `willBecomeActive(with:)` has decided what it is: the brand mark on the
@@ -257,9 +274,7 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         statusLabel.text = nil
         statusLabel.isHidden = true
         previewLabel.text = nil
-        previewLabel.isHidden = true
-        let controls: [UIView] = [modeControl, searchBar, itemStack, browseButton, insertButton, reviewButton]
-        controls.forEach { $0.isHidden = true }
+        hideStatePieces()
     }
 
     /// The composer's catalog, read the first time the composer draws without an activation having
@@ -293,12 +308,9 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         configureComposerVisibility()
         guard let catalog else {
             titleLabel.text = composerTitle
-            statusLabel.text = catalogUnavailableMessage ?? FernletMessagesCopy.emptyCatalog
-            statusLabel.isHidden = false
-            previewLabel.text = ""
-            previewLabel.isHidden = true
-            insertButton.isHidden = true
+            setPreviewText("")
             renderButtons([])
+            showCatalogNotice(catalogUnavailableMessage ?? FernletMessagesCopy.emptyCatalog)
             return
         }
         switch catalogMode {
@@ -308,22 +320,21 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
     }
 
     private func configureComposerVisibility() {
+        hideStatePieces()
+        setCentred(false)
         modeControl.isHidden = false
-        searchBar.isHidden = presentationStyle != .expanded
+        modeControl.select(catalogMode.rawValue)
+        searchField.isHidden = presentationStyle != .expanded
         itemStack.isHidden = false
         browseButton.isHidden = presentationStyle == .expanded
         insertButton.isHidden = false
-        reviewButton.isHidden = true
         statusLabel.isHidden = true
-        searchBar.placeholder = catalogMode == .recipes
+        searchField.setPlaceholder(catalogMode == .recipes
             ? FernletMessagesCopy.searchRecipesPlaceholder
-            : FernletMessagesCopy.searchWorkoutsPlaceholder
+            : FernletMessagesCopy.searchWorkoutsPlaceholder)
         // Two whole sentences, not "Browse your %@": the noun cannot be spliced into a
         // possessive in every language, and a translator cannot reorder around the splice.
-        browseButton.configuration = textButtonConfiguration(
-            title: catalogMode == .recipes ? FernletMessagesCopy.browseRecipes : FernletMessagesCopy.browseWorkouts
-        )
-        insertButton.configuration = filledButtonConfiguration(title: FernletMessagesCopy.share)
+        browseButton.setTitle(catalogMode == .recipes ? FernletMessagesCopy.browseRecipes : FernletMessagesCopy.browseWorkouts)
     }
 
     private func renderRecipes(in catalog: FernletMessagesCatalog) {
@@ -349,7 +360,16 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
     /// sentence as a missing catalog, since the remedy (the app publishes what it has) is the same.
     private func explainIfEmpty(_ isEmpty: Bool) {
         guard isEmpty else { return }
-        showComposerStatus(FernletMessagesCopy.emptyCatalog)
+        showCatalogNotice(FernletMessagesCopy.emptyCatalog)
+    }
+
+    /// The empty or unreadable catalog's sentence in the framed notice, with the chosen kind's pixel
+    /// icon (`b4-msg-empty`). Share and Browse step aside: there is nothing to pick.
+    private func showCatalogNotice(_ text: String) {
+        noticeCard.show(text, sprite: catalogMode == .recipes ? .bowl : .dumbbell)
+        noticeCard.isHidden = false
+        insertButton.isHidden = true
+        browseButton.isHidden = true
     }
 
     private var composerTitle: String {
@@ -358,27 +378,31 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
             : FernletMessagesCopy.shareFernletWorkoutTitle
     }
 
-    private func renderButtons(_ buttons: [UIButton]) {
+    /// The cards, two to a row — one at accessibility text sizes, so a title never squeezes to a word
+    /// a line.
+    private func renderButtons(_ cards: [FernletMessagesItemCard]) {
         for view in itemStack.arrangedSubviews.prefix(FernletMessagesCatalogLimits.maxRecipes) {
             itemStack.removeArrangedSubview(view)
             view.removeFromSuperview()
         }
-        let cards = Array(buttons.prefix(FernletMessagesCatalogLimits.maxRecipes))
-        for index in stride(from: 0, to: cards.count, by: 2) {
-            itemStack.addArrangedSubview(cardRow(first: cards[index], second: button(at: index + 1, in: cards)))
+        let shown = Array(cards.prefix(FernletMessagesCatalogLimits.maxRecipes))
+        let perRow = traitCollection.preferredContentSizeCategory.isAccessibilityCategory ? 1 : 2
+        for index in stride(from: 0, to: shown.count, by: perRow) {
+            let second = perRow == 2 ? card(at: index + 1, in: shown) : nil
+            itemStack.addArrangedSubview(cardRow(first: shown[index], second: second, columns: perRow))
         }
     }
 
-    private func cardRow(first: UIButton, second: UIButton?) -> UIStackView {
+    private func cardRow(first: UIView, second: UIView?, columns: Int) -> UIStackView {
         let row = UIStackView()
         row.axis = .horizontal
         row.alignment = .fill
         row.distribution = .fillEqually
-        row.spacing = 10
+        row.spacing = 12
         row.addArrangedSubview(first)
         if let second {
             row.addArrangedSubview(second)
-        } else {
+        } else if columns == 2 {
             let spacer = UIView()
             spacer.isUserInteractionEnabled = false
             row.addArrangedSubview(spacer)
@@ -386,14 +410,14 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         return row
     }
 
-    private func button(at index: Int, in buttons: [UIButton]) -> UIButton? {
-        guard index >= 0, index < buttons.count else { return nil }
-        return buttons[index]
+    private func card(at index: Int, in cards: [FernletMessagesItemCard]) -> FernletMessagesItemCard? {
+        guard index >= 0, index < cards.count else { return nil }
+        return cards[index]
     }
 
     private func visibleRecipeEntries(in catalog: FernletMessagesCatalog) -> [FernletMessagesRecipeCatalogEntry] {
         if presentationStyle == .expanded {
-            return FernletMessagesRecipePicker.entries(matching: searchBar.text ?? "", in: catalog)
+            return FernletMessagesRecipePicker.entries(matching: searchField.textField.text ?? "", in: catalog)
         }
         // Pins the card picked in THIS composer session — including one chosen from the expanded
         // list — so the selection is still on screen after collapsing. From memory only: see the
@@ -403,95 +427,29 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
 
     private func visibleWorkoutEntries(in catalog: FernletMessagesCatalog) -> [FernletMessagesWorkoutCatalogEntry] {
         if presentationStyle == .expanded {
-            return FernletMessagesWorkoutPicker.entries(matching: searchBar.text ?? "", in: catalog)
+            return FernletMessagesWorkoutPicker.entries(matching: searchField.textField.text ?? "", in: catalog)
         }
         return FernletMessagesWorkoutPicker.compactEntries(in: catalog)
     }
 
-    private func recipeButton(for entry: FernletMessagesRecipeCatalogEntry) -> UIButton {
+    private func recipeButton(for entry: FernletMessagesRecipeCatalogEntry) -> FernletMessagesItemCard {
         let isSelected = entry.packet.originContentID == selectedRecipeID
         let summary = recipeSummary(for: entry.packet)
         let subtitle = entry.packet.includesNotes
             ? FernletMessagesCopy.recipeSubtitleWithNote(summary: summary)
             : summary
-        let button = catalogButton(title: entry.packet.recipe.name, subtitle: subtitle,
-                                   symbol: "fork.knife", isSelected: isSelected)
-        button.addAction(UIAction { [weak self] _ in self?.selectRecipe(entry.packet.originContentID) }, for: .touchUpInside)
-        return button
+        let card = FernletMessagesItemCard(title: entry.packet.recipe.name, subtitle: subtitle,
+                                           sprite: .bowl, isPicked: isSelected)
+        card.addAction(UIAction { [weak self] _ in self?.selectRecipe(entry.packet.originContentID) }, for: .touchUpInside)
+        return card
     }
 
-    private func workoutButton(for entry: FernletMessagesWorkoutCatalogEntry) -> UIButton {
+    private func workoutButton(for entry: FernletMessagesWorkoutCatalogEntry) -> FernletMessagesItemCard {
         let isSelected = entry.packet.originContentID == selectedWorkoutID
-        let button = catalogButton(title: entry.card.title, subtitle: workoutComposerSummary(for: entry),
-                                   symbol: "figure.strengthtraining.traditional", isSelected: isSelected)
-        button.addAction(UIAction { [weak self] _ in self?.selectWorkout(entry.packet.originContentID) }, for: .touchUpInside)
-        return button
-    }
-
-    private func catalogButton(title: String, subtitle: String, symbol: String, isSelected: Bool) -> UIButton {
-        let button = UIButton(type: .system)
-        button.backgroundColor = isSelected ? Palette.sage : Palette.card
-        button.layer.cornerRadius = 18
-        button.layer.borderWidth = isSelected ? 2 : 1
-        button.layer.borderColor = (isSelected ? Palette.moss : Palette.line).cgColor
-        let imageView = UIImageView(image: UIImage(systemName: symbol))
-        imageView.tintColor = Palette.moss
-        imageView.contentMode = .scaleAspectFit
-        let titleLabel = catalogTitleLabel(text: title)
-        let subtitleLabel = catalogSubtitleLabel(text: subtitle)
-        button.addSubview(imageView)
-        button.addSubview(titleLabel)
-        button.addSubview(subtitleLabel)
-        [imageView, titleLabel, subtitleLabel].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
-        NSLayoutConstraint.activate(catalogButtonConstraints(
-            imageView: imageView, titleLabel: titleLabel, subtitleLabel: subtitleLabel, in: button
-        ))
-        button.heightAnchor.constraint(greaterThanOrEqualToConstant: 138).isActive = true
-        button.accessibilityLabel = title
-        button.accessibilityHint = subtitle
-        button.accessibilityValue = isSelected ? FernletMessagesCopy.selected : ""
-        return button
-    }
-
-    private func catalogTitleLabel(text: String) -> UILabel {
-        let label = UILabel()
-        label.text = text
-        label.font = .preferredFont(forTextStyle: .body)
-        label.textColor = Palette.ink
-        label.numberOfLines = 2
-        label.adjustsFontForContentSizeCategory = true
-        return label
-    }
-
-    private func catalogSubtitleLabel(text: String) -> UILabel {
-        let label = UILabel()
-        label.text = text
-        label.font = .preferredFont(forTextStyle: .caption2)
-        label.textColor = Palette.muted
-        label.numberOfLines = 2
-        label.adjustsFontForContentSizeCategory = true
-        return label
-    }
-
-    private func catalogButtonConstraints(
-        imageView: UIImageView, titleLabel: UILabel, subtitleLabel: UILabel, in button: UIButton
-    ) -> [NSLayoutConstraint] {
-        [
-            imageView.topAnchor.constraint(equalTo: button.topAnchor, constant: 14),
-            imageView.leadingAnchor.constraint(equalTo: button.leadingAnchor, constant: 12),
-            imageView.widthAnchor.constraint(equalToConstant: 30),
-            imageView.heightAnchor.constraint(equalToConstant: 30),
-            subtitleLabel.leadingAnchor.constraint(equalTo: button.leadingAnchor, constant: 12),
-            subtitleLabel.trailingAnchor.constraint(equalTo: button.trailingAnchor, constant: -12),
-            subtitleLabel.bottomAnchor.constraint(equalTo: button.bottomAnchor, constant: -12),
-            titleLabel.leadingAnchor.constraint(equalTo: subtitleLabel.leadingAnchor),
-            titleLabel.trailingAnchor.constraint(equalTo: subtitleLabel.trailingAnchor),
-            titleLabel.bottomAnchor.constraint(equalTo: subtitleLabel.topAnchor, constant: -4),
-            // Closes the vertical chain. Without it the labels grew UPWARD from the bottom edge, so
-            // at accessibility text sizes a two-line title slid under the symbol instead of making
-            // the card taller than its 138-point floor.
-            titleLabel.topAnchor.constraint(greaterThanOrEqualTo: imageView.bottomAnchor, constant: 8)
-        ]
+        let card = FernletMessagesItemCard(title: entry.card.title, subtitle: workoutComposerSummary(for: entry),
+                                           sprite: .dumbbell, isPicked: isSelected)
+        card.addAction(UIAction { [weak self] _ in self?.selectWorkout(entry.packet.originContentID) }, for: .touchUpInside)
+        return card
     }
 
     private func selectRecipe(_ id: UUID) {
@@ -560,15 +518,17 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
                                           steps: packet.recipe.steps?.count ?? 0)
     }
 
-    /// The date and the session count: the card face's subcaption, and the composer's line for a
-    /// workout that carries no notes. Never the notes themselves.
+    /// The date and the session count: the line for a workout that carries no notes. Never the notes
+    /// themselves.
     private func workoutSummary(for entry: FernletMessagesWorkoutCatalogEntry) -> String {
         "\(entry.dayKey) · \(FernletMessagesCopy.workoutCount(entry.packet.plan.sessionCount))"
     }
 
-    /// The composer's row and preview line: ``workoutSummary(for:)``, plus "Notes included" when the
-    /// workout's own notes travel inside the card (tracker §2.6, 2026-10-18), so the sender knows
-    /// before sending. The note text is never shown, here or on the card.
+    /// The composer's row and preview line, and the sent card's subcaption: ``workoutSummary(for:)``,
+    /// plus "Notes included" when the workout's own notes travel inside the card — in the composer
+    /// since tracker §2.6 (2026-10-18), so the sender knows before sending, and on the card face since
+    /// World Review Batch 4 (`b4-msg-bubbles`, owner, 2026-10-24), as the recipe card already says. The
+    /// note text is never shown, here or on the card.
     private func workoutComposerSummary(for entry: FernletMessagesWorkoutCatalogEntry) -> String {
         let summary = workoutSummary(for: entry)
         guard entry.packet.includesNotes else { return summary }
@@ -646,16 +606,17 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         FernletMessagesHaptic.failed.play()
     }
 
-    /// The workout card's artwork, drawn by the shared builder like the recipe card's.
+    /// The workout card's artwork, the pixel dumbbell in the shared builder's scene, like the recipe
+    /// card's bowl.
     private func workoutPlaceholderImage() -> UIImage {
-        FernletMessagesCard.placeholderImage(symbol: "dumbbell.fill", label: FernletMessagesCopy.workoutWordmark)
+        FernletMessagesCard.placeholderImage(sprite: .dumbbell, tag: FernletMessagesCopy.workoutTag)
     }
 
     private func workoutLayout(for entry: FernletMessagesWorkoutCatalogEntry) -> MSMessageTemplateLayout {
         let layout = MSMessageTemplateLayout()
         layout.image = workoutPlaceholderImage()
         layout.caption = entry.card.title
-        layout.subcaption = workoutSummary(for: entry)
+        layout.subcaption = workoutComposerSummary(for: entry)
         layout.trailingCaption = entry.card.senderLabel ?? FernletMessagesCopy.cardPlan
         layout.trailingSubcaption = FernletMessagesCardCopy.cardOpensInFernlet
         return layout
@@ -671,16 +632,28 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         }
     }
 
+    /// A recipe someone sent (`b4-msg-received`): the sender's note in the preview line when one
+    /// travels, and the counts — under a "Parts: …" line for a recipe made in parts — in the framed
+    /// card above Review in Fernlet.
     private func showReceivedRecipe(_ packet: RecipeExchangePacket, card: ExchangeCardMetadata) {
         receivedRecipe = packet
         receivedWorkout = nil
         let status = packet.includesNotes
             ? FernletMessagesCopy.receivedRecipeWithNote
             : FernletMessagesCopy.receivedRecipe
-        showReceived(title: card.title, status: status,
-                     preview: prependingParts(of: packet, to: notePreviewOrSummary(for: packet)))
+        showReceived(title: card.title, status: status, preview: receivedNotePreview(for: packet),
+                     details: prependingParts(of: packet, to: recipeSummary(for: packet)))
     }
 
+    /// The received recipe's note (its first 120 characters), or nothing when no note travels.
+    private func receivedNotePreview(for packet: RecipeExchangePacket) -> String {
+        let note = packet.recipe.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard packet.includesNotes, !note.isEmpty else { return "" }
+        return FernletMessagesCopy.recipeNotePreview(note: String(note.prefix(120)))
+    }
+
+    /// A workout plan someone sent: the sender in the status line, the proposed day and the count in
+    /// the framed card.
     private func showReceivedWorkout(_ record: FernletMessagesWorkoutInboxRecord, card: ExchangeCardMetadata) {
         let schedule = record.suggestedStartDayKey.map { FernletMessagesCopy.scheduled(dayKey: $0) }
             ?? FernletMessagesCopy.chooseDateInFernlet
@@ -691,32 +664,36 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
         showReceived(
             title: card.title,
             status: status,
-            preview: "\(schedule) · \(FernletMessagesCopy.workoutCount(record.packet.plan.sessionCount))"
+            preview: "",
+            details: "\(schedule) · \(FernletMessagesCopy.workoutCount(record.packet.plan.sessionCount))"
         )
     }
 
-    private func showReceived(title: String, status: String, preview: String) {
+    private func showReceived(title: String, status: String, preview: String, details: String) {
         panelState = .received
+        hideStatePieces()
+        setCentred(false)
         titleLabel.text = title
         statusLabel.text = status
         statusLabel.isHidden = false
-        previewLabel.text = preview
-        previewLabel.isHidden = preview.isEmpty
-        modeControl.isHidden = true
-        searchBar.isHidden = true
-        itemStack.isHidden = true
-        browseButton.isHidden = true
-        insertButton.isHidden = true
+        setPreviewText(preview)
+        detailCard.show(details)
+        detailCard.isHidden = details.isEmpty
         reviewButton.isHidden = false
     }
 
+    /// A card that can't be opened (`b4-msg-invalid`): the pixel ⓘ over the three centred lines, and
+    /// nothing to tap.
     private func showInvalidReceivedItem() {
         receivedRecipe = nil
         receivedWorkout = nil
         showReceived(title: FernletMessagesCopy.invalidTitle,
                      status: FernletMessagesCopy.invalidStatus,
-                     preview: FernletMessagesCopy.invalidPreview)
+                     preview: FernletMessagesCopy.invalidPreview,
+                     details: "")
         reviewButton.isHidden = true
+        infoRow.isHidden = false
+        setCentred(true)
     }
 
     private func openRecipeInFernlet(_ packet: RecipeExchangePacket) {

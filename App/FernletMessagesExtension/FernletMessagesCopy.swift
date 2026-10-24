@@ -58,9 +58,11 @@ enum FernletMessagesCopy {
 
     // MARK: - Chrome
 
-    static var brand: String {
-        String(localized: "messages.brand", defaultValue: "⌁  FERNLET",
-               comment: "Wordmark above the composer title. 'Fernlet' is the product name and must NOT be translated; the ⌁ glyph and the two spaces are the mark's fixed typography. Translate only if the product ships under a different name in this language.")
+    /// The name beside the pixel fern at the top of the panel (World Review Batch 4, `b4-msg-opening`),
+    /// replacing the "⌁  FERNLET" wordmark.
+    static var brandName: String {
+        String(localized: "messages.brand.name", defaultValue: "Fernlet",
+               comment: "The app's name beside its pixel fern mark at the top of the Messages panel, above the title. 'Fernlet' is the product name and must NOT be translated. Translate only if the product ships under a different name in this language.")
     }
 
     static var modeRecipes: String {
@@ -100,9 +102,10 @@ enum FernletMessagesCopy {
                comment: "Button expanding the compact composer to the full workout list. Sibling of messages.action.browseRecipes — see that comment for why the noun is not interpolated.")
     }
 
-    static var share: String {
-        String(localized: "messages.action.share", defaultValue: "Share ↗",
-               comment: "Button inserting the selected item into the Messages conversation. The ↗ arrow is decorative and may be dropped if it reads badly in this language.")
+    /// The framed Share button's word; its pixel share icon replaces the old label's ↗ arrow.
+    static var shareItem: String {
+        String(localized: "messages.action.shareItem", defaultValue: "Share",
+               comment: "Button inserting the selected recipe or workout into the Messages conversation's draft (it does not send it). Drawn beside a share icon, top right of the panel, so keep it to one short word.")
     }
 
     static var reviewInFernlet: String {
@@ -178,11 +181,12 @@ enum FernletMessagesCopy {
                comment: "Number of sessions in a shared workout plan, e.g. '3 workouts'. Needs a plural variation per language; English also needs the one-workout form.")
     }
 
-    /// The workout's composer row and preview when its notes travel with it (tracker §2.6, 2026-10-18).
-    /// Never the card face: that keeps the date and the count alone.
+    /// The workout's composer row and preview when its notes travel with it (tracker §2.6, 2026-10-18),
+    /// and since World Review Batch 4 (`b4-msg-bubbles`, owner, 2026-10-24) the sent card's subcaption
+    /// too, as the recipe card already says so. Never the note text itself.
     static func workoutSubtitleWithNotes(summary: String) -> String {
         String(localized: "messages.workout.subtitleWithNotes", defaultValue: "\(summary) · Notes included",
-               comment: "Composer subtitle and preview line for a planned workout whose own written notes travel with it, so the sender knows before sending. %@ is the date and workout count, e.g. '2026-10-18 · 1 workout'.")
+               comment: "Composer subtitle, preview line and sent card subcaption for a planned workout whose own written notes travel with it, so the sender and the recipient know. %@ is the date and workout count, e.g. '2026-10-18 · 1 workout'.")
     }
 
     static func recipeSubtitleWithNote(summary: String) -> String {
@@ -249,9 +253,11 @@ enum FernletMessagesCopy {
                comment: "Trailing caption on a sent workout card when the sender set no display name of their own. Keep it short — Messages truncates this corner hard.")
     }
 
-    static var workoutWordmark: String {
-        String(localized: "messages.card.wordmark.workout", defaultValue: "FERNLET WORKOUT",
-               comment: "Workout counterpart of messages.card.wordmark.recipe — same 28pt width limit and the same untranslated product name.")
+    /// The tag drawn into the workout card's pixel artwork, beside the recipe card's
+    /// (`FernletMessagesCardCopy.recipeTag`).
+    static var workoutTag: String {
+        String(localized: "messages.card.tag.workout", defaultValue: "Fernlet workout",
+               comment: "Workout counterpart of messages.card.tag.recipe: drawn into the card artwork in a small framed label beside the pixel fern, room for about 30 characters, and the same untranslated product name.")
     }
 
     // MARK: - Received items

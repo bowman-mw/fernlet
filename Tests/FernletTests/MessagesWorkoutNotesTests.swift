@@ -6,7 +6,11 @@
 //  its Messages card (`ExchangeWorkoutPlanBuilder` copies them into the session), yet the composer
 //  showed only "date · 1 workout", so a sender could not tell their notes were going along (the
 //  2026-09-23 review: "workout notes not previewed"). The composer's row and preview now say "Notes
-//  included"; the card face keeps the date and the count, and never shows the note text.
+//  included"; the card face never shows the note text.
+//
+//  World Review Batch 4 (`b4-msg-bubbles`, owner, 2026-10-24): the sent card's subcaption says "Notes
+//  included" too, as the recipe card's trailing caption already did — the date and the count, then the
+//  flag, and still never the note text.
 //
 
 import Foundation
@@ -15,7 +19,7 @@ import FernletDomainModel
 import FernletExchange
 
 /// Pins when a workout card counts as carrying notes, that the card's metadata never holds the note
-/// text, and that the iMessage app's composer says "Notes included" while its card face does not.
+/// text, and that the iMessage app's composer and its sent card's subcaption both say "Notes included".
 struct MessagesWorkoutNotesTests {
 
     private static let sentinel = "knee still sore, go easy on lunges"
@@ -53,20 +57,23 @@ struct MessagesWorkoutNotesTests {
         #expect(entry.card.scheduledStartDayKey == "2026-10-18")
     }
 
-    /// The composer's workout row and preview read the notes-aware line; the card face's subcaption
-    /// reads the date and the count alone. A source pin: the view controller lives in the iMessage
-    /// app, which this bundle does not link, and swapping either call compiles clean.
-    @Test func theComposerSaysNotesIncludedAndTheCardFaceDoesNot() throws {
+    /// The composer's workout row and preview, and the sent card's subcaption, all read the notes-aware
+    /// line (the card face since World Review Batch 4, `b4-msg-bubbles`). A source pin: the view
+    /// controller lives in the iMessage app, which this bundle does not link, and swapping any of the
+    /// calls compiles clean.
+    @Test func theComposerAndTheCardFaceSayNotesIncluded() throws {
         let source = try RepoRoot.source("App/FernletMessagesExtension/FernletMessagesViewController.swift")
         #expect(source.contains("subtitle: workoutComposerSummary(for: entry)"),
                 "the workout row no longer says when notes travel with the card")
         #expect(source.contains("return workoutComposerSummary(for: entry)"),
                 "the workout preview no longer says when notes travel with the card")
         #expect(source.contains("guard entry.packet.includesNotes else { return summary }"))
-        #expect(source.contains("layout.subcaption = workoutSummary(for: entry)"),
-                "the card face must keep the date and the count alone")
+        #expect(source.contains("layout.subcaption = workoutComposerSummary(for: entry)"),
+                "the sent card's subcaption no longer says when notes travel with it (b4-msg-bubbles)")
+        #expect(!source.contains("layout.subcaption = workoutSummary(for: entry)"),
+                "the card face went back to the date and the count alone")
         #expect(source.contains("\"\\(entry.dayKey) · \\(FernletMessagesCopy.workoutCount(entry.packet.plan.sessionCount))\""),
-                "the card face's line is the date and the count, nothing else")
+                "the line's base is the date and the count, never the notes")
         let copy = try RepoRoot.source("App/FernletMessagesExtension/FernletMessagesCopy.swift")
         #expect(copy.contains("\"messages.workout.subtitleWithNotes\""))
     }
