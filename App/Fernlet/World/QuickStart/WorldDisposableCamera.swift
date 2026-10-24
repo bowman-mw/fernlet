@@ -8,24 +8,22 @@ import SwiftUI
 /// **In a session** it is today's camera, unchanged: the session's shared film, its rules and its
 /// Develop review (`DisposableCameraView`).
 ///
-/// **On your own** (10 photos a day, no Develop, the photos appear after the companion sleeps;
-/// `b3-camera-solo`) is being built alongside this, in the camera's own views. Until it lands,
-/// ``soloIsAvailable`` is false, so the blue button offers the camera only in a session, and never
-/// opens the session's film outside one (a photo taken there with no session would be held for a
-/// review that never comes).
+/// **On your own** (`b3-camera-solo`: 10 photos a day, no Develop, the photos appear after the
+/// companion sleeps) it is the same camera shooting into the sealed, device-only solo roll
+/// (`FernletStore.soloCamera`), titled "Just you" or "Just you · <space>". The blue button offers it
+/// during a walk or a workout when no session is running; a decoy keeps its shots in memory only.
 nonisolated enum WorldDisposableCamera {
     /// Which film the camera shoots on.
     enum Mode: Equatable, Sendable {
         /// The friend session's shared film.
         case session
-        /// The person's own film, 10 a day.
-        case solo
+        /// The person's own film, 10 a day; `placeName` is the space they stand at, if any.
+        case solo(placeName: String?)
     }
 
-    /// Whether the on-your-own camera exists yet.
-    // INTEGRATOR: set this true once lane FRIENDS' solo mode (10 a day, no Develop) is merged, and open
-    // it from `view(store:mode:)` below.
-    static let soloIsAvailable = false
+    /// Whether the on-your-own camera exists (lane friends-solo: the sealed solo corpus and its wipe
+    /// leg are in).
+    static let soloIsAvailable = true
 }
 
 extension WorldDisposableCamera {
@@ -35,11 +33,9 @@ extension WorldDisposableCamera {
         switch mode {
         case .session:
             DisposableCameraView(store: store)
-        case .solo:
-            // INTEGRATOR: solo mode plugs in here (lane FRIENDS' camera with its own 10-a-day film). Today's
-            // camera only knows the session film, so this stays the session camera and is never reached
-            // while `soloIsAvailable` is false.
-            DisposableCameraView(store: store)
+        case .solo(let placeName):
+            // Outside a session the camera shoots into the solo roll by itself; the place only titles it.
+            DisposableCameraView(store: store, placeName: placeName)
         }
     }
 }

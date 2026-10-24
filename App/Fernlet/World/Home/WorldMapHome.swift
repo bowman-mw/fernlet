@@ -362,6 +362,7 @@ struct WorldMapHome: View {
     /// Does what a choice says, then closes the card.
     private func choose(_ option: WorldQuickStartOption) {
         let spaceID = cardContext?.space?.id
+        let placeName = cardContext?.space?.name
         closeCard()
         switch option {
         case .todaysPlan:
@@ -379,7 +380,7 @@ struct WorldMapHome: View {
         case .sessionCamera:
             cameraMode = .session
         case .soloCamera:
-            cameraMode = .solo
+            cameraMode = .solo(placeName: placeName)
         case .backToWorkout:
             guidedSession = store.guidedSessionForResume()
         }

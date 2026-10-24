@@ -64,8 +64,8 @@ nonisolated struct WorldQuickStartContext: Equatable, Sendable {
     var hasGentleStretch = false
     var session: Session?
     var activity: Activity = .none
-    /// Whether the disposable camera has its on-your-own mode (10 a day). Until it lands the camera is
-    /// offered only in a session (`WorldDisposableCamera.soloIsAvailable`).
+    /// Whether the disposable camera has its on-your-own mode (10 a day;
+    /// `WorldDisposableCamera.soloIsAvailable`). Without it the camera is offered only in a session.
     var soloCameraAvailable = false
 }
 
