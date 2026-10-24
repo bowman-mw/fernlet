@@ -96,6 +96,17 @@ struct PrivacyPolicyParityTests {
     ///   rating and the override reason, pain among them (`ExerciseResult`);
     /// - `Workout suggestions.` — sleep, resting heart rate and heart-rate variability shape the
     ///   planner's readiness, the stalled-lift check and the heart-rate zones, on the device.
+    ///
+    /// The seven markers added 2026-10-24 (World build step 5c; the owner approved the "Location and the
+    /// map" paragraph and the added sentence word for word) pin what the map keeps and who sees it:
+    /// - `cells about 35 m across` — the fog is a coarse record, on this iPhone only;
+    /// - `only during a walk you started` — the only times location runs in the background (with the
+    ///   optional low-power mapping);
+    /// - `it never receives your map history or your walks` — Apple Maps gets the area on screen, nothing kept;
+    /// - `keeps a rolling 30-day timeline of the places` — Where you've been;
+    /// - `which holds only a visit count, never dates` — Places you return to;
+    /// - `therapists are never named or kept` — the allowlist's refusal;
+    /// - `so the photo can sit on your map` — a solo photo's place, never at a refused place.
     private static let substanceMarkers = [
         "iOS may refuse or end it at any time",
         "never retroactively repurposed",
@@ -123,7 +134,14 @@ struct PrivacyPolicyParityTests {
         "Heart rate during cardio",
         "holds the reading in memory only",
         "Easy, Good or Tough",
-        "Workout suggestions."
+        "Workout suggestions.",
+        "cells about 35 m across",
+        "only during a walk you started",
+        "it never receives your map history or your walks",
+        "keeps a rolling 30-day timeline of the places",
+        "which holds only a visit count, never dates",
+        "therapists are never named or kept",
+        "so the photo can sit on your map"
     ]
 
     /// Loads each copy's text, keyed by its repo-relative path.
