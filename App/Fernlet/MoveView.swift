@@ -1424,13 +1424,17 @@ struct WorkoutSheet: View {
     }
 
     var body: some View {
+        // The exercise page is built here, inside this body, so every state it draws (its set rows, the
+        // switch, last time) is read by this view: built lazily in the destination closure, a change to
+        // state only that page read never re-rendered it, and a picked lift showed no set rows.
+        let page = liftPage
         // World build (`b3-workout-log` draft 2): a stack, so an exercise's sets open on their own page
         // with Back naming the sheet. The list keeps the sheet's header (Cancel, the title) and Save.
         NavigationStack(path: $liftPath) {
             listPage
                 .navigationTitle(logSheetTitle)
                 .toolbar(.hidden, for: .navigationBar)
-                .navigationDestination(for: WorkoutLiftRoute.self) { _ in liftPage }
+                .navigationDestination(for: WorkoutLiftRoute.self) { _ in page }
         }
         .onChange(of: liftPath) { _, path in
             // Back from an exercise's page drops what it held; Add to workout already took it.
@@ -3152,12 +3156,14 @@ struct EditWorkoutSheet: View {
 
     /// Any editable field diverges from the row this sheet opened on.
     private var isDirty: Bool {
-        name != workout.displayedName
+        // The set drafts first, so this body always reads them: the lift pages pushed from it draw them,
+        // and a page re-renders only when state this view read changes.
+        setDrafts != originalSetDrafts
+            || name != workout.displayedName
             || intensity != workout.intensity
             || duration != (workout.duration.map(String.init) ?? "")
             || rpe != Self.rpeText(workout.rpe)
             || notes != workout.notes
-            || setDrafts != originalSetDrafts
     }
 
     private func attemptCancel() {
