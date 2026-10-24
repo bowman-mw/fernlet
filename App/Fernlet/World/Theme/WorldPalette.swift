@@ -23,12 +23,16 @@ nonisolated enum WorldPalette {
     static let paperLight = adaptive(light: 0xFFFBF0, dark: 0x45372A)
     /// The shade under a container's bottom edge.
     static let paperShade = adaptive(light: 0xEFDDB8, dark: 0x2A2017)
-    /// Navigation only: the item bar and title plates.
-    static let wood = adaptive(light: 0xC98E54, dark: 0x6E4424, lightHC: 0xD9A56E, darkHC: 0x5A361B)
-    static let woodHigh = adaptive(light: 0xE0AE74, dark: 0x8A5A32)
-    static let woodLow = adaptive(light: 0xA86E3C, dark: 0x4E2F17)
+    /// Navigation only: the item bar and title plates, in the wood App colors chose (``WorldAppColors``;
+    /// Oak, today's wood, by default). Read where it is drawn, so a pick shows on the next draw; a view
+    /// that stays on screen also reads ``EnvironmentValues/worldAppColors`` to be redrawn by it.
+    static var wood: Color { WorldAppColors.wood().tones.wood }
+    static var woodHigh: Color { WorldAppColors.wood().tones.high }
+    static var woodLow: Color { WorldAppColors.wood().tones.low }
     /// The item bar's selected slot: lighter wood, so its label still clears AA.
-    static let woodSelected = adaptive(light: 0xDDA86C, dark: 0x8E5C34, lightHC: 0xE9C08E, darkHC: 0x7A4C28)
+    static var woodSelected: Color { WorldAppColors.wood().tones.selected }
+    /// Text and one-colour icons on wood: ``bark``, or cream on Walnut.
+    static var onWood: Color { WorldAppColors.wood().tones.label }
     /// Pages: parchment.
     static let page = adaptive(light: 0xF5EFDF, dark: 0x1C1E1B)
     /// The page's faint dot grid.
@@ -41,10 +45,11 @@ nonisolated enum WorldPalette {
     static let dim = adaptive(light: 0x6B5C4A, dark: 0xC9BFAE, lightHC: 0x4E4030, darkHC: 0xE2D8C6)
     /// The moss of section squares and switches.
     static let moss = adaptive(light: 0x5E844D, dark: 0x7FB069)
-    /// Primary buttons and selected chips (the design's moss ink; App colors can change it later).
-    static let accent = adaptive(light: 0x46683A, dark: 0x8DBB78)
+    /// Primary buttons and selected chips, in the accent App colors chose (``WorldAppColors``; the
+    /// design's moss ink by default).
+    static var accent: Color { WorldAppColors.accent().tones.accent }
     /// Text on ``accent``.
-    static let onAccent = adaptive(light: 0xFFFFFF, dark: 0x10170D)
+    static var onAccent: Color { WorldAppColors.accent().tones.onAccent }
     /// Moss as text: links and quiet buttons on paper ("Arrange Today").
     static let mossInk = adaptive(light: 0x46683A, dark: 0x9BCB84)
     /// The calm card's paper (First aid).

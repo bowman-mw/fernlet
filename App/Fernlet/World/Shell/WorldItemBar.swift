@@ -13,6 +13,8 @@ struct WorldItemBar: View {
     let onOpen: (WorldPanel) -> Void
     @Environment(\.worldTheme) private var theme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// The wood App colors chose (``WorldAppColors``), read here so a pick redraws the bar.
+    @Environment(\.worldAppColors) private var appColors
 
     /// The bar's height, for the views that sit above it.
     static let height: CGFloat = 84
@@ -62,7 +64,7 @@ struct WorldItemBar: View {
                 if !accessibility {
                     Text(verbatim: panel.barName)
                         .font(WorldType.barLabel)
-                        .foregroundStyle(WorldPalette.bark)
+                        .foregroundStyle(appColors.wood.tones.label)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                         .accessibilityHidden(true)
@@ -92,9 +94,9 @@ struct WorldItemBar: View {
     /// background, so the raised Log disc paints over the frame).
     private var barWood: some View {
         RoundedRectangle(cornerRadius: 14)
-            .fill(WorldPalette.wood)
-            .overlay(alignment: .top) { WorldPalette.woodHigh.frame(height: 4).padding(.horizontal, 10).padding(.top, 3) }
-            .overlay(alignment: .bottom) { WorldPalette.woodLow.frame(height: 4).padding(.horizontal, 10).padding(.bottom, 3) }
+            .fill(appColors.wood.tones.wood)
+            .overlay(alignment: .top) { appColors.wood.tones.high.frame(height: 4).padding(.horizontal, 10).padding(.top, 3) }
+            .overlay(alignment: .bottom) { appColors.wood.tones.low.frame(height: 4).padding(.horizontal, 10).padding(.bottom, 3) }
             .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(WorldPalette.ink, lineWidth: 3))
             .background {
                 RoundedRectangle(cornerRadius: 14)

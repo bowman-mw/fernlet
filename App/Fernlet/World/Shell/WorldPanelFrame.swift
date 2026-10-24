@@ -34,6 +34,9 @@ struct WorldPanelFrame<Content: View>: View {
     @ViewBuilder let content: Content
     @Environment(\.worldTheme) private var theme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// The wood App colors chose: the plate stays on screen while App colors is open, so it reads the
+    /// choice from the environment to be redrawn by a pick.
+    @Environment(\.worldAppColors) private var appColors
     @AccessibilityFocusState private var isTitleFocused: Bool
     /// The pages pushed under this plate (their titles and Backs).
     @State private var navigation = FernletPlateNavigation()
@@ -83,8 +86,8 @@ struct WorldPanelFrame<Content: View>: View {
         }
         .padding(EdgeInsets(top: 4, leading: 16, bottom: 13, trailing: 12))
         .background {
-            WorldPalette.wood
-                .overlay(alignment: .bottom) { WorldPalette.woodLow.frame(height: 4).padding(.bottom, 3) }
+            appColors.wood.tones.wood
+                .overlay(alignment: .bottom) { appColors.wood.tones.low.frame(height: 4).padding(.bottom, 3) }
                 .overlay(alignment: .bottom) { WorldPalette.ink.frame(height: 3) }
                 .ignoresSafeArea(edges: .top)
         }
@@ -99,7 +102,7 @@ struct WorldPanelFrame<Content: View>: View {
     private func plateText(_ text: String) -> some View {
         Text(verbatim: text)
             .font(WorldType.plateTitle)
-            .foregroundStyle(WorldPalette.bark)
+            .foregroundStyle(appColors.wood.tones.label)
             .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
             .minimumScaleFactor(dynamicTypeSize.isAccessibilitySize ? 1 : 0.7)
             // The approved largest-text plate draws its title at 31 pt, not the full accessibility size,

@@ -66,15 +66,24 @@ nonisolated enum WorldType {
 extension WorldTheme {
     /// The design language for everything in the World build (``FernletFramedLook``, `b1-language`):
     /// paper in a 2-pt ink frame with a solid shadow, dotted parchment pages, wood for the sheet's
-    /// grabber, in this theme's palette. Set once at the root by `worldDesignLanguage()`.
+    /// grabber, in this theme's palette and the stored App colors choice. Set at the root by
+    /// `worldDesignLanguage()`, which passes the choice it observes (``framedLook(for:)``).
     @MainActor static var framedLook: FernletFramedLook {
-        FernletFramedLook(paper: WorldPalette.paper, paperLow: WorldPalette.paperShade, raised: WorldPalette.paperLight,
-                          ink: WorldPalette.ink, text: WorldPalette.bark, shadow: WorldPalette.ink.opacity(0.22),
-                          sage: WorldPalette.sage, rose: WorldPalette.rose, mark: WorldPalette.moss,
-                          accent: WorldPalette.accent, onAccent: WorldPalette.onAccent, dim: WorldPalette.dim,
-                          page: WorldPalette.page, pageDot: WorldPalette.pageDot, rule: WorldPalette.rule,
-                          link: WorldPalette.mossInk, wood: WorldPalette.wood, woodHigh: WorldPalette.woodHigh,
-                          warn: WorldPalette.warn)
+        framedLook(for: WorldAppColors.current())
+    }
+
+    /// The framed look in an App colors choice (`b2-colors`): its wood on the grabbers, its accent on
+    /// primary buttons, selected chips and switches.
+    @MainActor static func framedLook(for colors: WorldAppColorChoice) -> FernletFramedLook {
+        let wood = colors.wood.tones
+        let accent = colors.accent.tones
+        return FernletFramedLook(paper: WorldPalette.paper, paperLow: WorldPalette.paperShade, raised: WorldPalette.paperLight,
+                                 ink: WorldPalette.ink, text: WorldPalette.bark, shadow: WorldPalette.ink.opacity(0.22),
+                                 sage: WorldPalette.sage, rose: WorldPalette.rose, mark: accent.mark,
+                                 accent: accent.accent, onAccent: accent.onAccent, dim: WorldPalette.dim,
+                                 page: WorldPalette.page, pageDot: WorldPalette.pageDot, rule: WorldPalette.rule,
+                                 link: WorldPalette.mossInk, wood: wood.wood, woodHigh: wood.high,
+                                 warn: WorldPalette.warn)
     }
 
     /// Draws the framed primitives' icons as this theme's pixel sprites, through ``WorldSpriteView`` (the
@@ -103,9 +112,22 @@ extension WorldSprites {
 extension View {
     /// The one design language (`b1-language`) for everything below: framed cards, chips, buttons,
     /// switches, fields, Forms (``FernletFormStyle``) and sheets in this theme's palette
-    /// (``WorldTheme/framedLook``), with its pixel icons (``WorldTheme/iconRenderer``).
+    /// (``WorldTheme/framedLook``), with its pixel icons (``WorldTheme/iconRenderer``), in the App
+    /// colors the person chose (``WorldAppColorsSource``, outermost, so the look below reads it).
     func worldDesignLanguage() -> some View {
-        environment(\.fernletFramedLook, WorldTheme.framedLook)
+        modifier(WorldDesignLanguage())
+            .modifier(WorldAppColorsSource())
+    }
+}
+
+/// Implements `worldDesignLanguage()`: the framed look in the App colors choice handed down by
+/// ``WorldAppColorsSource``, the pixel icons, and the framed switch and Form styles.
+struct WorldDesignLanguage: ViewModifier {
+    @Environment(\.worldAppColors) private var appColors
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.fernletFramedLook, WorldTheme.framedLook(for: appColors))
             .environment(\.fernletIconRenderer, WorldTheme.iconRenderer)
             .toggleStyle(FernletFramedToggleStyle())
             .formStyle(FernletFormStyle())

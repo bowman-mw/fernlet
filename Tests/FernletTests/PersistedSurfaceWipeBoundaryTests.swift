@@ -425,6 +425,13 @@ struct PersistedSurfaceWipeBoundaryTests {
         "fernletAppearanceMode": .kept(
             reason: "Appearance preference (system / light / dark). A setting describing the app's chrome, not the user's days; clearing it only makes a freshly-wiped app look unfamiliar for no privacy gain."
         ),
+        // World build (2026-10-24): App colors' Wood and Accent (design `b2-colors`, `WorldAppColors`).
+        "fernlet.world.appColors.wood": .kept(
+            reason: "App colors' Wood: which wood the title plates, the item bar and the grabbers are drawn in. Appearance preference beside the custom backgrounds it shares a page with; app chrome, no content and no timestamps."
+        ),
+        "fernlet.world.appColors.accent": .kept(
+            reason: "App colors' Accent: which colour primary buttons, switches and selected chips wear. Appearance preference beside the custom backgrounds it shares a page with; app chrome, no content and no timestamps."
+        ),
         "fernletDarkModeEnabled": .kept(
             reason: "The legacy dark-mode appearance flag, read for installs predating the three-way appearance mode. Same class as the mode beside it: app chrome, no content, no timestamps."
         ),

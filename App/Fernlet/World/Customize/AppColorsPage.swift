@@ -4,11 +4,11 @@ import FernletUI
 
 /// App colors (design `b2-colors`, approved 2026-10-24): a small light and dark preview, then Paper,
 /// today's Backgrounds as framed swatches (four presets each for light and dark, plus Custom, today's
-/// colour picker) with the hex, the contrast line and Reset.
+/// colour picker) with the hex, the contrast line and Reset; then Wood and Accent (``AppWoodCard``,
+/// ``AppAccentCard``), stored through ``WorldAppColors``.
 ///
 /// Opens from Customize (and is meant to replace Appearance's Backgrounds). It writes the same two
-/// stored backgrounds the Appearance page does (``FernletThemeDefaults``), so both stay in step. The
-/// design's Wood and Accent rows wait on a theme hook in the World palette (the lane ledger has it).
+/// stored backgrounds the Appearance page does (``FernletThemeDefaults``), so both stay in step.
 struct AppColorsPage: View {
     var store: FernletStore
     @AppStorage(FernletThemeDefaults.customLightBackgroundKey) private var lightHex = FernletThemeDefaults.lightBackgroundHex
@@ -39,6 +39,8 @@ struct AppColorsPage: View {
                                     defaultHex: FernletThemeDefaults.darkBackgroundHex, isDark: true)
                     }
                 }
+                AppWoodCard()
+                AppAccentCard()
                 Text("Text colours adjust by themselves, so every label stays readable. Protein, carbs and fat keep their colours everywhere, and hearts stay red.")
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(WorldPalette.dim)
@@ -192,28 +194,30 @@ private struct AppPaperCustomSwatch: View {
 }
 
 /// A tiny app in the chosen colours (design `b2-colors`): a wooden plate, a meal card with its macro
-/// bars, and the accent's Log button, over “Light” or “Dark”. Decorative.
+/// bars, and the accent's Log button, over “Light” or “Dark”. Decorative. It follows the Wood and
+/// Accent picks (the swatch face, and the accent's light or dark face) as they are made.
 private struct AppColorsPreview: View {
     let dark: Bool
+    @Environment(\.worldAppColors) private var appColors
 
     var body: some View {
         VStack(spacing: 4) {
             VStack(spacing: 0) {
                 Text("Food")
                     .font(.custom(FernletFontName.frauncesSemiBold, size: 13, relativeTo: .caption))
-                    .foregroundStyle(WorldPalette.rgb(0x3A2414))
+                    .foregroundStyle(appColors.wood == .walnut ? WorldPalette.gameCream : WorldPalette.rgb(0x3A2414))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
-                    .background(WorldPalette.rgb(0xD9A56E))
+                    .background(appColors.wood.swatch)
                     .overlay(alignment: .bottom) { WorldPalette.rgb(0x4A2E1C).frame(height: 2) }
                 VStack(spacing: 6) {
                     mealCard
                     Text("Log")
                         .font(.fernlet(.labelSmall).weight(.bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(appColors.accent.tones.onAccent)
                         .frame(maxWidth: .infinity, minHeight: 26)
-                        .background(WorldPalette.rgb(0x46683A), in: RoundedRectangle(cornerRadius: 7))
+                        .background(appColors.accent.tones.accent, in: RoundedRectangle(cornerRadius: 7))
                         .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(WorldPalette.rgb(0x4A2E1C), lineWidth: 2))
                 }
                 .padding(8)
