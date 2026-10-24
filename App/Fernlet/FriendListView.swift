@@ -87,11 +87,8 @@ struct FriendListView: View {
         .listStyle(.plain)
         .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
         .scrollContentBackground(.hidden)
-        .background(Color.parchment)
-        .navigationTitle("Friends & Blocks")
-        // Inline, matching the two sibling pushes off the same header (Activities, Safety &
-        // reporting). A large title here sat flush against x=0 while every field below is inset 20pt.
-        .navigationBarTitleDisplayMode(.inline)
+        // The title is on the panel's plate (`fernletPushedPage` at the push); the dots show here.
+        .fernletPageBackground()
         .peerReportFlow($reportSubject) { subject, reason in fileReport(subject, reason: reason) }
         .onAppear {
             displayName = store.settings.proximityDisplayName
@@ -120,11 +117,11 @@ struct FriendListView: View {
         VStack(alignment: .leading, spacing: 6) {
             displayNameField
             Text("Friends nearby see this name.")
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.note)
+                .foregroundStyle(WorldPalette.dim)
                 .padding(.horizontal, 4)
         }
-        .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 0, trailing: 20))
+        .listRowInsets(EdgeInsets(top: 14, leading: 16, bottom: 0, trailing: 16))
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
     }
@@ -132,17 +129,17 @@ struct FriendListView: View {
     private var displayNameField: some View {
         HStack(spacing: 10) {
             Text("You appear as")
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.body)
+                .foregroundStyle(WorldPalette.dim)
             Spacer()
             // The placeholder is the name that is ACTUALLY broadcast when the field is empty (the
             // device name), not an invented "Your name" — otherwise friends see "iPhone" and nothing
             // here ever said so.
             TextField(store.resolvedProximityDisplayName, text: $displayName,
                       prompt: .fieldPrompt(verbatim: store.resolvedProximityDisplayName))
-                .font(.fernlet(.body))
+                .font(FernletFramedFont.field.weight(.semibold))
                 .multilineTextAlignment(.trailing)
-                .foregroundStyle(Color.bark)
+                .foregroundStyle(WorldPalette.bark)
                 .submitLabel(.done)
                 .focused($nameFieldFocused)
                 // Commit only when the user finishes — on Return, and when focus leaves the
@@ -156,27 +153,19 @@ struct FriendListView: View {
                     if !focused { commitDisplayName() }
                 }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        .padding(.horizontal, 15)
+        .frame(minHeight: 54)
+        .background(WorldPalette.paper, in: RoundedRectangle(cornerRadius: FernletFramedLook.cardRadius))
+        .overlay(RoundedRectangle(cornerRadius: FernletFramedLook.cardRadius)
+            .strokeBorder(WorldPalette.ink, lineWidth: FernletFramedLook.frameWidth))
+        .background { RoundedRectangle(cornerRadius: FernletFramedLook.cardRadius).fill(WorldPalette.ink.opacity(0.22)).offset(y: 3) }
     }
 
     /// The search field. It still matches a fingerprint (someone who has one to hand can paste it),
     /// but it says "name": a fingerprint is not something the list asks anyone to know.
     private var searchRow: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(Color.slate)
-            TextField("Search by name", text: $searchText, prompt: .fieldPrompt("Search by name"))
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+        FriendsSearchField(prompt: "Search by name", text: $searchText)
+        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 8, trailing: 16))
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
     }
@@ -196,17 +185,16 @@ struct FriendListView: View {
     @ViewBuilder
     private func peerList(_ peers: [ProximityTrustedPeerRecord], lastPeerID: UUID?) -> some View {
         if peers.isEmpty {
-            EmptyState(text: emptyStateText)
-                .padding(.horizontal, 20)
-                .padding(.top, 24)
+            FriendsEmptyNote(text: Text(emptyStateText))
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
         } else {
+            // One framed card of rows (b2-friend-list): the List keeps the swipe actions.
             ForEach(peers) { peer in
                 peerCell(peer, isLast: peer.id == lastPeerID)
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.parchment)
-                    .listRowSeparator(.hidden)
+                    .fernletFramedListRow(isFirst: peer.id == peers.first?.id, isLast: peer.id == lastPeerID)
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         swipeActions(for: peer)
                     }
@@ -228,15 +216,8 @@ struct FriendListView: View {
 
             if let expanded = selected, expanded.id == peer.id {
                 peerDetailCard(peer)
-                    .padding(.horizontal, 20)
                     .padding(.bottom, 12)
                     .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-
-            if !isLast {
-                Divider()
-                    .overlay(Color.bark.opacity(0.07))
-                    .padding(.horizontal, 20)
             }
         }
     }
@@ -245,20 +226,23 @@ struct FriendListView: View {
     /// page that explains reporting (and what happens next) belongs at the end of it, not only in
     /// Settings › Privacy.
     private var safetyFooterRow: some View {
-        NavigationLink {
-            SafetyReportingView()
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "lifepreserver")
-                    .foregroundStyle(Color.moss)
-                Text("Safety & reporting")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.bark)
+        // A ZStack-hidden link under a framed card: inside a `List` a bare NavigationLink hangs the
+        // system chevron outside the card, next to the card's own pixel one.
+        ZStack {
+            NavigationLink {
+                SafetyReportingView()
+                    .fernletPushedPage("Safety & reporting")
+            } label: {
+                EmptyView()
             }
-            .frame(minHeight: 44)
+            .opacity(0)
+            FriendsLinkCard(title: Text("Safety & reporting"), sprite: FriendsSprites.heartMoss)
+                .allowsHitTesting(false)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("friends.safetyReporting")
-        .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 28, trailing: 20))
+        .listRowInsets(EdgeInsets(top: 18, leading: 16, bottom: 28, trailing: 16))
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
     }
@@ -381,7 +365,6 @@ struct FriendListView: View {
             statusBadge(for: peer)
         }
         .padding(.vertical, 12)
-        .padding(.horizontal, 20)
     }
 
     /// A friend's fuzzy vibe (thriving/okay/struggling) from the last time you met — never a number.

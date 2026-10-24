@@ -46,21 +46,17 @@ struct SessionChatPanel: View {
     private var messages: [SessionMessageStore.Message] { chat.sessionMessages.messages }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                transcript
-                composeBar
-            }
-            .background(Color.parchment.ignoresSafeArea())
-            .navigationTitle("Messages")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { onDone() }
-                        .foregroundStyle(Color.bark)
-                }
-            }
+        // b3-session-chat: paper, the wooden grabber, Done top right (the way out, as today), the
+        // title in the sheet, framed bubbles, then the compose bar.
+        VStack(spacing: 0) {
+            transcript
+            composeBar
         }
+        .frame(maxHeight: .infinity)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            SheetHeader(title: "Messages", onDone: onDone)
+        }
+        .fernletSheet()
         // TF b19 item 6: an open panel keeps the unread badge at zero — the store suppresses unread
         // counting while viewing, and clears the standing count the moment the panel appears.
         // Opening the panel is already "I want to type" — land the caret in the field rather than
@@ -107,15 +103,13 @@ struct SessionChatPanel: View {
 
     private var emptyState: some View {
         VStack(spacing: 12) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 34, weight: .light))
-                .foregroundStyle(Color.slate)
+            WorldSpriteView(sprite: FriendsSprites.bubble, scale: 4)
             Text("Say hello")
-                .font(.fernlet(.header))
-                .foregroundStyle(Color.bark)
+                .font(FernletFramedFont.cardTitle)
+                .foregroundStyle(WorldPalette.bark)
             Text("Messages stay in this session only — they disappear for everyone when the session ends.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.body)
+                .foregroundStyle(WorldPalette.dim)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -123,24 +117,25 @@ struct SessionChatPanel: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    /// One framed bubble: yours on the right on the rose fill, theirs on the left on paper with their
+    /// name above (b3-session-chat).
     private func messageRow(_ message: SessionMessageStore.Message) -> some View {
-        HStack {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        return HStack {
             if message.isOutgoing { Spacer(minLength: 40) }
-            VStack(alignment: message.isOutgoing ? .trailing : .leading, spacing: 3) {
+            VStack(alignment: message.isOutgoing ? .trailing : .leading, spacing: 4) {
                 if !message.isOutgoing {
                     Text(message.senderDisplayName)
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
+                        .font(FernletFramedFont.rowDetail.weight(.bold))
+                        .foregroundStyle(WorldPalette.dim)
                 }
                 Text(message.text)
-                    .font(.fernlet(.body))
-                    .foregroundStyle(message.isOutgoing ? Color.midnight : Color.bark)
+                    .font(FernletFramedFont.body)
+                    .foregroundStyle(WorldPalette.bark)
                     .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .background(
-                        message.isOutgoing ? Color.terracotta.opacity(0.18) : Color.cream,
-                        in: RoundedRectangle(cornerRadius: 15, style: .continuous)
-                    )
+                    .padding(.vertical, 10)
+                    .background(message.isOutgoing ? WorldPalette.rose : WorldPalette.paperLight, in: shape)
+                    .overlay(shape.strokeBorder(WorldPalette.ink, lineWidth: FernletFramedLook.frameWidth))
             }
             if !message.isOutgoing { Spacer(minLength: 40) }
         }
@@ -161,53 +156,43 @@ struct SessionChatPanel: View {
     private var composeBar: some View {
         if let sendNotice {
             Text(sendNotice)
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.terracotta)
+                .font(FernletFramedFont.note)
+                .foregroundStyle(Color.terracottaInk)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 18)
                 .padding(.top, 10)
-                .background(Color.parchment)
                 .accessibilityIdentifier("session.chat.sendNotice")
         }
-        HStack(spacing: 10) {
+        HStack(alignment: .bottom, spacing: 10) {
             TextField("Message", text: $draft, prompt: .fieldPrompt("Message"), axis: .vertical)
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
                 .lineLimit(1...4)
                 // Return sends, as it does in every messaging app — it used to only insert a newline,
-                // leaving the 30pt glyph as the single way to send. (Same mechanism as the shared
-                // `SheetGrowingTextField`; the chat bubble keeps its own chrome.)
+                // leaving the glyph as the single way to send.
                 .submitLabel(.send)
                 .onSubmit {
                     if canSend { send() }
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .sheetTextInput()
                 .focused($composeFocused)
                 .accessibilityIdentifier("session.chat.field")
 
             Button(action: send) {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 30))
-                    .foregroundStyle(canSend ? Color.terracotta : Color.slate.opacity(0.4))
-                    .frame(width: 44, height: 44)
+                WorldSpriteView(sprite: FriendsSprites.sendArrow, scale: 3, tint: WorldPalette.onAccent)
+                    .frame(width: 50, height: 50)
+                    .background(canSend ? WorldPalette.accent : WorldPalette.accent.opacity(0.45),
+                                in: RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(WorldPalette.ink, lineWidth: FernletFramedLook.frameWidth))
                     .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             .disabled(!canSend)
             .accessibilityLabel("Send message")
             .accessibilityIdentifier("session.chat.send")
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 18)
         .padding(.vertical, 12)
-        .background(Color.parchment)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(Color.bark.opacity(0.08))
-                .frame(height: 1)
-        }
     }
 
     private var canSend: Bool {

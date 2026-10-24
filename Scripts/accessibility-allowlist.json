@@ -121,12 +121,6 @@
  },
  {
   "rule": "A8-MUTED-SLATE",
-  "path": "App/Fernlet/SessionChatPanel.swift",
-  "line_contains": "canSend ? Color.terracotta : Color.slate.opacity(0.4)",
-  "reason": "DISABLED-STATE ink on an inactive control, which WCAG 1.4.3 and 1.4.11 both exempt: the dim branch of this ternary is taken exactly when the control's own `.disabled(!canSend)` is true, so VoiceOver announces it as dimmed and it cannot be activated. The ENABLED branch is the readable one (`terracotta`). If the `.disabled` predicate and this ternary ever stop being the same condition, this entry is wrong — delete it and decide the site again."
- },
- {
-  "rule": "A8-MUTED-SLATE",
   "path": "App/Fernlet/AmbientCards.swift",
   "line_contains": ".background(Color.slate.opacity(0.10), in: Circle())",
   "reason": "A BACKDROP, not ink: a slate@0.10 circle behind a full-strength `Color.slate` ✕ glyph that is the control's only visible content and is named by its `.fernletIconButton` label (\"Not today\", \"Dismiss nutrient nudge\"); both dismiss buttons in this file share the line. The glyph measures 4.22:1 against the composited circle in the worst case (default light, card on parchment), 4.52:1 on cream, ≥4.96:1 in dark and ≥5.96:1 under Increase Contrast — all above the 3:1 non-text floor. The circle itself measures ~1.14:1 against its card and carries no information."

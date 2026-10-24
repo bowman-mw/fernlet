@@ -14,6 +14,6 @@ struct SocialHubView: View {
 
     var body: some View {
         FriendsView(store: store, activeSheet: $activeSheet, isTabBarCompact: $isTabBarCompact, tabResetToken: $tabResetToken)
-            .background(Color.parchment)
+            .fernletPageBackground()
     }
 }

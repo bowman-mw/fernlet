@@ -59,7 +59,12 @@ import ProximityKit
         #expect(reads >= 1, "the camera view reads the count")
         #expect(view.contains("RoutedShareRefusalCopy.photoKeptNotice(count: features.photos.photosKeptOnThisPhone)"),
                 "and only through the copy table — no sentence is composed in the view")
-        #expect(view.contains(".accessibilityIdentifier(\"camera.photosKeptNotice\")"),
+        // World build (Friends lane): the sentence lives in Session info, which left the camera for
+        // Home's session button.
+        let info = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/World/Friends/SessionInfoSheet.swift"))
+        #expect(info.contains("RoutedShareRefusalCopy.photoKeptNotice(count: features.photos.photosKeptOnThisPhone)"),
+                "Session info reads the count through the copy table too")
+        #expect(info.contains(".accessibilityIdentifier(\"camera.photosKeptNotice\")"),
                 "the sentence is reachable by identifier for the UI suite")
     }
 
@@ -107,11 +112,13 @@ import ProximityKit
     /// ProximityKit's source and is its package suite of this name; the camera's and the chat panel's
     /// halves are held here.
     @Test func theRefusalLeavesThePackageAsATokenOnly() throws {
+        // World build (Friends lane): the session alert is `SessionPromptsModifier`'s, which rides
+        // every session surface (the camera, Home's session button, the Friends panel).
         let camera = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("App/Fernlet/DisposableCameraView.swift")
+            try RepoRoot.source("App/Fernlet/World/Friends/SessionPrompts.swift")
         )
         #expect(camera.contains("RoutedShareRefusalCopy.message(refusal)"),
-                "the camera's session alert forks the token into copy")
+                "the session alert forks the token into copy")
         #expect(camera.contains("manager.clearRoutedShareRefusal()"),
                 "dismissing the alert clears the refusal, so the next one can show")
         // P6 item 4: chat neither shares that copy nor that surface. The panel is a sheet OVER the

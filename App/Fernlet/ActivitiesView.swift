@@ -40,11 +40,10 @@ struct ActivitiesView: View {
                 if !manager.joinedActivities.isEmpty { joinedSection }
                 if allEmpty { emptyHint }
             }
-            .padding(20)
+            .padding(16)
         }
-        .background(Color.parchment)
-        .navigationTitle("Activities")
-        .navigationBarTitleDisplayMode(.inline)
+        // The title is on the panel's plate (`fernletPushedPage` at the push); the dots show here.
+        .fernletPageBackground()
         .onAppear { manager.gcExpired() }
         // Pushed from the Friends album: a re-tap of the Friends tab asks before it pops a typed
         // activity name or place away.
@@ -87,21 +86,26 @@ struct ActivitiesView: View {
     private var canHostMore: Bool { manager.hostedActivities.count < ActivityLimits.maxHosted }
 
     @ViewBuilder private var hostForm: some View {
-        VStack(alignment: .leading, spacing: FernletMetrics.spaceMd) {
+        FernletCard {
+            hostFormContent
+        }
+    }
+
+    /// The form inside the Start an activity card (`b2-activities`): framed fields and chips, and a
+    /// framed Start that dims until the activity has a name.
+    @ViewBuilder private var hostFormContent: some View {
+        VStack(alignment: .leading, spacing: 14) {
             Text("Start an activity")
-                .font(.fernlet(.header))
-                .foregroundStyle(Color.bark)
+                .font(FernletFramedFont.cardTitle)
+                .foregroundStyle(WorldPalette.bark)
             Text("Anyone you're with right now can ask to join. It stays on your devices — nothing is uploaded.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.body)
+                .foregroundStyle(WorldPalette.dim)
                 .fixedSize(horizontal: false, vertical: true)
 
             if canHostMore {
                 TextField("Activity name", text: $draftTitle, prompt: .fieldPrompt("Activity name"))
-                    .font(.fernlet(.body))
-                    .textFieldStyle(.plain)
-                    .padding(12)
-                    .background(Color.cream, in: RoundedRectangle(cornerRadius: FernletMetrics.radiusSm))
+                    .sheetTextInput()
                     .onChange(of: draftTitle) { _, new in
                         draftTitle = ItemNameModeration.sanitizedName(new)
                         titleWarning = nil
@@ -115,10 +119,7 @@ struct ActivitiesView: View {
                           prompt: .fieldPrompt("Where? (optional, e.g. \"the park\")"))
                     // Same role, same size as the name field above it — the two used to render at
                     // different type sizes in the same form.
-                    .font(.fernlet(.body))
-                    .textFieldStyle(.plain)
-                    .padding(12)
-                    .background(Color.cream, in: RoundedRectangle(cornerRadius: FernletMetrics.radiusSm))
+                    .sheetTextInput()
                     .onChange(of: draftLocation) { _, new in
                         draftLocation = ItemNameModeration.sanitizedName(new)
                     }
@@ -129,25 +130,17 @@ struct ActivitiesView: View {
 
                 Button(action: startActivity) {
                     Text("Start activity")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.parchment)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(draftTitle.isEmpty ? Color.moss.opacity(0.4) : Color.moss,
-                                    in: RoundedRectangle(cornerRadius: FernletMetrics.radiusSm))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ActionPillButtonStyle(.primary))
                 .disabled(draftTitle.isEmpty)
                 .accessibilityIdentifier("activities.start")
             } else {
                 Text("You're hosting the maximum of \(ActivityLimits.maxHosted) activities. End one to start another.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.body)
+                    .foregroundStyle(WorldPalette.dim)
             }
         }
-        .padding(16)
-        .background(Color.cream.opacity(0.5), in: RoundedRectangle(cornerRadius: FernletMetrics.radiusMd))
-        .overlay(RoundedRectangle(cornerRadius: FernletMetrics.radiusMd).stroke(Color.bark.opacity(0.08), lineWidth: 1))
     }
 
     private func startActivity() {
@@ -308,8 +301,8 @@ struct ActivitiesView: View {
     // MARK: - Empty
 
     private var emptyHint: some View {
-        EmptyState(
-            text: "No activities yet — start one above, or wait for a nearby friend to invite you.",
+        FriendsEmptyNote(
+            text: Text("No activities yet — start one above, or wait for a nearby friend to invite you."),
             systemImage: "figure.2.arms.open"
         )
         .padding(.vertical, 6)
@@ -492,8 +485,10 @@ struct ActivitiesView: View {
         func body(content: Content) -> some View {
             content
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: FernletMetrics.radiusMd))
-                .overlay(RoundedRectangle(cornerRadius: FernletMetrics.radiusMd).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+                .background(WorldPalette.paper, in: RoundedRectangle(cornerRadius: FernletFramedLook.cardRadius))
+                .overlay(RoundedRectangle(cornerRadius: FernletFramedLook.cardRadius)
+                    .strokeBorder(WorldPalette.ink, lineWidth: FernletFramedLook.frameWidth))
+                .background { RoundedRectangle(cornerRadius: FernletFramedLook.cardRadius).fill(WorldPalette.ink.opacity(0.22)).offset(y: 3) }
         }
     }
 }

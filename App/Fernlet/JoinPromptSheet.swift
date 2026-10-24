@@ -48,7 +48,7 @@ struct JoinPromptSheet<Request>: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("Someone wants to join")
-                        .font(.fernlet(.displayMedium))
+                        .font(FernletFramedFont.sheetTitle)
                         .foregroundStyle(Color.bark)
 
                     if let errorMessage {
@@ -61,14 +61,14 @@ struct JoinPromptSheet<Request>: View {
 
                     dismissalFooter
                 }
-                .padding(20)
+                .padding(.horizontal, 18)
+                .padding(.top, 8)
                 .padding(.bottom, 10)
             }
         }
-        .background(Color.parchment)
-        // One small card doesn't need a full-height sheet — and at half height the host can still
-        // see what they were doing while deciding.
-        .presentationDetents([.medium])
+        // Every sheet is full height on paper with the wooden grabber (b3-join-request; World
+        // Review Batch 3). This view is always a sheet's root, so it carries the frame itself.
+        .fernletSheet()
     }
 
     /// The way out, said out loud. Swiping this sheet away declines *everything* still pending
@@ -78,8 +78,10 @@ struct JoinPromptSheet<Request>: View {
     private var dismissalFooter: some View {
         VStack(alignment: .leading, spacing: 12) {
             if requests.count > 1 {
-                Button("Decline all") {
+                Button {
                     requests.forEach(decline)
+                } label: {
+                    Text("Decline all").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(ActionPillButtonStyle(.secondary))
                 .accessibilityIdentifier("\(accessibilityPrefix).declineAll")
@@ -88,8 +90,8 @@ struct JoinPromptSheet<Request>: View {
             Text(requests.count > 1
                  ? "Swiping this away declines everyone waiting."
                  : "Swiping this away declines this request.")
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.body)
+                .foregroundStyle(WorldPalette.dim)
                 .fernletWrappingText()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -99,23 +101,19 @@ struct JoinPromptSheet<Request>: View {
     /// over this sheet, so the error has to live inside it).
     private func errorBanner(_ message: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(Color.goldenrod)
             Text(message)
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
+                .font(FernletFramedFont.body)
+                .foregroundStyle(WorldPalette.bark)
                 .fernletWrappingText()
             Spacer(minLength: 0)
             Button("Dismiss") { dismissError() }
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
+                .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
                 .accessibilityIdentifier("\(accessibilityPrefix).error.dismiss")
         }
         .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14).stroke(Color.goldenrod.opacity(0.35), lineWidth: 1)
-        )
+        .background(WorldPalette.warn, in: RoundedRectangle(cornerRadius: FernletFramedLook.cardRadius))
+        .overlay(RoundedRectangle(cornerRadius: FernletFramedLook.cardRadius)
+            .strokeBorder(WorldPalette.ink, lineWidth: FernletFramedLook.frameWidth))
         .accessibilityIdentifier("\(accessibilityPrefix).error")
     }
 
@@ -129,48 +127,39 @@ struct JoinPromptSheet<Request>: View {
         return Text("\(requester) wants to join \(Text(targetName).bold())")
     }
 
-    /// The first pending request: who is asking, the "N more waiting" pill, and Allow/Decline.
+    /// The first pending request (b3-join-request): who is asking, the framed "N more waiting", and
+    /// Allow and Decline side by side, in a framed card.
     private func requestCard(_ request: Request) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            requestLine(request)
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
-                .fernletWrappingText()
+        FernletCard {
+            VStack(alignment: .leading, spacing: 14) {
+                requestLine(request)
+                    .font(FernletFramedFont.rowTitle)
+                    .foregroundStyle(WorldPalette.bark)
+                    .fernletWrappingText()
 
-            if requests.count > 1 {
-                Text("\(requests.count - 1) more waiting")
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 10))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.bark.opacity(0.10), lineWidth: 1)
-                    )
-            }
-
-            // Admitting or refusing someone is the sheet's whole job — 44pt action pills, not the
-            // 34pt chips used for picking options.
-            AdaptiveStack(spacing: 10, horizontalAlignment: .leading) {
-                Button("Allow") {
-                    allow(request)
+                if requests.count > 1 {
+                    Text("\(requests.count - 1) more waiting")
+                        .font(FernletFramedFont.buttonSmall)
+                        .foregroundStyle(WorldPalette.bark)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(WorldPalette.paperLight, in: RoundedRectangle(cornerRadius: 9))
+                        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(WorldPalette.ink, lineWidth: FernletFramedLook.frameWidth))
                 }
-                .buttonStyle(ActionPillButtonStyle(.primary))
-                .accessibilityIdentifier("\(accessibilityPrefix).allow")
 
-                Button("Decline") {
-                    decline(request)
+                // Admitting or refusing someone is the sheet's whole job — full action buttons, not
+                // the chips used for picking options.
+                AdaptiveStack(spacing: 10, horizontalAlignment: .leading) {
+                    Button { allow(request) } label: { Text("Allow").frame(maxWidth: .infinity) }
+                        .buttonStyle(ActionPillButtonStyle(.primary))
+                        .accessibilityIdentifier("\(accessibilityPrefix).allow")
+
+                    Button { decline(request) } label: { Text("Decline").frame(maxWidth: .infinity) }
+                        .buttonStyle(ActionPillButtonStyle(.secondary))
+                        .accessibilityIdentifier("\(accessibilityPrefix).decline")
                 }
-                .buttonStyle(ActionPillButtonStyle(.secondary))
-                .accessibilityIdentifier("\(accessibilityPrefix).decline")
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(16)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.bark.opacity(0.08), lineWidth: 1)
-        )
     }
 }
