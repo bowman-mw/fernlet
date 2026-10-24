@@ -152,7 +152,7 @@ struct WorldMapHome: View {
     /// The companion with its bubble, its feet on `point`.
     private func companion(at point: CGPoint) -> some View {
         WorldMapCompanion(store: store, bodySignal: bodySignal, isActive: isFrontmost && !isCustomizing, mapLine: mapLine,
-                          isQuiet: cardContext != nil) {
+                          isQuiet: isBubbleQuiet) {
             isCustomizing = true
         }
         .fixedSize()
@@ -262,6 +262,13 @@ struct WorldMapHome: View {
 
     /// Whether a walk is recording.
     private var isWalking: Bool { store.worldLocation.isWalking }
+
+    /// Whether the companion's bubble stays down: under the open quick-start card, and at accessibility
+    /// sizes while a notice, the walk bar or a stamp's banner fills the top, so the large bubble never
+    /// runs into them.
+    private var isBubbleQuiet: Bool {
+        cardContext != nil || (dynamicTypeSize.isAccessibilitySize && (notice != nil || isWalking || stampBannerShowing))
+    }
 
     /// The walk's length so far, in metres.
     private var walkMetres: Double { WorldRouteCodec.length(of: store.worldWalk.points) }
@@ -452,11 +459,21 @@ extension WorldMapHome {
         if !hasPlace || distance != camera.distance {
             if !hasPlace { readSavedLine() }
             hasPlace = true
-            camera = WorldCamera(center: fix.point, distance: distance, revision: camera.revision &+ 1)
+            camera = WorldCamera(center: Self.lookAt(fix.point, distance: distance), distance: distance,
+                                 revision: camera.revision &+ 1)
             return
         }
-        camera.move(to: fix.point)
+        camera.move(to: Self.lookAt(fix.point, distance: camera.distance))
     }
+
+    /// Where the camera looks so the person stands a little below the middle, as the approved Home
+    /// stands the companion (about 58% of the way down), leaving room above for the plates and notices.
+    static func lookAt(_ point: GeoPoint, distance: Double) -> GeoPoint {
+        point.offset(east: 0, north: distance * PlainBaseMap.heightPerDistance * companionDrop)
+    }
+
+    /// How far below the middle the person stands, as a share of the map's height.
+    static let companionDrop = 0.08
 
     /// How far back the camera stands with approximate location: the area, not the street.
     static let areaDistance = 5_000.0

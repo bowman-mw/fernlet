@@ -28,21 +28,14 @@ struct WorldMapNotice: View {
     private var plate: some View {
         HStack(alignment: .center, spacing: 10) {
             WorldSpriteView(sprite: sprite, scale: 2)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(WorldNoticeType.title)
-                if let detail {
-                    Text(detail)
-                        .font(WorldNoticeType.detail)
+            if kind == .approximate {
+                WorldNoticeLineLayout {
+                    lines
+                    usePrecise
                 }
+            } else {
+                lines
             }
-            .foregroundStyle(WorldPalette.bark)
-            .fernletWrappingText()
-            // The line keeps the room; a long "Use precise" wraps onto two lines instead of
-            // squeezing it into a narrow column (Spanish and the doubled-length check).
-            .layoutPriority(1)
-            .accessibilityElement(children: .combine)
-            if kind == .approximate { usePrecise }
         }
         .padding(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
         .background(WorldPalette.paper, in: RoundedRectangle(cornerRadius: 9))
@@ -50,6 +43,21 @@ struct WorldMapNotice: View {
         .background {
             RoundedRectangle(cornerRadius: 9).fill(WorldPalette.ink.opacity(0.35)).offset(y: 3)
         }
+    }
+
+    /// The bold line and the line under it, read as one.
+    private var lines: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(WorldNoticeType.title)
+            if let detail {
+                Text(detail)
+                    .font(WorldNoticeType.detail)
+            }
+        }
+        .foregroundStyle(WorldPalette.bark)
+        .fernletWrappingText()
+        .accessibilityElement(children: .combine)
     }
 
     /// "Use precise": the wooden button on the approximate plate.
@@ -113,6 +121,63 @@ struct WorldMapNotice: View {
         let title = String(localized: notice.title)
         guard let detail = notice.detail else { return title }
         return "\(title). \(String(localized: detail))"
+    }
+}
+
+/// The approximate plate's lines and its "Use precise": side by side while the button takes at most
+/// two fifths of the plate (the approved draft), else the button under the lines, so a long label
+/// (Spanish, the doubled-length check) never squeezes either into a narrow column. Exactly two
+/// subviews: the lines, then the button.
+struct WorldNoticeLineLayout: Layout {
+    /// The gap between the lines and the button.
+    static let spacing: CGFloat = 10
+    /// The most of the plate's width the button may take beside the lines.
+    static let sideShare: CGFloat = 0.4
+
+    /// The two frames, and whether the button sits beside the lines.
+    private struct Frames {
+        let lines: CGRect
+        let button: CGRect
+        let sideBySide: Bool
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard subviews.count == 2 else { return .zero }
+        let frames = Self.frames(width: proposal.width, subviews: subviews)
+        return CGSize(width: max(frames.lines.maxX, frames.button.maxX), height: max(frames.lines.maxY, frames.button.maxY))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard subviews.count == 2 else { return }
+        let frames = Self.frames(width: bounds.width, subviews: subviews)
+        // Beside the lines the button keeps to the plate's right edge, as the approved plate draws it.
+        let buttonX = frames.sideBySide ? bounds.maxX - frames.button.width : bounds.minX + frames.button.minX
+        subviews[0].place(at: CGPoint(x: bounds.minX + frames.lines.minX, y: bounds.minY + frames.lines.minY),
+                          proposal: ProposedViewSize(frames.lines.size))
+        subviews[1].place(at: CGPoint(x: buttonX, y: bounds.minY + frames.button.minY),
+                          proposal: ProposedViewSize(frames.button.size))
+    }
+
+    /// Where the lines and the button go in `width` (nil or unbounded: each at its ideal size, side by side).
+    private static func frames(width: CGFloat?, subviews: Subviews) -> Frames {
+        let button = subviews[1].sizeThatFits(.unspecified)
+        let ideal = subviews[0].sizeThatFits(.unspecified)
+        let wanted = ideal.width + spacing + button.width
+        let total = width.map { $0.isFinite ? $0 : wanted } ?? wanted
+        if button.width <= total * sideShare {
+            let lines = subviews[0].sizeThatFits(ProposedViewSize(width: max(0, total - button.width - spacing), height: nil))
+            let height = max(lines.height, button.height)
+            return Frames(lines: CGRect(x: 0, y: (height - lines.height) / 2, width: lines.width, height: lines.height),
+                          button: CGRect(x: lines.width + spacing, y: (height - button.height) / 2,
+                                         width: button.width, height: button.height),
+                          sideBySide: true)
+        }
+        let lines = subviews[0].sizeThatFits(ProposedViewSize(width: total, height: nil))
+        let buttonWidth = min(button.width, total)
+        let buttonHeight = subviews[1].sizeThatFits(ProposedViewSize(width: buttonWidth, height: nil)).height
+        return Frames(lines: CGRect(origin: .zero, size: lines),
+                      button: CGRect(x: 0, y: lines.height + spacing, width: buttonWidth, height: buttonHeight),
+                      sideBySide: false)
     }
 }
 

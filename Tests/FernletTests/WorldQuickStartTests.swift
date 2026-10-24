@@ -195,6 +195,17 @@ struct WorldQuickStartTests {
         #expect(WorldMapMarker.space(near: nil, in: [nearer]) == nil)
     }
 
+    /// The camera looks a little north of the person, so the companion stands about 58% of the way
+    /// down the map (the approved Home), and it scales with the zoom.
+    @Test func theCameraStandsTheCompanionBelowTheMiddle() {
+        let here = GeoPoint(45.5205, -122.6255)
+        let near = WorldMapHome.lookAt(here, distance: 1_700).metres(from: here)
+        #expect(abs(near.east) < 0.01)
+        #expect(abs(near.north - 1_700 * PlainBaseMap.heightPerDistance * WorldMapHome.companionDrop) < 0.5)
+        let far = WorldMapHome.lookAt(here, distance: 5_000).metres(from: here)
+        #expect(far.north > near.north * 2.5, "zoomed out, the same share of the screen is more ground")
+    }
+
     // MARK: The walk bar's End
 
     /// End logs the walk and its toast carries what Undo needs; Undo removes it.
