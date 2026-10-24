@@ -18,29 +18,41 @@ struct WorldTodayEditor: View {
     var store: FernletStore
 
     var body: some View {
+        let shown = self.shown, hidden = self.hidden, count = shown.count + hidden.count
         List {
-            Section {
-                ForEach(shown) { row($0, isShown: true) }
-                    .onMove { from, to in apply(TodayLayout.moving(store.settings.homeWidgets, from: from, to: to)) }
-                ForEach(hidden) { row($0, isShown: false) }
-            } header: {
-                Text("Drag to reorder. Hidden cards stay one tap away in Settings.")
-                    .font(.fernlet(.body))
-                    .foregroundStyle(WorldPalette.dim)
-                    .textCase(nil)
-                    .fernletWrappingText()
-            } footer: {
-                Text("The companion lives on the map, and Quick log moved to Log, so neither is in this list.")
-                    .font(.fernlet(.body))
-                    .foregroundStyle(WorldPalette.dim)
-                    .fernletWrappingText()
+            note("Drag to reorder. Hidden cards stay one tap away in Settings.")
+                .padding(.bottom, 4)
+            ForEach(Array(shown.enumerated()), id: \.element) { index, widget in
+                row(widget, isShown: true)
+                    .fernletFramedListRow(isFirst: index == 0, isLast: index == count - 1)
             }
-            .listRowBackground(WorldPalette.paper)
-            .listRowSeparatorTint(WorldPalette.ink.opacity(0.25))
+            .onMove { from, to in apply(TodayLayout.moving(store.settings.homeWidgets, from: from, to: to)) }
+            ForEach(Array(hidden.enumerated()), id: \.element) { index, widget in
+                row(widget, isShown: false)
+                    .fernletFramedListRow(isFirst: shown.isEmpty && index == 0, isLast: shown.count + index == count - 1)
+            }
+            note("The companion lives on the map, and Quick log moved to Log, so neither is in this list.")
+                .padding(.top, 8)
         }
+        .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .fernletPageBackground()
         .environment(\.editMode, .constant(.active))
         .accessibilityIdentifier("world.todayEditor")
+    }
+
+    /// The page's lines above and below the card, on the dotted page (plain rows: no frame, no rule,
+    /// nothing to move).
+    private func note(_ text: LocalizedStringKey) -> some View {
+        Text(text)
+            .font(.fernlet(.body))
+            .foregroundStyle(WorldPalette.dim)
+            .fernletWrappingText()
+            .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .moveDisabled(true)
+            .deleteDisabled(true)
     }
 
     /// The cards Today shows, in order.

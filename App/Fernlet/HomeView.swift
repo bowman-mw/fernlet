@@ -1296,7 +1296,8 @@ struct HomeView: View {
             }
         }
         .font(.fernlet(.labelSmall))
-        .foregroundStyle(Color.slate)
+        // World build: the design language's secondary ink on paper (b1-today), not the slate blue.
+        .foregroundStyle(framedLook?.dim ?? Color.slate)
         .multilineTextAlignment(.trailing)
         .fixedSize(horizontal: false, vertical: true)
         // T2-2: dropping the prefix is a layout decision, but spoken alone the goal name is the very
@@ -2544,7 +2545,7 @@ struct MacroCard: View {
                     }
                 }
                 .font(.fernlet(.stat))
-                .foregroundStyle(Color.slate)
+                .foregroundStyle(look?.dim ?? Color.slate)
             }
         }
     }
