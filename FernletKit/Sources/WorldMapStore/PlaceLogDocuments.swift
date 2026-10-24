@@ -45,6 +45,9 @@ public nonisolated struct PlaceLog: Codable, Equatable, Sendable {
         let seen = Set(stops.map(\.id))
         let firstDay = Self.firstDay(now: now, calendar: calendar)
         for stop in device.pending where !seen.contains(stop.id) && stop.at >= firstDay {
+            // A visit to a place the timeline already has a visit to within three hours is the same visit
+            // (the map opened again there after Private folded the first one).
+            if stop.kind == .visit, next.stops.contains(where: { $0.isSameVisit(as: stop) }) { continue }
             if stop.kind == .visit, let place = stop.placeID {
                 guard let index = next.places.firstIndex(where: { $0.id == place }) else { continue }
                 next.places[index].visits += 1
@@ -152,12 +155,11 @@ public nonisolated struct PlaceDeviceState: Codable, Equatable, Sendable {
     }
 
     /// This state with a visit to `place` at `date`, unless one is already waiting there from the last
-    /// ``sameVisitWindow`` (and `lastVisit`, the newest folded visit there, is older than that too).
-    public func recordingVisit(to place: UUID, at date: Date, lastFoldedVisit: Date? = nil) -> PlaceDeviceState {
-        let recent = pending.contains { $0.placeID == place && abs(date.timeIntervalSince($0.at)) < Self.sameVisitWindow }
-        let folded = lastFoldedVisit.map { abs(date.timeIntervalSince($0)) < Self.sameVisitWindow } ?? false
-        guard !recent, !folded else { return self }
-        return appending(PlaceStop(kind: .visit, at: date, placeID: place))
+    /// ``sameVisitWindow`` (a visit Private already folded is caught by the fold itself, ``PlaceLog/folding(_:now:calendar:)``).
+    public func recordingVisit(to place: UUID, at date: Date) -> PlaceDeviceState {
+        let visit = PlaceStop(kind: .visit, at: date, placeID: place)
+        guard !pending.contains(where: { $0.isSameVisit(as: visit) }) else { return self }
+        return appending(visit)
     }
 
     /// This state with a new place learned at its first visit, `date`: known for matching, its name waiting

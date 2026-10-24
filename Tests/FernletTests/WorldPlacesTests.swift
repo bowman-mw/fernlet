@@ -68,6 +68,11 @@ struct WorldPlacesTests {
         #expect(log.stops.count == 2, "and it never reaches the timeline")
         let again = log.folding(device, now: Self.now)
         #expect(again.places.first?.visits == 1, "a fold cut short and run again counts nothing twice")
+        let reopened = PlaceDeviceState.empty.recordingVisit(to: place.id, at: Self.now.addingTimeInterval(3_600))
+        #expect(log.folding(reopened, now: Self.now).places.first?.visits == 1,
+                "the map opened again at the park an hour later, after a fold: the same visit")
+        let later = PlaceDeviceState.empty.recordingVisit(to: place.id, at: Self.now.addingTimeInterval(5 * 3_600))
+        #expect(log.folding(later, now: Self.now.addingTimeInterval(5 * 3_600)).places.first?.visits == 2)
         #expect(log.returnedTo.map(\.name) == ["Laurelhurst Park"])
     }
 

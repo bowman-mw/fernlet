@@ -193,6 +193,13 @@ public nonisolated struct PlaceStop: Codable, Equatable, Identifiable, Sendable 
     /// The walk's or run's workout, whose saved line (if any) the day's map draws.
     public let workoutID: UUID?
 
+    /// Whether this stop and `other` are visits to the same place within
+    /// ``PlaceDeviceState/sameVisitWindow`` of each other: one visit, noted twice.
+    public func isSameVisit(as other: PlaceStop) -> Bool {
+        kind == .visit && other.kind == .visit && placeID != nil && placeID == other.placeID
+            && abs(at.timeIntervalSince(other.at)) < PlaceDeviceState.sameVisitWindow
+    }
+
     /// A stop.
     public init(id: UUID = UUID(), kind: Kind, at: Date, placeID: UUID? = nil, metres: Double? = nil, workoutID: UUID? = nil) {
         self.id = id

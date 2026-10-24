@@ -162,8 +162,9 @@ struct WorldDaySketch: View {
             }
             for point in points {
                 let at = fit.place(point)
-                context.fill(Path(CGRect(x: at.x - 5, y: at.y - 5, width: 10, height: 10)), with: .color(WorldPalette.ink))
-                context.fill(Path(CGRect(x: at.x - 3, y: at.y - 3, width: 6, height: 6)), with: .color(WorldPalette.paperLight))
+                // The icon ink, which turns light in dark mode, round a paper centre.
+                context.fill(Path(CGRect(x: at.x - 5, y: at.y - 5, width: 10, height: 10)), with: .color(WorldPalette.iconInk))
+                context.fill(Path(CGRect(x: at.x - 3, y: at.y - 3, width: 6, height: 6)), with: .color(WorldPalette.paper))
             }
         }
         .background(dark ? WorldPalette.nightPlainGround : WorldPalette.plainGround)
@@ -177,7 +178,6 @@ nonisolated struct WorldSketchFit {
     let origin: GeoPoint
     let scale: Double
     let offset: CGPoint
-    let height: Double
 
     /// The fit for `points` in `size`, or nil with none. A single point (or a tiny spread) sits in the
     /// middle at a street's scale.
@@ -190,7 +190,6 @@ nonisolated struct WorldSketchFit {
         let scale = min((size.width - 2 * margin) / spanEast, (size.height - 2 * margin) / spanNorth)
         origin = first
         self.scale = scale
-        height = size.height
         offset = CGPoint(x: size.width / 2 - (minEast + maxEast) / 2 * scale,
                          y: size.height / 2 + (minNorth + maxNorth) / 2 * scale)
     }
