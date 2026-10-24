@@ -14,12 +14,14 @@ The World build's Home is a live map ("A World for Fernlet", design page v9). Ap
 
 ### The sealed history
 
-``WorldMapVault`` is the only place the map's history is written. Every file is AES-GCM sealed with its own authenticated purpose (`FernletCryptoPurpose.AEAD.worldMapFogV1`, `worldMapPendingV1`, `worldMapRouteV1`), plus any per-file context (a walk line's workout id), written with file protection, and kept in `Application Support/WorldMap`, a folder excluded from device backups. Its two keys (``WorldMapKeys``, ``WorldMapKeyRole``) are this-device-only rows under `com.fernlet.world-map`:
+``WorldMapVault`` is the only place the map's history is written. Every file is AES-GCM sealed with its own authenticated purpose (`FernletCryptoPurpose.AEAD.worldMapFogV1`, `worldMapPendingV1`, `worldMapRouteV1`, `worldMapPinsV1`), plus any per-file context (a walk line's workout id), written with file protection, and kept in `Application Support/WorldMap`, a folder excluded from device backups. Its two keys (``WorldMapKeys``, ``WorldMapKeyRole``) are this-device-only rows under `com.fernlet.world-map`:
 
 - the **store** key is `WhenUnlockedThisDeviceOnly`, so the fog can only be read or written while the phone is unlocked;
 - the **buffer** key is `AfterFirstUnlockThisDeviceOnly`, for the small locked-phone buffer alone: a walk with the screen off, or Always mode's visits, lift cells while the phone is locked, and those wait there until the next unlock drains them into the store. The same split as `PendingNarrativeBuffer`, for the same reason.
 
 **Walk lines** (``WorldRouteStore``, ``WorldRouteCodec``, ``RoutePoint``) are one sealed file per workout, bound to the workout's id, shaped like the watch build's planned `DeviceRouteStore` so a later move to it is a straight copy. A line is thinned (Ramer–Douglas–Peucker at 2.5 m), quantised (1e-5°, 0.5 m) and delta-coded as zigzag varints; at most 50,000 points, at most 2,000 lines. Only the workout's duration and distance reach the synced diary; the line stays here.
+
+**Workout-space pins** (``SpacePinStore``) are one small sealed file: a point per space, keyed by the space's `WorkoutLocation.id`, matched within 100 m on the phone. A space's name and setup stay in the synced settings; only its place on the map lives here. At most 200 pins.
 
 A key that can't be read right now is an error, never a reason to mint a new one over it; a file that can't be opened (its key gone, its bytes damaged) is removed, so the map starts fresh rather than carrying noise.
 
@@ -56,3 +58,4 @@ This module holds location history (the lifted fog cells now; saved walk lines a
 - ``WorldRouteStore``
 - ``WorldRouteCodec``
 - ``RoutePoint``
+- ``SpacePinStore``

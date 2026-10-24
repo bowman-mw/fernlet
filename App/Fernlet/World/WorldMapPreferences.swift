@@ -8,6 +8,8 @@ import Foundation
 ///   along the day. Needs the Always permission, asked only when the person turns this on.
 /// - **Save new routes** (on by default; owner, 2026-10-22): whether a finished walk keeps its line on
 ///   this iPhone. Off stops new lines only: the walk still lifts the fog and logs its distance.
+/// - **Remember where your workout spaces are** (asked once, in workout-space setup; step 6a): not asked
+///   (nil), yes or no. Until it is yes nothing pins a space.
 ///
 /// Device-only `UserDefaults`, never in the synced settings: they describe this phone's location
 /// behaviour. Every key is cleared by the delete funnel (``clearAll(in:)``,
@@ -18,6 +20,7 @@ nonisolated enum WorldMapPreferences {
         static let uncoverAsYouGo = "fernlet.worldMap.uncoverAsYouGo"
         static let alwaysLowPower = "fernlet.worldMap.alwaysLowPower"
         static let saveNewRoutes = "fernlet.worldMap.saveNewRoutes"
+        static let rememberSpaces = "fernlet.worldMap.rememberSpaces"
     }
 
     /// Whether the fog lifts as you go (default on).
@@ -52,10 +55,22 @@ nonisolated enum WorldMapPreferences {
         defaults.set(on, forKey: Key.saveNewRoutes)
     }
 
+    /// The answer to "Remember where your workout spaces are?": nil until it has been asked.
+    static func rememberSpaces(in defaults: UserDefaults = .standard) -> Bool? {
+        guard defaults.object(forKey: Key.rememberSpaces) != nil else { return nil }
+        return defaults.bool(forKey: Key.rememberSpaces)
+    }
+
+    /// Records the answer to "Remember where your workout spaces are?".
+    static func setRememberSpaces(_ yes: Bool, in defaults: UserDefaults = .standard) {
+        defaults.set(yes, forKey: Key.rememberSpaces)
+    }
+
     /// Removes every setting (the delete funnel), so the next launch starts from the defaults.
     static func clearAll(in defaults: UserDefaults = .standard) {
         defaults.removeObject(forKey: Key.uncoverAsYouGo)
         defaults.removeObject(forKey: Key.alwaysLowPower)
         defaults.removeObject(forKey: Key.saveNewRoutes)
+        defaults.removeObject(forKey: Key.rememberSpaces)
     }
 }

@@ -769,6 +769,9 @@ final class FernletStore {
     @ObservationIgnored private(set) lazy var worldRoutes = WorldRouteStore(vault: worldMapVault)
     /// The walk recording now, if any (`WorldWalkRecorder`; `FernletStore+WorldWalk`).
     @ObservationIgnored let worldWalk = WorldWalkRecorder()
+    /// Where the person's workout spaces are (`SpacePinStore`; `FernletStore+WorldPins`), in the same
+    /// vault as the fog and cleared with it.
+    @ObservationIgnored private(set) lazy var worldSpacePins = SpacePinStore(vault: worldMapVault)
     /// Recipe ids whose web-image download is currently in flight. Guards the entry to
     /// ``fetchRecipeWebImageIfNeeded(for:)`` so the paste-import fire-and-forget task and the
     /// detail's first-open task — both of which can hold the same not-yet-attempted recipe copy —
@@ -4625,6 +4628,8 @@ final class FernletStore {
 
     func deleteWorkoutLocation(_ id: UUID) {
         diary.deleteWorkoutLocation(id)
+        // World build: the space's place on the map goes with it.
+        forgetWorkoutSpacePin(id)
     }
 
     func setActiveWorkoutLocation(_ id: UUID) {
@@ -5054,6 +5059,8 @@ final class FernletStore {
         // The session's start, for the logged duration: the run carries it, so it survives a relaunch.
         state.startedAt = state.setStartedAt
         guidedRunState = state
+        // World build: a space's first guided workout pins where it is, if the person said yes.
+        pinWorkoutSpaceAtGuidedStart()
         // Spoken cues name the first step once, here at Start (never on a resume).
         guidedRunCues.started(state)
         mirrorGuidedRunState(state)
@@ -7107,9 +7114,9 @@ final class FernletStore {
         if !deviceDaySummaryStore.clearAll() {
             incompleteStores.append("your day summaries")
         }
-        // The World map's sealed location history (fog cells, its locked-phone buffer and the saved
-        // walk lines, one folder) and both of its device keys, plus its device-only settings. World
-        // build only.
+        // The World map's sealed location history (fog cells, its locked-phone buffer, the saved walk
+        // lines and the workout-space pins, one folder) and both of its device keys, plus its
+        // device-only settings. World build only.
         if !worldFog.clearAll() {
             incompleteStores.append("your map history")
         }

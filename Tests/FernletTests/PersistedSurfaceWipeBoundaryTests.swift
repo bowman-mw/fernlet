@@ -196,6 +196,7 @@ struct PersistedSurfaceWipeBoundaryTests {
         "fernlet.worldMap.uncoverAsYouGo": .cleared(token: "WorldMapPreferences.clearAll"),
         "fernlet.worldMap.alwaysLowPower": .cleared(token: "WorldMapPreferences.clearAll"),
         "fernlet.worldMap.saveNewRoutes": .cleared(token: "WorldMapPreferences.clearAll"),
+        "fernlet.worldMap.rememberSpaces": .cleared(token: "WorldMapPreferences.clearAll"),
         "fernlet.barcodeLastServings.v1": .cleared(token: "BarcodeServingMemory.clearAll"),
         // The companion petting state, all four keys. `clearPersistentState()` existed long before
         // anything on a shipping path called it — see the header.

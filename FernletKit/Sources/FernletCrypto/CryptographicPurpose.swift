@@ -451,6 +451,10 @@ public nonisolated enum FernletCryptoPurpose {
         /// when-unlocked store key with its workout id as further authenticated data, so a line can
         /// open only as its own workout's line, never as the fog or another walk.
         public static let worldMapRouteV1 = CryptographicPurpose("fernlet.world-map.route.aead.v1")
+        /// **World build only.** Where the person's workout spaces are (`SpacePinStore`), sealed under the
+        /// vault's when-unlocked store key: one point per space, keyed by the space's id, never in the
+        /// synced settings.
+        public static let worldMapPinsV1 = CryptographicPurpose("fernlet.world-map.pins.aead.v1")
         public static let mealPhotoV2 = CryptographicPurpose("fernlet.private-media.meal-photo.aead.v2")
         public static let recipePhotoV2 = CryptographicPurpose("fernlet.private-media.recipe-photo.aead.v2")
         public static let progressPhotoV2 = CryptographicPurpose("fernlet.private-media.progress-photo.aead.v2")
