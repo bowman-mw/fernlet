@@ -639,6 +639,8 @@ struct PrivacyDataSettingsView: View {
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
+            // The framed primary button (the same one as the entry check's): it fades while the
+            // export is being prepared.
             Button {
                 runExport()
             } label: {
@@ -646,14 +648,7 @@ struct PrivacyDataSettingsView: View {
                       systemImage: "square.and.arrow.up")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.plain)
-            .font(.fernlet(.label))
-            .foregroundStyle(isBuildingExport ? Color.bark : Color.onMoss)
-            .padding(.vertical, 11)
-            .background(
-                Color.mossFill.opacity(isBuildingExport ? 0.55 : 1),
-                in: RoundedRectangle(cornerRadius: 12)
-            )
+            .buttonStyle(ActionPillButtonStyle(.primary))
             .disabled(isBuildingExport)
             .accessibilityIdentifier("privacy.export")
 
@@ -821,11 +816,11 @@ struct PrivacyDataSettingsView: View {
             // single decision about the user's own pictures — and the size disclosure below is
             // attached to the switch rather than buried in the confirm dialog, because photos are
             // the one backup whose cost the user pays in iCloud storage.
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 0) {
                 Toggle("Sealed backup for your photos", isOn: ownPhotoBackupBinding)
                     .accessibilityIdentifier("privacy.sealedBackup.ownPhotos")
-                backupNote(Text(Self.ownPhotoBackupSizeDisclosure))
-                    .padding(.bottom, 10)
+                backupNote(Text(Self.ownPhotoBackupSizeDisclosure), padded: false)
+                    .padding(.bottom, 14)
             }
             foundBackupLines
 
@@ -835,12 +830,13 @@ struct PrivacyDataSettingsView: View {
     }
 
     /// A quiet line in the backups card (an unavailable switch's reason, the photo size disclosure).
-    private func backupNote(_ text: Text) -> some View {
+    /// `padded` gives a row of its own the row's padding; the disclosure under its switch takes none.
+    private func backupNote(_ text: Text, padded: Bool = true) -> some View {
         text
             .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.rowDetail)
             .foregroundStyle(look?.dim ?? Color.slate)
             .fernletWrappingText()
-            .padding(.vertical, look == nil ? 0 : 8)
+            .padding(.vertical, look == nil || !padded ? 0 : 8)
     }
 
     /// The sealed backups iCloud was found to hold (`ExistingDataSummary.sealedBackups`) whose switch on

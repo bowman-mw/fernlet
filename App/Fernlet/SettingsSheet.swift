@@ -198,13 +198,18 @@ struct SettingsSheet: View {
     @ViewBuilder
     private var settingsRoot: some View {
         if framedLook != nil {
-            settingsContent
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    SettingsSearchField(title: "Search settings", text: $settingsSearch)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 14)
-                }
-                .modifier(SettingsRootChrome(inPanel: onClose != nil, isDeleting: deleteFlow.isDeleting) { dismiss() })
+            // The field sits ABOVE the list, not in the list's safe-area inset: the first keystroke
+            // swaps the page for the results (`settingsContent`), and a field hosted in the swapped
+            // list's inset lost the keyboard on that swap, so only the first letter was ever typed.
+            VStack(spacing: 0) {
+                SettingsSearchField(title: "Search settings", text: $settingsSearch)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 14)
+                settingsContent
+            }
+            // The dotted page behind the field too (the list paints only its own area).
+            .fernletPageBackground()
+            .modifier(SettingsRootChrome(inPanel: onClose != nil, isDeleting: deleteFlow.isDeleting) { dismiss() })
         } else {
             settingsContent
                 .navigationTitle(Text("Settings"))
