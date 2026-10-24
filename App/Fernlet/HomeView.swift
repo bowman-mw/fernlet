@@ -81,6 +81,9 @@ struct HomeView: View {
     /// What this Home draws (World build): the whole page, or only the Quick log and mood cards for
     /// the item bar's Log panel. The same cards either way, so the panels show exactly Home's data.
     var presentation: HomePresentation = .page
+    /// The stamp banner's or the stamp widget's ask for the Stamp book (World Today panel): this Home
+    /// pushes it at its stamps and clears the ask (``StampBookPushHost``).
+    var stampBookRequest: Binding<Bool> = .constant(false)
     @State private var hasRecentPeriodEvent = false
     @State private var didLoadRecentPeriodActivity = false
     @State private var isCompanionThoughtVisible = true
@@ -131,7 +134,7 @@ struct HomeView: View {
     /// couple of points at each end exactly as they did before.
     @ScaledMetric(relativeTo: .body) private var photowallHeight: CGFloat = 126
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    /// The Stamp book, pushed from the Milestones or Silly stats card.
+    /// The Stamp book, pushed from the Milestones or Silly stats card, or on ``stampBookRequest``.
     @State private var isStampBookOpen = false
     var body: some View {
         NavigationStack {
@@ -142,7 +145,7 @@ struct HomeView: View {
             }
             .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
             // Milestones and Silly stats open one page, the Stamp book (design `b2-milestones`, draft 2).
-            .stampBookDestination(isPresented: $isStampBookOpen, store: store)
+            .modifier(StampBookPushHost(isOpen: $isStampBookOpen, request: stampBookRequest, store: store))
             // A Recent bites polaroid pushes its photo under the plate ("‹ Today", `b2-meal-photo`).
             .navigationDestination(item: $selectedBite) { bite in recentBiteDetail(bite) }
             // Customize is a page inside the Today panel (design `b2-customize`): Customize → a slot,

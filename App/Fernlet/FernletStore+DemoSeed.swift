@@ -65,6 +65,13 @@ extension FernletStore {
         // so a relaunch that drops the flag puts the coach gate back off rather than leaving it on
         // from an earlier run.
         settings.coachExchangeEnabled = UITestSupport.enableCoachExchange
+        // Log meal's Import helper is a web lookup end to end, so it shows only while the lane is open
+        // (AI on, asked for, consented): a screenshot of the `b3-meal` row asks for it explicitly.
+        if UITestSupport.enableWebNutritionLookup {
+            if settings.aiStatus == .off { settings.aiStatus = .ready }
+            settings.webNutritionLookupEnabled = true
+            settings.webNutritionLookupConsent = .accepted
+        }
         // Same rule, and it is load-bearing for two suites at once. `selectedGoal` is persisted and
         // NOTHING resets it, but `GoalPresetCardsUITests` taps the Strength card and leaves it
         // there — so on that simulator's next run the goal is whatever the last test chose. Two

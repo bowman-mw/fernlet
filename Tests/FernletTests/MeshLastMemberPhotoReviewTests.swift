@@ -1021,12 +1021,14 @@ struct LastMemberPhotoReviewSourceWallTests {
                 "no Photos-waiting card under the decoy or over a live session")
     }
 
-    /// Fix round C-F2/L-F2: every trigger schedules, the check refuses over presentations this
-    /// surface does not own, and an unlanded request is withdrawn and re-asked rather than latched.
-    /// Since U3 the Friends surface requests ONE session-end sheet — the keep-friends prompt — and
-    /// never while photos are outstanding or the overlay shows (I17).
+    /// Fix round C-F2/L-F2: every trigger schedules, the check refuses over presentations, and an
+    /// unlanded request is withdrawn and re-asked rather than latched. Since U3 the keep-friends prompt
+    /// is the one session-end sheet, never asked while photos are outstanding or the overlay shows
+    /// (I17); since the owner's answer of 2026-10-24 it is the root's (``KeepFriendsPromptHost``), so it
+    /// is asked wherever the person is, Home included.
     @Test func theFriendsPresenterNeverLatchesADroppedRequest() throws {
-        let source = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/ConnectView.swift"))
+        let source = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("App/Fernlet/World/Friends/KeepFriendsPromptHost.swift"))
         #expect(source.components(separatedBy: "presentDisconnectReviewIfNeeded()").count - 1 == 2,
                 "declared once and called once — from the deferred check; every trigger schedules")
         let deferred = try #require(MeshRoutedSourceScan.bracedBody(
@@ -1034,10 +1036,10 @@ struct LastMemberPhotoReviewSourceWallTests {
         #expect(deferred.contains("presentDisconnectReviewIfNeeded()"))
         let present = try #require(MeshRoutedSourceScan.bracedBody(
             after: "private func presentDisconnectReviewIfNeeded()", in: source))
-        // The Album hosts no camera since b4-mem-session (the camera is Home's blue button's full-screen
-        // cover), so the only covering presentation it waits out is the root sheet.
-        #expect(present.contains("guard activeSheet == nil else { return }"),
-                "no request over the root sheet")
+        #expect(present.contains("guard !aPresentationIsUp else { return }"), "no request over a presentation")
+        let predicate = try #require(MeshRoutedSourceScan.bracedBody(after: "private var aPresentationIsUp: Bool", in: source))
+        #expect(predicate.contains("isRootSheetUp") && predicate.contains("isCoverUp"),
+                "the root's own presentations and every cover below it count (a request over a cover is dropped)")
         #expect(present.contains("guard !features.photos.hasOutstandingPhotoReview, !reviewCoordinator.isShowing,"),
                 "photos first: never while photos wait or the overlay is up (I17)")
         #expect(present.contains("sessionEndReview(hasPhotos: false"), "the photo half is never decided here")
@@ -1052,17 +1054,25 @@ struct LastMemberPhotoReviewSourceWallTests {
             after: "private func withdrawUnlandedSessionEndSheet()", in: source))
         #expect(!withdraw.contains("completeFriendReview") && !withdraw.contains("finishReviewedPhotos"),
                 "withdrawing answers nothing")
+        let cleared = try #require(withdraw.range(of: "reviewBatch = nil"))
+        let loweredFlag = try #require(withdraw.range(of: "keepFriendsPromptPresented = false"))
+        #expect(cleared.lowerBound < loweredFlag.lowerBound, "its batch cleared FIRST, so the finalize mints nothing")
         let overlay = try #require(MeshRoutedSourceScan.bracedBody(
             after: "private func handleOverlayChange(showing: Bool)", in: source))
-        let cleared = try #require(overlay.range(of: "reviewBatch = nil"))
+        let overlayCleared = try #require(overlay.range(of: "reviewBatch = nil"))
         let lowered = try #require(overlay.range(of: "keepFriendsPromptPresented = false"))
-        #expect(cleared.lowerBound < lowered.lowerBound,
+        #expect(overlayCleared.lowerBound < lowered.lowerBound,
                 "the overlay showing withdraws a standing prompt with its batch cleared FIRST, so its finalize mints nothing")
         #expect(source.contains(".onChange(of: reviewCoordinator.isShowing)"))
-        #expect(!source.contains("DisposableCameraView("),
+        #expect(source.contains(".onChange(of: isRootSheetUp)") && source.contains(".onChange(of: isCoverUp)"),
+                "and the covering presentations re-check when they go")
+        let friends = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/ConnectView.swift"))
+        #expect(!friends.contains("DisposableCameraView("),
                 "the Album presents no camera of its own (b4-mem-session): it is Home's blue button's")
-        #expect(source.contains(".onChange(of: activeSheet == nil)"),
-                "and the covering presentation re-checks when it goes")
+        #expect(!friends.contains("KeepFriendsPromptSheet("), "nor the keep prompt: it is the root's")
+        let root = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/ContentView.swift"))
+        #expect(root.components(separatedBy: ".modifier(KeepFriendsPromptHost(").count - 1 == 1,
+                "the root hangs the prompt once")
     }
 
     /// Session photos U3, invariant I20: the camera reports its Develop review to the coordinator

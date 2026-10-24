@@ -55,6 +55,14 @@ struct WidgetWorldTests {
         store.duressSessionActive = false
     }
 
+    /// The store publishes a friend's gold hearts and the stamp book with every snapshot.
+    @Test func theStorePublishesTheGoldHeartsAndTheStamps() {
+        let store = makeTestStore()
+        let snapshot = store.currentWidgetSnapshot()
+        #expect(snapshot.goldHeartEnds == store.widgetGoldHeartEnds())
+        #expect(snapshot.stamps == store.widgetStamps())
+    }
+
     // MARK: - The snapshot file
 
     /// The new fields travel under their own keys and come back whole; the widget's twin declares the

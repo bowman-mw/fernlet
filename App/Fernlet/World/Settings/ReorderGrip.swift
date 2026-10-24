@@ -4,8 +4,9 @@ import SwiftUI
 
 /// The ink drag handle at the end of a reorderable framed row (`b2-settings-quicklog`): three bold
 /// square-ended bars, drawn inside the card's frame where the system's pale grip used to overlap it.
-/// Decorative: the row is what a person presses and drags, and VoiceOver and Voice Control move it
-/// with the row's "Move up" and "Move down" actions.
+/// The Quick-log editor makes it a handle grabbed at once (owner, 2026-10-24, question 16:
+/// ``QuickLogGripDrag``); hidden from VoiceOver, which moves the row with its "Move up" and "Move
+/// down" actions, as Voice Control does.
 struct ReorderGrip: View {
     @Environment(\.fernletFramedLook) private var look
 
@@ -17,6 +18,8 @@ struct ReorderGrip: View {
         }
         // Narrow: the bars end where the design's do, 4 pt inside the row's trailing inset.
         .frame(width: 24, height: 44)
+        // The whole 24 × 44 is the handle, not only the bars.
+        .contentShape(Rectangle())
         .accessibilityHidden(true)
     }
 
@@ -38,5 +41,36 @@ nonisolated enum QuickLogOrder {
         var updated = items
         updated.swapAt(index, index + offset)
         return updated
+    }
+}
+
+/// A Quick-log grip drag in progress (owner, 2026-10-24, question 16: the handle is grabbed at once,
+/// no press-and-hold first). The held row moves one place each time the finger passes half a row
+/// beyond the row's slot, and follows the finger within it. Pure, so the editor and its tests share it.
+nonisolated struct QuickLogGripDrag: Equatable, Sendable {
+    /// The held row's place now.
+    var index: Int
+    /// The finger's travel (points down from where it went down) at the row's last move.
+    var anchor: CGFloat = 0
+
+    /// The step the finger's `translation` asks for: +1 (down) or -1 (up) once it is more than half
+    /// a row past the row's slot, 0 otherwise or before a row height is known.
+    func step(at translation: CGFloat, rowHeight: CGFloat) -> Int {
+        guard rowHeight > 0 else { return 0 }
+        let travel = translation - anchor
+        if travel > rowHeight / 2 { return 1 }
+        if travel < -rowHeight / 2 { return -1 }
+        return 0
+    }
+
+    /// The drag after its row moved `offset` places, the anchor following the row's new slot.
+    func moved(by offset: Int, rowHeight: CGFloat) -> QuickLogGripDrag {
+        QuickLogGripDrag(index: index + offset, anchor: anchor + CGFloat(offset) * rowHeight)
+    }
+
+    /// How far the held row follows the finger inside its slot: half a row at most either way.
+    func lift(at translation: CGFloat, rowHeight: CGFloat) -> CGFloat {
+        let half = max(rowHeight, 0) / 2
+        return min(max(translation - anchor, -half), half)
     }
 }

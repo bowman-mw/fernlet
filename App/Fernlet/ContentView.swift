@@ -81,6 +81,15 @@ struct ContentView: View {
     /// A page of the Album panel Home asked for (Friends nearby, Activities, Friend shops), handed to the
     /// panel, which pushes it one deep and clears this (`b4-mem-blue-*`, `b4-mem-home-shop`).
     @State private var pendingFriendsRoute: FriendsRoute?
+    /// The Stamp book asked for by the stamp banner or the stamp widget: Today opens and pushes it at its
+    /// stamps (owner, 2026-10-24: no sheet), and the Today panel's HomeView takes and clears this.
+    @State private var pendingStampBook = false
+    /// Whether the session-end keep-as-friends prompt is up (``KeepFriendsPromptHost``, owner
+    /// 2026-10-24: shown wherever the person is, Home included).
+    @State private var isKeepFriendsPromptUp = false
+    /// Whether one of the Album's full-screen covers is up (a wall photo, a "Just you" set, the
+    /// session celebration): the keep prompt is never requested over one.
+    @State private var isAlbumCoverUp = false
     /// How far the keyboard reaches above the interface's bottom edge, zero while it is down. The
     /// bar stays behind the keyboard; the meal-logged toast reads this to rest on the keyboard.
     @State private var keyboardOverlap: CGFloat = 0
@@ -321,6 +330,13 @@ struct ContentView: View {
             // window scene, the scene phase, the launch and the root sheet (First Aid waits it out).
             .modifier(SessionPhotoReviewTriggers(
                 store: store, activeSheet: activeSheet, launchComplete: launcher.isDone, scenePhase: scenePhase
+            ))
+            // A session that ended with no photos asks "Keep as friends?" wherever the person is, Home
+            // included (owner, 2026-10-24), once per session end; never over a root presentation or a
+            // cover, never in a decoy.
+            .modifier(KeepFriendsPromptHost(
+                store: store, isRootSheetUp: rootSheetIsCoveringTabs, launchComplete: launcher.isDone,
+                isCoverUp: isWorldCameraOpen || isAlbumCoverUp, keepFriendsPromptPresented: $isKeepFriendsPromptUp
             ))
     }
 
@@ -737,6 +753,7 @@ struct ContentView: View {
             case .journal: activeSheet = .journal
             case .water: activeSheet = .water
             case .home: selectedTab = .home
+            case .stamps: openStampBookInToday()
             case .trainerPrepareSummary: openTrainerExport(.prepareSummary)
             case .trainerCopySummaryAndPrompt: openTrainerExport(.copySummaryAndPrompt)
             case .trainerPastePlan: openTrainerExport(.pastePlan)
@@ -889,7 +906,8 @@ struct ContentView: View {
 
     /// True while any ROOT-presented sheet is covering the tab pages: the `activeSheet` router
     /// (Settings, Trends, First Aid, the logging sheets, …), the connection inspector, an
-    /// incoming recipe-share review, or the toast's meal-correction slot. Composed into the
+    /// incoming recipe-share review, the toast's meal-correction slot, or the session-end keep-as-friends
+    /// prompt (``KeepFriendsPromptHost``). Composed into the
     /// Private hub's capture-friction `isFrontmost` — the hub stays alive beneath a root sheet,
     /// so a screenshot taken while an unprotected sheet covers the Personal tab must not spend
     /// the once-per-session nudge on a banner nobody can see. The recipe-share slot presents
@@ -902,6 +920,7 @@ struct ContentView: View {
             || adjustingLoggedMeal != nil
             || messagesRecipeImport != nil
             || messagesWorkoutPlanImport != nil
+            || isKeepFriendsPromptUp
     }
 
     private var tabPages: some View {
@@ -939,7 +958,8 @@ struct ContentView: View {
             WorldPanelFrame(panel: .friends, onClose: closeWorldPanel) {
                 SocialHubView(store: store, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact,
                               tabResetToken: resetTokenBinding(for: .social), requestedRoute: $pendingFriendsRoute,
-                              onFinished: closeWorldPanel)
+                              onFinished: closeWorldPanel, keepFriendsPromptIsUp: isKeepFriendsPromptUp,
+                              albumCoverIsUp: $isAlbumCoverUp)
             }
             .tabPage(.social)
             // `!rootSheetIsCoveringTabs`: the hub stays alive beneath a root-presented sheet, so
@@ -1030,7 +1050,8 @@ struct ContentView: View {
                         stressService: stressService,
                         isActive: !rootSheetIsCoveringTabs,
                         onMealsLogged: mealLogReporter,
-                        presentation: panel == .log ? .quickLog : .today
+                        presentation: panel == .log ? .quickLog : .today,
+                        stampBookRequest: panel == .today ? $pendingStampBook : .constant(false)
                     )
                 }
             }
@@ -1975,10 +1996,18 @@ struct ContentView: View {
     /// the bottom of the screen.") — about the time that sentence takes to speak.
     static let stampAfterMealToastPause: Duration = .seconds(3)
 
-    /// The stamp banner's tap: opens the silly stats page, where the stamp book is.
+    /// The stamp banner's tap: opens Today and pushes the Stamp book at its stamps (owner, 2026-10-24).
     private func openStampBook(from kind: SillyStatKind) {
         store.sillyStats.bannerShown(kind)
-        activeSheet = .sillyStats
+        openStampBookInToday()
+    }
+
+    /// Opens the Today panel over Home and asks it to push the Stamp book at its stamps: the stamp
+    /// banner's tap and the stamp widget's land the same way.
+    private func openStampBookInToday() {
+        pendingStampBook = true
+        if selectedTab != .home { selectedTab = .home }
+        openWorldPanel(.today)
     }
 
     /// The toast's "Undo": removes the just-logged meal(s) from the day they were logged to — for

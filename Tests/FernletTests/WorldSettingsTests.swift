@@ -85,6 +85,21 @@ struct WorldSettingsTests {
         #expect(QuickLogOrder.stepping(tiles, at: 9, by: 1) == tiles)
     }
 
+    /// The grip is grabbed at once (owner, question 16): the held row moves one place each time the
+    /// finger passes half a row beyond its slot, and follows the finger no further than half a row.
+    @Test func theQuickLogGripMovesARowEachHalfRowPastItsSlot() {
+        let start = QuickLogGripDrag(index: 2)
+        #expect(start.step(at: 20, rowHeight: 54) == 0)
+        #expect(start.step(at: 28, rowHeight: 54) == 1)
+        #expect(start.step(at: -28, rowHeight: 54) == -1)
+        #expect(start.step(at: 100, rowHeight: 0) == 0, "no step before a row height is known")
+        let moved = start.moved(by: 1, rowHeight: 54)
+        #expect(moved.index == 3 && moved.anchor == 54)
+        #expect(moved.step(at: 60, rowHeight: 54) == 0, "the anchor follows the row to its new slot")
+        #expect(moved.step(at: 82, rowHeight: 54) == 1)
+        #expect(start.lift(at: 200, rowHeight: 54) == 27 && start.lift(at: -10, rowHeight: 54) == -10)
+    }
+
     // MARK: Source pins
 
     /// Settings' first page draws the framed search field under the look (no system drawer under an

@@ -216,15 +216,17 @@ struct SoloCameraTests {
     // MARK: Shown after the companion sleeps
 
     /// When a shot shows: the first time the companion falls asleep after it (bedtime plus the
-    /// wind-down), at once when it is already asleep, and the standard night when none is set.
+    /// wind-down); a shot taken once it is asleep waits for the next night (owner, question 20); the
+    /// standard night when none is set.
     @Test func aShotShowsTheFirstTimeTheCompanionFallsAsleepAfterIt() {
         let rules = { (date: Date, window: CompanionSleepWindow) in
             SoloCameraRules.revealsAt(takenAt: date, window: window, calendar: Self.calendar)
         }
         #expect(rules(Self.at(24, 14), Self.night) == Self.at(24, 23), "an afternoon shot shows tonight")
         #expect(rules(Self.at(24, 22, 45), Self.night) == Self.at(24, 23), "the wind-down is not asleep yet")
-        #expect(rules(Self.at(24, 23, 30), Self.night) == Self.at(24, 23, 30), "asleep already: it shows")
-        #expect(rules(Self.at(25, 2), Self.night) == Self.at(25, 2), "after midnight, still asleep")
+        #expect(rules(Self.at(24, 23), Self.night) == Self.at(25, 23), "the minute it falls asleep: the next night")
+        #expect(rules(Self.at(24, 23, 30), Self.night) == Self.at(25, 23), "asleep already: the next night")
+        #expect(rules(Self.at(25, 2), Self.night) == Self.at(25, 23), "after midnight, still asleep: the next night")
         #expect(rules(Self.at(25, 7, 30), Self.night) == Self.at(25, 23), "awake again: tonight's sleep")
         let empty = CompanionSleepWindow(bedtimeMinute: 9 * 60, wakeMinute: 9 * 60)
         #expect(rules(Self.at(24, 14), empty) == Self.at(24, 23), "no night set: the standard one")

@@ -111,7 +111,8 @@ struct WorldMapHome: View {
     private func offHome(date: Date) -> some View {
         WorldOffMapHome(store: store, date: date, status: WorldStatus.current(store: store, date: date), onOpen: onOpen) {
             WorldMapCompanion(store: store, bodySignal: bodySignal, isActive: isFrontmost && !isCustomizing,
-                              mapLine: mapLine, pixelScale: dynamicTypeSize.isAccessibilitySize ? 6 : 7) {
+                              mapLine: mapLine, pixelScale: dynamicTypeSize.isAccessibilitySize ? 6 : 7,
+                              isNight: phase(at: date) == .night) {
                 isCustomizing = true
             }
         }
@@ -157,7 +158,7 @@ struct WorldMapHome: View {
     /// The companion with its bubble, its feet on `point`.
     private func companion(at point: CGPoint) -> some View {
         WorldMapCompanion(store: store, bodySignal: bodySignal, isActive: isFrontmost && !isCustomizing, mapLine: mapLine,
-                          isQuiet: isBubbleQuiet) {
+                          isQuiet: isBubbleQuiet, isNight: phase(at: Date()) == .night) {
             isCustomizing = true
         }
         .fixedSize()
@@ -256,6 +257,8 @@ struct WorldMapHome: View {
         facts.sky = sky
         facts.presence = presence
         facts.isOffline = isOffline
+        let now = Date()
+        facts.isNight = phase(at: now) == .night || WorldMapCompanion.isPastBedtime(store: store, at: now)
         return WorldMapLine.line(facts)
     }
 

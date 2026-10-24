@@ -29,13 +29,22 @@ import FernletUI
 /// palette's `FlowLayout` naturally stacks one chip per row.
 ///
 /// Under the World's framed look (`b2-settings-quicklog`) the list leaves edit mode: the system grip
-/// drew on the card's right frame, so each row draws the ink ``ReorderGrip`` inside the card and a row
-/// is pressed and dragged to move (List's own `onMove` drag). Every row also carries "Move up" and
-/// "Move down" actions, so VoiceOver and Voice Control can reorder without dragging.
+/// drew on the card's right frame, so each row draws the ink ``ReorderGrip`` inside the card. The grip
+/// is grabbed at once and dragged (owner, 2026-10-24, question 16; ``QuickLogGripDrag``), and a row
+/// can still be held and dragged (List's own `onMove`). Every row also carries "Move up" and "Move
+/// down" actions, so VoiceOver and Voice Control can reorder without dragging.
 struct QuickLogShortcutsEditor: View {
     @Bindable var store: FernletStore
     /// The slot whose inline palette is open, by position. Nil when no slot is being chosen.
     @State private var editingSlot: Int?
+    /// The grip drag in progress, if any (question 16: the handle is grabbed at once).
+    @State private var gripDrag: QuickLogGripDrag?
+    /// The finger's travel down since the grip went down, for the held row's lift.
+    @State private var gripTranslation: CGFloat = 0
+    /// The order when the grip drag began: the drag plays its one cue at the end if it changed.
+    @State private var orderBeforeGripDrag: [FernletShortcut] = []
+    /// One closed row's height, measured: how far the finger travels to move a row one place.
+    @State private var rowHeight: CGFloat = 54
 
     /// The layout being edited: the STORED array, deliberately NOT visibility-filtered (see the
     /// type doc — filtering the saved array destroys the hidden user's layout irreversibly).
@@ -53,7 +62,12 @@ struct QuickLogShortcutsEditor: View {
             note("Drag to reorder. Tap one to swap it.")
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 slotRow(index: index, item: item)
+                    .offset(y: gripDrag?.index == index ? gripDrag?.lift(at: gripTranslation, rowHeight: rowHeight) ?? 0 : 0)
+                    .zIndex(gripDrag?.index == index ? 1 : 0)
                     .fernletFramedListRow(isFirst: index == 0, isLast: index == items.count - 1)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                        if editingSlot == nil, gripDrag == nil { rowHeight = height }
+                    }
             }
             .onMove(perform: moveItems)
             .listRowBackground(look == nil ? Color.cream : nil)
@@ -112,7 +126,10 @@ struct QuickLogShortcutsEditor: View {
                         .font(.fernlet(.labelSmall))
                         .foregroundStyle(look?.dim ?? Color.slate)
                 }
-                if look != nil { ReorderGrip() }
+                if look != nil {
+                    ReorderGrip()
+                        .highPriorityGesture(gripGesture(startingAt: index))
+                }
             }
             .frame(minHeight: 44)
             .contentShape(Rectangle())
@@ -178,6 +195,38 @@ struct QuickLogShortcutsEditor: View {
         FernletFeedback.system.play(.moved)
         store.setQuickLogItems(updated)
         editingSlot = nil
+    }
+
+    /// The grip's drag: it starts on touch down (no press-and-hold first) and moves the row one place
+    /// each time the finger passes half a row beyond it, through the STORED array as every move does.
+    private func gripGesture(startingAt index: Int) -> some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .global)
+            .onChanged { value in gripMoved(startingAt: index, translation: value.translation.height) }
+            .onEnded { _ in gripReleased() }
+    }
+
+    /// One step of the grip drag: begins it on the first event, then moves the held row when asked.
+    private func gripMoved(startingAt index: Int, translation: CGFloat) {
+        var drag = gripDrag ?? QuickLogGripDrag(index: index)
+        if gripDrag == nil {
+            orderBeforeGripDrag = items
+            editingSlot = nil
+        }
+        gripTranslation = translation
+        let offset = drag.step(at: translation, rowHeight: rowHeight)
+        let updated = QuickLogOrder.stepping(items, at: drag.index, by: offset)
+        if offset != 0, updated != items {
+            store.setQuickLogItems(updated)
+            drag = drag.moved(by: offset, rowHeight: rowHeight)
+        }
+        gripDrag = drag
+    }
+
+    /// The grip let go: the layout cue once, when the order changed (report B13).
+    private func gripReleased() {
+        if gripDrag != nil, items != orderBeforeGripDrag { FernletFeedback.system.play(.moved) }
+        gripDrag = nil
+        gripTranslation = 0
     }
 
     /// Applies a drag reorder to the STORED array.

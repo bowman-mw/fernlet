@@ -77,18 +77,11 @@ nonisolated enum FriendsRoute: Hashable {
 /// photos are waiting (its "Choose photos" re-presents a review put off with "Not now"), and the
 /// launch restore's resume OFFER withheld while the review blocks discovery.
 ///
-/// It still owns the compact keep-as-friends prompt for a session that produced NO photos:
-/// `presentDisconnectReviewIfNeeded()` presents it off observable model state
-/// (`pendingFriendReview`'s candidates), gated on `isSessionLive` so it presents once the SESSION
-/// has ended and never on a link blip, and — photos first (invariant I17) — never while photos are
-/// outstanding, the overlay is up or the review blocks discovery; a prompt already up is withdrawn
-/// unconsumed the moment the overlay shows, so a batch that turned into a photo batch under it has
-/// its candidates answered once, by the overlay. Every trigger schedules a short-deferred check
-/// rather than presenting on the spot, the check never requests over the camera's own sheets or the
-/// root sheet, and a request whose sheet never appears is withdrawn unconsumed and re-asked by a
-/// bounded landing watchdog. Kept friends are minted one-sided via ``FernletStore``'s
-/// `keepProximityFriends`, and the candidate half is consumed with `completeFriendReview` — never by
-/// clearing the live roster, which would clobber the next session's entries.
+/// The compact keep-as-friends prompt for a session that produced NO photos is the root's now
+/// (``KeepFriendsPromptHost``, owner 2026-10-24: "Show it wherever you are, Home included"). This
+/// view tells the root which of its covers is up (``albumCoverIsUp``), so the prompt is never
+/// requested over one, and reads whether the prompt is up (``keepFriendsPromptIsUp``), so its heal
+/// arm never celebrates in the same transaction as that sheet.
 struct FriendsView: View {
     var store: FernletStore
     @Binding var activeSheet: FernletSheet?
@@ -99,18 +92,26 @@ struct FriendsView: View {
     @Binding var requestedRoute: FriendsRoute?
     /// Closes the panel back to Home: after a session started from Friends nearby.
     var onFinished: () -> Void = {}
+    /// Whether the root's keep-as-friends prompt is up (``KeepFriendsPromptHost``).
+    var keepFriendsPromptIsUp: Bool = false
+    /// Out: whether one of this view's full-screen covers is up (a wall photo, a "Just you" set, the
+    /// celebration), so the root never requests its prompt over one.
+    @Binding var albumCoverIsUp: Bool
 
-    /// The album over `store`, with the tab's bindings; Home's page asks and the close-to-Home are
-    /// optional (a test host passes neither).
+    /// The album over `store`, with the tab's bindings; Home's page asks, the close-to-Home and the
+    /// root prompt's two flags are optional (a test host passes none).
     init(store: FernletStore, activeSheet: Binding<FernletSheet?>, isTabBarCompact: Binding<Bool>,
          tabResetToken: Binding<Int>, requestedRoute: Binding<FriendsRoute?> = .constant(nil),
-         onFinished: @escaping () -> Void = {}) {
+         onFinished: @escaping () -> Void = {}, keepFriendsPromptIsUp: Bool = false,
+         albumCoverIsUp: Binding<Bool> = .constant(false)) {
         self.store = store
         _activeSheet = activeSheet
         _isTabBarCompact = isTabBarCompact
         _tabResetToken = tabResetToken
         _requestedRoute = requestedRoute
         self.onFinished = onFinished
+        self.keepFriendsPromptIsUp = keepFriendsPromptIsUp
+        _albumCoverIsUp = albumCoverIsUp
     }
 
     @State private var showConnectionAnimation = false
@@ -129,12 +130,6 @@ struct FriendsView: View {
     /// "Your friend's here" is felt on a session's first commit only; a link that blips and heals
     /// replays the overlay in silence (report B20, ``SessionConnectCue``).
     @State private var connectCue = SessionConnectCue()
-    // Phase 2 friend minting: the promoted batch this instance is presenting (consumed via
-    // completeFriendReview on finalize), candidates snapshotted at presentation time, and keeps.
-    @State private var reviewBatch: MeshFriendReviewBatch?
-    @State private var friendCandidates: [MeshSessionRosterEntry] = []
-    @State private var keptFriendFingerprints: Set<String> = []
-    @State private var keepFriendsPromptPresented = false
     @State private var selectedAlbumPostID: UUID?
     /// The solo camera's photos in this album (`b4-mem-solo-waiting`, `-revealed`, `-open`): the
     /// "Just you" sets and the count still held until tonight. Empty in a decoy.
@@ -152,26 +147,6 @@ struct FriendsView: View {
     @State private var path: [FriendsRoute] = []
     /// The album root's own scroll-to-top token; `tabReselect` bumps it only when nothing is pushed.
     @State private var scrollToTopToken = 0
-
-    /// Bumped to run a deferred session-end check (``scheduleReviewCheck()``).
-    @State private var reviewCheckRequest = 0
-    /// Bumped on every session-end sheet request; its task is the landing watchdog
-    /// (``confirmSessionEndSheetLanded()``).
-    @State private var reviewLandingRequest = 0
-    /// Set by either session-end sheet's content appearing — the only proof a request landed.
-    @State private var sessionEndSheetLanded = false
-    /// Watchdog re-requests left for the current trigger (R2: each trigger resets it to the bound).
-    @State private var reviewRetriesLeft = 0
-
-    @Environment(\.scenePhase) private var scenePhase
-
-    /// How long a trigger waits before presenting: past the dismissal of whatever it fired beside —
-    /// the camera leaving with its sheet, a root sheet closing, the scene's own activation routing.
-    private static let reviewCheckDelay: Duration = .milliseconds(700)
-    /// How long a session-end sheet request has to land before the watchdog withdraws it.
-    private static let reviewLandingGrace: Duration = .seconds(2)
-    /// Re-requests per trigger after a request that did not land (R2).
-    private static let maxReviewRetries = 4
 
     private var manager: MeshNetworkManager { store.meshNetworkManager }
     /// Fernlet's mesh features over ``manager``: the clothing shop and its post-session window live there,
@@ -199,30 +174,13 @@ struct FriendsView: View {
         .onAppear {
             // Already in session when returning to the panel: no celebration, and no haptic.
             connectCue.surfaceAppeared(inSession: manager.isInSession)
-            // A freshly created FriendsView instance must present a review that predates it:
-            // ContentView's Social-tab layout swap destroys the previous instance in the same
-            // transaction as the isInSession flip, so its onChange never fires. The review is
-            // model-state (pendingFriendReview, photos included), not a view-event.
-            scheduleReviewCheck()
         }
-        // Every session-end trigger schedules rather than presents (see scheduleReviewCheck): the
-        // batch moving, the session ending, the scene coming back (a session that ended in the dark
-        // is answered on return, after ContentView's own activation routing), and whatever covered
-        // the surface — the camera's own sheets, the root sheet — going away.
-        .onChange(of: features.photos.pendingFriendReview) { _, _ in scheduleReviewCheck() }
         .onChange(of: manager.isSessionLive) { _, live in
             guard !live else { return }
             connectCue.sessionEnded()
-            scheduleReviewCheck()
         }
-        .onChange(of: scenePhase) { _, phase in if phase == .active { scheduleReviewCheck() } }
-        .onChange(of: activeSheet == nil) { _, clear in if clear { scheduleReviewCheck() } }
-        // Photos first (I17): the overlay showing withdraws a keep prompt that is up, unanswered; the
-        // overlay going, or the review's discovery block falling, is when a prompt may be due.
-        .onChange(of: reviewCoordinator.isShowing) { _, showing in handleOverlayChange(showing: showing) }
-        .onChange(of: reviewCoordinator.blocksDiscovery) { _, blocked in if !blocked { scheduleReviewCheck() } }
-        .task(id: reviewCheckRequest) { await runDeferredReviewCheck() }
-        .task(id: reviewLandingRequest) { await confirmSessionEndSheetLanded() }
+        // The root's keep-as-friends prompt is never requested over one of this view's covers.
+        .onChange(of: albumCoverPresented, initial: true) { _, up in albumCoverIsUp = up }
         .onChange(of: manager.isInSession) { wasInSession, nowInSession in
             handleSessionSurfaceChange(wasInSession: wasInSession, nowInSession: nowInSession)
         }
@@ -231,13 +189,6 @@ struct FriendsView: View {
         }
         .onChange(of: connectedPeerName()) { _, name in
             adoptDisclosedPeerName(name)
-        }
-        // Sessions with no photos but eligible new-friend candidates get the compact prompt.
-        // Dismissing without choosing = skip all: onDismiss mints only the toggled keeps and
-        // consumes the presented batch either way (unless a new session abandoned the prompt,
-        // in which case the batch survives and re-presents merged at the next teardown).
-        .sheet(isPresented: $keepFriendsPromptPresented, onDismiss: finalizeFriendKeeps) {
-            keepFriendsPromptSheet
         }
         .fullScreenCover(isPresented: $selectedAlbumPostID.isPresent()) {
             FriendPhotoFeedView(
@@ -250,28 +201,25 @@ struct FriendsView: View {
         }
     }
 
-    /// Whether ANY of this surface's presenters is up right now — the one predicate that stands
-    /// between "a cover is showing" and a second presentation request SwiftUI silently drops (P6
-    /// item 2 fix review, finding P2-2).
+    /// Whether ANY presenter this surface must not present over is up right now — the one predicate
+    /// that stands between "a presentation is showing" and a second presentation request SwiftUI
+    /// silently drops (P6 item 2 fix review, finding P2-2).
     ///
-    /// **Two now, and the photo review is not one of them.** `body` hangs a celebration
-    /// `fullScreenCover` (`$showConnectionAnimation`), the keep-friends `.sheet`
-    /// (`$keepFriendsPromptPresented`) and the album photo feed's `fullScreenCover`
-    /// (`$selectedAlbumPostID`) off ONE anchor. The session-end PHOTO review used to be a fourth; it
-    /// moved to ``SessionPhotoReviewCoordinator``'s overlay window (session photos U3), which draws
-    /// above this surface without presenting from it. The heal arm once special-cased only the sheets, so a
-    /// commit while a wall photo was open took the celebrate branch: two `fullScreenCover`s cannot
-    /// both present from one anchor, the celebration never appeared, nothing reset
-    /// `showConnectionAnimation`, and `.accessibilityHidden(showConnectionAnimation)` on the whole
-    /// `ZStack` latched VoiceOver and Switch Control out of the entire Friends surface until the
-    /// next peer loss or session end. The celebration's own flag is deliberately absent from the
-    /// list: it is what the heal arm is deciding whether to raise, so including it would make the
-    /// predicate read its own output.
-    ///
-    /// Read by the heal arm and by ``presentDisconnectReviewIfNeeded()``, which is the other site
-    /// that requests a presentation and therefore the other site that can lose one.
+    /// `body` hangs the celebration `fullScreenCover` (`$showConnectionAnimation`) and the album photo
+    /// feed's `fullScreenCover` (`$selectedAlbumPostID`) off ONE anchor, the "Just you" set opens a
+    /// third, and the root's keep-as-friends sheet (``keepFriendsPromptIsUp``, ``KeepFriendsPromptHost``)
+    /// may be up over all of them. A commit while any is up must not request the celebration: two
+    /// presentations in one transaction drop one, nothing resets `showConnectionAnimation`, and
+    /// `.accessibilityHidden(showConnectionAnimation)` on the whole `ZStack` latches VoiceOver and
+    /// Switch Control out of the Album until the next peer loss or session end. The celebration's own
+    /// flag is deliberately absent: it is what the heal arm is deciding whether to raise.
     private var aPresentationIsUp: Bool {
-        keepFriendsPromptPresented || selectedAlbumPostID != nil || openSoloSetID != nil
+        keepFriendsPromptIsUp || selectedAlbumPostID != nil || openSoloSetID != nil
+    }
+
+    /// Whether one of this view's own full-screen covers is up (reported to the root's prompt).
+    private var albumCoverPresented: Bool {
+        selectedAlbumPostID != nil || openSoloSetID != nil || showConnectionAnimation
     }
 
     /// The **layout** half of the session transition: what surface the Social tab draws.
@@ -284,59 +232,40 @@ struct FriendsView: View {
     /// `startFriendsDiscovery`'s resume arm. Only a session that is really over — End Session, or a
     /// launch with no mesh — swaps back to the album.
     ///
-    /// The swap is also a review trigger (2026-09-30 fix round, finding L-F2): an ending that does
-    /// not move the batch — one already pending from an earlier give-up, with nothing new to add —
-    /// fires no other edge once the session is over, and the camera leaving takes its sheets with it.
+    /// The keep-as-friends prompt this edge used to trigger is the root's (``KeepFriendsPromptHost``),
+    /// which watches the session ending itself.
     private func handleSessionSurfaceChange(wasInSession: Bool, nowInSession: Bool) {
         guard wasInSession, !nowInSession else { return }
         connectCue.sessionEnded()
         // The album never swapped out, so its pushed pages stay (the camera is Home's now, and closes
         // itself on this edge).
         showConnectionAnimation = false
-        scheduleReviewCheck()
     }
 
-    /// The **lifecycle** half: the keep-as-friend ceremony and the connection choreography.
+    /// The **lifecycle** half: the connection choreography.
     ///
-    /// `hasCommittedPeer`, because that is the predicate the manager's three session-end hooks and
-    /// `presentDisconnectReviewIfNeeded()` read (P6 item 2) — and because for a founded pair
-    /// `isInSession` never dips, so hanging either half off it leaves a dead arm: the standing keep
-    /// prompt would never be abandoned across a heal and `finalizeFriendKeeps` would mint friends
-    /// and consume the batch mid-session on dismissal, while a healed link would replay no
-    /// choreography at all. The model half and the presenting half must read the SAME predicate or
-    /// the ceremony is only half re-pointed.
+    /// `hasCommittedPeer`, because that is the predicate the manager's three session-end hooks and the
+    /// root's keep-as-friends prompt (``KeepFriendsPromptHost``) read (P6 item 2) — for a founded pair
+    /// `isInSession` never dips, so hanging the choreography off it would leave a healed link
+    /// replaying nothing.
     ///
-    /// The review sheet no longer presents on a blip at all — `presentDisconnectReviewIfNeeded()`
-    /// gates on `isSessionLive`, so it presents only once the session has really ended (the fix for
-    /// this commit's P1). This arm is still the right TRIGGER for it: every door that ends a
-    /// session also loses the committed peer, because every terminal transition carries
-    /// `.stopParticipation`.
-    ///
-    /// The heal arm reads ``aPresentationIsUp`` — all THREE presenters, not the two session-end
-    /// sheets (fix review finding P2-2) — and both non-celebrating exits clear
-    /// `showConnectionAnimation` (review finding P2-4). Both halves are load-bearing: a heal is
-    /// seconds away in the same room, the photo review is the blip's common case and not the keep
-    /// prompt, and nothing else ever resets `showConnectionAnimation` once the cover fails to
-    /// present — the flag is lowered inside the cover's own completion — so
-    /// `.accessibilityHidden(showConnectionAnimation)` would latch VoiceOver and Switch Control out
-    /// of the whole Friends surface for the rest of the session.
+    /// The heal arm reads ``aPresentationIsUp`` — every presenter it must not present over, the root's
+    /// keep prompt included (fix review finding P2-2) — and both non-celebrating exits clear
+    /// `showConnectionAnimation` (review finding P2-4). A heal is seconds away in the same room, and
+    /// nothing else ever resets `showConnectionAnimation` once the cover fails to present — the flag
+    /// is lowered inside the cover's own completion — so `.accessibilityHidden(showConnectionAnimation)`
+    /// would latch VoiceOver and Switch Control out of the whole Album for the rest of the session. The
+    /// root withdraws its own prompt, unconsumed, on the same commit edge.
     private func handleCommittedPeerChange(hadPeer: Bool, hasPeer: Bool) {
         if !hadPeer && hasPeer {
             // B20: the session's first commit is felt; a heal is not. Either arm below may be the
-            // first: a wall photo or a session-end sheet that is up when a session's first commit
-            // lands takes the presentation arm, with no overlay — the haptic still answers it.
+            // first: a wall photo or the keep prompt that is up when a session's first commit lands
+            // takes the presentation arm, with no overlay — the haptic still answers it.
             if let cue = connectCue.committed() { FernletFeedback.system.play(cue) }
             if aPresentationIsUp {
-                // A session became live again while a session-end sheet was up: dismiss WITHOUT
-                // consuming — the batch persists and re-presents (merged) at the next real teardown.
-                // Clearing reviewBatch first turns the keep sheet's onDismiss finalize into a no-op,
-                // and skipping the fullScreenCover avoids presenting it in the same transaction as a
-                // sheet dismissal (one of the two would drop). The photo review is the overlay's,
-                // which never presents over a live session.
-                reviewBatch = nil
-                friendCandidates = []
-                keptFriendFingerprints = []
-                keepFriendsPromptPresented = false
+                // Skipping the fullScreenCover avoids presenting it in the same transaction as the
+                // root prompt's withdrawal or over a cover (one of the two would drop). The photo
+                // review is the overlay's, which never presents over a live session.
                 showConnectionAnimation = false
             } else {
                 connectionPeerName = connectedPeerName()
@@ -344,25 +273,13 @@ struct FriendsView: View {
             }
         } else if hadPeer && !hasPeer {
             // A celebration cover still up over a session that just lost its peer has nothing left
-            // to celebrate: take it down and hand the surface to what is behind it — for a blipped
-            // pair the camera it keeps, and `handleSessionSurfaceChange` owns the ended case.
-            // Leaving the flag set is the a11y latch above.
+            // to celebrate: take it down and hand the surface to what is behind it, and
+            // `handleSessionSurfaceChange` owns the ended case. Leaving the flag set is the a11y latch
+            // above.
             if showConnectionAnimation {
                 showConnectionAnimation = false
             }
-            scheduleReviewCheck()
         }
-    }
-
-    /// The compact "keep these as friends?" prompt used when a session produced no photos.
-    private var keepFriendsPromptSheet: some View {
-        KeepFriendsPromptSheet(
-            candidates: friendCandidates,
-            keptFingerprints: $keptFriendFingerprints,
-            done: { keepFriendsPromptPresented = false }
-        )
-        .fernletSheet()
-        .onAppear { sessionEndSheetLanded = true }
     }
 
     // MARK: - Photo album
@@ -849,172 +766,6 @@ struct FriendsView: View {
         guard showConnectionAnimation, connectionPeerName == nil, let name else { return }
         connectionPeerName = name
     }
-
-    /// The session-end KEEP-AS-FRIENDS prompt, driven off OBSERVABLE MODEL STATE (Phase 2,
-    /// "Session-end review is model-state, not view-events"): presents whenever a promoted
-    /// `pendingFriendReview` batch carries candidates and NO photos, run by the deferred check every
-    /// trigger schedules (``scheduleReviewCheck()``: the batch moving, the session ending, the
-    /// surface swapping or appearing, scene activation, a covering presentation going away, the
-    /// overlay going) and confirmed by the landing watchdog. Friend candidates come from the BATCH
-    /// entries; eligibility is computed here — at presentation time, against the live trust vault —
-    /// so peers trusted or blocked mid-session never reach the prompt.
-    ///
-    /// **Photos first** (session photos U3, invariant I17). A batch with photos is the overlay's
-    /// (``SessionPhotoReviewCoordinator``), which answers its candidates inside the photo review, so
-    /// this returns early while photos are outstanding, while the overlay shows, and while the
-    /// review blocks discovery (an answer or a leave still running); the photo half is never decided
-    /// here — `sessionEndReview` is asked with `hasPhotos: false` only.
-    ///
-    /// The gate is `isSessionLive` — neither `isInSession` nor `hasCommittedPeer` (P6 item 2 and
-    /// its fix): a founded mesh outlives its links, so on `isInSession` this prompt would never
-    /// present again for a proximity pair, and on `hasCommittedPeer` a two-second blip presented it
-    /// **over a live session**, whose dismissal mints friends and consumes the batch mid-session.
-    /// The model half (the manager's three hooks) and this presenting half must read the SAME
-    /// predicate or the ceremony is only half re-pointed.
-    ///
-    /// **It never requests over a presentation, and a request is not proof** (2026-09-30 fix round,
-    /// findings C-F2/L-F2). Besides this surface's own presenters it waits out the root sheet — which
-    /// its request would otherwise REPLACE (a First Aid route consumed on the same activation, a
-    /// meal log, Settings' Delete everything) — and the camera's sheets and alerts, which it would
-    /// otherwise queue behind with a stale snapshot; each schedules a re-check when it goes. A
-    /// request that still does not land — a presenter this view cannot see — is withdrawn
-    /// unconsumed and re-asked by ``confirmSessionEndSheetLanded()`` rather than latching
-    /// ``aPresentationIsUp`` shut.
-    private func presentDisconnectReviewIfNeeded() {
-        guard !manager.isSessionLive else { return }
-        // ``aPresentationIsUp``, not the sheet flag alone: a `.sheet` requested while the album's
-        // `fullScreenCover` is up is one of the two presentations SwiftUI drops (fix review P2-2),
-        // and a prompt that silently never appears is a batch the user never gets to answer.
-        guard !aPresentationIsUp else { return }
-        // Nor over a presentation this surface does not own (fix round C-F2/L-F2): the root sheet. It
-        // re-checks here the moment it goes away (the camera is Home's full-screen cover now).
-        guard activeSheet == nil else { return }
-        // Photos first (I17): the overlay answers a photo batch's candidates, once.
-        guard !features.photos.hasOutstandingPhotoReview, !reviewCoordinator.isShowing,
-              !reviewCoordinator.blocksDiscovery else { return }
-        guard let batch = features.photos.pendingFriendReview else { return }
-        reviewBatch = batch
-        friendCandidates = FriendMintingReview.eligibleCandidates(
-            roster: batch.entries,
-            trustedPeers: store.trustedProximityPeers
-        )
-        keptFriendFingerprints = []
-        switch FriendMintingReview.sessionEndReview(hasPhotos: false, eligibleCandidateCount: friendCandidates.count) {
-        case .friendPromptOnly:
-            keepFriendsPromptPresented = true
-            noteSessionEndSheetRequested()
-        case .none:
-            // Nothing to review — consume the batch immediately so it can't re-present.
-            features.photos.completeFriendReview(batch.id)
-            reviewBatch = nil
-            friendCandidates = []
-        case .photoReview:
-            // Unreachable with `hasPhotos: false`; answered, not trapped, and answering nothing.
-            reviewBatch = nil
-            friendCandidates = []
-        }
-    }
-
-    /// The overlay's edges (invariant I17). Rising: a keep prompt that is up is withdrawn WITHOUT
-    /// minting or consuming — the heal arm's pattern, `reviewBatch` cleared first so the sheet's
-    /// `onDismiss` finalize is a no-op — because a late photo can have turned a candidates-only batch
-    /// into a photo batch under it, whose candidates the overlay now offers. Falling: a prompt may be
-    /// due.
-    private func handleOverlayChange(showing: Bool) {
-        guard showing else {
-            scheduleReviewCheck()
-            return
-        }
-        guard keepFriendsPromptPresented else { return }
-        reviewBatch = nil
-        friendCandidates = []
-        keptFriendFingerprints = []
-        keepFriendsPromptPresented = false
-    }
-
-    /// Completes the keep-as-friend flow: mints the kept candidates (one-sided, local-only) and
-    /// consumes the PRESENTED batch via completeFriendReview — never clearSessionRoster(), which
-    /// clobbered live-roster entries belonging to the next session. Skipped/untoggled candidates
-    /// are simply dropped. A no-op when the prompt was abandoned for a new session (batch nil).
-    private func finalizeFriendKeeps() {
-        if let batch = reviewBatch {
-            store.keepProximityFriends(from: friendCandidates, keptFingerprints: keptFriendFingerprints)
-            features.photos.completeFriendReview(batch.id)
-        }
-        reviewBatch = nil
-        friendCandidates = []
-        keptFriendFingerprints = []
-    }
-
-    // MARK: - Session-end review: scheduling and the landing watchdog
-
-    /// Asks for a session-end check a moment from now (``runDeferredReviewCheck()``), with a fresh
-    /// watchdog budget.
-    ///
-    /// **Every trigger schedules; none presents on the spot** (2026-09-30 fix round, findings
-    /// C-F2/L-F2). Most of them fire in the same transaction as another presentation — the camera
-    /// leaving the hierarchy with its chat, info or Develop sheet, a root sheet closing, the scene
-    /// coming back while ContentView routes a notification into the root sheet — and what SwiftUI
-    /// does with a second sheet depends on who asked. Measured on the iOS 26.5 simulator: this
-    /// surface's request REPLACES a standing sheet of a view above it (ContentView's root sheet
-    /// vanished under the review), while a request made over a sheet of a view below it (the
-    /// camera's) queues behind it and presents when that one closes — a review snapshotted before
-    /// the person answered the camera's own. Neither dropped the request in the shapes tried; the
-    /// reviewers' latch is covered anyway by the landing watchdog. Waiting out
-    /// ``reviewCheckDelay``, and refusing while either kind of sheet is up (see the presenter), makes
-    /// the review the only presentation asking.
-    private func scheduleReviewCheck() {
-        reviewRetriesLeft = Self.maxReviewRetries
-        reviewCheckRequest &+= 1
-    }
-
-    /// The deferred half of ``scheduleReviewCheck()``: waits out ``reviewCheckDelay``, then presents
-    /// if the review is still due. `.task` semantics also run it on every appearance and cancel it
-    /// when a newer request or a disappearance supersedes it — a review for a surface that is not on
-    /// screen waits for the surface.
-    private func runDeferredReviewCheck() async {
-        do {
-            try await Task.sleep(for: Self.reviewCheckDelay)
-        } catch {
-            return   // superseded by a newer request, or the surface went away (R7: nothing owed)
-        }
-        presentDisconnectReviewIfNeeded()
-    }
-
-    /// Marks a session-end sheet request unlanded and arms its watchdog.
-    private func noteSessionEndSheetRequested() {
-        sessionEndSheetLanded = false
-        reviewLandingRequest &+= 1
-    }
-
-    /// The landing watchdog. A keep prompt whose content has not appeared within
-    /// ``reviewLandingGrace`` was dropped — and its flag, left true, would latch
-    /// ``aPresentationIsUp`` shut until the next peer commit. So it is withdrawn WITHOUT consuming
-    /// anything (the batch stays pending) and re-requested through the deferred check, at most
-    /// ``maxReviewRetries`` times per trigger (R2).
-    private func confirmSessionEndSheetLanded() async {
-        guard keepFriendsPromptPresented else { return }
-        do {
-            try await Task.sleep(for: Self.reviewLandingGrace)
-        } catch {
-            return   // a newer request re-armed the watchdog, or the surface went away (R7)
-        }
-        guard keepFriendsPromptPresented, !sessionEndSheetLanded else { return }
-        withdrawUnlandedSessionEndSheet()
-        guard reviewRetriesLeft > 0 else { return }
-        reviewRetriesLeft -= 1
-        reviewCheckRequest &+= 1
-    }
-
-    /// Lowers an unlanded keep prompt's flag without answering anything. `reviewBatch` goes first
-    /// so the keep prompt's `onDismiss` finalize is a no-op — the heal arm's rule.
-    private func withdrawUnlandedSessionEndSheet() {
-        reviewBatch = nil
-        friendCandidates = []
-        keptFriendFingerprints = []
-        keepFriendsPromptPresented = false
-    }
-
 }
 
 // MARK: - Full-screen photo feed

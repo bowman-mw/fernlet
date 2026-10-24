@@ -164,28 +164,29 @@ struct ConnectReviewKeepTests {
         let source = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/ConnectView.swift"))
         let armDecl = try #require(source.range(of: "func handleCommittedPeerChange"),
                                    "FriendsView.handleCommittedPeerChange is the lifecycle arm — renamed?")
-        let nextDecl = try #require(source.range(of: "private var keepFriendsPromptSheet"),
-                                    "the keep prompt is declared right after the arm — reordered?")
+        let nextDecl = try #require(source.range(of: "private var albumHeader: some View"),
+                                    "the album header is declared after the arm — reordered?")
         try #require(armDecl.lowerBound < nextDecl.lowerBound,
-                     "Expected the arm to be declared before the review sheet — update this scan if they moved")
+                     "Expected the arm to be declared before the album header — update this scan if they moved")
         let armBody = source[armDecl.upperBound..<nextDecl.lowerBound]
 
         #expect(armBody.contains("aPresentationIsUp"),
                 """
                 The heal arm must branch on the ONE predicate over every presenter, not on a \
-                hand-listed subset: the two session-end sheets AND the album photo feed can each \
-                be up when a peer commits.
+                hand-listed subset: the root's keep prompt AND the album photo feed can each be up \
+                when a peer commits.
                 """)
-        #expect(armBody.contains("keepFriendsPromptPresented = false") && !armBody.contains("disconnectReviewPresented"),
+        #expect(!armBody.contains("disconnectReviewPresented") && !armBody.contains("reviewBatch"),
                 """
-                The heal arm dismisses the keep prompt; the PHOTO review is no longer this view's sheet \
-                (U3: the overlay, which never presents over a live session, so a heal cannot meet it).
+                The keep prompt is the root's now (owner, 2026-10-24: wherever you are, Home included) and \
+                withdraws itself on the commit edge; the PHOTO review is the overlay's, which never \
+                presents over a live session.
                 """)
         #expect(armBody.components(separatedBy: "showConnectionAnimation = false").count - 1 >= 2,
                 """
                 Both non-celebrating exits of the arm must clear showConnectionAnimation, or a \
                 cover that never presented latches .accessibilityHidden(true) on the whole \
-                Friends surface for the rest of the session.
+                Album for the rest of the session.
                 """)
 
         let predicateDecl = try #require(source.range(of: "private var aPresentationIsUp: Bool {"),
@@ -193,34 +194,42 @@ struct ConnectReviewKeepTests {
         let predicateEnd = try #require(source.range(of: "}", range: predicateDecl.upperBound..<source.endIndex))
         let predicateBody = source[predicateDecl.upperBound..<predicateEnd.lowerBound]
         #expect(!predicateBody.contains("disconnectReviewPresented"), "the photo review is not one of this view's presenters")
-        for presenter in ["keepFriendsPromptPresented", "selectedAlbumPostID"] {
+        for presenter in ["keepFriendsPromptIsUp", "selectedAlbumPostID", "openSoloSetID"] {
             #expect(predicateBody.contains(presenter),
                     """
-                    \(presenter) is one of the three presenters hung off this view's single anchor, \
-                    so it must be named in aPresentationIsUp — a presenter missing from the \
-                    predicate is a presentation SwiftUI drops with nothing resetting the a11y latch.
+                    \(presenter) can be up when a peer commits, so it must be named in aPresentationIsUp — \
+                    a presenter missing from the predicate is a presentation SwiftUI drops with nothing \
+                    resetting the a11y latch.
                     """)
         }
+        #expect(!source.contains("KeepFriendsPromptSheet("), "the Album presents no keep prompt of its own")
 
-        let reviewDecl = try #require(source.range(of: "private func presentDisconnectReviewIfNeeded()"),
+        let host = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("App/Fernlet/World/Friends/KeepFriendsPromptHost.swift"))
+        let commit = try #require(MeshRoutedSourceScan.bracedBody(
+            after: "private func handleCommittedPeerChange(hadPeer: Bool, hasPeer: Bool)", in: host))
+        #expect(commit.contains("withdrawUnlandedSessionEndSheet()"),
+                "a session going live again under the root's prompt withdraws it, unconsumed")
+        let reviewDecl = try #require(host.range(of: "private func presentDisconnectReviewIfNeeded()"),
                                       "the review presenter is gone — renamed?")
         let reviewEnd = try #require(
-            source.range(of: "private func finalizeFriendKeeps", range: reviewDecl.upperBound..<source.endIndex),
+            host.range(of: "private func finalizeFriendKeeps", range: reviewDecl.upperBound..<host.endIndex),
             "finalizeFriendKeeps is declared right after the review presenter — reordered?"
         )
-        let reviewBody = source[reviewDecl.upperBound..<reviewEnd.lowerBound]
+        let reviewBody = host[reviewDecl.upperBound..<reviewEnd.lowerBound]
         #expect(reviewBody.contains("guard !manager.isSessionLive else { return }"),
                 """
-                And the review presents only once the SESSION has ended: on hasCommittedPeer a \
-                link blip showed a sheet whose primary action signs a termination on a live mesh. \
+                And the prompt presents only once the SESSION has ended: on hasCommittedPeer a \
+                link blip showed a sheet whose dismissal mints friends on a live mesh. \
                 The needle is scoped to this function's body (finding P3-8).
                 """)
         #expect(reviewBody.contains("guard !aPresentationIsUp else { return }"),
                 """
-                And it refuses while any presenter is up: a .sheet requested over the album's \
-                fullScreenCover is dropped, and a review that never appears is a batch the user \
-                never answers.
+                And it refuses while any presenter is up: a .sheet requested over a cover is dropped, \
+                and a prompt that never appears is a batch the user never answers.
                 """)
+        #expect(reviewBody.contains("guard launchComplete, !store.duressSessionActive else { return }"),
+                "and never under the launch screen or in a decoy")
     }
 }
 

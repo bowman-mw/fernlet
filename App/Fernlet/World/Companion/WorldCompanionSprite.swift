@@ -10,6 +10,8 @@ struct WorldCompanionSprite: View {
     let look: WorldCompanionLook
     var settled = false
     var asleep = false
+    /// Winding down at night: closed eyes in the band's colour (``WorldCompanionPose/drowsy``).
+    var drowsy = false
     /// Whether the map is on screen; off, the breath stops ticking.
     var isActive = true
     /// Points per sprite pixel; nil takes the theme's (3). The open scene with location off draws it
@@ -27,7 +29,8 @@ struct WorldCompanionSprite: View {
         let scale = pixelScale ?? theme.spriteScale
         TimelineView(.animation(minimumInterval: state.animationTempo, paused: reduceMotion || !isActive)) { timeline in
             let beat = Int(timeline.date.timeIntervalSinceReferenceDate / state.animationTempo)
-            let pose = WorldCompanionPose(breathIn: !reduceMotion && isActive && beat % 2 == 1, settled: settled, asleep: asleep)
+            let pose = WorldCompanionPose(breathIn: !reduceMotion && isActive && beat % 2 == 1, settled: settled, asleep: asleep,
+                                          drowsy: drowsy)
             WorldCompanionCanvas(grid: WorldCompanionPainter.paint(state: state, look: look, pose: pose), scale: scale)
         }
         .frame(width: Self.size(scale: scale).width, height: Self.size(scale: scale).height)

@@ -7387,7 +7387,9 @@ final class FernletStore {
     }
 
     /// The benign snapshot the widget would render right now. PRIVACY: score/water/macros plus the
-    /// companion's state and its widget-safe emotion timeline only.
+    /// companion's state, name and look, its widget-safe emotion timeline, when a friend's gold hearts
+    /// fade and the stamp book's tokens and days only (both empty in a decoy;
+    /// `FernletStore+WidgetExtras.swift`).
     ///
     /// Lifted out of `publishWidgetSnapshot()` unchanged — same fields, same order, same `Date()`
     /// stamp — so the background refresh can DIFF a snapshot before deciding whether publishing it
@@ -7414,7 +7416,9 @@ final class FernletStore {
             computedAt: Date(),
             companionEmotionTimeline: widgetEmotionTimeline(),
             companionName: widgetCompanionName,
-            companionLook: WidgetSnapshot.CompanionLook(appearance: settings.companionAppearance)
+            companionLook: WidgetSnapshot.CompanionLook(appearance: settings.companionAppearance),
+            goldHeartEnds: widgetGoldHeartEnds(),
+            stamps: widgetStamps()
         )
     }
 

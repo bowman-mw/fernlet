@@ -6,8 +6,9 @@ import Foundation
 /// `b1-home-denied`). Nil leaves the companion's usual line (`companionAmbientThought`, Home's own order).
 ///
 /// A stamp just earned speaks first, as everywhere: that is the usual line's own first rule, so the map
-/// stays quiet while one is waiting. Then a friend arriving, then the day marked unwell, then the
-/// weather, then where the map is (no signal, approximate, location off).
+/// stays quiet while one is waiting. Then a friend arriving, then the day marked unwell, then the night
+/// (`b1-home-night`: the map's night or the companion's bedtime, so no day's line is said over the
+/// sleepy face), then the weather, then where the map is (no signal, approximate, location off).
 enum WorldMapLine {
     /// The facts the line reads.
     struct Facts: Equatable, Sendable {
@@ -17,6 +18,8 @@ enum WorldMapLine {
         var sky: AmbientSky?
         var presence: WorldMapPresence = .precise
         var isOffline = false
+        /// The map's night, or the companion's own bedtime: it is winding down.
+        var isNight = false
     }
 
     /// The map's own line for `facts`, or nil for the companion's usual one.
@@ -29,6 +32,10 @@ enum WorldMapLine {
         if facts.isUnwell {
             return String(localized: "worldLine.unwell", defaultValue: "Staying in today. The map will keep.",
                           comment: "World Home, the companion's speech on a day marked unwell")
+        }
+        if facts.isNight {
+            return String(localized: "worldLine.night", defaultValue: "Getting sleepy. Night soon.",
+                          comment: "World Home at night or past the companion's bedtime: the companion's speech as it winds down")
         }
         if let weather = weatherLine(facts.sky) { return weather }
         return placeLine(facts)

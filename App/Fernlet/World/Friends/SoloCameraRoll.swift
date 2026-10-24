@@ -15,9 +15,9 @@ nonisolated enum SoloCameraRules {
     /// Photos a local day, alone.
     static let photosPerDay = 10
 
-    /// When a shot taken at `takenAt` starts to show: the first time the companion falls asleep at
-    /// or after the shot, or the shot itself when the companion is already asleep then (the photo is
-    /// taken after it has gone to sleep). A window with no night (bedtime equals wake) uses the
+    /// When a shot taken at `takenAt` starts to show: the next time the companion falls asleep after
+    /// the shot. A shot taken once it is already asleep waits for the NEXT night (owner, 2026-10-24,
+    /// question 20), never shows at once. A window with no night (bedtime equals wake) uses the
     /// standard one, so a photo always has a night to wait for.
     ///
     /// - Parameters:
@@ -26,11 +26,9 @@ nonisolated enum SoloCameraRules {
     ///   - calendar: The calendar (and time zone) the night is read in.
     static func revealsAt(takenAt: Date, window: CompanionSleepWindow, calendar: Calendar) -> Date {
         let night = window.isEmpty ? CompanionSleepWindow.standard : window
-        let parts = calendar.dateComponents([.hour, .minute], from: takenAt)
-        let minute = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
-        guard !night.isPastWindDown(atMinute: minute) else { return takenAt }
         let today = calendar.startOfDay(for: takenAt)
-        if let tonight = instant(minute: night.fallsAsleepMinute, of: today, calendar: calendar), tonight >= takenAt {
+        // Strictly after: a shot at the very minute it falls asleep is a shot of an asleep companion.
+        if let tonight = instant(minute: night.fallsAsleepMinute, of: today, calendar: calendar), tonight > takenAt {
             return tonight
         }
         guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: today),

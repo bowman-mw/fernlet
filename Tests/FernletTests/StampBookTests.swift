@@ -54,7 +54,16 @@ struct StampBookTests {
         let kinds = MilestoneEconomy.countedKinds
         let sprites = kinds.map { StampBookArt.keepsake(for: $0).sprite }
         #expect(Set(sprites.map(\.rows)).count == kinds.count)
-        #expect(kinds.allSatisfy { !MilestonesCopy.shelfLabel(for: $0).isEmpty && !StampBookCopy.nextLabel(for: $0).isEmpty })
+        #expect(kinds.allSatisfy { !MilestonesCopy.shelfLabel(for: $0, count: 2).isEmpty && !StampBookCopy.nextLabel(for: $0).isEmpty })
+    }
+
+    /// A medal's caption agrees with its count ("1 well-watered day", "3 well-watered days"; owner,
+    /// 2026-10-24) and leaves the number to the line above it.
+    @Test func aMedalsCaptionAgreesWithItsCount() {
+        let one = MilestonesCopy.shelfLabel(for: .water, count: 1)
+        let three = MilestonesCopy.shelfLabel(for: .water, count: 3)
+        #expect(one != three, "the catalog lost the medal caption's plural forms")
+        #expect(!one.contains("1") && !three.contains("3"), "the number is drawn above the caption, not in it")
     }
 
     @Test func aMedalSpeaksItsSentenceAndItsGifts() {

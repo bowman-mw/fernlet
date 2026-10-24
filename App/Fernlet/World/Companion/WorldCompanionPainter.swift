@@ -95,6 +95,9 @@ nonisolated struct WorldCompanionPose: Equatable, Sendable {
     var settled = false
     /// Asleep at night: closed eyes, whatever the band.
     var asleep = false
+    /// Winding down (`b1-home-night`): the map's night, or the companion's own bedtime before it falls
+    /// asleep. Closed eyes in the band's own colour; asleep adds the night's body colour.
+    var drowsy = false
 }
 
 /// Paints the map companion as the approved pixel art (design `b1-home-day`'s `pixComp`, the World
@@ -119,9 +122,10 @@ nonisolated enum WorldCompanionPainter {
         return grid
     }
 
-    /// Whether the eyes are closed lines: resting, sick or asleep (and settled on a low-energy day).
+    /// Whether the eyes are closed lines: resting, sick, winding down or asleep (and settled on a
+    /// low-energy day).
     static func closesEyes(state: CompanionState, pose: WorldCompanionPose) -> Bool {
-        pose.asleep || state == .resting || state == .sick
+        pose.asleep || pose.drowsy || state == .resting || state == .sick
     }
 
     /// Fills the ellipse with its outline, highlight, lower shade and (when sick) the blanket.

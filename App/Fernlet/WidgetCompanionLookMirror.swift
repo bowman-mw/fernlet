@@ -78,13 +78,13 @@ nonisolated enum FernletWidgetLinkRouter {
 
     /// Where a widget link lands, or nil when the URL is not one.
     ///
-    /// The stamp widget's `/stamps` lands on Home for now: the Stamp book is pushed inside the Today
-    /// panel, and opening it from a link needs a landing in `ContentView` (lane widgets' ledger asks
-    /// the integrator for it). Home is the honest fallback — never a dead tap.
+    /// The stamp widget's `/stamps` opens Today and pushes the Stamp book at its stamps, as the stamp
+    /// banner's tap does (`ContentView.openStampBookInToday()`).
     static func target(of url: URL) -> PendingIntentSheet.Target? {
         guard url.scheme == "fernlet-world", url.host == host else { return nil }
         switch url.path {
-        case "/home", "/stamps": return .home
+        case "/home": return .home
+        case "/stamps": return .stamps
         case "/water": return .water
         default: return nil
         }

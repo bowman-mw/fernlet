@@ -61,7 +61,8 @@ struct MilestoneRowModel {
     /// Raw lifetime count — drives the shelf medallions, empty-vs-filled row styling, and the
     /// mostly-empty header decision. (The sentence in `headline` already folds this in.)
     let count: Int
-    /// A short lower-case caption under a Stamp book medal ("journal moments", "worries let go").
+    /// A short lower-case caption under a Stamp book medal, agreeing with ``count`` ("1 journal moment",
+    /// "3 worries let go"; the number itself is drawn above it).
     let shelfLabel: String
     /// A gentle "your first … will land here" line for a kind with no count yet.
     let emptyPrompt: String
@@ -110,7 +111,7 @@ struct MilestoneRowModel {
                 headline: headline(kind: kind, count: count),
                 giftCount: kind == .worry ? 0 : (giftCounts[kind] ?? 0),
                 count: count,
-                shelfLabel: MilestonesCopy.shelfLabel(for: kind),
+                shelfLabel: MilestonesCopy.shelfLabel(for: kind, count: count),
                 emptyPrompt: MilestonesCopy.emptyPrompt(for: kind)
             )
         }
@@ -189,21 +190,22 @@ enum MilestonesCopy {
     }
 
     /// The short lower-case label under a Stamp book medal, below its count (design `b2-milestones`,
-    /// draft 2). A caption for the tally, so it reads the same at any count.
-    static func shelfLabel(for kind: MilestoneEventKind) -> String {
+    /// draft 2): "1 well-watered day", "3 well-watered days" (owner, 2026-10-24). The number is drawn
+    /// above it, so the catalog's plural forms agree with it and leave it out.
+    static func shelfLabel(for kind: MilestoneEventKind, count: Int) -> String {
         switch kind {
-        case .journal: String(localized: "stampBook.medal.journal", defaultValue: "journal moments",
-                              comment: "Stamp book: lowercase caption under the journal medal, below its lifetime count. A tally caption, the same at any count.")
-        case .meal: String(localized: "stampBook.medal.meals", defaultValue: "meals noted",
-                           comment: "Stamp book: lowercase caption under the meals medal, below its lifetime count. A tally caption, the same at any count.")
-        case .workout: String(localized: "stampBook.medal.workouts", defaultValue: "workouts on purpose",
-                              comment: "Stamp book: lowercase caption under the workouts medal, below its lifetime count. A tally caption, the same at any count.")
-        case .water: String(localized: "stampBook.medal.water", defaultValue: "well-watered days",
-                            comment: "Stamp book: lowercase caption under the water medal, below its count of days the water target was met. A tally caption, the same at any count.")
-        case .breathing: String(localized: "stampBook.medal.breathing", defaultValue: "breathing breaks",
-                                comment: "Stamp book: lowercase caption under the breathing medal, below its count of breathing breaks. A tally caption, the same at any count.")
-        case .worry: String(localized: "stampBook.medal.worries", defaultValue: "worries let go",
-                            comment: "Stamp book: lowercase caption under the worry medal, below its count of worries let go. A tally caption, the same at any count.")
+        case .journal: String(localized: "stampBook.medal.journal", defaultValue: "\(count) journal moments",
+                              comment: "Stamp book: lowercase caption under the journal medal, below its lifetime count. Plural forms agree with the count and leave the number out (it is drawn above).")
+        case .meal: String(localized: "stampBook.medal.meals", defaultValue: "\(count) meals noted",
+                           comment: "Stamp book: lowercase caption under the meals medal, below its lifetime count. Plural forms agree with the count and leave the number out (it is drawn above).")
+        case .workout: String(localized: "stampBook.medal.workouts", defaultValue: "\(count) workouts on purpose",
+                              comment: "Stamp book: lowercase caption under the workouts medal, below its lifetime count. Plural forms agree with the count and leave the number out (it is drawn above).")
+        case .water: String(localized: "stampBook.medal.water", defaultValue: "\(count) well-watered days",
+                            comment: "Stamp book: lowercase caption under the water medal, below its count of days the water target was met. Plural forms agree with the count and leave the number out (it is drawn above).")
+        case .breathing: String(localized: "stampBook.medal.breathing", defaultValue: "\(count) breathing breaks",
+                                comment: "Stamp book: lowercase caption under the breathing medal, below its count of breathing breaks. Plural forms agree with the count and leave the number out (it is drawn above).")
+        case .worry: String(localized: "stampBook.medal.worries", defaultValue: "\(count) worries let go",
+                            comment: "Stamp book: lowercase caption under the worry medal, below its count of worries let go. Plural forms agree with the count and leave the number out (it is drawn above).")
         case .resetBoundary: ""
         }
     }

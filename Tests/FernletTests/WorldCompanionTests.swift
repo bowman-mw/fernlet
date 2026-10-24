@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import FernletDomainModel
+import AppServices
 @testable import Fernlet
 
 /// The companion on the World map (World app plan step 3): the approved pixel art, what it wears, and
@@ -27,6 +28,25 @@ struct WorldCompanionTests {
         #expect(WorldCompanionPainter.closesEyes(state: .sick, pose: WorldCompanionPose()))
         #expect(WorldCompanionPainter.closesEyes(state: .thriving, pose: WorldCompanionPose(asleep: true)))
         #expect(!WorldCompanionPainter.closesEyes(state: .okay, pose: WorldCompanionPose()))
+    }
+
+    /// At night (`b1-home-night`) the companion winds down: its eyes close in the band's own colour, and
+    /// the map says the night's line after a friend and an unwell day and before the weather.
+    @Test func theNightWindsTheCompanionDown() {
+        #expect(WorldCompanionPainter.closesEyes(state: .okay, pose: WorldCompanionPose(drowsy: true)))
+        let look = WorldCompanionLook(body: WorldCompanionLook.stateHex(.okay))
+        let drowsy = WorldCompanionPainter.paint(state: .okay, look: look, pose: WorldCompanionPose(drowsy: true))
+        #expect(drowsy != WorldCompanionPainter.paint(state: .okay, look: look, pose: WorldCompanionPose()))
+        #expect(drowsy.cells.contains(WorldCompanionLook.stateHex(.okay)), "winding down keeps the band's colour")
+        var facts = WorldMapLine.Facts(sky: .rain)
+        let rain = WorldMapLine.line(facts)
+        facts.isNight = true
+        let night = WorldMapLine.line(facts)
+        #expect(night != nil && night != rain, "the night speaks before the weather")
+        facts.isUnwell = true
+        #expect(WorldMapLine.line(facts) != night, "an unwell day speaks before the night")
+        facts.stampWaiting = true
+        #expect(WorldMapLine.line(facts) == nil, "a stamp just earned speaks first")
     }
 
     /// The breath changes the frame (two crisp frames, not a scale), and the settled pose has its own.

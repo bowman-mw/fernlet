@@ -19,7 +19,7 @@ nonisolated struct WorldTheme: Sendable {
     static let pixel = WorldTheme(
         spriteScale: 3, spriteScaleAccessibility: 4,
         icons: [.today: WorldSprites.heartSm, .food: WorldSprites.onigiri, .move: WorldSprites.shoe,
-                .log: WorldSprites.basket, .friends: WorldSprites.face, .personal: WorldSprites.diary,
+                .log: WorldSprites.basket, .friends: WorldSprites.photo, .personal: WorldSprites.diary,
                 .settings: WorldSprites.gear])
 
     /// The sprite scale for a text size.

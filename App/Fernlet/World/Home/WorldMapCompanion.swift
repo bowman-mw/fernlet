@@ -33,6 +33,9 @@ struct WorldMapCompanion: View {
     /// Whether the bubble stays down: the quick-start card is open over the map (`b1-qs-*` draw the
     /// companion without one), so the two never overlap.
     var isQuiet = false
+    /// The map's night (`b1-home-night`; the DEBUG night override too): the companion winds down, its
+    /// eyes closing, before its own bedtime makes it sleepy and then asleep.
+    var isNight = false
     let onCustomize: () -> Void
     @State private var petGovernor = PetInteractionGovernor()
     @State private var playfulUntil: Date?
@@ -64,8 +67,8 @@ struct WorldMapCompanion: View {
                 .accessibilityHidden(true)
             ZStack {
                 WorldCompanionSprite(state: store.liveCompanionState, look: look(emotion: emotion),
-                                     settled: isSettled, asleep: emotion?.hidesTheDay == true, isActive: isActive,
-                                     pixelScale: pixelScale)
+                                     settled: isSettled, asleep: emotion?.hidesTheDay == true,
+                                     drowsy: isNight || emotion == .sleepy, isActive: isActive, pixelScale: pixelScale)
                     .offset(y: hopLift)
                 if tapCount > 0 { WorldPetHeart().id(tapCount) }
             }
@@ -126,9 +129,21 @@ struct WorldMapCompanion: View {
     /// Whether the companion is asleep at `date` (its feeling hides the day), for the Today panel's
     /// companion card, so the card and the map sleep together. Only the yes or no leaves this file.
     static func isAsleep(store: FernletStore, at date: Date) -> Bool {
+        nightFeeling(store: store, at: date)?.hidesTheDay == true
+    }
+
+    /// Whether the companion's own bedtime has come at `date` (sleepy, or asleep after the wind-down),
+    /// for the map's night line. Only the yes or no leaves this file.
+    static func isPastBedtime(store: FernletStore, at date: Date) -> Bool {
+        let feeling = nightFeeling(store: store, at: date)
+        return feeling == .sleepy || feeling?.hidesTheDay == true
+    }
+
+    /// The feeling at `date` without the moment's touches (no body signal, no pet), as the night reads it.
+    private static func nightFeeling(store: FernletStore, at date: Date) -> CompanionEmotion? {
         store.companionEmotion(at: date, bodySignal: nil, playfulUntil: nil,
                                appetiteCuesEnabled: CompanionEmotionPreferences.appetiteCuesEnabled(),
-                               sleepWindow: CompanionEmotionPreferences.sleepWindow())?.hidesTheDay == true
+                               sleepWindow: CompanionEmotionPreferences.sleepWindow())
     }
 
     /// One pet, answered as Home answers it: the governor decides, its cue plays (nothing while

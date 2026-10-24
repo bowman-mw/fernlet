@@ -71,6 +71,12 @@ enum UITestSupport {
     /// launch, so a relaunch without it puts the gate back.
     static var enableCoachExchange: Bool { env["FERNLET_UI_TEST_COACH_EXCHANGE"] == "1" }
 
+    /// `FERNLET_UI_TEST_WEB_LOOKUP=1` — seed the demo persona with AI on and web nutrition lookup
+    /// allowed (asked for and consented), so Log meal shows its Import helper (`b3-meal`'s Recent /
+    /// Import / By hand row), which only a web lookup can serve. Consumed by
+    /// `FernletStore.seedDemoContent`; applied only when set, so other suites keep the lane closed.
+    static var enableWebNutritionLookup: Bool { env["FERNLET_UI_TEST_WEB_LOOKUP"] == "1" }
+
     /// `FERNLET_UI_TEST_HEALTH_SHARING_OFF=1` — turn Fernlet's master Health switch and its Cycle
     /// tracking switch off at launch (the shipped defaults), so a test that needs cycle sharing OFF
     /// gets it on any simulator. The preferences keychain outlives the app, and two Settings suites
@@ -280,6 +286,7 @@ enum UITestSupport {
     static var hidePeriodSurface: Bool { false }
     static var hideIntimacySurface: Bool { false }
     static var enableCoachExchange: Bool { false }
+    static var enableWebNutritionLookup: Bool { false }
     static var pinsHealthSharingOff: Bool { false }
     static var initialSheet: FernletSheet? { nil }
     static var forceCaptureCover: Bool { false }

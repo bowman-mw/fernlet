@@ -103,7 +103,7 @@ struct WidgetRedesignTests {
         }
     }
 
-    /// A widget tap's URL lands where the widget promised: Home, or the Water sheet.
+    /// A widget tap's URL lands where the widget promised: Home, the Water sheet, or the Stamp book.
     @Test func widgetLinksLandOnHomeAndWater() throws {
         let bundle = try RepoRoot.source(Self.bundlePath)
         for path in ["home", "water"] {
@@ -112,10 +112,9 @@ struct WidgetRedesignTests {
             let url = try #require(URL(string: spelling))
             #expect(FernletWidgetLinkRouter.target(of: url)?.rawValue == path)
         }
-        // The stamp widget's link lands on Home until the app has a Stamp book landing (lane widgets'
-        // ledger asks the integrator for it) — never a dead tap.
+        // The stamp widget's link opens Today and pushes the Stamp book, as the stamp banner's tap does.
         #expect(bundle.contains("URL(string: \"fernlet-world://widget/stamps\")"), "the stamp widget no longer writes its link")
-        #expect(FernletWidgetLinkRouter.target(of: try #require(URL(string: "fernlet-world://widget/stamps"))) == .home)
+        #expect(FernletWidgetLinkRouter.target(of: try #require(URL(string: "fernlet-world://widget/stamps"))) == .stamps)
         #expect(FernletWidgetLinkRouter.target(of: try #require(URL(string: "fernlet-world://widget/journal"))) == nil)
         #expect(FernletWidgetLinkRouter.target(of: try #require(URL(string: "https://widget/home"))) == nil)
     }

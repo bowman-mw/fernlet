@@ -8,8 +8,9 @@ import FernletUI
 /// view”. Care keepsakes on wooden shelves come first, then the nineteen silly stamps (`b2-stamp-art`),
 /// then the silly stats themselves.
 ///
-/// Pushed inside the Today panel from its Milestones and Silly stats cards (the plate shows ‹ Today and
-/// the title), and hosted in a sheet by ``MilestonesView`` for the stamp banner and the routed sheets.
+/// Pushed inside the Today panel from its Milestones and Silly stats cards, and from the stamp banner and
+/// the stamp widget (the plate shows ‹ Today and the title; ``StampBookPushHost``), and hosted in a sheet
+/// by ``MilestonesView`` for the routed sheets.
 ///
 /// Every figure derives from ONE read of each ledger per render (HOME-20's one-source rule): the medal
 /// counts, each medal's gift tag, the header's gift total and the coins line, so no two can disagree.
@@ -63,12 +64,35 @@ enum StampBookTitle {
                                                   comment: "The Stamp book page's title: milestones, keepsakes, silly stamps and silly stats in one page")
 }
 
-extension View {
-    /// The Stamp book pushed under a World panel's plate (‹ Today and the title).
-    func stampBookDestination(isPresented: Binding<Bool>, store: FernletStore) -> some View {
-        navigationDestination(isPresented: isPresented) {
-            StampBookPage(store: store)
-                .fernletPushedPage(StampBookTitle.resource)
-        }
+/// The Stamp book pushed under the Today panel's plate (‹ Today and the title): from its Milestones
+/// and Silly stats cards (at the top), and on a request — the stamp banner's tap or the stamp widget's
+/// (owner, 2026-10-24: open Today and push the book, no sheet) — scrolled to the silly stamps.
+struct StampBookPushHost: ViewModifier {
+    /// Whether the Stamp book is pushed.
+    @Binding var isOpen: Bool
+    /// Set by ContentView when the banner or the widget asks for the book; taken (cleared) here.
+    @Binding var request: Bool
+    var store: FernletStore
+    /// Whether this push scrolls to the stamps (a request's push); a card's push starts at the top.
+    @State private var startsAtStamps = false
+
+    func body(content: Content) -> some View {
+        content
+            .navigationDestination(isPresented: $isOpen) {
+                StampBookPage(store: store, startsAtStamps: startsAtStamps)
+                    .fernletPushedPage(StampBookTitle.resource)
+            }
+            .onChange(of: request, initial: true) { _, _ in takeRequest() }
+            .onChange(of: isOpen) { _, open in
+                if !open { startsAtStamps = false }
+            }
+    }
+
+    /// Pushes the book at its stamps when asked, once.
+    private func takeRequest() {
+        guard request else { return }
+        request = false
+        startsAtStamps = true
+        isOpen = true
     }
 }
