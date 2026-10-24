@@ -75,6 +75,9 @@ struct ContentView: View {
     /// The World Home's panel that is not a tab (Today, Log, Settings), open over everything; nil when
     /// none is. The four tab panels are the `TabView`'s own pages (World build, plan step 1b).
     @State private var worldOverlay: WorldPanel?
+    /// Whether the World Home's disposable camera (the blue button's, ``WorldDisposableCamera``) is open
+    /// full screen over everything: the session button and the stamp banner hold back while it is.
+    @State private var isWorldCameraOpen = false
     /// How far the keyboard reaches above the interface's bottom edge, zero while it is down. The
     /// bar stays behind the keyboard; the meal-logged toast reads this to rest on the keyboard.
     @State private var keyboardOverlap: CGFloat = 0
@@ -916,7 +919,11 @@ struct ContentView: View {
             WorldMapHome(store: store, isFrontmost: isWorldMapFrontmost,
                          bodySignal: HomeView.companionBodySignal(enabled: store.settings.stressAwarenessEnabled,
                                                                   assessment: stressService.assessment),
-                         onOpen: openWorldPanel)
+                         onOpen: openWorldPanel,
+                         // The quick start's "Suggest today's workout" opens Move's suggestion sheet.
+                         onSheet: { activeSheet = $0 },
+                         stampBannerShowing: shownStampBanner != nil,
+                         isCameraOpen: $isWorldCameraOpen)
                 .tabPage(.home)
             WorldPanelFrame(panel: .food, onClose: closeWorldPanel) {
                 FoodView(store: store, onMealsLogged: mealLogReporter, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .food))

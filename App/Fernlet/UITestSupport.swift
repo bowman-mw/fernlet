@@ -153,6 +153,20 @@ enum UITestSupport {
         }
     }
 
+    /// `FERNLET_UI_TEST_WORLD_HOME=<comma list>` — put the World Home into the states the approved
+    /// Batch 1 designs draw, for screenshots: `offline`, `loading`, `approx` (the map's notices, display
+    /// only), `rain`, `snow` (the weather layer), `sick` (marks today unwell on the demo seed; any list without it, such as `well`,
+    /// clears it), `space`
+    /// (the first saved workout space stands in for a pinned one), `pin` (its marker near the
+    /// companion), `friend` (a nearby friend, "Sam"), `solo` / `session` (the quick start as if the
+    /// camera of your own existed, or as if in a session with Sam and Rae; display only),
+    /// `qs` (opens the quick-start card), `walk` (starts Walk together), `hold` (the companion's line
+    /// stays up instead of fading after six seconds). Consumed by `WorldMapHome` and `WorldMapCompanion`;
+    /// `FERNLET_UI_TEST_WORLD_MAP_PHASE` fixes its time of day too.
+    static var worldHomeScenes: Set<String> {
+        Set((env["FERNLET_UI_TEST_WORLD_HOME"] ?? "").split(separator: ",").map(String.init))
+    }
+
     /// `FERNLET_MESH_CONTINUATION=refused|expired|endedBySystem` — seed `FernletStore`'s
     /// background-continuation projection at launch, so the Friends tab renders P8 item 7's card.
     ///
@@ -242,6 +256,7 @@ enum UITestSupport {
     static var worldFoundationGallery: String? { nil }
     static var worldMapHarnessPlain: Bool { false }
     static var worldMapHarnessPhase: CompanionDayPhase? { nil }
+    static var worldHomeScenes: Set<String> { [] }
     static var initialWorldPanel: WorldPanel? { nil }
     static var seededMeshContinuationCard: MeshContinuationCardKind? { nil }
     static var seededHeldSessionPhotoCount: Int? { nil }
