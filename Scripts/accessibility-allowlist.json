@@ -19,18 +19,6 @@
  },
  {
   "rule": "A1-COMBINE-LABEL",
-  "path": "App/Fernlet/FoodView.swift",
-  "line_contains": "\"Step \\(number). \\(step.text)\"",
-  "reason": "Adds the step's ORDINAL POSITION, which the drawn cell shows as a separate numeral chip that `.combine` would speak before the instruction as a naked number ('3. Fold the batter' vs '3 Fold the batter'). Position-bearing labels are the pattern T0-6 established for Cooking Mode; this is the recipe-detail sibling. The AX-size-dropped timer capsule on the line above is re-exposed separately (T2-2). NOTE: FoodView.swift is fenced this round — re-verify at reconciliation."
- },
- {
-  "rule": "A1-COMBINE-LABEL",
-  "path": "App/Fernlet/FoodView.swift",
-  "line_contains": "\"Saved product \\(foodItem.name)\"",
-  "reason": "Same invariant as the saved-recipe row: adds the row KIND to fragments that are a name plus a macro triple and are otherwise indistinguishable from a saved recipe. NOTE: FoodView.swift is fenced this round — re-verify at reconciliation."
- },
- {
-  "rule": "A1-COMBINE-LABEL",
   "path": "App/Fernlet/CompanionCustomizationSheet.swift",
   "line_contains": ".accessibilityLabel(\"\\(Text(slot)): \\(value)\")",
   "reason": "Adds the CAPTION-TO-VALUE relation. The fragments are a slot caption and a value drawn one above the other; `.combine` speaks them as two unlinked items in one breath, and the widget slot rows stack several of them, so a user hears four captions and four values with no way to pair them. The colon is what carries the pairing in speech. `Text(slot)` rather than `slot` is deliberate and commented at the site: a `LocalizedStringKey` cannot be interpolated into another `LocalizedStringKey`, but a `Text` carries its own lookup."
@@ -106,18 +94,6 @@
   "path": "App/Fernlet/MoveView.swift",
   "line_contains": "selectedExercise == nil ? Color.slate.opacity(0.45)",
   "reason": "DISABLED-STATE ink on an inactive control, which WCAG 1.4.3 and 1.4.11 both exempt: the dim branch of this ternary is taken exactly when the control's own `.disabled(selectedExercise == nil)` is true, so VoiceOver announces it as dimmed and it cannot be activated. The ENABLED branch is the readable one (`moss`). If the `.disabled` predicate and this ternary ever stop being the same condition, this entry is wrong — delete it and decide the site again."
- },
- {
-  "rule": "A8-MUTED-SLATE",
-  "path": "App/Fernlet/RecipePartsEditor.swift",
-  "line_contains": "enabled ? tint : Color.slate.opacity(0.3)",
-  "reason": "DISABLED-STATE ink on an inactive control, which WCAG 1.4.3 and 1.4.11 both exempt: the dim branch of this ternary is taken exactly when the control's own `.disabled(!enabled)` is true, so VoiceOver announces it as dimmed and it cannot be activated. The ENABLED branch is the readable one (the caller's `tint`). If the `.disabled` predicate and this ternary ever stop being the same condition, this entry is wrong — delete it and decide the site again."
- },
- {
-  "rule": "A8-MUTED-SLATE",
-  "path": "App/Fernlet/RecipePartsEditor.swift",
-  "line_contains": "enabled ? Color.moss : Color.slate.opacity(0.3)",
-  "reason": "DISABLED-STATE ink on an inactive control, which WCAG 1.4.3 and 1.4.11 both exempt: the dim branch of this ternary is taken exactly when the control's own `.disabled(!enabled)` is true, so VoiceOver announces it as dimmed and it cannot be activated. The ENABLED branch is the readable one (`moss`). If the `.disabled` predicate and this ternary ever stop being the same condition, this entry is wrong — delete it and decide the site again."
  },
  {
   "rule": "A8-MUTED-SLATE",

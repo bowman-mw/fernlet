@@ -492,11 +492,11 @@ struct FoodView: View {
         content
             .sheet(item: $editingRecipe) { recipe in
                 RecipeSheet(store: store, recipe: recipe)
-                    .fernletSheetChrome(anchor: "sheet.recipeEditor", detents: [.large])
+                    .recipeSheetFrame(anchor: "sheet.recipeEditor")
             }
             .sheet(item: $editingSavedRecipe) { recipe in
                 SavedRecipeNotesSheet(store: store, recipe: recipe)
-                    .fernletSheetChrome(anchor: "sheet.savedRecipeNotes", detents: [.medium, .large])
+                    .recipeSheetFrame(anchor: "sheet.savedRecipeNotes")
             }
             .sheet(item: $correctingMeal) { meal in
                 // Full height only: at .medium the "Matched items" editor — the thing the user opened
@@ -510,9 +510,7 @@ struct FoodView: View {
             }
             .sheet(item: $recipeShareDraft) { draft in
                 ProximityRecipeShareSheet(draft: draft, manager: store.recipeShareManager, store: store)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-                    .presentationCornerRadius(20)
+                    .fernletSheet()
             }
     }
 
@@ -664,56 +662,39 @@ private struct CookingResumeCard: View {
     var onResume: () -> Void
     var onDiscard: () -> Void
 
+    /// World build (`b2-cooking-resume`, approved 2026-10-23): a sage card at the top of Food with the
+    /// bowl on a framed tile, "Pick up where you left off", the recipe and its step, then Resume
+    /// (primary) beside Done cooking, which still asks before it forgets the run.
     var body: some View {
-        FernletCard {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 12) {
-                    Image(systemName: "flame.fill")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(Color.moss)
-                        .frame(width: 30)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Cooking in progress")
-                            .font(.fernlet(.headerMedium))
-                            .foregroundStyle(Color.bark)
-                        Text("\(recipeName) — step \(stepNumber) of \(stepCount). Pick up where you left off.")
-                            .font(.fernlet(.bubble))
-                            .foregroundStyle(Color.slate)
-                            .fernletWrappingText()
-                    }
-                    Spacer(minLength: 0)
+        let shape = RoundedRectangle(cornerRadius: FernletFramedLook.cardRadius, style: .continuous)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                RecipeSpriteTile(sprite: WorldSprites.bowl, scale: 3, tint: WorldPalette.iconInk)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Pick up where you left off")
+                        .font(RecipeType.cardTitle)
+                        .foregroundStyle(WorldPalette.bark)
+                        .fernletWrappingText()
+                    Text("\(Text(verbatim: recipeName)) · step \(stepNumber) of \(stepCount)")
+                        .font(FernletFramedFont.body)
+                        .foregroundStyle(WorldPalette.dim)
+                        .fernletWrappingText()
                 }
-
-                HStack(spacing: 12) {
-                    Button(action: onDiscard) {
-                        Text("Discard")
-                            .font(.fernlet(.label))
-                            .foregroundStyle(Color.slate)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 15)
-                            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("cooking.discard")
-
-                    Button(action: onResume) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "play.circle.fill")
-                                .font(.body.weight(.semibold))
-                            Text("Resume")
-                                .font(.fernlet(.label))
-                        }
-                        .foregroundStyle(Color.onMoss)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 15)
-                        .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 14))
-                    }
-                    .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            AdaptiveStack(spacing: 10) {
+                Button(action: onResume) { Text("Resume").frame(maxWidth: .infinity) }
+                    .buttonStyle(ActionPillButtonStyle(.primary))
                     .accessibilityIdentifier("cooking.resume")
-                }
+                Button(action: onDiscard) { Text("Done cooking").frame(maxWidth: .infinity) }
+                    .buttonStyle(ActionPillButtonStyle(.secondary))
+                    .accessibilityIdentifier("cooking.discard")
             }
         }
+        .padding(EdgeInsets(top: 14, leading: 15, bottom: 14, trailing: 15))
+        .background(WorldPalette.sage, in: shape)
+        .overlay(shape.strokeBorder(WorldPalette.ink, lineWidth: FernletFramedLook.frameWidth))
+        .background { shape.fill(WorldPalette.ink.opacity(0.22)).offset(y: 3) }
     }
 }
 
@@ -815,72 +796,63 @@ private struct RecipeImportSheet: View {
             .fernletTabBarSafeAreaClearance()
     }
 
+    /// `b2-recipe-import` (approved 2026-10-23): Paste URL full width, the shared-text field under its
+    /// label, the note, then Import at the bottom right, dimmed until there is something to import.
+    /// The title is on the wooden plate (‹ Create).
     private var importContent: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    Text("Import recipe")
-                        .font(.fernlet(.displayMedium))
-                        .foregroundStyle(Color.bark)
-
-                    pasteURLButton
-
-                    SheetField("Shared recipe text") {
-                        SheetTextEditor(
-                            text: $importText,
-                            placeholder: "Paste Fernlet recipe data here",
-                            minHeight: 180
-                        )
-                    }
-
-                    Text("A recipe shared as text is for reading and won't import here. To save one, have it sent with Send in Messages or shared nearby.")
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-
-                    if let notice {
-                        Text(notice)
-                            .font(.fernlet(.bodySmall))
-                            .italic()
-                            .foregroundStyle(Color.slate)
-                            .fernletWrappingText()
-                    }
-
-                    #if canImport(UIKit)
-                    if let existingRecipe {
-                        alreadySavedCard(for: existingRecipe)
-                    }
-                    #endif
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                pasteURLButton
+                SectionLabel("Shared recipe text")
+                    .padding(.top, 4)
+                SheetTextEditor(text: $importText, placeholder: "Paste Fernlet recipe data here", minHeight: 150)
+                Text("A recipe shared as text is for reading and won't import here. To save one, have it sent with Send in Messages or shared nearby.")
+                    .font(FernletFramedFont.body)
+                    .foregroundStyle(WorldPalette.dim)
+                    .fernletWrappingText()
+                if let notice {
+                    FernletNotice(text: Text(verbatim: notice)) { WorldSpriteView(sprite: WorldSprites.clock, scale: 2) }
                 }
-                .padding(20)
-                .padding(.bottom, 10)
+                #if canImport(UIKit)
+                if let existingRecipe {
+                    alreadySavedCard(for: existingRecipe)
+                }
+                #endif
+                HStack {
+                    Spacer(minLength: 0)
+                    Button("Import") { importSharedText() }
+                        .buttonStyle(ActionPillButtonStyle(.primary))
+                        .disabled(importText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .accessibilityIdentifier("recipeImport.import")
+                }
             }
-
-            SheetSaveBar(label: "Import", disabled: importText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
-                importSharedText()
-            }
+            .padding(.horizontal, 18)
+            .padding(.top, 14)
+            .padding(.bottom, 28)
         }
-        .background(Color.parchment)
+        .fernletPageBackground()
+        .fernletPushedPage("Import recipe")
         // Return adds a line in the paste editor, so the accessory is the way to put the keyboard
         // away. On the page: it is always pushed, beyond the reach of a Done outside its stack.
         .keyboardDoneToolbar()
     }
 
-    /// The pasteboard-URL import affordance; disabled (and relabelled) while a fetch is in flight so
-    /// only one import task can ever be in flight.
+    /// The pasteboard-URL import affordance, full width with the pixel box; disabled (and relabelled)
+    /// while a fetch is in flight so only one import task can ever be in flight.
     private var pasteURLButton: some View {
         Button {
             importFromPasteboardURL()
         } label: {
-            Label(isImportingURL ? "Importing URL" : "Paste URL", systemImage: isImportingURL ? "hourglass" : "link.badge.plus")
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.cream)
-                .frame(maxWidth: .infinity)
-                .padding(14)
-                .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+            HStack(spacing: 8) {
+                WorldSpriteView(sprite: isImportingURL ? WorldSprites.clock : WorldSprites.box, scale: 2,
+                                tint: WorldPalette.onAccent)
+                if isImportingURL { Text("Importing URL") } else { Text("Paste URL") }
+            }
+            .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ActionPillButtonStyle(.primary))
         .disabled(isImportingURL)
+        .accessibilityIdentifier("recipeImport.pasteURL")
     }
 
     /// Leaves the import screen after a successful import: all the way back to the book when the host
@@ -918,17 +890,11 @@ private struct RecipeImportSheet: View {
             }
             .sheet(item: $editingSavedRecipe) { recipe in
                 SavedRecipeNotesSheet(store: store, recipe: recipe)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-                    // The notes editor's keyboard "Done". Declared here, not in the sheet: its other
-                    // two presentations go through `fernletSheetChrome`, which already gives it one.
-                    .keyboardDoneToolbar()
+                    .recipeSheetFrame(anchor: "sheet.savedRecipeNotes")
             }
             .sheet(item: $recipeShareDraft) { draft in
                 ProximityRecipeShareSheet(draft: draft, manager: store.recipeShareManager, store: store)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-                    .presentationCornerRadius(20)
+                    .fernletSheet()
             }
         #endif
     }
@@ -937,31 +903,32 @@ private struct RecipeImportSheet: View {
     /// The zero-network duplicate state: names the matched recipe and offers to open its detail —
     /// no fetch happened and none will (refreshing is the detail's own "Re-import from source").
     private func alreadySavedCard(for recipe: RecipeDefinition) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Already in your recipe book", systemImage: "checkmark.circle")
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.moss)
-            Text(recipe.name)
-                .font(.fernlet(.header))
-                .foregroundStyle(Color.bark)
-                .fernletWrappingText()
-            Button {
-                showingExistingRecipe = true
-            } label: {
-                Label("Open saved recipe", systemImage: "book")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.cream)
+        FernletCard {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    FernletIcon(.check, scale: 2)
+                    Text("Already in your recipe book")
+                        .font(FernletFramedFont.rowTitle.weight(.semibold))
+                        .foregroundStyle(WorldPalette.mossInk)
+                }
+                Text(verbatim: recipe.name)
+                    .font(RecipeType.cardTitle)
+                    .foregroundStyle(WorldPalette.bark)
+                    .fernletWrappingText()
+                Button {
+                    showingExistingRecipe = true
+                } label: {
+                    HStack(spacing: 8) {
+                        WorldSpriteView(sprite: WorldSprites.diary, scale: 2)
+                        Text("Open saved recipe")
+                    }
                     .frame(maxWidth: .infinity)
-                    .padding(12)
-                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(ActionPillButtonStyle(.secondary))
+                .accessibilityIdentifier("recipeImport.openExisting")
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("recipeImport.openExisting")
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.moss.opacity(0.35), lineWidth: 1.5))
     }
 
     /// The matched recipe's read-only detail, wired with local closures (edit → local notes sheet,
@@ -1152,7 +1119,10 @@ struct SavedRecipeNotesSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SheetHeader(title: Text(verbatim: recipe.name), onDone: {
+            // World build (b3-recipe-notes draft 2): this is a saved recipe's Edit recipe, where
+            // Delete recipe lives; the notes are also on the recipe page itself. Cancel keeps them.
+            SheetHeader(title: Text("Edit recipe"), subtitle: Text(verbatim: recipe.name), onCancel: { dismiss() },
+                        onDone: {
                 // Merge only the field this sheet edits into the LIVE row — writing the whole
                 // at-open snapshot back would revert store updates that landed while the sheet
                 // was up (e.g. the image fetch stamping a suppression, or a cloud refresh).
@@ -1160,7 +1130,7 @@ struct SavedRecipeNotesSheet: View {
                 dismiss()
             })
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 18) {
                     sourceLinkSection
 
                     macrosCard
@@ -1173,11 +1143,11 @@ struct SavedRecipeNotesSheet: View {
 
                     deleteButton
                 }
-                .padding(20)
+                .padding(18)
                 .padding(.bottom, 10)
             }
         }
-        .background(Color.parchment)
+        .background(WorldPalette.paper)
         .destructiveConfirmation($pendingDestructiveAction)
         // Warm the DNS/TLS connection to the source host while the sheet is up, so tapping the
         // link opens near-instantly (owner decision 2026-08-09; documented in
@@ -1201,29 +1171,19 @@ struct SavedRecipeNotesSheet: View {
 
     @ViewBuilder private var macrosCard: some View {
         if let macros = webImport?.macros, macros.protein > 0 || macros.carbs > 0 || macros.fat > 0 {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(recipe.servings > 1 ? "PER SERVING" : "MACROS")
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
-                    .tracking(0.8)
-                HStack(spacing: 14) {
-                    Text("P \(macros.protein)g").foregroundStyle(Color.moss)
-                    Text("C \(macros.carbs)g")
-                    Text("F \(macros.fat)g")
-                    Spacer()
+            FernletCard {
+                VStack(alignment: .leading, spacing: 8) {
+                    if recipe.servings > 1 { SectionLabel("Per serving") } else { SectionLabel("Macros") }
+                    RecipeMacroTags(macros: MacroTotals(protein: macros.protein, carbs: macros.carbs, fat: macros.fat))
                     if recipe.servings > 1 {
                         Text("^[\(recipe.servings) serving](inflect: true)")
-                            .font(.fernlet(.stat))
-                            .foregroundStyle(Color.slate)
+                            .font(FernletFramedFont.rowDetail)
+                            .foregroundStyle(WorldPalette.dim)
                     }
+                    WebImportEstimateNote(uncountedLines: webImport?.uncountedIngredientLines, estimatedLines: webImport?.estimatedIngredientLines)
                 }
-                .font(.fernlet(.stat))
-                .foregroundStyle(Color.bark)
-                WebImportEstimateNote(uncountedLines: webImport?.uncountedIngredientLines, estimatedLines: webImport?.estimatedIngredientLines)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
         } else {
             // An estimate that rounds to all zeros hides the card, not the lines it left out.
             WebImportEstimateNote(uncountedLines: webImport?.uncountedIngredientLines, estimatedLines: webImport?.estimatedIngredientLines)
@@ -1232,17 +1192,14 @@ struct SavedRecipeNotesSheet: View {
 
     @ViewBuilder private var ingredientLinesCard: some View {
         if let ingredientLines = webImport?.ingredientLines, !ingredientLines.isEmpty {
-            SheetField("Ingredients") {
-                VStack(alignment: .leading, spacing: 6) {
+            FernletCard {
+                VStack(alignment: .leading, spacing: 4) {
+                    SectionLabel("Ingredients")
                     ForEach(ingredientLines, id: \.self) { ingredient in
-                        Text("• \(ingredient)")
-                            .font(.fernlet(.body))
-                            .foregroundStyle(Color.bark)
+                        RecipeIngredientRow(name: ingredient, amount: "")
                     }
                 }
-                .padding(14)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -1583,13 +1540,16 @@ struct RecipeSheet: View {
 
                     deleteRecipeButton
                 }
-                .padding(20)
+                .padding(.horizontal, 18)
+                .padding(.top, 10)
                 .padding(.bottom, 10)
             }
 
             saveBar
         }
-        .background(Color.parchment)
+        // b3-recipe-new: the sheet's paper; pushed in a panel (Create recipe › Manual entry), the
+        // dotted page under the wooden plate, which carries the title.
+        .background { if isEmbeddedInNavigationStack { FernletDottedPage().ignoresSafeArea() } else { WorldPalette.paper.ignoresSafeArea() } }
         // Belt and braces for the unit menu and the steppers: this editor is reached from a routed
         // sheet, its own sheet, and two pushed stacks, and an untinted system control renders Apple
         // blue in any presentation that isn't already tinted.
@@ -1598,7 +1558,7 @@ struct RecipeSheet: View {
         // on this page because it is always a page of a stack (pushed, or the root of its own
         // sheet's stack), and a Done declared by the host outside that stack never reaches it.
         .keyboardDoneToolbar()
-        .navigationTitle(isEmbeddedInNavigationStack ? editorTitle : "")
+        .modifier(RecipeEditorPageTitle(isPushed: isEmbeddedInNavigationStack, isNew: editingRecipe == nil))
         .navigationBarTitleDisplayMode(.inline)
         .destructiveConfirmation($pendingDestructiveAction)
         .navigationDestination(isPresented: $scannerPath) {
@@ -1632,9 +1592,8 @@ struct RecipeSheet: View {
                     Button {
                         addIngredient()
                     } label: {
-                        RecipeEditorActionLabel(title: "Add ingredient", systemImage: "plus")
+                        RecipeEditorActionLabel(title: "Add ingredient")
                     }
-                    .buttonStyle(.plain)
                     // R3: the list is bounded where it grows — the same ceiling the paste decoder uses.
                     .disabled(ingredients.count >= RecipeLimits.maxIngredients)
 
@@ -1643,11 +1602,11 @@ struct RecipeSheet: View {
                         scanTargetPartID = nil
                         showingBarcodeScanner = true
                     } label: {
-                        RecipeEditorActionLabel(title: "Scan barcode", systemImage: "barcode.viewfinder")
+                        RecipeEditorActionLabel(title: "Scan barcode", sprite: WorldSprites.barcode)
                     }
-                    .buttonStyle(.plain)
                     #endif
                 }
+                .buttonStyle(ActionPillButtonStyle(.secondary))
             }
         }
     }
@@ -1676,18 +1635,17 @@ struct RecipeSheet: View {
             expandedId = nil
         } label: {
             VStack(alignment: .leading, spacing: 4) {
-                Label("Split into parts", systemImage: "square.split.1x2")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.moss)
+                Text("Split into parts")
+                    .font(FernletFramedFont.rowTitle.weight(.semibold))
+                    .foregroundStyle(WorldPalette.mossInk)
                 Text("For a recipe made in stages, like a dressing you make first and a salad you put together after.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.note)
+                    .foregroundStyle(WorldPalette.dim)
                     .fernletWrappingText()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+            .modifier(RecipeEditorCardFrame())
         }
         .buttonStyle(.plain)
         .disabled(ingredients.count >= RecipeLimits.maxIngredients)
@@ -1728,35 +1686,30 @@ struct RecipeSheet: View {
         expandedId = new.id
     }
 
+    /// What one serving holds as the rows stand, in the coloured macro tags (calories only behind
+    /// the explicit opt-in).
     private var perServingCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("PER SERVING")
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
-                .tracking(0.8)
-            HStack {
-                Text("P \(perServingTotals.protein)g · C \(perServingTotals.carbs)g · F \(perServingTotals.fat)g")
-                    .font(.fernlet(.stat))
-                    .foregroundStyle(Color.bark)
-                Spacer()
-                // Macros-first: calories render only behind the explicit opt-in.
-                if store.settings.showCalories {
-                    Text("\(perServingTotals.calories) cal")
-                        .font(.fernlet(.stat))
-                        .foregroundStyle(Color.slate)
-                }
+        FernletCard {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel("Per serving")
+                RecipeMacroTags(macros: perServingTotals, showsCalories: store.settings.showCalories)
             }
-            .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
     private var servingsField: some View {
-        SheetField("Servings") {
-            Stepper("\(servings)", value: $servings, in: 1...RecipeLimits.maxServings)
-                .padding(14)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        FernletCard {
+            HStack(spacing: 10) {
+                Text("Servings")
+                    .font(FernletFramedFont.rowTitle.weight(.semibold))
+                    .foregroundStyle(WorldPalette.bark)
+                    .accessibilityHidden(true)
+                Spacer(minLength: 8)
+                FernletStepper("Servings", value: $servings, in: 1...RecipeLimits.maxServings, step: 1,
+                               display: Text("\(servings)"))
+                    .accessibilityIdentifier("recipeEditor.servings")
+            }
         }
     }
 
@@ -1779,9 +1732,14 @@ struct RecipeSheet: View {
                     }
                 )
             } label: {
-                Label("Delete recipe", systemImage: "trash")
+                HStack(spacing: 8) {
+                    WorldSpriteView(sprite: WorldSprites.trash, scale: 2, tint: Color.terracottaInk)
+                    Text("Delete recipe")
+                }
+                .frame(maxWidth: .infinity)
             }
-            .buttonStyle(DestructiveCardButtonStyle())
+            .buttonStyle(ActionPillButtonStyle(.destructive))
+            .accessibilityIdentifier("recipeEditor.delete")
         }
     }
 
@@ -1830,22 +1788,19 @@ struct RecipeSheet: View {
     /// Stacks at accessibility sizes — side by side, "Save recipe" / "Log & save" squeezed to the
     /// screen edge and broke mid-word.
     private var createButtons: some View {
-        AdaptiveStack(spacing: 12) {
-            Button("Save recipe") {
+        // b3-recipe-new: Save recipe and Log & save share the bottom, faded until there's a name and
+        // an ingredient.
+        AdaptiveStack(spacing: 10) {
+            Button {
                 addDraftRecipe()
                 finishAfterSave(named: name)
+            } label: {
+                Text("Save recipe").frame(maxWidth: .infinity)
             }
-            .buttonStyle(.plain)
-            .font(.fernlet(.label))
-            .foregroundStyle(Color.moss)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.moss.opacity(0.3), lineWidth: 1))
-            .disabled(!canSave)
-            .opacity(canSave ? 1 : 0.4)
+            .buttonStyle(ActionPillButtonStyle(.secondary))
+            .opacity(canSave ? 1 : 0.55)
 
-            Button("Log & save") {
+            Button {
                 let recipe = addDraftRecipe()
                 // Reported before the save finishes, so a host that pops or closes on save already
                 // knows a meal toast is coming (the recipe book then leaves the speaking to it).
@@ -1853,17 +1808,15 @@ struct RecipeSheet: View {
                     onMealsLogged([meal])
                 }
                 finishAfterSave(named: name)
+            } label: {
+                Text("Log & save").frame(maxWidth: .infinity)
             }
-            .buttonStyle(.plain)
-            .font(.fernlet(.label))
-            .foregroundStyle(Color.onMoss)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(canSave ? Color.mossFill : Color.mossFill.opacity(0.4), in: RoundedRectangle(cornerRadius: 16))
-            .disabled(!canSave)
+            .buttonStyle(ActionPillButtonStyle(.primary))
         }
-        .padding(20)
-        .background(Color.parchment)
+        .disabled(!canSave)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .background(WorldPalette.paper)
     }
 
     /// Lands a barcode-resolved food (catalog hit or just-remembered user item) in the ingredient
@@ -1947,9 +1900,9 @@ struct RecipeSheet: View {
         Button {
             addStep()
         } label: {
-            RecipeEditorActionLabel(title: "Add step", systemImage: "plus")
+            RecipeEditorActionLabel(title: "Add step")
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ActionPillButtonStyle(.secondary))
         // R3: bounded by the same step ceiling the paste decoder enforces.
         .disabled(steps.count >= RecipeLimits.maxSteps)
         .accessibilityIdentifier("recipeEditor.addStep")
@@ -2090,27 +2043,29 @@ struct CollapsedIngredientRow: View {
             Button(action: onExpand) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(ingredient.name)
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.bark)
+                        .font(FernletFramedFont.rowTitle.weight(.bold))
+                        .foregroundStyle(WorldPalette.bark)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Text(summaryLine)
-                        .font(.fernlet(.stat))
-                        .foregroundStyle(Color.slate)
+                        .font(FernletFramedFont.rowDetail)
+                        .foregroundStyle(WorldPalette.dim)
                 }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             Button(action: onRemove) {
-                Image(systemName: "xmark")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.slate)
+                FernletIcon(.close, scale: 2)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             // Two whole labels: an English "ingredient" spliced into the key read English in every language.
             .fernletIconButton(ingredient.name.isEmpty ? "Remove ingredient" : "Remove \(ingredient.name)")
         }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        .padding(.leading, 14)
+        .padding(.trailing, 6)
+        .padding(.vertical, 6)
+        .modifier(RecipeEditorCardFrame())
     }
 }
 
@@ -2350,35 +2305,34 @@ struct RecipeIngredientEditor: View {
     /// results list deleted the whole ingredient. Removal is now the labelled button at the bottom of
     /// the card (see ``removeIngredientButton``).
     private var searchHeaderRow: some View {
-        HStack {
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(Color.slate)
+        HStack(spacing: 8) {
+            HStack(spacing: 9) {
+                FernletIcon(.search, scale: 2)
                 TextField("Search ingredient", text: $ingredient.name, prompt: .fieldPrompt("Search ingredient"))
-                    .font(.fernlet(.body))
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled(true)
                     .textContentType(.none)
                     .accessibilityIdentifier("recipeIngredient.search")
             }
+            .sheetTextInput()
             if let onCollapse, !ingredient.trimmedName.isEmpty {
                 Button("Done", action: onCollapse)
                     .buttonStyle(.plain)
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.moss)
+                    .font(FernletFramedFont.sheetControl)
+                    .foregroundStyle(WorldPalette.mossInk)
                     .fernletTapTarget(minWidth: 44, minHeight: 44)
             }
         }
     }
 
-    /// The labelled way out of an ingredient: a word, at the foot of the card, well away from the
-    /// search field's Done.
+    /// The labelled way out of an ingredient: a word, at the foot of the card (b3-recipe-new: bottom
+    /// right), well away from the search field's Done.
     private var removeIngredientButton: some View {
         Button("Remove ingredient", action: onRemove)
             .buttonStyle(.plain)
-            .font(.fernlet(.label))
+            .font(FernletFramedFont.sheetControl)
             .foregroundStyle(Color.terracottaInk)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .trailing)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
             .accessibilityLabel(ingredient.trimmedName.isEmpty ? "Remove ingredient" : "Remove \(ingredient.name)")
@@ -2451,22 +2405,21 @@ struct RecipeIngredientEditor: View {
     }
 
     private var quantityUnitRow: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             TextField("Qty", value: $ingredient.quantity, format: .number, prompt: .fieldPrompt("Qty"))
                 .keyboardType(.decimalPad)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled(true)
                 .textContentType(.none)
-                // Design-system digits: the bare field rendered its value in system SF next to the
-                // serif placeholders in the same card.
-                .font(.fernlet(.label))
-                .frame(maxWidth: 80)
+                .sheetTextInput()
+                .frame(maxWidth: 92)
             unitMenu
         }
     }
 
     /// A bound food's own menu (F4b: its USDA portions, typical sizes, and only the units that
-    /// convert); an unbound (custom) row keeps every unit, since its amount is its own serving.
+    /// convert); an unbound (custom) row keeps every unit, since its amount is its own serving, in the
+    /// framed dropdown (`b3-recipe-new`).
     @ViewBuilder private var unitMenu: some View {
         if let selectedFoodItem {
             RecipePortionMenu(
@@ -2475,13 +2428,10 @@ struct RecipeIngredientEditor: View {
                 askingGramsFor: $askingGramsFor
             )
         } else {
-            Picker("Unit", selection: $ingredient.unit) {
-                ForEach(RecipeUnit.allCases) { unit in
-                    Text(unit.label).tag(unit.rawValue)
-                }
+            FernletDropdown("Unit", selection: $ingredient.unit, options: RecipeUnit.allCases.map(\.rawValue),
+                            showsLabel: false, fullWidth: true) { token in
+                Text(verbatim: RecipeUnit(rawValue: token)?.label ?? token)
             }
-            .pickerStyle(.menu)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -3969,29 +3919,27 @@ private struct FoodProductPageImportView: View {
         _lookupText = State(initialValue: initialLookup)
     }
 
+    /// World build (`b3-web-import`, approved 2026-10-24): on the sheet's paper, the search field under
+    /// its label, the line saying what happens, the primary Find product page, then a framed card while
+    /// the label is read. Pushed in the meal sheet's own stack, so the system bar keeps Back to Log meal
+    /// (the foundation's rule for pages pushed inside a sheet).
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    // This page is always PUSHED, so it titles itself in the nav bar rather than
-                    // drawing a display-serif title under an empty one.
-                    urlEntry
-
-                    if isLoading {
-                        loadingRow
-                    }
-
-                    if let notice {
-                        noticeSection(notice)
-                    }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                urlEntry
+                if isLoading {
+                    loadingRow
                 }
-                .padding(20)
-                .padding(.bottom, 10)
+                if let notice {
+                    noticeSection(notice)
+                }
             }
-
+            .padding(.horizontal, 18)
+            .padding(.top, 10)
+            .padding(.bottom, 24)
         }
-        .background(Color.parchment)
-        .navigationTitle("Import product")
+        .background(WorldPalette.paper)
+        .fernletPushedPage("Import product")
         .navigationBarTitleDisplayMode(.inline)
         // Always pushed (the meal sheet's stack), so the page declares its own keyboard Done.
         .keyboardDoneToolbar()
@@ -4004,9 +3952,7 @@ private struct FoodProductPageImportView: View {
                     onSearchAgain: searchAgain,
                     onConfirm: saveConfirmedProduct
                 )
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheet()
             }
         }
         .onAppear {
@@ -4018,69 +3964,66 @@ private struct FoodProductPageImportView: View {
 
     /// The calm progress card shown while the search / label read is running.
     private var loadingRow: some View {
-        HStack(spacing: 10) {
-            ProgressView()
-                .tint(Color.moss)
-                // The adjacent status text carries the changing, localized operation. Hiding this
-                // otherwise-bare glyph avoids an unlabeled duplicate progress element.
-                .accessibilityHidden(true)
-            Text(importedProduct == nil && preview != nil ? "Reading nutrition label..." : "Finding product page...")
-                .font(.fernlet(.body))
-                .italic()
-                .foregroundStyle(Color.slate)
+        FernletCard {
+            HStack(spacing: 10) {
+                // The clock is decoration; the status text carries the changing, localized operation.
+                WorldSpriteView(sprite: WorldSprites.clock, scale: 2)
+                Group {
+                    if importedProduct == nil && preview != nil {
+                        Text("Reading nutrition label...")
+                    } else {
+                        Text("Finding product page...")
+                    }
+                }
+                .font(FernletFramedFont.body)
+                .foregroundStyle(WorldPalette.bark)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
     }
 
     /// The outcome line, with the "log what you typed instead" escape when the web can't help.
     private func noticeSection(_ notice: String) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(notice)
-                .font(.fernlet(.bodySmall))
-                .italic()
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
+            FernletNotice(text: Text(verbatim: notice)) { EmptyView() }
             // When the web lookup can't help, don't strand the user here — let them log
             // what they typed through the normal meal flow instead.
             if let onLogAsTyped {
                 Button {
                     onLogAsTyped()
                 } label: {
-                    Label("Log what you typed instead", systemImage: "square.and.pencil")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.moss)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(12)
-                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                    HStack(spacing: 8) {
+                        WorldSpriteView(sprite: WorldSprites.pen, scale: 2)
+                        Text("Log what you typed instead")
+                    }
+                    .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ActionPillButtonStyle(.secondary))
             }
         }
     }
 
     private var urlEntry: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SheetField("Product search or page URL") {
-                // A plain-language placeholder: the example URL rendered as a live blue link inside
-                // the empty field, which read as content rather than a hint.
-                TextField("Product name or paste a page link", text: $lookupText,
-                          prompt: .fieldPrompt("Product name or paste a page link"))
-                    .textInputAutocapitalization(.never)
-                    .submitLabel(.search)
-                    .onSubmit { loadPreview() }
-                    .sheetTextInput()
-            }
+        VStack(alignment: .leading, spacing: 12) {
+            SectionLabel("Product search or page URL")
+            // A plain-language placeholder: the example URL rendered as a live blue link inside
+            // the empty field, which read as content rather than a hint.
+            TextField("Product name or paste a page link", text: $lookupText,
+                      prompt: .fieldPrompt("Product name or paste a page link"))
+                .textInputAutocapitalization(.never)
+                .submitLabel(.search)
+                .onSubmit { loadPreview() }
+                .sheetTextInput()
             Text("Search for a specific packaged food or paste its product page. Fernlet will read the nutrition label and show the source and extracted values together before saving.")
-                .font(.fernlet(.bodySmall))
-                .italic()
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.body)
+                .foregroundStyle(WorldPalette.dim)
                 .fernletWrappingText()
-            actionButton(label: isLoading ? "Finding page" : "Find product page", systemImage: "magnifyingglass") {
-                loadPreview()
+            Group {
+                if isLoading {
+                    actionButton(label: "Finding page") { loadPreview() }
+                } else {
+                    actionButton(label: "Find product page") { loadPreview() }
+                }
             }
             .disabled(isLoading || lookupText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
@@ -4112,18 +4055,18 @@ private struct FoodProductPageImportView: View {
         )
     }
 
-    /// The screen's moss action. `LocalizedStringKey`: as a `String` its "Find product page" label was
-    /// drawn verbatim and never reached the catalog.
-    private func actionButton(label: LocalizedStringKey, systemImage: String, action: @escaping () -> Void) -> some View {
+    /// The screen's primary action, full width with the pixel magnifier. `LocalizedStringKey`: as a
+    /// `String` its "Find product page" label was drawn verbatim and never reached the catalog.
+    private func actionButton(label: LocalizedStringKey, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Label(label, systemImage: systemImage)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.cream)
-                .frame(maxWidth: .infinity)
-                .padding(14)
-                .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+            HStack(spacing: 8) {
+                FernletIcon(.search, scale: 2, tint: WorldPalette.onAccent)
+                Text(label)
+            }
+            .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ActionPillButtonStyle(.primary))
+        .accessibilityIdentifier("productImport.find")
     }
 
     private func loadPreview() {
@@ -5707,6 +5650,13 @@ private struct RecipeRow: View {
 /// Read-only detail view for a saved recipe (#1): the user's OWN photo, per-serving + total macros, the
 /// ingredient list, and notes — plus log / edit / share.
 ///
+/// The World build draws it as ONE page (`b2-recipe-detail` draft 3 on top, `b3-recipe-notes` draft 2
+/// at the bottom, approved 2026-10-24): the photo slot and name, "Each serving gives", the compact
+/// ingredient rows with Cook for, the wooden Start cooking, Log it / Share / Edit, the steps, the notes
+/// (edited in place; the separate notes sheet is gone) and where a web recipe came from with its
+/// Re-import. Pushed in a panel, it hands "Recipe" to the wooden plate. The pieces are in
+/// `World/Recipes/RecipePageSections.swift`.
+///
 /// Reached by tapping a recipe in the book (which used to jump straight into the editor). Recipe photos
 /// are the user's own pick or the page's one-attempt web default, sealed and keyed by the recipe id.
 /// Also hosts the ephemeral F4 "cook for N" view-only scaling, the per-ingredient Swap flow
@@ -5781,13 +5731,6 @@ struct RecipeDetailView: View {
     @State private var showingCookingMode = false
     /// The meal the cook's finish screen logged, held until the cover has gone (``CookedMealHandoff``).
     @State private var cookedMeal = CookedMealHandoff()
-
-    /// True while "Log this recipe" has its inline meal-slot chip row open (2026-08-21, FOOD-14 —
-    /// the same chip row as the meal sheet, replacing the old Menu). A chip tap logs and closes it.
-    @State private var showingLogMealTypes = false
-    /// Drives the Steps card's timer-capsule drop and the Cook/Log unstack at accessibility
-    /// sizes (4f·AX3).
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var photo: UIImage?
     @State private var didLoadPhoto = false
@@ -5880,24 +5823,28 @@ struct RecipeDetailView: View {
         detailPresentations(detailScroll)
     }
 
+    /// One page (`b2-recipe-detail` draft 3 on top, `b3-recipe-notes` draft 2 at the bottom, approved
+    /// 2026-10-24): the photo and name, what a serving gives, the ingredients with Cook for, the
+    /// wooden Start cooking, Log it / Share / Edit, then the steps, the notes and where it came from.
     private var detailScroll: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                photoSection
+            VStack(alignment: .leading, spacing: 14) {
                 noticeLines
-                titleBlock
+                headerCard
                 macrosCard
-                yieldControl
                 ingredientsCard
+                if CookingModeAvailability.canCook(recipe) { cookButton }
+                RecipePageActions(onLog: { onLog(recipe, $0) }, onShare: { onShare(recipe) }, onEdit: onEdit)
                 stepsCard
-                if !recipe.notes.isEmpty { notesCard }
-                actionsRow
+                RecipeNotesCard(notes: StoredFoodNote.displayedRecipeNotes(recipe.notes), onSave: saveNotes)
+                sourceCard
             }
-            .padding(20)
-            .padding(.bottom, 24)
+            .padding(.horizontal, 18)
+            .padding(.top, 14)
+            .padding(.bottom, 28)
         }
-        .background(Color.parchment)
-        .navigationTitle("Recipe")
+        .fernletPageBackground()
+        .fernletPushedPage("Recipe")
         .navigationBarTitleDisplayMode(.inline)
         // A6: a recipe photo that couldn't be sealed is a failure the person should feel, not only
         // read in the italic notice line.
@@ -5906,7 +5853,6 @@ struct RecipeDetailView: View {
         // link opens near-instantly (owner decision 2026-08-09; documented in
         // Docs/No-Tracking-Wall.md §4b).
         .prewarmsSourceLinkConnection(for: recipe.webImport)
-        .toolbar { reimportToolbar }
         // Resolve the manual recipe's structured ingredients (a FoodCatalog SQLite read) into a cached
         // dictionary, keyed on the ingredient ids so an edit-and-save under this detail (the editor
         // presents over a pushed detail) re-resolves — a once-guard here left added/swapped ingredients
@@ -5924,48 +5870,42 @@ struct RecipeDetailView: View {
     /// The photo-save and re-import outcome lines.
     @ViewBuilder private var noticeLines: some View {
         if let photoNotice {
-            Text(photoNotice)
-                .font(.fernlet(.bodySmall))
-                .italic()
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
+            FernletNotice(text: Text(verbatim: photoNotice), tone: .warn) { EmptyView() }
         }
         if let reimportNotice {
-            Text(reimportNotice)
-                .font(.fernlet(.bodySmall))
-                .italic()
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
+            FernletNotice(text: Text(verbatim: reimportNotice)) { WorldSpriteView(sprite: WorldSprites.clock, scale: 2) }
         }
     }
 
-    private var titleBlock: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(recipe.name)
-                .font(.fernlet(.displayMedium))
-                .foregroundStyle(Color.bark)
-            Text("^[\(recipe.servings) serving](inflect: true)")
-                .font(.fernlet(.stat))
-                .foregroundStyle(Color.slate)
+    /// The photo slot beside the name and its yield (`b2-recipe-detail`).
+    private var headerCard: some View {
+        RecipePageHeaderCard(name: recipe.name, yieldLine: Text("^[\(recipe.servings) serving](inflect: true)")) {
+            RecipePhotoSlot(photo: photo, onCamera: { save($0) }, onLibraryData: { saveLibraryData($0) },
+                            onLibraryFailed: { photoNotice = Self.photoNotSavedNotice },
+                            onDelete: { confirmRemovePhoto() })
         }
     }
 
-    /// Explicit refresh for a web-imported recipe (owner decision 2026-08-09): repeat imports of the
-    /// same URL now skip the network and surface the saved recipe, so THIS is the one way to re-fetch
-    /// the page. Photo and notes are preserved (same-id replace — see
-    /// `FernletStore.reimportSavedRecipeFromSource`).
-    @ToolbarContentBuilder private var reimportToolbar: some ToolbarContent {
-        if recipe.webImport?.sourceURL?.isSafariPresentable == true {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    confirmReimportFromSource()
-                } label: {
-                    Label("Re-import from source", systemImage: "arrow.clockwise")
-                }
-                .disabled(isReimporting)
-                .accessibilityIdentifier("recipeDetail.reimport")
-            }
+    /// Where a web recipe came from, with the explicit refresh (owner decision 2026-08-09): repeat
+    /// imports of the same URL skip the network and surface the saved recipe, so Re-import is the one
+    /// way to re-fetch the page. Photo and notes are preserved (same-id replace — see
+    /// `FernletStore.reimportSavedRecipeFromSource`). It sat in the navigation bar, which the World
+    /// plate replaces, so it lives with the source now.
+    @ViewBuilder private var sourceCard: some View {
+        if let sourceURL = recipe.webImport?.sourceURL {
+            let presentable = sourceURL.isSafariPresentable
+            RecipeSourceCard(url: sourceURL, isReimporting: isReimporting,
+                             onOpen: { if presentable { showingSafari = true } },
+                             onReimport: presentable ? { confirmReimportFromSource() } : nil)
         }
+    }
+
+    /// Saves the Notes card's text: the stored English when the person left a seeded note as drawn,
+    /// else what they typed (``StoredFoodNote/savedRecipeNotes(editing:stored:)``).
+    private func saveNotes(_ typed: String) {
+        let notes = StoredFoodNote.savedRecipeNotes(editing: typed, stored: recipe.notes)
+        store.updateRecipeNotes(notes, forRecipeID: recipe.id)
+        reimportedRecipe?.notes = notes
     }
 
     /// Caches the recipe's structured ingredients resolved through the catalog (see the `.task(id:)`
@@ -6021,6 +5961,7 @@ struct RecipeDetailView: View {
                     originalFoodItem: resolvedItems[target.foodItemId],
                     onSaveFork: onSaveFork
                 )
+                .fernletSheet()
             }
             .fullScreenCover(isPresented: $showingCookingMode, onDismiss: { cookedMeal.release(to: onMealsLogged) }) {
                 // Carry the detail page's ephemeral "Cook for N" into cooking mode so mise opens at that
@@ -6033,89 +5974,18 @@ struct RecipeDetailView: View {
             }
     }
 
-    @ViewBuilder private var photoSection: some View {
-        if let photo {
-            ZStack(alignment: .topTrailing) {
-                Image(uiImage: photo)
-                    .resizable()
-                    .scaledToFill()
-                    .accessibilityIgnoresInvertColors()
-                    .frame(height: 210)
-                    .frame(maxWidth: .infinity)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                HStack(spacing: 8) {
-                    PhotoCaptureControl(
-                        onCameraCapture: { save($0) },
-                        onLibraryPickData: { data, _ in saveLibraryData(data) },
-                        onLibraryPickFailed: { photoNotice = Self.photoNotSavedNotice },
-                        allowsLibraryChoice: true
-                    ) {
-                        photoIconChip("camera.fill")
-                    }
-                    Button { confirmRemovePhoto() } label: { photoIconChip("trash") }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Delete this recipe photo")
-                        .accessibilityIdentifier("recipeDetail.deletePhoto")
-                }
-                .padding(8)
-            }
-        } else {
-            PhotoCaptureControl(
-                onCameraCapture: { save($0) },
-                onLibraryPickData: { data, _ in saveLibraryData(data) },
-                onLibraryPickFailed: { photoNotice = Self.photoNotSavedNotice },
-                allowsLibraryChoice: true
-            ) {
-                HStack(spacing: 10) {
-                    Image(systemName: "camera.fill").font(.system(size: 16, weight: .semibold))
-                    Text("Add a photo of this recipe").font(.fernlet(.label))
-                }
-                .foregroundStyle(Color.moss)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 22)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(Color.moss.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
-                )
-            }
-            .accessibilityIdentifier("recipeDetail.addPhoto")
-        }
-    }
-
-    private func photoIconChip(_ systemName: String) -> some View {
-        Image(systemName: systemName)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(Color.bark)
-            .frame(width: 34, height: 34)
-            .background(Color.cream.opacity(0.92), in: Circle())
-            // The chip stays 34pt; the frame + contentShape expand only the tap target to Apple's
-            // 44pt minimum — same pattern as the gym-location glyphs.
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
-    }
-
+    /// "Each serving gives" (`b2-recipe-detail`): per serving stays pinned to the base recipe while
+    /// the whole-recipe line follows Cook for.
     private var macrosCard: some View {
-        FernletCard {
-            VStack(alignment: .leading, spacing: 10) {
-                SectionLabel("Per serving")
-                HStack(spacing: 10) {
-                    NutritionPill(title: "Protein", value: "\(perServing.protein)g")
-                    NutritionPill(title: "Carbs", value: "\(perServing.carbs)g")
-                    NutritionPill(title: "Fat", value: "\(perServing.fat)g")
-                    if store.settings.showCalories {
-                        NutritionPill(title: "Calories", value: "\(perServing.calories)")
-                    }
-                }
-                totalsLine
-                    .font(.fernlet(.stat))
-                    .foregroundStyle(Color.slate)
-                WebImportEstimateNote(
-                    uncountedLines: recipe.webImport?.uncountedIngredientLines,
-                    estimatedLines: recipe.webImport?.estimatedIngredientLines
-                )
-            }
-        }
+        RecipeServingCard(
+            perServing: perServing,
+            showsCalories: store.settings.showCalories,
+            totalsLine: totalsLine,
+            estimateNote: WebImportEstimateNote(
+                uncountedLines: recipe.webImport?.uncountedIngredientLines,
+                estimatedLines: recipe.webImport?.estimatedIngredientLines
+            )
+        )
     }
 
     /// "Makes 4 servings: P 40g · C 120g · F 30g", with calories only behind the opt-in. Two whole
@@ -6129,136 +5999,126 @@ struct RecipeDetailView: View {
         return Text("Makes ^[\(effectiveYield) serving](inflect: true): P \(totals.protein)g · C \(totals.carbs)g · F \(totals.fat)g · \(totals.calories) cal")
     }
 
-    /// Ephemeral "cook for N" control (F4, §11.4). Shown only for structured recipes — web imports
-    /// have free-text ingredient lines with no quantities to rescale, so faking a scale would be a
-    /// lie; for them the control is hidden and a one-line note explains why. Everything here is view
-    /// state: nothing is written to the store, and dismissing the detail discards the override.
-    @ViewBuilder private var yieldControl: some View {
-        if RecipeScaling.isScalable(recipe) {
-            FernletCard {
-                VStack(alignment: .leading, spacing: 8) {
-                    SectionLabel("Cook for")
-                    Stepper(value: Binding(get: { effectiveYield }, set: { cookYield = $0 }),
-                            in: RecipeScaling.yieldRange) {
-                        Text("^[\(effectiveYield) serving](inflect: true)")
-                    }
-                    .accessibilityIdentifier("recipeDetail.cookForYield")
-                    if isScaled {
-                        Text("Scaled from ^[\(recipe.servings) serving](inflect: true) for this view only — your saved recipe is unchanged, and logging still records one serving.")
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
-                            .fernletWrappingText()
-                        Button { cookYield = nil } label: {
-                            Text("Reset to ^[\(recipe.servings) serving](inflect: true)")
-                        }
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.moss)
-                        .accessibilityIdentifier("recipeDetail.cookForReset")
-                    }
+    /// Ephemeral "cook for N" control (F4, §11.4), in the Ingredients card's header
+    /// (`b2-recipe-detail`). Shown only for structured recipes — web imports have free-text
+    /// ingredient lines with no quantities to rescale, so faking a scale would be a lie. Everything
+    /// here is view state: nothing is written to the store, and leaving the page discards it.
+    private var cookForStepper: some View {
+        HStack(spacing: 8) {
+            Text("Cook for")
+                .font(FernletFramedFont.rowTitle.weight(.semibold))
+                .foregroundStyle(WorldPalette.bark)
+                .accessibilityHidden(true)
+            FernletStepper("Cook for", value: Binding(get: { effectiveYield }, set: { cookYield = $0 }),
+                           in: RecipeScaling.yieldRange, step: 1, display: Text("\(effectiveYield)"))
+                .accessibilityIdentifier("recipeDetail.cookForYield")
+        }
+        // Its ideal width, never squeezed: where the label and the stepper don't fit beside
+        // "Ingredients", the card's header stacks them instead (a squeezed "Cook for" broke per letter).
+        .fixedSize()
+    }
+
+    /// The scaled-view note and its reset, under the ingredients while Cook for differs from the
+    /// recipe's own yield; for a web import, why there is no Cook for.
+    @ViewBuilder private var yieldNote: some View {
+        if isScaled {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Scaled from ^[\(recipe.servings) serving](inflect: true) for this view only — your saved recipe is unchanged, and logging still records one serving.")
+                    .font(FernletFramedFont.note)
+                    .foregroundStyle(WorldPalette.dim)
+                    .fernletWrappingText()
+                Button { cookYield = nil } label: {
+                    Text("Reset to ^[\(recipe.servings) serving](inflect: true)")
                 }
+                .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
+                .accessibilityIdentifier("recipeDetail.cookForReset")
             }
         } else if recipe.webImport != nil {
             Text("Scaling isn't available for imported recipes — their ingredient amounts are free text.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.note)
+                .foregroundStyle(WorldPalette.dim)
                 .fernletWrappingText()
         }
     }
 
-    @ViewBuilder private var ingredientsCard: some View {
+    /// The Ingredients card: its label and Cook for on top, then one compact row per ingredient
+    /// (`b2-recipe-detail` draft 3: a 30-ingredient recipe is a list you scroll).
+    private var ingredientsCard: some View {
+        FernletCard {
+            VStack(alignment: .leading, spacing: 8) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        SectionLabel("Ingredients")
+                        Spacer(minLength: 8)
+                        if RecipeScaling.isScalable(recipe) { cookForStepper }
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        SectionLabel("Ingredients")
+                        if RecipeScaling.isScalable(recipe) { cookForStepper }
+                    }
+                }
+                ingredientRows
+                yieldNote
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder private var ingredientRows: some View {
         if let webImport = recipe.webImport {
-            webImportIngredientsCard(webImport)
+            webImportIngredientRows(webImport)
+        } else if recipe.ingredients.isEmpty {
+            Text("No ingredients listed.")
+                .font(FernletFramedFont.body)
+                .foregroundStyle(WorldPalette.dim)
+        } else if recipe.isMultipart {
+            RecipePartsIngredientList(parts: RecipePartsLayout.parts(of: recipe, displaying: displayIngredients)) {
+                structuredIngredientRow($0)
+            }
         } else {
-            structuredIngredientsCard
-        }
-    }
-
-    /// Web imports keep free-text ingredient lines (no structured food-item resolution) plus the
-    /// source URL as a provenance line where a manual recipe's resolved list would be.
-    private func webImportIngredientsCard(_ webImport: RecipeWebImport) -> some View {
-        FernletCard {
-            VStack(alignment: .leading, spacing: 10) {
-                SectionLabel("Ingredients")
-                if webImport.ingredientLines.isEmpty {
-                    Text("No ingredients listed.")
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                } else {
-                    ForEach(webImport.ingredientLines, id: \.self) { line in
-                        HStack(alignment: .top, spacing: 8) {
-                            Circle().fill(Color.moss.opacity(0.5)).frame(width: 5, height: 5).padding(.top, 7)
-                            Text(line)
-                                .font(.fernlet(.body))
-                                .foregroundStyle(Color.bark)
-                                .fernletWrappingText()
-                        }
-                    }
-                }
-                if let sourceURL = webImport.sourceURL {
-                    SourceLinkRow(url: sourceURL) { showingSafari = true }
-                        .padding(.top, 2)
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(displayIngredients) { ingredient in
+                    structuredIngredientRow(ingredient)
                 }
             }
         }
     }
 
-    private var structuredIngredientsCard: some View {
-        FernletCard {
-            VStack(alignment: .leading, spacing: 10) {
-                SectionLabel("Ingredients")
-                if recipe.ingredients.isEmpty {
-                    Text("No ingredients listed.")
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                } else if recipe.isMultipart {
-                    RecipePartsIngredientList(parts: RecipePartsLayout.parts(of: recipe, displaying: displayIngredients)) {
-                        structuredIngredientRow($0)
-                    }
-                } else {
-                    ForEach(displayIngredients) { ingredient in
-                        structuredIngredientRow(ingredient)
-                    }
+    /// Web imports keep free-text ingredient lines (no structured food-item resolution): each line is
+    /// a compact row whose icon is chosen from its words, with no separate amount.
+    @ViewBuilder private func webImportIngredientRows(_ webImport: RecipeWebImport) -> some View {
+        if webImport.ingredientLines.isEmpty {
+            Text("No ingredients listed.")
+                .font(FernletFramedFont.body)
+                .foregroundStyle(WorldPalette.dim)
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(webImport.ingredientLines, id: \.self) { line in
+                    RecipeIngredientRow(name: line, amount: "")
                 }
             }
         }
     }
 
-    /// One resolved ingredient line, with the Swap affordance for structured (scalable) recipes.
+    /// One resolved ingredient: its icon, name and amount, the typical-size note, and the Swap
+    /// affordance for structured (scalable) recipes.
     private func structuredIngredientRow(_ ingredient: RecipeIngredient) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Circle().fill(Color.moss.opacity(0.5)).frame(width: 5, height: 5).padding(.top, 7)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(ingredientLine(ingredient))
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.bark)
-                    .fernletWrappingText()
-                // A household amount read from the curated typical-size table stays marked as an
-                // estimate after the editor closes (F4b fix round 1, finding s2-L-F4b-DT-2).
-                if isTypicalSizeEstimate(ingredient) {
-                    RecipeTypicalSizeEstimateNote()
-                }
-            }
-            // Swap targets the STORED base ingredient (matched by id), not the scaled
-            // display copy — a fork is built from saved quantities. Structured recipes
-            // only; web imports have no swappable structured ingredients.
+        let name = resolvedItems[ingredient.foodItemId]?.name
+        return RecipeIngredientRow(
+            name: RecipeIngredientLine.displayName(name),
+            amount: ingredient.amountText,
+            artName: name,
+            // A household amount read from the curated typical-size table stays marked as an
+            // estimate after the editor closes (F4b fix round 1, finding s2-L-F4b-DT-2).
+            note: isTypicalSizeEstimate(ingredient) ? AnyView(RecipeTypicalSizeEstimateNote()) : nil
+        ) {
+            // Swap targets the STORED base ingredient (matched by id), not the scaled display copy — a
+            // fork is built from saved quantities. Structured recipes only.
             if RecipeScaling.isScalable(recipe) {
-                Spacer(minLength: 6)
-                Button {
+                RecipeIconButton(sprite: WorldSprites.swap, label: swapLabel(for: ingredient), size: 30) {
                     substitutionTarget = recipe.ingredients.first(where: { $0.id == ingredient.id }) ?? ingredient
-                } label: {
-                    Label("Swap", systemImage: "arrow.triangle.2.circlepath")
-                        .labelStyle(.iconOnly)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.moss)
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                // The 44pt target centres the glyph well below the ingredient's first text baseline in
-                // this top-aligned row; lift it so icon and text read as one line (the target is
-                // unchanged — only where it sits).
-                .padding(.top, -6)
-                .accessibilityLabel(swapLabel(for: ingredient))
+                .accessibilityInputLabels([swapLabel(for: ingredient), Text("Swap")])
                 .accessibilityIdentifier("recipeDetail.swapIngredient")
             }
         }
@@ -6271,181 +6131,35 @@ struct RecipeDetailView: View {
         return Text("Swap \(name)")
     }
 
-    private var notesCard: some View {
-        FernletCard {
-            VStack(alignment: .leading, spacing: 8) {
-                SectionLabel("Notes")
-                Text(verbatim: StoredFoodNote.displayedRecipeNotes(recipe.notes))
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.bark)
-                    .fernletWrappingText()
-            }
-            // FernletCard hugs its content when nothing inside stretches, which left this card
-            // visibly narrower than the macro/ingredient cards above it.
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    /// The Steps card (2026-08-21, FOOD-22): the recipe's authored steps, readable WITHOUT
-    /// starting cooking mode — Cook stays the hands-free walker, no longer the only way to see
-    /// what you wrote. Numbered 44pt circles beside the step text; a quiet timer capsule renders
-    /// where `durationSeconds` is set (and drops at accessibility sizes — 4f·AX3).
+    /// The Steps card (2026-08-21, FOOD-22): the recipe's authored steps, readable WITHOUT starting
+    /// cooking mode, each number on a small wooden square (`b3-recipe-notes`).
     @ViewBuilder private var stepsCard: some View {
         if let steps = recipe.steps, !steps.isEmpty {
             FernletCard {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 12) {
                     SectionLabel("Steps")
                     if recipe.isMultipart {
                         // Part by part, in making order, numbered from 1 within each part.
-                        RecipePartsStepList(parts: recipe.resolvedComponents) { stepRow(number: $0, step: $1) }
+                        RecipePartsStepList(parts: recipe.resolvedComponents) { RecipeStepRow(number: $0, step: $1) }
                     } else {
                         ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
-                            stepRow(number: index + 1, step: step)
+                            RecipeStepRow(number: index + 1, step: step)
                         }
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
 
-    /// One step: the 44pt numbered circle, the step text, and the trailing timer capsule.
-    private func stepRow(number: Int, step: RecipeStep) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text("\(number)")
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.moss)
-                .frame(width: 44, height: 44)
-                .background(Color.moss.opacity(0.12), in: Circle())
-                .accessibilityHidden(true)
-            Text(step.text)
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
-                .fernletWrappingText()
-                .padding(.top, 11)
-            Spacer(minLength: 0)
-            if let seconds = step.durationSeconds, seconds > 0, !dynamicTypeSize.isAccessibilitySize {
-                stepTimerCapsule(seconds)
-                    .padding(.top, 11)
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Step \(number). \(step.text)")
-    }
-
-    /// The quiet duration capsule — locale-aware unit formatting so an overnight step reads
-    /// "8 hr" and a short one "8 min" (seconds appear only for a sub-minute remainder).
-    private func stepTimerCapsule(_ seconds: Int) -> some View {
-        Label {
-            Text(
-                Duration.seconds(seconds),
-                format: .units(allowed: [.hours, .minutes, .seconds], width: .abbreviated, maximumUnitCount: 2)
-            )
-        } icon: {
-            Image(systemName: "timer")
-        }
-        .font(.fernlet(.labelSmall))
-        .foregroundStyle(Color.slate)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(Color.parchment, in: Capsule())
-    }
-
-    /// "Log this recipe" is the ONE primary (FOOD-14) and opens the same meal-slot chip row the
-    /// meal sheet uses, inline — replacing the old Menu; Cook is its cream sibling. At
-    /// accessibility sizes the pair unstacks full-width, primary on top (4f·AX3).
-    private var actionsRow: some View {
-        VStack(spacing: 10) {
-            logAndCookRow
-            if showingLogMealTypes {
-                logMealTypeChips
-            }
-            // Stacks at accessibility sizes rather than breaking "Share" mid-word.
-            AdaptiveStack(spacing: 10) {
-                Button { onEdit() } label: {
-                    secondaryActionLabel("Edit", icon: "pencil")
-                }
-                .buttonStyle(.plain)
-                Button { onShare(recipe) } label: {
-                    secondaryActionLabel("Share", icon: "square.and.arrow.up")
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    /// Cook (cream) beside the primary Log; the pair stacks primary-first at accessibility sizes.
-    @ViewBuilder private var logAndCookRow: some View {
-        if CookingModeAvailability.canCook(recipe) {
-            if dynamicTypeSize.isAccessibilitySize {
-                VStack(spacing: 10) {
-                    logPrimaryButton
-                    cookButton
-                }
-            } else {
-                HStack(spacing: 10) {
-                    cookButton
-                    logPrimaryButton
-                }
-            }
-        } else {
-            logPrimaryButton
-        }
-    }
-
-    private var logPrimaryButton: some View {
-        Button {
-            withAnimation(FernletMotion.ui) { showingLogMealTypes.toggle() }
-        } label: {
-            Label("Log this recipe", systemImage: "fork.knife")
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.onMoss)
-                .frame(maxWidth: .infinity)
-                .padding(14)
-                .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 12))
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("recipeDetail.log")
-    }
-
+    /// The wooden Start cooking (`b2-recipe-detail` draft 3): right under the ingredients, so it shows
+    /// without scrolling on a short recipe. Opens cooking mode full screen.
     private var cookButton: some View {
         Button { showingCookingMode = true } label: {
-            Label("Cook", systemImage: "flame")
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.moss)
-                .frame(maxWidth: .infinity)
-                .padding(14)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.moss.opacity(0.35), lineWidth: 1.5))
+            Text("Start cooking")
         }
-        .buttonStyle(.plain)
+        .buttonStyle(RecipeWoodButtonStyle())
         .accessibilityIdentifier("recipeDetail.cook")
-    }
-
-    /// The inline meal-slot chips under the primary — a chip tap logs the definition ON SCREEN
-    /// (after a re-import this is the refreshed one) and collapses the row.
-    private var logMealTypeChips: some View {
-        FlowLayout(spacing: 8) {
-            ForEach(MealType.allCases) { mealType in
-                Button {
-                    showingLogMealTypes = false
-                    onLog(recipe, mealType)
-                } label: {
-                    Text(verbatim: mealType.displayName)
-                }
-                .buttonStyle(ChipButtonStyle(selected: false))
-            }
-        }
-    }
-
-    /// The Edit / Share secondaries. `LocalizedStringKey`: as a `String` both labels were verbatim.
-    private func secondaryActionLabel(_ title: LocalizedStringKey, icon: String) -> some View {
-        Label(title, systemImage: icon)
-            .font(.fernlet(.label))
-            .foregroundStyle(Color.moss)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
     }
 
     /// The inline line when a recipe photo couldn't be sealed (camera, library pick or its failure).
@@ -6453,11 +6167,6 @@ struct RecipeDetailView: View {
         String(localized: "recipeDetail.photo.notSaved",
                defaultValue: "Couldn't save this photo to your private store. Please try again.",
                comment: "Recipe page: the photo the person took or picked could not be saved on the device")
-    }
-
-    /// "118 g · Bananas, raw", or "1 medium (118 g) · Bananas, raw" for a household choice (F4a).
-    private func ingredientLine(_ ingredient: RecipeIngredient) -> String {
-        RecipeIngredientLine.text(ingredient, name: resolvedItems[ingredient.foodItemId]?.name)
     }
 
     /// Whether the line's household amount is a USDA typical size rather than the food's own portion.
@@ -6747,40 +6456,40 @@ private struct RecipeCreationOptionsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 14) {
                 Text("Choose how to start.")
-                    .font(.fernlet(.bodySmall))
-                    .italic()
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.body)
+                    .foregroundStyle(WorldPalette.dim)
 
-                VStack(spacing: 10) {
-                    // Recipe creation is Import or Manual only. Nutrition-label scanning belongs to the
-                    // barcode-not-found handoff (BarcodeNotFoundView, reached from the camera when a scanned
-                    // barcode has no catalog match) — not as a standalone recipe-creation entry point.
-                    Button { step = .importing } label: {
-                        RecipeCreationOptionRow(
-                            title: "Import recipe",
-                            subtitle: Text("Paste a recipe link or Fernlet recipe data."),
-                            systemImage: "tray.and.arrow.down"
-                        )
-                    }
-                    .buttonStyle(.plain)
-
-                    Button { step = .manual } label: {
-                        RecipeCreationOptionRow(
-                            title: "Manual entry",
-                            subtitle: Text(AddressedCopy.attributed("Enter ingredients, macros, servings, and notes yourself.", addressing: termOfAddress)),
-                            systemImage: "square.and.pencil"
-                        )
-                    }
-                    .buttonStyle(.plain)
+                // Recipe creation is Import or Manual only. Nutrition-label scanning belongs to the
+                // barcode-not-found handoff (BarcodeNotFoundView, reached from the camera when a scanned
+                // barcode has no catalog match) — not as a standalone recipe-creation entry point.
+                Button { step = .importing } label: {
+                    RecipeCreationOptionRow(
+                        title: "Import recipe",
+                        subtitle: Text("Paste a recipe link or Fernlet recipe data."),
+                        sprite: WorldSprites.box
+                    )
                 }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("recipeCreate.import")
+
+                Button { step = .manual } label: {
+                    RecipeCreationOptionRow(
+                        title: "Manual entry",
+                        subtitle: Text(AddressedCopy.attributed("Enter ingredients, macros, servings, and notes yourself.", addressing: termOfAddress)),
+                        sprite: WorldSprites.pen
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("recipeCreate.manual")
             }
-            .padding(20)
-            .padding(.bottom, 24)
+            .padding(.horizontal, 18)
+            .padding(.top, 14)
+            .padding(.bottom, 28)
         }
-        .background(Color.parchment)
-        .navigationTitle("Create recipe")
+        .fernletPageBackground()
+        .fernletPushedPage("Create recipe")
         .navigationBarTitleDisplayMode(.inline)
         // Saving reports the name and stops there: the book pops the editor AND this chooser with
         // the one assignment it owns. Clearing `step` here too would put a second, racing pop back
@@ -6812,34 +6521,27 @@ private struct RecipeCreationOptionRow: View {
     /// A `Text` the caller builds, for the same reason never a `String`: Manual entry's "yourself"
     /// describes the user (*tú mismo*), so its caller resolves it for them through `AddressedCopy`.
     var subtitle: Text
-    var systemImage: String
+    /// The option's pixel icon on its framed tile (`b2-recipe-create`).
+    var sprite: WorldSprite
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.headline.weight(.semibold))
-                .foregroundStyle(Color.moss)
-                .frame(width: 34, height: 34)
-                .background(Color.moss.opacity(0.12), in: Circle())
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.fernlet(.header))
-                    .foregroundStyle(Color.bark)
-                subtitle
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
+        FernletCard {
+            HStack(alignment: .center, spacing: 12) {
+                RecipeSpriteTile(sprite: sprite)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(FernletFramedFont.rowTitle.weight(.semibold))
+                        .foregroundStyle(WorldPalette.bark)
+                    subtitle
+                        .font(FernletFramedFont.note)
+                        .foregroundStyle(WorldPalette.dim)
+                        .fernletWrappingText()
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                FernletIcon(.chevron, scale: 2)
             }
-            Spacer(minLength: 8)
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(Color.slate)
-                .padding(.top, 8)
         }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        .contentShape(Rectangle())
     }
 }
 
@@ -6927,66 +6629,18 @@ private struct RecipeRowLogControl<Trailing: View>: View {
     }
 }
 
-/// A row for a saved web-imported product in the recipe book's "Imported products" section.
-///
-/// Shows name, brand/source host, serving description, and macros; logging happens via the row's
-/// ``RecipeRowLogControl`` beneath.
-private struct WebImportedFoodRow: View {
-    var foodItem: FoodItem
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "shippingbox")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(Color.moss)
-                    .frame(width: 24)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(foodItem.name)
-                        .font(.fernlet(.header))
-                        .foregroundStyle(Color.bark)
-                        .fernletWrappingText()
-                    sourceLine
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
-                        .lineLimit(1)
-                }
-            }
-            if let servingDescription = foodItem.servingDescription, !servingDescription.isEmpty {
-                Text("Serving: \(servingDescription)")
-                    .font(.fernlet(.stat))
-                    .foregroundStyle(Color.slate)
-            }
-            HStack(spacing: 14) {
-                Text("P \(foodItem.macros.protein)g").foregroundStyle(Color.moss)
-                Text("C \(foodItem.macros.carbs)g")
-                Text("F \(foodItem.macros.fat)g")
-            }
-            .font(.fernlet(.stat))
-            .foregroundStyle(Color.slate)
-        }
-        .padding(.vertical, 6)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Saved product \(foodItem.name)")
-    }
-
-    /// The brand or source host as data, else a localized stand-in (it used to fall back to English).
-    private var sourceLine: Text {
-        if let source = foodItem.brandSource ?? foodItem.sourceURL?.host() { return Text(verbatim: source) }
-        return Text("Saved web product")
-    }
-}
-
 /// The full recipe book: searchable, labelled A–Z lists (Your recipes / Saved from web /
 /// Imported products), plus the Create/Planner/List entry points as three equal secondaries
 /// (2026-08-21, FOOD-19/FOOD-14).
 ///
-/// Sheet mode carries the template's pinned header with Done in the trailing slot — the book's
-/// first close control; pushed mode keeps the back chevron and no Done. Rows push the read-only
-/// ``RecipeDetailView``; edit requests are handed back to ``FoodView`` via the two editing
-/// bindings (the book dismisses and the owning view presents the right editor sheet). Sharing
-/// goes through the proximity recipe-share sheet; row logging goes through ``RecipeRowLogControl``
-/// and reports to `onMealsLogged` for the post-log toast.
+/// The World build draws it as `b2-recipe-book` (draft 3, approved 2026-10-24): pushed inside the Food
+/// panel it hands "Recipe book" to the wooden plate (‹ Food), and every recipe is its own card
+/// (``RecipeBookCard``: photo, name, servings, notes, coloured macro tags, a small Log menu and the
+/// pixel Share). Sheet mode carries the template's pinned header with Done in the trailing slot.
+/// Cards push the read-only ``RecipeDetailView``; edit requests are handed back to ``FoodView`` via
+/// the two editing bindings (the book dismisses and the owning view presents the right editor
+/// sheet). Sharing goes through the proximity recipe-share sheet; Log reports to `onMealsLogged` for
+/// the post-log toast.
 struct RecipeBookSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -7043,39 +6697,35 @@ struct RecipeBookSheet: View {
     /// Header line, toolbar, search field, and the three labelled A–Z lists — the scrolling half
     /// of ``bookContent``.
     private var bookScrollContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Pushed: the nav bar carries the title. Presented: the pinned SheetHeader above the
+        LazyVStack(alignment: .leading, spacing: 14) {
+            // Pushed: the plate carries the title. Presented: the pinned SheetHeader above the
             // scroll carries it, so only the pushed mode draws its subtitle here.
             if isEmbeddedInNavigationStack {
                 Text("Recipes and saved products, A\u{2013}Z.")
-                    .font(.fernlet(.bodySmall))
-                    .italic()
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.body)
+                    .foregroundStyle(WorldPalette.dim)
+                    .fernletWrappingText()
             }
             if let createdNotice {
                 Text(createdNotice)
-                    .font(.fernlet(.bodySmall))
-                    .italic()
-                    .foregroundStyle(Color.moss)
+                    .font(FernletFramedFont.note)
+                    .foregroundStyle(WorldPalette.mossInk)
                     .fernletWrappingText()
                     .accessibilityIdentifier("recipeBook.createdNotice")
             }
             createAndPlannerButtons
-
-            TextField("Search recipes and products", text: $searchText,
-                      prompt: .fieldPrompt("Search recipes and products"))
-                .sheetTextInput()
+            searchField
             // Section labels name what you are looking at (FOOD-19): Your recipes, Saved from
-            // web, Imported products — only the products had a heading before.
+            // web, Imported products. Each recipe is its own card (b2-recipe-book, draft 3).
             let allManual = filteredManualRecipes
             if !allManual.isEmpty {
                 sectionHeading("Your recipes")
-                recipesCard(allManual, isSaved: false)
+                recipeCards(allManual, isSaved: false)
             }
             let allSaved = filteredSavedRecipes
             if !allSaved.isEmpty {
                 sectionHeading("Saved from web")
-                recipesCard(allSaved, isSaved: true)
+                recipeCards(allSaved, isSaved: true)
             }
             let allProducts = filteredWebImportedProducts
             if !allProducts.isEmpty {
@@ -7085,16 +6735,36 @@ struct RecipeBookSheet: View {
                 emptySearchState
             }
         }
-        .padding(20)
-        .padding(.bottom, 24)
+        .padding(.horizontal, 18)
+        .padding(.top, 14)
+        .padding(.bottom, 28)
     }
 
-    private var bookContent: some View {
+    /// The search field with its pixel magnifier inside the framed field (`b2-recipe-book`).
+    private var searchField: some View {
+        HStack(spacing: 9) {
+            FernletIcon(.search, scale: 2)
+            TextField("Search recipes and products", text: $searchText,
+                      prompt: .fieldPrompt("Search recipes and products"))
+        }
+        .sheetTextInput()
+    }
+
+    /// The page in its frame: pushed, the World plate carries "Recipe book" (`b1-frame-push`);
+    /// presented, the sheet's own header does.
+    @ViewBuilder private var bookContent: some View {
+        if isEmbeddedInNavigationStack {
+            bookPage.fernletPushedPage("Recipe book")
+        } else {
+            bookPage
+        }
+    }
+
+    private var bookPage: some View {
         ScrollView {
             bookScrollContent
         }
-        .background(Color.parchment)
-        .navigationTitle(isEmbeddedInNavigationStack ? "Recipe book" : "")
+        .fernletPageBackground()
         .navigationBarTitleDisplayMode(.inline)
         // The search field's keyboard "Done": this content is always a page of a stack (pushed in
         // the Food tab, or the root of the sheet's own stack), out of reach of any host's Done.
@@ -7127,9 +6797,7 @@ struct RecipeBookSheet: View {
         }
         .sheet(item: $recipeShareDraft) { draft in
             ProximityRecipeShareSheet(draft: draft, manager: store.recipeShareManager, store: store)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheet()
         }
     }
 
@@ -7176,100 +6844,87 @@ struct RecipeBookSheet: View {
     /// shared Phase A pipeline and share to Notes.
     private var createAndPlannerButtons: some View {
         // Stacks at accessibility sizes: side by side these broke mid-word at different heights.
-        AdaptiveStack(spacing: 12) {
+        AdaptiveStack(spacing: 10) {
             // A Button rather than a NavigationLink: the push is driven by `isCreatingRecipe`, the
             // one value that also un-pushes the whole branch when a recipe is saved.
             Button {
                 isCreatingRecipe = true
             } label: {
-                plannerLabel("Create", systemImage: "plus")
+                RecipeBookToolButtonLabel(title: Text("Create"), sprite: nil, usesPlusIcon: true)
             }
-            .buttonStyle(.plain)
+            .accessibilityIdentifier("recipeBook.create")
             NavigationLink {
                 WeeklyMealPlannerView(store: store, onMealsLogged: loggedInBook)
             } label: {
-                plannerLabel("Planner", systemImage: "calendar")
+                RecipeBookToolButtonLabel(title: Text("Planner"), sprite: WorldSprites.diary)
             }
-            .buttonStyle(.plain)
             NavigationLink {
                 ShoppingListBuilderView(store: store)
             } label: {
-                plannerLabel("List", systemImage: "cart")
+                RecipeBookToolButtonLabel(title: Text("List"), sprite: WorldSprites.box)
             }
-            .buttonStyle(.plain)
         }
+        .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
     }
 
-    /// One of the three equal toolbar secondaries. `LocalizedStringKey` — a `String` parameter
-    /// would silently opt the call sites out of localization.
-    private func plannerLabel(_ title: LocalizedStringKey, systemImage: String) -> some View {
-        Label(title, systemImage: systemImage)
-            .font(.fernlet(.label))
-            .foregroundStyle(Color.moss)
-            .frame(maxWidth: .infinity)
-            .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-    }
-
-    /// A named section heading over one of the book's three lists (FOOD-19).
+    /// A named section heading over one of the book's three lists (FOOD-19): the framed look's label
+    /// with its moss square.
     private func sectionHeading(_ title: LocalizedStringKey) -> some View {
-        Text(title)
-            .font(.fernlet(.header))
-            .foregroundStyle(Color.bark)
+        SectionLabel(title)
+            .padding(.top, 4)
     }
 
-    /// One A–Z card of recipes. `isSaved` selects the saved/web store's methods (edit sheet, log,
-    /// share text) over the manual store's — the rows are otherwise identical.
-    private func recipesCard(_ recipes: [RecipeDefinition], isSaved: Bool) -> some View {
-        FernletCard {
-            VStack(spacing: 0) {
-                ForEach(Array(recipes.enumerated()), id: \.element.id) { index, recipe in
-                    if index > 0 { FernletRowDivider() }
-                    recipeRow(recipe, isSaved: isSaved)
-                }
-            }
+    /// One A–Z run of recipe cards. `isSaved` selects the saved/web store's methods (edit sheet, log,
+    /// share text) over the manual store's — the cards are otherwise identical.
+    @ViewBuilder private func recipeCards(_ recipes: [RecipeDefinition], isSaved: Bool) -> some View {
+        ForEach(recipes) { recipe in
+            recipeCard(recipe, isSaved: isSaved)
         }
     }
 
-    /// A recipe-book row in the Food-root layout (FOOD-19/FOOD-14): the tappable summary above —
-    /// so "2 servings" sits at the trailing edge instead of drifting to the middle — with the
-    /// labelled Log pill (inline meal-slot chips) and the share button on their own trailing line.
-    private func recipeRow(_ recipe: RecipeDefinition, isSaved: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+    /// A recipe as its card (b2-recipe-book, draft 3): the tappable summary pushes the read-only
+    /// recipe page; Log opens the meal-type menu and Share the sharing sheet, in place.
+    private func recipeCard(_ recipe: RecipeDefinition, isSaved: Bool) -> some View {
+        RecipeBookCard(
+            macros: perServingMacros(recipe),
+            showsCalories: store.settings.showCalories,
+            estimateNote: isSaved ? WebImportEstimateNote(uncountedLines: recipe.webImport?.uncountedIngredientLines,
+                                                          estimatedLines: recipe.webImport?.estimatedIngredientLines) : nil,
+            onLog: { mealType in
+                logRecipe(recipe, mealType: mealType, isSaved: isSaved)
+                dismissIfPresented()
+            },
+            onShare: { recipeShareDraft = store.recipeShareDraft(for: recipe) }
+        ) {
             #if canImport(UIKit)
-            // Tapping a recipe opens a read-only detail view (photo, per-serving macros, ingredients,
-            // notes) rather than jumping straight into the editor — the detail offers edit/log/share.
-            // For a saved/web recipe, Edit opens its notes/delete sheet (no structured ingredients).
             NavigationLink {
                 recipeDetail(for: recipe, isSaved: isSaved)
             } label: {
-                recipeRowLabel(recipe, isSaved: isSaved)
+                RecipeCardSummary(recipe: recipe, loadPhoto: { store.recipePhotoData(for: recipe.id) })
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("recipeBook.recipe")
             #else
             Button { beginEditing(recipe, isSaved: isSaved); dismissIfPresented() } label: {
-                recipeRowLabel(recipe, isSaved: isSaved)
+                RecipeCardSummary(recipe: recipe, loadPhoto: nil)
             }
             .buttonStyle(.plain)
             #endif
-            RecipeRowLogControl(onLog: { mealType in
-                logRecipe(recipe, mealType: mealType, isSaved: isSaved)
-                dismissIfPresented()
-            }) {
-                RecipeShareButton {
-                    recipeShareDraft = store.recipeShareDraft(for: recipe)
-                }
-            }
         }
     }
 
-    @ViewBuilder private func recipeRowLabel(_ recipe: RecipeDefinition, isSaved: Bool) -> some View {
-        if isSaved {
-            SavedRecipeRow(recipe: recipe)
-        } else {
-            RecipeRow(recipe: recipe, totals: store.macroTotals(for: recipe), showCalories: store.settings.showCalories)
+    /// A recipe's per-serving macros: a web import's own figures (nil when its page carried none),
+    /// or a manual recipe's resolved totals divided by its servings.
+    private func perServingMacros(_ recipe: RecipeDefinition) -> MacroTotals? {
+        if let macros = recipe.webImport?.macros {
+            guard macros.protein > 0 || macros.carbs > 0 || macros.fat > 0 else { return nil }
+            return MacroTotals(protein: macros.protein, carbs: macros.carbs, fat: macros.fat)
         }
+        let totals = store.macroTotals(for: recipe)
+        let divisor = Double(max(recipe.servings, 1))
+        return MacroTotals(protein: Int((Double(totals.protein) / divisor).rounded()),
+                           carbs: Int((Double(totals.carbs) / divisor).rounded()),
+                           fat: Int((Double(totals.fat) / divisor).rounded()))
     }
 
     #if canImport(UIKit)
@@ -7317,25 +6972,13 @@ struct RecipeBookSheet: View {
         onMealsLogged([meal])
     }
 
-    private func importedProductsCard(_ products: [FoodItem]) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            sectionHeading("Imported products")
-            FernletCard {
-                VStack(spacing: 0) {
-                    ForEach(Array(products.enumerated()), id: \.element.id) { index, product in
-                        if index > 0 { FernletRowDivider() }
-                        VStack(alignment: .leading, spacing: 6) {
-                            WebImportedFoodRow(foodItem: product)
-                            RecipeRowLogControl(onLog: { mealType in
-                                let meal = store.logWebImportedFoodProduct(product, mealType: mealType)
-                                onMealsLogged([meal])
-                                dismissIfPresented()
-                            }) {
-                                EmptyView()
-                            }
-                        }
-                    }
-                }
+    @ViewBuilder private func importedProductsCard(_ products: [FoodItem]) -> some View {
+        sectionHeading("Imported products")
+        ForEach(products) { product in
+            ImportedProductCard(product: product) { mealType in
+                let meal = store.logWebImportedFoodProduct(product, mealType: mealType)
+                onMealsLogged([meal])
+                dismissIfPresented()
             }
         }
     }
