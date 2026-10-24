@@ -662,39 +662,56 @@ private struct CookingResumeCard: View {
     var onResume: () -> Void
     var onDiscard: () -> Void
 
-    /// World build (`b2-cooking-resume`, approved 2026-10-23): a sage card at the top of Food with the
-    /// bowl on a framed tile, "Pick up where you left off", the recipe and its step, then Resume
-    /// (primary) beside Done cooking, which still asks before it forgets the run.
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: FernletFramedLook.cardRadius, style: .continuous)
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                RecipeSpriteTile(sprite: WorldSprites.bowl, scale: 3, tint: WorldPalette.iconInk)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Pick up where you left off")
-                        .font(RecipeType.cardTitle)
-                        .foregroundStyle(WorldPalette.bark)
-                        .fernletWrappingText()
-                    Text("\(Text(verbatim: recipeName)) · step \(stepNumber) of \(stepCount)")
-                        .font(FernletFramedFont.body)
-                        .foregroundStyle(WorldPalette.dim)
-                        .fernletWrappingText()
+        FernletCard {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 12) {
+                    Image(systemName: "flame.fill")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(Color.moss)
+                        .frame(width: 30)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Cooking in progress")
+                            .font(.fernlet(.headerMedium))
+                            .foregroundStyle(Color.bark)
+                        Text("\(recipeName) — step \(stepNumber) of \(stepCount). Pick up where you left off.")
+                            .font(.fernlet(.bubble))
+                            .foregroundStyle(Color.slate)
+                            .fernletWrappingText()
+                    }
+                    Spacer(minLength: 0)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            AdaptiveStack(spacing: 10) {
-                Button(action: onResume) { Text("Resume").frame(maxWidth: .infinity) }
-                    .buttonStyle(ActionPillButtonStyle(.primary))
-                    .accessibilityIdentifier("cooking.resume")
-                Button(action: onDiscard) { Text("Done cooking").frame(maxWidth: .infinity) }
-                    .buttonStyle(ActionPillButtonStyle(.secondary))
+
+                HStack(spacing: 12) {
+                    Button(action: onDiscard) {
+                        Text("Discard")
+                            .font(.fernlet(.label))
+                            .foregroundStyle(Color.slate)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 15)
+                            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
                     .accessibilityIdentifier("cooking.discard")
+
+                    Button(action: onResume) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "play.circle.fill")
+                                .font(.body.weight(.semibold))
+                            Text("Resume")
+                                .font(.fernlet(.label))
+                        }
+                        .foregroundStyle(Color.onMoss)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 15)
+                        .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 14))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("cooking.resume")
+                }
             }
         }
-        .padding(EdgeInsets(top: 14, leading: 15, bottom: 14, trailing: 15))
-        .background(WorldPalette.sage, in: shape)
-        .overlay(shape.strokeBorder(WorldPalette.ink, lineWidth: FernletFramedLook.frameWidth))
-        .background { shape.fill(WorldPalette.ink.opacity(0.22)).offset(y: 3) }
     }
 }
 
