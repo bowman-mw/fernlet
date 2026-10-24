@@ -976,7 +976,8 @@ struct GuidedWorkoutSheet: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         if let look {
-            content.fernletFramed(look, cornerRadius: 10)
+            // The frame rule: a stat tile inside the exercise card keeps its tint, not a frame.
+            content.fernletFrameRulePiece(.tile, fill: look.raised, cornerRadius: 10)
         } else {
             content
                 .background(Color.parchment, in: RoundedRectangle(cornerRadius: 12))

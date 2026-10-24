@@ -14,7 +14,8 @@ struct WorldIconTile: View {
     var body: some View {
         WorldSpriteView(sprite: sprite, scale: 3, tint: tinted ? look.text : nil)
             .frame(width: 38, height: 38)
-            .fernletFramed(look, cornerRadius: 9)
+            // The frame rule (`ref-frames-today`): bare inside a card, framed on its own.
+            .fernletFrameRulePiece(.iconSquare, fill: look.raised, cornerRadius: 9)
             .accessibilityHidden(true)
     }
 }

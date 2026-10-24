@@ -149,7 +149,7 @@ struct FoodCatalogMatchRow: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            FernletIconTile(size: 36) {
+            FernletIconTile(size: 36, isControl: true) {
                 FernletIcon(isChosen ? .check : .plus, scale: 2)
             }
             .accessibilityHidden(true)

@@ -110,6 +110,7 @@ nonisolated enum RecipeType {
 
 /// A pixel sprite on a framed tile of raised paper (`.icci`, `.ingr .is`): the art centred in a
 /// `size`-point square with a 2-pt ink frame. Decorative; the control around it carries the name.
+/// Inside a section it sits bare (the frame rule), unless it is a button's face (`isControl`).
 struct RecipeSpriteTile: View {
     let sprite: WorldSprite
     var size: CGFloat = 42
@@ -117,14 +118,13 @@ struct RecipeSpriteTile: View {
     var fill: Color? = nil
     /// One colour for every pixel (the white bowl drawn in the ink token); nil keeps the sprite's own.
     var tint: Color? = nil
-    @Environment(\.fernletFramedLook) private var look
+    /// A button's face keeps its frame inside a section, as every control does.
+    var isControl = false
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: size < 34 ? 6 : 9)
         WorldSpriteView(sprite: sprite, scale: scale, tint: tint)
             .frame(width: size, height: size)
-            .background(fill ?? look?.raised ?? Color.cream, in: shape)
-            .overlay(shape.strokeBorder(look?.ink ?? Color.bark.opacity(0.2), lineWidth: FernletFramedLook.frameWidth))
+            .fernletFrameRulePiece(isControl ? .button : .iconSquare, fill: fill, cornerRadius: size < 34 ? 6 : 9)
             .accessibilityHidden(true)
     }
 }
@@ -139,7 +139,7 @@ struct RecipeIconButton: View {
 
     var body: some View {
         Button(action: action) {
-            RecipeSpriteTile(sprite: sprite, size: size)
+            RecipeSpriteTile(sprite: sprite, size: size, isControl: true)
                 .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
         }
@@ -264,7 +264,8 @@ extension RecipeIngredientRow where Trailing == EmptyView {
     }
 }
 
-/// A step's number on a small wooden square (`b3-recipe-notes`): 26 pt, bark on wood in a 2-pt ink frame.
+/// A step's number on a small wooden square (`b3-recipe-notes`): 26 pt, bark on wood in a 2-pt ink frame,
+/// or wood alone inside a section (the frame rule, `ref-frames-notes`).
 struct RecipeStepBadge: View {
     let number: Int
 
@@ -273,8 +274,7 @@ struct RecipeStepBadge: View {
             .font(FernletFramedFont.tag)
             .foregroundStyle(WorldPalette.bark)
             .frame(minWidth: 26, minHeight: 26)
-            .background(WorldPalette.wood, in: RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(WorldPalette.ink, lineWidth: FernletFramedLook.frameWidth))
+            .fernletFrameRulePiece(.tile, fill: WorldPalette.wood, cornerRadius: 6)
             .accessibilityHidden(true)
     }
 }

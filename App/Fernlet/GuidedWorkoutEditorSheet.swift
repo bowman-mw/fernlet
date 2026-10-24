@@ -711,7 +711,7 @@ private struct GuidedEditorRowControls: View {
 
     /// A control's framed pixel tile, faded when it can't act.
     private func tile(_ sprite: WorldSprite, flipped: Bool = false, tint: Color? = nil, enabled: Bool) -> some View {
-        FernletIconTile(size: 32) {
+        FernletIconTile(size: 32, isControl: true) {
             WorldSpriteView(sprite: sprite, scale: 2, tint: tint)
                 .rotationEffect(.degrees(flipped ? 180 : 0))
         }

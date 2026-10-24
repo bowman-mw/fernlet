@@ -204,6 +204,8 @@ struct MoveInsetCardFrame: ViewModifier {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         if let look {
             content
+                // A hand-drawn section: the frame rule unframes the pieces inside it.
+                .environment(\.fernletInFramedSection, true)
                 .background(look.paper, in: shape)
                 .overlay(shape.strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth))
                 .background { shape.fill(look.shadow).offset(y: 3) }

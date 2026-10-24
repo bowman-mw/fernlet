@@ -136,7 +136,7 @@ struct NutritionLabelCameraSheet: View {
     /// The flash: a framed tile with the pixel bolt, filled with the accent while on.
     private var flashButton: some View {
         Button { isFlashOn.toggle() } label: {
-            FernletIconTile(size: 48, fill: isFlashOn ? (look?.accent ?? Color.moss) : nil) {
+            FernletIconTile(size: 48, fill: isFlashOn ? (look?.accent ?? Color.moss) : nil, isControl: true) {
                 WorldSpriteView(sprite: FoodSprites.bolt, scale: 3, tint: isFlashOn ? (look?.onAccent ?? Color.onMoss) : nil)
             }
             .contentShape(Rectangle())

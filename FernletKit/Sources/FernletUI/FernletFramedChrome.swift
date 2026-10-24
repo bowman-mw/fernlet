@@ -239,6 +239,8 @@ struct FernletSheetModifier: ViewModifier {
                 .environment(\.fernletPlateNavigation, nil)
                 .environment(\.fernletTitleOnPlate, false)
                 .environment(\.fernletPageTitleOnPlate, false)
+                // A sheet presented from inside a card inherits the card's environment; it is a page.
+                .environment(\.fernletInFramedSection, false)
                 // A presented sheet does not inherit the presenter's toggle and Form styles, so the
                 // framed switch and Form are set again here (each falls back to today's look without one).
                 .toggleStyle(FernletFramedToggleStyle())
@@ -464,6 +466,7 @@ public struct FernletFocusedFlow<Content: View, Footer: View>: View {
         .environment(\.fernletPlateNavigation, nil)
         .environment(\.fernletTitleOnPlate, false)
         .environment(\.fernletPageTitleOnPlate, false)
+        .environment(\.fernletInFramedSection, false)
         .accessibilityAction(.escape) { onClose() }
     }
 }

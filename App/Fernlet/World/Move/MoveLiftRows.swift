@@ -156,7 +156,7 @@ struct MoveRecentLiftRow: View {
                         .fernletWrappingText()
                 }
                 Spacer(minLength: 8)
-                FernletIconTile(size: 32) { FernletIcon(.plus, scale: 2) }
+                FernletIconTile(size: 32, isControl: true) { FernletIcon(.plus, scale: 2) }
             }
             .padding(.vertical, 10)
             .contentShape(Rectangle())
