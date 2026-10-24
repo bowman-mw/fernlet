@@ -497,6 +497,22 @@
         }
       }
     },
+    "%@ · %lld people" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$lld people"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ · %2$lld personas"
+          }
+        }
+      }
+    },
     "%@ · P %lldg" : {
       "localizations" : {
         "en" : {
@@ -529,6 +545,22 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%1$@ · pensado para un día %2$@"
+          }
+        }
+      }
+    },
+    "%@ · with %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · with %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ · con %2$@"
           }
         }
       }
@@ -870,6 +902,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%@, previsto, no se espera periodo, intimidad registrada"
+          }
+        }
+      }
+    },
+    "%@, price" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@, precio"
           }
         }
       }
@@ -1416,6 +1458,16 @@
         }
       }
     },
+    "%lld new · only in this session" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld nuevos · solo en esta sesión"
+          }
+        }
+      }
+    },
     "%lld of %lld" : {
       "comment" : "How many Health kinds are shared",
       "localizations" : {
@@ -1461,6 +1513,22 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%1$lld de %2$lld tipos compartidos"
+          }
+        }
+      }
+    },
+    "%lld of %lld listed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld listed"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$lld de %2$lld a la venta"
           }
         }
       }
@@ -2154,6 +2222,16 @@
         }
       }
     },
+    "1 to 100 coins" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De 1 a 100 monedas"
+          }
+        }
+      }
+    },
     "2" : {
 
     },
@@ -2324,6 +2402,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Una mezcla flexible de comidas y snacks."
+          }
+        }
+      }
+    },
+    "A friend's shop opens here for an hour after you part. Report an item from its ··· menu." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La tienda de un amigo se abre aquí durante una hora después de despedirse. Reporta un artículo desde su menú ···."
           }
         }
       }
@@ -2595,6 +2683,27 @@
         }
       }
     },
+    "A stamp arrives the day a silly stat first shows up. They only add up." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Llega un sello el día que aparece por primera vez una estadística absurda. Solo se suman."
+          }
+        }
+      }
+    },
+    "A stamp not earned yet" : {
+      "comment" : "Stamp book: VoiceOver for a stamp slot whose silly stat hasn't shown up yet (drawn as a faded silhouette over '?')",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un sello aún sin ganar"
+          }
+        }
+      }
+    },
     "A tap when a rest or a hold ends." : {
       "localizations" : {
         "es" : {
@@ -2704,6 +2813,16 @@
         }
       }
     },
+    "Accent" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Acento"
+          }
+        }
+      }
+    },
     "Accept" : {
       "localizations" : {
         "es" : {
@@ -2715,6 +2834,7 @@
       }
     },
     "Accessory" : {
+      "comment" : "Customize: the accessory slot's page title and row name",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -3489,6 +3609,16 @@
         }
       }
     },
+    "Advanced period tracking" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Seguimiento avanzado del periodo"
+          }
+        }
+      }
+    },
     "Aerobic minutes" : {
       "comment" : "Weekly totals screen: heading of the section with the week's aerobic minutes.",
       "localizations" : {
@@ -3878,6 +4008,17 @@
         }
       }
     },
+    "App colors" : {
+      "comment" : "App colors page title (Customize and Appearance): paper, wood and accent",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Colores de la app"
+          }
+        }
+      }
+    },
     "App lock" : {
       "localizations" : {
         "es" : {
@@ -4112,6 +4253,16 @@
         }
       }
     },
+    "Asks first; your photos develop as they would" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Te pregunta antes; tus fotos se revelan como siempre"
+          }
+        }
+      }
+    },
     "Assign recipes to your week, then build one shopping list." : {
       "localizations" : {
         "es" : {
@@ -4190,6 +4341,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Atrás"
+          }
+        }
+      }
+    },
+    "Back to First aid" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Volver a Primeros auxilios"
           }
         }
       }
@@ -4528,6 +4689,7 @@
       }
     },
     "Body" : {
+      "comment" : "Customize: the body slot's page title and row name",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -4637,6 +4799,16 @@
         }
       }
     },
+    "Breakfast" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Desayuno"
+          }
+        }
+      }
+    },
     "Breathe" : {
       "localizations" : {
         "es" : {
@@ -4734,6 +4906,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Preparando tu entrenamiento…"
+          }
+        }
+      }
+    },
+    "Buttons, switches and selected chips." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los botones, los interruptores y las etiquetas elegidas."
           }
         }
       }
@@ -5021,6 +5203,16 @@
         }
       }
     },
+    "Care keepsakes" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Recuerdos de cuidado"
+          }
+        }
+      }
+    },
     "Care score %lld percent" : {
       "localizations" : {
         "es" : {
@@ -5157,6 +5349,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Cambiar selección"
+          }
+        }
+      }
+    },
+    "Change the six tiles in Settings → Quick-log shortcuts." : {
+      "comment" : "World Log panel: the line under the quick-log tiles saying where to choose them. 'Quick-log shortcuts' is the Settings page's name.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cambia las seis casillas en Ajustes → Atajos de registro."
           }
         }
       }
@@ -5500,11 +5703,32 @@
       }
     },
     "Close photo viewer" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Cerrar el visor de fotos"
+          }
+        }
+      }
+    },
+    "Close up" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De cerca"
+          }
+        }
+      }
+    },
+    "Close up, and on the map" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De cerca, y en el mapa"
           }
         }
       }
@@ -5537,6 +5761,7 @@
       }
     },
     "Clothing" : {
+      "comment" : "Customize: the clothing slot's page title and row name",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -6666,6 +6891,17 @@
         }
       }
     },
+    "Cream" : {
+      "comment" : "App colors: the default light paper",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Crema"
+          }
+        }
+      }
+    },
     "Create" : {
       "localizations" : {
         "es" : {
@@ -6835,6 +7071,16 @@
         }
       }
     },
+    "Custom" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Otro"
+          }
+        }
+      }
+    },
     "Custom color" : {
       "localizations" : {
         "es" : {
@@ -6846,6 +7092,7 @@
       }
     },
     "Customize" : {
+      "comment" : "Customize page title: the companion's look, Wardrobe and Creation Studio",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -6866,6 +7113,7 @@
       }
     },
     "Cycle details" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -7012,6 +7260,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Zona de peligro"
+          }
+        }
+      }
+    },
+    "Dark" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Oscuro"
           }
         }
       }
@@ -7598,6 +7856,7 @@
       }
     },
     "Design one in the Wardrobe to fold it in here." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -7763,6 +8022,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Descartar la intención del día"
+          }
+        }
+      }
+    },
+    "Disposable camera" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cámara desechable"
           }
         }
       }
@@ -8304,6 +8573,7 @@
       }
     },
     "Edit item" : {
+      "comment" : "Creation Studio title while editing one of the user's companion items",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -8971,6 +9241,7 @@
       }
     },
     "Every bit of care you've logged, added up over all time." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -8981,6 +9252,7 @@
       }
     },
     "Every bit of care, pressed into a keepsake. These only ever grow — nothing resets or expires." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -9011,6 +9283,7 @@
       }
     },
     "Everything here is cumulative. Nothing resets." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -9026,6 +9299,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Todo lo de aquí necesita que los dos estén cerca."
+          }
+        }
+      }
+    },
+    "Everything here only adds up. Nothing resets or expires." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aquí todo se suma. Nada se reinicia ni caduca."
           }
         }
       }
@@ -10533,6 +10816,17 @@
         }
       }
     },
+    "Forest" : {
+      "comment" : "App colors: a dark paper colour",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bosque"
+          }
+        }
+      }
+    },
     "Forget" : {
       "localizations" : {
         "es" : {
@@ -10763,6 +11057,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Tus amigos que estén cerca pueden comprarlo para su compañero."
+          }
+        }
+      }
+    },
+    "Friends nearby can buy these for their companion." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tus amigos cercanos pueden comprarlos para su compañero."
           }
         }
       }
@@ -12466,12 +12770,32 @@
         }
       }
     },
+    "In a session" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "En una sesión"
+          }
+        }
+      }
+    },
     "In use" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "En uso"
+          }
+        }
+      }
+    },
+    "In your closet, not listed" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "En tu armario, sin vender"
           }
         }
       }
@@ -12584,6 +12908,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Ingredientes"
+          }
+        }
+      }
+    },
+    "Ink" : {
+      "comment" : "App colors: a dark paper colour",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tinta"
           }
         }
       }
@@ -12738,7 +13073,18 @@
         }
       }
     },
+    "It stays on your Private panel." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se queda en tu panel Privado."
+          }
+        }
+      }
+    },
     "It stays on your Private tab." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -12976,6 +13322,16 @@
         }
       }
     },
+    "Just you" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Solo tú"
+          }
+        }
+      }
+    },
     "Keep Fernlet data out of device backups?" : {
       "localizations" : {
         "es" : {
@@ -13108,6 +13464,7 @@
       }
     },
     "Keepsake shelf" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -13297,6 +13654,16 @@
         }
       }
     },
+    "Leave session" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Salir de la sesión"
+          }
+        }
+      }
+    },
     "Left empty, Fernlet estimates it from your age with 208 − 0.7 × age (Tanaka): about %lld bpm for you. If you know your own, from a lab test or a hard effort you measured, enter it and your zones use it instead." : {
       "comment" : "Workout setup, under My max heart rate. Keep the formula as written; Tanaka is the researcher's surname. The argument is the estimate for this person in beats per minute.",
       "localizations" : {
@@ -13427,6 +13794,16 @@
         }
       }
     },
+    "Light" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Claro"
+          }
+        }
+      }
+    },
     "Light and steady — just waking things up." : {
       "localizations" : {
         "es" : {
@@ -13500,6 +13877,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Vender en mi tienda"
+          }
+        }
+      }
+    },
+    "Listed" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "A la venta"
           }
         }
       }
@@ -13781,6 +14168,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Registrar cuidado"
+          }
+        }
+      }
+    },
+    "Log every symptom, cervical mucus, ovulation tests, basal temperature and spotting between periods." : {
+      "comment" : "Settings › Period & sensitive content: the line under the Advanced period tracking switch, saying what it adds to Log period.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Registra todos los síntomas, el moco cervical, las pruebas de ovulación, la temperatura basal y el manchado entre periodos."
           }
         }
       }
@@ -14693,6 +15091,16 @@
         }
       }
     },
+    "Messages, session info and leave" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mensajes, información de la sesión y salir"
+          }
+        }
+      }
+    },
     "Micronutrients" : {
       "localizations" : {
         "es" : {
@@ -14751,6 +15159,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Mindfulness"
+          }
+        }
+      }
+    },
+    "Mint" : {
+      "comment" : "App colors: a light paper colour",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Menta"
           }
         }
       }
@@ -14936,6 +15355,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Irán apareciendo más estadísticas con el día a día."
+          }
+        }
+      }
+    },
+    "More symptoms, cervical mucus, ovulation tests and temperature: turn on Advanced period tracking in Settings." : {
+      "comment" : "Log period sheet, under the symptoms, while Advanced period tracking is off: where the hidden fields can be turned on. 'Advanced period tracking' is the Settings switch's name (Settings › Period & sensitive content).",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Más síntomas, moco cervical, pruebas de ovulación y temperatura: activa el seguimiento avanzado del periodo en Ajustes."
           }
         }
       }
@@ -15165,6 +15595,16 @@
         }
       }
     },
+    "Names are checked before they go in your shop. Private items can be named anything." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Revisamos los nombres antes de que entren en tu tienda. Los artículos privados pueden llamarse como quieras."
+          }
+        }
+      }
+    },
     "Near or far — a hum in the walls, a bird, your own breath." : {
       "localizations" : {
         "es" : {
@@ -15243,6 +15683,7 @@
       }
     },
     "New item" : {
+      "comment" : "Creation Studio title while designing a new companion item",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -15502,6 +15943,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Bien hecho"
+          }
+        }
+      }
+    },
+    "Night" : {
+      "comment" : "App colors: the default dark paper",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Noche"
           }
         }
       }
@@ -16684,6 +17136,16 @@
         }
       }
     },
+    "On the map" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "En el mapa"
+          }
+        }
+      }
+    },
     "On your other device" : {
       "localizations" : {
         "es" : {
@@ -16849,6 +17311,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Un toque guarda cómo te sientes hoy. No hace falta escribir."
+          }
+        }
+      }
+    },
+    "Only in this session" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Solo en esta sesión"
           }
         }
       }
@@ -17041,6 +17513,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Abrir el clóset"
+          }
+        }
+      }
+    },
+    "Open the disposable camera" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abrir la cámara desechable"
           }
         }
       }
@@ -17399,6 +17881,37 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Pares, según el peso de una mancuerna."
+          }
+        }
+      }
+    },
+    "Paper" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Papel"
+          }
+        }
+      }
+    },
+    "Paper, wood and accent" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Papel, madera y acento"
+          }
+        }
+      }
+    },
+    "Parchment" : {
+      "comment" : "App colors: a light paper colour",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pergamino"
           }
         }
       }
@@ -18294,6 +18807,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Inténtalo de nuevo."
+          }
+        }
+      }
+    },
+    "Plum" : {
+      "comment" : "App colors: a dark paper colour",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ciruela"
           }
         }
       }
@@ -21031,6 +21555,7 @@
       }
     },
     "Save item" : {
+      "comment" : "Creation Studio: the step that names a new item and lists it in the shop",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -21729,6 +22254,16 @@
         }
       }
     },
+    "Sell %@" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Vender %@"
+          }
+        }
+      }
+    },
     "Send good vibes" : {
       "localizations" : {
         "es" : {
@@ -21956,6 +22491,7 @@
       }
     },
     "Session messages" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -21966,6 +22502,7 @@
       }
     },
     "Session messages, new message" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -21981,6 +22518,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Nombre de la sesión"
+          }
+        }
+      }
+    },
+    "Session with %@" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sesión con %@"
           }
         }
       }
@@ -22708,6 +23255,7 @@
       }
     },
     "Side item" : {
+      "comment" : "Customize: the side-item slot's page title and row name",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -22748,6 +23296,16 @@
         }
       }
     },
+    "Silly stamps" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sellos absurdos"
+          }
+        }
+      }
+    },
     "Silly stats" : {
       "localizations" : {
         "es" : {
@@ -22759,6 +23317,7 @@
       }
     },
     "Silly stats and stamps" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -22915,6 +23474,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Omitir calentamientos"
+          }
+        }
+      }
+    },
+    "Sky" : {
+      "comment" : "App colors: a light paper colour",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cielo"
           }
         }
       }
@@ -23412,6 +23982,7 @@
       }
     },
     "Stamp book" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -24502,6 +25073,16 @@
         }
       }
     },
+    "Text colours adjust by themselves, so every label stays readable. Protein, carbs and fat keep their colours everywhere, and hearts stay red." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los colores del texto se ajustan solos, así cada etiqueta se lee bien. Proteína, carbohidratos y grasa mantienen sus colores, y los corazones siguen rojos."
+          }
+        }
+      }
+    },
     "Thanks — Fernlet will adjust from here." : {
       "localizations" : {
         "es" : {
@@ -25056,11 +25637,22 @@
       }
     },
     "The shelf is filling in" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "El estante se va llenando"
+          }
+        }
+      }
+    },
+    "The title plates, the item bar and the grabbers." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los letreros de título, la barra de objetos y los tiradores."
           }
         }
       }
@@ -25166,6 +25758,7 @@
       }
     },
     "These only ever grow, in their own time. There's nothing to keep up with here." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -26662,6 +27255,16 @@
         }
       }
     },
+    "Unlist %@" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Retirar %@"
+          }
+        }
+      }
+    },
     "Unlock to view" : {
       "localizations" : {
         "es" : {
@@ -27142,6 +27745,7 @@
       }
     },
     "Wardrobe" : {
+      "comment" : "Wardrobe page title: the companion's closet of designed items",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -27581,6 +28185,16 @@
         }
       }
     },
+    "What friends nearby can buy from you" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lo que tus amigos cercanos pueden comprarte"
+          }
+        }
+      }
+    },
     "What happened today?" : {
       "localizations" : {
         "es" : {
@@ -27802,6 +28416,16 @@
         }
       }
     },
+    "Who's here, rename, open or closed" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Quién está, cambiar nombre, abierta o cerrada"
+          }
+        }
+      }
+    },
     "Whole recipe" : {
       "localizations" : {
         "es" : {
@@ -27878,12 +28502,32 @@
         }
       }
     },
+    "With %@" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Con %@"
+          }
+        }
+      }
+    },
     "Without macros this logs as 0g, so it won't count toward your day. Scan the label to add them — or remember it now and fill them in later." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Sin macros se registra como 0 g, así que no contará para tu día. Escanea la información nutricional para agregarlos, o guárdalo ahora y complétalos después."
+          }
+        }
+      }
+    },
+    "Wood" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Madera"
           }
         }
       }
@@ -28172,6 +28816,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Vale la pena revisarlo"
+          }
+        }
+      }
+    },
+    "Write" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Escribir"
           }
         }
       }
@@ -29458,6 +30112,7 @@
       }
     },
     "Your keepsake shelf" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -29797,6 +30452,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Tus notas selladas del diario, del ciclo y de intimidad siguen en este teléfono. Tu dispositivo de recuperación guarda la clave para abrirlas. Escanearás códigos entre los dos teléfonos, aprobarás la solicitud allí y luego elegirás un código nuevo aquí."
+          }
+        }
+      }
+    },
+    "Your shop" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu tienda"
           }
         }
       }
@@ -30921,6 +31586,186 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "El seguimiento de intimidad es para personas de %lld años o más. Fernlet todavía no sabe tu edad: Apple puede confirmar tu rango de edad sin compartir tu fecha de nacimiento."
+          }
+        }
+      }
+    },
+    "appColors.accent.clay" : {
+      "comment" : "App colors: a red-brown accent for buttons, switches and selected chips",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Clay"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Arcilla"
+          }
+        }
+      }
+    },
+    "appColors.accent.moss" : {
+      "comment" : "App colors: the green accent for buttons, switches and selected chips (today's accent)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Moss"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Musgo"
+          }
+        }
+      }
+    },
+    "appColors.accent.plum" : {
+      "comment" : "App colors: a purple accent for buttons, switches and selected chips",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Plum"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ciruela"
+          }
+        }
+      }
+    },
+    "appColors.accent.sea" : {
+      "comment" : "App colors: a blue-green accent for buttons, switches and selected chips",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sea"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mar"
+          }
+        }
+      }
+    },
+    "appColors.accent.sun" : {
+      "comment" : "App colors: a golden accent for buttons, switches and selected chips (the colour, not the day)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sun"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sol"
+          }
+        }
+      }
+    },
+    "appColors.contrast" : {
+      "comment" : "App colors: the worst text contrast the chosen paper gives, after its hex ('Contrast 12.7:1')",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Contrast %@:1"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Contraste %@:1"
+          }
+        }
+      }
+    },
+    "appColors.wood.birch" : {
+      "comment" : "App colors: a pale wood for the title plates and the item bar",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Birch"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abedul"
+          }
+        }
+      }
+    },
+    "appColors.wood.cherry" : {
+      "comment" : "App colors: a reddish wood for the title plates and the item bar",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cherry"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cerezo"
+          }
+        }
+      }
+    },
+    "appColors.wood.oak" : {
+      "comment" : "App colors: a wood for the title plates and the item bar (today's wood)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Oak"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Roble"
+          }
+        }
+      }
+    },
+    "appColors.wood.walnut" : {
+      "comment" : "App colors: a dark wood for the title plates and the item bar",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Walnut"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nogal"
           }
         }
       }
@@ -33002,6 +33847,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Servicios de emergencia locales"
+          }
+        }
+      }
+    },
+    "cycle.day.plateTitle" : {
+      "comment" : "World: the title on the plate over a day of the Cycle calendar (its date is the page's own heading)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cycle day"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Día del ciclo"
           }
         }
       }
@@ -40813,7 +41676,7 @@
     },
     "milestones.shelf.breathing" : {
       "comment" : "Keepsake shelf: lowercase label under the breathing medallion, below its count of breathing breaks.",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -40831,7 +41694,7 @@
     },
     "milestones.shelf.journal" : {
       "comment" : "Keepsake shelf: lowercase label under the journal medallion, below its count.",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -40849,7 +41712,7 @@
     },
     "milestones.shelf.meals" : {
       "comment" : "Keepsake shelf: lowercase label under the meals medallion, below its count.",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -40867,7 +41730,7 @@
     },
     "milestones.shelf.water" : {
       "comment" : "Keepsake shelf: lowercase label under the water medallion, below its count of well-watered days.",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -40885,7 +41748,7 @@
     },
     "milestones.shelf.workouts" : {
       "comment" : "Keepsake shelf: lowercase label under the workouts medallion, below its count.",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -40903,7 +41766,7 @@
     },
     "milestones.shelf.worries" : {
       "comment" : "Keepsake shelf: lowercase label under the worry medallion, below its count of worries let go.",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -46803,6 +47666,258 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "pan de masa madre tostado"
+          }
+        }
+      }
+    },
+    "stampBook.medal.accessibility" : {
+      "comment" : "Stamp book, VoiceOver for a keepsake medal: the warm count sentence ('You've written 2 journal moments.'), then its gifts ('1 gift on the shelf').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ %2$@."
+          }
+        }
+      }
+    },
+    "stampBook.medal.breathing" : {
+      "comment" : "Stamp book: lowercase caption under the breathing medal, below its count of breathing breaks. A tally caption, the same at any count.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "breathing breaks"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "pausas para respirar"
+          }
+        }
+      }
+    },
+    "stampBook.medal.journal" : {
+      "comment" : "Stamp book: lowercase caption under the journal medal, below its lifetime count. A tally caption, the same at any count.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "journal moments"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "momentos de diario"
+          }
+        }
+      }
+    },
+    "stampBook.medal.meals" : {
+      "comment" : "Stamp book: lowercase caption under the meals medal, below its lifetime count. A tally caption, the same at any count.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "meals noted"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "comidas anotadas"
+          }
+        }
+      }
+    },
+    "stampBook.medal.water" : {
+      "comment" : "Stamp book: lowercase caption under the water medal, below its count of days the water target was met. A tally caption, the same at any count.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "well-watered days"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "días bien hidratados"
+          }
+        }
+      }
+    },
+    "stampBook.medal.workouts" : {
+      "comment" : "Stamp book: lowercase caption under the workouts medal, below its lifetime count. A tally caption, the same at any count.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "workouts on purpose"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "entrenos a propósito"
+          }
+        }
+      }
+    },
+    "stampBook.medal.worries" : {
+      "comment" : "Stamp book: lowercase caption under the worry medal, below its count of worries let go. A tally caption, the same at any count.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "worries let go"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "preocupaciones soltadas"
+          }
+        }
+      }
+    },
+    "stampBook.next.breathing" : {
+      "comment" : "Stamp book: under 'Next' on the dashed keepsake slot, the first finished breathing exercise. Lowercase noun phrase.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "a breathing break"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "una pausa para respirar"
+          }
+        }
+      }
+    },
+    "stampBook.next.journal" : {
+      "comment" : "Stamp book: under 'Next' on the dashed keepsake slot, the next kind of care to land. Lowercase, a quiet noun phrase.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "a journal moment"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "un momento de diario"
+          }
+        }
+      }
+    },
+    "stampBook.next.meal" : {
+      "comment" : "Stamp book: under 'Next' on the dashed keepsake slot, the first logged meal. Lowercase noun phrase.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "a noted meal"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "una comida anotada"
+          }
+        }
+      }
+    },
+    "stampBook.next.water" : {
+      "comment" : "Stamp book: under 'Next' on the dashed keepsake slot, the first day the water target is met. Lowercase noun phrase.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "a well-watered day"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "un día bien hidratado"
+          }
+        }
+      }
+    },
+    "stampBook.next.workout" : {
+      "comment" : "Stamp book: under 'Next' on the dashed keepsake slot, the first logged workout. Lowercase noun phrase.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "a workout on purpose"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "un entreno a propósito"
+          }
+        }
+      }
+    },
+    "stampBook.next.worry" : {
+      "comment" : "Stamp book: under 'Next' on the dashed keepsake slot, the first worry released from the Worry Box. Lowercase noun phrase.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "a worry let go"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "una preocupación soltada"
+          }
+        }
+      }
+    },
+    "stampBook.title" : {
+      "comment" : "The Stamp book page's title: milestones, keepsakes, silly stamps and silly stats in one page",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Stamp book"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Álbum de sellos"
           }
         }
       }
