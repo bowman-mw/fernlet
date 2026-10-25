@@ -56,13 +56,13 @@ nonisolated enum WorldQuickStartCopy {
                       comment: "World Home quick-start card heading: two friends nearby, e.g. 'Sam and Rae are nearby'")
     }
 
-    /// What VoiceOver hears on the blue button with a friend nearby: "Sam is nearby. Start a session or
-    /// an activity." Nil otherwise.
+    /// What VoiceOver hears on the blue button with a friend nearby: "Sam is nearby. Start a hangout or
+    /// an activity." (its first choice is "Start a hangout with Sam", form answer 33). Nil otherwise.
     static func spokenStatus(_ card: WorldQuickStartCard?) -> String? {
         guard case .friendNearby(let names) = card?.heading else { return nil }
-        return String(localized: "worldQuickStart.status.friendNearby",
-                      defaultValue: "\(friendsAreNearby(names)). Start a session or an activity.",
-                      comment: "World Home: the blue button's VoiceOver value with a friend nearby; the heading, e.g. 'Sam is nearby'")
+        return String(localized: "worldQuickStart.status.friendNearbyHangout",
+                      defaultValue: "\(friendsAreNearby(names)). Start a hangout or an activity.",
+                      comment: "World Home: the blue button's VoiceOver value with a friend nearby; the heading, e.g. 'Sam is nearby' (Spanish: … Empieza una quedada o una actividad.)")
     }
 
     /// The line under the heading.
@@ -120,7 +120,7 @@ nonisolated enum WorldQuickStartCopy {
             return String(localized: "worldQuickStart.backToWorkout", defaultValue: "Back to \(title)",
                           comment: "World Home quick start during a guided workout: returns to it; the workout's name")
         case .startSession(let friend):
-            return FriendsNearbyCopy.startSession(with: friend)
+            return FriendsNearbyCopy.startHangout(with: friend)
         case .startActivity:
             return String(localized: "worldQuickStart.startActivity", defaultValue: "Start an activity",
                           comment: "World Home quick start with a friend nearby: opens Activities to plan one friends nearby can join")

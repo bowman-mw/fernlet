@@ -35,7 +35,7 @@ nonisolated enum WorldQuickStartType {
 /// (``WorldQuickStartLabel``), and VoiceOver hears "Quick start, Camera" as its name.
 struct WorldQuickStartButton: View {
     let glyph: WorldQuickStartGlyph
-    /// What VoiceOver hears after the name when the button has news ("Sam is nearby. Start a session
+    /// What VoiceOver hears after the name when the button has news ("Sam is nearby. Start a hangout
     /// or an activity."), nil otherwise.
     var spokenStatus: String? = nil
     let action: () -> Void
