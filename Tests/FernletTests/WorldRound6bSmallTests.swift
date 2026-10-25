@@ -31,6 +31,37 @@ struct WorldRound6bSmallTests {
         #expect(!body.contains(".notes"), "the note text never reaches the panel")
     }
 
+    // MARK: 43 · Log meal's Import, always
+
+    /// Import opens while lookup is on; with lookup off it asks first, even after an earlier "Not now"
+    /// or a revocation (the tap is the person's own request); with AI features off no consent can open
+    /// the lane, so Import opens and explains.
+    @Test func importAsksForLookupConsentOnTheTap() {
+        var settings = FernletSettings()
+        settings.aiStatus = .ready
+        #expect(FoodImportTap.resolve(for: settings) == .askFirst, "undecided")
+        settings.webNutritionLookupEnabled = true
+        settings.webNutritionLookupConsent = .accepted
+        #expect(FoodImportTap.resolve(for: settings) == .open)
+        settings.webNutritionLookupEnabled = false
+        settings.webNutritionLookupConsent = .revoked
+        #expect(FoodImportTap.resolve(for: settings) == .askFirst, "revoked")
+        settings.webNutritionLookupConsent = .declined
+        #expect(FoodImportTap.resolve(for: settings) == .askFirst, "declined before")
+        settings.aiStatus = .off
+        #expect(FoodImportTap.resolve(for: settings) == .openExplainingOff)
+    }
+
+    /// Log meal draws Import whatever the lookup setting, and its tap goes through ``FoodImportTap``.
+    @Test func logMealAlwaysDrawsImport() throws {
+        let source = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/FoodView.swift"))
+        let row = try #require(MeshRoutedSourceScan.bracedBody(after: "private var helperButtons: some View", in: source))
+        #expect(row.contains("FoodHelperButton(title: \"Import\", sprite: FoodSprites.link, action: tapImport)"))
+        #expect(!row.contains("if store.allowsWebNutritionLookup"), "Import is no longer hidden while lookup is off")
+        let tap = try #require(MeshRoutedSourceScan.bracedBody(after: "private func tapImport()", in: source))
+        #expect(tap.contains("FoodImportTap.resolve(for: store.settings)"))
+    }
+
     // MARK: 42 · The Messages panel's icons grow with the text
 
     /// The panel's pixel icons step up one point a key at the accessibility sizes, as the app's sprites

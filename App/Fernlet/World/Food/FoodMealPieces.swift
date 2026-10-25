@@ -109,6 +109,27 @@ struct FoodHelperButton: View {
     }
 }
 
+/// What a tap on Log meal's Import does (owner's form answer 43, 2026-10-25: Import shows always, and
+/// asks for web-lookup consent on the tap when lookup is off). Import is a web lookup end to end, so
+/// nothing leaves the phone until the person allows it here or in Settings.
+nonisolated enum FoodImportTap: Equatable, Sendable {
+    /// Web nutrition lookup is on: open Import.
+    case open
+    /// Lookup is off and AI features are on: ask first; allowing turns lookup on and opens Import, "Not
+    /// now" keeps it off and stays on Log meal. The tap is the person's own request, so it asks even after
+    /// an earlier "Not now".
+    case askFirst
+    /// AI features are off, which closes the whole web-nutrition lane (no consent can open it): Import
+    /// opens and says which Settings switches turn it on, as it always has.
+    case openExplainingOff
+
+    /// The tap's outcome under `settings`.
+    static func resolve(for settings: FernletSettings) -> FoodImportTap {
+        if settings.allowsWebNutritionLookup { return .open }
+        return settings.aiStatus == .off ? .openExplainingOff : .askFirst
+    }
+}
+
 /// A catalog match under "What did you eat?" (`b3-meal`): the food's name, its source as a tag (USDA,
 /// Your foods), one serving and its grams, and a framed + (a ✓ once chosen). The whole row picks it.
 struct FoodCatalogMatchRow: View {
