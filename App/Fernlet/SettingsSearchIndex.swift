@@ -50,6 +50,7 @@ nonisolated enum SettingsRoute: Hashable, CaseIterable {
     case privacyData
     case aiAuditLog
     case privacyPolicy
+    case acknowledgments
     case safetyReporting
     case appLock
     case sharing
@@ -803,6 +804,18 @@ nonisolated enum SettingsSearchIndex {
             route: .privacyPolicy
         ),
 
+        // Acknowledgments — the license notices: CryptoSwift's required acknowledgment, the fonts, the food data.
+        SettingsSearchEntry(
+            title: "Acknowledgments",
+            display: LocalizedStringResource(
+                "settings.search.title.acknowledgments", defaultValue: "Acknowledgments",
+                comment: "Settings search result: the name of a setting a search can find, on the Acknowledgments page. Short, sentence case, like the row it leads to."),
+            keywords: ["acknowledgments", "acknowledgements", "licenses", "licences", "license", "open source",
+                       "credits", "attribution", "notices", "fonts", "cryptoswift", "legal"],
+            breadcrumb: .acknowledgments,
+            route: .acknowledgments
+        ),
+
         // Safety & reporting — it opens on the crisis-line card (`CrisisSupportCard`), so the words a
         // person in distress might type land on a page that carries the line.
         SettingsSearchEntry(
@@ -1147,6 +1160,11 @@ nonisolated extension SettingsSearchBreadcrumb {
         token: "Privacy Policy",
         display: LocalizedStringResource(
             "settings.search.breadcrumb.privacyPolicy", defaultValue: "Privacy Policy",
+            comment: "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it."))
+    static let acknowledgments = SettingsSearchBreadcrumb(
+        token: "Acknowledgments",
+        display: LocalizedStringResource(
+            "settings.search.breadcrumb.acknowledgments", defaultValue: "Acknowledgments",
             comment: "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it."))
     static let safetyReporting = SettingsSearchBreadcrumb(
         token: "Safety & reporting",

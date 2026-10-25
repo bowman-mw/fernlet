@@ -32,7 +32,8 @@ import FernletLockUI
 /// the standalone screens (``PrivacyDataSettingsView``, ``HealthAccessSettingsView``,
 /// ``NearbyFriendsSettingsView``, ``PeriodSensitiveSettingsView``, ``QuickLogShortcutsEditor``,
 /// ``SoundsHapticsSettingsView``,
-/// ``PrivacyPolicyView``, `SafetyReportingView`, ``AIAuditLogView``, ``AppLockSettingsView``)
+/// ``PrivacyPolicyView``, ``AcknowledgmentsView``, `SafetyReportingView`, ``AIAuditLogView``,
+/// ``AppLockSettingsView``)
 /// return with their own chrome. A non-empty search query swaps the Form for a
 /// ``SettingsSearchIndex`` results list.
 ///
@@ -338,6 +339,8 @@ struct SettingsSheet: View {
             AIAuditLogView()
         case .privacyPolicy:
             PrivacyPolicyView()
+        case .acknowledgments:
+            AcknowledgmentsView()
         case .safetyReporting:
             SafetyReportingView()
         case .appLock:
@@ -478,6 +481,9 @@ struct SettingsSheet: View {
                 .accessibilityIdentifier("settings.row.safety")
             hubLink("Privacy Policy", .privacyPolicy)
                 .accessibilityIdentifier("settings.row.privacyPolicy")
+            // The notices Fernlet's licenses ask it to carry (CryptoSwift's acknowledgment first).
+            hubLink("Acknowledgments", .acknowledgments)
+                .accessibilityIdentifier("settings.row.acknowledgments")
             // The "what left my device" ledger — a disclosure surface, not a control.
             hubLink("AI activity log", .aiAuditLog)
                 .accessibilityIdentifier("settings.aiAuditLog")

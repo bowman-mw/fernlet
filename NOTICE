@@ -45,6 +45,11 @@ Apache License. Fernlet builds it from a fork,
 https://github.com/bowman-mw/CryptoSwift, which alters one line of the
 package manifest (the iOS deployment floor, marked in the file) and no
 source file. The original is https://github.com/krzyzanowskim/CryptoSwift.
+Its license is in App/Fernlet/Acknowledgments/CryptoSwift-LICENSE.txt,
+unaltered, and the app bundle carries the same file. The app shows the
+acknowledgment below and the whole license in Settings > Acknowledgments,
+beside the fonts' notices, and fernlet.com/technical carries the
+acknowledgment too.
 
 This product includes software developed by the "Marcin Krzyzanowski"
 (http://krzyzanowskim.com/).
