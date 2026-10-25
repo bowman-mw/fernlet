@@ -3,6 +3,8 @@ import SwiftUI
 import Testing
 import UIKit
 import WorldMapStore
+@testable import FernletSocial
+@testable import ProximityKit
 import FernletDomainModel
 import FernletScoring
 @testable import Fernlet
