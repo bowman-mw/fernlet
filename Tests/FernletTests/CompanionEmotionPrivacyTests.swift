@@ -43,6 +43,9 @@ struct CompanionEmotionPrivacyTests {
         // face and asleep only, as Home's map does, so it never names the feeling.)
         "App/FernletWidgets/CompanionWidgetViews.swift",
         "App/FernletWidgets/WidgetThoughtLines.swift",
+        // Round 6b: the map widget's Sprout reads the entry's feeling for its spoken value, as the small and
+        // medium cards do. It neither persists nor sends it.
+        "App/FernletWidgets/MapWidgetViews.swift",
         // World build step 3: the map's companion reads the feeling, as Home's does, for its sleeping
         // pose and its VoiceOver value. It neither persists nor sends it.
         "App/Fernlet/World/Home/WorldMapCompanion.swift",

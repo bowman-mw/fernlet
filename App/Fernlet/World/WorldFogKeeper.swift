@@ -16,6 +16,11 @@ import WorldMapStore
 /// unlock reveals no history and leaves none behind. The silent wipe and Delete everything reach
 /// ``clearAll()`` through `FernletStore.resetAll()`; the recovery lock through its own purge hook.
 ///
+/// **The map widget's picture** (round 6b, owner's Q36) goes with the history: ``clearAll()`` (every wipe,
+/// the recovery lock and "Delete map history") and entering a decoy delete it and reload the widget, which
+/// then draws no map (a decoy's map is none). ``widgetMapGeneration`` moves each time, so a picture rendered
+/// across one of them is never written (`WorldWidgetMapWriter`).
+///
 /// **A locked phone.** The store's key works only while the phone is unlocked, so readings that
 /// arrive while it is locked (a walk with the screen off, Always mode's visits) go into the
 /// locked-phone buffer and are merged on the next ``load()``.
@@ -40,6 +45,12 @@ final class WorldFogKeeper {
     @ObservationIgnored private let isProtectedDataAvailable: @MainActor () -> Bool
     @ObservationIgnored private var decoyCells: Set<HexCell> = []
     @ObservationIgnored private var sinceSave = 0
+    /// The map widget's picture in the app group (tests point it at their own folder).
+    @ObservationIgnored var widgetMap: WorldWidgetMapFile
+    /// Reloads the map widget once its picture is gone (tests count the calls).
+    @ObservationIgnored var widgetMapReload: @MainActor () -> Void
+    /// Moves each time the widget's picture is deleted (a wipe, Delete map history, a decoy).
+    @ObservationIgnored private(set) var widgetMapGeneration = 0
 
     /// A keeper over `vault`. `isProtectedDataAvailable` reports whether the phone is unlocked (the
     /// app's `UIApplication` answer by default; tests inject one).
@@ -49,6 +60,8 @@ final class WorldFogKeeper {
         self.store = FogCellStore(vault: vault)
         self.defaults = defaults
         self.isProtectedDataAvailable = isProtectedDataAvailable ?? { UIApplication.shared.isProtectedDataAvailable }
+        self.widgetMap = WorldWidgetMapFile()
+        self.widgetMapReload = { WorldWidgetMap.reload() }
     }
 
     /// Reads the lifted history (and merges the locked-phone buffer) when the phone is unlocked and no
@@ -102,19 +115,34 @@ final class WorldFogKeeper {
     /// cells and shows the history again.
     func setDecoy(_ on: Bool) {
         guard on != isDecoy else { return }
-        if on { flush() }
+        if on {
+            flush()
+            // The decoy's map widget has no map: the real picture goes before anything of the decoy shows.
+            if !removeWidgetMap() { FernletAuditLog.log("worldMap.widgetMap.decoyDeleteFailed") }
+        }
         isDecoy = on
         decoyCells = []
         visibleCells = on ? [] : store.cells
     }
 
-    /// The wipe: forgets the cells and deletes every World map file and key. Whether it all went.
+    /// The wipe: forgets the cells and deletes every World map file and key, and the map widget's picture.
+    /// Whether it all went.
     func clearAll() -> Bool {
         store.forget()
         decoyCells = []
         visibleCells = []
         sinceSave = 0
-        return vault.clearAll()
+        let pictureGone = removeWidgetMap()
+        let vaultGone = vault.clearAll()
+        return vaultGone && pictureGone
+    }
+
+    /// Deletes the map widget's picture and reloads the widget; whether the picture is gone.
+    private func removeWidgetMap() -> Bool {
+        widgetMapGeneration &+= 1
+        let removed = widgetMap.delete()
+        widgetMapReload()
+        return removed
     }
 
     /// Puts cells lifted while the phone is locked into the buffer for the next unlock.

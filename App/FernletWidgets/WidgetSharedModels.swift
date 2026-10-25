@@ -16,6 +16,8 @@
 //   - `WidgetSnapshot`             mirrors Fernlet/WidgetBridge.swift `WidgetSnapshot`
 //   - `WidgetCompanionLook`        mirrors Fernlet/WidgetBridge.swift `WidgetSnapshot.CompanionLook`
 //   - `PendingWidgetAction`        mirrors Fernlet/WidgetBridge.swift `PendingWidgetAction`
+//   - `WidgetMapPicture`           mirrors Fernlet/World/Widget/WorldWidgetMapFile.swift `WorldWidgetMapPicture`
+//                                  (declared in WidgetMapPicture.swift, with its reader)
 //   - `WidgetDayKey`               mirrors FernletFoundation.FernletDate.dayKey ("yyyy-MM-dd", en_US_POSIX)
 //   - JSON codecs                  mirror the app-group queue convention (iso8601 dates, sorted keys)
 //
@@ -280,6 +282,9 @@ struct WidgetSnapshot: Codable, Equatable {
     /// The stamp book, oldest first, for the stamp widget. ADDITIVE (2026-10-24) and optional; nil or
     /// empty before the first stamp, and empty while a decoy is open.
     var stamps: [StampMoment]? = nil
+    /// The day's protein, carbs and fat targets in grams, for the map widget's bars. ADDITIVE (2026-10-25)
+    /// and optional: without them the bars read empty, never full.
+    var macroTargets: MacroSummary? = nil
 
     var companionState: WidgetCompanionState? { WidgetCompanionState(rawValue: companionStateRaw) }
 

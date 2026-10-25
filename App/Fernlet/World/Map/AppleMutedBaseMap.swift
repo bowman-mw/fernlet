@@ -1,3 +1,4 @@
+import FernletFoundation
 import MapKit
 import SwiftUI
 import UIKit
@@ -7,6 +8,7 @@ import WorldMapStore
 ///
 /// **The only file in the app that imports MapKit** (`MapAndLocationConfinementBoundaryTests`). MapKit
 /// fetches Apple's map tiles for the visible area; with the place lookups below (``ApplePlaceLookup``)
+/// and the map widget's still picture of the area around the person (``AppleMapSnapshot``, round 6b)
 /// that is the whole of what Apple receives (`Docs/No-Tracking-Wall.md` §4a, "Apple Maps (MapKit)").
 /// Fernlet's fog, trails, pins and location are drawn on top by Fernlet and never handed to MapKit.
 ///
@@ -99,6 +101,40 @@ private struct AppleMutedMapView: UIViewRepresentable {
         camera.follows = false
     }
 
+}
+
+/// The map widget's base picture (owner's Q36, `b4-new-map`, round 6b): Apple's muted map for one area,
+/// as a still image, from `MKMapSnapshotter`. The same muted style as the live map, points of interest
+/// hidden, north-up and flat, so Fernlet's own layers place themselves on it from the `MapViewport` alone.
+///
+/// Asked only by the map widget's writer (`WorldWidgetMapWriter`), only while the World Home's map is on
+/// screen and following the person, for the area around them that the map is already showing: the same
+/// destination, and the same area, as the live map's own tile requests (`Docs/No-Tracking-Wall.md` §4a).
+/// Only the rectangle goes to Apple; the places and trails drawn over the picture never do.
+enum AppleMapSnapshot {
+    /// The muted map of `viewport` at `size` points and `scale` pixels per point, light or `dark`; nil
+    /// when the snapshot fails (offline, throttled) or the viewport is unusable.
+    static func image(of viewport: MapViewport, size: CGSize, scale: CGFloat, dark: Bool) async -> UIImage? {
+        guard viewport.isUsable, size.width > 0, size.height > 0, scale > 0 else { return nil }
+        let world = MKMapSize.world
+        let options = MKMapSnapshotter.Options()
+        options.mapRect = MKMapRect(x: viewport.minX * world.width, y: viewport.minY * world.height,
+                                    width: viewport.width * world.width, height: viewport.height * world.height)
+        options.size = size
+        let configuration = MKStandardMapConfiguration(elevationStyle: .flat, emphasisStyle: .muted)
+        configuration.pointOfInterestFilter = .excludingAll
+        options.preferredConfiguration = configuration
+        options.traitCollection = UITraitCollection { traits in
+            traits.userInterfaceStyle = dark ? .dark : .light
+            traits.displayScale = scale
+        }
+        do {
+            return try await MKMapSnapshotter(options: options).start().image
+        } catch {
+            FernletAuditLog.log("worldMap.widgetSnapshot.failed", context: ["dark": dark ? "yes" : "no"])
+            return nil
+        }
+    }
 }
 
 /// Phase 1's place lookup (``WorldPlaceLooking``; World build step 5c and round 5). Two requests, both to

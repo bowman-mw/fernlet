@@ -51,7 +51,7 @@ struct WidgetSnapshotContentEqualityTests {
     /// should be reading it.
     static let contentFields = [
         "companionStateRaw", "score", "bottleCount", "hydrationTarget", "macroSummary", "dateKey",
-        "companionEmotionTimeline", "companionName", "companionLook", "goldHeartEnds", "stamps"
+        "companionEmotionTimeline", "companionName", "companionLook", "goldHeartEnds", "stamps", "macroTargets"
     ]
 
     /// The fields stamped at construction that no widget family renders. A difference in one of
@@ -92,7 +92,8 @@ struct WidgetSnapshotContentEqualityTests {
                                                         accessoryRaw: "sprout", accessoryColorHex: "#72A364"),
             goldHeartEnds: [Date(timeIntervalSince1970: 1_780_030_000)],
             stamps: [WidgetSnapshot.StampMoment(kindRaw: "bathtubIndex", dayKey: "2026-09-20",
-                                                earnedAt: Date(timeIntervalSince1970: 1_780_000_100))]
+                                                earnedAt: Date(timeIntervalSince1970: 1_780_000_100))],
+            macroTargets: WidgetSnapshot.MacroSummary(protein: 120, carbs: 250, fat: 70)
         )
     }
 
@@ -133,7 +134,10 @@ struct WidgetSnapshotContentEqualityTests {
         // A friend's gold heart and a new stamp are drawn (World Review Batch 4, 2026-10-24): both are
         // changes a person sees, and both are time-stable (an end, and the moment a stamp was earned).
         Flip(field: "goldHeartEnds", apply: { $0.goldHeartEnds?.append(Date(timeIntervalSince1970: 1_780_031_000)) }),
-        Flip(field: "stamps", apply: { $0.stamps?[0].dayKey = "2026-09-19" })
+        Flip(field: "stamps", apply: { $0.stamps?[0].dayKey = "2026-09-19" }),
+        // The map widget's bars are drawn against the day's targets (round 6b, 2026-10-25): a new target is a
+        // change a person sees, and time-stable (a setting).
+        Flip(field: "macroTargets", apply: { $0.macroTargets = WidgetSnapshot.MacroSummary(protein: 130, carbs: 250, fat: 70) })
     ]
 
     // MARK: - The thesis
@@ -202,7 +206,7 @@ struct WidgetSnapshotContentEqualityTests {
             construction, rendered by nothing → no reload), and the one that is missing has to be \
             put on a side before this passes.
             """)
-        #expect(fields.count == 12, "MEASURED 2026-10-24: eleven content fields (the gold hearts and the stamps joined) and one metadata field")
+        #expect(fields.count == 13, "MEASURED 2026-10-25: twelve content fields (the map widget's macro targets joined the gold hearts and the stamps) and one metadata field")
 
         let macroFields = Mirror(reflecting: WidgetSnapshot.MacroSummary(protein: 0, carbs: 0, fat: 0))
             .children.compactMap(\.label)
