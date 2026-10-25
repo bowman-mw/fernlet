@@ -55,6 +55,14 @@ nonisolated enum SoloCameraRules {
         return night.isPastWindDown(atMinute: hour * 60 + minute)
     }
 
+    /// ``waitsForTomorrowNight(at:window:calendar:)`` with the person's night as Settings has it now, read
+    /// here (as ``SoloCameraRoll``'s `takePhoto` reads it), so the camera's view never names the emotion's
+    /// preferences itself (`CompanionEmotionPrivacyTests`).
+    @MainActor
+    static func waitsForTomorrowNight(at now: Date, calendar: Calendar) -> Bool {
+        waitsForTomorrowNight(at: now, window: CompanionEmotionPreferences.sleepWindow(), calendar: calendar)
+    }
+
     /// Shots left on a day that has used `used` (never negative).
     static func shotsLeft(used: Int) -> Int {
         max(0, photosPerDay - max(0, used))

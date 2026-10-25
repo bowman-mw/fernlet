@@ -885,8 +885,7 @@ struct DisposableCameraView: View {
 
     /// The solo line at `date`.
     private func soloFooterLine(at date: Date) -> some View {
-        let tomorrow = SoloCameraRules.waitsForTomorrowNight(at: date, window: CompanionEmotionPreferences.sleepWindow(),
-                                                             calendar: .current)
+        let tomorrow = SoloCameraRules.waitsForTomorrowNight(at: date, calendar: .current)
         let line = tomorrow
             ? Text("Your photos appear tomorrow night, after \(companionName) goes to sleep.")
             : Text("Your photos appear tonight, after \(companionName) goes to sleep.")
