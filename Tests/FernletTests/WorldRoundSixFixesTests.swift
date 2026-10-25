@@ -3,8 +3,8 @@ import Testing
 import FernletDomainModel
 @testable import Fernlet
 
-/// Round 6's smaller fixes (lane "fixes"): the photo prints' one-read cache (W-04) and a print opening its
-/// photo (`ref-wall-photo`).
+/// Round 6's smaller fixes (lane "fixes"): the photo prints' one-read cache (W-04), a print opening its
+/// photo (`ref-wall-photo`), and Log intimacy's two-half date and time (`ref-int-date`, `ref-int-time`).
 @MainActor
 struct WorldRoundSixFixesTests {
 
@@ -55,5 +55,35 @@ struct WorldRoundSixFixesTests {
         #expect(album.contains("if case .wallPhoto(let photoID) = route"), "the album takes it as a cover, not a page")
         #expect(album.contains("initialPhotoID: feedOpenedFromWall"), "the carousel opens at that photo")
         #expect(album.contains("onBack: feedOpenedFromWall == nil ? nil"), "‹ Album only when the wall opened it")
+    }
+
+    // MARK: ref-int-date + ref-int-time · Log intimacy's date and time
+
+    /// Picking a day keeps the time; picking a time keeps the day; nothing lands in the future.
+    @Test func theTwoHalvesMergeAndNeverGoPastNow() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "America/Los_Angeles"))
+        func at(_ day: Int, _ hour: Int, _ minute: Int) throws -> Date {
+            try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour, minute: minute)))
+        }
+        let now = try at(23, 21, 40)
+        // The calendar picks the 20th: the time stays 9:40 PM.
+        #expect(PrivateDateTimeButton.merged(day: try at(20, 0, 0), time: now, latest: now, calendar: calendar) == (try at(20, 21, 40)))
+        // The wheels pick 7:15 AM: the day stays the 23rd.
+        #expect(PrivateDateTimeButton.merged(day: now, time: try at(1, 7, 15), latest: now, calendar: calendar) == (try at(23, 7, 15)))
+        // Today at 11 PM is later than now: it stops at now.
+        #expect(PrivateDateTimeButton.merged(day: now, time: try at(23, 23, 0), latest: now, calendar: calendar) == now)
+        // Seconds drop.
+        let withSeconds = try at(23, 8, 5).addingTimeInterval(37)
+        #expect(PrivateDateTimeButton.merged(day: withSeconds, time: withSeconds, latest: now, calendar: calendar) == (try at(23, 8, 5)))
+    }
+
+    /// The sheet's Date and time is the framed two-half button, and its save still sends `eventDate`
+    /// to Apple Health.
+    @Test func logIntimacyUsesTheTwoHalfButton() throws {
+        let sheet = try RepoRoot.source("App/Fernlet/LogIntimacySheet.swift")
+        #expect(sheet.contains("PrivateDateTimeButton(date: $eventDate"))
+        #expect(sheet.contains("date: eventDate,"), "Apple Health gets the picked date and time")
+        #expect(!sheet.contains(".datePickerStyle(.compact)"))
     }
 }

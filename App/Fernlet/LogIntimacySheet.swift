@@ -97,15 +97,13 @@ struct LogIntimacySheet: View {
         .captureProtected(surface: "logIntimacy")
     }
 
-    /// The event's date and time, never in the future.
+    /// The event's date and time, never in the future: the framed two-half button (`ref-int-date`,
+    /// `ref-int-time`) under its section label, the date opening iOS's calendar and the time its wheels.
+    /// Apple Health gets the picked date and time (``save()`` writes `eventDate`).
     private var dateField: some View {
-        // World (b3-log-intimacy): "Date and time" on the left, the compact picker on the right.
-        PrivateDateRow(title: "Date and time") {
-            DatePicker("Date and time", selection: $eventDate, in: ...Date())
-                .labelsHidden()
-                .datePickerStyle(.compact)
+        SheetField("Date and time") {
+            PrivateDateTimeButton(date: $eventDate, latest: Date())
                 .onChange(of: eventDate) { _, _ in dateAdjusted = true }
-                .tint(WorldPalette.mossInk)
         }
     }
 
