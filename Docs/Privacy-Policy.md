@@ -80,13 +80,19 @@
      lines while "Save new routes" is on, workout-space pins, background location only during a walk
      or with background mapping on, Apple Maps receiving the area on screen — and the approved added
      sentence on Where you've been, Places you return to and solo photos' places. Everything stays on
-     the device; nothing new is sent to the developer and no promise is weakened under §13). Before
+     the device; nothing new is sent to the developer and no promise is weakened under §13), and
+     2026-10-25 (the World build's round 6, both additions approved by the owner word for word: a place
+     Fernlet won't name can be added by the person ("unless you add one yourself"), a solo photo with no
+     place can be put on the map by the person, and a home (up to two) or a hotel the person marks is
+     kept, sealed on this iPhone, to uncover the map around it and to welcome them back, until they remove
+     it in Settings › Home map. Everything stays on the device; nothing new is sent to the developer and
+     no promise is weakened under §13). Before
      submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
      (2) keep it in sync with the in-app copy in App/Fernlet/PrivacyPolicyView.swift (Settings →
      Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
      the effective date in all three. -->
 
-**Effective date:** October 24, 2026
+**Effective date:** October 25, 2026
 **Developer:** Michael Bowman Olay
 **Contact:** fernletapp@gmail.com
 
@@ -401,9 +407,13 @@ With Where you've been in Private, Fernlet also keeps a rolling 30-day timeline 
 stopped at, collected while the map is open and, if you turn on background mapping, through the day.
 It also keeps a list of Places you return to, which holds only a visit count, never dates. Both
 cover everyday places only: food and drink, gyms, parks, beaches and campgrounds. Places like
-doctors' offices, lawyers or therapists are never named or kept. When you take a photo with the
-camera on your own at one of those everyday places, Fernlet keeps where it was taken,
-so the photo can sit on your map; anywhere else, it keeps no place. All of this is sealed on this
+doctors' offices, lawyers or therapists are never named or kept, unless you add one yourself.
+When you take a photo with the camera on your own at one of those everyday places, Fernlet keeps
+where it was taken, so the photo can sit on your map; anywhere else, it keeps no place.
+You can put a photo on the map yourself.
+If you mark a place as your home (up to two) or as a hotel you stay at, Fernlet keeps it,
+sealed on this iPhone like your journal, to uncover the map around it and to welcome you back
+when you return; it stays until you remove it in Settings › Home map. All of this is sealed on this
 iPhone like your journal: never synced, backed up, exported, shared, given to the AI or sent to us.
 You can delete a day, a photo, or all of it, at any time.
 

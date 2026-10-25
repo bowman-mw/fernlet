@@ -117,8 +117,9 @@ private struct AppleMutedMapView: UIViewRepresentable {
 ///
 /// The kinds: food and drink (restaurant, café, bakery, brewery, winery, distillery, food market,
 /// nightlife), gyms (fitness centre), parks (park, national park), beaches and campgrounds (campground,
-/// RV park) are allowed; hospitals and pharmacies are refused; everything else is "other", and its name
-/// still goes through the refused words (`PlaceClassifier`). "Nothing here" is an answer (an empty list);
+/// RV park) are allowed; hospitals and pharmacies are refused; a park's outdoor amenities and anything Apple
+/// gives no category (a lake, a trail) are features, which never block a park (round 6); everything else is
+/// "other". Every name still goes through the refused words (`PlaceClassifier`). "Nothing here" is an answer (an empty list);
 /// any other failure is none (nil).
 final class ApplePlaceLookup: WorldPlaceLooking {
     /// How far around the point the lookup reaches, in metres.
@@ -170,9 +171,12 @@ final class ApplePlaceLookup: WorldPlaceLooking {
         names.removeAll()
     }
 
-    /// Fernlet's kind for one of Apple's categories.
+    /// Fernlet's kind for one of Apple's categories. A place Apple gives no category (a lake, a pond, a
+    /// trail) and the outdoor amenities a park holds are features (round 6): they never block a park, and
+    /// alone they keep nothing.
     static func kind(of category: MKPointOfInterestCategory?) -> NearbyPlace.Kind {
-        guard let category else { return .other }
+        guard let category else { return .feature }
+        if featureCategories.contains(category) { return .feature }
         switch category {
         case .restaurant, .cafe, .bakery, .brewery, .winery, .distillery, .foodMarket, .nightlife: return .allowed(.foodAndDrink)
         case .fitnessCenter: return .allowed(.gym)
@@ -183,6 +187,13 @@ final class ApplePlaceLookup: WorldPlaceLooking {
         default: return .other
         }
     }
+
+    /// The outdoor amenities a park, beach or campground holds or stands beside (World build round 6).
+    static let featureCategories: Set<MKPointOfInterestCategory> = [
+        .restroom, .parking, .publicTransport, .evCharger, .landmark, .nationalMonument, .marina, .hiking, .fishing,
+        .kayaking, .swimming, .surfing, .skatePark, .skating, .soccer, .tennis, .basketball, .baseball, .volleyball,
+        .golf, .miniGolf, .rockClimbing,
+    ]
 }
 
 /// The map's delegate: the viewport on every move, the person's pans written back, and the tiles'

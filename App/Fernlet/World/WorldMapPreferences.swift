@@ -13,6 +13,8 @@ import Foundation
 /// - **Remember places I stop at** (on by default; owner, World build round 5): whether Where you've been
 ///   notes new visits and timeline stops. Off notes nothing new and asks no lookup; what is kept stays until
 ///   it is deleted (the fog and the walk lines have their own switches).
+/// - **Remember places I eat out** (on by default, as `b1-settings-map` draws it; World build round 6): whether
+///   the meals logged at a place to eat are noted there. Off notes no meal; the places kept stay.
 /// - **The map intro answered** (step 5c, `b1-loc-intro`): the intro shows once, before iOS asks; Turn on
 ///   location and Not now both answer it.
 /// - **The companion hint shown** (`ref-hint`): "Tap me to say hi!" shows once on this iPhone.
@@ -28,8 +30,21 @@ nonisolated enum WorldMapPreferences {
         static let saveNewRoutes = "fernlet.worldMap.saveNewRoutes"
         static let rememberSpaces = "fernlet.worldMap.rememberSpaces"
         static let remembersPlaces = "fernlet.worldMap.rememberPlaces"
+        static let remembersEatingOut = "fernlet.worldMap.rememberEatingOut"
         static let locationIntroAnswered = "fernlet.worldMap.locationIntroAnswered"
         static let companionHintShown = "fernlet.worldMap.companionHintShown"
+    }
+
+    /// Whether the meals logged at a place to eat are noted there, so it becomes a favourite after three
+    /// ("Remember places I eat out", `b1-settings-map`; default on, as drawn).
+    static func remembersEatingOut(in defaults: UserDefaults = .standard) -> Bool {
+        guard defaults.object(forKey: Key.remembersEatingOut) != nil else { return true }
+        return defaults.bool(forKey: Key.remembersEatingOut)
+    }
+
+    /// Sets "Remember places I eat out".
+    static func setRemembersEatingOut(_ on: Bool, in defaults: UserDefaults = .standard) {
+        defaults.set(on, forKey: Key.remembersEatingOut)
     }
 
     /// Whether Where you've been notes the places the person stops at (default on).
@@ -113,6 +128,7 @@ nonisolated enum WorldMapPreferences {
         defaults.removeObject(forKey: Key.saveNewRoutes)
         defaults.removeObject(forKey: Key.rememberSpaces)
         defaults.removeObject(forKey: Key.remembersPlaces)
+        defaults.removeObject(forKey: Key.remembersEatingOut)
         defaults.removeObject(forKey: Key.locationIntroAnswered)
         defaults.removeObject(forKey: Key.companionHintShown)
     }

@@ -61,6 +61,9 @@ extension SettingsSearchSynonyms {
         "Save new routes": ["guardar rutas nuevas", "rutas", "ruta", "líneas", "senderos", "borrar rutas"],
         "Remember places I stop at": ["recordar los lugares donde me detengo", "lugares", "visitas", "dónde has estado",
                                       "dejar de guardar lugares"],
+        "Remember places I eat out": ["recordar los lugares donde como fuera", "restaurantes", "restaurante", "comer fuera",
+                                      "lo de siempre"],
+        "Homes and hotels": ["casas y hoteles", "casa", "hogar", "hotel", "salir del hotel", "segunda casa"],
         "Delete map history": ["borrar el historial del mapa", "historial del mapa", "olvidar espacios", "limpiar mapa"],
         // AI & data sources
         "AI status": ["estado de la ia", "ia", "inteligencia artificial", "en el dispositivo", "asistente", "estado"],

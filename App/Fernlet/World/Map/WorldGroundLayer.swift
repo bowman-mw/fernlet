@@ -9,6 +9,9 @@ import WorldMapStore
 struct WorldGround: Equatable {
     /// Cells the fog has lifted from.
     var lifted: Set<HexCell> = []
+    /// Cells drawn clear around the person's homes, hotel and kept places (round 6): never written into the
+    /// fog, so they fog again when the place goes.
+    var uncovered: Set<HexCell> = []
     /// Saved lines (routes, trails), drawn solid.
     var trails: [[GeoPoint]] = []
     /// Lines in progress or from this session, drawn as dotted footsteps.
@@ -33,7 +36,8 @@ struct WorldGroundLayer: View {
                 context.stroke(path(for: trail, size: size), with: .color(trailColor),
                                style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
             }
-            WorldFogPainter(viewport: viewport, lifted: ground.lifted, darkStyle: darkStyle).paint(&context, size: size)
+            WorldFogPainter(viewport: viewport, lifted: ground.lifted, darkStyle: darkStyle, uncovered: ground.uncovered)
+                .paint(&context, size: size)
             for trace in ground.traces {
                 let line = path(for: trace, size: size)
                 context.stroke(line, with: .color(WorldPalette.gameCream.opacity(0.9)),
@@ -66,6 +70,13 @@ struct WorldFogPainter {
     let viewport: MapViewport
     let lifted: Set<HexCell>
     let darkStyle: Bool
+    /// Cells drawn clear around homes and kept places (round 6), as if lifted.
+    var uncovered: Set<HexCell> = []
+
+    /// Whether `cell` shows clear: lifted, or uncovered around a place.
+    private func isClear(_ cell: HexCell) -> Bool {
+        lifted.contains(cell) || uncovered.contains(cell)
+    }
 
     /// The smallest a cell may draw, in points; below it the fog is skipped (zoomed too far out).
     static let minimumCellPoints = 2.0
@@ -79,14 +90,14 @@ struct WorldFogPainter {
         let grow = (cellPoints + 0.5) / cellPoints
         let corners = MercatorHexGrid.cornerOffsets.map { CGSize(width: $0.x * perUnit * grow, height: $0.y * perUnit * grow) }
         var deep = Path(), shade = Path(), frontier = Path()
-        for cell in MercatorHexGrid.cells(in: viewport) where !lifted.contains(cell) {
+        for cell in MercatorHexGrid.cells(in: viewport) where !isClear(cell) {
             let centre = MercatorHexGrid.centre(of: cell)
             let point = viewport.screenPoint(x: centre.x, y: centre.y, in: size)
             let hex = Path { shape in
                 shape.addLines(corners.map { CGPoint(x: point.x + $0.width, y: point.y + $0.height) })
                 shape.closeSubpath()
             }
-            if MercatorHexGrid.neighbours(of: cell).contains(where: lifted.contains) {
+            if MercatorHexGrid.neighbours(of: cell).contains(where: isClear) {
                 frontier.addPath(hex)
             } else if (cell.q - cell.r) % 3 == 0 {
                 shade.addPath(hex)

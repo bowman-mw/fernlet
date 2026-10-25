@@ -52,6 +52,8 @@ struct WorldMapHome: View {
     /// Reports whether the disposable camera is open full screen (the root holds the session button and
     /// the stamp banner back meanwhile).
     var isCameraOpen: Binding<Bool> = .constant(false)
+    /// Where a meal the blue button logs goes: the toast (round 6, "Log your usual"; the root's reporter).
+    var onMealsLogged: MealLogReporter = .none
     @State private var camera = WorldCamera(center: GeoPoint(0, 0), distance: 1_700)
     @State private var hasPlace = false
     @State private var isCustomizing = false
@@ -78,6 +80,12 @@ struct WorldMapHome: View {
     @State private var testPhotoKept = false
     /// Whether the one-time "Tap me to say hi!" hint is showing (`ref-hint`, ``WorldCompanionHint``).
     @State private var isHintShowing = false
+    /// Round 6: Sprout's greeting at a home or hotel (said once), the map drawn clear round homes and kept
+    /// places, the Remember this place sheet, and a menu search's meal sheet.
+    @State private var homeGreeting: String?
+    @State private var uncovered: Set<HexCell> = []
+    @State private var placeSheet: WorldPlaceSheetMode?
+    @State private var menuSearch: WorldMenuSearch?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -107,6 +115,8 @@ struct WorldMapHome: View {
         .modifier(WorldLocationIntroPresenter(store: store, isFrontmost: isFrontmost, isUp: $isLocationIntroUp))
         // A photo place's marker opens the photos taken there (World build step 5c).
         .modifier(WorldPhotoPlacePresenter(store: store, place: $openPhotoPlace))
+        // Round 6: Remember this place, and a place to eat's menu search.
+        .modifier(WorldPlacesPresenter(store: store, placeSheet: $placeSheet, menuSearch: $menuSearch, onMealsLogged: onMealsLogged))
         .environment(\.worldTileStatus, tiles)
         .task { await applyTestScenes() }
         .task(id: isHintDue) { if isHintDue { isHintShowing = true } }
@@ -161,8 +171,9 @@ struct WorldMapHome: View {
     private func onMap(viewport: MapViewport, size: CGSize) -> some View {
         let point = companionPoint(viewport: viewport, size: size)
         return ZStack(alignment: .topLeading) {
+            WorldHomesLayer(store: store, viewport: viewport, size: size, isNight: phase(at: Date()) == .night)
             ForEach(shownMarkers) { marker in
-                WorldMapMarkerView(marker: marker) { openCard(spaceID: marker.id) }
+                WorldMapMarkerView(marker: marker, resolvedName: store.worldPlaces.eatingNames[marker.id]) { open(marker) }
                     .fixedSize()
                     .position(viewport.screenPoint(for: marker.point, in: size))
             }
@@ -177,6 +188,7 @@ struct WorldMapHome: View {
                     .position(x: point.x + (index == 0 ? 92 : -92), y: point.y + 40)
             }
             companion(at: point)
+            WorldCompanionExtras(store: store, point: point, date: Date())
         }
     }
 
@@ -229,9 +241,15 @@ struct WorldMapHome: View {
                     WorldQuickStartCardView(card: card, onChoose: choose, onClose: closeCard)
                         .transition(.opacity)
                 }
-                if let glyph = WorldQuickStart.glyph(for: buttonContext) {
-                    WorldQuickStartButton(glyph: glyph, spokenStatus: WorldQuickStartCopy.spokenStatus(WorldQuickStart.card(for: buttonContext)),
-                                          action: toggleCard)
+                HStack(alignment: .bottom, spacing: 10) {
+                    // Round 6 (`ref-tag-home`): beside the blue button at a spot Fernlet refused.
+                    if cardContext == nil, let spot = store.worldRefusedSpot(near: store.worldLocation.latest) {
+                        WorldTagPlaceButton { placeSheet = .remember(start: spot, kind: .place) }
+                    }
+                    if let glyph = WorldQuickStart.glyph(for: buttonContext) {
+                        WorldQuickStartButton(glyph: glyph, spokenStatus: WorldQuickStartCopy.spokenStatus(WorldQuickStart.card(for: buttonContext)),
+                                              action: toggleCard)
+                    }
                 }
             }
             .padding(.trailing, 12)
@@ -292,14 +310,15 @@ struct WorldMapHome: View {
         facts.isOffline = isOffline
         let now = Date()
         facts.isNight = phase(at: now) == .night || WorldMapCompanion.isPastBedtime(store: store, at: now)
+        facts.homeGreeting = homeGreeting
         return WorldMapLine.line(facts)
     }
 
     /// What the ground draws: the lifted fog, and the walk's line while it records.
     private var ground: WorldGround {
         let trace = isWalking ? store.worldWalk.points.map(\.point) : []
-        return WorldGround(lifted: store.worldFog.visibleCells, trails: isWalking && guideLine.count >= 2 ? [guideLine] : [],
-                           traces: trace.count >= 2 ? [trace] : [])
+        return WorldGround(lifted: store.worldFog.visibleCells, uncovered: uncovered,
+                           trails: isWalking && guideLine.count >= 2 ? [guideLine] : [], traces: trace.count >= 2 ? [trace] : [])
     }
 
     /// Whether a walk is recording.
@@ -363,6 +382,8 @@ struct WorldMapHome: View {
     private func staged(_ context: WorldQuickStartContext) -> WorldQuickStartContext {
         var context = context
         context.savedLine = savedLineHere?.summary
+        context.eatingPlace = store.worldEatingOut(near: store.worldLocation.latest)
+        if testScenes.contains("restaurant"), !context.isDecoy { context.eatingPlace = WorldPlacesTestScenes.restaurant }
         if testScenes.contains("solo") { context.soloCameraAvailable = true }
         if testScenes.contains("run") { context.savedLine = WorldQuickStartContext.SavedLine(metres: 3_200, walks: 8, kind: .run) }
         if testScenes.contains("friend"), context.canMeetFriends { context.nearbyFriends = nearbyFriends.map(\.firstName) }
@@ -394,10 +415,25 @@ struct WorldMapHome: View {
         openCard(spaceID: hereSpaceID)
     }
 
-    /// Opens the card for `spaceID` (where the person stands, or a tapped marker's space).
-    private func openCard(spaceID: UUID?) {
+    /// Opens the card for `spaceID` (where the person stands, or a tapped marker's space), or for the
+    /// place to eat `eatingID` whose icon was tapped.
+    private func openCard(spaceID: UUID?, eatingID: UUID? = nil) {
         readSavedLine()
-        cardContext = staged(store.worldQuickStartContext(spaceID: spaceID, includingPlans: true))
+        var context = staged(store.worldQuickStartContext(spaceID: spaceID, includingPlans: true))
+        if let eatingID { context.eatingPlace = store.worldEatingOut(id: eatingID) }
+        cardContext = context
+    }
+
+    /// A kept place's icon (`ref-places-map`): the photos taken there when it holds any, else its card.
+    private func open(_ marker: WorldMapMarker) {
+        if let photos = marker.photos {
+            openPhotoPlace = photos
+            return
+        }
+        switch marker.kind {
+        case .space: openCard(spaceID: marker.id)
+        case .eatingPlace: openCard(spaceID: nil, eatingID: marker.id)
+        }
     }
 
     /// Reads the saved walk that starts where the person stands now (a precise reading only; none while
@@ -415,8 +451,15 @@ struct WorldMapHome: View {
     private func choose(_ option: WorldQuickStartOption) {
         let spaceID = cardContext?.space?.id
         let placeName = cardContext?.space?.name
+        let eatingID = cardContext?.eatingPlace?.id
         closeCard()
         switch option {
+        case .logUsual:
+            // The usual, logged again in one tap; it reaches the toast like any meal log.
+            guard let eatingID, let usual = store.worldUsualMeal(at: eatingID) else { return }
+            onMealsLogged([store.copyMeal(usual, mealType: store.worldUsualMealType(for: usual))])
+        case .findMenu:
+            menuSearch = eatingID.flatMap(store.worldMenuSearchSeed(at:)).map { WorldMenuSearch(seed: $0) }
         case .todaysPlan:
             if let spaceID { guidedSession = store.startTodaysPlan(at: spaceID) }
         case .suggestWorkout:
@@ -504,19 +547,35 @@ extension WorldMapHome {
             location.stopForeground()
             store.worldFog.flush()
             if !isFrontmost { cardContext = nil }
+            homeGreeting = nil
             return
         }
         store.worldFog.load()
-        markers = store.worldSpaceMarkers(near: location.latest)
-        photoPlaces = store.worldPhotoMarkers(near: location.latest)
+        readPlaces()
         readSavedLine()
         location.startForeground()
         follow(location.latest)
     }
 
+    /// Reads the kept places as the map comes to the front (round 6): the meals just logged at a place to
+    /// eat, the homes and hotel, every kept place's icon with its photos and the photos elsewhere, the
+    /// circles drawn clear round them, and Sprout's greeting when one waits.
+    private func readPlaces() {
+        let latest = store.worldLocation.latest
+        store.noteWorldMealsEatenOut()
+        store.reloadWorldHomes()
+        let placed = store.worldPlaceMarkers(near: latest)
+        markers = placed.markers
+        photoPlaces = placed.loosePhotos
+        uncovered = store.worldUncoveredCells(markers: placed.markers)
+        if let greeting = store.takeWorldHomeGreeting() { homeGreeting = greeting }
+        Task { await store.worldPlaces.resolveEatingNames() }
+    }
+
     /// Moves the camera to a new reading while it follows the person. With approximate location the
     /// camera stands back to show the area, never a street.
     private func follow(_ fix: WorldFix?) {
+        if homeGreeting == nil, isFrontmost, let greeting = store.takeWorldHomeGreeting() { homeGreeting = greeting }
         guard let fix, camera.follows else { return }
         let distance = presence == .approximate ? max(camera.distance, Self.areaDistance) : camera.distance
         if !hasPlace || distance != camera.distance {
@@ -624,6 +683,22 @@ extension WorldMapHome {
         if scenes.contains("walk") { startWalk() }
         if scenes.contains("qs") { openCard(spaceID: hereSpaceID) }
         if scenes.contains("photo") { await checkTestPhotoPlace() }
+        applyPlacesTestScenes(scenes)
+    }
+
+    /// DEBUG round 6 scenes (``WorldPlacesTestScenes``): Sprout's welcome-home line, and the Remember this
+    /// place / Put on the map sheet open where the person stands. Display only.
+    private func applyPlacesTestScenes(_ scenes: Set<String>) {
+        if scenes.contains("greeting") {
+            let hotel = scenes.contains("hotel")
+            homeGreeting = WorldHomeMapCopy.greeting(HomeGreeting(kind: hotel ? .hotelAgain : .cameHome, placeID: UUID()),
+                                                     place: HomePlace(kind: hotel ? .hotel : .home, label: hotel ? "Ace" : "Home",
+                                                                      point: WorldPlacesTestScenes.laurelhurst))
+        }
+        let here = store.worldLocation.latest?.point ?? WorldPlacesTestScenes.laurelhurst
+        if scenes.contains("tagSheet") { placeSheet = .remember(start: here, kind: .place) }
+        if scenes.contains("homeSheet") { placeSheet = .remember(start: here, kind: .home) }
+        if scenes.contains("photoSheet") { placeSheet = .photo(id: UUID(), start: here, takenAt: Date()) }
     }
 
     /// DEBUG `photo`: the stand-in photos sit on the map only where a photo taken here would keep its

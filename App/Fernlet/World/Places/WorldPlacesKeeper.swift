@@ -1,5 +1,6 @@
 import FernletFoundation
 import Foundation
+import Observation
 import WorldMapStore
 
 /// Notes the places the person stops at, for "Where you've been" in Private (World build step 5c;
@@ -18,8 +19,20 @@ import WorldMapStore
 ///   learned only once the person opens the map there.
 /// - **Walks and runs** recorded on the map join the timeline with their length.
 ///
+/// **Round 6** (owner-approved 2026-10-25):
+/// - **A refused spot** (`ref-tag-home`): the last lookup refused where the person stands; held in memory
+///   only (``refusedSpot``), so Home can offer "Remember this place" until the person moves on. Nothing is
+///   kept unless they add it (``WorldPlacesKeeper/remember(_:at:)``).
+/// - **Homes and hotels** (`ref-home-*`): every reading and visit is checked against them on the phone
+///   (``observeHomes(_:at:departed:)``); leaving and getting back join the timeline, getting home after an
+///   hour away leaves Sprout a greeting, and no visit is ever noted at a home or a hotel.
+/// - **Places to eat** ("Remember places I eat out", `b1-qs-food`): a visit the device decides is at a
+///   food-and-drink place (by Apple's reference) is held in memory (``eatingVisit``), and meals logged
+///   during it are noted there (``noteMeals(_:now:)``).
+///
 /// With "Remember places I stop at" off (Settings › Home map, ``WorldMapPreferences/remembersPlaces(in:)``)
-/// nothing new is noted and no lookup runs; what is already kept stays until it is deleted.
+/// nothing new is noted in Where you've been; with "Remember places I eat out" off no meal is noted. A lookup
+/// runs only while one of them is on. What is already kept stays until it is deleted.
 ///
 /// Captures wait in the device side (``PlaceDeviceState``, sealed under the map vault's buffer key) until
 /// Private folds them under the hub key. Visits to one place within three hours count once.
@@ -27,6 +40,7 @@ import WorldMapStore
 /// **Duress.** In a decoy nothing is read or written (``setDecoy(_:)``); a lookup that returns after a decoy
 /// opened is dropped. The wipes remove the files with the vault.
 @MainActor
+@Observable
 final class WorldPlacesKeeper {
     /// The worst accuracy a reading may have and still place a visit, in metres.
     static let maxAccuracy = 50.0
@@ -36,39 +50,66 @@ final class WorldPlacesKeeper {
     static let lookupSpacing: TimeInterval = 30 * 60
     /// The worst accuracy a background visit may have and still match a known place, in metres.
     static let maxVisitAccuracy = 200.0
+    /// The worst accuracy a reading may have and still say whether the person is home, in metres.
+    static let maxHomeAccuracy = 100.0
+    /// How far from a refused spot the person moves before "Remember this place" goes, in metres.
+    static let refusedSpotReach = 50.0
+    /// How long a refused spot is offered while the person stays.
+    static let refusedSpotLife: TimeInterval = 2 * 60 * 60
 
     /// The sealed log and device side.
-    let store: PlaceLogStore
-    private let lookup: any WorldPlaceLooking
+    @ObservationIgnored let store: PlaceLogStore
+    @ObservationIgnored let lookup: any WorldPlaceLooking
     /// Whether "Remember places I stop at" is on now.
-    private let remembersPlaces: () -> Bool
-    private var lastLookup: (point: GeoPoint, at: Date)?
-    private var isLookingUp = false
+    @ObservationIgnored let remembersPlaces: () -> Bool
+    /// Whether "Remember places I eat out" is on now.
+    @ObservationIgnored let remembersEatingOut: () -> Bool
+    @ObservationIgnored private var lastLookup: (point: GeoPoint, at: Date)?
+    @ObservationIgnored private var isLookingUp = false
+    /// Whether each place's reference read as food and drink when asked this session (in memory only).
+    @ObservationIgnored var eatsAt: [String: Bool] = [:]
     /// Whether a decoy session is showing.
     private(set) var isDecoy = false
+    /// Where the last lookup refused the spot the person stands at (`ref-tag-home`), and when; in memory only.
+    var refusedSpot: (point: GeoPoint, at: Date)?
+    /// The homes and hotel as last read or saved (the map draws them).
+    var homes: HomeBook = .empty
+    /// The places to eat as last read or saved (the map draws the favourites).
+    var eatingPlaces: [EatingPlace] = []
+    /// The place to eat the person is at now, while the map follows them (in memory only).
+    @ObservationIgnored var eatingVisit: WorldEatingVisit?
+    /// The favourite places to eat's names as Apple Maps gave them again by reference while the map was
+    /// open, by place id (in memory only; the MapKit terms).
+    var eatingNames: [UUID: String] = [:]
 
-    /// A keeper over `vault`, asking `lookup` about new places while `remembersPlaces` says so (by default,
-    /// the Home map switch on this iPhone).
+    /// A keeper over `vault`, asking `lookup` about new places while `remembersPlaces` or
+    /// `remembersEatingOut` says so (by default, the Home map switches on this iPhone).
     init(vault: WorldMapVault, lookup: any WorldPlaceLooking,
-         remembersPlaces: @escaping () -> Bool = { WorldMapPreferences.remembersPlaces() }) {
+         remembersPlaces: @escaping () -> Bool = { WorldMapPreferences.remembersPlaces() },
+         remembersEatingOut: @escaping () -> Bool = { WorldMapPreferences.remembersEatingOut() }) {
         store = PlaceLogStore(vault: vault)
         self.lookup = lookup
         self.remembersPlaces = remembersPlaces
+        self.remembersEatingOut = remembersEatingOut
     }
 
     /// Enters or leaves a decoy session: nothing is read or written while one shows, and no name is held.
     func setDecoy(_ on: Bool) {
         isDecoy = on
-        lastLookup = nil
-        lookup.forgetNames()
+        forget()
+        if !on { reloadDeviceSide() }
     }
 
-    /// A reading taken while the map is open and the app in front: a visit at a known place, or a lookup
-    /// when the rules allow one. Whether a visit was noted.
+    /// A reading taken while the map is open and the app in front: home or away, then a visit at a known
+    /// place, or a lookup when the rules allow one. Whether a visit was noted.
     @discardableResult
     func handleForeground(_ fix: WorldFix, now: Date = Date()) async -> Bool {
-        guard !isDecoy, remembersPlaces(), !isLookingUp, fix.isPrecise, fix.accuracy <= Self.maxAccuracy,
-              fix.point.isValid else { return false }
+        guard !isDecoy, fix.point.isValid else { return false }
+        if fix.isPrecise, fix.accuracy <= Self.maxHomeAccuracy { observeHomes(fix.point, at: now) }
+        followEatingVisit(fix.point, now: now)
+        if let spot = refusedSpot, spot.point.distance(to: fix.point) > Self.refusedSpotReach { refusedSpot = nil }
+        guard remembersPlaces() || remembersEatingOut(), !isLookingUp, fix.isPrecise, fix.accuracy <= Self.maxAccuracy,
+              homes.base(near: fix.point) == nil else { return false }
         if let noted = noteKnownVisit(at: fix.point, now: now) { return noted }
         guard lookupIsDue(at: fix.point, now: now) else { return false }
         isLookingUp = true
@@ -80,25 +121,34 @@ final class WorldPlacesKeeper {
         FernletAuditLog.log("worldMap.places.lookup", context: ["answered": nearby == nil ? "no" : "yes",
                                                                  "places": "\(nearby?.count ?? 0)",
                                                                  "verdict": Self.token(verdict)])
-        guard !isDecoy, remembersPlaces(), case .allowed(let placeID) = verdict else { return false }
-        return update { state in
-            if let known = state.knownPlace(withPlaceID: placeID) { return state.recordingVisit(to: known.id, at: now) }
-            guard state.knownPlace(near: fix.point) == nil else { return state }
-            return state.learning(PlaceRecord(placeID: placeID, point: fix.point), at: now)
+        guard !isDecoy else { return false }
+        refusedSpot = verdict == .refused && remembersPlaces() ? (fix.point, now) : nil
+        var noted = false
+        if remembersPlaces(), case .allowed(let placeID) = verdict {
+            noted = update { state in
+                if let known = state.knownPlace(withPlaceID: placeID) { return state.recordingVisit(to: known.id, at: now) }
+                guard state.knownPlace(near: fix.point) == nil else { return state }
+                return state.learning(PlaceRecord(placeID: placeID, point: fix.point), at: now)
+            }
         }
+        // After the visit is learned, so a place to eat shares its place's id.
+        startEatingVisit(nearby.flatMap(PlaceClassifier.eatingPlaceID), at: fix.point, now: now)
+        return noted
     }
 
-    /// A low-power visit from iOS: noted only at a place already known.
+    /// A low-power visit from iOS: home or away, then a visit noted only at a place already known.
     @discardableResult
     func handleVisit(_ visit: WorldVisit) -> Bool {
-        guard !isDecoy, remembersPlaces(), visit.accuracy <= Self.maxVisitAccuracy else { return false }
+        guard !isDecoy, visit.accuracy <= Self.maxVisitAccuracy else { return false }
+        if visit.accuracy <= Self.maxHomeAccuracy { observeHomes(visit.point, at: visit.arrived, departed: visit.departed) }
+        guard remembersPlaces(), homes.base(near: visit.point) == nil else { return false }
         return noteKnownVisit(at: visit.point, now: visit.arrived) ?? false
     }
 
     /// A walk or run recorded on the map joins the timeline (`at` is when it started).
     @discardableResult
     func recordOuting(_ kind: PlaceStop.Kind, at date: Date, metres: Double, workoutID: UUID?) -> Bool {
-        guard !isDecoy, remembersPlaces(), kind != .visit, metres.isFinite else { return false }
+        guard !isDecoy, remembersPlaces(), kind == .walk || kind == .run, metres.isFinite else { return false }
         return update { $0.appending(PlaceStop(kind: kind, at: date, metres: max(0, metres), workoutID: workoutID)) }
     }
 
@@ -112,10 +162,17 @@ final class WorldPlacesKeeper {
         }
     }
 
-    /// Forgets what is held in memory: the lookup spacing and every place name asked for again (the wipes,
-    /// Delete all of it).
+    /// Forgets what is held in memory: the lookup spacing, the refused spot, the visit to a place to eat,
+    /// the homes and places drawn, and every place name asked for again (the wipes, Delete all of it, a
+    /// decoy).
     func forget() {
         lastLookup = nil
+        refusedSpot = nil
+        eatingVisit = nil
+        eatsAt = [:]
+        homes = .empty
+        eatingPlaces = []
+        eatingNames = [:]
         lookup.forgetNames()
     }
 
@@ -127,7 +184,8 @@ final class WorldPlacesKeeper {
     }
 
     /// A visit at the known place within 75 m of `point`, if there is one: true when it was noted, false
-    /// when it counts as the visit already noted, nil when no known place is that near (or none can be read).
+    /// when it counts as the visit already noted (or "Remember places I stop at" is off), nil when no known
+    /// place is that near (or none can be read).
     private func noteKnownVisit(at point: GeoPoint, now: Date) -> Bool? {
         let state: PlaceDeviceState
         do {
@@ -137,6 +195,8 @@ final class WorldPlacesKeeper {
         }
         guard let place = state.knownPlace(near: point) else { return nil }
         lastLookup = (point, now)
+        knownPlaceVisited(place, at: point, now: now)
+        guard remembersPlaces() else { return false }
         let next = state.recordingVisit(to: place.id, at: now)
         guard next != state else { return false }
         return save(next)
@@ -149,12 +209,16 @@ final class WorldPlacesKeeper {
     }
 
     /// Reads the device side, applies `change` and saves it when it changed. Whether it was saved.
-    private func update(_ change: (PlaceDeviceState) -> PlaceDeviceState) -> Bool {
+    @discardableResult
+    func update(_ change: (PlaceDeviceState) -> PlaceDeviceState) -> Bool {
         do {
             let state = try store.deviceState()
             let next = change(state)
             guard next != state else { return false }
-            return save(next)
+            guard save(next) else { return false }
+            homes = next.homeBook
+            eatingPlaces = next.eatingPlaces
+            return true
         } catch {
             FernletAuditLog.log("worldMap.places.captureDeferred")
             return false
@@ -169,6 +233,18 @@ final class WorldPlacesKeeper {
         } catch {
             FernletAuditLog.log("worldMap.places.captureDeferred")
             return false
+        }
+    }
+
+    /// Reads the homes and places to eat again (the map coming to the front); none in a decoy.
+    func reloadDeviceSide() {
+        guard !isDecoy else { return }
+        do {
+            let state = try store.deviceState()
+            homes = state.homeBook
+            eatingPlaces = state.eatingPlaces
+        } catch {
+            FernletAuditLog.log("worldMap.places.readDeferred")
         }
     }
 }

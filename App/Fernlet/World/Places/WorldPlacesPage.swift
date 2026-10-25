@@ -31,6 +31,8 @@ struct WorldPlacesPage: View {
     @State private var renaming: PlaceRecord?
     @State private var newName = ""
     @State private var confirmsDeleteAll = false
+    /// The Remember this place sheet, opened from a place to make it a home or a hotel (round 6).
+    @State private var homeSheet: WorldPlaceSheetMode?
     @Environment(FernletLockService.self) private var lockService
 
     var body: some View {
@@ -43,7 +45,9 @@ struct WorldPlacesPage: View {
                         .accessibilityAddTraits(.isHeader)
                         .fixedSize(horizontal: false, vertical: true)
                     latestDay
-                    WorldReturnedPlacesCard(places: log?.returnedTo ?? [], names: names) { place in
+                    // Homes and hotels are not places you return to (round 6, `ref-home-where`).
+                    WorldReturnedPlacesCard(places: (log?.returnedTo ?? []).filter { !store.worldHomes.isHomeOrHotel($0.point) },
+                                            names: names) { place in
                         newName = place.label ?? names[place.id]?.name ?? ""
                         renaming = place
                     }
@@ -63,7 +67,15 @@ struct WorldPlacesPage: View {
         .alert(Text(WorldPlacesCopy.renameTitle), isPresented: isRenaming, presenting: renaming) { place in
             TextField("Place name", text: $newName, prompt: .fieldPrompt("Place name"))
             Button("Save") { rename(place) }
+            // Round 6 (`ref-home-set`): a place you return to can become a home or your hotel.
+            Button { homeSheet = .remember(start: place.point, kind: .home) } label: { Text(WorldHomeCopy.makeHome) }
             Button("Cancel", role: .cancel) {}
+        }
+        .sheet(item: $homeSheet) { mode in
+            WorldRememberPlaceSheet(store: store, mode: mode) {
+                homeSheet = nil
+                reload()
+            }
         }
         .alert(Text(WorldPlacesCopy.deleteAllTitle), isPresented: $confirmsDeleteAll) {
             Button("Delete", role: .destructive) { deleteAll() }
@@ -78,7 +90,8 @@ struct WorldPlacesPage: View {
     @ViewBuilder
     private var latestDay: some View {
         if let log, let day = log.days().first {
-            WorldPlacesDayCard(day: day, stops: log.stops(on: day), places: log.places, names: names, store: store, showsNote: true)
+            WorldPlacesDayCard(day: day, stops: log.stops(on: day), places: log.places, names: names, store: store, showsNote: true,
+                               homes: store.worldHomes, outAndAbout: log.outAndAbout(on: day))
         } else {
             WorldPlacesEmptyCard()
         }
@@ -132,6 +145,8 @@ extension WorldPlacesPage {
     private func reload() {
         log = store.worldPlaceLog()
         if log == nil { names = [:] }
+        // The homes and hotel name the timeline's leaves and returns (round 6).
+        store.reloadWorldHomes()
     }
 
     /// Asks Apple Maps again, by reference, for the name of each place the person hasn't named (at most
@@ -180,7 +195,7 @@ struct WorldPlacesDaysPage: View {
             LazyVStack(alignment: .leading, spacing: 16) {
                 ForEach(log.days(), id: \.self) { day in
                     WorldPlacesDayCard(day: day, stops: log.stops(on: day), places: log.places, names: names, store: store,
-                                       showsNote: false)
+                                       showsNote: false, homes: store.worldHomes, outAndAbout: log.outAndAbout(on: day))
                 }
             }
             .padding(16)

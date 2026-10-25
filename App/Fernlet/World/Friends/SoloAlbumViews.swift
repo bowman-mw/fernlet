@@ -204,6 +204,7 @@ struct SoloPhotoFeedView: View {
             // Deleting the last photo empties the feed; close instead of a blank screen.
             if isEmpty { onDismiss() }
         }
+        .modifier(SoloPutOnMapPresenter(album: album))
     }
 }
 
@@ -285,6 +286,8 @@ struct SoloPhotoPostView: View {
                     actions
                 }
             }
+            // Round 6 (`ref-tag-photo`): a photo that kept no place says so and can be put on the map.
+            SoloNoPlaceRow(album: album, photo: selectedPhoto)
             HStack(alignment: .center, spacing: 6) {
                 WorldSpriteView(sprite: WorldSprites.lock, scale: 2)
                     .accessibilityHidden(true)

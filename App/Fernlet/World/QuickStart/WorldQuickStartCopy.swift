@@ -43,6 +43,8 @@ nonisolated enum WorldQuickStartCopy {
         case .inPerson:
             return String(localized: "worldQuickStart.heading.inPerson", defaultValue: "Together, in person",
                           comment: "World Home quick-start card heading when friends nearby is the only choice")
+        case .eatingPlace(let name):
+            return name
         }
     }
 
@@ -84,6 +86,9 @@ nonisolated enum WorldQuickStartCopy {
         case .ranFromHere(let times):
             return String(localized: "worldQuickStart.note.ranFromHere", defaultValue: "You've run this route \(times) times",
                           comment: "World Home quick-start card where a saved run route starts: how many recent runs started here. Plural on the number")
+        case .loggedMealsHere(let times):
+            return String(localized: "worldQuickStart.note.loggedMealsHere", defaultValue: "You've logged meals here \(times) times",
+                          comment: "World Home quick-start card at a favourite place to eat: how many meals were logged there. Plural on the number")
         }
     }
 
@@ -122,6 +127,12 @@ nonisolated enum WorldQuickStartCopy {
         case .friendsNearby:
             return String(localized: "worldQuickStart.friendsNearby", defaultValue: "Friends nearby",
                           comment: "World Home quick start: opens Friends nearby, to start a session or make a friend in person")
+        case .logUsual(let meal, _):
+            return String(localized: "worldQuickStart.logUsual", defaultValue: "Log your usual: \(meal)",
+                          comment: "World Home quick start at a favourite place to eat: logs the meal logged there most often; its name, e.g. 'Log your usual: tonkotsu ramen'")
+        case .findMenu(let place):
+            return String(localized: "worldQuickStart.findMenu", defaultValue: "Find \(place)'s menu",
+                          comment: "World Home quick start at a favourite place to eat: searches the web for its menu by the place's name (Spanish: Buscar el menú de …)")
         }
     }
 
@@ -165,6 +176,12 @@ nonisolated enum WorldQuickStartCopy {
         case .friendsNearby:
             return String(localized: "worldQuickStart.friendsNearby.detail", defaultValue: "Start a session or make a friend, in person",
                           comment: "World Home quick start: under 'Friends nearby'")
+        case .logUsual(_, let meals):
+            return String(localized: "worldQuickStart.logUsual.detail", defaultValue: "From your \(meals) meals here",
+                          comment: "World Home quick start: under 'Log your usual'; how many meals were logged at this place. Plural on the number")
+        case .findMenu:
+            return String(localized: "worldQuickStart.findMenu.detail", defaultValue: "Searches the web by name. Your location isn't sent.",
+                          comment: "World Home quick start: under 'Find …'s menu'")
         }
     }
 }

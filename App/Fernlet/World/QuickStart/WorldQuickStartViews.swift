@@ -74,6 +74,7 @@ struct WorldQuickStartButton: View {
         case .trail: WorldSprites.tree
         case .run: WorldSprites.runner
         case .friends: WorldSprites.pair
+        case .eat: WorldSprites.bowl
         }
     }
 }
@@ -182,6 +183,7 @@ struct WorldQuickStartOptionRow: View {
         case .startSession: WorldSprites.pair
         case .startActivity: FriendsSprites.flag
         case .friendsNearby: WorldSprites.face
+        case .logUsual, .findMenu: WorldSprites.bowl
         }
     }
 
@@ -200,6 +202,8 @@ struct WorldQuickStartOptionRow: View {
         case .startSession: "startSession"
         case .startActivity: "startActivity"
         case .friendsNearby: "friendsNearby"
+        case .logUsual: "logUsual"
+        case .findMenu: "findMenu"
         }
     }
 }

@@ -89,11 +89,27 @@ public nonisolated enum MercatorHexGrid {
     /// Every cell whose centre lies within `metres` of `point`, always including the cell under it.
     /// The reach is capped at 12 rings (about 400 m at 45°), so one fix can never lift a district.
     public static func cells(around point: GeoPoint, within metres: Double) -> [HexCell] {
+        cells(around: point, within: metres, maxRings: 11)
+    }
+
+    /// The most rings ``disc(around:radius:)`` reaches: a home's 1 km at 60° latitude.
+    public static let maxDiscRings = 63
+
+    /// Every cell whose centre lies within `metres` of `point`, for the circles Fernlet draws uncovered
+    /// around a home, a hotel or a place the person keeps (World build round 6: 1 km and about 300 m). Never
+    /// written into the fog: drawn, so removing the place fogs its circle again. Capped at
+    /// ``maxDiscRings`` rings.
+    public static func disc(around point: GeoPoint, radius metres: Double) -> [HexCell] {
+        cells(around: point, within: metres, maxRings: maxDiscRings)
+    }
+
+    /// The cells within `metres` of `point`, reaching at most `maxRings` rings.
+    private static func cells(around point: GeoPoint, within metres: Double, maxRings: Int) -> [HexCell] {
         let middle = cell(containing: point)
         guard point.isValid, metres.isFinite, metres > 0 else { return [middle] }
         let reachUnits = metres * WebMercator.unitsPerMetre(at: point.latitude)
         // Clamp in Double before converting, so a huge radius can never overflow `Int`.
-        let reach = Int(min((reachUnits / (radius * 1.5)).rounded(.up), 11)) + 1
+        let reach = Int(min((reachUnits / (radius * 1.5)).rounded(.up), Double(maxRings))) + 1
         let origin = WebMercator.unit(point)
         var found = [middle]
         for dq in -reach...reach {

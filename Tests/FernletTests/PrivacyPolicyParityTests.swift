@@ -112,6 +112,12 @@ struct PrivacyPolicyParityTests {
     /// - `anywhere else, it keeps no place` — a solo photo keeps its place only at the everyday places;
     /// - `keeps only Apple's reference to it, never its details` — the Apple Maps lookups and what a place
     ///   you return to keeps of Apple's answer (its name is asked for again when you look).
+    ///
+    /// The four markers added in World build round 6 (both additions owner-approved word for word) pin:
+    /// - `unless you add one yourself` — a place Fernlet won't name is kept only when the person adds it;
+    /// - `You can put a photo on the map yourself.` — a solo photo with no place, placed by hand;
+    /// - `If you mark a place as your home (up to two) or as a hotel you stay at` — homes and hotels are kept;
+    /// - `it stays until you remove it in Settings › Home map` — and where they go away.
     private static let substanceMarkers = [
         "iOS may refuse or end it at any time",
         "never retroactively repurposed",
@@ -148,7 +154,11 @@ struct PrivacyPolicyParityTests {
         "therapists are never named or kept",
         "so the photo can sit on your map",
         "anywhere else, it keeps no place",
-        "keeps only Apple's reference to it, never its details"
+        "keeps only Apple's reference to it, never its details",
+        "unless you add one yourself",
+        "You can put a photo on the map yourself.",
+        "If you mark a place as your home (up to two) or as a hotel you stay at",
+        "it stays until you remove it in Settings › Home map"
     ]
 
     /// Loads each copy's text, keyed by its repo-relative path.

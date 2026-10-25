@@ -25,6 +25,9 @@ nonisolated struct WorldVisit: Equatable, Sendable {
     let accuracy: Double
     /// When the person arrived.
     let arrived: Date
+    /// When the person left, once iOS knows (a visit is delivered again on departure); nil until then.
+    /// Read only against the person's homes and hotel (round 6, `ref-home-where`: "you left").
+    var departed: Date? = nil
 }
 
 /// The person's location answer, as the World map reads it.
@@ -242,7 +245,8 @@ extension WorldLocationSource: CLLocationManagerDelegate {
         // iOS marks an unknown arrival with the distant past; such a visit is a departure seen alone.
         let arrived = visit.arrivalDate == .distantPast ? visit.departureDate : visit.arrivalDate
         let fix = WorldFix(point: point, accuracy: visit.horizontalAccuracy, at: arrived, isPrecise: precise)
-        let stop = WorldVisit(point: point, accuracy: visit.horizontalAccuracy, arrived: arrived)
+        let departed = visit.departureDate == .distantFuture ? nil : visit.departureDate
+        let stop = WorldVisit(point: point, accuracy: visit.horizontalAccuracy, arrived: arrived, departed: departed)
         Task { @MainActor in
             self.deliver(fix)
             self.deliverVisit(stop)
