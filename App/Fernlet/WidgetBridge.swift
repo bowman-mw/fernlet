@@ -10,6 +10,10 @@
 //        appends; drained by `FernletStore.processPendingWidgetActions()` at the same two
 //        ContentView points as the shared-recipe import queue.
 //
+// The map widget's picture (`FernletWidgets/WidgetMap.plist`, round 6b) is a third file with its own
+// writer and rules — complete protection, never in a backup, deleted with the map history and in a
+// decoy — in World/Widget/WorldWidgetMapFile.swift. This snapshot itself still never carries a place.
+//
 // The widget-extension twins of these types live in FernletWidgets/WidgetSharedModels.swift as a
 // DELIBERATE standalone duplication (S3 wall: the widget must not link the FernletKit umbrella,
 // which carries the sealed Private* stores). Keep both sides byte-identical: iso8601 dates,
@@ -138,6 +142,10 @@ struct WidgetSnapshot: Codable, Equatable {
     /// optional; empty while a decoy is open. The book itself stays device-local (`SillyStampStore`):
     /// the app-group file is on this device too, and "Delete everything" deletes it.
     var stamps: [StampMoment]? = nil
+    /// The day's protein, carbs and fat targets in grams, for the map widget's bars (`b4-new-map`, round
+    /// 6b), as Home's status plate draws `macroSummary` against them. ADDITIVE (2026-10-25) and optional:
+    /// without them the bars read empty, never full.
+    var macroTargets: MacroSummary? = nil
 }
 
 // MARK: - Content vs. metadata
@@ -194,6 +202,7 @@ extension WidgetSnapshot {
     /// | `companionLook` | content | the body, colour and topper every family draws |
     /// | `goldHeartEnds` | content | the gold hearts after the six; a new heart is a real change |
     /// | `stamps` | content | the stamp widget's book; a new stamp is a real change |
+    /// | `macroTargets` | content | the map widget's protein, carbs and fat bars are drawn against them |
     /// | `computedAt` | **metadata** | stamped at construction, rendered by nothing |
     ///
     /// `WidgetSnapshotContentEqualityTests` pins that table — the field COUNT through `Mirror`, the
@@ -220,6 +229,7 @@ extension WidgetSnapshot {
             && companionLook == other.companionLook
             && goldHeartEnds == other.goldHeartEnds
             && stamps == other.stamps
+            && macroTargets == other.macroTargets
     }
 }
 
@@ -552,6 +562,8 @@ final class WidgetSnapshotMirror {
     static let waterControlKind = "FernletWaterControl"
     /// The stamp widget's kind — twin of `FernletWidgetKind.stamp`.
     static let stampWidgetKind = "FernletStamp"
+    /// The map widget's kind — twin of `FernletWidgetKind.map` (`WorldWidgetMap.kind`).
+    static let mapWidgetKind = WorldWidgetMap.kind
 
     private let fileStore: WidgetSnapshotFileStore
     private let reloadTimelines: () -> Void
@@ -561,13 +573,15 @@ final class WidgetSnapshotMirror {
         self.reloadTimelines = reloadTimelines ?? { Self.reloadEverySurface() }
     }
 
-    /// Reloads every surface that renders the snapshot: the three widgets and the Control Center control.
+    /// Reloads every surface that renders the snapshot: the four widgets and the Control Center control.
     /// One function so a new surface is added in one place, and the Siri water intent reloads the same
-    /// set the mirror does.
+    /// set the mirror does. The map widget reloads only while the phone is unlocked (`WorldWidgetMap.reload`):
+    /// its picture is locked away with the phone, so a reload then would draw it without its map.
     static func reloadEverySurface() {
         WidgetCenter.shared.reloadTimelines(ofKind: widgetKind)
         WidgetCenter.shared.reloadTimelines(ofKind: waterWidgetKind)
         WidgetCenter.shared.reloadTimelines(ofKind: stampWidgetKind)
+        WorldWidgetMap.reload()
         ControlCenter.shared.reloadControls(ofKind: waterControlKind)
     }
 

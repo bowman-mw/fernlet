@@ -122,6 +122,8 @@ struct WorldMapHome: View {
         .task(id: isHintDue) { if isHintDue { isHintShowing = true } }
         .task(id: isFrontmost) { await refreshWeather() }
         .task(id: tiles.state) { await watchLoading() }
+        // The map widget's picture (round 6b, Q36): only while this map is in front and following the person.
+        .worldWidgetMap(store: store, isActive: isFrontmost && scenePhase == .active && hasPlace && camera.follows && !isOffline)
         .onAppear { updateLocation() }
         .onDisappear { store.worldLocation.stopForeground() }
         .onChange(of: isFrontmost) { updateLocation() }

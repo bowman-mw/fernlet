@@ -600,6 +600,8 @@ struct WidgetCompanionSprite: View {
     var ink: WidgetCompanionInk = .color
     /// Draws the pixel "z" at the top right (asleep).
     var showsZee = false
+    /// A feeling's motif beside the head, top right (owner's Q37; never with the "z").
+    var motif: WidgetFeelingMotif? = nil
     @Environment(\.redactionReasons) private var redaction
 
     /// The sprite's size at `scale`: the whole item frame, so a drawn piece never clips.
@@ -624,9 +626,19 @@ struct WidgetCompanionSprite: View {
                 // Where it sat beside the 20 × 22 body before the frame grew round it.
                 WidgetSpriteView(sprite: WidgetSprites.zee, scale: scale, paint: zeePaint)
                     .offset(x: scale * 2.5, y: scale)
+            } else if let motif, !hidden {
+                // Beside the head, clear of the sprout and the flower.
+                WidgetSpriteView(sprite: motif.sprite, scale: scale, paint: motifPaint)
+                    .offset(x: scale * 3, y: 0)
             }
         }
         .accessibilityHidden(true)
+    }
+
+    /// A motif as drawn, or in one colour with its bubble's paper dropped out.
+    private var motifPaint: WidgetSpritePaint {
+        if case .silhouette(let hex) = ink { return .clearingPaper(hex) }
+        return .plain
     }
 
     private var zeePaint: WidgetSpritePaint {

@@ -44,6 +44,11 @@ struct WaterPlusOneIntent: AppIntent {
         // Every surface that shows the count: both widgets and the Control Center control.
         WidgetCenter.shared.reloadTimelines(ofKind: FernletWidgetKind.companion)
         WidgetCenter.shared.reloadTimelines(ofKind: FernletWidgetKind.water)
+        // The map widget's drops too — but not from the Lock Screen while its picture is locked away with
+        // the phone: it keeps its last drawing rather than redrawing without its map.
+        if WidgetMapPictureStore().mayReload {
+            WidgetCenter.shared.reloadTimelines(ofKind: FernletWidgetKind.map)
+        }
         ControlCenter.shared.reloadControls(ofKind: FernletWidgetKind.waterControl)
         return .result()
     }

@@ -7,7 +7,9 @@
 // friend's gold hearts after them; the medium card speaks in the pixel speech bubble; the Lock Screen
 // has the face alone and a rectangle with the hearts and water; water has its own widget and Control
 // Center control (WaterWidget.swift); the stamp widget shows a stamp from the book (StampWidget.swift).
-// Companion mood, look, water, gold hearts and stamps only — never anything sensitive, never a place.
+// Companion mood, look, water, gold hearts and stamps only — never anything sensitive, never a place —
+// except the large map widget (MapWidget.swift, owner's Q36, round 6b), which draws the picture of the
+// map around you the app hands it, with your marked places and saved trails: never visits or history.
 
 import SwiftUI
 import WidgetKit
@@ -26,6 +28,8 @@ enum FernletWidgetKind {
     static let waterControl = "FernletWaterControl"
     /// The stamp widget (`FernletStampWidget`): a stamp from the book, small and medium.
     static let stamp = "FernletStamp"
+    /// The map widget (`FernletMapWidget`): Sprout on a picture of the map around you, large.
+    static let map = "FernletMap"
 }
 
 /// The deep links a widget tap opens. The app's `FernletWidgetLinkRouter` reads the same
@@ -51,6 +55,7 @@ struct FernletWidgetsBundle: WidgetBundle {
         FernletWaterWidget()
         FernletWaterControl()
         FernletStampWidget()
+        FernletMapWidget()
         WorkoutLiveActivity()
         CookingLiveActivity()
     }
@@ -137,10 +142,33 @@ struct FernletCompanionEntry: TimelineEntry {
     }
 
     /// The pixel companion for this entry: the person's look in the day's state, asleep or awake. The
-    /// state face only — the drawn face never shows a passing feeling but asleep, as on Home's map — so
-    /// the Lock Screen's state-only rule holds for every family.
+    /// state face only — no passing feeling but asleep, as on Home's map — which is what the Lock Screen
+    /// draws (``FernletWidgetEmotionPolicy``). The Home Screen families draw ``homeScreenGrid(increasedContrast:)``.
     var companionGrid: WidgetCompanionGrid {
         companionGrid(increasedContrast: false)
+    }
+
+    /// The feeling the Home Screen families draw on the face (owner's Q37): happy, sad, hungry or thirsty
+    /// at this entry's moment, else nil. Never drawn on the Lock Screen.
+    var homeScreenFeeling: WidgetCompanionEmotion? {
+        WidgetFeelingFace.face(for: currentCompanionEmotion)
+    }
+
+    /// The feeling's motif beside the head on the Home Screen (the twinkle, the apple, the drop), if any.
+    var homeScreenMotif: WidgetFeelingMotif? {
+        WidgetFeelingMotif(feeling: homeScreenFeeling)
+    }
+
+    /// The pixel companion the Home Screen families draw: ``companionGrid(increasedContrast:)`` wearing
+    /// ``homeScreenFeeling``'s face in place of the state's (owner's Q37).
+    func homeScreenGrid(increasedContrast: Bool) -> WidgetCompanionGrid {
+        var grid = companionGrid(increasedContrast: increasedContrast)
+        guard let feeling = homeScreenFeeling else { return grid }
+        let state = currentDayCompanionState
+        WidgetFeelingFace.apply(feeling, to: &grid, state: state ?? .thriving,
+                                look: WidgetPixelLook(look: look, state: state, asleep: hidesTheDay),
+                                pose: WidgetCompanionPose(asleep: hidesTheDay), increasedContrast: increasedContrast)
+        return grid
     }
 
     /// The pixel companion for this entry, its outline darker with Increase Contrast (W-03), as the
@@ -200,34 +228,27 @@ struct FernletCompanionProvider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<FernletCompanionEntry>) -> Void) {
         let snapshot = WidgetSnapshotStore().read()
         let now = Date()
-        var entries = [FernletCompanionEntry(date: now, snapshot: snapshot)]
+        let entries = Self.entryDates(for: snapshot, now: now).map { FernletCompanionEntry(date: $0, snapshot: snapshot) }
+        let nextHour = Calendar.current.date(byAdding: .hour, value: 1, to: now) ?? now.addingTimeInterval(3600)
+        completion(Timeline(entries: entries, policy: .after(nextHour)))
+    }
 
-        // One entry at each upcoming emotion transition (bedtime, falling asleep, the hunger onset, the
-        // wake time…), so the face changes on time with the app closed. Bounded, and never at `now`.
-        let transitions = WidgetEmotionTimeline.transitionDates(in: snapshot?.companionEmotionTimeline ?? [], after: now)
-        entries += transitions.map { FernletCompanionEntry(date: $0, snapshot: snapshot) }
-        // A friend's gold heart fades on time with the app closed: one entry at each end (at most two).
-        let goldEnds = (snapshot?.goldHeartEnds ?? []).filter { $0 > now }.prefix(WidgetHearts.maxGold)
-        for end in goldEnds where !entries.contains(where: { $0.date == end }) {
-            entries.append(FernletCompanionEntry(date: end, snapshot: snapshot))
-        }
-
-        // Noon (the thought card's morning line gives way to the afternoon one) and the next local
-        // midnight (the day gate turns the same snapshot into a fresh, empty day), each from the
-        // SAME snapshot and each only once.
-        let calendar = Calendar.current
-        let startOfToday = calendar.startOfDay(for: now)
+    /// The moments a timeline over `snapshot` draws from `now` on, in order and each once: now; every
+    /// upcoming emotion transition (bedtime, falling asleep, the hunger onset, the wake time…, so the face
+    /// changes on time with the app closed; bounded, never at `now`); each of a friend's gold hearts' ends
+    /// (at most two); noon (the thought card's morning line gives way to the afternoon one); and the next
+    /// local midnight (the day gate turns the same snapshot into a fresh, empty day). The map widget's
+    /// timeline (``FernletMapProvider``) shares them.
+    static func entryDates(for snapshot: WidgetSnapshot?, now: Date, calendar: Calendar = .current) -> [Date] {
+        var dates = [now]
+        dates += WidgetEmotionTimeline.transitionDates(in: snapshot?.companionEmotionTimeline ?? [], after: now)
+        dates += (snapshot?.goldHeartEnds ?? []).filter { $0 > now }.prefix(WidgetHearts.maxGold)
         let fixedMoments = [
             calendar.date(bySettingHour: 12, minute: 0, second: 0, of: now),
-            calendar.date(byAdding: .day, value: 1, to: startOfToday)
+            calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))
         ]
-        for moment in fixedMoments.compactMap({ $0 }) where moment > now && !entries.contains(where: { $0.date == moment }) {
-            entries.append(FernletCompanionEntry(date: moment, snapshot: snapshot))
-        }
-        entries.sort { $0.date < $1.date }
-
-        let nextHour = calendar.date(byAdding: .hour, value: 1, to: now) ?? now.addingTimeInterval(3600)
-        completion(Timeline(entries: entries, policy: .after(nextHour)))
+        dates += fixedMoments.compactMap { $0 }.filter { $0 > now }
+        return Array(Set(dates)).sorted()
     }
 }
 
