@@ -264,7 +264,7 @@ struct SharedRecipeImportQueueMirrorTests {
     @Test func bothSidesShareTheSameContainerFallbackChain() throws {
         for path in [Self.appSourcePath, Self.extensionSourcePath] {
             let text = try source(path)
-            #expect(text.contains("group.MBO.Fernlet.World"), "\(path) lost the App-Group identifier")
+            #expect(text.contains("group.MBO.Fernlet"), "\(path) lost the App-Group identifier")
             #expect(text.contains("SharedRecipeImports"), "\(path) lost the queue directory name")
             #expect(text.contains("PendingRecipeURLs.json"), "\(path) lost the queue file name")
             guard let applicationSupport = text.range(of: "applicationSupportDirectory"),

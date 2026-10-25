@@ -6,10 +6,10 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>MBO.Fernlet.World.Messages</string>
+			<string>MBO.Fernlet.Messages</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>fernlet-world</string>
+				<string>fernlet</string>
 			</array>
 		</dict>
 	</array>
@@ -28,7 +28,7 @@
 		<string>MBO.Fernlet.mesh-continuation.*</string>
 		<string>MBO.Fernlet.companion-refresh</string>
 	</array>
-	<key>UTImportedTypeDeclarations</key>
+	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>
 			<key>UTTypeConformsTo</key>

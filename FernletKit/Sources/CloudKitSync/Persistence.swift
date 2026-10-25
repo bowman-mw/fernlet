@@ -405,7 +405,7 @@ nonisolated public final class PersistenceController {
             // iCloudAvailabilityOverride lets tests exercise this path without a real account.
             let iCloudAvailable = iCloudAvailabilityOverride ?? (FileManager.default.ubiquityIdentityToken != nil)
             storeDescription.cloudKitContainerOptions = (preferences.iCloudSyncEnabled && iCloudAvailable)
-                ? NSPersistentCloudKitContainerOptions(containerIdentifier: "iCloud.MBO.Fernlet.World")
+                ? NSPersistentCloudKitContainerOptions(containerIdentifier: "iCloud.MBO.Fernlet")
                 : nil
         }
     }
@@ -579,7 +579,7 @@ nonisolated public final class PersistenceController {
     /// DEBUG-only, launch-argument-gated CloudKit schema deploy.
     ///
     /// When the app is launched with the `INITIALIZE_CLOUDKIT_SCHEMA` argument, this pushes the
-    /// Core Data model to the CloudKit **development** schema for `iCloud.MBO.Fernlet.World` via
+    /// Core Data model to the CloudKit **development** schema for `iCloud.MBO.Fernlet` via
     /// `NSPersistentCloudKitContainer.initializeCloudKitSchema(options:)`. Promotion of that
     /// schema to production is an owner action in the CloudKit console — code cannot do it. See
     /// Docs/CloudKit-Schema-Deploy.md for the full ritual.
@@ -612,7 +612,7 @@ nonisolated public final class PersistenceController {
     /// The deploy itself — the body the ``schemaDeployOnce`` latch runs exactly once.
     private static func performCloudKitSchemaDeploy() {
         FernletAuditLog.log("cloudkit.schema.initialize.started")
-        print("[Fernlet] INITIALIZE_CLOUDKIT_SCHEMA: pushing the Core Data model to the CloudKit DEVELOPMENT schema for container iCloud.MBO.Fernlet.World…")
+        print("[Fernlet] INITIALIZE_CLOUDKIT_SCHEMA: pushing the Core Data model to the CloudKit DEVELOPMENT schema for container iCloud.MBO.Fernlet…")
 
         // Run the whole deploy off the main thread. The container is created and torn down inside
         // this closure so it never crosses an isolation boundary; the store load completion is
@@ -624,7 +624,7 @@ nonisolated public final class PersistenceController {
                 .appendingPathComponent("CloudKitSchemaDeploy-\(UUID().uuidString).sqlite")
             let description = container.persistentStoreDescriptions.first ?? NSPersistentStoreDescription()
             description.url = scratchURL
-            description.cloudKitContainerOptions = NSPersistentCloudKitContainerOptions(containerIdentifier: "iCloud.MBO.Fernlet.World")
+            description.cloudKitContainerOptions = NSPersistentCloudKitContainerOptions(containerIdentifier: "iCloud.MBO.Fernlet")
             container.persistentStoreDescriptions = [description]
 
             let loadSemaphore = DispatchSemaphore(value: 0)

@@ -92,7 +92,7 @@ struct StoragePrivacyIntegrationTests {
         #expect(controller.activeStoreDescription?.cloudKitContainerOptions != nil)
         #expect(
             controller.activeStoreDescription?.cloudKitContainerOptions?.containerIdentifier
-                == "iCloud.MBO.Fernlet.World"
+                == "iCloud.MBO.Fernlet"
         )
     }
 

@@ -2064,8 +2064,8 @@ struct AppLockSettingsView: View {
                defaultValue: "Your journal, cycle history and intimacy entries saved in Fernlet will be permanently deleted. Anything Fernlet copied to Apple Health stays there. If Sealed backup is on, restore it from Privacy & Data afterwards, before you add new entries.",
                comment: "Message in the Reset app lock confirmation in Settings. Keep it identical to the lock screen's own reset confirmation. The journal and intimacy backups restore only into an empty store, so the sentence tells the user to restore before adding new entries.")
             + "\n\n"
-            + String(localized: "settings.appLock.reset.whereYouveBeen", defaultValue: "This also deletes Where you've been.",
-                     comment: "Last line of the Reset app lock confirmation in Settings; keep it identical to the lock screen's. 'Where you've been' is the name of the Places page in Private (the 30-day timeline of places), so match how that page's title is translated.")
+            + String(localized: "settings.appLock.reset.whereYouveBeen", defaultValue: "This also deletes the places you've been.",
+                     comment: "Last line of the Reset app lock confirmation in Settings: the reset also deletes the 30-day timeline of places kept in Private (its Where you've been page), for good. Owner-approved wording, 2026-10-25. Keep it identical to the lock screen's.")
     }
 
     /// Destroys the lock and its keys, dismissing only if the sealed store was rebuilt.

@@ -168,7 +168,7 @@ public nonisolated struct FernletMessagesWorkoutCatalogEntry: Codable, Equatable
 /// Coordinated App Group access for the Messages catalog. Production never falls back to less
 /// protected storage: an unavailable group is a failure, not a reason to use Application Support.
 public nonisolated struct FernletMessagesCatalogFileStore {
-    public static let appGroupIdentifier = "group.MBO.Fernlet.World"
+    public static let appGroupIdentifier = "group.MBO.Fernlet"
     private static let filename = "MessagesCatalog.json"
 
     private let fileManager: FileManager

@@ -48,7 +48,7 @@ struct PhotoDirectoryIsolationTests {
         "heartDropService", "queueHeart", "heartsAway", "deleteAllData",
     ]
 
-    /// Anything reaching the shared app-group directory `<group.MBO.Fernlet.World>/FernletWidgets/` — the
+    /// Anything reaching the shared app-group directory `<group.MBO.Fernlet>/FernletWidgets/` — the
     /// guided-run and cooking-run state files, the inbound widget-action queue, the widget snapshot.
     ///
     /// Case matters (`String.contains`): "guidedRun" alone does NOT match `startGuidedRun`, hence the
@@ -385,7 +385,7 @@ struct PhotoDirectoryIsolationTests {
                     """
                     \(file.lastPathComponent) reaches the share-extension recipe inbox but constructs \
                     FernletStore without `sharedRecipeImportQueueFileURL:`, so its queue is the real \
-                    `<group.MBO.Fernlet.World>/SharedRecipeImports/PendingRecipeURLs.json` that every \
+                    `<group.MBO.Fernlet>/SharedRecipeImports/PendingRecipeURLs.json` that every \
                     concurrent delete-all empties. Pass `sharedRecipeImportQueueFileURL: \
                     uniqueSharedRecipeImportQueueURL()`, or build the store through \
                     makeTestStore/makeTestStoreWithRepositories/makeStoreSharingStores.

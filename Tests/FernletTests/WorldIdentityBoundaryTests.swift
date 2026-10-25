@@ -3,33 +3,48 @@ import Testing
 import FernletExchange
 @testable import Fernlet
 
-/// The World build's own identity (world-ui only, step 0 of the live-map Home plan, owner-approved
-/// 2026-10-23): its bundle IDs, app group, iCloud container and URL scheme are all distinct from the
-/// shipping Fernlet app's, so installing it on the owner's phone can never replace the real app or share
-/// its data, app-group files or iCloud copy.
+/// The World build carries Fernlet's REAL identity (world-ui only; owner's call of 2026-10-25, which
+/// replaced step 0's separate "Fernlet World" identity, `57b5392b`): the shipping bundle IDs, app group,
+/// iCloud container, `fernlet://` scheme, exported file types and the name "Fernlet". A run from Xcode
+/// therefore installs over the TestFlight app as an update and opens the owner's existing data — the
+/// same data container, the same app-group files, the same keychain items and the same CloudKit
+/// container, in the Production environment the TestFlight app uses.
 ///
-/// **Why a wall.** `world-ui` takes merges FROM main from time to time. A main commit that adds a new
-/// `"group.MBO.Fernlet"` literal (a new widget file, a new extension) would compile clean and quietly
-/// point the World build back at the real app's container. These checks fail that merge instead.
+/// **Why a wall.** Two silent failures, both of which compile clean:
+/// - Step 0's World identity coming back (a cherry-pick or a merge from an older World branch). The
+///   build would then install BESIDE Fernlet and start empty, or worse, point one target's app group
+///   away from the others', so the widget, the share sheet and the Messages inbox read nothing.
+/// - The real data becoming unreachable without any identity string changing: a keychain access group
+///   (items would move out of the default group, team ID plus bundle ID, that the TestFlight app's
+///   lock, journal, media and preferences keys live in), or the CloudKit environment dropping back to
+///   Development (a development-signed run would sync against an empty container).
 ///
-/// What stays shared on purpose and is NOT checked here: the mesh namespace (Bonjour types, ALPN, the
-/// `fernlet://verify` QR and the duress-ceremony QR, all scanned in-app), so the World build still meets
-/// friends' real Fernlet; background-task identifiers, which the system scopes per app; and the test
-/// bundles' own IDs.
+/// What is NOT checked here: the mesh namespace (Bonjour types, ALPN, the `fernlet://verify` and
+/// duress-ceremony QR codes), which never changed; background-task identifiers; the test bundles' IDs;
+/// and the icon's pixels.
 struct WorldIdentityBoundaryTests {
 
-    /// The World build's identity strings.
-    static let bundlePrefix = "MBO.Fernlet.World"
-    static let appGroup = "group.MBO.Fernlet.World"
-    static let iCloudContainer = "iCloud.MBO.Fernlet.World"
-    static let urlScheme = "fernlet-world"
+    /// Fernlet's shipping identity strings.
+    static let appGroup = "group.MBO.Fernlet"
+    static let iCloudContainer = "iCloud.MBO.Fernlet"
+    static let urlScheme = "fernlet"
+    static let displayName = "Fernlet"
 
-    /// The four installable targets' bundle IDs, each set in both build configurations.
+    /// The four installable targets' bundle IDs, each set in both build configurations, exactly as main
+    /// has them.
     static let installableBundleIDs: Set<String> = [
-        "MBO.Fernlet.World",
-        "MBO.Fernlet.World.FernletWidgets",
-        "MBO.Fernlet.World.ShareExtension",
-        "MBO.Fernlet.World.MessagesExtension",
+        "MBO.Fernlet",
+        "MBO.Fernlet.FernletWidgets",
+        "MBO.Fernlet.ShareExtension",
+        "MBO.Fernlet.MessagesExtension",
+    ]
+
+    /// The four entitlements files, the app's first.
+    static let entitlementsPaths = [
+        "App/Fernlet/Fernlet.entitlements",
+        "App/FernletWidgets/FernletWidgets.entitlements",
+        "App/FernletShareExtension/FernletShareExtension.entitlements",
+        "App/FernletMessagesExtension/FernletMessagesExtension.entitlements",
     ]
 
     /// The shipping Swift roots (the same five every code wall scans).
@@ -38,9 +53,9 @@ struct WorldIdentityBoundaryTests {
         "App/FernletMessagesExtension", "FernletKit/Sources",
     ]
 
-    /// Every installable target carries a World bundle ID, in both configurations, and nothing else
-    /// does except the two test bundles.
-    @Test func everyInstallableTargetHasAWorldBundleID() throws {
+    /// Every installable target carries its shipping bundle ID, in both configurations, and the app
+    /// keeps its product name as its display name.
+    @Test func everyInstallableTargetHasTheShippingBundleID() throws {
         let project = try RepoRoot.source("App/Fernlet.xcodeproj/project.pbxproj")
         let ids = Self.values(of: "PRODUCT_BUNDLE_IDENTIFIER", in: project)
         guard !ids.isEmpty else {
@@ -49,32 +64,43 @@ struct WorldIdentityBoundaryTests {
         }
         let installable = ids.filter { !$0.hasPrefix("MBO.FernletTests") && !$0.hasPrefix("MBO.FernletUITests") }
         #expect(Set(installable) == Self.installableBundleIDs, "installable bundle IDs drifted: \(Set(installable))")
-        #expect(installable.count == 2 * Self.installableBundleIDs.count, "each installable target needs a World ID in Debug and Release")
-        #expect(project.contains("INFOPLIST_KEY_CFBundleDisplayName = \"Fernlet World\";"), "the app lost its Fernlet World name")
+        #expect(installable.count == 2 * Self.installableBundleIDs.count, "each installable target needs its ID in Debug and Release")
+        #expect(!project.contains("Fernlet World"), "the project still names the app Fernlet World")
+        #expect(Self.values(of: "INFOPLIST_KEY_CFBundleDisplayName", in: project).isEmpty,
+                "the app's name comes from its product name, Fernlet, as on main")
     }
 
-    /// Every entitlements file names only the World app group and the World iCloud container.
-    @Test func entitlementsNameOnlyTheWorldGroupAndContainer() throws {
-        let paths = [
-            "App/Fernlet/Fernlet.entitlements",
-            "App/FernletWidgets/FernletWidgets.entitlements",
-            "App/FernletShareExtension/FernletShareExtension.entitlements",
-            "App/FernletMessagesExtension/FernletMessagesExtension.entitlements",
-        ]
-        for path in paths {
-            let text = try RepoRoot.source(path)
-            #expect(text.contains("<string>\(Self.appGroup)</string>"), "\(path) lost the World app group")
-            #expect(!Self.containsRealIdentity(text), "\(path) names the shipping app's group or container")
+    /// Each extension shows the app's own name in the share sheet, Messages and the widget gallery.
+    @Test func extensionsAreNamedFernlet() throws {
+        for path in ["App/FernletWidgets/Info.plist", "App/FernletShareExtension/Info.plist", "App/FernletMessagesExtension/Info.plist"] {
+            let plist = try Self.plist(path)
+            #expect(plist["CFBundleDisplayName"] as? String == Self.displayName, "\(path) is not named Fernlet")
         }
-        let app = try RepoRoot.source(paths[0])
-        #expect(app.components(separatedBy: "<string>\(Self.iCloudContainer)</string>").count - 1 == 2,
-                "the app needs the World container under both iCloud keys")
     }
 
-    /// No shipping Swift file spells the shipping app's group or container as a literal.
-    @Test func shippingSourceNamesNoRealGroupOrContainer() throws {
+    /// Every entitlements file names exactly the shipping app group; the app names the shipping
+    /// container under both iCloud keys, in CloudKit's Production environment, with no keychain access
+    /// group.
+    @Test func entitlementsReachTheRealData() throws {
+        for path in Self.entitlementsPaths {
+            let plist = try Self.plist(path)
+            #expect(plist["com.apple.security.application-groups"] as? [String] == [Self.appGroup], "\(path) lost the shipping app group")
+            #expect(plist["keychain-access-groups"] == nil, "\(path) adds a keychain access group: items would leave the TestFlight app's default group")
+            #expect(!Self.containsWorldIdentity(try RepoRoot.source(path)), "\(path) names step 0's World identity")
+        }
+        let app = try Self.plist(Self.entitlementsPaths[0])
+        #expect(app["com.apple.developer.icloud-container-identifiers"] as? [String] == [Self.iCloudContainer])
+        #expect(app["com.apple.developer.ubiquity-container-identifiers"] as? [String] == [Self.iCloudContainer])
+        #expect(app["com.apple.developer.icloud-container-environment"] as? String == "Production",
+                "a development-signed run must use the Production environment the TestFlight app's data is in")
+    }
+
+    /// No shipping Swift file spells step 0's identity or picks a keychain access group, so every
+    /// keychain item stays in the app's default group.
+    @Test func shippingSourceNamesNoWorldIdentityOrAccessGroup() throws {
         var scanned = 0
         var offenders: [String] = []
+        var accessGroups: [String] = []
         for root in Self.shippingRoots {
             let rootURL = RepoRoot.url.appendingPathComponent(root)
             guard let walker = FileManager.default.enumerator(at: rootURL, includingPropertiesForKeys: nil) else {
@@ -84,40 +110,54 @@ struct WorldIdentityBoundaryTests {
             for case let url as URL in walker where url.pathExtension == "swift" {
                 scanned += 1
                 let text = try String(contentsOf: url, encoding: .utf8)
-                if Self.containsRealIdentity(text) { offenders.append(url.lastPathComponent) }
+                if Self.containsWorldIdentity(text) { offenders.append(url.lastPathComponent) }
+                if text.contains("kSecAttrAccessGroup") { accessGroups.append(url.lastPathComponent) }
             }
         }
         #expect(scanned > 500, "scanned only \(scanned) shipping Swift files; a root moved")
-        #expect(offenders.isEmpty, "these files name group.MBO.Fernlet or iCloud.MBO.Fernlet: \(offenders)")
+        #expect(offenders.isEmpty, "these files name step 0's World identity: \(offenders)")
+        #expect(accessGroups.isEmpty, "these files set a keychain access group: \(accessGroups)")
     }
 
-    /// The app answers only its own URL scheme, and the links it hands the system use it.
-    @Test func urlSchemeAndLinksAreTheWorldScheme() throws {
+    /// The app answers the shipping scheme and owns (exports) its file types again, and the links it
+    /// hands the system use the scheme.
+    @Test func urlSchemeLinksAndFileTypesAreTheShippingOnes() throws {
         let plist = try RepoRoot.source("App/Fernlet/Info.plist")
-        #expect(plist.contains("<string>\(Self.urlScheme)</string>"), "Info.plist lost the fernlet-world scheme")
-        #expect(!plist.contains("<string>fernlet</string>"), "Info.plist still claims the shipping app's fernlet scheme")
-        #expect(!plist.contains("UTExportedTypeDeclarations"), "the World build must import, not export, Fernlet's file types")
+        #expect(plist.contains("<string>\(Self.urlScheme)</string>"), "Info.plist lost the fernlet scheme")
+        #expect(plist.contains("UTExportedTypeDeclarations"), "Fernlet exports its recipe and workout-plan file types")
+        #expect(!plist.contains("UTImportedTypeDeclarations"), "Fernlet must not merely import its own file types")
+        let packets = try RepoRoot.source("App/Fernlet/FernletExchangePackets.swift")
+        #expect(packets.contains("UTType(exportedAs: \"com.mbo.fernlet.recipe\""))
+        #expect(packets.contains("UTType(exportedAs: \"com.mbo.fernlet.workout-plan\""))
         #expect(FernletMessagesInboxLink.scheme == Self.urlScheme)
-        #expect(FernletWidgetLinkRouter.target(of: try #require(URL(string: "fernlet-world://widget/home"))) == .home)
-        #expect(FernletWidgetLinkRouter.target(of: try #require(URL(string: "fernlet://widget/home"))) == nil)
+        #expect(FernletWidgetLinkRouter.target(of: try #require(URL(string: "fernlet://widget/home"))) == .home)
+        #expect(FernletWidgetLinkRouter.target(of: try #require(URL(string: "fernlet-world://widget/home"))) == nil)
     }
 
-    /// The planted-token fixture for ``containsRealIdentity(_:)``: a wall whose matcher never fires
+    /// The planted-token fixture for ``containsWorldIdentity(_:)``: a wall whose matcher never fires
     /// passes vacuously.
-    @Test func realIdentityMatcherFiresOnlyOnTheShippingStrings() {
-        #expect(Self.containsRealIdentity(#"let id = "group.MBO.Fernlet""#))
-        #expect(Self.containsRealIdentity("<string>iCloud.MBO.Fernlet</string>"))
-        #expect(!Self.containsRealIdentity(#"let id = "group.MBO.Fernlet.World""#))
-        #expect(!Self.containsRealIdentity("<string>iCloud.MBO.Fernlet.World</string>"))
+    @Test func worldIdentityMatcherFiresOnlyOnStepZeroStrings() {
+        #expect(Self.containsWorldIdentity(#"let id = "group.MBO.Fernlet.World""#))
+        #expect(Self.containsWorldIdentity("<string>iCloud.MBO.Fernlet.World</string>"))
+        #expect(Self.containsWorldIdentity("PRODUCT_BUNDLE_IDENTIFIER = MBO.Fernlet.World.FernletWidgets;"))
+        #expect(Self.containsWorldIdentity(#"URL(string: "fernlet-world://widget/home")"#))
+        #expect(!Self.containsWorldIdentity(#"let id = "group.MBO.Fernlet""#))
+        #expect(!Self.containsWorldIdentity("<string>iCloud.MBO.Fernlet</string>"))
+        #expect(!Self.containsWorldIdentity(#"static let worldMapFogV1 = "fernlet.world-map.fog.aead.v1""#))
     }
 
     // MARK: - Helpers
 
-    /// Whether `text` names the shipping app's group or container as a whole string (closed by a quote
-    /// or a plist tag), as opposed to the World build's.
-    static func containsRealIdentity(_ text: String) -> Bool {
-        let real = ["group.MBO.Fernlet", "iCloud.MBO.Fernlet"]
-        return real.contains { name in text.contains(name + "\"") || text.contains(name + "</string>") }
+    /// Whether `text` names step 0's identity: its bundle-ID stem (which also covers its app group and
+    /// container) or its URL scheme. World-only stores' own tokens (`fernlet.world-map…`) don't match.
+    static func containsWorldIdentity(_ text: String) -> Bool {
+        text.contains("MBO.Fernlet.World") || text.contains("fernlet-world")
+    }
+
+    /// A property list file in the repository, as a dictionary.
+    static func plist(_ path: String) throws -> [String: Any] {
+        let data = try Data(contentsOf: RepoRoot.url(path))
+        return try #require(try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any])
     }
 
     /// Every value assigned to `key` in a pbxproj (`key = value;`), quotes removed.

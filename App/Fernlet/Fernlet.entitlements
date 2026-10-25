@@ -13,9 +13,18 @@
 	<string>NSFileProtectionComplete</string>
 	<key>com.apple.developer.healthkit</key>
 	<true/>
+	<!-- World build (world-ui) only: the owner's data lives in CloudKit's PRODUCTION environment (the
+	     TestFlight app's), and a development-signed run from Xcode would otherwise use Development
+	     and see none of it. CloudKit reads this key at runtime (CKContainer, "Testing Your Code Using
+	     the Development Container"); TestFlight and App Store builds use Production whatever it says.
+	     The Simulator works only with Development, and INITIALIZE_CLOUDKIT_SCHEMA cannot write
+	     Production, so a schema push needs this set back to Development first
+	     (Docs/CloudKit-Schema-Deploy.md). Pinned by WorldIdentityBoundaryTests. -->
+	<key>com.apple.developer.icloud-container-environment</key>
+	<string>Production</string>
 	<key>com.apple.developer.icloud-container-identifiers</key>
 	<array>
-		<string>iCloud.MBO.Fernlet.World</string>
+		<string>iCloud.MBO.Fernlet</string>
 	</array>
 	<!-- CloudDocuments and the ubiquity container below stay although the app opens no document
 	     container: the iCloud-availability check reads FileManager.ubiquityIdentityToken
@@ -29,13 +38,13 @@
 	</array>
 	<key>com.apple.developer.ubiquity-container-identifiers</key>
 	<array>
-		<string>iCloud.MBO.Fernlet.World</string>
+		<string>iCloud.MBO.Fernlet</string>
 	</array>
 	<key>com.apple.developer.weatherkit</key>
 	<true/>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.MBO.Fernlet.World</string>
+		<string>group.MBO.Fernlet</string>
 	</array>
 	<key>com.apple.security.hardened-process</key>
 	<true/>

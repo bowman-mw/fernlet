@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDisplayName</key>
-	<string>Fernlet World</string>
+	<string>Fernlet</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Fraunces-SemiBold.ttf</string>

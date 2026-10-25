@@ -108,15 +108,15 @@ struct WidgetRedesignTests {
     @Test func widgetLinksLandOnHomeAndWater() throws {
         let bundle = try RepoRoot.source(Self.bundlePath)
         for path in ["home", "water"] {
-            let spelling = "fernlet-world://widget/\(path)"
+            let spelling = "fernlet://widget/\(path)"
             #expect(bundle.contains("URL(string: \"\(spelling)\")"), "the widget no longer writes \(spelling)")
             let url = try #require(URL(string: spelling))
             #expect(FernletWidgetLinkRouter.target(of: url)?.rawValue == path)
         }
         // The stamp widget's link opens Today and pushes the Stamp book, as the stamp banner's tap does.
-        #expect(bundle.contains("URL(string: \"fernlet-world://widget/stamps\")"), "the stamp widget no longer writes its link")
-        #expect(FernletWidgetLinkRouter.target(of: try #require(URL(string: "fernlet-world://widget/stamps"))) == .stamps)
-        #expect(FernletWidgetLinkRouter.target(of: try #require(URL(string: "fernlet-world://widget/journal"))) == nil)
+        #expect(bundle.contains("URL(string: \"fernlet://widget/stamps\")"), "the stamp widget no longer writes its link")
+        #expect(FernletWidgetLinkRouter.target(of: try #require(URL(string: "fernlet://widget/stamps"))) == .stamps)
+        #expect(FernletWidgetLinkRouter.target(of: try #require(URL(string: "fernlet://widget/journal"))) == nil)
         #expect(FernletWidgetLinkRouter.target(of: try #require(URL(string: "https://widget/home"))) == nil)
     }
 

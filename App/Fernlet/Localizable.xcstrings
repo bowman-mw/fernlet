@@ -46714,19 +46714,19 @@
       }
     },
     "settings.appLock.reset.whereYouveBeen" : {
-      "comment" : "Last line of the Reset app lock confirmation in Settings; keep it identical to the lock screen's. 'Where you've been' is the name of the Places page in Private (the 30-day timeline of places), so match how that page's title is translated.",
+      "comment" : "Last line of the Reset app lock confirmation in Settings: the reset also deletes the 30-day timeline of places kept in Private (its Where you've been page), for good. Owner-approved wording, 2026-10-25. Keep it identical to the lock screen's.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "This also deletes Where you've been."
+            "value" : "This also deletes the places you've been."
           }
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Esto también elimina Dónde has estado."
+            "state" : "translated",
+            "value" : "Esto también elimina los lugares donde has estado."
           }
         }
       }

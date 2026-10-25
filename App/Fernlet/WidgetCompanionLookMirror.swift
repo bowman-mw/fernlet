@@ -81,7 +81,7 @@ nonisolated enum FernletWidgetLinkRouter {
     /// The stamp widget's `/stamps` opens Today and pushes the Stamp book at its stamps, as the stamp
     /// banner's tap does (`ContentView.openStampBookInToday()`).
     static func target(of url: URL) -> PendingIntentSheet.Target? {
-        guard url.scheme == "fernlet-world", url.host == host else { return nil }
+        guard url.scheme == "fernlet", url.host == host else { return nil }
         switch url.path {
         case "/home": return .home
         case "/stamps": return .stamps

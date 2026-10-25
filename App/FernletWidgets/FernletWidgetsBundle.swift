@@ -32,11 +32,11 @@ enum FernletWidgetKind {
 /// spellings; `WidgetBridgeTests` pins that they match.
 enum FernletWidgetLink {
     /// Opens the app on Home.
-    static let home = URL(string: "fernlet-world://widget/home")
+    static let home = URL(string: "fernlet://widget/home")
     /// Opens the app's Water sheet, where a mis-tapped bottle can be undone.
-    static let water = URL(string: "fernlet-world://widget/water")
+    static let water = URL(string: "fernlet://widget/water")
     /// Opens the Stamp book (the stamp widget's tap).
-    static let stamps = URL(string: "fernlet-world://widget/stamps")
+    static let stamps = URL(string: "fernlet://widget/stamps")
 }
 
 /// The extension's `@main` entry point: registers every widget, control and Live Activity this
