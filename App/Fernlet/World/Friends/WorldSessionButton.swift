@@ -237,7 +237,7 @@ struct WorldSessionButton: View {
 
 /// The session button's card (`b3-session-menu`): "Session with Sam and Rae" with a framed ✕, the
 /// session's name and head count, then Messages (with how many are new, and only offered past the
-/// 13+ gate), Session info and Leave session as framed rows.
+/// 13+ gate), Session info and Leave session as framed rows with teal icon squares, as drawn.
 struct SessionMenuCard: View {
     let title: Text
     let subtitle: Text
@@ -258,7 +258,7 @@ struct SessionMenuCard: View {
         }
         .frame(maxWidth: 420, alignment: .leading)
         // The frame rule (ref-frames-rule): pieces inside this card draw flat (its rows are buttons,
-        // which keep their frames; their icon squares sit bare).
+        // which keep their frames); the rows' teal icon squares are the owner's exception (form answer 45).
         .environment(\.fernletInFramedSection, true)
         .background(WorldPalette.paper, in: shape)
         .overlay(shape.strokeBorder(WorldPalette.ink, lineWidth: 3))
@@ -304,26 +304,35 @@ struct SessionMenuCard: View {
         unreadCount > 0 ? Text("\(unreadCount) new · only in this session") : Text("Only in this session")
     }
 
+    /// One row, drawn as the blue button's card draws its choices (`b3-session-menu` is that card on the
+    /// left): its icon in a teal square, an approved exception to the frame rule's bare tiles (owner's
+    /// form answer 45, 2026-10-25); Messages with new ones leads in teal, its square the deeper teal.
     private func menuRow(sprite: WorldSprite, title: Text, detail: Text, highlighted: Bool,
                          action: @escaping () -> Void) -> some View {
         let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
         return Button(action: action) {
             HStack(spacing: 14) {
-                FernletIconTile(size: 44, fill: WorldPalette.sage) { WorldSpriteView(sprite: sprite, scale: 3) }
+                WorldSpriteView(sprite: sprite, scale: 3)
+                    .frame(width: 44, height: 44)
+                    .background(highlighted ? WorldQuickStartPalette.tileOnTeal : WorldQuickStartPalette.teal,
+                                in: RoundedRectangle(cornerRadius: 9))
                 VStack(alignment: .leading, spacing: 2) {
                     title
                         .font(FernletFramedFont.rowTitleBold)
-                        .foregroundStyle(WorldPalette.bark)
+                        .foregroundStyle(highlighted ? WorldQuickStartPalette.onTeal : WorldPalette.bark)
                     detail
                         .font(FernletFramedFont.rowDetail)
-                        .foregroundStyle(WorldPalette.dim)
+                        .foregroundStyle(highlighted ? WorldQuickStartPalette.onTeal : WorldPalette.dim)
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
             .padding(12)
             .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
-            .background(highlighted ? WorldPalette.sage : WorldPalette.paperLight, in: shape)
+            .background(highlighted ? WorldQuickStartPalette.teal : WorldPalette.paperLight, in: shape)
+            .overlay(alignment: .bottom) {
+                if highlighted { WorldQuickStartPalette.tealLow.frame(height: 4).padding(.horizontal, 3).padding(.bottom, 3) }
+            }
             .overlay(shape.strokeBorder(WorldPalette.ink, lineWidth: FernletFramedLook.frameWidth))
             .contentShape(shape)
         }
