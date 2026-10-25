@@ -8,7 +8,8 @@ import WorldMapStore
 ///   keeps none of what comes back beyond the decision (the MapKit terms): a visit keeps the person's own
 ///   point and the lookup's reference to the place; a photo keeps its point or nothing.
 /// - **When the person looks** at their places (Private's Places page): the name and kind of a kept place,
-///   asked for again by its reference (``placeName(for:)``) and held in memory only, never written.
+///   asked for again by its reference (``placeName(for:)``) and held in memory only, never written; and, on
+///   their tap, the place opened in Apple Maps by that reference (``openInMaps(placeID:)``).
 ///
 /// Phase 1's lookup is Apple's map (`ApplePlaceLookup`, in `AppleMutedBaseMap.swift`, the one MapKit file).
 /// Capture lookups run only in the foreground about where the person stands while the map is on screen;
@@ -24,6 +25,19 @@ protocol WorldPlaceLooking {
 
     /// Forgets every name held in memory (the wipes, Delete all of it, a decoy).
     func forgetNames()
+
+    /// Opens the place the lookup refers to as `placeID` in Apple's Maps app, on the person's tap (owner's
+    /// form answer 53, 2026-10-25): looked up by that reference and handed to Maps, which fetches and
+    /// shows its name and address; Fernlet keeps nothing of it. False when there is no answer (offline,
+    /// or the place is gone) or Maps did not open.
+    func openInMaps(placeID: String) async -> Bool
+}
+
+extension WorldPlaceLooking {
+    /// No Maps to open: tests and the fixed lookups.
+    func openInMaps(placeID: String) async -> Bool {
+        false
+    }
 }
 
 /// A kept place's name and kind as the lookup gives them again, by the place's reference: shown on the

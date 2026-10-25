@@ -12,7 +12,9 @@ import WorldMapStore
 ///   its length) and a small sketch of the day drawn by Fernlet alone (the day's saved lines and the places'
 ///   points on plain ground, never Apple's map: Apple must not receive a past day's area), then the note on
 ///   what is collected.
-/// - **Places you return to**: a visit count each, never dates. Tap one to rename it.
+/// - **Places you return to**: a visit count each, never dates. Tap one to rename it; one with Apple's
+///   reference also opens in Apple Maps (form answer 53: its button in the rename alert, the row's long-press
+///   menu and its VoiceOver action), which fetches and shows the name and address; nothing is kept.
 /// - **The last 30 days** (every day's card), **Delete a day** and **Delete all of it**, each delete behind a
 ///   confirmation; a day's delete also deletes its walks' and runs' saved lines (the workouts stay in Move).
 ///
@@ -33,6 +35,8 @@ struct WorldPlacesPage: View {
     @State private var confirmsDeleteAll = false
     /// The Remember this place sheet, opened from a place to make it a home or a hotel (round 6).
     @State private var homeSheet: WorldPlaceSheetMode?
+    /// Open in Apple Maps found nothing (offline, or the place is gone): its alert is up.
+    @State private var mapsFailed = false
     @Environment(FernletLockService.self) private var lockService
 
     var body: some View {
@@ -47,7 +51,7 @@ struct WorldPlacesPage: View {
                     latestDay
                     // Homes and hotels are not places you return to (round 6, `ref-home-where`).
                     WorldReturnedPlacesCard(places: (log?.returnedTo ?? []).filter { !store.worldHomes.isHomeOrHotel($0.point) },
-                                            names: names) { place in
+                                            names: names, onOpenInMaps: openInMaps) { place in
                         newName = place.label ?? names[place.id]?.name ?? ""
                         renaming = place
                     }
@@ -69,7 +73,14 @@ struct WorldPlacesPage: View {
             Button("Save") { rename(place) }
             // Round 6 (`ref-home-set`): a place you return to can become a home or your hotel.
             Button { homeSheet = .remember(start: place.point, kind: .home) } label: { Text(WorldHomeCopy.makeHome) }
+            // Round 6b (form answer 53): the place in Apple Maps, by its reference.
+            if place.placeID != nil {
+                Button { openInMaps(place) } label: { Text(WorldPlacesCopy.openInMaps) }
+            }
             Button("Cancel", role: .cancel) {}
+        }
+        .alert(Text(WorldPlacesCopy.openInMapsFailed), isPresented: $mapsFailed) {
+            Button("OK", role: .cancel) {}
         }
         .sheet(item: $homeSheet) { mode in
             WorldRememberPlaceSheet(store: store, mode: mode) {
@@ -157,6 +168,17 @@ extension WorldPlacesPage {
         for place in places where place.label == nil && place.placeID != nil && names[place.id] == nil {
             guard !Task.isCancelled else { return }
             if let name = await store.worldPlaceName(for: place) { names[place.id] = name }
+        }
+    }
+
+    /// Opens `place` in Apple Maps by its reference; says so, with the failed cue, when Maps found nothing.
+    private func openInMaps(_ place: PlaceRecord) {
+        Task {
+            guard await store.openWorldPlaceInAppleMaps(place) else {
+                FernletFeedback.system.play(.failed)
+                mapsFailed = true
+                return
+            }
         }
     }
 

@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import Testing
 import UIKit
+import WorldMapStore
 import FernletDomainModel
 import FernletScoring
 @testable import Fernlet
@@ -157,6 +158,36 @@ struct WorldRound6bSmallTests {
         #expect(!source.contains("UIApplication.shared"), "only the host's own window counts, never another one")
     }
 
+    // MARK: 53 · Open in Apple Maps
+
+    /// A kept place opens in Apple Maps by its stored reference, asked of the lookup at the tap; a place
+    /// with no reference (added by the person, a home, a hotel) or a decoy asks nothing.
+    @Test func aKeptPlaceOpensInAppleMapsByItsReference() async {
+        let lookup = OpeningLookup()
+        let store = makeTestStore(worldPlaceLookup: lookup)
+        let park = GeoPoint(45.5213, -122.6253)
+        #expect(await store.openWorldPlaceInAppleMaps(PlaceRecord(placeID: "I-park", point: park)))
+        #expect(lookup.opened == ["I-park"], "looked up by the reference it kept")
+        #expect(!(await store.openWorldPlaceInAppleMaps(PlaceRecord(point: park))), "no reference: nothing to open")
+        store.duressSessionActive = true
+        #expect(!(await store.openWorldPlaceInAppleMaps(PlaceRecord(placeID: "I-park", point: park))), "a decoy opens nothing")
+        store.duressSessionActive = false
+        #expect(lookup.opened == ["I-park"], "and neither asked the lookup")
+        #expect(!(await FixedPlaceLookup(answer: nil).openInMaps(placeID: "I-park")), "a fixed lookup has no Maps")
+    }
+
+    /// MapKit stays in its one file: the page and the store reach Maps only through the lookup seam, and
+    /// nothing Maps returns is written (the Apple lookup keeps no item).
+    @Test func openingInMapsStaysBehindTheLookupSeam() throws {
+        let apple = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/World/Map/AppleMutedBaseMap.swift"))
+        let open = try #require(MeshRoutedSourceScan.bracedBody(after: "func openInMaps(placeID: String) async -> Bool", in: apple))
+        #expect(open.contains("MKMapItemRequest(mapItemIdentifier: identifier)") && open.contains("item.openInMaps()"))
+        #expect(!open.contains("names["), "the opened place's name is not cached")
+        let store = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/FernletStore+WorldPlaceMaps.swift"))
+        #expect(store.contains("worldPlaceLookup.openInMaps(placeID:"))
+        #expect(!store.contains("import MapKit"))
+    }
+
     /// The prompt (not the other sheet) is what `hosting` presents.
     private static func promptIsUp(_ hosting: UIViewController) -> Bool {
         hosting.presentedViewController != nil && !holdsForeignCover(hosting.presentedViewController)
@@ -190,5 +221,26 @@ struct KeepFriendsBehindSheetHarness: View {
             .sheet(isPresented: $other.isUp) { ForeignCoverMarker() }
             .modifier(KeepFriendsPromptHost(store: store, isRootSheetUp: false, launchComplete: true, isCoverUp: false,
                                             keepFriendsPromptPresented: $isPromptUp))
+    }
+}
+
+/// A lookup that records which references it was asked to open in Maps, and opens none for real.
+@MainActor
+private final class OpeningLookup: WorldPlaceLooking {
+    private(set) var opened: [String] = []
+
+    func nearbyPlaces(around point: GeoPoint) async -> [NearbyPlace]? {
+        nil
+    }
+
+    func placeName(for placeID: String) async -> WorldPlaceName? {
+        nil
+    }
+
+    func forgetNames() {}
+
+    func openInMaps(placeID: String) async -> Bool {
+        opened.append(placeID)
+        return true
     }
 }
