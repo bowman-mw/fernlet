@@ -874,9 +874,23 @@ struct DisposableCameraView: View {
     /// The room the solo line takes under the controls, kept clear of the viewfinder.
     private static let soloFooterReserve: CGFloat = 44
 
-    /// On your own, when the photos show (`b3-camera-solo`): after the companion goes to sleep.
+    /// On your own, when the photos show (`b3-camera-solo`): after the companion goes to sleep, tonight,
+    /// or tomorrow night once it is already asleep (form answer 44). Read again each minute, so the line
+    /// turns as bedtime passes with the camera open.
     private var soloFooter: some View {
-        Text("Your photos appear tonight, after \(companionName) goes to sleep.")
+        TimelineView(.everyMinute) { context in
+            soloFooterLine(at: context.date)
+        }
+    }
+
+    /// The solo line at `date`.
+    private func soloFooterLine(at date: Date) -> some View {
+        let tomorrow = SoloCameraRules.waitsForTomorrowNight(at: date, window: CompanionEmotionPreferences.sleepWindow(),
+                                                             calendar: .current)
+        let line = tomorrow
+            ? Text("Your photos appear tomorrow night, after \(companionName) goes to sleep.")
+            : Text("Your photos appear tonight, after \(companionName) goes to sleep.")
+        return line
             .font(FernletFramedFont.note)
             .foregroundStyle(Self.cream.opacity(0.88))
             .multilineTextAlignment(.center)

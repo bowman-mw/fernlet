@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import FernletDomainModel
+import FernletScoring
 @testable import Fernlet
 
 /// The owner's form answers built in round 6b's small lane (2026-10-25): the close-up's one even veil
@@ -60,6 +61,41 @@ struct WorldRound6bSmallTests {
         #expect(!row.contains("if store.allowsWebNutritionLookup"), "Import is no longer hidden while lookup is off")
         let tap = try #require(MeshRoutedSourceScan.bracedBody(after: "private func tapImport()", in: source))
         #expect(tap.contains("FoodImportTap.resolve(for: store.settings)"))
+    }
+
+    // MARK: 44 · The solo camera after bedtime
+
+    /// The local calendar the camera reads the night in.
+    private static var calendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        return calendar
+    }
+
+    /// 2026-10-`day` at `hour`:`minute`, local.
+    private static func at(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
+        calendar.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour, minute: minute)) ?? .distantPast
+    }
+
+    /// Once the companion has fallen asleep the camera says "tomorrow night", exactly when the shot's
+    /// reveal is the next night; in the wind-down and through the day it still says "tonight".
+    @Test func theSoloCameraSaysTomorrowNightOnceTheCompanionSleeps() {
+        let night = CompanionSleepWindow(bedtimeMinute: 22 * 60 + 30, wakeMinute: 7 * 60)
+        let says = { (date: Date) in SoloCameraRules.waitsForTomorrowNight(at: date, window: night, calendar: Self.calendar) }
+        #expect(!says(Self.at(24, 14)), "an afternoon: tonight")
+        #expect(!says(Self.at(24, 22, 45)), "the wind-down: tonight")
+        #expect(says(Self.at(24, 23)), "the minute it falls asleep: tomorrow night")
+        #expect(says(Self.at(25, 2)), "after midnight, still asleep: tomorrow night")
+        #expect(!says(Self.at(25, 7, 30)), "awake again: tonight")
+        for (day, hour, minute) in [(24, 14, 0), (24, 22, 45), (24, 23, 0), (24, 23, 30), (25, 2, 0), (25, 7, 30)] {
+            let date = Self.at(day, hour, minute)
+            let reveal = SoloCameraRules.revealsAt(takenAt: date, window: night, calendar: Self.calendar)
+            let tomorrowNight = reveal.timeIntervalSince(date) > 16 * 60 * 60
+            #expect(says(date) == tomorrowNight, "the line and the reveal agree at \(hour):\(minute)")
+        }
+        let empty = CompanionSleepWindow(bedtimeMinute: 9 * 60, wakeMinute: 9 * 60)
+        #expect(SoloCameraRules.waitsForTomorrowNight(at: Self.at(24, 23, 30), window: empty, calendar: Self.calendar),
+                "no night set: the standard one")
     }
 
     // MARK: 42 · The Messages panel's icons grow with the text
