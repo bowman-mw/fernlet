@@ -56,6 +56,39 @@ struct PrivateDateRow<Picker: View>: View {
     }
 }
 
+/// A sheet's day as the framed date button (`ref-frames-period`, the frame rule: controls keep their
+/// frames): the day in a framed paper button where iOS draws its grey pill. iOS's own compact date picker
+/// lies over it, drawn clear (`colorMultiply(.clear)` keeps it tappable and readable by VoiceOver, where
+/// an opacity of 0 would not), so a tap opens iOS's calendar as before and VoiceOver reads iOS's picker;
+/// the framed words are decoration.
+struct PrivateDateButton: View {
+    /// The picker's name, for VoiceOver.
+    let title: LocalizedStringKey
+    @Binding var date: Date
+    /// The days that may be picked (never the future).
+    let range: PartialRangeThrough<Date>
+    @Environment(\.fernletFramedLook) private var look
+
+    var body: some View {
+        Text(date, format: .dateTime.month(.abbreviated).day().year())
+            .font(FernletFramedFont.chip)
+            .foregroundStyle(look?.text ?? WorldPalette.bark)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .fernletFrameRulePiece(.button, fill: look?.raised, cornerRadius: 10)
+            .accessibilityHidden(true)
+            .overlay {
+                DatePicker(title, selection: $date, in: range, displayedComponents: .date)
+                    .labelsHidden()
+                    .datePickerStyle(.compact)
+                    .tint(WorldPalette.mossInk)
+                    .colorMultiply(.clear)
+            }
+            .frame(minHeight: 44)
+            .accessibilityIdentifier("privateDate.button")
+    }
+}
+
 /// The tick box at the end of a personal care row (`b3-hygiene`): an empty framed square, or the moss
 /// square with a white pixel tick when the task is done. Decorative: the row says "completed" or
 /// "not done yet" itself.

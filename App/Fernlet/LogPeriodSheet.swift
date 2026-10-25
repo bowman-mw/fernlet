@@ -273,12 +273,10 @@ struct LogPeriodSheet: View {
     /// Which day is being logged. Without it the sheet silently logged "today" — a user catching up
     /// on yesterday had to back out, find the day on the calendar, open it, and tap Edit.
     private var dateField: some View {
-        // World (b3-log-period): "Date" on the left, the day as a compact picker on the right.
+        // World (b3-log-period, `ref-frames-period`): "Date" on the left, the day as the framed date
+        // button on the right (iOS's compact picker under it, drawn clear).
         PrivateDateRow(title: "Date") {
-            DatePicker("Date", selection: $eventDate, in: ...Date(), displayedComponents: .date)
-                .labelsHidden()
-                .datePickerStyle(.compact)
-                .tint(WorldPalette.mossInk)
+            PrivateDateButton(title: "Date", date: $eventDate, range: ...Date())
         }
     }
 
@@ -356,7 +354,9 @@ struct LogPeriodSheet: View {
     }
 
     /// First day of cycle in a framed card; spotting between periods beside it with Advanced period
-    /// tracking (or when the entry already says so).
+    /// tracking (or when the entry already says so). The frame rule's rows (`ref-frames-period`): each switch
+    /// row is its 44-pt touch target, hairline to hairline (about 10 pt of air above and below the words),
+    /// and the card's 14 pt reaches the switch itself (`switchAir`).
     private var cycleDetailsField: some View {
         FernletCard {
             VStack(spacing: 0) {
@@ -366,8 +366,14 @@ struct LogPeriodSheet: View {
                     periodToggle("Intermenstrual bleeding", isOn: $hasIntermenstrualBleeding)
                 }
             }
+            .padding(.vertical, -Self.switchAir)
         }
     }
+
+    /// The air a framed switch (30 pt) has above and below it inside its 44-pt touch target. A card's
+    /// switch rows give it back to the card's own 14-pt padding, so the frame sits 14 pt from the switch as
+    /// the frame rule draws it, while the whole 44 pt stays tappable.
+    private static let switchAir: CGFloat = 7
 
     /// One toggle per symptom, each revealing a 1…10 intensity stepper while it is on: the common four
     /// by default, every symptom with Advanced period tracking (`b3-log-period` draft 2).
@@ -377,7 +383,7 @@ struct LogPeriodSheet: View {
             FernletCard {
             VStack(spacing: 0) {
                 ForEach(shown) { symptom in
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 0) {
                         periodToggle(verbatim: symptom.displayName, isOn: Binding(
                             get: { symptoms.contains(symptom) },
                             set: { isOn in
@@ -397,7 +403,8 @@ struct LogPeriodSheet: View {
                                 set: { customScales[symptom] = $0 }
                             ), in: 1...10, step: 1, display: Text("Intensity \(customScales[symptom] ?? 5)"))
                             .frame(maxWidth: .infinity, alignment: .trailing)
-                            .padding(.bottom, 12)
+                            // The switch's own air above it; the same under it, before the hairline.
+                            .padding(.bottom, Self.switchAir)
                         }
                     }
                     if symptom != shown.last {
@@ -405,6 +412,7 @@ struct LogPeriodSheet: View {
                     }
                 }
             }
+            .padding(.vertical, -Self.switchAir)
             }
         }
     }
@@ -617,9 +625,9 @@ struct LogPeriodSheet: View {
             .foregroundStyle(WorldPalette.bark)
             .tint(Color.moss)
             // World (b3-log-period): the framed switch, stated here because a sheet the root
-            // presents does not inherit the root's toggle style.
+            // presents does not inherit the root's toggle style. No padding of its own: its 44-pt touch
+            // target is the whole row, hairline to hairline (`ref-frames-period`, the frame rule's row).
             .toggleStyle(FernletFramedToggleStyle())
-            .padding(.vertical, 8)
     }
 
     /// Seeds the temperature field from a record's stored reading, converted from the unit it was

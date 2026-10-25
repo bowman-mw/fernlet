@@ -151,9 +151,14 @@ struct WorldQuickStartTests {
 
     // MARK: The map's states
 
-    /// Off until allowed (not asked counts as off; nothing on Home asks), approximate or precise.
+    /// The off scene only after an actual answer of no (a denial, or the intro's Not now while iOS hasn't
+    /// asked); before the person answers (the intro to come, or iOS's prompt up) the first day's map
+    /// (`b1-loc-prompt`, `b1-home-first`; round 5); approximate or precise once allowed.
     @Test func thePresenceFollowsThePermission() {
-        #expect(WorldMapPresence.make(permission: .notAsked, isPrecise: true) == .off)
+        #expect(WorldMapPresence.make(permission: .notAsked, isPrecise: true) == .off, "the intro's Not now")
+        #expect(WorldMapPresence.make(permission: .notAsked, isPrecise: false, awaitsAnswer: true) == .precise,
+                "behind the intro and iOS's prompt: the map, not the off scene")
+        #expect(WorldMapPresence.make(permission: .denied, isPrecise: true, awaitsAnswer: true) == .off)
         #expect(WorldMapPresence.make(permission: .denied, isPrecise: true) == .off)
         #expect(WorldMapPresence.make(permission: .whileUsing, isPrecise: false) == .approximate)
         #expect(WorldMapPresence.make(permission: .always, isPrecise: true) == .precise)

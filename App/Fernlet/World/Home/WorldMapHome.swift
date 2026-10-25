@@ -16,8 +16,9 @@ import WorldMapStore
 ///
 /// **The map.** Apple's muted map behind the map seam, following the person while location is allowed
 /// (asked once by the map intro, `b1-loc-intro`, step 5c; a permission given earlier, for weather, counts too,
-/// and the intro never shows). Without a reading yet the plain map stands in, the companion in its middle.
-/// With location off (or not asked) there is no map: the open scene (``WorldOffMapHome``,
+/// and the intro never shows). Without a reading yet the plain map stands in, the companion in its middle:
+/// so it is before the person answers, behind the intro and iOS's prompt (`b1-home-first`, `b1-loc-prompt`).
+/// With location off (denied, or the intro's Not now) there is no map: the open scene (``WorldOffMapHome``,
 /// `b1-home-denied` draft 4). With approximate location the map zooms out to the area. With no
 /// signal, parchment covers Apple's map and the fog and lines draw on it. Location updates run only
 /// while this map is on screen and the app is active (`WorldLocationSource`), or while a walk records.
@@ -73,6 +74,8 @@ struct WorldMapHome: View {
     /// the front, and the one whose photos are open.
     @State private var photoPlaces: [WorldPhotoPlace] = []
     @State private var openPhotoPlace: WorldPhotoPlace?
+    /// DEBUG `photo`: whether a photo taken where the person stands would keep its place.
+    @State private var testPhotoKept = false
     /// Whether the one-time "Tap me to say hi!" hint is showing (`ref-hint`, ``WorldCompanionHint``).
     @State private var isHintShowing = false
     @Environment(\.scenePhase) private var scenePhase
@@ -249,10 +252,12 @@ struct WorldMapHome: View {
 
     // MARK: State read from the store
 
-    /// On or off, precise or approximate (a DEBUG screenshot can ask for approximate).
+    /// On or off, precise or approximate (a DEBUG screenshot can ask for approximate). Before the person
+    /// answers (the intro still to come, or iOS's prompt up) it is the first day's map, not the off scene.
     private var presence: WorldMapPresence {
         let location = store.worldLocation
-        let real = WorldMapPresence.make(permission: location.permission, isPrecise: location.isPrecise)
+        let awaits = !WorldMapPreferences.locationIntroAnswered() || location.isAsking
+        let real = WorldMapPresence.make(permission: location.permission, isPrecise: location.isPrecise, awaitsAnswer: awaits)
         guard real != .off, testScenes.contains("approx") else { return real }
         return .approximate
     }
@@ -316,9 +321,10 @@ struct WorldMapHome: View {
     }
 
     /// The solo photos' places on the map (a DEBUG screenshot, `photo`, stands three photos in beside the
-    /// companion, display only).
+    /// companion, display only, where a photo taken here would keep its place).
     private var shownPhotoPlaces: [WorldPhotoPlace] {
-        guard testScenes.contains("photo"), !store.duressSessionActive, let fix = store.worldLocation.latest else { return photoPlaces }
+        guard testScenes.contains("photo"), testPhotoKept, !store.duressSessionActive,
+              let fix = store.worldLocation.latest else { return photoPlaces }
         return photoPlaces + [WorldPhotoPlace(id: UUID(uuidString: "5C000000-0000-0000-0000-000000000001") ?? UUID(),
                                               point: fix.point.offset(east: 110, north: 140), photoIDs: [UUID(), UUID(), UUID()])]
     }
@@ -609,5 +615,23 @@ extension WorldMapHome {
         }
         if scenes.contains("walk") { startWalk() }
         if scenes.contains("qs") { openCard(spaceID: hereSpaceID) }
+        if scenes.contains("photo") { await checkTestPhotoPlace() }
+    }
+
+    /// DEBUG `photo`: the stand-in photos sit on the map only where a photo taken here would keep its
+    /// place: the camera's own lookup and rule at the shutter (``PlaceClassifier/photoMayKeepPlace(_:)``,
+    /// round 5), asked once the first reading arrives (waiting at most 15 s for it).
+    private func checkTestPhotoPlace() async {
+        for _ in 0..<15 where store.worldLocation.latest == nil {
+            do {
+                try await Task.sleep(for: .seconds(1))
+            } catch {
+                return
+            }
+        }
+        guard let fix = store.worldLocation.latest else { return }
+        let nearby = await store.worldPlaceLookup.nearbyPlaces(around: fix.point)
+        testPhotoKept = PlaceClassifier.photoMayKeepPlace(nearby)
+        FernletAuditLog.log("worldMap.photoPlace.testScene", context: ["kept": testPhotoKept ? "yes" : "no"])
     }
 }

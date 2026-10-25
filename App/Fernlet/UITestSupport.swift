@@ -205,8 +205,10 @@ enum UITestSupport {
     /// (the blue button's action word shows and stays), `intro` (the map intro may show under the test
     /// harness, which otherwise holds it back), `hint` (the one-time "Tap me to say hi!" may show), `run`
     /// (a saved run route starts here, display only), `photo` (three solo photos stand in beside the
-    /// companion as a photo marker, display only). Consumed by `WorldMapHome`, `WorldMapCompanion`,
-    /// `WorldLocationIntroPresenter` and the blue button's label;
+    /// companion as a photo marker, display only, and only where a photo taken there would keep its place),
+    /// `namesOffline` (Private's Places page gets no place
+    /// names back, as offline). Consumed by `WorldMapHome`, `WorldMapCompanion`,
+    /// `WorldLocationIntroPresenter`, the blue button's label and `FernletStore+WorldPlaces`;
     /// `FERNLET_UI_TEST_WORLD_MAP_PHASE` fixes its time of day too.
     static var worldHomeScenes: Set<String> {
         Set((env["FERNLET_UI_TEST_WORLD_HOME"] ?? "").split(separator: ",").map(String.init))

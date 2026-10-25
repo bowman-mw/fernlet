@@ -4,18 +4,23 @@ import Observation
 /// What the World Home draws for the person's location (designs `b1-home-*`, Batch 1): the live map,
 /// or the open scene when location is off.
 nonisolated enum WorldMapPresence: Equatable, Sendable {
-    /// Location is off or not asked yet: the open sky-and-grass scene (`b1-home-denied`, draft 4). Not
-    /// asked counts as off until the permission screens (plan step 5c) ask; nothing here prompts.
+    /// Location is off: the open sky-and-grass scene (`b1-home-denied`, draft 4), after an actual denial,
+    /// or after the map intro's Not now while iOS has not asked ("Not now leaves Home on plain parchment,
+    /// as in 'Location turned off'", `b1-loc-intro`).
     case off
     /// Allowed, but approximate: the map zooms out to the area and the companion never stands on a street.
     case approximate
-    /// Allowed and precise.
+    /// Allowed and precise, or not answered yet: before the person answers (the intro still to come, or
+    /// iOS's prompt up) Home is the map as on its first day (`b1-home-first`, and the map behind iOS's
+    /// prompt in `b1-loc-prompt`), never the location-off scene.
     case precise
 
-    /// The presence for a permission and accuracy.
-    static func make(permission: WorldLocationPermission, isPrecise: Bool) -> WorldMapPresence {
+    /// The presence for a permission and accuracy. `awaitsAnswer`: iOS hasn't asked yet and the person's
+    /// answer is still to come (the map intro not answered, or iOS's prompt up).
+    static func make(permission: WorldLocationPermission, isPrecise: Bool, awaitsAnswer: Bool = false) -> WorldMapPresence {
         switch permission {
-        case .notAsked, .denied: .off
+        case .denied: .off
+        case .notAsked: awaitsAnswer ? .precise : .off
         case .whileUsing, .always: isPrecise ? .precise : .approximate
         }
     }
