@@ -3118,6 +3118,9 @@ struct EditWorkoutSheet: View {
     @State private var duration: String
     @State private var rpe: String
     @State private var notes: String
+    /// A walk or a run (`ref-run-first`): the map logs Walk or run together from its pace, and this is
+    /// where a pace that guessed wrong is put right. Nil for every other row.
+    @State private var activity: WorkoutActivityType?
     /// Each editable lift's sets (``WorkoutSetEditing/drafts(for:defaultUnit:)``), and what they were
     /// when the sheet opened — the save writes back only the lifts that changed.
     @State private var setDrafts: [ExerciseSetsDraft]
@@ -3140,6 +3143,7 @@ struct EditWorkoutSheet: View {
         _duration = State(initialValue: workout.duration.map(String.init) ?? "")
         _rpe = State(initialValue: Self.rpeText(workout.rpe))
         _notes = State(initialValue: workout.notes)
+        _activity = State(initialValue: workout.activityType)
         let drafts = WorkoutSetEditing.drafts(
             for: workout, defaultUnit: WorkoutLoadContextBuilder.defaultUnit(for: .current))
         _setDrafts = State(initialValue: drafts)
@@ -3164,6 +3168,31 @@ struct EditWorkoutSheet: View {
             || duration != (workout.duration.map(String.init) ?? "")
             || rpe != Self.rpeText(workout.rpe)
             || notes != workout.notes
+            || activity != workout.activityType
+    }
+
+    /// The activities a walk-or-run row can be switched between.
+    static let walkOrRun: [WorkoutActivityType] = [.walking, .running]
+
+    /// Walk · Run, on a walk or a run only (`ref-run-first`: "changeable in Move").
+    @ViewBuilder private var walkOrRunField: some View {
+        if let current = workout.activityType, Self.walkOrRun.contains(current) {
+            SheetField("Walk or run") {
+                FernletSegmentedPicker("Walk or run", selection: Binding(get: { activity ?? current }, set: { activity = $0 }),
+                                       options: Self.walkOrRun) { type in
+                    Text(verbatim: type.displayName)
+                }
+                .accessibilityIdentifier("workout.edit.walkOrRun")
+            }
+        }
+    }
+
+    /// The name a walk turned run (or back) is saved under: the new activity's default while the row
+    /// still carries the old one's, so Move and Health name it for what it was; a name of the person's
+    /// own stays.
+    static func savedName(_ name: String, from old: WorkoutActivityType?, to new: WorkoutActivityType?) -> String {
+        guard let old, let new, old != new, name == old.defaultName else { return name }
+        return new.defaultName
     }
 
     private func attemptCancel() {
@@ -3250,7 +3279,8 @@ struct EditWorkoutSheet: View {
         guard !trimmedName.isEmpty else { return }
         // Corrected sets first: each changed lift's record and its line, rewritten together.
         var updated = WorkoutSetEditing.applying(setDrafts, original: originalSetDrafts, to: workout)
-        updated.name = workout.savedName(editing: trimmedName)
+        updated.name = Self.savedName(workout.savedName(editing: trimmedName), from: workout.activityType, to: activity)
+        updated.activityType = activity
         updated.intensity = intensity
         updated.duration = WorkoutSheetRules.durationMinutes(from: duration)
         // Blank clears the RPE rather than pinning the old one — the field is how you correct it.
@@ -3288,6 +3318,8 @@ struct EditWorkoutSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     nameField
+
+                    walkOrRunField
 
                     intensityField
 

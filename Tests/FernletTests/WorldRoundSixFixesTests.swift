@@ -1,10 +1,12 @@
 import Foundation
 import Testing
 import FernletDomainModel
+import WorldMapStore
 @testable import Fernlet
 
 /// Round 6's smaller fixes (lane "fixes"): the photo prints' one-read cache (W-04), a print opening its
-/// photo (`ref-wall-photo`), and Log intimacy's two-half date and time (`ref-int-date`, `ref-int-time`).
+/// photo (`ref-wall-photo`), Log intimacy's two-half date and time (`ref-int-date`, `ref-int-time`), and
+/// the run start (`ref-run-first`, `ref-run-again`): Walk or run together, told apart by the GPS pace.
 @MainActor
 struct WorldRoundSixFixesTests {
 
@@ -85,5 +87,85 @@ struct WorldRoundSixFixesTests {
         #expect(sheet.contains("PrivateDateTimeButton(date: $eventDate"))
         #expect(sheet.contains("date: eventDate,"), "Apple Health gets the picked date and time")
         #expect(!sheet.contains(".datePickerStyle(.compact)"))
+    }
+
+    // MARK: ref-run-first + ref-run-again · Walk or run together
+
+    /// The card says walk or run, everywhere the row appears; a saved run route keeps "Run it again" first.
+    @Test func theCardOffersWalkOrRunTogether() {
+        let anywhere = WorldQuickStart.card(for: WorldQuickStartContext(canWalk: true))
+        #expect(anywhere?.heading == .walk && anywhere?.options == [.walkTogether])
+        #expect(WorldQuickStartCopy.heading(.walk) == "Go for a walk or run")
+        #expect(WorldQuickStartCopy.note(.nothingSaved)
+                == "Nothing saved here yet. It shows up once you've trained, run, hiked or eaten here a few times.")
+        #expect(WorldQuickStartCopy.title(.walkTogether) == "Walk or run together")
+        #expect(WorldQuickStartCopy.detail(.walkTogether) == "Precise location for this walk or run only")
+        let route = WorldQuickStartContext.SavedLine(metres: 3_200, walks: 8, kind: .run)
+        let again = WorldQuickStart.card(for: WorldQuickStartContext(canWalk: true, savedLine: route))
+        #expect(again?.options == [.runSavedLine(metres: 3_200), .walkTogether])
+        #expect(WorldQuickStart.glyph(for: WorldQuickStartContext(canWalk: true)) == .walk, "a first run keeps the pair, no label")
+        let routeGlyph = WorldQuickStart.glyph(for: WorldQuickStartContext(canWalk: true, savedLine: route))
+        #expect(WorldQuickStartLabel.label(for: routeGlyph) == .run, "the Run label still slides out at a saved route")
+    }
+
+    /// A moving pace of 2.2 m/s or more is a run; slower, or too little to go on, a walk.
+    @Test func thePaceTellsAWalkFromARun() {
+        #expect(WorldWalkRecorder.paceKind(metres: 1_000, seconds: 400) == .run, "2.5 m/s")
+        #expect(WorldWalkRecorder.paceKind(metres: 1_000, seconds: 455) == .run, "2.2 m/s")
+        #expect(WorldWalkRecorder.paceKind(metres: 1_000, seconds: 600) == .walk, "1.7 m/s, a brisk walk")
+        #expect(WorldWalkRecorder.paceKind(metres: 140, seconds: 50) == .walk, "too little to say")
+        #expect(WorldWalkRecorder.paceKind(metres: 0, seconds: 0) == .walk)
+    }
+
+    /// Walk or run together counts only the moving steps: a run with a long stop is still a run, and
+    /// a saved walk again stays a walk whatever the pace.
+    @Test func theRecorderTimesOnlyTheMovingSteps() throws {
+        let recorder = WorldWalkRecorder()
+        #expect(try Self.stopAndGo(recorder, decides: true).kind == .run, "the stop doesn't slow the pace")
+        #expect(try Self.stopAndGo(recorder, decides: false).kind == .walk, "a saved walk again stays a walk")
+        #expect(recorder.movingSeconds == 0 && !recorder.decidesByPace, "finish resets the pace")
+    }
+
+    /// 600 m at 3 m/s, a reading a second, five minutes standing at a light, then 300 m more.
+    private static func stopAndGo(_ recorder: WorldWalkRecorder, decides: Bool) throws -> WorldWalkRecorder.Walk {
+        let origin = GeoPoint(45.5205, -122.6255), start = Date(timeIntervalSince1970: 2_000_000_000)
+        recorder.start(at: start, decidesByPace: decides)
+        for second in 0...200 {
+            recorder.record(WorldFix(point: origin.offset(east: Double(second) * 3, north: 0), accuracy: 5,
+                                     at: start.addingTimeInterval(Double(second)), isPrecise: true))
+        }
+        for second in 0...100 {
+            recorder.record(WorldFix(point: origin.offset(east: 600 + Double(second) * 3, north: 0), accuracy: 5,
+                                     at: start.addingTimeInterval(500 + Double(second)), isPrecise: true))
+        }
+        return try #require(recorder.finish(at: start.addingTimeInterval(620)))
+    }
+
+    /// A pace-decided run is logged as a run, and its line is saved under "Save new routes".
+    @Test func aWalkOrRunTogetherAtARunningPaceLogsARun() throws {
+        let store = makeTestStore()
+        let defaults = try #require(UserDefaults(suiteName: "WorldRoundSixFixesTests.\(UUID().uuidString)"))
+        let start = Date()
+        store.startWorldWalk(at: start, decidesByPace: true)
+        for second in 0...300 {
+            store.worldWalk.record(WorldFix(point: GeoPoint(45.5205, -122.6255).offset(east: Double(second) * 2.6, north: 0),
+                                            accuracy: 5, at: start.addingTimeInterval(Double(second)), isPrecise: true))
+        }
+        let logged = try #require(store.endWorldWalk(at: start.addingTimeInterval(305), defaults: defaults))
+        #expect(logged.kind == .run)
+        let workout = try #require(store.day.workouts.first { $0.id == logged.id })
+        #expect(workout.activityType == .running && workout.name == "Running")
+        #expect(store.worldRoute(for: workout.id)?.isEmpty == false, "a run saves its line")
+        #expect(store.removeWorkout(id: workout.id, date: store.todayKey))
+    }
+
+    /// Move can put a pace that guessed wrong right: the default name follows the activity, a name of
+    /// the person's own stays.
+    @Test func moveSwitchesAWalkToARun() {
+        #expect(EditWorkoutSheet.savedName("Walking", from: .walking, to: .running) == "Running")
+        #expect(EditWorkoutSheet.savedName("Running", from: .running, to: .walking) == "Walking")
+        #expect(EditWorkoutSheet.savedName("Park loop", from: .walking, to: .running) == "Park loop")
+        #expect(EditWorkoutSheet.savedName("Walking", from: .walking, to: .walking) == "Walking")
+        #expect(EditWorkoutSheet.walkOrRun == [.walking, .running])
     }
 }

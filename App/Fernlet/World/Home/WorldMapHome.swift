@@ -425,7 +425,8 @@ struct WorldMapHome: View {
         case .gentleStretch:
             guidedSession = store.todaysGentleStretch(committing: true)
         case .walkTogether:
-            startWalk()
+            // Walk or run together (`ref-run-first`): the pace decides which it is logged as.
+            startWalk(decidesByPace: true)
         case .walkSavedLine:
             guideLine = savedLineHere?.points ?? []
             startWalk()
@@ -447,10 +448,10 @@ struct WorldMapHome: View {
 
     // MARK: Walking together
 
-    /// Starts Walk together (or a run on a saved route): the recorder, and location for it.
-    private func startWalk(kind: WorldWalkRecorder.Kind = .walk) {
+    /// Starts Walk or run together (or a saved walk or run again): the recorder, and location for it.
+    private func startWalk(kind: WorldWalkRecorder.Kind = .walk, decidesByPace: Bool = false) {
         loggedWalk = nil
-        store.startWorldWalk(kind: kind)
+        store.startWorldWalk(kind: kind, decidesByPace: decidesByPace)
         follow(store.worldLocation.latest)
     }
 

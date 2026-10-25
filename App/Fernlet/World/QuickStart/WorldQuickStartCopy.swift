@@ -18,8 +18,9 @@ nonisolated enum WorldQuickStartCopy {
             return String(localized: "worldQuickStart.heading.session", defaultValue: "With \(list)",
                           comment: "World Home quick-start card heading in a friend session: the friends' first names, e.g. 'With Sam and Rae'")
         case .walk:
-            return String(localized: "worldQuickStart.heading.walk", defaultValue: "Go for a walk",
-                          comment: "World Home quick-start card heading when nothing is saved where the person stands")
+            // `ref-run-first` (approved 2026-10-25): a walk or a run, told apart afterwards by the pace.
+            return String(localized: "worldQuickStart.heading.walkOrRun", defaultValue: "Go for a walk or run",
+                          comment: "World Home quick-start card heading when nothing is saved where the person stands (Spanish: Salir a caminar o correr)")
         case .gentle:
             return String(localized: "worldQuickStart.heading.gentle", defaultValue: "A gentle day",
                           comment: "World Home quick-start card heading on a resting or unwell day, away from a workout space")
@@ -70,9 +71,9 @@ nonisolated enum WorldQuickStartCopy {
                           defaultValue: "Nothing planned yet. Fernlet can put something together from this space's \(items) items.",
                           comment: "World Home quick-start card at a workout space with no plan today; the number is how many pieces of equipment the space holds. Plural on the number")
         case .nothingSaved:
-            return String(localized: "worldQuickStart.note.nothingSaved",
-                          defaultValue: "Nothing saved here yet. It shows up once you've trained, hiked or eaten here a few times.",
-                          comment: "World Home quick-start card away from any saved place")
+            return String(localized: "worldQuickStart.note.nothingSaved.run",
+                          defaultValue: "Nothing saved here yet. It shows up once you've trained, run, hiked or eaten here a few times.",
+                          comment: "World Home quick-start card away from any saved place (`ref-run-first`)")
         case .restingCounts:
             return String(localized: "worldQuickStart.note.resting",
                           defaultValue: "Resting counts today. These are here if you want them.",
@@ -99,8 +100,8 @@ nonisolated enum WorldQuickStartCopy {
             return String(localized: "worldQuickStart.gentleStretch", defaultValue: "Gentle stretch",
                           comment: "World Home quick start on a resting day: a guided gentle stretch")
         case .walkTogether:
-            return String(localized: "worldQuickStart.walk", defaultValue: "Walk together",
-                          comment: "World Home quick start: start a walk with the companion, recorded on the map")
+            return String(localized: "worldQuickStart.walkOrRun", defaultValue: "Walk or run together",
+                          comment: "World Home quick start: start a walk or a run with the companion, recorded on the map and logged as one or the other from its pace (Spanish: Caminar o correr juntos)")
         case .walkSavedLine:
             return String(localized: "worldQuickStart.savedLine", defaultValue: "Walk it again",
                           comment: "World Home quick start where a saved walk starts: walk that same line again")
@@ -137,8 +138,8 @@ nonisolated enum WorldQuickStartCopy {
             return String(localized: "worldQuickStart.gentleStretch.detail", defaultValue: "About 8 min · no equipment",
                           comment: "World Home quick start: the gentle stretch's length and what it needs")
         case .walkTogether:
-            return String(localized: "worldQuickStart.walk.detail", defaultValue: "Precise location for this walk only",
-                          comment: "World Home quick start: under Walk together; precise location is used for this walk only")
+            return String(localized: "worldQuickStart.walkOrRun.detail", defaultValue: "Precise location for this walk or run only",
+                          comment: "World Home quick start: under Walk or run together; precise location is used for this walk or run only")
         case .walkSavedLine(let metres):
             let distance = WorldWalkCopy.distance(metres)
             return String(localized: "worldQuickStart.savedLine.detail", defaultValue: "\(distance) · your saved line",
