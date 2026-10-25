@@ -8,6 +8,8 @@ struct WorldPlacesDayCard: View {
     let day: Date
     let stops: [PlaceStop]
     let places: [PlaceRecord]
+    /// The names Apple Maps gave again for this look, by place id.
+    let names: [UUID: WorldPlaceName]
     var store: FernletStore
     let showsNote: Bool
 
@@ -26,7 +28,9 @@ struct WorldPlacesDayCard: View {
                 }
                 ForEach(stops) { stop in
                     FernletDottedRule()
-                    WorldPlaceStopRow(stop: stop, place: places.first { $0.id == stop.placeID })
+                    let place = places.first { $0.id == stop.placeID }
+                    WorldPlaceStopRow(stop: stop, title: WorldPlacesCopy.stopTitle(stop, place: place, name: place.flatMap { names[$0.id] }),
+                                      detail: WorldPlacesCopy.stopDetail(stop, name: place.flatMap { names[$0.id] }))
                 }
                 WorldDaySketch(lines: lines, points: points)
                     .frame(height: 130)
@@ -53,10 +57,14 @@ struct WorldPlacesDayCard: View {
     }
 }
 
-/// One stop: the time, then the place's name and its kind, or "A walk" / "A run" and its length.
+/// One stop: the time, then the place's name and its kind (when Apple Maps gave them again), or "A walk" /
+/// "A run" and its length.
 struct WorldPlaceStopRow: View {
     let stop: PlaceStop
-    let place: PlaceRecord?
+    /// The bold line (``WorldPlacesCopy/stopTitle(_:place:name:)``).
+    let title: String
+    /// The line under it, or empty for none (``WorldPlacesCopy/stopDetail(_:name:)``).
+    let detail: String
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 14) {
@@ -66,12 +74,14 @@ struct WorldPlaceStopRow: View {
                 .monospacedDigit()
                 .frame(minWidth: 52, alignment: .leading)
             VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: WorldPlacesCopy.stopTitle(stop, place: place))
+                Text(verbatim: title)
                     .font(FernletFramedFont.rowTitle)
                     .foregroundStyle(WorldPalette.bark)
-                Text(verbatim: WorldPlacesCopy.stopDetail(stop, place: place))
-                    .font(FernletFramedFont.rowDetail)
-                    .foregroundStyle(WorldPalette.dim)
+                if !detail.isEmpty {
+                    Text(verbatim: detail)
+                        .font(FernletFramedFont.rowDetail)
+                        .foregroundStyle(WorldPalette.dim)
+                }
             }
             .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
@@ -80,9 +90,13 @@ struct WorldPlaceStopRow: View {
     }
 }
 
-/// "Places you return to": each place and its visit count, never a date. A tap renames it.
+/// "Places you return to": each place and its visit count, never a date. A tap renames it. A place shows
+/// the person's own name, else the name Apple Maps gave again by its reference, else "A place you return
+/// to" (offline, or no reference).
 struct WorldReturnedPlacesCard: View {
     let places: [PlaceRecord]
+    /// The names Apple Maps gave again for this look, by place id.
+    let names: [UUID: WorldPlaceName]
     let onRename: (PlaceRecord) -> Void
 
     var body: some View {
@@ -107,7 +121,7 @@ struct WorldReturnedPlacesCard: View {
                 ForEach(places) { place in
                     Button { onRename(place) } label: {
                         HStack(alignment: .firstTextBaseline) {
-                            Text(verbatim: place.name).font(FernletFramedFont.rowTitle)
+                            Text(verbatim: WorldPlacesCopy.placeTitle(place, name: names[place.id])).font(FernletFramedFont.rowTitle)
                             Spacer(minLength: 8)
                             Text(verbatim: WorldPlacesCopy.visits(place.visits)).font(FernletFramedFont.button)
                         }
@@ -253,20 +267,28 @@ nonisolated enum WorldPlacesCopy {
         return day.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
     }
 
+    /// The name a kept place shows under: the person's own, else the one Apple Maps gave again (`name`),
+    /// else "A place you return to" (offline, or no reference).
+    static func placeTitle(_ place: PlaceRecord, name: WorldPlaceName?) -> String {
+        place.label ?? name?.name ?? String(localized: "privatePlaces.unnamedPlace", defaultValue: "A place you return to",
+                                            comment: "Private, Places: a kept place whose name can't be shown (offline, or Apple Maps has none) and that the person hasn't named; tap renames it")
+    }
+
     /// A stop's bold line.
-    static func stopTitle(_ stop: PlaceStop, place: PlaceRecord?) -> String {
+    static func stopTitle(_ stop: PlaceStop, place: PlaceRecord?, name: WorldPlaceName?) -> String {
         switch stop.kind {
-        case .visit: return place?.name ?? String(localized: "privatePlaces.placeGone", defaultValue: "A place",
-                                                  comment: "Private, Places: a stop whose place was removed")
+        case .visit: return place.map { placeTitle($0, name: name) }
+            ?? String(localized: "privatePlaces.placeGone", defaultValue: "A place", comment: "Private, Places: a stop whose place was removed")
         case .walk: return String(localized: "privatePlaces.walk", defaultValue: "A walk", comment: "Private, Places: a walk on the timeline")
         case .run: return String(localized: "privatePlaces.run", defaultValue: "A run", comment: "Private, Places: a run on the timeline")
         }
     }
 
-    /// The line under it: the place's kind, or the walk's or run's length.
-    static func stopDetail(_ stop: PlaceStop, place: PlaceRecord?) -> String {
+    /// The line under it: the place's kind as Apple Maps gave it again (empty when it didn't), or the walk's
+    /// or run's length.
+    static func stopDetail(_ stop: PlaceStop, name: WorldPlaceName?) -> String {
         guard stop.kind == .visit else { return WorldWalkCopy.distance(stop.metres ?? 0) }
-        return place.map { kind($0.category) } ?? ""
+        return name?.category.map(kind) ?? ""
     }
 
     /// A place's kind, as the stop's line says it.

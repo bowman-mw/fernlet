@@ -496,6 +496,15 @@ nonisolated enum SettingsSearchIndex {
             route: .homeMap
         ),
         SettingsSearchEntry(
+            title: "Remember places I stop at",
+            display: LocalizedStringResource(
+                "settings.search.title.rememberPlaces", defaultValue: "Remember places I stop at",
+                comment: "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to."),
+            keywords: ["places", "visits", "where you've been", "stop collecting places", "timeline"],
+            breadcrumb: .homeMap,
+            route: .homeMap
+        ),
+        SettingsSearchEntry(
             title: "Delete map history",
             display: LocalizedStringResource(
                 "settings.search.title.deleteMapHistory", defaultValue: "Delete map history",

@@ -4,7 +4,7 @@ import WorldMapStore
 
 /// A place on the map where the person took solo photos (design `b1-markers`' photo print; World build
 /// step 5c, owner's Q24): the print sprite, a 44-pt target. Only photos that have
-/// shown (after the companion slept), never a friend's, never one taken at a refused place. Tapping it opens
+/// shown (after the companion slept), never a friend's, only ones taken at an everyday place. Tapping it opens
 /// those photos (`b4-mem-solo-open`'s "Just you" carousel). VoiceOver: "Your photos here, 3".
 struct WorldPhotoMarkerView: View {
     let place: WorldPhotoPlace

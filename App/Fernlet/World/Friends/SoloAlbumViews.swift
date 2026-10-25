@@ -313,7 +313,7 @@ struct SoloPhotoPostView: View {
     }
 
     /// The day the photo was taken, then its place's name when it has one (`b4-mem-solo-open`: "Thursday 23
-    /// October · Oak Park"). A photo taken at a refused place has no place, so no name.
+    /// October · Oak Park"). A photo taken away from the everyday places has no place, so no name.
     private var dayLine: String {
         let day = selectedPhoto.takenAt.formatted(.dateTime.weekday(.wide).month(.wide).day())
         guard let place = album.placeName(selectedPhoto.id) else { return day }

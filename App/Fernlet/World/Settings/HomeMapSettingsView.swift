@@ -12,8 +12,9 @@ import WorldMapStore
 ///   iOS to change location to Always; it runs once Always is allowed.
 /// - **The map:** "Uncover the map as you go" and "Save new routes" (both on by default), how many routes
 ///   are stored on this iPhone, and Delete all stored routes (the walks and runs stay in Move).
-/// - **Places:** "Remember where my workout spaces are", the kinds of place Fernlet can name, how many
-///   spaces are pinned, and Forget workout-space locations.
+/// - **Places:** "Remember where my workout spaces are", "Remember places I stop at" (on by default; off,
+///   Where you've been notes nothing new and what it holds stays until deleted; round 5), the kinds of
+///   place Fernlet can name, how many spaces are pinned, and Forget workout-space locations.
 /// - **Delete map history:** the fog, the walk and run lines, Where you've been and the pins, after a
 ///   confirmation.
 ///
@@ -24,6 +25,7 @@ struct HomeMapSettingsView: View {
     @State private var uncovers = WorldMapPreferences.uncoverAsYouGo()
     @State private var savesRoutes = WorldMapPreferences.saveNewRoutes()
     @State private var remembersSpaces = WorldMapPreferences.rememberSpaces() == true
+    @State private var remembersPlaces = WorldMapPreferences.remembersPlaces()
     @State private var routeCount = 0
     @State private var pinCount = 0
     /// Background mapping was turned on while only While Using is allowed: it starts once iOS says Always.
@@ -107,7 +109,8 @@ struct HomeMapSettingsView: View {
         }
     }
 
-    /// Places: remembering spaces, the kinds Fernlet names, the pins and their forget.
+    /// Places: remembering spaces and the places stopped at, the kinds Fernlet names, the pins and their
+    /// forget.
     private var placesSection: some View {
         FernletFramedSection("Places") {
             Toggle(isOn: $remembersSpaces) {
@@ -115,6 +118,11 @@ struct HomeMapSettingsView: View {
             }
             .onChange(of: remembersSpaces) { _, on in WorldMapPreferences.setRememberSpaces(on) }
             .accessibilityIdentifier("settings.homeMap.rememberSpaces")
+            Toggle(isOn: $remembersPlaces) {
+                FernletRowLabel("Remember places I stop at", detail: "For Where you've been, in Private.").padding(.vertical, 7)
+            }
+            .onChange(of: remembersPlaces) { _, on in WorldMapPreferences.setRemembersPlaces(on) }
+            .accessibilityIdentifier("settings.homeMap.rememberPlaces")
             FernletRowLabel(title: Text("Places Fernlet can name"),
                             detail: isLarge ? Text("Food, drink, gyms, parks") : Text("Never doctors, lawyers or therapists."),
                             value: isLarge ? nil : Text("Food, drink, gyms, parks"))

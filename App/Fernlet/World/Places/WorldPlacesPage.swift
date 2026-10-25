@@ -15,10 +15,17 @@ import WorldMapStore
 /// - **The last 30 days** (every day's card), **Delete a day** and **Delete all of it**, each delete behind a
 ///   confirmation; a day's delete also deletes its walks' and runs' saved lines (the workouts stay in Move).
 ///
+/// **Names** (World build round 5, the MapKit terms): a place keeps only Apple's reference to it, so its
+/// name and kind are asked for again by that reference while this page is open (`names`, in memory only).
+/// A place the person renamed shows their name; offline, or with no reference, a place shows as "A place
+/// you return to" until it is renamed.
+///
 /// A decoy, which never has the hub key, shows the page empty and deletes nothing real.
 struct WorldPlacesPage: View {
     var store: FernletStore
     @State private var log: PlaceLog?
+    /// The names Apple Maps gave again for this look, by place id (in memory only).
+    @State private var names: [UUID: WorldPlaceName] = [:]
     @State private var path: [WorldPlacesRoute] = []
     @State private var renaming: PlaceRecord?
     @State private var newName = ""
@@ -34,8 +41,8 @@ struct WorldPlacesPage: View {
                         .accessibilityAddTraits(.isHeader)
                         .fixedSize(horizontal: false, vertical: true)
                     latestDay
-                    WorldReturnedPlacesCard(places: log?.returnedTo ?? []) { place in
-                        newName = place.name
+                    WorldReturnedPlacesCard(places: log?.returnedTo ?? [], names: names) { place in
+                        newName = place.label ?? names[place.id]?.name ?? ""
                         renaming = place
                     }
                     actions
@@ -48,6 +55,7 @@ struct WorldPlacesPage: View {
             .navigationDestination(for: WorldPlacesRoute.self) { route in destination(route) }
         }
         .task { reload() }
+        .task(id: log) { await resolveNames() }
         .alert(Text(WorldPlacesCopy.renameTitle), isPresented: isRenaming, presenting: renaming) { place in
             TextField("Place name", text: $newName, prompt: .fieldPrompt("Place name"))
             Button("Save") { rename(place) }
@@ -66,7 +74,7 @@ struct WorldPlacesPage: View {
     @ViewBuilder
     private var latestDay: some View {
         if let log, let day = log.days().first {
-            WorldPlacesDayCard(day: day, stops: log.stops(on: day), places: log.places, store: store, showsNote: true)
+            WorldPlacesDayCard(day: day, stops: log.stops(on: day), places: log.places, names: names, store: store, showsNote: true)
         } else {
             WorldPlacesEmptyCard()
         }
@@ -99,7 +107,7 @@ struct WorldPlacesPage: View {
     private func destination(_ route: WorldPlacesRoute) -> some View {
         switch route {
         case .days:
-            WorldPlacesDaysPage(log: log ?? .empty, store: store)
+            WorldPlacesDaysPage(log: log ?? .empty, names: names, store: store)
         case .deleteDay:
             WorldPlacesDeleteDayPage(log: log ?? .empty) { day in
                 if store.deleteWorldPlaceDay(day) { FernletFeedback.system.play(.done) }
@@ -121,6 +129,17 @@ extension WorldPlacesPage {
         log = store.worldPlaceLog()
     }
 
+    /// Asks Apple Maps again, by reference, for the name of each place the person hasn't named (at most
+    /// ``PlaceLog/maxPlaces``, one at a time, each shown as it comes); a name already asked for this look is
+    /// kept. Stops when the page goes.
+    private func resolveNames() async {
+        let places = (log?.places ?? []).prefix(PlaceLog.maxPlaces)
+        for place in places where place.label == nil && place.placeID != nil && names[place.id] == nil {
+            guard !Task.isCancelled else { return }
+            if let name = await store.worldPlaceName(for: place) { names[place.id] = name }
+        }
+    }
+
     /// Saves the new name of `place`.
     private func rename(_ place: PlaceRecord) {
         if let next = store.renameWorldPlace(place.id, to: newName) { log = next }
@@ -131,6 +150,7 @@ extension WorldPlacesPage {
     private func deleteAll() {
         FernletFeedback.system.play(store.deleteAllWorldPlaces() ? .done : .failed)
         path = []
+        names = [:]
         reload()
     }
 }
@@ -146,13 +166,16 @@ nonisolated enum WorldPlacesRoute: Hashable, Sendable {
 /// "The last 30 days": every day's card, newest first.
 struct WorldPlacesDaysPage: View {
     let log: PlaceLog
+    /// The names asked for again on the Places page, by place id.
+    let names: [UUID: WorldPlaceName]
     var store: FernletStore
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
                 ForEach(log.days(), id: \.self) { day in
-                    WorldPlacesDayCard(day: day, stops: log.stops(on: day), places: log.places, store: store, showsNote: false)
+                    WorldPlacesDayCard(day: day, stops: log.stops(on: day), places: log.places, names: names, store: store,
+                                       showsNote: false)
                 }
             }
             .padding(16)

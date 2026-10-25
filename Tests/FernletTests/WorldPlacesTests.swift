@@ -15,27 +15,32 @@ struct WorldPlacesTests {
 
     // MARK: The device's rules
 
-    /// A visit names only the nearest place, only when it is an allowed kind and its name refuses nothing;
-    /// a refused nearest place refuses the visit even beside a café.
-    @Test func aVisitNamesOnlyTheNearestAllowedPlace() {
-        let cafe = NearbyPlace(name: "Hoshi Noodle Bar", kind: .allowed(.foodAndDrink), metres: 12)
+    /// A visit is kept only at the nearest place, only when it is an allowed kind and its name refuses
+    /// nothing; a refused nearest place refuses the visit even beside a café. The verdict carries the
+    /// place's reference and nothing else of the answer.
+    @Test func aVisitIsKeptOnlyAtTheNearestAllowedPlace() {
+        let cafe = NearbyPlace(name: "Hoshi Noodle Bar", kind: .allowed(.foodAndDrink), metres: 12, placeID: "I-cafe")
         let clinic = NearbyPlace(name: "Riverside Family Clinic", kind: .other, metres: 8)
         let shop = NearbyPlace(name: "Corner Shop", kind: .other, metres: 5)
-        #expect(PlaceClassifier.visitVerdict([cafe]) == .allowed(.foodAndDrink, name: "Hoshi Noodle Bar"))
+        #expect(PlaceClassifier.visitVerdict([cafe]) == .allowed(placeID: "I-cafe"))
+        #expect(PlaceClassifier.visitVerdict([NearbyPlace(name: "Hoshi", kind: .allowed(.foodAndDrink), metres: 12)]) == .allowed(placeID: nil),
+                "no reference: still allowed, kept by its point alone")
         #expect(PlaceClassifier.visitVerdict([cafe, clinic]) == .refused, "a clinic nearer than the café")
         #expect(PlaceClassifier.visitVerdict([cafe, shop]) == .unnamed)
         #expect(PlaceClassifier.visitVerdict([NearbyPlace(name: "Ortiz Law Office", kind: .other, metres: 3)]) == .refused)
         #expect(PlaceClassifier.visitVerdict([NearbyPlace(name: "Centro de Terapia", kind: .other, metres: 3)]) == .refused)
         #expect(PlaceClassifier.visitVerdict([NearbyPlace(name: "Mercy Hospital", kind: .refused, metres: 30)]) == .refused)
         #expect(PlaceClassifier.visitVerdict([NearbyPlace(name: "Far Café", kind: .allowed(.foodAndDrink), metres: 70)]) == .unnamed)
+        #expect(PlaceClassifier.visitVerdict([NearbyPlace(name: " ", kind: .allowed(.gym), metres: 4, placeID: "I-gym")]) == .unnamed,
+                "a nameless place can't be read for the refused words")
         #expect(PlaceClassifier.visitVerdict([]) == .unnamed)
     }
 
-    /// Inside a park, far from its one point and with nothing else near, the park names the visit; a
-    /// refused place within 80 m still refuses it; a café that far never names it.
-    @Test func anAreaNamesAVisitFromInside() {
-        let park = NearbyPlace(name: "Laurelhurst Park", kind: .allowed(.park), metres: 210)
-        #expect(PlaceClassifier.visitVerdict([park]) == .allowed(.park, name: "Laurelhurst Park"))
+    /// Inside a park, far from its one point and with nothing else near, the park keeps the visit; a
+    /// refused place within 80 m still refuses it; a café that far never does.
+    @Test func anAreaKeepsAVisitFromInside() {
+        let park = NearbyPlace(name: "Laurelhurst Park", kind: .allowed(.park), metres: 210, placeID: "I-park")
+        #expect(PlaceClassifier.visitVerdict([park]) == .allowed(placeID: "I-park"))
         #expect(PlaceClassifier.visitVerdict([park, NearbyPlace(name: "Park Clinic", kind: .other, metres: 70)]) == .refused)
         #expect(PlaceClassifier.visitVerdict([park, NearbyPlace(name: "Corner Shop", kind: .other, metres: 30)]) == .unnamed,
                 "the shop is the nearest place, so the visit is there")
@@ -43,14 +48,26 @@ struct WorldPlacesTests {
         #expect(PlaceClassifier.visitVerdict([NearbyPlace(name: "Far Park", kind: .allowed(.park), metres: 400)]) == .unnamed)
     }
 
-    /// A solo photo keeps its place only when a lookup answered and no refused place is within 60 m.
-    @Test func aPhotoKeepsItsPlaceOnlyAwayFromRefusedPlaces() {
-        #expect(!PlaceClassifier.photoMayKeepPlace(nil), "offline: a refused place can't be ruled out")
-        #expect(PlaceClassifier.photoMayKeepPlace([]))
+    /// Round 5 (owner): a solo photo keeps its place only at the everyday allowlist or inside a park, beach
+    /// or campground, the same rule as a visit. Anywhere else (an office nobody lists, a shop, a station,
+    /// nothing at all) and offline, it keeps no place.
+    @Test func aPhotoKeepsItsPlaceOnlyAtAnAllowedPlace() {
         #expect(PlaceClassifier.photoMayKeepPlace([NearbyPlace(name: "Laurelhurst Park", kind: .allowed(.park), metres: 20)]))
+        #expect(PlaceClassifier.photoMayKeepPlace([NearbyPlace(name: "Hoshi Noodle Bar", kind: .allowed(.foodAndDrink), metres: 12)]))
+        #expect(PlaceClassifier.photoMayKeepPlace([NearbyPlace(name: "Cannon Beach", kind: .allowed(.beach), metres: 260)]),
+                "outdoors inside a beach, far from its one point")
+        #expect(PlaceClassifier.photoMayKeepPlace([NearbyPlace(name: "Iron Gym", kind: .allowed(.gym), metres: 30)]))
+        // The other side: everywhere else.
+        #expect(!PlaceClassifier.photoMayKeepPlace(nil), "offline: nothing can be placed")
+        #expect(!PlaceClassifier.photoMayKeepPlace([]), "nothing recognised near: no place")
+        #expect(!PlaceClassifier.photoMayKeepPlace([NearbyPlace(name: "Corner Shop", kind: .other, metres: 10)]))
         #expect(!PlaceClassifier.photoMayKeepPlace([NearbyPlace(name: "Dr. Lee Dental", kind: .other, metres: 40)]))
         #expect(!PlaceClassifier.photoMayKeepPlace([NearbyPlace(name: "Walgreens", kind: .refused, metres: 55)]))
-        #expect(PlaceClassifier.photoMayKeepPlace([NearbyPlace(name: "Walgreens", kind: .refused, metres: 90)]))
+        #expect(!PlaceClassifier.photoMayKeepPlace([NearbyPlace(name: "Walgreens", kind: .refused, metres: 90)]),
+                "far from a pharmacy but at no allowed place: still no place (the old rule kept it)")
+        #expect(!PlaceClassifier.photoMayKeepPlace([NearbyPlace(name: "Far Café", kind: .allowed(.foodAndDrink), metres: 120)]))
+        #expect(!PlaceClassifier.photoMayKeepPlace([NearbyPlace(name: "Hoshi", kind: .allowed(.foodAndDrink), metres: 12),
+                                                    NearbyPlace(name: "Lakeside Therapy", kind: .other, metres: 6)]))
     }
 
     // MARK: The log and its device side
@@ -58,7 +75,7 @@ struct WorldPlacesTests {
     /// A fold adds new places, counts each visit once (a stop already folded is not counted again), and
     /// drops stops older than 30 days.
     @Test func aFoldCountsEachVisitOnceAndKeepsThirtyDays() {
-        let place = PlaceRecord(name: "Laurelhurst Park", category: .park, point: Self.park)
+        let place = PlaceRecord(placeID: "I-park", point: Self.park)
         let old = PlaceStop(kind: .visit, at: Self.now.addingTimeInterval(-40 * 86_400), placeID: place.id)
         let device = PlaceDeviceState.empty.learning(place, at: Self.now)
             .appending(PlaceStop(kind: .walk, at: Self.now, metres: 900, workoutID: UUID()))
@@ -73,13 +90,14 @@ struct WorldPlacesTests {
                 "the map opened again at the park an hour later, after a fold: the same visit")
         let later = PlaceDeviceState.empty.recordingVisit(to: place.id, at: Self.now.addingTimeInterval(5 * 3_600))
         #expect(log.folding(later, now: Self.now.addingTimeInterval(5 * 3_600)).places.first?.visits == 2)
-        #expect(log.returnedTo.map(\.name) == ["Laurelhurst Park"])
+        #expect(log.returnedTo.map(\.placeID) == ["I-park"])
+        #expect(log.returnedTo.first?.label == nil, "no name is kept until the person gives one")
     }
 
     /// Deleting a day takes its visits off the counts, removes a place left with none, and names the
-    /// day's walks so their lines can go.
+    /// day's walks so their lines can go. Renaming gives a place the person's own label.
     @Test func deletingADayTakesItsVisitsAndNamesItsWalks() {
-        let place = PlaceRecord(name: "Gym", category: .gym, point: Self.park)
+        let place = PlaceRecord(point: Self.park)
         let walkID = UUID()
         let device = PlaceDeviceState.empty.learning(place, at: Self.now)
             .appending(PlaceStop(kind: .walk, at: Self.now.addingTimeInterval(60), metres: 500, workoutID: walkID))
@@ -89,17 +107,20 @@ struct WorldPlacesTests {
         #expect(result.log.stops.isEmpty && result.log.places.isEmpty)
         #expect(result.workoutIDs == [walkID])
         #expect(result.removedPlaces == [place.id])
-        #expect(log.renaming(place.id, to: "  My gym ").places.first?.name == "My gym")
-        #expect(log.renaming(place.id, to: "   ").places.first?.name == "Gym", "an empty name changes nothing")
+        let renamed = log.renaming(place.id, to: "  My gym ")
+        #expect(renamed.places.first?.label == "My gym")
+        #expect(renamed.renaming(place.id, to: "   ") == renamed, "an empty name changes nothing")
     }
 
-    /// Visits to one place within three hours count once; a known place matches within 75 m; the waiting
-    /// stops are capped.
+    /// Visits to one place within three hours count once; a known place matches within 75 m, or anywhere
+    /// by the lookup's reference; the waiting stops are capped.
     @Test func theDeviceSideMatchesDedupesAndIsBounded() {
-        let place = PlaceRecord(name: "Park", category: .park, point: Self.park)
+        let place = PlaceRecord(placeID: "I-park", point: Self.park)
         let state = PlaceDeviceState.empty.learning(place, at: Self.now)
         #expect(state.knownPlace(near: Self.park.offset(east: 60, north: 0))?.id == place.id)
         #expect(state.knownPlace(near: Self.park.offset(east: 90, north: 0)) == nil)
+        #expect(state.knownPlace(withPlaceID: "I-park")?.id == place.id)
+        #expect(state.knownPlace(withPlaceID: "I-other") == nil && state.knownPlace(withPlaceID: nil) == nil)
         #expect(state.recordingVisit(to: place.id, at: Self.now.addingTimeInterval(3_600)) == state)
         #expect(state.recordingVisit(to: place.id, at: Self.now.addingTimeInterval(4 * 3_600)).pending.count == 2)
         var full = PlaceDeviceState.empty
@@ -116,7 +137,7 @@ struct WorldPlacesTests {
         let vault = WorldMapVault.ephemeral()
         let store = PlaceLogStore(vault: vault)
         let key = SymmetricKey(size: .bits256)
-        let place = PlaceRecord(name: "Park", category: .park, point: Self.park)
+        let place = PlaceRecord(placeID: "I-park", point: Self.park)
         try store.saveDeviceState(PlaceDeviceState.empty.learning(place, at: Self.now))
         let folded = try store.fold(hubKey: key, now: Self.now)
         #expect(folded.places.count == 1)
@@ -126,6 +147,51 @@ struct WorldPlacesTests {
         #expect(try store.log(hubKey: SymmetricKey(size: .bits256)) == .empty, "another key opens nothing")
         #expect(try store.log(hubKey: key) == .empty, "and the unopenable log was removed")
         #expect(store.deleteAll())
+        #expect(vault.clearAll())
+    }
+
+    /// After an app-lock reset (a new hub key that can't open the log), the fold starts Where you've been
+    /// again empty and drops what waited on the device side too, as the reset screen says.
+    @Test func aResetStartsWhereYouveBeenAgainEmpty() throws {
+        let vault = WorldMapVault.ephemeral()
+        let store = PlaceLogStore(vault: vault)
+        let oldKey = SymmetricKey(size: .bits256)
+        let place = PlaceRecord(placeID: "I-park", point: Self.park)
+        try store.saveDeviceState(PlaceDeviceState.empty.learning(place, at: Self.now))
+        #expect(try store.fold(hubKey: oldKey, now: Self.now).places.count == 1)
+        try store.saveDeviceState(try store.deviceState().recordingVisit(to: place.id, at: Self.now.addingTimeInterval(5 * 3_600)))
+        let newKey = SymmetricKey(size: .bits256)
+        #expect(try store.fold(hubKey: newKey, now: Self.now) == .empty)
+        #expect(try store.deviceState() == .empty, "the waiting visit and the known point went with it")
+        #expect(try store.fold(hubKey: newKey, now: Self.now) == .empty)
+        #expect(vault.clearAll())
+    }
+
+    /// The first format kept Apple's name and Fernlet's kind for each place. Reading it drops both (none
+    /// can be told apart from a person's rename, so none is kept), keeps the point and the visits, and
+    /// seals the log and the device side again in the current format at once.
+    @Test func aFirstFormatLogIsMigratedWithoutApplesNames() throws {
+        let vault = WorldMapVault.ephemeral()
+        let store = PlaceLogStore(vault: vault)
+        let key = SymmetricKey(size: .bits256)
+        let id = UUID()
+        let point = #""point":{"latitude":45.5213,"longitude":-122.6253}"#
+        let legacyLog = #"{"places":[{"category":"park","id":"\#(id.uuidString)","name":"Laurelhurst Park",\#(point),"visits":2}],"schemaVersion":1,"stops":[]}"#
+        try vault.write(Data(legacyLog.utf8), to: .places, sealedWith: key)
+        let legacyDevice = #"{"known":[{"category":"park","id":"\#(id.uuidString)",\#(point)}],"newPlaces":[{"category":"foodAndDrink","id":"\#(UUID().uuidString)","name":"Hoshi Noodle Bar",\#(point),"visits":0}],"pending":[]}"#
+        try vault.write(Data(legacyDevice.utf8), to: .placesDevice)
+
+        let log = try store.log(hubKey: key)
+        #expect(log.schemaVersion == PlaceLog.currentSchema)
+        #expect(log.places.map(\.id) == [id] && log.places.first?.visits == 2 && log.places.first?.point == Self.park)
+        #expect(log.places.first?.label == nil && log.places.first?.placeID == nil)
+        let sealedLog = String(decoding: try #require(try vault.read(.places, sealedWith: key)), as: UTF8.self)
+        #expect(!sealedLog.contains("Laurelhurst") && !sealedLog.contains("category"), "the name was sealed again without it")
+
+        let device = try store.deviceState()
+        #expect(!device.needsMigration && device.known.map(\.id) == [id])
+        let sealedDevice = String(decoding: try #require(try vault.read(.placesDevice)), as: UTF8.self)
+        #expect(!sealedDevice.contains("Hoshi") && !sealedDevice.contains("category"))
         #expect(vault.clearAll())
     }
 
@@ -146,28 +212,64 @@ struct WorldPlacesTests {
 
     // MARK: Capture
 
-    /// Open on the map at a park: the lookup is asked once, the park is learned with its name, and the
-    /// next reading there is the same visit, without asking again. A refused place is never learned.
+    /// Open on the map at a park: the lookup is asked once, the park is learned by its reference and the
+    /// person's point (never its name), and the next reading there is the same visit, without asking
+    /// again. Entering the same park far from that point is a visit there, by its reference. A refused
+    /// place is never learned.
     @Test func theMapLearnsAnAllowedPlaceOnce() async throws {
-        let lookup = CountingLookup(answer: [NearbyPlace(name: "Laurelhurst Park", kind: .allowed(.park), metres: 10)])
-        let keeper = WorldPlacesKeeper(vault: WorldMapVault.ephemeral(), lookup: lookup)
+        let lookup = CountingLookup(answer: [NearbyPlace(name: "Laurelhurst Park", kind: .allowed(.park), metres: 10, placeID: "I-park")])
+        let keeper = WorldPlacesKeeper(vault: WorldMapVault.ephemeral(), lookup: lookup, remembersPlaces: { true })
         let fix = WorldFix(point: Self.park, accuracy: 10, at: Self.now, isPrecise: true)
         #expect(await keeper.handleForeground(fix, now: Self.now))
         #expect(!(await keeper.handleForeground(fix, now: Self.now.addingTimeInterval(60))), "the same visit")
         #expect(lookup.calls == 1)
         let state = try keeper.store.deviceState()
-        #expect(state.newPlaces.map(\.name) == ["Laurelhurst Park"] && state.pending.count == 1)
+        #expect(state.newPlaces.map(\.placeID) == ["I-park"] && state.newPlaces.first?.label == nil && state.pending.count == 1)
+
+        let farSide = WorldFix(point: Self.park.offset(east: 400, north: 0), accuracy: 10, at: Self.now, isPrecise: true)
+        #expect(await keeper.handleForeground(farSide, now: Self.now.addingTimeInterval(4 * 3_600)))
+        let after = try keeper.store.deviceState()
+        #expect(after.known.count == 1 && after.pending.count == 2, "the same park by its reference, not a second place")
 
         let refused = WorldPlacesKeeper(vault: WorldMapVault.ephemeral(),
-                                        lookup: CountingLookup(answer: [NearbyPlace(name: "Lakeside Therapy", kind: .other, metres: 5)]))
+                                        lookup: CountingLookup(answer: [NearbyPlace(name: "Lakeside Therapy", kind: .other, metres: 5)]),
+                                        remembersPlaces: { true })
         #expect(!(await refused.handleForeground(fix, now: Self.now)))
         #expect(try refused.store.deviceState() == .empty, "a therapist's office is never kept")
+    }
+
+    /// With "Remember places I stop at" off, nothing new is noted and nothing is looked up: no visit, no
+    /// background visit, no walk on the timeline. What is already kept stays.
+    @Test func rememberPlacesOffNotesNothingNew() async throws {
+        var remembers = true
+        let lookup = CountingLookup(answer: [NearbyPlace(name: "Laurelhurst Park", kind: .allowed(.park), metres: 10, placeID: "I-park")])
+        let keeper = WorldPlacesKeeper(vault: WorldMapVault.ephemeral(), lookup: lookup, remembersPlaces: { remembers })
+        let fix = WorldFix(point: Self.park, accuracy: 10, at: Self.now, isPrecise: true)
+        #expect(await keeper.handleForeground(fix, now: Self.now))
+        let kept = try keeper.store.deviceState()
+        remembers = false
+        #expect(!(await keeper.handleForeground(fix, now: Self.now.addingTimeInterval(5 * 3_600))))
+        #expect(!keeper.handleVisit(WorldVisit(point: Self.park, accuracy: 30, arrived: Self.now.addingTimeInterval(6 * 3_600))))
+        #expect(!keeper.recordOuting(.walk, at: Self.now, metres: 900, workoutID: UUID()))
+        #expect(lookup.calls == 1)
+        #expect(try keeper.store.deviceState() == kept, "the park already kept stays")
+    }
+
+    /// The switch is on by default, device-only, and goes with the map's other settings.
+    @Test func rememberPlacesIsOnByDefaultAndCleared() throws {
+        let defaults = try #require(UserDefaults(suiteName: "WorldPlacesTests.\(UUID().uuidString)"))
+        #expect(WorldMapPreferences.remembersPlaces(in: defaults))
+        WorldMapPreferences.setRemembersPlaces(false, in: defaults)
+        #expect(!WorldMapPreferences.remembersPlaces(in: defaults))
+        WorldMapPreferences.clearAll(in: defaults)
+        #expect(WorldMapPreferences.remembersPlaces(in: defaults))
+        #expect(defaults.object(forKey: WorldMapPreferences.Key.remembersPlaces) == nil)
     }
 
     /// Approximate or poor readings, and a decoy, note nothing and ask nothing.
     @Test func poorReadingsAndADecoyNoteNothing() async throws {
         let lookup = CountingLookup(answer: [NearbyPlace(name: "Laurelhurst Park", kind: .allowed(.park), metres: 10)])
-        let keeper = WorldPlacesKeeper(vault: WorldMapVault.ephemeral(), lookup: lookup)
+        let keeper = WorldPlacesKeeper(vault: WorldMapVault.ephemeral(), lookup: lookup, remembersPlaces: { true })
         #expect(!(await keeper.handleForeground(WorldFix(point: Self.park, accuracy: 10, at: Self.now, isPrecise: false))))
         #expect(!(await keeper.handleForeground(WorldFix(point: Self.park, accuracy: 120, at: Self.now, isPrecise: true))))
         keeper.setDecoy(true)
@@ -181,8 +283,8 @@ struct WorldPlacesTests {
     /// Background visits match known places only: a stop somewhere new is not kept, and never looked up.
     @Test func backgroundVisitsMatchOnlyKnownPlaces() throws {
         let lookup = CountingLookup(answer: [])
-        let keeper = WorldPlacesKeeper(vault: WorldMapVault.ephemeral(), lookup: lookup)
-        let place = PlaceRecord(name: "Park", category: .park, point: Self.park)
+        let keeper = WorldPlacesKeeper(vault: WorldMapVault.ephemeral(), lookup: lookup, remembersPlaces: { true })
+        let place = PlaceRecord(point: Self.park)
         try keeper.store.saveDeviceState(PlaceDeviceState.empty.learning(place, at: Self.now.addingTimeInterval(-86_400)))
         #expect(!keeper.handleVisit(WorldVisit(point: Self.park.offset(east: 2_000, north: 0), accuracy: 30, arrived: Self.now)))
         #expect(keeper.handleVisit(WorldVisit(point: Self.park.offset(east: 30, north: 0), accuracy: 30, arrived: Self.now)))
@@ -219,9 +321,9 @@ struct WorldPlacesTests {
         #expect(store.day.workouts.contains { $0.id == workout.id }, "the walk stays in Move")
     }
 
-    /// A solo photo keeps its place where nothing refused is near, none at a refused place or offline,
-    /// and deleting the photo deletes its place.
-    @Test func soloPhotoPlacesFollowTheRefusedPlaceRule() async throws {
+    /// A solo photo keeps its place at an allowed place (a park, a café), none anywhere else (a clinic, a
+    /// shop, nothing recognised) or offline, and deleting the photo deletes its place.
+    @Test func soloPhotoPlacesFollowTheAllowlist() async throws {
         let fix = WorldFix(point: Self.park, accuracy: 8, at: Self.now, isPrecise: true)
         let open = makeTestStore(worldPlaceLookup: FixedPlaceLookup(answer: [NearbyPlace(name: "Park", kind: .allowed(.park), metres: 5)]))
         let photo = UUID()
@@ -230,18 +332,46 @@ struct WorldPlacesTests {
         open.forgetSoloPhotoPlaces([photo])
         #expect(try open.worldPhotoPlaces.place(for: photo) == nil)
         #expect(!(await open.keepSoloPhotoPlace(for: photo, fix: fix, now: Self.now.addingTimeInterval(600))), "a stale reading")
+        let cafe = makeTestStore(worldPlaceLookup: FixedPlaceLookup(answer: [NearbyPlace(name: "Hoshi", kind: .allowed(.foodAndDrink), metres: 9)]))
+        #expect(await cafe.keepSoloPhotoPlace(for: photo, fix: fix, now: Self.now))
 
-        let clinic = makeTestStore(worldPlaceLookup: FixedPlaceLookup(answer: [NearbyPlace(name: "Northside Clinic", kind: .other, metres: 15)]))
-        #expect(!(await clinic.keepSoloPhotoPlace(for: photo, fix: fix, now: Self.now)))
-        #expect(try clinic.worldPhotoPlaces.all().isEmpty)
+        for elsewhere in [[NearbyPlace(name: "Northside Clinic", kind: .other, metres: 15)],
+                          [NearbyPlace(name: "Corner Shop", kind: .other, metres: 10)], []] {
+            let store = makeTestStore(worldPlaceLookup: FixedPlaceLookup(answer: elsewhere))
+            #expect(!(await store.keepSoloPhotoPlace(for: photo, fix: fix, now: Self.now)), "\(elsewhere.map(\.name))")
+            #expect(try store.worldPhotoPlaces.all().isEmpty, "it stays in Just you, off the map")
+        }
         let offline = makeTestStore()
         #expect(!(await offline.keepSoloPhotoPlace(for: photo, fix: fix, now: Self.now)), "no answer, no place")
+    }
+
+    /// A kept place's name is asked for again by its reference only while Private is open, never in a
+    /// decoy; a place the person renamed shows their name, and with no answer a place shows as "A place you
+    /// return to". A name Apple now gives as a refused place is never shown.
+    @Test func placeNamesComeBackByReferenceOnlyInPrivate() async throws {
+        let name = WorldPlaceName(name: "Laurelhurst Park", category: .park)
+        let store = makeTestStore(worldPlaceLookup: FixedPlaceLookup(answer: nil, names: ["I-park": name]))
+        let place = PlaceRecord(placeID: "I-park", point: Self.park, visits: 1)
+        #expect(await store.worldPlaceName(for: place) == nil, "Private closed: nothing asked")
+        store.hubContentKeyProvider = { SymmetricKey(size: .bits256) }
+        #expect(await store.worldPlaceName(for: place) == name)
+        #expect(await store.worldPlaceName(for: PlaceRecord(point: Self.park)) == nil, "no reference, nothing to ask")
+        store.duressSessionActive = true
+        #expect(await store.worldPlaceName(for: place) == nil, "a decoy asks nothing")
+        store.duressSessionActive = false
+
+        #expect(WorldPlacesCopy.placeTitle(place, name: name) == "Laurelhurst Park")
+        #expect(WorldPlacesCopy.placeTitle(PlaceRecord(label: "Our park", placeID: "I-park", point: Self.park), name: name) == "Our park")
+        #expect(WorldPlacesCopy.placeTitle(place, name: nil) == String(localized: "privatePlaces.unnamedPlace", defaultValue: "A place you return to"))
+        #expect(WorldPlaceName.shown(name: "Riverside Family Clinic", kind: .other) == nil)
+        #expect(WorldPlaceName.shown(name: "Mercy Hospital", kind: .refused) == nil)
+        #expect(WorldPlaceName.shown(name: "Hoshi", kind: .allowed(.foodAndDrink)) == WorldPlaceName(name: "Hoshi", category: .foodAndDrink))
     }
 
     /// Delete map history clears the places with the rest of the vault; nothing real goes in a decoy.
     @Test func deleteMapHistoryClearsThePlaces() throws {
         let store = makeTestStore()
-        try store.worldPlaces.store.saveDeviceState(.empty.learning(PlaceRecord(name: "Park", category: .park, point: Self.park), at: Self.now))
+        try store.worldPlaces.store.saveDeviceState(.empty.learning(PlaceRecord(placeID: "I-park", point: Self.park), at: Self.now))
         #expect(try store.worldPhotoPlaces.setPlace(Self.park, for: UUID()))
         store.duressSessionActive = true
         #expect(store.deleteWorldMapHistory())
@@ -314,4 +444,10 @@ private final class CountingLookup: WorldPlaceLooking {
         calls += 1
         return answer
     }
+
+    func placeName(for placeID: String) async -> WorldPlaceName? {
+        nil
+    }
+
+    func forgetNames() {}
 }

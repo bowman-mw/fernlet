@@ -779,8 +779,9 @@ final class FernletStore {
     /// Where each solo camera photo was taken (`PhotoPlaceStore`; `FernletStore+WorldPlaces`), in the same
     /// vault and cleared with it.
     @ObservationIgnored private(set) lazy var worldPhotoPlaces = PhotoPlaceStore(vault: worldMapVault)
-    /// The place lookup a visit's kind and a photo's refused-place check go through: Apple's map on the
-    /// launch path, a lookup with no answer in a test-built store (nothing named, no photo place kept).
+    /// The place lookup visits and photos' places are decided through, and kept places' names asked for again
+    /// by reference: Apple's map on the launch path, a lookup with no answer in a test-built store (nothing
+    /// named, no photo place kept).
     @ObservationIgnored let worldPlaceLookup: any WorldPlaceLooking
     /// The World map's saved walk lines (`WorldRouteStore`), sealed in the same vault as the fog and
     /// cleared with it. Lazy, like the fog.

@@ -3,9 +3,9 @@ import Foundation
 
 /// Where each photo taken with the disposable camera on your own was taken (owner's Q24 and the approved
 /// policy sentence, 2026-10-24; World build step 5c): one point per photo id, so the photo can sit on the
-/// person's map once it has shown. A photo taken at a refused place (medical, legal, therapy;
-/// ``PlaceClassifier/photoMayKeepPlace(_:)``) has no point here at all, and neither has a friend's photo:
-/// nothing ever writes one for them.
+/// person's map once it has shown. Only a photo taken at an everyday place or inside a park, beach or
+/// campground has one (``PlaceClassifier/photoMayKeepPlace(_:)``; owner, round 5); a photo taken anywhere
+/// else, offline, or by a friend has no point here at all: nothing ever writes one for them.
 ///
 /// One small sealed file in the map's vault (`AEAD.worldMapPhotoPlacesV1`, the when-unlocked store key),
 /// read afresh on every use, so nothing held in memory outlives a wipe. Deleting a photo deletes its point;

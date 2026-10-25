@@ -461,11 +461,11 @@ public nonisolated enum FernletCryptoPurpose {
         /// decoy, which never holds that key, sees none of it.
         public static let worldMapPlacesV1 = CryptographicPurpose("fernlet.world-map.places.aead.v1")
         /// **World build only.** The places log's device side (`PlaceLogStore`): stops captured while
-        /// Private is closed, waiting to be folded under the hub key, and the allowed places' points that
+        /// Private is closed, waiting to be folded under the hub key, and the allowed places' points and references that
         /// background visits are matched against, under the vault's after-first-unlock buffer key.
         public static let worldMapPlacesDeviceV1 = CryptographicPurpose("fernlet.world-map.places-device.aead.v1")
         /// **World build only.** Where each solo camera photo was taken (`PhotoPlaceStore`): a point per
-        /// photo id, never kept for a photo taken at a refused place, under the vault's store key.
+        /// photo id, kept only for a photo taken at an everyday place, under the vault's store key.
         public static let worldMapPhotoPlacesV1 = CryptographicPurpose("fernlet.world-map.photo-places.aead.v1")
         /// **World build only.** A photo taken with the disposable camera on your own
         /// (`SoloCameraPhotoStore`, owner 2026-10-24: kept in the Friends area, ten a day, shown after

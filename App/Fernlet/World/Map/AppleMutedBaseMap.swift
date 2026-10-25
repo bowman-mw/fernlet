@@ -6,9 +6,9 @@ import WorldMapStore
 /// Phase 1's base map: Apple's map, muted, with every point of interest hidden.
 ///
 /// **The only file in the app that imports MapKit** (`MapAndLocationConfinementBoundaryTests`). MapKit
-/// fetches Apple's map tiles for the visible area; that is the whole of what Apple receives
-/// (`Docs/No-Tracking-Wall.md` §4a, "Apple Maps (MapKit)"). Fernlet's fog, trails, pins and location
-/// are drawn on top by Fernlet and never handed to MapKit.
+/// fetches Apple's map tiles for the visible area; with the place lookups below (``ApplePlaceLookup``)
+/// that is the whole of what Apple receives (`Docs/No-Tracking-Wall.md` §4a, "Apple Maps (MapKit)").
+/// Fernlet's fog, trails, pins and location are drawn on top by Fernlet and never handed to MapKit.
 ///
 /// MapKit draws its own "Maps" logo and "Legal" link inside the map's layout margins, so the bottom
 /// inset lifts them clear of the item bar and they stay visible (MapKit terms). Pitch and rotation are
@@ -101,22 +101,32 @@ private struct AppleMutedMapView: UIViewRepresentable {
 
 }
 
-/// Phase 1's place lookup (``WorldPlaceLooking``; World build step 5c): Apple's points of interest within
-/// 300 m of where the person stands (a park's one point can be that far from someone inside it), asked in the foreground while the map is on screen, for a visit's
-/// kind and name or a solo photo's refused-place check. Only the point goes to Apple, as the map's own
-/// tile requests for that area already do (`Docs/No-Tracking-Wall.md` §4a); what comes back is turned into
-/// Fernlet's own kinds here and nothing of it is stored but the decision (the MapKit terms).
+/// Phase 1's place lookup (``WorldPlaceLooking``; World build step 5c and round 5). Two requests, both to
+/// Apple Maps, the map's own destination:
+///
+/// - **What is near** (``nearbyPlaces(around:)``): Apple's points of interest within 300 m of where the
+///   person stands (a park's one point can be that far from someone inside it), asked in the foreground
+///   while the map is on screen, to decide a stop or a solo photo's place. Only the point goes to Apple, as
+///   the map's own tile requests for that area already do. What comes back is turned into Fernlet's own
+///   kinds here and dropped once the device has decided; only an allowed place's reference
+///   (`MKMapItem.identifier`) is kept.
+/// - **A kept place's name again** (``placeName(for:)``): while Places is open, each place the person
+///   returns to that has a reference is asked for by it (`MKMapItemRequest`); its name and kind are held in
+///   memory only (`names`), never written (Apple's terms: the identifier may be kept, the place's data
+///   only cached for a while), and forgotten with the wipes. Offline, nothing is named.
 ///
 /// The kinds: food and drink (restaurant, café, bakery, brewery, winery, distillery, food market,
 /// nightlife), gyms (fitness centre), parks (park, national park), beaches and campgrounds (campground,
 /// RV park) are allowed; hospitals and pharmacies are refused; everything else is "other", and its name
 /// still goes through the refused words (`PlaceClassifier`). "Nothing here" is an answer (an empty list);
 /// any other failure is none (nil).
-struct ApplePlaceLookup: WorldPlaceLooking {
+final class ApplePlaceLookup: WorldPlaceLooking {
     /// How far around the point the lookup reaches, in metres.
     static let radius = 300.0
     /// The most places one answer keeps.
     static let maxPlaces = 40
+    /// Names asked for again, by reference: in memory only, at most `PlaceLog.maxPlaces` of them.
+    private var names: [String: WorldPlaceName] = [:]
 
     func nearbyPlaces(around point: GeoPoint) async -> [NearbyPlace]? {
         guard point.isValid else { return nil }
@@ -128,13 +138,36 @@ struct ApplePlaceLookup: WorldPlaceLooking {
             return response.mapItems.prefix(Self.maxPlaces).map { item in
                 let at = item.location.coordinate
                 return NearbyPlace(name: item.name ?? "", kind: Self.kind(of: item.pointOfInterestCategory),
-                                   metres: point.distance(to: GeoPoint(at.latitude, at.longitude)))
+                                   metres: point.distance(to: GeoPoint(at.latitude, at.longitude)),
+                                   placeID: item.identifier?.rawValue)
             }
         } catch let error as MKError where error.code == .placemarkNotFound {
             return []
         } catch {
             return nil
         }
+    }
+
+    func placeName(for placeID: String) async -> WorldPlaceName? {
+        if let known = names[placeID] { return known }
+        guard let identifier = MKMapItem.Identifier(rawValue: placeID) else { return nil }
+        let item: MKMapItem
+        do {
+            item = try await MKMapItemRequest(mapItemIdentifier: identifier).mapItem
+        } catch {
+            // Offline, throttled or gone: nothing is named; the page falls back to the person's own name.
+            return nil
+        }
+        guard let shown = WorldPlaceName.shown(name: item.name ?? "", kind: Self.kind(of: item.pointOfInterestCategory)) else {
+            return nil
+        }
+        if names.count >= PlaceLog.maxPlaces { names.removeAll() }
+        names[placeID] = shown
+        return shown
+    }
+
+    func forgetNames() {
+        names.removeAll()
     }
 
     /// Fernlet's kind for one of Apple's categories.

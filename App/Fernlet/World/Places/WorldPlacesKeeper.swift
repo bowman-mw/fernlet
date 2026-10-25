@@ -9,13 +9,17 @@ import WorldMapStore
 ///   75 m of a place already known is a visit there. Otherwise, at most once per 150 m moved or 30
 ///   minutes, the place lookup (``WorldPlaceLooking``) is asked about where the person stands, and the
 ///   device decides at that moment (``PlaceClassifier/visitVerdict(_:)``): an everyday place (food and drink,
-///   gyms, parks, beaches, campgrounds) is learned with its name as the label it starts with and the
-///   person's own point; anything else, a doctor's office, a lawyer or a therapist above all, is neither
-///   named nor kept. Nothing from the lookup is stored but that.
+///   gyms, parks, beaches, campgrounds) is learned with the person's own point and the lookup's reference to
+///   it (a place already known by that reference is a visit there); anything else, a doctor's office, a
+///   lawyer or a therapist above all, is not kept. Nothing from the lookup is stored but that: never the
+///   place's name or kind (World build round 5, the MapKit terms).
 /// - **With background mapping on**, iOS's low-power visits are matched on the phone against the places
 ///   already known, and nothing else: no lookup ever runs in the background, so a stop at a new place is
 ///   learned only once the person opens the map there.
 /// - **Walks and runs** recorded on the map join the timeline with their length.
+///
+/// With "Remember places I stop at" off (Settings › Home map, ``WorldMapPreferences/remembersPlaces(in:)``)
+/// nothing new is noted and no lookup runs; what is already kept stays until it is deleted.
 ///
 /// Captures wait in the device side (``PlaceDeviceState``, sealed under the map vault's buffer key) until
 /// Private folds them under the hub key. Visits to one place within three hours count once.
@@ -36,28 +40,35 @@ final class WorldPlacesKeeper {
     /// The sealed log and device side.
     let store: PlaceLogStore
     private let lookup: any WorldPlaceLooking
+    /// Whether "Remember places I stop at" is on now.
+    private let remembersPlaces: () -> Bool
     private var lastLookup: (point: GeoPoint, at: Date)?
     private var isLookingUp = false
     /// Whether a decoy session is showing.
     private(set) var isDecoy = false
 
-    /// A keeper over `vault`, asking `lookup` about new places.
-    init(vault: WorldMapVault, lookup: any WorldPlaceLooking) {
+    /// A keeper over `vault`, asking `lookup` about new places while `remembersPlaces` says so (by default,
+    /// the Home map switch on this iPhone).
+    init(vault: WorldMapVault, lookup: any WorldPlaceLooking,
+         remembersPlaces: @escaping () -> Bool = { WorldMapPreferences.remembersPlaces() }) {
         store = PlaceLogStore(vault: vault)
         self.lookup = lookup
+        self.remembersPlaces = remembersPlaces
     }
 
-    /// Enters or leaves a decoy session: nothing is read or written while one shows.
+    /// Enters or leaves a decoy session: nothing is read or written while one shows, and no name is held.
     func setDecoy(_ on: Bool) {
         isDecoy = on
         lastLookup = nil
+        lookup.forgetNames()
     }
 
     /// A reading taken while the map is open and the app in front: a visit at a known place, or a lookup
     /// when the rules allow one. Whether a visit was noted.
     @discardableResult
     func handleForeground(_ fix: WorldFix, now: Date = Date()) async -> Bool {
-        guard !isDecoy, !isLookingUp, fix.isPrecise, fix.accuracy <= Self.maxAccuracy, fix.point.isValid else { return false }
+        guard !isDecoy, remembersPlaces(), !isLookingUp, fix.isPrecise, fix.accuracy <= Self.maxAccuracy,
+              fix.point.isValid else { return false }
         if let noted = noteKnownVisit(at: fix.point, now: now) { return noted }
         guard lookupIsDue(at: fix.point, now: now) else { return false }
         isLookingUp = true
@@ -65,43 +76,54 @@ final class WorldPlacesKeeper {
         isLookingUp = false
         lastLookup = (fix.point, now)
         let verdict = nearby.map(PlaceClassifier.visitVerdict)
-        // The outcome's shape only (never a name or a point), for the device pass.
+        // The outcome's shape only (never a name, a reference or a point), for the device pass.
         FernletAuditLog.log("worldMap.places.lookup", context: ["answered": nearby == nil ? "no" : "yes",
                                                                  "places": "\(nearby?.count ?? 0)",
                                                                  "verdict": Self.token(verdict)])
-        guard !isDecoy, case .allowed(let category, let name) = verdict else { return false }
-        return update { $0.knownPlace(near: fix.point) == nil
-            ? $0.learning(PlaceRecord(name: name, category: category, point: fix.point), at: now)
-            : $0 }
+        guard !isDecoy, remembersPlaces(), case .allowed(let placeID) = verdict else { return false }
+        return update { state in
+            if let known = state.knownPlace(withPlaceID: placeID) { return state.recordingVisit(to: known.id, at: now) }
+            guard state.knownPlace(near: fix.point) == nil else { return state }
+            return state.learning(PlaceRecord(placeID: placeID, point: fix.point), at: now)
+        }
     }
 
     /// A low-power visit from iOS: noted only at a place already known.
     @discardableResult
     func handleVisit(_ visit: WorldVisit) -> Bool {
-        guard !isDecoy, visit.accuracy <= Self.maxVisitAccuracy else { return false }
+        guard !isDecoy, remembersPlaces(), visit.accuracy <= Self.maxVisitAccuracy else { return false }
         return noteKnownVisit(at: visit.point, now: visit.arrived) ?? false
     }
 
     /// A walk or run recorded on the map joins the timeline (`at` is when it started).
     @discardableResult
     func recordOuting(_ kind: PlaceStop.Kind, at date: Date, metres: Double, workoutID: UUID?) -> Bool {
-        guard !isDecoy, kind != .visit, metres.isFinite else { return false }
+        guard !isDecoy, remembersPlaces(), kind != .visit, metres.isFinite else { return false }
         return update { $0.appending(PlaceStop(kind: kind, at: date, metres: max(0, metres), workoutID: workoutID)) }
     }
 
-    /// A verdict's audit token: its kind alone.
+    /// A verdict's audit token: its kind alone (never the place's kind, name or reference).
     static func token(_ verdict: PlaceVerdict?) -> String {
         switch verdict {
-        case .allowed(let category, _): "allowed.\(category.rawValue)"
+        case .allowed(let placeID): placeID == nil ? "allowed.noReference" : "allowed"
         case .refused: "refused"
         case .unnamed: "unnamed"
         case nil: "none"
         }
     }
 
-    /// Forgets the in-memory lookup spacing (the wipes).
+    /// Forgets what is held in memory: the lookup spacing and every place name asked for again (the wipes,
+    /// Delete all of it).
     func forget() {
         lastLookup = nil
+        lookup.forgetNames()
+    }
+
+    /// The name and kind of `place` as the lookup gives them again by its reference (in memory only), or
+    /// nil: no reference, no answer, or a decoy.
+    func name(of place: PlaceRecord) async -> WorldPlaceName? {
+        guard !isDecoy, let placeID = place.placeID else { return nil }
+        return await lookup.placeName(for: placeID)
     }
 
     /// A visit at the known place within 75 m of `point`, if there is one: true when it was noted, false

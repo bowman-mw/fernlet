@@ -13,10 +13,11 @@ import WorldMapStore
 ///   low-power visits with background mapping on, and the walks and runs it records.
 /// - **Private reads it under the hub key** (``worldPlaceLog(now:)`` and the deletes), the key the
 ///   journal's entries are sealed under, from ``hubContentKeyProvider``. No key (Private closed) or a
-///   decoy: nothing is read, and the page shows nothing.
-/// - **Solo photos** keep where they were taken unless a refused place is there
-///   (``keepSoloPhotoPlace(for:fix:)``); deleting a photo deletes its place; only shown photos sit on the
-///   map (``worldPhotoMarkers(visibleAt:)``).
+///   decoy: nothing is read, and the page shows nothing. A kept place's name is asked for again by its
+///   reference while the page is open (``worldPlaceName(for:)``) and held in memory only.
+/// - **Solo photos** keep where they were taken only at an everyday place or inside a park, beach or
+///   campground (``keepSoloPhotoPlace(for:fix:now:)``, owner, round 5); deleting a photo deletes its
+///   place; only shown photos sit on the map (``worldPhotoMarkers(visibleAt:near:)``).
 extension FernletStore {
     // MARK: Capture
 
@@ -128,7 +129,18 @@ extension FernletStore {
         return worldPlaces.store.deleteAll()
     }
 
-    /// Renames place `id` (the name a place starts with is the lookup's; the person's own replaces it).
+    /// The name and kind of `place` as Apple Maps gives them again by its reference, held in memory only;
+    /// nil with no reference, no answer (offline), Private closed or a decoy. The DEBUG scene `namesOffline`
+    /// answers nil, as offline.
+    func worldPlaceName(for place: PlaceRecord) async -> WorldPlaceName? {
+        guard worldPlacesKey != nil, !UITestSupport.worldHomeScenes.contains("namesOffline") else { return nil }
+        let keeper = worldPlaces
+        let name = await keeper.name(of: place)
+        return duressSessionActive ? nil : name
+    }
+
+    /// Gives place `id` the person's own name, shown from then on in place of the one asked for by its
+    /// reference.
     func renameWorldPlace(_ id: UUID, to name: String, now: Date = Date()) -> PlaceLog? {
         guard let key = worldPlacesKey else { return nil }
         do {
@@ -141,9 +153,11 @@ extension FernletStore {
 
     // MARK: Solo photos' places
 
-    /// Keeps where solo photo `id` was taken, from `fix`, unless a refused place is there or the place
-    /// can't be checked (offline): then it keeps none, and the photo stays in Just you, off the map. Only a
-    /// fresh, precise reading counts; nothing in a decoy. Whether a place was kept.
+    /// Keeps where solo photo `id` was taken, from `fix`, only at one of the everyday places a visit is kept
+    /// at or inside a park, beach or campground (``PlaceClassifier/photoMayKeepPlace(_:)``; owner, round 5).
+    /// Anywhere else, or when the place can't be checked (offline), it keeps none, and the photo stays in
+    /// Just you, off the map. Only a fresh, precise reading counts; nothing in a decoy. Whether a place was
+    /// kept. Only the point is kept, never the lookup's answer.
     @discardableResult
     func keepSoloPhotoPlace(for id: UUID, fix: WorldFix?, now: Date = Date()) async -> Bool {
         guard !duressSessionActive, let fix, WorldPhotoPlaceRules.isGoodEnough(fix, at: now) else { return false }

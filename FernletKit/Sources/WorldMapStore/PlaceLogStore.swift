@@ -8,12 +8,17 @@ import Foundation
 /// - **The log** (``PlaceLog``, `places.bin`): the 30-day timeline and Places you return to, sealed with the
 ///   **Private tab's hub key**, passed per call while Private is open, as the journal's entries are. The
 ///   vault never holds that key, so the log opens only inside Private, and a decoy, which never has it,
-///   sees none of it. A log the current hub key can't open (the app lock was reset) is removed and starts
-///   again empty: it is a rolling record, not a corpus anyone restores.
+///   sees none of it. A log the current hub key can't open (the app lock was reset, whose screen says it
+///   deletes Where you've been) is removed with the device side's waiting captures, and starts again
+///   empty: it is a rolling record, not a corpus anyone restores.
 /// - **The device side** (``PlaceDeviceState``, `places-device.bin`): what was captured while Private was
-///   closed (the stops and any new places' names), and the allowed places' points that background visits
-///   are matched against, under the vault's after-first-unlock buffer key, because Always mode's visits
-///   arrive with the phone locked. Folding moves the waiting stops under the hub key.
+///   closed (the stops and any new places' points and references), and the allowed places' points that
+///   background visits are matched against, under the vault's after-first-unlock buffer key, because Always
+///   mode's visits arrive with the phone locked. Folding moves the waiting stops under the hub key.
+///
+/// What either file keeps of a place is Fernlet's own point, the lookup's reference to it, the person's
+/// own name for it and the visits (World build round 5, the MapKit terms): never the lookup's name or kind.
+/// A file from the first format, which held those, is read with them dropped and sealed again at once.
 ///
 /// Both go with the vault: Delete everything, the silent wipe and the recovery lock remove the folder and
 /// its keys together. Nothing here is synced, backed up, exported, shared, given to the AI or sent anywhere.
@@ -33,31 +38,48 @@ public final class PlaceLogStore {
         decoder.dateDecodingStrategy = .secondsSince1970
     }
 
+    /// A sealed file as it was found.
+    private enum Found {
+        /// Its opened bytes.
+        case bytes(Data)
+        /// No such file.
+        case absent
+        /// It could never open with the key given, and was removed.
+        case removed
+    }
+
     // MARK: The device side
 
     /// The device side now (empty when there is none, or when its bytes can't be opened or read as one:
-    /// they are removed). Throws when the file or the vault's key can't be read right now.
+    /// they are removed). A first-format state is sealed again in the current one before it is returned.
+    /// Throws when the file or the vault's key can't be read right now.
     public func deviceState() throws -> PlaceDeviceState {
         let file = WorldMapVault.File.placesDevice
-        guard let data = try openedOrRemoved(file, read: { try self.vault.read(file) }) else { return .empty }
+        guard case .bytes(let data) = try found(file, read: { try self.vault.read(file) }) else { return .empty }
+        let state: PlaceDeviceState
         do {
-            return try decoder.decode(PlaceDeviceState.self, from: data)
+            state = try decoder.decode(PlaceDeviceState.self, from: data)
         } catch {
             FernletAuditLog.log("worldMap.places.deviceUnreadable")
             vault.remove(file)
             return .empty
         }
+        guard state.needsMigration else { return state }
+        let migrated = PlaceDeviceState(known: state.known, pending: state.pending, newPlaces: state.newPlaces)
+        try saveDeviceState(migrated)
+        FernletAuditLog.log("worldMap.places.deviceMigrated")
+        return migrated
     }
 
-    /// `read`'s bytes, or nil when the file is absent or can never open (it is then removed). A key or file
-    /// that can't be read right now throws.
-    private func openedOrRemoved(_ file: WorldMapVault.File, read: () throws -> Data?) throws -> Data? {
+    /// `read`'s bytes, absent, or removed when the file can never open. A key or file that can't be read
+    /// right now throws.
+    private func found(_ file: WorldMapVault.File, read: () throws -> Data?) throws -> Found {
         do {
-            return try read()
+            return try read().map(Found.bytes) ?? .absent
         } catch WorldMapVault.VaultError.unopenable {
             FernletAuditLog.log("worldMap.places.unopenable", context: ["file": file.name])
             vault.remove(file)
-            return nil
+            return .removed
         }
     }
 
@@ -69,19 +91,43 @@ public final class PlaceLogStore {
     // MARK: The log, under the hub key
 
     /// The log sealed with `hubKey` (empty when there is none, or when it can't be opened with this key:
-    /// it is removed).
+    /// it is removed). A log in an older format is sealed again in the current one first.
     public func log(hubKey: SymmetricKey) throws -> PlaceLog {
+        try reading(hubKey: hubKey).log
+    }
+
+    /// The log sealed with `hubKey`, and whether a log was there that this key could never open (the key
+    /// changed: the app lock was reset).
+    private func reading(hubKey: SymmetricKey) throws -> (log: PlaceLog, keyChanged: Bool) {
         let file = WorldMapVault.File.places
-        guard let data = try openedOrRemoved(file, read: { try self.vault.read(file, sealedWith: hubKey) }) else { return .empty }
+        switch try found(file, read: { try self.vault.read(file, sealedWith: hubKey) }) {
+        case .absent: return (.empty, false)
+        case .removed: return (.empty, true)
+        case .bytes(let data): return (try decodedLog(data, hubKey: hubKey), false)
+        }
+    }
+
+    /// `data` read as a log, migrated to the current format (and sealed again) when it is an older one, or
+    /// empty when it reads as none (it is removed).
+    private func decodedLog(_ data: Data, hubKey: SymmetricKey) throws -> PlaceLog {
+        let log: PlaceLog
         do {
-            let log = try decoder.decode(PlaceLog.self, from: data)
-            guard log.schemaVersion == PlaceLog.currentSchema else { throw WorldMapVault.VaultError.unopenable }
-            return log
+            log = try decoder.decode(PlaceLog.self, from: data)
         } catch {
             FernletAuditLog.log("worldMap.places.logUnreadable")
-            vault.remove(file)
+            vault.remove(WorldMapVault.File.places)
             return .empty
         }
+        guard (PlaceLog.oldestReadableSchema...PlaceLog.currentSchema).contains(log.schemaVersion) else {
+            FernletAuditLog.log("worldMap.places.logUnreadable")
+            vault.remove(WorldMapVault.File.places)
+            return .empty
+        }
+        guard log.schemaVersion != PlaceLog.currentSchema else { return log }
+        let migrated = log.migrated
+        try saveLog(migrated, hubKey: hubKey)
+        FernletAuditLog.log("worldMap.places.logMigrated")
+        return migrated
     }
 
     /// Seals `log` with `hubKey`.
@@ -91,12 +137,18 @@ public final class PlaceLogStore {
 
     /// Folds the device side into the log at `now` and returns the log: the log is written first, then the
     /// waiting stops are cleared, so a fold cut short between the two adds nothing twice (each stop is
-    /// added once, by id).
+    /// added once, by id). When the hub key could not open the log (the app lock was reset), the device
+    /// side goes too, so nothing captured before the reset joins the new, empty log.
     public func fold(hubKey: SymmetricKey, now: Date, calendar: Calendar = .current) throws -> PlaceLog {
+        let current = try reading(hubKey: hubKey)
+        if current.keyChanged {
+            vault.remove(WorldMapVault.File.placesDevice)
+            FernletAuditLog.log("worldMap.places.resetCleared")
+            return .empty
+        }
         let device = try deviceState()
-        let current = try log(hubKey: hubKey)
-        let next = current.folding(device, now: now, calendar: calendar)
-        if next != current { try saveLog(next, hubKey: hubKey) }
+        let next = current.log.folding(device, now: now, calendar: calendar)
+        if next != current.log { try saveLog(next, hubKey: hubKey) }
         if !device.pending.isEmpty || !device.newPlaces.isEmpty { try saveDeviceState(device.folded) }
         return next
     }
@@ -112,7 +164,7 @@ public final class PlaceLogStore {
         return result.workoutIDs
     }
 
-    /// Renames place `id` to `name`.
+    /// Gives place `id` the person's own name `name`.
     public func rename(_ id: UUID, to name: String, hubKey: SymmetricKey, now: Date) throws -> PlaceLog {
         let current = try fold(hubKey: hubKey, now: now)
         let next = current.renaming(id, to: name)

@@ -10,6 +10,9 @@ import Foundation
 ///   this iPhone. Off stops new lines only: the walk still lifts the fog and logs its distance.
 /// - **Remember where your workout spaces are** (asked once, in workout-space setup; step 6a): not asked
 ///   (nil), yes or no. Until it is yes nothing pins a space.
+/// - **Remember places I stop at** (on by default; owner, World build round 5): whether Where you've been
+///   notes new visits and timeline stops. Off notes nothing new and asks no lookup; what is kept stays until
+///   it is deleted (the fog and the walk lines have their own switches).
 /// - **The map intro answered** (step 5c, `b1-loc-intro`): the intro shows once, before iOS asks; Turn on
 ///   location and Not now both answer it.
 /// - **The companion hint shown** (`ref-hint`): "Tap me to say hi!" shows once on this iPhone.
@@ -24,8 +27,20 @@ nonisolated enum WorldMapPreferences {
         static let alwaysLowPower = "fernlet.worldMap.alwaysLowPower"
         static let saveNewRoutes = "fernlet.worldMap.saveNewRoutes"
         static let rememberSpaces = "fernlet.worldMap.rememberSpaces"
+        static let remembersPlaces = "fernlet.worldMap.rememberPlaces"
         static let locationIntroAnswered = "fernlet.worldMap.locationIntroAnswered"
         static let companionHintShown = "fernlet.worldMap.companionHintShown"
+    }
+
+    /// Whether Where you've been notes the places the person stops at (default on).
+    static func remembersPlaces(in defaults: UserDefaults = .standard) -> Bool {
+        guard defaults.object(forKey: Key.remembersPlaces) != nil else { return true }
+        return defaults.bool(forKey: Key.remembersPlaces)
+    }
+
+    /// Sets "Remember places I stop at".
+    static func setRemembersPlaces(_ on: Bool, in defaults: UserDefaults = .standard) {
+        defaults.set(on, forKey: Key.remembersPlaces)
     }
 
     /// Whether the map intro has been answered on this iPhone (Turn on location or Not now).
@@ -97,6 +112,7 @@ nonisolated enum WorldMapPreferences {
         defaults.removeObject(forKey: Key.alwaysLowPower)
         defaults.removeObject(forKey: Key.saveNewRoutes)
         defaults.removeObject(forKey: Key.rememberSpaces)
+        defaults.removeObject(forKey: Key.remembersPlaces)
         defaults.removeObject(forKey: Key.locationIntroAnswered)
         defaults.removeObject(forKey: Key.companionHintShown)
     }

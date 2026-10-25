@@ -59,6 +59,8 @@ extension SettingsSearchSynonyms {
                                             "bajo consumo", "visitas"],
         "Uncover the map as you go": ["descubrir el mapa mientras vas", "niebla", "descubrir", "explorar"],
         "Save new routes": ["guardar rutas nuevas", "rutas", "ruta", "líneas", "senderos", "borrar rutas"],
+        "Remember places I stop at": ["recordar los lugares donde me detengo", "lugares", "visitas", "dónde has estado",
+                                      "dejar de guardar lugares"],
         "Delete map history": ["borrar el historial del mapa", "historial del mapa", "olvidar espacios", "limpiar mapa"],
         // AI & data sources
         "AI status": ["estado de la ia", "ia", "inteligencia artificial", "en el dispositivo", "asistente", "estado"],

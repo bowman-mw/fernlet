@@ -6,10 +6,15 @@ import Foundation
 /// Bounded: at most ``maxPlaces`` places (a new place past it is not added) and ``maxStops`` stops (the
 /// oldest go first), and no stop older than ``keptDays`` days survives a fold.
 ///
-/// Frozen at rest: `schemaVersion`, `places` and `stops` are field names.
+/// Frozen at rest: `schemaVersion`, `places` and `stops` are field names. Format 2 (World build round 5)
+/// keeps a place's reference and the person's own name, never the lookup's name or kind; a format-1 log
+/// reads with those dropped (``PlaceRecord``) and is sealed again as format 2 at once
+/// (``PlaceLogStore/log(hubKey:)``).
 public nonisolated struct PlaceLog: Codable, Equatable, Sendable {
-    /// The format this build writes and reads.
-    public static let currentSchema = 1
+    /// The format this build writes.
+    public static let currentSchema = 2
+    /// The oldest format this build still reads (and rewrites in the current one).
+    public static let oldestReadableSchema = 1
     /// How many days the timeline keeps.
     public static let keptDays = 30
     /// The most places kept.
@@ -40,7 +45,7 @@ public nonisolated struct PlaceLog: Codable, Equatable, Sendable {
         var next = self
         let known = Set(places.map(\.id))
         for place in device.newPlaces where !known.contains(place.id) && next.places.count < Self.maxPlaces {
-            next.places.append(PlaceRecord(id: place.id, name: place.name, category: place.category, point: place.point))
+            next.places.append(PlaceRecord(id: place.id, label: place.label, placeID: place.placeID, point: place.point))
         }
         let seen = Set(stops.map(\.id))
         let firstDay = Self.firstDay(now: now, calendar: calendar)
@@ -83,9 +88,15 @@ public nonisolated struct PlaceLog: Codable, Equatable, Sendable {
         stops.filter { calendar.isDate($0.at, inSameDayAs: day) }
     }
 
-    /// Places you return to, most visited first (names break ties), without places no visit is left on.
+    /// Places you return to, most visited first (the person's names, then the order they were first
+    /// visited in, break ties), without places no visit is left on.
     public var returnedTo: [PlaceRecord] {
-        places.filter { $0.visits > 0 }.sorted { ($0.visits, $1.name) > ($1.visits, $0.name) }
+        let order = Dictionary(places.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return places.filter { $0.visits > 0 }.sorted { lhs, rhs in
+            if lhs.visits != rhs.visits { return lhs.visits > rhs.visits }
+            if lhs.label != rhs.label { return (lhs.label ?? "\u{10FFFF}") < (rhs.label ?? "\u{10FFFF}") }
+            return order[lhs.id, default: 0] < order[rhs.id, default: 0]
+        }
     }
 
     /// This log without the stops on `day`: each visit taken off its place's count, and a place left with
@@ -104,26 +115,37 @@ public nonisolated struct PlaceLog: Codable, Equatable, Sendable {
         return (next, going.compactMap(\.workoutID), emptied)
     }
 
-    /// This log with place `id` renamed to `name` (trimmed, at most ``PlaceRecord/maxNameLength``); an empty
-    /// name changes nothing.
+    /// This log with place `id` given the person's own name `name` (trimmed, at most
+    /// ``PlaceRecord/maxNameLength``), its label from now on; an empty name changes nothing.
     public func renaming(_ id: UUID, to name: String) -> PlaceLog {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let index = places.firstIndex(where: { $0.id == id }) else { return self }
+        guard let label = PlaceRecord.validLabel(name), let index = places.firstIndex(where: { $0.id == id }) else { return self }
         var next = self
-        next.places[index].name = String(trimmed.prefix(PlaceRecord.maxNameLength))
+        next.places[index].label = label
+        return next
+    }
+
+    /// This log in the current format: a log read from an older one (whose records' lookup names and kinds
+    /// were dropped as it was read) is marked current, so it is sealed again without them.
+    public var migrated: PlaceLog {
+        var next = self
+        next.schemaVersion = Self.currentSchema
         return next
     }
 }
 
 /// The places log's device side, sealed under the map vault's after-first-unlock buffer key: what was
 /// captured while Private was closed, waiting to be folded under the hub key, and the allowed places'
-/// points (no names) that background visits are matched against.
+/// points and references (no names) that visits are matched against.
 ///
 /// Bounded: at most ``maxPending`` stops wait (the oldest go first) and at most ``PlaceLog/maxPlaces`` places
 /// are known.
 ///
-/// Frozen at rest: `known`, `pending` and `newPlaces` are field names.
+/// Frozen at rest: `schemaVersion`, `known`, `pending` and `newPlaces` are field names. A first-format state
+/// (no `schemaVersion`; its new places held the lookup's names and kinds) reads with those dropped and is
+/// sealed again at once (``PlaceLogStore/deviceState()``).
 public nonisolated struct PlaceDeviceState: Codable, Equatable, Sendable {
+    /// The format this build writes.
+    public static let currentSchema = 2
     /// The most stops that wait for a fold.
     public static let maxPending = 500
     /// How near a reading must be to a known place to count as being there, in metres.
@@ -133,25 +155,37 @@ public nonisolated struct PlaceDeviceState: Codable, Equatable, Sendable {
     /// Nothing known, nothing waiting.
     public static let empty = PlaceDeviceState(known: [], pending: [], newPlaces: [])
 
-    /// The allowed places' points.
+    /// The format it was written in; nil for the first format.
+    public var schemaVersion: Int?
+    /// The allowed places' points and references.
     public var known: [KnownPlace]
     /// Stops waiting to be folded, oldest first.
     public var pending: [PlaceStop]
-    /// New places' names and points, waiting to be folded.
+    /// New places (a point and a reference, never a name), waiting to be folded.
     public var newPlaces: [PlaceRecord]
 
-    /// A device state.
+    /// A device state in the current format.
     public init(known: [KnownPlace], pending: [PlaceStop], newPlaces: [PlaceRecord]) {
+        self.schemaVersion = Self.currentSchema
         self.known = known
         self.pending = pending
         self.newPlaces = newPlaces
     }
+
+    /// Whether it was read from an older format and must be sealed again in the current one.
+    public var needsMigration: Bool { schemaVersion != Self.currentSchema }
 
     /// The known place nearest `point` within ``matchRadius``, or nil.
     public func knownPlace(near point: GeoPoint) -> KnownPlace? {
         known.map { (place: $0, metres: $0.point.distance(to: point)) }
             .filter { $0.metres <= Self.matchRadius }
             .min { $0.metres < $1.metres }?.place
+    }
+
+    /// The known place the lookup refers to as `placeID`, or nil (none given, or none known).
+    public func knownPlace(withPlaceID placeID: String?) -> KnownPlace? {
+        guard let placeID else { return nil }
+        return known.first { $0.placeID == placeID }
     }
 
     /// This state with a visit to `place` at `date`, unless one is already waiting there from the last
@@ -162,12 +196,12 @@ public nonisolated struct PlaceDeviceState: Codable, Equatable, Sendable {
         return appending(visit)
     }
 
-    /// This state with a new place learned at its first visit, `date`: known for matching, its name waiting
+    /// This state with a new place learned at its first visit, `date`: known for matching, its record waiting
     /// for the fold, and the visit itself. Unchanged when ``PlaceLog/maxPlaces`` places are already known.
     public func learning(_ place: PlaceRecord, at date: Date) -> PlaceDeviceState {
         guard known.count < PlaceLog.maxPlaces else { return self }
         var next = self
-        next.known.append(KnownPlace(id: place.id, category: place.category, point: place.point))
+        next.known.append(KnownPlace(id: place.id, point: place.point, placeID: place.placeID))
         next.newPlaces.append(place)
         return next.appending(PlaceStop(kind: .visit, at: date, placeID: place.id))
     }

@@ -4,7 +4,9 @@ import Foundation
 /// blocklist): food and drink, gyms, parks, beaches and campgrounds. Anything else is never named or kept;
 /// doctors, lawyers and therapists least of all.
 ///
-/// The raw values are frozen tokens (sealed at rest); ``PlaceCategory`` names nothing a person reads.
+/// A capture-time value only: the device decides with it and keeps none of it (World build round 5, the
+/// MapKit terms); a place's kind is asked for again with its name when the person looks. The raw values are
+/// frozen tokens; ``PlaceCategory`` names nothing a person reads.
 public nonisolated enum PlaceCategory: String, Codable, CaseIterable, Sendable {
     case foodAndDrink
     case gym
@@ -23,7 +25,9 @@ public nonisolated enum PlaceCategory: String, Codable, CaseIterable, Sendable {
 
 /// One point of interest near a spot, as a lookup reported it, kept only for the moment of the decision
 /// (the MapKit terms allow no store of Apple's place data): its name, what kind of place it is in
-/// Fernlet's own terms, and how far it is from the person.
+/// Fernlet's own terms, how far it is from the person, and the lookup's own reference to it when it gave
+/// one. Of all of it, only the reference may outlive the decision: a place the person returns to keeps it,
+/// so its name can be asked for again when the person looks (World build round 5).
 public nonisolated struct NearbyPlace: Equatable, Sendable {
     /// What kind of place it is, decided on the device from the lookup's category.
     public enum Kind: Equatable, Sendable {
@@ -35,52 +39,56 @@ public nonisolated struct NearbyPlace: Equatable, Sendable {
         case other
     }
 
-    /// The place's name as the lookup gave it.
+    /// The place's name as the lookup gave it: read for the refused words, never kept.
     public let name: String
     public let kind: Kind
     /// How far it is from the person, in metres.
     public let metres: Double
+    /// The lookup's persistent reference to the place (Apple's `MKMapItem.Identifier` raw value), or nil
+    /// when it gave none. Opaque to Fernlet: it names nothing until it is resolved again.
+    public let placeID: String?
 
-    /// A place `name` of `kind`, `metres` away.
-    public init(name: String, kind: Kind, metres: Double) {
+    /// A place `name` of `kind`, `metres` away, with the lookup's `placeID` when it gave a usable one.
+    public init(name: String, kind: Kind, metres: Double, placeID: String? = nil) {
         self.name = name
         self.kind = kind
         self.metres = metres
+        self.placeID = placeID.flatMap(PlaceRecord.validPlaceID)
     }
 }
 
-/// What the device decided about where the person is, from the places a lookup found around them.
+/// What the device decided about where the person is, from the places a lookup found around them. The
+/// decision is all that outlives the lookup: an allowed place keeps only the lookup's reference to it, never
+/// its name or its kind (World build round 5, the MapKit terms).
 public nonisolated enum PlaceVerdict: Equatable, Sendable {
-    /// At an everyday place: its kind and the name it starts with (the person can rename it).
-    case allowed(PlaceCategory, name: String)
+    /// At an everyday place, with the lookup's reference to it when it gave one.
+    case allowed(placeID: String?)
     /// At, or right beside, a place Fernlet never names or keeps.
     case refused
     /// Nowhere Fernlet names.
     case unnamed
 }
 
-/// The device's rules for naming a place and keeping a photo's place (owner, 2026-10-24: "agree with your
-/// take on the doctors / lawyers office"; World build step 5c). Plain values, so the rules are tested
-/// without a lookup.
+/// The device's rules for keeping a visit and keeping a photo's place (owner, 2026-10-24: "agree with your
+/// take on the doctors / lawyers office"; World build step 5c and round 5). Plain values, so the rules are
+/// tested without a lookup.
 ///
-/// - **A visit** names only the nearest place within ``visitRadius``, and only when that nearest place is
-///   one of the allowed kinds and its name reads as none of the refused ones. When the nearest place is a
-///   refused one, the visit is refused even if a café stands next door. With nothing that near, a park,
-///   beach or campground within ``areaRadius`` names it (the person is inside it, far from its one point),
+/// - **A visit** is kept only at the nearest place within ``visitRadius``, and only when that nearest place
+///   is one of the allowed kinds and its name reads as none of the refused ones. When the nearest place is
+///   a refused one, the visit is refused even if a café stands next door. With nothing that near, a park,
+///   beach or campground within ``areaRadius`` keeps it (the person is inside it, far from its one point),
 ///   unless a refused place is within ``areaRefuseRadius``.
-/// - **A solo photo** keeps its point unless a refused place is within ``photoRefuseRadius``, by kind or by
-///   name. With no lookup answer at all (offline) the photo keeps no place: a refused place can't be ruled
-///   out.
+/// - **A solo photo** keeps its point only where a visit would be kept (owner, round 5): at an everyday
+///   place, or inside a park, beach or campground. Anywhere else, and with no lookup answer at all
+///   (offline), it keeps no place.
 ///
 /// The name check catches what the lookup's categories can't: Apple's categories have hospitals and
 /// pharmacies but no doctors' offices, lawyers or therapists, so a name such as "Riverside Family Clinic"
 /// or "Ortiz Law Office" is refused by its words. A place a lookup doesn't list at all can't be recognised;
-/// that is the rule's known limit, and why a visit (an allowlist) names nothing it can't place.
+/// that is why both rules are allowlists: they keep nothing they can't place.
 public nonisolated enum PlaceClassifier {
     /// How near the nearest place must be for a visit to be there, in metres.
     public static let visitRadius = 50.0
-    /// How near a refused place must be for a photo to keep no place, in metres.
-    public static let photoRefuseRadius = 60.0
 
     /// Words (lowercased, without accents) that mark a place as medical, legal or therapy, in English and
     /// Spanish. A false match only drops a visit or a photo's place, never keeps one.
@@ -121,17 +129,18 @@ public nonisolated enum PlaceClassifier {
         return .unnamed
     }
 
-    /// The allowed verdict for `place`, or unnamed when it has no name.
+    /// The allowed verdict for `place` (of an allowed `category`), or unnamed when it has no name: a
+    /// nameless place can't be read for the refused words.
     private static func named(_ place: NearbyPlace, _ category: PlaceCategory) -> PlaceVerdict {
         let name = place.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        return name.isEmpty ? .unnamed : .allowed(category, name: String(name.prefix(PlaceRecord.maxNameLength)))
+        return name.isEmpty ? .unnamed : .allowed(placeID: place.placeID)
     }
 
-    /// Whether a solo photo taken where `nearby` was found may keep its point: never with no answer (nil),
-    /// never with a refused place within ``photoRefuseRadius``.
+    /// Whether a solo photo taken where `nearby` was found may keep its point: only where a visit would be
+    /// kept (an everyday place, or inside a park, beach or campground), never with no answer (nil).
     public static func photoMayKeepPlace(_ nearby: [NearbyPlace]?) -> Bool {
-        guard let nearby else { return false }
-        return !nearby.contains { $0.metres.isFinite && $0.metres <= photoRefuseRadius && isRefused($0) }
+        guard let nearby, case .allowed = visitVerdict(nearby) else { return false }
+        return true
     }
 
     /// Whether `place` is one Fernlet never names or keeps: by its kind, or by the words in its name.
@@ -143,31 +152,53 @@ public nonisolated enum PlaceClassifier {
     }
 }
 
-/// A place the person returns to, in "Where you've been" (`b2-where-been`): a name, a kind, the point the
-/// person stood at (Fernlet's own reading, never Apple's), and how many times they've been. A count, never
-/// dates (owner, 2026-10-22).
+/// A place the person returns to, in "Where you've been" (`b2-where-been`): the point the person stood at
+/// (Fernlet's own reading, never Apple's), the lookup's reference to the place when it gave one, the
+/// person's own name for it once they rename it, and how many times they've been. A count, never dates
+/// (owner, 2026-10-22).
 ///
-/// Frozen at rest: `id`, `name`, `category`, `point` and `visits` are field names of the sealed log.
+/// Nothing of Apple's answer is kept but the reference (World build round 5: Apple's terms let a place's
+/// identifier be kept, and its data be cached only for a while). The name shown is asked for again by that
+/// reference each time the person looks and is held in memory only; with no answer (offline) or no
+/// reference the place shows under the person's own name, or as "A place you return to".
+///
+/// Frozen at rest: `id`, `label`, `placeID`, `point` and `visits` are field names of the sealed log. A
+/// record from the first format (which held the lookup's `name` and a `category`) reads with both dropped:
+/// that format never marked which names the person gave, so none of its names can be kept.
 public nonisolated struct PlaceRecord: Codable, Equatable, Identifiable, Sendable {
     /// The longest name kept.
     public static let maxNameLength = 80
+    /// The longest reference kept (Apple's identifiers are far shorter).
+    public static let maxPlaceIDLength = 256
 
     public let id: UUID
-    /// The name it shows under: the lookup's name when it was first visited, or the person's own.
-    public var name: String
-    public let category: PlaceCategory
+    /// The person's own name for the place, once they rename it; nil until then.
+    public var label: String?
+    /// The lookup's reference to the place, or nil when it gave none.
+    public let placeID: String?
     /// Where the person stood on the first visit.
     public let point: GeoPoint
     /// How many visits it has had.
     public var visits: Int
 
     /// A place record.
-    public init(id: UUID = UUID(), name: String, category: PlaceCategory, point: GeoPoint, visits: Int = 0) {
+    public init(id: UUID = UUID(), label: String? = nil, placeID: String? = nil, point: GeoPoint, visits: Int = 0) {
         self.id = id
-        self.name = String(name.prefix(Self.maxNameLength))
-        self.category = category
+        self.label = label.flatMap(Self.validLabel)
+        self.placeID = placeID.flatMap(Self.validPlaceID)
         self.point = point
         self.visits = visits
+    }
+
+    /// `label` trimmed and capped at ``maxNameLength``, or nil when nothing is left.
+    public static func validLabel(_ label: String) -> String? {
+        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : String(trimmed.prefix(maxNameLength))
+    }
+
+    /// `placeID` when it is a usable reference (not empty, at most ``maxPlaceIDLength``), else nil.
+    public static func validPlaceID(_ placeID: String) -> String? {
+        placeID.isEmpty || placeID.count > maxPlaceIDLength ? nil : placeID
     }
 }
 
@@ -211,19 +242,21 @@ public nonisolated struct PlaceStop: Codable, Equatable, Identifiable, Sendable 
     }
 }
 
-/// An allowed place's point and kind, without its name: what background visits are matched against while
-/// Private is closed (the names stay under the hub key).
+/// An allowed place's point and the lookup's reference to it, without any name: what background visits are
+/// matched against while Private is closed, and what a new lookup's answer is matched against by reference
+/// (a park can be entered far from where it was first visited).
 ///
-/// Frozen at rest: the field names.
+/// Frozen at rest: the field names. A first-format entry (which held a `category`) reads with it dropped.
 public nonisolated struct KnownPlace: Codable, Equatable, Sendable {
     public let id: UUID
-    public let category: PlaceCategory
     public let point: GeoPoint
+    /// The lookup's reference to the place, or nil.
+    public let placeID: String?
 
     /// A known place.
-    public init(id: UUID, category: PlaceCategory, point: GeoPoint) {
+    public init(id: UUID, point: GeoPoint, placeID: String? = nil) {
         self.id = id
-        self.category = category
         self.point = point
+        self.placeID = placeID
     }
 }

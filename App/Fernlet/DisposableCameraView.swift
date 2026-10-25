@@ -1383,7 +1383,7 @@ struct DisposableCameraView: View {
         }
         switch soloRoll.takePhoto(data) {
         case .kept:
-            // Where it was taken, unless that's a refused place (World build step 5c; never a friend's photo).
+            // Where it was taken, only at an everyday place (World build step 5c and round 5; never a friend's photo).
             if let id = soloRoll.lastKeptID {
                 let fix = store.worldLocation.latest
                 Task { await store.keepSoloPhotoPlace(for: id, fix: fix) }
