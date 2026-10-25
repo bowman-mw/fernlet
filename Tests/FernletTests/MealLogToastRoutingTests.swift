@@ -246,10 +246,11 @@ private final class PlayedLog {
     }
 
     /// ContentView hands the toast to every surface that logs: Home (for its meal chips), the Food
-    /// tab, the Home-presented recipe book and the Home-presented recipe editor.
+    /// tab, the Home-presented recipe book, the Home-presented recipe editor and the World map (its
+    /// blue button's "Log your usual", round 6).
     @Test func contentViewWiresTheToastToEveryHost() throws {
         let content = try RepoRoot.source("App/Fernlet/ContentView.swift")
-        #expect(content.components(separatedBy: "onMealsLogged: mealLogReporter").count - 1 == 4)
+        #expect(content.components(separatedBy: "onMealsLogged: mealLogReporter").count - 1 == 5)
         #expect(content.contains("RecipeSheet(store: store, onMealsLogged: mealLogReporter)"))
         let home = try RepoRoot.source("App/Fernlet/HomeView.swift")
         #expect(home.contains("onMealsLogged: onMealsLogged"), "Home no longer passes the toast to its ambient cards")

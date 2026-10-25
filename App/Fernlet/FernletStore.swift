@@ -4000,6 +4000,9 @@ final class FernletStore {
         // The reset purged every sealed row; a pending legacy-import half would re-import Fernlet's
         // own Apple Health copies at the next Private open (§8.4, §9.21).
         cycleLegacyImportLedger.markBothHalvesDone()
+        // World build round 6: Where you've been's device side, the homes and hotel and the places to eat go
+        // at once, as the reset screens say ("This also deletes the places you've been.").
+        deleteWorldPlacesForLockReset()
         FernletAuditLog.log("sealedBackup.restoreHeldForOwner", context: ["site": "appLockReset"])
     }
 
@@ -7411,7 +7414,8 @@ final class FernletStore {
     }
 
     /// The benign snapshot the widget would render right now. PRIVACY: score/water/macros plus the
-    /// companion's state, name and look, its widget-safe emotion timeline, when a friend's gold hearts
+    /// companion's state, name and look (the worn Creation Studio pieces included, none in a decoy;
+    /// `FernletStore+CompanionLook.swift`), its widget-safe emotion timeline, when a friend's gold hearts
     /// fade and the stamp book's tokens and days only (both empty in a decoy;
     /// `FernletStore+WidgetExtras.swift`).
     ///
@@ -7440,7 +7444,7 @@ final class FernletStore {
             computedAt: Date(),
             companionEmotionTimeline: widgetEmotionTimeline(),
             companionName: widgetCompanionName,
-            companionLook: WidgetSnapshot.CompanionLook(appearance: settings.companionAppearance),
+            companionLook: widgetCompanionLook,
             goldHeartEnds: widgetGoldHeartEnds(),
             stamps: widgetStamps()
         )

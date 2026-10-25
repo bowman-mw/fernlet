@@ -942,7 +942,8 @@ struct ContentView: View {
                          // The quick start's "Suggest today's workout" opens Move's suggestion sheet.
                          onSheet: { activeSheet = $0 },
                          stampBannerShowing: shownStampBanner != nil,
-                         isCameraOpen: $isWorldCameraOpen)
+                         isCameraOpen: $isWorldCameraOpen,
+                         onMealsLogged: mealLogReporter)
                 .tabPage(.home)
             WorldPanelFrame(panel: .food, onClose: closeWorldPanel) {
                 FoodView(store: store, onMealsLogged: mealLogReporter, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .food))
