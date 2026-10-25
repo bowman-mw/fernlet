@@ -131,6 +131,24 @@ public nonisolated struct PlaceLog: Codable, Equatable, Sendable {
         next.schemaVersion = Self.currentSchema
         return next
     }
+
+    /// How long the person was out and about on the day that starts at `day` (`ref-home-where`): from each
+    /// time they left a home or their hotel to the next time they got back that day. Nil when no leave was
+    /// followed by a return that day.
+    public func outAndAbout(on day: Date, calendar: Calendar = .current) -> TimeInterval? {
+        var total: TimeInterval = 0
+        var leftAt: Date?
+        for stop in stops(on: day, calendar: calendar) {
+            switch stop.kind {
+            case .leftHome: leftAt = stop.at
+            case .cameHome:
+                if let leftAt, stop.at > leftAt { total += stop.at.timeIntervalSince(leftAt) }
+                leftAt = nil
+            case .visit, .walk, .run: continue
+            }
+        }
+        return total > 0 ? total : nil
+    }
 }
 
 /// The places log's device side, sealed under the map vault's after-first-unlock buffer key: what was
@@ -140,9 +158,13 @@ public nonisolated struct PlaceLog: Codable, Equatable, Sendable {
 /// Bounded: at most ``maxPending`` stops wait (the oldest go first) and at most ``PlaceLog/maxPlaces`` places
 /// are known.
 ///
-/// Frozen at rest: `schemaVersion`, `known`, `pending` and `newPlaces` are field names. A first-format state
-/// (no `schemaVersion`; its new places held the lookup's names and kinds) reads with those dropped and is
-/// sealed again at once (``PlaceLogStore/deviceState()``).
+/// World build round 6 adds two optional parts that live only here, because the map reads them with
+/// Private closed (and Always mode's visits with the phone locked): the person's homes and hotel
+/// (``homes``) and the places they eat out at (``restaurants``). Neither is ever folded into the log.
+///
+/// Frozen at rest: `schemaVersion`, `known`, `pending`, `newPlaces`, `homes` and `restaurants` are field
+/// names. A first-format state (no `schemaVersion`; its new places held the lookup's names and kinds) reads
+/// with those dropped and is sealed again at once (``PlaceLogStore/deviceState()``).
 public nonisolated struct PlaceDeviceState: Codable, Equatable, Sendable {
     /// The format this build writes.
     public static let currentSchema = 2
@@ -161,15 +183,62 @@ public nonisolated struct PlaceDeviceState: Codable, Equatable, Sendable {
     public var known: [KnownPlace]
     /// Stops waiting to be folded, oldest first.
     public var pending: [PlaceStop]
-    /// New places (a point and a reference, never a name), waiting to be folded.
+    /// New places (a point and a reference, and the person's own name for a place they added), waiting to
+    /// be folded.
     public var newPlaces: [PlaceRecord]
+    /// The homes and hotel (round 6); nil until one is marked.
+    public var homes: HomeBook?
+    /// The places the person eats out at (round 6); nil until a meal is noted at one.
+    public var restaurants: [EatingPlace]?
 
     /// A device state in the current format.
-    public init(known: [KnownPlace], pending: [PlaceStop], newPlaces: [PlaceRecord]) {
+    public init(known: [KnownPlace], pending: [PlaceStop], newPlaces: [PlaceRecord], homes: HomeBook? = nil,
+                restaurants: [EatingPlace]? = nil) {
         self.schemaVersion = Self.currentSchema
         self.known = known
         self.pending = pending
         self.newPlaces = newPlaces
+        self.homes = homes
+        self.restaurants = restaurants
+    }
+
+    /// The homes and hotel (empty when none was ever marked).
+    public var homeBook: HomeBook { homes ?? .empty }
+
+    /// The places to eat (none until a meal was noted at one).
+    public var eatingPlaces: [EatingPlace] { restaurants ?? [] }
+
+    /// This state with `book` as the homes and hotel.
+    public func withHomes(_ book: HomeBook) -> PlaceDeviceState {
+        var next = self
+        next.homes = book
+        return next
+    }
+
+    /// This state with `meal` noted at the place to eat `id` (Apple's reference `placeID`, the person's
+    /// point `point`), which is added when new (up to ``EatingPlace/maxPlaces``). A meal already noted
+    /// anywhere is not noted again.
+    public func notingMeal(_ meal: EatingMeal, at id: UUID, placeID: String, point: GeoPoint) -> PlaceDeviceState {
+        var places = eatingPlaces
+        guard !places.hasNoted(meal.id) else { return self }
+        if let index = places.firstIndex(where: { $0.id == id || $0.placeID == placeID }) {
+            places[index] = places[index].noting(meal)
+        } else {
+            guard places.count < EatingPlace.maxPlaces else { return self }
+            places.append(EatingPlace(id: id, placeID: placeID, point: point).noting(meal))
+        }
+        var next = self
+        next.restaurants = places
+        return next
+    }
+
+    /// This state with the place to eat `id` given the person's own name (a rename in Where you've been
+    /// reaches the map's bowl too); an empty name changes nothing.
+    public func renamingEatingPlace(_ id: UUID, to name: String) -> PlaceDeviceState {
+        guard let label = PlaceRecord.validLabel(name), let index = eatingPlaces.firstIndex(where: { $0.id == id }) else { return self }
+        var next = self
+        next.restaurants?[index].label = label
+        return next
     }
 
     /// Whether it was read from an older format and must be sealed again in the current one.
@@ -214,18 +283,25 @@ public nonisolated struct PlaceDeviceState: Codable, Equatable, Sendable {
         return next
     }
 
-    /// This state after a fold: nothing waits; the known points stay.
+    /// This state after a fold: nothing waits; the known points, the homes and the places to eat stay.
     public var folded: PlaceDeviceState {
-        PlaceDeviceState(known: known, pending: [], newPlaces: [])
+        PlaceDeviceState(known: known, pending: [], newPlaces: [], homes: homes, restaurants: restaurants)
     }
 
-    /// This state without the known places in `ids` (a day's delete emptied them).
+    /// This state without the known places in `ids` (a day's delete emptied them), nor their meals out.
     public func forgetting(_ ids: Set<UUID>) -> PlaceDeviceState {
         guard !ids.isEmpty else { return self }
         var next = self
         next.known.removeAll { ids.contains($0.id) }
         next.newPlaces.removeAll { ids.contains($0.id) }
         next.pending.removeAll { $0.placeID.map(ids.contains) ?? false }
+        next.restaurants?.removeAll { ids.contains($0.id) }
         return next
+    }
+
+    /// What "Delete all of it" leaves: the homes and hotel alone, which stay until they are removed in
+    /// Settings › Home map (the approved policy sentence).
+    public var keepingOnlyHomes: PlaceDeviceState {
+        PlaceDeviceState(known: [], pending: [], newPlaces: [], homes: homes)
     }
 }

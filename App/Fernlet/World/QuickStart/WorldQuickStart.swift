@@ -22,6 +22,17 @@ nonisolated struct WorldQuickStartContext: Equatable, Sendable {
         let itemCount: Int
     }
 
+    /// A favourite place to eat the person stands at (`b1-qs-food`; three meals or more logged there).
+    struct EatingOut: Equatable, Sendable {
+        let id: UUID
+        /// Its name: the person's own, else Apple's given again by reference, else "A place you eat".
+        let name: String
+        /// How many meals were logged there.
+        let meals: Int
+        /// The usual's name, when it can be logged again.
+        let usual: String?
+    }
+
     /// A friend session running now.
     struct Session: Equatable, Sendable {
         /// The other people's first names, in roster order.
@@ -60,6 +71,8 @@ nonisolated struct WorldQuickStartContext: Equatable, Sendable {
     /// A resting or unwell day (`needsRestToday`, or today marked unwell).
     var isResting = false
     var space: Space?
+    /// A favourite place to eat within 75 m (`b1-qs-food`, `b3-qs-food-camera`).
+    var eatingPlace: EatingOut?
     /// A saved walk that starts here (`b1-qs-trail`, as the data allows: a walk line, unnamed).
     var savedLine: SavedLine?
     /// Today's approved plan's next guided session, as drawn, when there is one.
@@ -124,6 +137,11 @@ nonisolated enum WorldQuickStartOption: Equatable, Hashable, Sendable {
     /// "Friends nearby": the same page, for a session, a hangout or a new friend when the presence
     /// radio hears no friend (it can't hear people who aren't friends; `b4-mem-blue-join`, `-blue-new`).
     case friendsNearby
+    /// "Log your usual: tonkotsu ramen" at a favourite place to eat (`b1-qs-food`): logs it again, in one tap.
+    case logUsual(meal: String, meals: Int)
+    /// "Find Hoshi Noodle Bar's menu": the meal sheet, ready for Fernlet's food lookup by the place's name;
+    /// the person's location is never sent.
+    case findMenu(place: String)
 }
 
 /// The card the blue button opens (the design's `.qs` card): a heading, an optional line, and the
@@ -153,6 +171,8 @@ nonisolated struct WorldQuickStartCard: Equatable, Sendable {
         case friendNearby([String])
         /// "Together, in person": nothing else to offer here but friends nearby.
         case inPerson
+        /// A favourite place to eat's name (`b1-qs-food`).
+        case eatingPlace(String)
     }
 
     /// The line under the heading.
@@ -167,6 +187,8 @@ nonisolated struct WorldQuickStartCard: Equatable, Sendable {
         case walkedFromHere(times: Int)
         /// "You've run this route 8 times"
         case ranFromHere(times: Int)
+        /// "You've logged meals here 4 times" (`b1-qs-food`)
+        case loggedMealsHere(times: Int)
     }
 
     let heading: Heading
@@ -190,6 +212,8 @@ nonisolated enum WorldQuickStartGlyph: Equatable, Sendable {
     case run
     /// Two people: a friend nearby, or friends in person.
     case friends
+    /// A bowl: at a favourite place to eat (`b1-qs-food`, and with the camera too, `b3-qs-food-camera`).
+    case eat
 }
 
 /// The blue button's rules (World app plan step 6b), first match wins:
@@ -200,6 +224,9 @@ nonisolated enum WorldQuickStartGlyph: Equatable, Sendable {
 /// 4. **In a session** the session's camera, then Walk together.
 /// 5. **With a friend nearby** (`b4-mem-blue-friend`) "Sam is nearby": Start a session with Sam,
 ///    Start an activity, and the usual choices below so nothing is taken away.
+/// 6a. **At a favourite place to eat** (away from a pinned space, round 6: `b1-qs-food`, `b3-qs-food-camera`)
+///    its name: Log your usual, the disposable camera on your own, Find its menu; on a resting day too. The
+///    button shows the bowl, never badges or buzzes on arrival.
 /// 6. **On a resting or unwell day** "Resting counts today" first, the gentle stretch leading, and the
 ///    usual choices below so nothing is taken away.
 /// 7. **At a pinned space** today's plan there (or Move's suggestion when nothing is planned), then
@@ -223,6 +250,8 @@ nonisolated enum WorldQuickStart {
     /// The button's icon, or nil when it hides.
     static func glyph(for context: WorldQuickStartContext) -> WorldQuickStartGlyph? {
         guard let card = card(for: context) else { return nil }
+        // At a favourite place to eat the bowl stays, camera row or not (`b3-qs-food-camera`).
+        if case .eatingPlace = card.heading { return .eat }
         if card.options.contains(where: \.isCamera) { return .camera }
         switch card.heading {
         case .space, .workout: return context.isResting ? .rest : .space
@@ -231,6 +260,7 @@ nonisolated enum WorldQuickStart {
         case .savedRun: return .run
         case .session, .walk, .walking, .running: return .walk
         case .friendNearby, .inPerson: return .friends
+        case .eatingPlace: return .eat
         }
     }
 
@@ -273,8 +303,9 @@ nonisolated enum WorldQuickStart {
         return WorldQuickStartCard(heading: card.heading, note: card.note, options: card.options + [.friendsNearby])
     }
 
-    /// The rules without friends: resting, space, saved walk, anywhere.
+    /// The rules without friends: a place to eat, resting, space, saved walk, anywhere.
     private static func usual(_ context: WorldQuickStartContext, walk: [WorldQuickStartOption]) -> WorldQuickStartCard {
+        if context.space == nil, let place = context.eatingPlace { return eating(place, context) }
         if context.isResting { return resting(context, walk: walk) }
         if let space = context.space {
             let first: WorldQuickStartOption = context.plannedSession.map { .todaysPlan(space: space.name, session: $0) }
@@ -303,6 +334,15 @@ nonisolated enum WorldQuickStart {
         }
         return WorldQuickStartCard(heading: .space(space.name), note: .restingCounts,
                                    options: stretch + [.suggestWorkout(space: space.name, equipment: space.equipment, gentle: true)])
+    }
+
+    /// At a favourite place to eat (`b1-qs-food`, `b3-qs-food-camera`): the usual in one tap, the camera on
+    /// your own second (its solo rules: 10 a day, they appear tonight), and the menu search by name.
+    private static func eating(_ place: WorldQuickStartContext.EatingOut, _ context: WorldQuickStartContext) -> WorldQuickStartCard {
+        let usual: [WorldQuickStartOption] = place.usual.map { [.logUsual(meal: $0, meals: place.meals)] } ?? []
+        let camera: [WorldQuickStartOption] = context.soloCameraAvailable ? [.soloCamera] : []
+        return WorldQuickStartCard(heading: .eatingPlace(place.name), note: .loggedMealsHere(times: place.meals),
+                                   options: usual + camera + [.findMenu(place: place.name)])
     }
 
     /// The camera to offer: the session's, else the on-your-own one when it exists.

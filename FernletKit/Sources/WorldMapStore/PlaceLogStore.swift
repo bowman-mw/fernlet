@@ -18,6 +18,10 @@ import Foundation
 ///
 /// What either file keeps of a place is Fernlet's own point, the lookup's reference to it, the person's
 /// own name for it and the visits (World build round 5, the MapKit terms): never the lookup's name or kind.
+/// Round 6 adds, on the device side only: the homes and hotel the person marked (their name and pin), and
+/// the places they eat out at (the reference, their name, the point and the meals logged there; no dates).
+/// "Delete all of it" keeps the homes and hotel, which go in Settings › Home map, with the map history, in
+/// every wipe and with an app-lock reset.
 /// A file from the first format, which held those, is read with them dropped and sealed again at once.
 ///
 /// Both go with the vault: Delete everything, the silent wipe and the recovery lock remove the folder and
@@ -65,7 +69,8 @@ public final class PlaceLogStore {
             return .empty
         }
         guard state.needsMigration else { return state }
-        let migrated = PlaceDeviceState(known: state.known, pending: state.pending, newPlaces: state.newPlaces)
+        let migrated = PlaceDeviceState(known: state.known, pending: state.pending, newPlaces: state.newPlaces,
+                                        homes: state.homes, restaurants: state.restaurants)
         try saveDeviceState(migrated)
         FernletAuditLog.log("worldMap.places.deviceMigrated")
         return migrated
@@ -172,8 +177,42 @@ public final class PlaceLogStore {
         return next
     }
 
-    /// Deletes all of it: the log and the device side ("Delete all of it"). Keyless. Whether both are gone.
+    /// Deletes all of it ("Delete all of it"): the log (keyless), and of the device side everything but the
+    /// homes and hotel, which stay until they are removed in Settings › Home map (the approved policy
+    /// sentence; round 6). A device side that can't be read now goes whole. Whether it all went.
     public func deleteAll() -> Bool {
+        let log = vault.remove(WorldMapVault.File.places)
+        let homes: HomeBook?
+        do {
+            homes = try deviceState().homes
+        } catch {
+            homes = nil
+        }
+        let device = vault.remove(WorldMapVault.File.placesDevice)
+        guard let homes, homes != .empty else { return log && device }
+        do {
+            try saveDeviceState(PlaceDeviceState.empty.withHomes(homes))
+        } catch {
+            FernletAuditLog.log("worldMap.places.homesNotKept")
+        }
+        return log && device
+    }
+
+    // MARK: Homes and hotels, places to eat (round 6)
+
+    /// Reads the device side, applies `change` and seals it when it changed; the state after the change.
+    /// Throws when the device side or its key can't be read or written right now.
+    @discardableResult
+    public func updateDeviceState(_ change: (PlaceDeviceState) -> PlaceDeviceState) throws -> PlaceDeviceState {
+        let state = try deviceState()
+        let next = change(state)
+        if next != state { try saveDeviceState(next) }
+        return next
+    }
+
+    /// Removes both files whole, the homes and hotel with them: the app-lock reset, whose screen says it
+    /// deletes the places you've been. Keyless. Whether both are gone.
+    public func deleteEverything() -> Bool {
         let log = vault.remove(WorldMapVault.File.places)
         let device = vault.remove(WorldMapVault.File.placesDevice)
         return log && device

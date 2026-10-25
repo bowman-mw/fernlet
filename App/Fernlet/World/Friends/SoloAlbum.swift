@@ -116,6 +116,18 @@ final class SoloAlbumModel {
     @ObservationIgnored private let only: Set<UUID>?
     /// The name a photo's place goes by on its card ("Thursday 23 October · Oak Park"), or nil.
     @ObservationIgnored var placeName: (UUID) -> String? = { _ in nil }
+    /// The store a photo with no place is put on the map through (round 6, `ref-tag-photo`), set by the
+    /// page that shows the album; nil leaves the card saying nothing about places.
+    @ObservationIgnored weak var placesStore: FernletStore?
+    /// The photo being put on the map, while its sheet is up.
+    var placing: SoloCameraPhoto?
+    /// Goes up when a photo is put on the map, so its card drops "No place, to be careful".
+    private(set) var placesRevision = 0
+
+    /// Marks that a photo got a place (its card reads again).
+    func placed() {
+        placesRevision &+= 1
+    }
 
     /// A model over every solo photo, or over `only` those photos.
     init(only: Set<UUID>? = nil) {

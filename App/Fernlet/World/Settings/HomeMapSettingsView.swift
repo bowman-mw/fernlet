@@ -26,6 +26,7 @@ struct HomeMapSettingsView: View {
     @State private var savesRoutes = WorldMapPreferences.saveNewRoutes()
     @State private var remembersSpaces = WorldMapPreferences.rememberSpaces() == true
     @State private var remembersPlaces = WorldMapPreferences.remembersPlaces()
+    @State private var remembersEatingOut = WorldMapPreferences.remembersEatingOut()
     @State private var routeCount = 0
     @State private var pinCount = 0
     /// Background mapping was turned on while only While Using is allowed: it starts once iOS says Always.
@@ -43,6 +44,7 @@ struct HomeMapSettingsView: View {
             VStack(alignment: .leading, spacing: 16) {
                 locationSection
                 mapSection
+                HomesAndHotelsSection(store: store)
                 placesSection
                 historySection
             }
@@ -123,6 +125,11 @@ struct HomeMapSettingsView: View {
             }
             .onChange(of: remembersPlaces) { _, on in WorldMapPreferences.setRemembersPlaces(on) }
             .accessibilityIdentifier("settings.homeMap.rememberPlaces")
+            Toggle(isOn: $remembersEatingOut) {
+                FernletRowLabel("Remember places I eat out").padding(.vertical, 7)
+            }
+            .onChange(of: remembersEatingOut) { _, on in WorldMapPreferences.setRemembersEatingOut(on) }
+            .accessibilityIdentifier("settings.homeMap.rememberEatingOut")
             FernletRowLabel(title: Text("Places Fernlet can name"),
                             detail: isLarge ? Text("Food, drink, gyms, parks") : Text("Never doctors, lawyers or therapists."),
                             value: isLarge ? nil : Text("Food, drink, gyms, parks"))
@@ -263,8 +270,9 @@ nonisolated enum HomeMapDeletion: String, Identifiable, Sendable {
                                     defaultValue: "The map forgets where your workout spaces are. The spaces themselves stay.",
                                     comment: "Settings, Home map: what forgetting workout-space locations does")
         case .history:
-            LocalizedStringResource("homeMap.delete.history.message",
-                                    defaultValue: "The fog, the walk and run lines, Where you've been and the pins on this iPhone go. Your workouts stay in Move.",
+            // Round 6: homes and hotels and the places you eat out at live with the map history and go with it.
+            LocalizedStringResource("homeMap.delete.history.message.homes",
+                                    defaultValue: "The fog, the walk and run lines, Where you've been, your homes and hotels, and the pins on this iPhone go. Your workouts stay in Move.",
                                     comment: "Settings, Home map: what deleting the map history does")
         }
     }

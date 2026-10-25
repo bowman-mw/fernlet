@@ -412,8 +412,12 @@ struct FriendsView: View {
         // The solo camera's photos (b4-mem-solo-*): read on appear and when the decoy flips (the camera
         // is Home's, so the album reads afresh each time it opens); a decoy reads nothing. A tapped
         // "Just you" set opens full screen.
-        // A solo photo's card names its place when it is a workout space's (World build step 5c).
-        .onAppear { soloAlbum.placeName = { [store] in store.soloPhotoPlaceName(for: $0) } }
+        // A solo photo's card names its place when it is a workout space's (World build step 5c); a photo
+        // with no place can be put on the map through the store (round 6, `ref-tag-photo`).
+        .onAppear {
+            soloAlbum.placeName = { [store] in store.soloPhotoPlaceName(for: $0) }
+            soloAlbum.placesStore = store
+        }
         .modifier(SoloAlbumHost(album: soloAlbum, openSetID: $openSoloSetID,
                                 refreshKey: [store.duressSessionActive],
                                 roll: { store.duressSessionActive ? nil : store.soloCameraRoll() }))

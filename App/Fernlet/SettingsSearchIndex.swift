@@ -505,6 +505,24 @@ nonisolated enum SettingsSearchIndex {
             route: .homeMap
         ),
         SettingsSearchEntry(
+            title: "Remember places I eat out",
+            display: LocalizedStringResource(
+                "settings.search.title.rememberEatingOut", defaultValue: "Remember places I eat out",
+                comment: "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to."),
+            keywords: ["restaurants", "restaurant", "eat out", "favourite restaurant", "favorite restaurant", "usual meal"],
+            breadcrumb: .homeMap,
+            route: .homeMap
+        ),
+        SettingsSearchEntry(
+            title: "Homes and hotels",
+            display: LocalizedStringResource(
+                "settings.search.title.homesAndHotels", defaultValue: "Homes and hotels",
+                comment: "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to."),
+            keywords: ["home", "house", "hotel", "check out", "second home"],
+            breadcrumb: .homeMap,
+            route: .homeMap
+        ),
+        SettingsSearchEntry(
             title: "Delete map history",
             display: LocalizedStringResource(
                 "settings.search.title.deleteMapHistory", defaultValue: "Delete map history",

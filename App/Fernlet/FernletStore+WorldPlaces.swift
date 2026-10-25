@@ -96,6 +96,10 @@ extension FernletStore {
     /// while Private is closed, in a decoy, or when it can't be read right now.
     func worldPlaceLog(now: Date = Date()) -> PlaceLog? {
         guard let key = worldPlacesKey else { return nil }
+        // DEBUG scene `where` (`ref-home-where`): a day with Home left and got back, display only.
+        if WorldPlacesTestScenes.scenes.contains("where"), let home = worldHomes.homes.first {
+            return WorldPlacesTestScenes.log(home: home.id, now: now)
+        }
         do {
             return try worldPlaces.store.fold(hubKey: key, now: now)
         } catch {
@@ -126,7 +130,10 @@ extension FernletStore {
             for id in log.stops.compactMap(\.workoutID) { worldRoutes.delete(for: id) }
         }
         worldPlaces.forget()
-        return worldPlaces.store.deleteAll()
+        let deleted = worldPlaces.store.deleteAll()
+        // The homes and hotel stay (removed in Settings › Home map); the map reads them again.
+        worldPlaces.reloadDeviceSide()
+        return deleted
     }
 
     /// The name and kind of `place` as Apple Maps gives them again by its reference, held in memory only;
@@ -140,11 +147,17 @@ extension FernletStore {
     }
 
     /// Gives place `id` the person's own name, shown from then on in place of the one asked for by its
-    /// reference.
+    /// reference; a place they eat out at (the same place) takes the name on the map too (round 6).
     func renameWorldPlace(_ id: UUID, to name: String, now: Date = Date()) -> PlaceLog? {
         guard let key = worldPlacesKey else { return nil }
         do {
-            return try worldPlaces.store.rename(id, to: name, hubKey: key, now: now)
+            let log = try worldPlaces.store.rename(id, to: name, hubKey: key, now: now)
+            let reference = log.places.first { $0.id == id }?.placeID
+            worldPlaces.reloadDeviceSide()
+            if let eating = worldPlaces.eatingPlaces.first(where: { $0.id == id || ($0.placeID == reference && reference != nil) }) {
+                worldPlaces.renameEatingPlace(eating.id, to: name)
+            }
+            return log
         } catch {
             FernletAuditLog.log("worldMap.places.renameFailed")
             return nil

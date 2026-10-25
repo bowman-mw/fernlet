@@ -12,6 +12,10 @@ struct WorldPlacesDayCard: View {
     let names: [UUID: WorldPlaceName]
     var store: FernletStore
     let showsNote: Bool
+    /// The homes and hotel, for the leaves and returns on the timeline (round 6, `ref-home-where`).
+    var homes: HomeBook = .empty
+    /// How long the person was out and about that day, when they left and got back.
+    var outAndAbout: TimeInterval? = nil
 
     var body: some View {
         FernletCard {
@@ -26,11 +30,10 @@ struct WorldPlacesDayCard: View {
                         .font(FernletFramedFont.rowDetail)
                         .foregroundStyle(WorldPalette.dim)
                 }
+                if let outAndAbout { WorldOutAndAboutLine(duration: outAndAbout) }
                 ForEach(stops) { stop in
                     FernletDottedRule()
-                    let place = places.first { $0.id == stop.placeID }
-                    WorldPlaceStopRow(stop: stop, title: WorldPlacesCopy.stopTitle(stop, place: place, name: place.flatMap { names[$0.id] }),
-                                      detail: WorldPlacesCopy.stopDetail(stop, name: place.flatMap { names[$0.id] }))
+                    WorldPlaceStopRow(stop: stop, title: title(of: stop), detail: detail(of: stop))
                 }
                 WorldDaySketch(lines: lines, points: points)
                     .frame(height: 130)
@@ -54,6 +57,41 @@ struct WorldPlacesDayCard: View {
     /// The day's places' points.
     private var points: [GeoPoint] {
         stops.compactMap { stop in places.first { $0.id == stop.placeID }?.point }
+    }
+
+    /// A stop's bold line: a home's or hotel's own name for a leave or a return, else the place's.
+    private func title(of stop: PlaceStop) -> String {
+        guard stop.kind != .leftHome && stop.kind != .cameHome else {
+            let label = stop.placeID.flatMap(homes.place)?.label ?? ""
+            return label.isEmpty ? WorldHomeCopy.defaultHomeName : label
+        }
+        let place = places.first { $0.id == stop.placeID }
+        return WorldPlacesCopy.stopTitle(stop, place: place, name: place.flatMap { names[$0.id] })
+    }
+
+    /// The line under it.
+    private func detail(of stop: PlaceStop) -> String {
+        let place = places.first { $0.id == stop.placeID }
+        return WorldPlacesCopy.stopDetail(stop, name: place.flatMap { names[$0.id] })
+    }
+}
+
+/// "Out and about 9 h 40 min" under a day with a small house (`ref-home-where`), in the moss ink. VoiceOver
+/// reads it as "Out and about 9 hours 40 minutes".
+struct WorldOutAndAboutLine: View {
+    let duration: TimeInterval
+
+    var body: some View {
+        HStack(spacing: 8) {
+            WorldSpriteView(sprite: WorldPlaceSprites.house, scale: 2)
+                .accessibilityHidden(true)
+            Text(verbatim: WorldPlacesCopy.outAndAbout(duration, style: .condensedAbbreviated))
+                .font(FernletFramedFont.rowTitle)
+                .foregroundStyle(WorldPalette.mossInk)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: WorldPlacesCopy.outAndAbout(duration, style: .wide)))
     }
 }
 
@@ -281,14 +319,28 @@ nonisolated enum WorldPlacesCopy {
             ?? String(localized: "privatePlaces.placeGone", defaultValue: "A place", comment: "Private, Places: a stop whose place was removed")
         case .walk: return String(localized: "privatePlaces.walk", defaultValue: "A walk", comment: "Private, Places: a walk on the timeline")
         case .run: return String(localized: "privatePlaces.run", defaultValue: "A run", comment: "Private, Places: a run on the timeline")
+        case .leftHome, .cameHome: return WorldHomeCopy.defaultHomeName
         }
     }
 
-    /// The line under it: the place's kind as Apple Maps gave it again (empty when it didn't), or the walk's
-    /// or run's length.
+    /// The line under it: the place's kind as Apple Maps gave it again (empty when it didn't), the walk's or
+    /// run's length, or "you left" / "you got back" at a home or the hotel (`ref-home-where`).
     static func stopDetail(_ stop: PlaceStop, name: WorldPlaceName?) -> String {
-        guard stop.kind == .visit else { return WorldWalkCopy.distance(stop.metres ?? 0) }
-        return name?.category.map(kind) ?? ""
+        switch stop.kind {
+        case .visit: return name?.category.map(kind) ?? ""
+        case .walk, .run: return WorldWalkCopy.distance(stop.metres ?? 0)
+        case .leftHome: return String(localized: "privatePlaces.leftHome", defaultValue: "you left",
+                                      comment: "Private, Places: under a home's (or the hotel's) name on the timeline, when the person left")
+        case .cameHome: return String(localized: "privatePlaces.cameHome", defaultValue: "you got back",
+                                      comment: "Private, Places: under a home's (or the hotel's) name on the timeline, when the person got back")
+        }
+    }
+
+    /// "Out and about 9 h 40 min" (abbreviated) or "Out and about 9 hours 40 minutes" (VoiceOver).
+    static func outAndAbout(_ duration: TimeInterval, style: Duration.UnitsFormatStyle.UnitWidth) -> String {
+        let length = Duration.seconds(max(0, duration.rounded())).formatted(.units(allowed: [.hours, .minutes], width: style))
+        return String(localized: "privatePlaces.outAndAbout", defaultValue: "Out and about \(length)",
+                      comment: "Private, Places: under a day, how long the person was away from home that day, e.g. 'Out and about 9 h 40 min'")
     }
 
     /// A place's kind, as the stop's line says it.

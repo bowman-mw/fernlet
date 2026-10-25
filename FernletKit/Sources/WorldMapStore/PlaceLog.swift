@@ -118,31 +118,46 @@ public nonisolated enum PlaceClassifier {
 
     /// What a visit at a spot with `nearby` places around it is.
     public static func visitVerdict(_ nearby: [NearbyPlace]) -> PlaceVerdict {
+        decide(nearby).verdict
+    }
+
+    /// The place to eat a visit at a spot with `nearby` places around it is at, by Apple's reference, or nil
+    /// (World build round 6, "Remember places I eat out"): only when the visit would be kept and the place
+    /// it is kept at is food and drink, and only with a reference. Decided at the moment and never stored as
+    /// a kind: what is kept is the meals logged there.
+    public static func eatingPlaceID(_ nearby: [NearbyPlace]) -> String? {
+        let decision = decide(nearby)
+        guard decision.category == .foodAndDrink, case .allowed(let placeID) = decision.verdict else { return nil }
+        return placeID
+    }
+
+    /// The verdict, and the allowed place's kind when the verdict is allowed.
+    private static func decide(_ nearby: [NearbyPlace]) -> (verdict: PlaceVerdict, category: PlaceCategory?) {
         let measured = nearby.filter { $0.metres.isFinite && $0.metres >= 0 }.sorted { $0.metres < $1.metres }
         guard let nearest = measured.first, nearest.metres <= visitRadius else { return areaVerdict(measured) }
-        if isRefused(nearest) { return .refused }
+        if isRefused(nearest) { return (.refused, nil) }
         // A park's own feature (round 6): the park around it decides, as if nothing stood that near.
         if nearest.kind == .feature { return areaVerdict(measured) }
-        guard case .allowed(let category) = nearest.kind else { return .unnamed }
+        guard case .allowed(let category) = nearest.kind else { return (.unnamed, nil) }
         return named(nearest, category)
     }
 
     /// Nothing within ``visitRadius``: the nearest park, beach or campground within ``areaRadius``, unless a
     /// refused place is within ``areaRefuseRadius``.
-    private static func areaVerdict(_ measured: [NearbyPlace]) -> PlaceVerdict {
-        if measured.contains(where: { $0.metres <= areaRefuseRadius && isRefused($0) }) { return .refused }
+    private static func areaVerdict(_ measured: [NearbyPlace]) -> (verdict: PlaceVerdict, category: PlaceCategory?) {
+        if measured.contains(where: { $0.metres <= areaRefuseRadius && isRefused($0) }) { return (.refused, nil) }
         for place in measured where place.metres <= areaRadius && !isRefused(place) {
             guard case .allowed(let category) = place.kind, category.isArea else { continue }
             return named(place, category)
         }
-        return .unnamed
+        return (.unnamed, nil)
     }
 
     /// The allowed verdict for `place` (of an allowed `category`), or unnamed when it has no name: a
     /// nameless place can't be read for the refused words.
-    private static func named(_ place: NearbyPlace, _ category: PlaceCategory) -> PlaceVerdict {
+    private static func named(_ place: NearbyPlace, _ category: PlaceCategory) -> (verdict: PlaceVerdict, category: PlaceCategory?) {
         let name = place.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        return name.isEmpty ? .unnamed : .allowed(placeID: place.placeID)
+        return name.isEmpty ? (.unnamed, nil) : (.allowed(placeID: place.placeID), category)
     }
 
     /// Whether a solo photo taken where `nearby` was found may keep its point: only where a visit would be
@@ -220,13 +235,18 @@ public nonisolated struct PlaceStop: Codable, Equatable, Identifiable, Sendable 
         case visit
         case walk
         case run
+        /// The person left a home or their hotel (round 6, `ref-home-where`: "Home · you left").
+        case leftHome
+        /// The person got back to it ("Home · you got back").
+        case cameHome
     }
 
     public let id: UUID
     public let kind: Kind
     /// When it began.
     public let at: Date
-    /// The place visited (``PlaceRecord/id``), for a visit.
+    /// The place visited (``PlaceRecord/id``), for a visit; the home or hotel (``HomePlace/id``) for a
+    /// leave or a return.
     public let placeID: UUID?
     /// A walk's or run's length, in metres.
     public let metres: Double?
