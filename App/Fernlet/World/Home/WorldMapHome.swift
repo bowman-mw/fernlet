@@ -39,10 +39,10 @@ struct WorldMapHome: View {
     let isFrontmost: Bool
     /// The opt-in body-signal reading for the companion's feeling, as Home reads it.
     var bodySignal: CompanionBodySignal?
-    /// Opens a panel: Today from the status plate, the Album from the photo prints.
+    /// Opens a panel: Today from the status plate, the Album from an empty photo print.
     let onOpen: (WorldPanel) -> Void
     /// Opens a page of the Album panel: Friends nearby or Activities from the blue button's friend
-    /// choices (`b4-mem-blue-*`).
+    /// choices (`b4-mem-blue-*`), or a print's photo from the photo wall (`ref-wall-photo`).
     var onFriends: (FriendsRoute) -> Void = { _ in }
     /// Opens one of the app's sheets (Move's workout suggestion, from the quick start).
     var onSheet: (FernletSheet) -> Void = { _ in }
@@ -128,7 +128,8 @@ struct WorldMapHome: View {
 
     /// The open scene with location off (`b1-home-denied`, draft 4).
     private func offHome(date: Date) -> some View {
-        WorldOffMapHome(store: store, date: date, status: WorldStatus.current(store: store, date: date), onOpen: onOpen) {
+        WorldOffMapHome(store: store, date: date, status: WorldStatus.current(store: store, date: date), onOpen: onOpen,
+                        onOpenPrint: openPrint) {
             WorldMapCompanion(store: store, bodySignal: bodySignal, isActive: isFrontmost && !isCustomizing,
                               mapLine: mapLine, pixelScale: dynamicTypeSize.isAccessibilitySize ? 6 : 7,
                               isNight: phase(at: date) == .night, hint: isHintShowing, onHintEnded: endHint) {
@@ -179,6 +180,12 @@ struct WorldMapHome: View {
         }
     }
 
+    /// A print on the photo wall: its photo in the Album's carousel (`ref-wall-photo`), or the Album for an
+    /// empty print.
+    private func openPrint(_ route: FriendsRoute?) {
+        if let route { onFriends(route) } else { onOpen(.friends) }
+    }
+
     /// The companion with its bubble, its feet on `point`.
     private func companion(at point: CGPoint) -> some View {
         WorldMapCompanion(store: store, bodySignal: bodySignal, isActive: isFrontmost && !isCustomizing, mapLine: mapLine,
@@ -197,7 +204,7 @@ struct WorldMapHome: View {
                 WorldStatusPlate(status: WorldStatus.current(store: store, date: date)) { onOpen(.today) }
                 Spacer(minLength: 0)
                 if showsPrints {
-                    WorldPhotoPrints(store: store) { onOpen(.friends) }
+                    WorldPhotoPrints(store: store, onOpen: openPrint)
                         .padding(.trailing, -2)
                 }
             }
@@ -418,7 +425,8 @@ struct WorldMapHome: View {
         case .gentleStretch:
             guidedSession = store.todaysGentleStretch(committing: true)
         case .walkTogether:
-            startWalk()
+            // Walk or run together (`ref-run-first`): the pace decides which it is logged as.
+            startWalk(decidesByPace: true)
         case .walkSavedLine:
             guideLine = savedLineHere?.points ?? []
             startWalk()
@@ -440,10 +448,10 @@ struct WorldMapHome: View {
 
     // MARK: Walking together
 
-    /// Starts Walk together (or a run on a saved route): the recorder, and location for it.
-    private func startWalk(kind: WorldWalkRecorder.Kind = .walk) {
+    /// Starts Walk or run together (or a saved walk or run again): the recorder, and location for it.
+    private func startWalk(kind: WorldWalkRecorder.Kind = .walk, decidesByPace: Bool = false) {
         loggedWalk = nil
-        store.startWorldWalk(kind: kind)
+        store.startWorldWalk(kind: kind, decidesByPace: decidesByPace)
         follow(store.worldLocation.latest)
     }
 

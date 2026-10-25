@@ -180,8 +180,9 @@ extension FernletStore {
             return WorldLoggedWalk(id: UUID(), dayKey: todayKey, metres: walk.metres, minutes: walk.minutes, isKept: false,
                                    kind: walk.kind)
         }
-        let kind = worldWalk.kind
         guard let workout = finishWorldWalk(at: date, defaults: defaults) else { return nil }
+        // What it was logged as: Walk or run together's pace decides only as it ends.
+        let kind: WorldWalkRecorder.Kind = workout.activityType == .running ? .run : .walk
         worldFog.flush()
         return WorldLoggedWalk(id: workout.id, dayKey: FernletDate.dayKey(for: workout.completedAt),
                                metres: (workout.distanceMiles ?? 0) * 1_609.344, minutes: workout.duration ?? 1, isKept: true,

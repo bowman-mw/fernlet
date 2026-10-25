@@ -68,23 +68,12 @@ struct WorkoutLocationSetupView: View {
         _activeID = State(initialValue: store.settings.activeWorkoutLocation.id)
     }
 
-    private let twoColumns = Array(repeating: GridItem(.flexible(), spacing: 14), count: 2)
-
-    /// T2-11: the equipment checklist's fixed three-up grid truncated its labels at Larger Text
-    /// sizes — three columns leave roughly 100pt per tile, and a two-word piece of equipment set in
-    /// `.labelSmall` needs far more than that once the user is in the accessibility sizes. Collapse
-    /// to a single column there (the same `isAccessibilitySize` branch this file already uses for
-    /// the step header and `SavedSpaceRow`'s summary); the default sizes are untouched.
-    private var equipmentColumns: [GridItem] {
-        let count = dynamicTypeSize.isAccessibilitySize ? 1 : 3
-        return Array(repeating: GridItem(.flexible(), spacing: 10), count: count)
+    /// Two cards or tiles to a row (`comp-space-add`, `comp-space-equip`); one at the accessibility sizes,
+    /// so a two-word piece of equipment keeps its whole name (T2-11).
+    private func gridColumns(spacing: CGFloat) -> [GridItem] {
+        let count = dynamicTypeSize.isAccessibilitySize ? 1 : 2
+        return Array(repeating: GridItem(.flexible(), spacing: spacing, alignment: .top), count: count)
     }
-
-    /// The equipment tile's glyph and the tile's own minimum height are one measurement: the tile is
-    /// a glyph stacked over up to two lines of label. Both scale against `.body` — a fixed 28pt mark
-    /// beside AX-size text reads as a speck, and the fixed 56pt floor cropped the second label line.
-    @ScaledMetric(relativeTo: .body) private var equipmentGlyphSize: CGFloat = 28
-    @ScaledMetric(relativeTo: .body) private var equipmentCardMinHeight: CGFloat = 56
 
     var body: some View {
         Group {
@@ -281,30 +270,35 @@ struct WorkoutLocationSetupView: View {
 
     // MARK: - Add step (presets + custom)
 
+    /// `comp-space-add` (approved 2026-10-25): "‹ Your spaces" and "Add a location"; the unsaved presets as
+    /// framed cards two to a row, a line naming the ones already saved, then "Somewhere else": the framed
+    /// name field and a small primary Add with a pixel plus, dim until the name has text.
     private var addStep: some View {
         VStack(spacing: 0) {
-            addHeader
+            YourSpacesStepHeader(title: "Add a location", titleText: String(localized: "Add a location")) {
+                customName = ""
+                step = .location
+            }
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 16) {
                     if availableTemplates.isEmpty == false {
-                        sectionHeader("Start from a preset")
-                        LazyVGrid(columns: twoColumns, spacing: 14) {
+                        SectionLabel("Start from a preset")
+                        LazyVGrid(columns: gridColumns(spacing: 10), spacing: 10) {
                             ForEach(availableTemplates) { template in
-                                templateCard(template)
+                                YourSpacesPresetCard(template: template) { addFromTemplate(template) }
                             }
                         }
                     }
-
-                    sectionHeader("Somewhere else")
-                    HStack(spacing: 8) {
-                        TextField("Location name", text: $customName, prompt: .fieldPrompt("Location name"))
-                            .sheetTextInput()
-                        Button("Add") { addCustomLocation() }
-                            .buttonStyle(ChipButtonStyle(selected: true))
-                            .disabled(customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    if let savedPresetsLine {
+                        savedPresetsLine
+                            .font(FernletFramedFont.note)
+                            .foregroundStyle(look?.dim ?? Color.slate)
+                            .fernletWrappingText()
                     }
+                    SectionLabel("Somewhere else")
+                    customLocationRow
                 }
-                .padding(20)
+                .padding(16)
                 .padding(.bottom, 10)
             }
         }
@@ -318,64 +312,52 @@ struct WorkoutLocationSetupView: View {
         return LocationTemplate.all.filter { savedNames.contains($0.name) == false }
     }
 
-    /// The add step's chrome: back chevron + title.
-    private var addHeader: some View {
-        HStack(spacing: 10) {
-            Button {
-                customName = ""
-                step = .location
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.bark)
-                    .frame(width: 34, height: 34)
-                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 11))
-                    .frame(minWidth: 44, minHeight: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Back to your spaces")
-            .accessibilityIdentifier("workout.location.addBack")
-            Text("Add a location")
-                .font(.fernlet(.header))
-                .foregroundStyle(Color.bark)
-            Spacer()
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 18)
-        .padding(.bottom, 12)
+    /// "Full gym is already saved, so it isn't offered again." (`comp-space-add`): nil while every preset
+    /// is still offered. Forked on the count, the names interpolated as data.
+    private var savedPresetsLine: Text? {
+        let savedNames = Set(locations.map(\.name))
+        let saved = LocationTemplate.all.filter { savedNames.contains($0.name) }.map(\.displayName)
+        guard let first = saved.first else { return nil }
+        if saved.count == 1 { return Text("\(first) is already saved, so it isn't offered again.") }
+        return Text("\(saved.formatted(.list(type: .and))) are already saved, so they aren't offered again.")
     }
 
-    private func templateCard(_ template: LocationTemplate) -> some View {
-        Button { addFromTemplate(template) } label: {
-            VStack(alignment: .leading, spacing: 14) {
-                LocationGlyph(templateID: template.id, fallbackSystemImage: template.systemImage, size: 32)
-                    .foregroundStyle(Color.moss)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(template.displayName)
-                        .font(.fernlet(.headerMedium))
-                        .foregroundStyle(Color.bark)
-                    Text(template.displaySubtitle)
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
+    /// "Somewhere else": the framed Location name field and Add (a small primary with a pixel plus),
+    /// stacked at the accessibility sizes.
+    private var customLocationRow: some View {
+        let isBlank = customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+            : AnyLayout(HStackLayout(spacing: 8))
+        return layout {
+            TextField("Location name", text: $customName, prompt: .fieldPrompt("Location name"))
+                .sheetTextInput()
+                .submitLabel(.done)
+                .onSubmit { addCustomLocation() }
+            Button { addCustomLocation() } label: {
+                HStack(spacing: 6) {
+                    WorldSpriteView(sprite: WorldSprites.plus, scale: 2, tint: WorldPalette.onAccent)
+                    Text("Add")
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
-            .padding(16)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 18))
-            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.bark.opacity(0.07), lineWidth: 1))
+            .buttonStyle(ActionPillButtonStyle(.primary, size: .small))
+            .disabled(isBlank)
+            .accessibilityIdentifier("workout.location.addCustom")
         }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Equipment step
 
+    /// `comp-space-equip` and `comp-space-weights` (approved 2026-10-25): "‹ Your spaces" and "Equipment";
+    /// the name chip, "What's available?" with its count and Train here; each category's framed tiles; for a
+    /// space with free weights, "Weights I have" in one frame; "Save location" pinned in its bar.
     private var equipmentStep: some View {
         VStack(spacing: 0) {
-            equipmentHeader
+            YourSpacesStepHeader(title: "Equipment", titleText: String(localized: "Equipment")) { leaveEquipmentStep() }
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 16) {
+                    equipmentIntro
                     ForEach(EquipmentCategory.allCases) { category in
                         equipmentCategorySection(category)
                     }
@@ -387,23 +369,23 @@ struct WorkoutLocationSetupView: View {
                         )
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 10)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
             }
 
-            SheetSaveBar(label: "Save location") {
+            YourSpacesSaveBar {
                 commitEdits()
                 dismiss()
             }
         }
         // Commit name + equipment edits on ANY exit from this step — including a swipe-dismiss, which
-        // routes through neither the save bar nor the back chevron, so an edited-but-unsaved rename used
+        // routes through neither the save bar nor the Back, so an edited-but-unsaved rename used
         // to evaporate exactly the way a delete once did. Guarded to fire only for a location that
         // already exists in the store (compare by id): a brand-new location added at this step lives
         // only in local @State until its save bar is tapped, so committing it on a cancel-swipe would
         // persist a location the user was still deciding on and break the "add commits at the save bar"
         // contract. A deleted row isn't in the store either, so this can never resurrect one. Committing
-        // here and then again at a save bar / back chevron writes the same rows, so it stays idempotent.
+        // here and then again at a save bar / Back writes the same rows, so it stays idempotent.
         .onDisappear {
             if let editing = editingLocation,
                store.settings.workoutLocations.contains(where: { $0.id == editing.id }) {
@@ -412,63 +394,26 @@ struct WorkoutLocationSetupView: View {
         }
     }
 
-    /// The equipment step's chrome: back chevron, the editable location-name chip, and the count.
-    private var equipmentHeader: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                Button { leaveEquipmentStep() } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.bark)
-                        .frame(width: 34, height: 34)
-                        .background(Color.cream, in: RoundedRectangle(cornerRadius: 11))
-                        // Visual stays 34pt; only the tap target grows to the 44pt minimum.
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Back to locations")
-                .accessibilityIdentifier("workout.location.back")
-                // Editable, not a label: the model has always had `name` and the creator lets you set
-                // it once, but nothing could ever rename a saved location — so a typo lived forever.
-                HStack(spacing: 6) {
-                    Image(systemName: "mappin.and.ellipse")
-                        .font(.caption2)
-                    TextField("Location", text: editingNameBinding, prompt: .fieldPrompt("Location"))
-                        .font(.fernlet(.labelSmall))
-                        .textInputAutocapitalization(.words)
-                        .submitLabel(.done)
-                        // Bounded width, not .fixedSize(): fixedSize grows the chip to the full text
-                        // width, so a long name pushed the trailing pencil and the caret off-screen.
-                        // A frame lets the field scroll its own content and keeps the row on-screen.
-                        .frame(maxWidth: 180)
-                        .accessibilityIdentifier("workout.location.name")
-                    Image(systemName: "pencil")
-                        .font(.system(size: 9))
-                        .foregroundStyle(Color.slate)
-                }
-                .foregroundStyle(Color.bark)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color.moss.opacity(0.16), in: RoundedRectangle(cornerRadius: 10))
-                Spacer()
-            }
-            HStack(alignment: .bottom) {
+    /// The name chip (tap it to rename), then "What's available?" in Fraunces with "5 selected" in moss
+    /// ink, and Train here (or "Training here" with a check) at its end.
+    private var equipmentIntro: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            YourSpacesNameChip(name: editingNameBinding)
+            HStack(alignment: .bottom, spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("What's available?")
-                        .font(.fernlet(.header))
-                        .foregroundStyle(Color.bark)
+                        .font(.custom(FernletFontName.frauncesSemiBold, size: 24, relativeTo: .title2))
+                        .foregroundStyle(look?.text ?? Color.bark)
+                        .fernletWrappingText()
                     Text("\(editingLocation?.ownedEquipment.count ?? 0) selected")
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.moss)
+                        .font(.custom(FernletFontName.dmSansBold, size: 13.5, relativeTo: .footnote))
+                        .foregroundStyle(WorldPalette.mossInk)
                 }
                 Spacer(minLength: 8)
                 activeLocationControl
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 18)
-        .padding(.bottom, 12)
+        .padding(.top, 4)
     }
 
     /// The explicit "this is where I train" switch, and the quiet state when it already is.
@@ -478,13 +423,13 @@ struct WorkoutLocationSetupView: View {
     @ViewBuilder private var activeLocationControl: some View {
         if let editing = editingLocation {
             if editing.id == activeID {
-                HStack(spacing: 5) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.caption)
+                HStack(spacing: 6) {
+                    WorldSpriteView(sprite: WorldSprites.check, scale: 2, tint: WorldPalette.mossInk)
                     Text("Training here")
-                        .font(.fernlet(.labelSmall))
+                        .font(FernletFramedFont.buttonSmall)
                 }
-                .foregroundStyle(Color.moss)
+                .foregroundStyle(WorldPalette.mossInk)
+                .frame(minHeight: 44)
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("workout.location.isActive")
             } else {
@@ -495,82 +440,34 @@ struct WorkoutLocationSetupView: View {
                     // no later Done to carry it.
                     trainHereID = editing.id
                 }
-                // T1-9: `ChipButtonStyle` itself now grows the tap target to 44pt
-                // (`.frame(minHeight: 44)` inside the style), so the `fernletTapTarget()`
-                // this call site used to need as a manual patch would only duplicate it.
-                .buttonStyle(ChipButtonStyle(selected: false))
+                .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
                 .accessibilityHint("Plans your workouts around this space")
                 .accessibilityIdentifier("workout.location.makeActive")
             }
         }
     }
 
+    /// One category: its label with the moss square and "2 of 5", then its tiles two to a row.
     private func equipmentCategorySection(_ category: EquipmentCategory) -> some View {
         let items = GymEquipment.allCases.filter { $0.category == category }
         let selected = editingLocation?.selectedCount(in: category) ?? 0
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                Text(category.label)
-                    .textCase(.uppercase)
-                    .font(.fernlet(.labelSmall))
-                    .tracking(0.6)
-                    .foregroundStyle(Color.slate)
-                Spacer()
+                SectionLabel(verbatim: category.label)
+                Spacer(minLength: 8)
                 Text("\(selected) of \(items.count)")
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.rowDetail)
+                    .foregroundStyle(look?.dim ?? Color.slate)
             }
-            LazyVGrid(columns: equipmentColumns, spacing: 10) {
+            LazyVGrid(columns: gridColumns(spacing: 8), spacing: 8) {
                 ForEach(items) { item in
-                    equipmentCard(item)
+                    YourSpacesEquipmentTile(name: item.displayName,
+                                            isSelected: editingLocation?.ownedEquipment.contains(item) ?? false) {
+                        toggle(item)
+                    }
                 }
             }
         }
-    }
-
-    private func equipmentCard(_ item: GymEquipment) -> some View {
-        let isSelected = editingLocation?.ownedEquipment.contains(item) ?? false
-        return Button { toggle(item) } label: {
-            VStack(spacing: 9) {
-                EquipmentGlyph(item: item, size: equipmentGlyphSize)
-                    .foregroundStyle(Color.bark)
-                    .frame(height: equipmentGlyphSize)
-                Text(item.displayName)
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.bark)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.85)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(minHeight: equipmentCardMinHeight)
-            .padding(.vertical, 14)
-            .padding(.horizontal, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(isSelected ? Color.moss.opacity(0.10) : Color.cream)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(isSelected ? Color.moss : Color.bark.opacity(0.07), lineWidth: isSelected ? 2 : 1)
-            )
-            .overlay(alignment: .topTrailing) {
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Color.onMoss)
-                        .frame(width: 22, height: 22)
-                        .background(Color.moss, in: Circle())
-                        .offset(x: 7, y: -7)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        // F2: the multi-select equipment grid — fill/stroke/checkmark are otherwise the only
-        // signal, on the tile a blind user relies on to build their equipment list one tap at a
-        // time. `SavedSpaceRow`'s trait (added earlier this batch) stays too — a real, separate
-        // selection row.
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     // MARK: - Helpers

@@ -19,10 +19,10 @@ import WorldMapStore
 /// no line is read (``worldRoute(for:)``).
 extension FernletStore {
     /// Starts recording a walk (or, from a saved run route, a run) at `date`; a no-op while one is already
-    /// running.
-    func startWorldWalk(at date: Date = Date(), kind: WorldWalkRecorder.Kind = .walk) {
+    /// running. Walk or run together passes `decidesByPace`: the pace logs it as a walk or a run.
+    func startWorldWalk(at date: Date = Date(), kind: WorldWalkRecorder.Kind = .walk, decidesByPace: Bool = false) {
         guard !worldWalk.isRecording else { return }
-        worldWalk.start(at: date, kind: kind)
+        worldWalk.start(at: date, kind: kind, decidesByPace: decidesByPace)
         worldLocation.startWalk()
     }
 

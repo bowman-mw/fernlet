@@ -105,7 +105,8 @@ nonisolated enum WorldQuickStartOption: Equatable, Hashable, Sendable {
     case suggestWorkout(space: String, equipment: String, gentle: Bool)
     /// Today's rest plan's gentle stretch, guided.
     case gentleStretch
-    /// Walk together: the walk bar, the line and a logged walk.
+    /// Walk or run together (`ref-run-first`): the walk bar, the line, and a walk or a run logged from
+    /// its pace (``WorldWalkRecorder/paceKind(metres:seconds:)``), changeable in Move afterwards.
     case walkTogether
     /// Walk a saved line again: Walk together, with that line drawn on the map to follow.
     case walkSavedLine(metres: Double)
@@ -135,7 +136,7 @@ nonisolated struct WorldQuickStartCard: Equatable, Sendable {
         case space(String)
         /// "With Sam and Rae".
         case session([String])
-        /// "Go for a walk".
+        /// "Go for a walk or run".
         case walk
         /// "Your walk from here": a saved walk starts where the person stands.
         case savedLine
@@ -159,7 +160,7 @@ nonisolated struct WorldQuickStartCard: Equatable, Sendable {
     enum Note: Equatable, Sendable {
         /// "Nothing planned yet. Fernlet can put something together from this space's 22 items."
         case nothingPlanned(items: Int)
-        /// "Nothing saved here yet. It shows up once you've trained, hiked or eaten here a few times."
+        /// "Nothing saved here yet. It shows up once you've trained, run, hiked or eaten here a few times."
         case nothingSaved
         /// "Resting counts today. These are here if you want them." (drawn stronger)
         case restingCounts

@@ -36,6 +36,10 @@ nonisolated enum FriendsRoute: Hashable {
     /// Your own shop (`b2-shop-editor`): what friends nearby can buy from you. Pushed from Friend
     /// shops, so it closes with the shop window too (``closingShop(_:)`` drops what sits above it).
     case yourShop
+    /// One photo of the wall, from a print on Home's photo wall (`ref-wall-photo`): never pushed; the
+    /// album opens that photo in its carousel (`b2-album-post`) at that photo, with "‹ Album" back to the
+    /// grid and ✕ back to Home.
+    case wallPhoto(UUID)
 
     /// When a pushed friend shop has to close: its window's expiry, or `.distantPast` — at once —
     /// when no window is open or nearby clothing sharing is off (the two conditions under which the
@@ -131,6 +135,11 @@ struct FriendsView: View {
     /// replays the overlay in silence (report B20, ``SessionConnectCue``).
     @State private var connectCue = SessionConnectCue()
     @State private var selectedAlbumPostID: UUID?
+    /// The photo a print on Home's photo wall asked for, until the album is on screen to open it.
+    @State private var wallPhotoRequest: UUID?
+    /// The photo the open feed started at, when Home's photo wall opened it (`ref-wall-photo`): the feed
+    /// then shows "‹ Album" (back to the grid) and its ✕ goes back to Home. Nil for a feed the grid opened.
+    @State private var feedOpenedFromWall: UUID?
     /// The solo camera's photos in this album (`b4-mem-solo-waiting`, `-revealed`, `-open`): the
     /// "Just you" sets and the count still held until tonight. Empty in a decoy.
     @State private var soloAlbum = SoloAlbumModel()
@@ -190,13 +199,15 @@ struct FriendsView: View {
         .onChange(of: connectedPeerName()) { _, name in
             adoptDisclosedPeerName(name)
         }
-        .fullScreenCover(isPresented: $selectedAlbumPostID.isPresent()) {
+        .fullScreenCover(isPresented: $selectedAlbumPostID.isPresent(), onDismiss: { feedOpenedFromWall = nil }) {
             FriendPhotoFeedView(
                     posts: filteredPhotoWallPosts,
                     initialPostID: selectedAlbumPostID,
+                    initialPhotoID: feedOpenedFromWall,
                     photos: features.photos,
                     store: store,
-                    onDismiss: { selectedAlbumPostID = nil }
+                    onBack: feedOpenedFromWall == nil ? nil : { selectedAlbumPostID = nil },
+                    onDismiss: { if feedOpenedFromWall == nil { selectedAlbumPostID = nil } else { closeWallFeedToHome() } }
                 )
         }
     }
@@ -328,10 +339,42 @@ struct FriendsView: View {
     }
 
     /// Pushes the page Home asked for, one deep (so the plate's Back reads "Album"), and clears the ask.
+    /// A wall photo is not a page: it waits for the album to be on screen, then opens as the feed.
     private func takeRequestedRoute() {
         guard let route = requestedRoute else { return }
         requestedRoute = nil
-        path = [route]
+        if case .wallPhoto(let photoID) = route {
+            wallPhotoRequest = photoID
+            openRequestedWallPhoto()
+        } else {
+            path = [route]
+        }
+    }
+
+    /// Opens the photo a print on Home's photo wall asked for (`ref-wall-photo`): its post's carousel at
+    /// that photo, over the album's grid, at once (no slide: the tap on the print is what opened it). A
+    /// photo the wall no longer holds (deleted or reported since) leaves the album's grid showing.
+    private func openRequestedWallPhoto() {
+        guard albumIsVisible, let photoID = wallPhotoRequest else { return }
+        wallPhotoRequest = nil
+        guard let post = features.photos.photoWallPosts.first(where: { $0.photos.contains { $0.id == photoID } }) else {
+            return
+        }
+        sessionSearchText = ""
+        path.removeAll()
+        feedOpenedFromWall = photoID
+        var instant = Transaction()
+        instant.disablesAnimations = true
+        withTransaction(instant) { selectedAlbumPostID = post.id }
+    }
+
+    /// Closes a feed the photo wall opened straight back to Home (its ✕), with no slide over the album.
+    private func closeWallFeedToHome() {
+        var instant = Transaction()
+        instant.disablesAnimations = true
+        withTransaction(instant) { selectedAlbumPostID = nil }
+        feedOpenedFromWall = nil
+        onFinished()
     }
 
     /// A session went live: when Friends nearby was in front, close back to Home once the celebration
@@ -432,6 +475,8 @@ struct FriendsView: View {
         }
         .onAppear { albumIsVisible = true }
         .onDisappear { albumIsVisible = false }
+        // A print on Home's photo wall opens its photo once the album is on screen (`ref-wall-photo`).
+        .onChange(of: albumIsVisible) { _, _ in openRequestedWallPhoto() }
     }
 
     /// When the pushed friend shop has to close: `nil` while the shop is not pushed. Keys the album's
@@ -482,6 +527,9 @@ struct FriendsView: View {
         case .yourShop:
             YourShopView(store: store)
                 .fernletPushedPage("Your shop")
+        case .wallPhoto:
+            // Never pushed: a wall photo opens as the feed's cover (``takeRequestedRoute()``).
+            EmptyView()
         }
     }
 
@@ -786,10 +834,16 @@ struct FriendsView: View {
 private struct FriendPhotoFeedView: View {
     let posts: [FriendPhotoWallPost]
     let initialPostID: UUID?
+    /// The photo the first post opens at (a print on Home's photo wall, `ref-wall-photo`); nil opens
+    /// every post at its first photo.
+    var initialPhotoID: UUID? = nil
     /// The session photos whose wall the feed shows (the composition's `photos`).
     let photos: MeshSessionPhotos
     /// The store a photo's Report… files through (App Review guideline 1.2).
     let store: FernletStore
+    /// "‹ Album" on the plate, back to the album's grid: set when Home's photo wall opened the feed, whose
+    /// ✕ (``onDismiss``) then goes back to Home.
+    var onBack: (() -> Void)? = nil
     let onDismiss: () -> Void
 
     /// The photo sender the report flow is open for, if any.
@@ -798,7 +852,8 @@ private struct FriendPhotoFeedView: View {
     @State private var visiblePostID: UUID?
 
     var body: some View {
-        WorldPanelFrame(panel: .friends, title: plateTitle, onClose: onDismiss) {
+        WorldPanelFrame(panel: .friends, title: plateTitle, backTitle: onBack == nil ? nil : WorldPanel.friends.title,
+                        onBack: onBack, onClose: onDismiss) {
             GeometryReader { geometry in
                 ScrollView(.vertical) {
                     LazyVStack(spacing: 0) {
@@ -807,6 +862,7 @@ private struct FriendPhotoFeedView: View {
                                 post: post,
                                 photos: photos,
                                 width: geometry.size.width,
+                                startPhotoID: post.id == initialPostID ? initialPhotoID : nil,
                                 reportSubject: { PeerReportSubject.photo($0, senderKey: store.reportableSenderKey(of: $0)) },
                                 requestReport: { reportSubject = $0 }
                             )
@@ -870,8 +926,10 @@ private struct FriendPhotoCarouselPostView: View {
     /// Photos with a save Task already running — the per-photo in-flight cap (R3).
     @State private var inFlightSaveIDs: Set<UUID> = []
 
+    /// One post's carousel, opened at `startPhotoID` when the post holds it (a print on Home's photo
+    /// wall, `ref-wall-photo`), else at its first photo.
     init(
-        post: FriendPhotoWallPost, photos: MeshSessionPhotos, width: CGFloat,
+        post: FriendPhotoWallPost, photos: MeshSessionPhotos, width: CGFloat, startPhotoID: UUID? = nil,
         reportSubject: @escaping (FriendPhotoPayload) -> PeerReportSubject?,
         requestReport: @escaping (PeerReportSubject) -> Void
     ) {
@@ -880,7 +938,8 @@ private struct FriendPhotoCarouselPostView: View {
         self.width = width
         self.reportSubject = reportSubject
         self.requestReport = requestReport
-        self._selectedPhotoID = State(initialValue: post.photos.first?.id ?? post.coverPhoto.id)
+        let start = post.photos.first { $0.id == startPhotoID }
+        self._selectedPhotoID = State(initialValue: start?.id ?? post.photos.first?.id ?? post.coverPhoto.id)
     }
 
     var body: some View {
