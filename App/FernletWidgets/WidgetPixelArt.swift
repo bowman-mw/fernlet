@@ -77,6 +77,9 @@ enum WidgetSpritePaint: Equatable {
     case monoHeart(WidgetHeartFill)
     /// A drop in one colour: filled, or its outline alone.
     case monoDrop(full: Bool)
+    /// Every key in one colour but the paper (`w`), which drops out: a feeling's motif in the one-colour
+    /// renderings, its bubble an outline round the apple or the drop (owner's Q37).
+    case clearingPaper(UInt32)
 
     /// White: what iOS tints in the one-colour renderings.
     static let white: UInt32 = 0xFFFFFF
@@ -96,6 +99,8 @@ enum WidgetSpritePaint: Equatable {
             return hex
         case .cutout(let hex):
             return key == "k" ? nil : hex
+        case .clearingPaper(let hex):
+            return key == "w" ? nil : hex
         case .heart(let fill):
             return Self.heartColour(fill, key: key, x: x, base: base)
         case .drop(let full):

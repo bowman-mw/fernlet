@@ -142,10 +142,33 @@ struct FernletCompanionEntry: TimelineEntry {
     }
 
     /// The pixel companion for this entry: the person's look in the day's state, asleep or awake. The
-    /// state face only — the drawn face never shows a passing feeling but asleep, as on Home's map — so
-    /// the Lock Screen's state-only rule holds for every family.
+    /// state face only — no passing feeling but asleep, as on Home's map — which is what the Lock Screen
+    /// draws (``FernletWidgetEmotionPolicy``). The Home Screen families draw ``homeScreenGrid(increasedContrast:)``.
     var companionGrid: WidgetCompanionGrid {
         companionGrid(increasedContrast: false)
+    }
+
+    /// The feeling the Home Screen families draw on the face (owner's Q37): happy, sad, hungry or thirsty
+    /// at this entry's moment, else nil. Never drawn on the Lock Screen.
+    var homeScreenFeeling: WidgetCompanionEmotion? {
+        WidgetFeelingFace.face(for: currentCompanionEmotion)
+    }
+
+    /// The feeling's motif beside the head on the Home Screen (the twinkle, the apple, the drop), if any.
+    var homeScreenMotif: WidgetFeelingMotif? {
+        WidgetFeelingMotif(feeling: homeScreenFeeling)
+    }
+
+    /// The pixel companion the Home Screen families draw: ``companionGrid(increasedContrast:)`` wearing
+    /// ``homeScreenFeeling``'s face in place of the state's (owner's Q37).
+    func homeScreenGrid(increasedContrast: Bool) -> WidgetCompanionGrid {
+        var grid = companionGrid(increasedContrast: increasedContrast)
+        guard let feeling = homeScreenFeeling else { return grid }
+        let state = currentDayCompanionState
+        WidgetFeelingFace.apply(feeling, to: &grid, state: state ?? .thriving,
+                                look: WidgetPixelLook(look: look, state: state, asleep: hidesTheDay),
+                                pose: WidgetCompanionPose(asleep: hidesTheDay), increasedContrast: increasedContrast)
+        return grid
     }
 
     /// The pixel companion for this entry, its outline darker with Increase Contrast (W-03), as the

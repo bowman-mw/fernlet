@@ -67,9 +67,9 @@ struct MapWidgetCard: View {
     /// Sprout, its feet on the picture's middle (where you were when it was taken), with its name and mood
     /// for VoiceOver.
     private var companion: some View {
-        WidgetCompanionSprite(grid: entry.companion.companionGrid(increasedContrast: contrast == .increased),
+        WidgetCompanionSprite(grid: entry.companion.homeScreenGrid(increasedContrast: contrast == .increased),
                               scale: Self.spriteScale, ink: mono ? .silhouette(0xFFFFFF) : .color,
-                              showsZee: entry.companion.hidesTheDay)
+                              showsZee: entry.companion.hidesTheDay, motif: entry.companion.homeScreenMotif)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(entry.companion.companionLabel)
             .accessibilityValue(companionMoodValue(entry.companion.currentDayCompanionState, entry.companion.currentCompanionEmotion))

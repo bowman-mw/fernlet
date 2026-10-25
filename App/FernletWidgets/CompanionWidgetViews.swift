@@ -27,8 +27,9 @@ struct CompanionSmallView: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .top, spacing: 4) {
-                    WidgetCompanionSprite(grid: entry.companionGrid(increasedContrast: contrast == .increased), scale: 3,
-                                          ink: mono ? .silhouette(0xFFFFFF) : .color, showsZee: entry.hidesTheDay)
+                    WidgetCompanionSprite(grid: entry.homeScreenGrid(increasedContrast: contrast == .increased), scale: 3,
+                                          ink: mono ? .silhouette(0xFFFFFF) : .color, showsZee: entry.hidesTheDay,
+                                          motif: entry.homeScreenMotif)
                     Spacer(minLength: 0)
                     if let name = entry.companionName {
                         Text(verbatim: name)
@@ -72,8 +73,9 @@ struct CompanionThoughtView: View {
         let theme = mono ? WidgetTheme.mono : WidgetTheme.current(scheme, contrast: contrast)
         HStack(alignment: .center, spacing: 14) {
             VStack(spacing: 8) {
-                WidgetCompanionSprite(grid: entry.companionGrid(increasedContrast: contrast == .increased), scale: 4,
-                                      ink: mono ? .silhouette(0xFFFFFF) : .color, showsZee: entry.hidesTheDay)
+                WidgetCompanionSprite(grid: entry.homeScreenGrid(increasedContrast: contrast == .increased), scale: 4,
+                                      ink: mono ? .silhouette(0xFFFFFF) : .color, showsZee: entry.hidesTheDay,
+                                      motif: entry.homeScreenMotif)
                 if let score = entry.careScore {
                     WidgetHeartRow(score: score, goldHearts: entry.goldHearts, mono: mono)
                 }
