@@ -58,7 +58,7 @@ struct WorldMapCompanion: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
-            figure(emotion: emotion(at: context.date))
+            figure(now: now(at: context.date))
         }
         .task(id: LineKey(isActive: isActive, line: mapLine)) { await sayAmbientLine() }
         .task(id: HintKey(hint: hint, isActive: isActive)) { await endHintWhenDue() }
@@ -88,7 +88,7 @@ struct WorldMapCompanion: View {
     }
 
     /// The bubble over the sprite, and the sprite with its pet heart.
-    private func figure(emotion: CompanionEmotion?) -> some View {
+    private func figure(now: WorldCompanionNow) -> some View {
         VStack(spacing: 12) {
             WorldSpeechBubble(text: thought)
                 .opacity((isThoughtVisible || hint) && !isQuiet ? 1 : 0)
@@ -97,9 +97,7 @@ struct WorldMapCompanion: View {
                 .accessibilityHidden(true)
             ZStack {
                 if hint { WorldHintRing() }
-                WorldCompanionSprite(state: store.liveCompanionState, look: look(emotion: emotion),
-                                     settled: isSettled, asleep: emotion?.hidesTheDay == true,
-                                     drowsy: isNight || emotion == .sleepy, isActive: isActive, pixelScale: pixelScale)
+                WorldCompanionSprite(now: now, settled: isSettled, isActive: isActive, pixelScale: pixelScale)
                     .offset(y: hopLift)
                 if tapCount > 0 { WorldPetHeart().id(tapCount) }
             }
@@ -112,7 +110,7 @@ struct WorldMapCompanion: View {
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Fernlet companion")
-            .accessibilityValue(CompanionEmotion.accessibilityValue(state: store.liveCompanionState, emotion: emotion))
+            .accessibilityValue(CompanionEmotion.accessibilityValue(state: now.state, emotion: now.emotion))
             .accessibilityCustomContent("Thought", Text(verbatim: spokenThought))
             .accessibilityAddTraits(.isButton)
             .accessibilityAction { activate() }
@@ -153,17 +151,12 @@ struct WorldMapCompanion: View {
         let line: String?
     }
 
-    /// The companion's look for the frame: the person's appearance, the night colour while it sleeps.
-    private func look(emotion: CompanionEmotion?) -> WorldCompanionLook {
-        WorldCompanionLook(appearance: store.settings.companionAppearance, state: store.liveCompanionState,
-                           asleep: emotion?.hidesTheDay == true)
-    }
-
-    /// The companion's feeling at `date`, from the same inputs Home's companion reads.
-    private func emotion(at date: Date) -> CompanionEmotion? {
-        store.companionEmotion(at: date, bodySignal: bodySignal, playfulUntil: playfulUntil,
-                               appetiteCuesEnabled: CompanionEmotionPreferences.appetiteCuesEnabled(),
-                               sleepWindow: CompanionEmotionPreferences.sleepWindow())
+    /// The companion at `date` as every World picture draws it (W-06a): the live state, the person's
+    /// look with the pieces it wears, and the map's night (``WorldCompanionNight/map``), with the map's
+    /// own body signal and pets.
+    private func now(at date: Date) -> WorldCompanionNow {
+        WorldCompanionLook.current(store: store, at: date, night: .map, bodySignal: bodySignal, playfulUntil: playfulUntil,
+                                   mapNight: isNight)
     }
 
     /// Whether the companion is asleep at `date` (its feeling hides the day), for the Today panel's

@@ -29,9 +29,11 @@ import CoreGraphics
 /// measured viewport and the measured header and tool-row heights. Those two blocks never depend
 /// on the canvas height, so the choice it makes cannot feed back into its own inputs and flip.
 nonisolated struct CreationStudioLayout: Equatable {
-    /// The smallest canvas card the fitted layout accepts, in points. At 200 an Outfit canvas
-    /// (48×40 cells) is still ~4.6pt a cell before pinch-zoom; below it the page scrolls instead.
-    static let minimumCanvasHeight: CGFloat = 200
+    /// The smallest canvas card the fitted layout accepts, in points. Since the canvases went to the
+    /// companion's own scale (W-07, 2026-10-25: at most 18 columns and 13 rows), 150 still gives an
+    /// Outfit canvas ~11.5pt a cell before pinch-zoom (the old 48×40 grid needed 200 for 4.6pt);
+    /// below it the page scrolls instead.
+    static let minimumCanvasHeight: CGFloat = 150
 
     /// True when the header, the tools and a canvas of at least ``minimumCanvasHeight`` all fit in
     /// the visible page: scrolling is off.
@@ -41,35 +43,46 @@ nonisolated struct CreationStudioLayout: Equatable {
     /// the viewport is measured, never taller than it is inside its padding, so the whole canvas
     /// can be on screen at once.
     let canvasHeight: CGFloat
+    /// Whether the up-close and on-the-map previews show under the canvas. They give way (the
+    /// preview beside the chips stays) only where they alone would turn scrolling on; where the page
+    /// scrolls anyway, they show.
+    let showsPreviews: Bool
 
     /// - Parameters:
     ///   - viewportHeight: The page's visible height, between the navigation bar and the pinned
     ///     palette. Zero before the first measurement, which reads as "does not fit".
-    ///   - headerHeight: The measured preview-and-chips row.
+    ///   - headerHeight: The measured preview-and-chips row (with the size line under it).
     ///   - toolsHeight: The measured Undo · Clear · Mirror row.
-    ///   - spacing: The gap between the header, the tools and the canvas (two gaps).
+    ///   - footerHeight: The measured note under the canvas (a held item's); zero for none, which
+    ///     also drops its gap.
+    ///   - previewsHeight: The measured up-close and on-the-map previews (W-07); zero for none.
+    ///   - spacing: The gap between the header, the tools, the canvas and what is under it.
     ///   - padding: The page's padding on each vertical edge.
-    init(viewportHeight: CGFloat, headerHeight: CGFloat, toolsHeight: CGFloat,
-         spacing: CGFloat, padding: CGFloat) {
+    init(viewportHeight: CGFloat, headerHeight: CGFloat, toolsHeight: CGFloat, footerHeight: CGFloat = 0,
+         previewsHeight: CGFloat = 0, spacing: CGFloat, padding: CGFloat) {
         let minimum = Self.minimumCanvasHeight
-        let inputs = [viewportHeight, headerHeight, toolsHeight, spacing, padding]
+        let inputs = [viewportHeight, headerHeight, toolsHeight, footerHeight, previewsHeight, spacing, padding]
         guard viewportHeight > 0, inputs.allSatisfy({ $0.isFinite && $0 >= 0 }) else {
             fits = false
             canvasHeight = minimum
+            showsPreviews = true
             return
         }
-        let fitted = (viewportHeight - headerHeight - toolsHeight - 2 * spacing - 2 * padding)
-            .rounded(.down)
-        if fitted >= minimum {
-            fits = true
-            canvasHeight = fitted
+        let note = footerHeight > 0 ? footerHeight + spacing : 0
+        let previews = previewsHeight > 0 ? previewsHeight + spacing : 0
+        let page = viewportHeight - headerHeight - toolsHeight - note - 2 * spacing - 2 * padding
+        if (page - previews).rounded(.down) >= minimum {
+            (fits, canvasHeight, showsPreviews) = (true, (page - previews).rounded(.down), true)
+        } else if page.rounded(.down) >= minimum {
+            (fits, canvasHeight, showsPreviews) = (true, page.rounded(.down), false)
         } else {
-            // Scrolled to the bottom, the tool row and the canvas fill one screen: the header is
-            // the only thing that scrolls away. Where that screenful is under the minimum (a
-            // short landscape page), the canvas gets the minimum — but never more than the page
-            // shows in one piece, since a canvas cannot be scrolled from the canvas itself.
+            // Scrolled to the bottom, the tool row, the canvas and what is under it fill one screen:
+            // the header is the only thing that scrolls away. Where that screenful is under the
+            // minimum (a short landscape page), the canvas gets the minimum — but never more than the
+            // page shows in one piece, since a canvas cannot be scrolled from the canvas itself.
             fits = false
-            let screenful = (viewportHeight - toolsHeight - spacing - 2 * padding).rounded(.down)
+            showsPreviews = true
+            let screenful = (viewportHeight - toolsHeight - note - previews - spacing - 2 * padding).rounded(.down)
             let wholeOnScreen = max(0, (viewportHeight - 2 * padding).rounded(.down))
             canvasHeight = screenful >= minimum ? screenful : min(minimum, wholeOnScreen)
         }

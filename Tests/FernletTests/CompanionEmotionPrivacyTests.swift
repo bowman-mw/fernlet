@@ -50,6 +50,11 @@ struct CompanionEmotionPrivacyTests {
         // feeling exactly as the map's companion does, for its asleep pose, its status line and its
         // VoiceOver value. It neither persists nor sends it.
         "App/Fernlet/World/Companion/WorldCompanionCloseUp.swift",
+        // Round 6 lane companion (phone test W-06a): the one helper every World picture of the companion
+        // reads (the map, the close-up, the Today card, Customize, the Creation Studio) takes the feeling
+        // for its asleep and winding-down pose, so they cannot drift apart. It neither persists nor
+        // sends it; the pictures keep only the yes or no of the pose.
+        "App/Fernlet/World/Companion/WorldCompanionNow.swift",
         // World build, the camera on your own (lane friends-solo): reads only the companion's sleep
         // window (`CompanionEmotionPreferences.sleepWindow()`) to time when a solo photo shows. It never
         // reads, persists or sends the emotion itself.

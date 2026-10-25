@@ -2,75 +2,6 @@ import SwiftUI
 import FernletDomainModel
 import FernletUI
 
-/// The two previews at the top of Customize, a slot and Save item (designs `b2-customize`,
-/// `b2-slot-picker`, `b2-studio-save`): the companion close up, and the pixel companion as it stands
-/// on the map in a small framed box.
-///
-/// The close-up is the full companion, so what the Wardrobe made shows the moment it is worn; the map
-/// draws only the built-in pieces as pixels. Decorative: the controls below carry the meaning.
-struct CustomizePreviewCard: View {
-    var store: FernletStore
-    var petCount: Int
-    /// Extra pieces worn in the previews (the Studio's drawing, before it is saved).
-    var previewItems: [CustomizationItem]? = nil
-    /// What VoiceOver hears, where the previews are the page's only sign of the drawing (Save item);
-    /// nil keeps them decorative.
-    var spokenName: Text? = nil
-
-    var body: some View {
-        FernletCard {
-            HStack(alignment: .bottom, spacing: 34) {
-                VStack(spacing: 6) {
-                    closeUp
-                    caption(Text("Close up"))
-                }
-                VStack(spacing: 6) {
-                    mapPreview
-                    caption(Text("On the map"))
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(spokenName ?? Text(verbatim: ""))
-        .accessibilityHidden(spokenName == nil)
-    }
-
-    /// The companion close up: the pixel companion, or the full one while a Wardrobe piece is worn.
-    @ViewBuilder
-    private var closeUp: some View {
-        let worn = previewItems ?? store.equippedCustomItems
-        if worn.isEmpty {
-            OnboardingPixelCompanion(appearance: store.settings.companionAppearance, state: store.companionState, scale: 6)
-                .fixedSize()
-        } else {
-            CompanionView(state: store.companionState, appearance: store.settings.companionAppearance,
-                          size: 104, interactionLevel: petCount, equippedItems: worn)
-                .frame(width: 104, height: 104)
-        }
-    }
-
-    /// The pixel companion in the map's framed grey box.
-    private var mapPreview: some View {
-        let state = store.companionState
-        let look = WorldCompanionLook(appearance: store.settings.companionAppearance, state: state, asleep: false)
-        let grid = WorldCompanionPainter.paint(state: state, look: look,
-                                               pose: WorldCompanionPose(breathIn: false, settled: false, asleep: false))
-        return WorldCompanionCanvas(grid: grid, scale: 3)
-            .frame(width: CGFloat(WorldCompanionGrid.width) * 3, height: CGFloat(WorldCompanionGrid.height) * 3)
-            .frame(width: 80, height: 80)
-            .background(WorldPalette.adaptive(light: 0xE7E2D4, dark: 0x2A2017), in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(WorldPalette.ink, lineWidth: 3))
-    }
-
-    private func caption(_ text: Text) -> some View {
-        text
-            .font(.fernlet(.bodySmall))
-            .foregroundStyle(WorldPalette.dim)
-    }
-}
-
 /// The coin balance in Customize's framed pill (design `b2-customize`): the pixel coin and the number.
 /// At accessibility text sizes the coin steps aside and the number stays.
 struct CustomizeCoinPill: View {
@@ -105,7 +36,11 @@ struct CustomizeLinkCard: View {
     let sprite: WorldSprite
     let title: Text
     var detail: Text? = nil
+    /// A one-word title (Wardrobe) in a narrow two-up card: it shrinks to stay on one line rather than
+    /// break in half, since the bold title type went in (it broke as "Wardrob / e" on an iPhone 17).
+    var keepsTitleOnOneLine = false
     @Environment(\.fernletFramedLook) private var look
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         FernletCard {
@@ -115,6 +50,8 @@ struct CustomizeLinkCard: View {
                     title
                         .font(FernletFramedFont.rowTitleBold)
                         .foregroundStyle(look?.text ?? Color.bark)
+                        .lineLimit(keepsTitleOnOneLine && !dynamicTypeSize.isAccessibilitySize ? 1 : nil)
+                        .minimumScaleFactor(keepsTitleOnOneLine ? 0.7 : 1)
                     if let detail {
                         detail
                             .font(FernletFramedFont.rowDetail)
