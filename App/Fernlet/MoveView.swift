@@ -3279,7 +3279,9 @@ struct EditWorkoutSheet: View {
         guard !trimmedName.isEmpty else { return }
         // Corrected sets first: each changed lift's record and its line, rewritten together.
         var updated = WorkoutSetEditing.applying(setDrafts, original: originalSetDrafts, to: workout)
-        updated.name = Self.savedName(workout.savedName(editing: trimmedName), from: workout.activityType, to: activity)
+        updated.name = workout.savedName(editing: trimmedName)
+        // A walk switched to a run (or back) takes the new activity's default name, unless renamed.
+        updated.name = Self.savedName(updated.name, from: workout.activityType, to: activity)
         updated.activityType = activity
         updated.intensity = intensity
         updated.duration = WorkoutSheetRules.durationMinutes(from: duration)
