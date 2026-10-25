@@ -41,7 +41,7 @@ struct WorldRound6bSmallTests {
 
     /// Import opens while lookup is on; with lookup off it asks first, even after an earlier "Not now"
     /// or a revocation (the tap is the person's own request); with AI features off no consent can open
-    /// the lane, so Import opens and explains.
+    /// the lane, so the tap says which switches turn it on.
     @Test func importAsksForLookupConsentOnTheTap() {
         var settings = FernletSettings()
         settings.aiStatus = .ready
@@ -55,7 +55,8 @@ struct WorldRound6bSmallTests {
         settings.webNutritionLookupConsent = .declined
         #expect(FoodImportTap.resolve(for: settings) == .askFirst, "declined before")
         settings.aiStatus = .off
-        #expect(FoodImportTap.resolve(for: settings) == .openExplainingOff)
+        #expect(FoodImportTap.resolve(for: settings) == .explainAIOff)
+        #expect(FoodImportTap.aiOffNotice.contains("AI features"), "it names the switch that closes the lane")
     }
 
     /// Log meal draws Import whatever the lookup setting, and its tap goes through ``FoodImportTap``.

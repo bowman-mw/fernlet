@@ -119,14 +119,21 @@ nonisolated enum FoodImportTap: Equatable, Sendable {
     /// now" keeps it off and stays on Log meal. The tap is the person's own request, so it asks even after
     /// an earlier "Not now".
     case askFirst
-    /// AI features are off, which closes the whole web-nutrition lane (no consent can open it): Import
-    /// opens and says which Settings switches turn it on, as it always has.
-    case openExplainingOff
+    /// AI features are off, which closes the whole web-nutrition lane (no consent can open it): the tap
+    /// says which Settings switches turn it on (``aiOffNotice``) and opens nothing.
+    case explainAIOff
 
     /// The tap's outcome under `settings`.
     static func resolve(for settings: FernletSettings) -> FoodImportTap {
         if settings.allowsWebNutritionLookup { return .open }
-        return settings.aiStatus == .off ? .openExplainingOff : .askFirst
+        return settings.aiStatus == .off ? .explainAIOff : .askFirst
+    }
+
+    /// What is off and where to turn it on, while AI features are off (Import's own notice too).
+    static var aiOffNotice: String {
+        String(localized: "productImport.notice.lookupOffWithAI",
+               defaultValue: "Web nutrition lookup is off. Turn on AI features and Web nutrition lookup in Settings to search the web.",
+               comment: "Import product screen: web nutrition lookup is off and AI features are off too. Names the two Settings switches.")
     }
 }
 

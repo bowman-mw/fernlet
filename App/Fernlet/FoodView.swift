@@ -2733,6 +2733,8 @@ struct MealSheet: View {
     @State private var pendingWebNutritionLookup: String?
     /// Import was tapped with web lookup off: its disclosure is up (form answer 43).
     @State private var asksImportConsent = false
+    /// Import was tapped with AI features off: the note saying which switches turn lookup on is up.
+    @State private var explainsImportOff = false
     @State private var isResolvingMeal = false
     /// True while the by-hand macro fields (FOOD-24) are revealed. With any nonzero value typed,
     /// Save logs those numbers directly instead of running the resolve cascade.
@@ -3397,14 +3399,18 @@ struct MealSheet: View {
         } message: {
             Text("Fernlet will send the typed product search to DuckDuckGo’s private HTML search. It sends no account identifier, cookies, or health data. Fernlet may then open a product page from the result to read its nutrition label. You can revoke this in Settings at any time. Each web lookup is recorded only on this device in Connection history.")
         }
+        .alert(Text(FoodImportTap.aiOffNotice), isPresented: $explainsImportOff) {
+            Button("OK", role: .cancel) {}
+        }
     }
 
-    /// Import's tap (form answer 43): open it while lookup is on (or, with AI features off, open it to
-    /// say how to turn lookup on); otherwise ask for consent first.
+    /// Import's tap (form answer 43): open it while lookup is on, ask for consent first while it is off,
+    /// and with AI features off say which switches turn it on.
     private func tapImport() {
         switch FoodImportTap.resolve(for: store.settings) {
-        case .open, .openExplainingOff: path.append(.productPageImport)
+        case .open: path.append(.productPageImport)
         case .askFirst: asksImportConsent = true
+        case .explainAIOff: explainsImportOff = true
         }
     }
 
@@ -3990,9 +3996,7 @@ private struct FoodProductPageImportView: View {
     /// mode…") was a double negative naming a mode by a label the user may never have seen.
     private var webNutritionLookupDisabledMessage: String {
         store.settings.aiStatus == .off
-            ? String(localized: "productImport.notice.lookupOffWithAI",
-                     defaultValue: "Web nutrition lookup is off. Turn on AI features and Web nutrition lookup in Settings to search the web.",
-                     comment: "Import product screen: web nutrition lookup is off and AI features are off too. Names the two Settings switches.")
+            ? FoodImportTap.aiOffNotice
             : String(localized: "productImport.notice.lookupOff",
                      defaultValue: "Web nutrition lookup is off. Turn on Web nutrition lookup in Settings to search the web.",
                      comment: "Import product screen: web nutrition lookup is off. Names the Settings switch that turns it on.")
