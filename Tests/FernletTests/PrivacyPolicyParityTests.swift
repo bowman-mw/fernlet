@@ -118,6 +118,13 @@ struct PrivacyPolicyParityTests {
     /// - `You can put a photo on the map yourself.` — a solo photo with no place, placed by hand;
     /// - `If you mark a place as your home (up to two) or as a hotel you stay at` — homes and hotels are kept;
     /// - `it stays until you remove it in Settings › Home map` — and where they go away.
+    ///
+    /// The three markers added in World build round 6b (both owner-approved word for word, 2026-10-25) pin:
+    /// - `encrypted on this iPhone only and never in a backup, to uncover the map around it` — the homes
+    ///   sentence's approved rewording (homes and hotels live in the map's device file, never in a backup);
+    /// - `If you add the map widget, Fernlet gives it a picture of the map around you` — the map widget
+    ///   (Q36): marked places and saved trails reach the widget, on this iPhone only and never in a backup;
+    /// - `the widget's copy is deleted whenever you delete your map history` — and it goes with the history.
     private static let substanceMarkers = [
         "iOS may refuse or end it at any time",
         "never retroactively repurposed",
@@ -158,7 +165,10 @@ struct PrivacyPolicyParityTests {
         "unless you add one yourself",
         "You can put a photo on the map yourself.",
         "If you mark a place as your home (up to two) or as a hotel you stay at",
-        "it stays until you remove it in Settings › Home map"
+        "it stays until you remove it in Settings › Home map",
+        "encrypted on this iPhone only and never in a backup, to uncover the map around it",
+        "If you add the map widget, Fernlet gives it a picture of the map around you",
+        "the widget's copy is deleted whenever you delete your map history"
     ]
 
     /// Loads each copy's text, keyed by its repo-relative path.

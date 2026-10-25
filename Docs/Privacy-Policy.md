@@ -412,10 +412,13 @@ When you take a photo with the camera on your own at one of those everyday place
 where it was taken, so the photo can sit on your map; anywhere else, it keeps no place.
 You can put a photo on the map yourself.
 If you mark a place as your home (up to two) or as a hotel you stay at, Fernlet keeps it,
-sealed on this iPhone like your journal, to uncover the map around it and to welcome you back
-when you return; it stays until you remove it in Settings › Home map. All of this is sealed on this
+encrypted on this iPhone only and never in a backup, to uncover the map around it and to welcome
+you back when you return; it stays until you remove it in Settings › Home map. All of this is sealed on this
 iPhone like your journal: never synced, backed up, exported, shared, given to the AI or sent to us.
 You can delete a day, a photo, or all of it, at any time.
+If you add the map widget, Fernlet gives it a picture of the map around you, with your marked places
+and saved trails, on this iPhone only and never in a backup; your visit counts and the history of
+where you've been stay sealed in Private, and the widget's copy is deleted whenever you delete your map history.
 
 To name a place you stop at, or to check where a photo you take on your own was taken, Fernlet asks
 Apple Maps what is near you, only while the map is open. For a place you return to, Fernlet
