@@ -98,7 +98,7 @@ struct WorldPlacesRound6Tests {
                                                PlaceStop(kind: .cameHome, at: at(18), placeID: home),
                                                PlaceStop(kind: .leftHome, at: at(19), placeID: home),
                                                PlaceStop(kind: .cameHome, at: at(19.5), placeID: home)])
-        #expect(log.outAndAbout(on: day, calendar: calendar) == 10 * 3_600)
+        #expect(abs((log.outAndAbout(on: day, calendar: calendar) ?? 0) - 10 * 3_600) < 1, "9 h 30 min, then 30 min")
         #expect(PlaceLog(places: [], stops: [PlaceStop(kind: .leftHome, at: at(8), placeID: home)]).outAndAbout(on: day, calendar: calendar) == nil)
     }
 

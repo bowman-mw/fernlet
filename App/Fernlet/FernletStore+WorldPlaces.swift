@@ -95,11 +95,11 @@ extension FernletStore {
     /// Where you've been, with everything captured since the last look folded in under the hub key; nil
     /// while Private is closed, in a decoy, or when it can't be read right now.
     func worldPlaceLog(now: Date = Date()) -> PlaceLog? {
-        guard let key = worldPlacesKey else { return nil }
         // DEBUG scene `where` (`ref-home-where`): a day with Home left and got back, display only.
-        if WorldPlacesTestScenes.scenes.contains("where"), let home = worldHomes.homes.first {
+        if WorldPlacesTestScenes.scenes.contains("where"), !duressSessionActive, let home = worldHomes.homes.first {
             return WorldPlacesTestScenes.log(home: home.id, now: now)
         }
+        guard let key = worldPlacesKey else { return nil }
         do {
             return try worldPlaces.store.fold(hubKey: key, now: now)
         } catch {

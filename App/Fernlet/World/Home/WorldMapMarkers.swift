@@ -80,8 +80,8 @@ extension FernletStore {
         }
         var markers = worldSpaceMarkers(near: nil) + eating
         // DEBUG scene `places` (`ref-places-map`): three kept places round the person, display only.
-        if WorldPlacesTestScenes.scenes.contains("places"), let fix = worldLocation.latest {
-            markers += WorldPlacesTestScenes.markers(near: fix.point)
+        if WorldPlacesTestScenes.scenes.contains("places") {
+            markers += WorldPlacesTestScenes.markers(near: worldLocation.latest?.point ?? WorldPlacesTestScenes.laurelhurst)
         }
         var loose: [WorldPhotoPlace] = []
         for group in worldPhotoMarkers(near: nil) {

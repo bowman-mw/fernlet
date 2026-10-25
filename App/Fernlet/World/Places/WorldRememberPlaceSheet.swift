@@ -81,8 +81,13 @@ struct WorldRememberPlaceSheet: View {
                 .padding(.horizontal, 18)
                 .padding(.vertical, 8)
             }
-            SheetSaveBar(verbatim: saveLabel, disabled: !canSave) { save() }
-                .accessibilityIdentifier("worldTag.save")
+            // The design's full-width primary ("Remember it", "Make it home", "Check in here").
+            FernletSheetFooter {
+                Button { save() } label: { Text(verbatim: saveLabel).frame(maxWidth: .infinity) }
+                    .buttonStyle(ActionPillButtonStyle(.primary))
+                    .disabled(!canSave)
+                    .accessibilityIdentifier("worldTag.save")
+            }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             SheetHeader(title: Text(verbatim: title), onCancel: onClose)

@@ -27,7 +27,7 @@ enum WorldPlacesTestScenes {
     static func homes(at point: GeoPoint, home hasHome: Bool, hotel: Bool) -> HomeBook {
         let home = HomePlace(id: UUID(uuidString: "6C000000-0000-0000-0000-000000000002") ?? UUID(), kind: .home, label: "Home", point: point)
         let ace = HomePlace(id: UUID(uuidString: "6C000000-0000-0000-0000-000000000003") ?? UUID(), kind: .hotel, label: "Ace Hotel",
-                            point: hasHome ? point.offset(east: 1_500, north: 0) : point.offset(east: -60, north: 0))
+                            point: hasHome ? point.offset(east: 1_500, north: 0) : point)
         var presence = HomePresence.unknown
         presence.atID = hasHome ? home.id : ace.id
         return HomeBook(homes: hasHome ? [home] : [], hotel: hotel ? ace : nil, pastHotels: [], presence: presence)
