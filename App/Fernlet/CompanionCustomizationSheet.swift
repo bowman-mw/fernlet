@@ -110,7 +110,8 @@ struct CompanionCustomizationPage: View {
         NavigationLink {
             WardrobeView(store: store, studioDraftIsDirty: $isStudioDraftDirty)
         } label: {
-            CustomizeLinkCard(sprite: WorldSprites.face, title: Text("Wardrobe"), detail: wardrobeCountText)
+            CustomizeLinkCard(sprite: WorldSprites.face, title: Text("Wardrobe"), detail: wardrobeCountText,
+                              keepsTitleOnOneLine: true)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("companion.wardrobe")

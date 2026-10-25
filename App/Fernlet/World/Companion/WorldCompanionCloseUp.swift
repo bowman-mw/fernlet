@@ -64,15 +64,19 @@ struct WorldCompanionCloseUp: View {
         pose.settled = reaction.blushes
         return ZStack(alignment: .bottom) {
             WorldCloseUpGround()
+            // The whole 240 × 240 pt frame takes its room, so a tall hat stays under the bubble; the feet
+            // keep their place on the grass (the frame's last row is below them).
             WorldCompanionCanvas(grid: WorldCompanionPainter.paint(state: now.state, look: now.look, pose: pose,
                                                                    increasedContrast: contrast == .increased),
-                                 scale: WorldCloseUpMotion.pixelScale)
+                                 scale: WorldCloseUpMotion.pixelScale, footprint: .frame)
                 .scaleEffect(x: reaction.squishes ? 1.08 : 1, y: reaction.squishes ? 0.9 : 1, anchor: .bottom)
-                .offset(y: WorldCloseUpMotion.bobLift(at: date, reduceMotion: reduceMotion) + hopLift - 26)
+                .offset(y: WorldCloseUpMotion.bobLift(at: date, reduceMotion: reduceMotion) + hopLift - WorldCloseUpMotion.standLift)
                 .overlay(alignment: .top) {
                     if reaction.hearts > 0 { WorldCloseUpHearts(count: reaction.hearts).id(petCount) }
                 }
         }
+        // Room for the lift onto the grass and the bob, so nothing it wears reaches the bubble.
+        .padding(.top, WorldCloseUpMotion.standLift + WorldCloseUpMotion.pixelScale)
         .frame(maxWidth: .infinity)
         .contentShape(Rectangle())
         .onTapGesture(perform: pet)
@@ -185,6 +189,9 @@ struct WorldCloseUpReaction: Equatable {
 nonisolated enum WorldCloseUpMotion {
     /// Points per sprite pixel up close: ten (the map draws three).
     static let pixelScale: CGFloat = 10
+    /// How far the 240 × 240 pt frame stands above the grass's bottom edge, so the feet rest on the
+    /// grass (the body's old 26 pt, less the frame's empty last row).
+    static let standLift: CGFloat = 26 - pixelScale
     /// The idle bob's period: up one pixel for a second, down for the next.
     static let bobPeriod: TimeInterval = 2
     /// The happy hop's height on a thriving day: two pixels.

@@ -407,6 +407,8 @@ struct CreationStudioView: View {
         // Fitted into whatever slot `body` gives it — the full width, or the height the layout
         // left, whichever binds first — so the card hugs the grid rather than the slot.
         .aspectRatio(CGFloat(Self.canvasSize(for: slot).cols) / CGFloat(Self.canvasSize(for: slot).rows), contentMode: .fit)
+        // The corner squares (paint or the companion's ghost) stay inside the card's rounded frame.
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(WorldPalette.paperLight)

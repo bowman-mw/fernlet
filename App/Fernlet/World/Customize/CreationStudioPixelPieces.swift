@@ -77,7 +77,8 @@ struct StudioPreviewsRow: View {
                 StudioPixelPreview(store: store, items: items, scale: 2)
                     .padding(.vertical, 8)
                     .padding(.horizontal, 14)
-                    .background(look?.paperLow ?? WorldPalette.paperShade, in: RoundedRectangle(cornerRadius: 8))
+                    // The map's grey box, as Customize's "On the map" draws it.
+                    .background(WorldPalette.adaptive(light: 0xE7E2D4, dark: 0x2A2017), in: RoundedRectangle(cornerRadius: 8))
                     .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(WorldPalette.ink, lineWidth: 2))
                 caption(StudioCopy.onTheMap)
             }

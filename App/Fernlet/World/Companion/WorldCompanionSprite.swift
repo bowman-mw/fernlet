@@ -6,9 +6,9 @@ import FernletDomainModel
 /// Motion holds the first frame, and the clock pauses while the map is covered, as Home's companion
 /// pauses its own. The soft ground shadow sits under the feet; Increase Contrast darkens the outline.
 ///
-/// It lays out at the body's 20 × 22 footprint, so the feet stay where they always stood; the 24 × 24
-/// item frame round it (72 × 72 pt on the map) spills past that footprint where a drawn piece reaches
-/// (W-07, draft 2).
+/// It lays out at the body's 20 × 22 footprint plus the frame's top row, so the feet stay where they
+/// always stood and a hat's tip stays clear of the bubble; the 24 × 24 item frame round it (72 × 72 pt
+/// on the map) spills past the sides and the bottom where a drawn piece reaches (W-07, draft 2).
 struct WorldCompanionSprite: View {
     let state: CompanionState
     let look: WorldCompanionLook
@@ -59,6 +59,8 @@ struct WorldCompanionSprite: View {
                                  scale: scale)
         }
         .frame(width: Self.size(scale: scale).width, height: Self.size(scale: scale).height)
+        // The frame's top row (a hat's tip) inside the layout, so the bubble above never meets it.
+        .padding(.top, scale)
         .accessibilityHidden(true)
     }
 }

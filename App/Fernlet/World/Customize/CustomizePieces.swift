@@ -36,7 +36,11 @@ struct CustomizeLinkCard: View {
     let sprite: WorldSprite
     let title: Text
     var detail: Text? = nil
+    /// A one-word title (Wardrobe) in a narrow two-up card: it shrinks to stay on one line rather than
+    /// break in half, since the bold title type went in (it broke as "Wardrob / e" on an iPhone 17).
+    var keepsTitleOnOneLine = false
     @Environment(\.fernletFramedLook) private var look
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         FernletCard {
@@ -46,6 +50,8 @@ struct CustomizeLinkCard: View {
                     title
                         .font(FernletFramedFont.rowTitleBold)
                         .foregroundStyle(look?.text ?? Color.bark)
+                        .lineLimit(keepsTitleOnOneLine && !dynamicTypeSize.isAccessibilitySize ? 1 : nil)
+                        .minimumScaleFactor(keepsTitleOnOneLine ? 0.7 : 1)
                     if let detail {
                         detail
                             .font(FernletFramedFont.rowDetail)
