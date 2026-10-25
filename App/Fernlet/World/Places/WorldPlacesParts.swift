@@ -171,14 +171,9 @@ struct WorldReturnedPlacesCard: View {
     @ViewBuilder
     private func row(_ place: PlaceRecord) -> some View {
         let button = Button { onRename(place) } label: {
-            HStack(alignment: .firstTextBaseline) {
-                Text(verbatim: WorldPlacesCopy.placeTitle(place, name: names[place.id])).font(FernletFramedFont.rowTitle)
-                Spacer(minLength: 8)
-                Text(verbatim: WorldPlacesCopy.visits(place.visits)).font(FernletFramedFont.button)
-            }
-            .foregroundStyle(WorldPalette.bark)
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
+            rowLabel(place)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityHint(Text(WorldPlacesCopy.renameHint))
@@ -186,11 +181,27 @@ struct WorldReturnedPlacesCard: View {
             button
                 .contextMenu {
                     Button { onOpenInMaps(place) } label: { Text(WorldPlacesCopy.openInMaps) }
+                } preview: {
+                    // The row lifted on paper, so the page under the menu never shows through it.
+                    rowLabel(place)
+                        .padding(16)
+                        .frame(width: 320)
+                        .background(WorldPalette.paperLight)
                 }
                 .accessibilityAction(named: Text(WorldPlacesCopy.openInMaps)) { onOpenInMaps(place) }
         } else {
             button
         }
+    }
+
+    /// The place's name and its visit count.
+    private func rowLabel(_ place: PlaceRecord) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(verbatim: WorldPlacesCopy.placeTitle(place, name: names[place.id])).font(FernletFramedFont.rowTitle)
+            Spacer(minLength: 8)
+            Text(verbatim: WorldPlacesCopy.visits(place.visits)).font(FernletFramedFont.button)
+        }
+        .foregroundStyle(WorldPalette.bark)
     }
 }
 
