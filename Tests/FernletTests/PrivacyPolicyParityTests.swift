@@ -107,6 +107,11 @@ struct PrivacyPolicyParityTests {
     /// - `which holds only a visit count, never dates` — Places you return to;
     /// - `therapists are never named or kept` — the allowlist's refusal;
     /// - `so the photo can sit on your map` — a solo photo's place, never at a refused place.
+    ///
+    /// The two markers added in World build round 5 (owner-approved the same day, word for word) pin:
+    /// - `anywhere else, it keeps no place` — a solo photo keeps its place only at the everyday places;
+    /// - `keeps only Apple's reference to it, never its details` — the Apple Maps lookups and what a place
+    ///   you return to keeps of Apple's answer (its name is asked for again when you look).
     private static let substanceMarkers = [
         "iOS may refuse or end it at any time",
         "never retroactively repurposed",
@@ -141,7 +146,9 @@ struct PrivacyPolicyParityTests {
         "keeps a rolling 30-day timeline of the places",
         "which holds only a visit count, never dates",
         "therapists are never named or kept",
-        "so the photo can sit on your map"
+        "so the photo can sit on your map",
+        "anywhere else, it keeps no place",
+        "keeps only Apple's reference to it, never its details"
     ]
 
     /// Loads each copy's text, keyed by its repo-relative path.

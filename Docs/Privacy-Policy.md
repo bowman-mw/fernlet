@@ -402,10 +402,15 @@ stopped at, collected while the map is open and, if you turn on background mappi
 It also keeps a list of Places you return to, which holds only a visit count, never dates. Both
 cover everyday places only: food and drink, gyms, parks, beaches and campgrounds. Places like
 doctors' offices, lawyers or therapists are never named or kept. When you take a photo with the
-camera on your own, Fernlet keeps where it was taken, unless that's a place like a doctor's office,
-so the photo can sit on your map. All of this is sealed on this iPhone like your journal: never
-synced, backed up, exported, shared, given to the AI or sent to us. You can delete a day, a photo,
-or all of it, at any time.
+camera on your own at one of those everyday places, Fernlet keeps where it was taken,
+so the photo can sit on your map; anywhere else, it keeps no place. All of this is sealed on this
+iPhone like your journal: never synced, backed up, exported, shared, given to the AI or sent to us.
+You can delete a day, a photo, or all of it, at any time.
+
+To name a place you stop at, or to check where a photo you take on your own was taken, Fernlet asks
+Apple Maps what is near you, only while the map is open. For a place you return to, Fernlet
+keeps only Apple's reference to it, never its details, and asks Apple Maps for its name again when
+you look at your places.
 
 ## 7. Artificial intelligence
 
