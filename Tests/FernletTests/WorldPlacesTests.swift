@@ -48,6 +48,26 @@ struct WorldPlacesTests {
         #expect(PlaceClassifier.visitVerdict([NearbyPlace(name: "Far Park", kind: .allowed(.park), metres: 400)]) == .unnamed)
     }
 
+    /// Round 6 (owner: "No park features should be fine. Why block it?"): a lake, a restroom, a bike dock or
+    /// a playground nearest the person no longer blocks the park around it, for a visit or a photo. A
+    /// feature with no park, beach or campground around it keeps nothing, a refused place near still
+    /// refuses, and a shop still decides the stop as before.
+    @Test func aParksOwnFeaturesNoLongerBlockIt() {
+        let park = NearbyPlace(name: "Laurelhurst Park", kind: .allowed(.park), metres: 160, placeID: "I-park")
+        let lake = NearbyPlace(name: "Firwood Lake", kind: .feature, metres: 18)
+        let restroom = NearbyPlace(name: "Restroom", kind: .feature, metres: 9)
+        let dock = NearbyPlace(name: "BIKETOWN", kind: .feature, metres: 25)
+        #expect(PlaceClassifier.visitVerdict([park, lake]) == .allowed(placeID: "I-park"))
+        #expect(PlaceClassifier.visitVerdict([park, restroom, dock]) == .allowed(placeID: "I-park"))
+        #expect(PlaceClassifier.photoMayKeepPlace([park, lake]), "a photo by the lake keeps its place")
+        #expect(PlaceClassifier.visitVerdict([lake]) == .unnamed, "a feature outside a park area keeps nothing")
+        #expect(!PlaceClassifier.photoMayKeepPlace([restroom]))
+        #expect(PlaceClassifier.visitVerdict([park, lake, NearbyPlace(name: "Park Clinic", kind: .other, metres: 60)]) == .refused)
+        #expect(PlaceClassifier.visitVerdict([park, NearbyPlace(name: "Lakeside Therapy", kind: .feature, metres: 10)]) == .refused,
+                "a feature's name still goes through the refused words")
+        #expect(PlaceClassifier.visitVerdict([park, NearbyPlace(name: "Corner Shop", kind: .other, metres: 12), lake]) == .unnamed)
+    }
+
     /// Round 5 (owner): a solo photo keeps its place only at the everyday allowlist or inside a park, beach
     /// or campground, the same rule as a visit. Anywhere else (an office nobody lists, a shop, a station,
     /// nothing at all) and offline, it keeps no place.

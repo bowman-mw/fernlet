@@ -35,7 +35,12 @@ public nonisolated struct NearbyPlace: Equatable, Sendable {
         case allowed(PlaceCategory)
         /// A place Fernlet never names or keeps: medical, legal or therapy.
         case refused
-        /// Anything else (a shop, a station, an office with no category).
+        /// An outdoor feature a park, beach or campground holds or stands beside (a lake, a restroom, a bike
+        /// dock, a playground, a trail, a court; World build round 6, owner: "No park features should be
+        /// fine. Why block it?"). It never decides a stop on its own: inside or beside a park, beach or
+        /// campground area the area keeps the visit; anywhere else nothing is kept.
+        case feature
+        /// Anything else (a shop, a station, an office with a category of its own).
         case other
     }
 
@@ -75,9 +80,11 @@ public nonisolated enum PlaceVerdict: Equatable, Sendable {
 ///
 /// - **A visit** is kept only at the nearest place within ``visitRadius``, and only when that nearest place
 ///   is one of the allowed kinds and its name reads as none of the refused ones. When the nearest place is
-///   a refused one, the visit is refused even if a café stands next door. With nothing that near, a park,
+///   a refused one, the visit is refused even if a café stands next door. With nothing that near, or with
+///   only a park's own feature that near (a lake, a restroom, a bike dock, a playground; round 6), a park,
 ///   beach or campground within ``areaRadius`` keeps it (the person is inside it, far from its one point),
-///   unless a refused place is within ``areaRefuseRadius``.
+///   unless a refused place is within ``areaRefuseRadius``. A feature with no park, beach or campground
+///   around it keeps nothing: what can't be identified outside a park area is still never kept.
 /// - **A solo photo** keeps its point only where a visit would be kept (owner, round 5): at an everyday
 ///   place, or inside a park, beach or campground. Anywhere else, and with no lookup answer at all
 ///   (offline), it keeps no place.
@@ -114,6 +121,8 @@ public nonisolated enum PlaceClassifier {
         let measured = nearby.filter { $0.metres.isFinite && $0.metres >= 0 }.sorted { $0.metres < $1.metres }
         guard let nearest = measured.first, nearest.metres <= visitRadius else { return areaVerdict(measured) }
         if isRefused(nearest) { return .refused }
+        // A park's own feature (round 6): the park around it decides, as if nothing stood that near.
+        if nearest.kind == .feature { return areaVerdict(measured) }
         guard case .allowed(let category) = nearest.kind else { return .unnamed }
         return named(nearest, category)
     }
