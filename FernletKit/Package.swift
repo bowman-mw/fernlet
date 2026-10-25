@@ -50,10 +50,12 @@ let package = Package(
     ],
     dependencies: [
         // CryptoSwift supplies the memory-hard Scrypt KDF used by FernletLock's passphrase
-        // derivation (the one third-party package the carve-up needs). Requirement mirrors the
-        // app target's pbxproj reference exactly (upToNextMinor from 1.10.0) so SPM resolves
-        // a single shared CryptoSwift across the .xcodeproj reference and this local package.
-        .package(url: "https://github.com/krzyzanowskim/CryptoSwift", .upToNextMinor(from: "1.10.0")),
+        // derivation (the one third-party package the carve-up needs), from Fernlet's fork: upstream
+        // 1.10.0 with only Package.swift's iOS floor raised to 26.0, so swiftc signs class_ro_t for
+        // arm64e and ld keeps that flag on the app image (Docs/Enhanced-Security.md). Pinned exactly,
+        // as the app target's pbxproj reference pins it, so SPM resolves a single shared CryptoSwift
+        // (CIGateSelectorBoundaryTests holds all four spellings to the tag's commit).
+        .package(url: "https://github.com/bowman-mw/CryptoSwift", exact: "1.10.0-fernlet.2"),
         // ProximityKit, the peer-to-peer subsystem ([S]: the radios, identity, the signed envelope,
         // sealing and replay, the session coordinator, ranging, the protocol namespace its host
         // supplies, the routed mesh engine, the presence radio and the one-to-one pair session), from

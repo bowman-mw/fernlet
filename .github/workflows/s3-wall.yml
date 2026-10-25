@@ -725,6 +725,16 @@ jobs:
         # The line, MEASURED on a Mac on this tree (a private iPhone 17 simulator, iOS 26.5), ran 102
         # tests in 12 suites ("passed after 3.147 seconds"; 97 + 5 is the ARITHMETIC CHECK), and the wall
         # ten times on its own, green each time; its floor stays the shared `1`.
+        #
+        # CryptoSwift's fork (2026-10-25) changes one suite of this line and adds one cell.
+        # `CIGateSelectorBoundaryTests` gains `theFourPinSpellingsNameOneTagOfTheCryptoSwiftFork`: CryptoSwift
+        # moved from a range on upstream to exactly `1.10.0-fernlet.2` of bowman-mw/CryptoSwift, upstream
+        # 1.10.0 with only Package.swift's iOS floor raised and marked as altered, so the app image keeps
+        # class_ro_t pointer signing (Docs/Enhanced-Security.md). The four spellings that hold ProximityKit's
+        # pin now hold it too, to the commit its `releasedCryptoSwiftRevisions` row holds, through helpers both
+        # cells share; the parser cell fixtures the fork's own table and identity. No suite joined or left this
+        # line, and the line, MEASURED on a Mac on this tree (a private iPhone 17 simulator, iOS 26.5), ran 103
+        # tests in 12 suites (102 + 1 is the ARITHMETIC CHECK); its floor stays the shared `1`.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
@@ -752,6 +762,11 @@ jobs:
         # name in CIGateSelectorBoundaryTests' `wallLines`. The line, MEASURED on a Mac on that tree
         # (iPhone 17 simulator, iOS 26.5), ran 43 tests in 2 suites (NoTrackingBoundaryTests 17,
         # OpenFoodFactsLookupTests 26), 0 failed, and refused a floor of 44.
+        # CryptoSwift's fork (2026-10-25) moves one row of NoTrackingBoundaryTests' package allowlist:
+        # bowman-mw/CryptoSwift replaces upstream's URL, and Docs/No-Tracking-Wall.md §2 says why in the same
+        # commit (upstream 1.10.0 with only Package.swift's iOS floor raised). No cell joined. The line,
+        # MEASURED on a Mac on this tree (a private iPhone 17 simulator, iOS 26.5), ran 43 tests in 2 suites,
+        # 0 failed; its floor stays the shared `1`.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh no-tracking 1 NoTrackingBoundaryTests OpenFoodFactsLookupTests
@@ -2470,9 +2485,17 @@ jobs:
         # load, the three suites passed 77 of 77 in three runs out of three, where the cells before this
         # commit failed 17, two of them by trapping on an empty `sentData` and taking the test process
         # down. 1310 + 8 + 43 = 1361 is the ARITHMETIC CHECK, never the source.
+        # CryptoSwift's fork (2026-10-25) adds one cell and moves no suite: CIGateSelectorBoundaryTests gains
+        # the fork's pin cell (see the s3-grep step). RAISED 1361 -> 1362, MEASURED on a Mac, 2026-10-25 (a
+        # private iPhone 17 simulator, iOS 26.5): this exact 154-name list run at floor 1 through
+        # Fernlet.xcworkspace after the strict build-for-testing (WALL CHECK PASSED), read off its own result
+        # bundle: totalTestCount 1362, all FernletTests ("Test run with 1362 tests in 154 suites passed after
+        # 159.483 seconds"), 0 failed, 0 skipped, no `Restarting after unexpected exit` line, the suite census
+        # silent. Re-run AT 1362: passed, and shown red once at 1363. 1361 + 1 = 1362 is the ARITHMETIC CHECK,
+        # never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 1361 \
+          Scripts/run-gated-suites.sh mesh-batteries 1362 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \

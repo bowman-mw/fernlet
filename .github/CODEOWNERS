@@ -77,8 +77,9 @@
 /App/Fernlet/PrivacyPolicyView.swift          @bowman-mw
 
 # The dependency DAG is the S3 wall's compiler half; the two resolved files pin the revision of each
-# package from outside this repository (CryptoSwift, and since plan step A1.3 ProximityKit, exactly 0.1.1
-# since the re-pin of 2026-10-17) that the strict build and a release archive compile, which
+# package from outside this repository (CryptoSwift, from Fernlet's fork at exactly 1.10.0-fernlet.2
+# since 2026-10-25, and since plan step A1.3 ProximityKit, exactly 0.1.1 since the re-pin of
+# 2026-10-17) that the strict build and a release archive compile, which
 # CIGateSelectorBoundaryTests holds equal, and holds to the manifests' one version at its tag's commit
 /FernletKit/Package.swift                     @bowman-mw
 /FernletKit/Package.resolved                  @bowman-mw

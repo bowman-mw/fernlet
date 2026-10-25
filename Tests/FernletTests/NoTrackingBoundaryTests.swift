@@ -164,7 +164,9 @@ struct NoTrackingBoundaryTests {
     /// manifest and in the Xcode project's remote-package references alike.
     ///
     /// CryptoSwift supplies the memory-hard Scrypt KDF behind `FernletLock`'s passphrase derivation —
-    /// pure local computation, no network code. ProximityKit is Fernlet's own peer-to-peer subsystem,
+    /// pure local computation, no network code — from Fernlet's fork since 2026-10-25: upstream 1.10.0
+    /// with only `Package.swift`'s iOS floor raised, so the app image keeps class_ro_t signing
+    /// (Docs/Enhanced-Security.md). ProximityKit is Fernlet's own peer-to-peer subsystem,
     /// moved with its history to a repository of its own at plan step A1.3 and pinned at exactly 0.1.1
     /// since the re-pin of 2026-10-17: it depends on nothing, and its repository's CI holds its code to
     /// the same rules (no tracking SDK or symbol, no HTTP client, and Network.framework's local-link API
@@ -176,7 +178,7 @@ struct NoTrackingBoundaryTests {
     /// has heard of yet (and `CIGateSelectorBoundaryTests` refuses a third pin in either resolved file,
     /// where a dependency of a dependency would appear).
     private static let allowedPackageURLs: Set<String> = [
-        "https://github.com/krzyzanowskim/CryptoSwift",
+        "https://github.com/bowman-mw/CryptoSwift",
         "https://github.com/bowman-mw/proximitykit"
     ]
 

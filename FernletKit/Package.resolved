@@ -1,13 +1,13 @@
 {
-  "originHash" : "59c51e2e52bf0db0047a65f010df95a3ddfa30a635ebf566146345dac5cd3f63",
+  "originHash" : "e86895851632dc14475bba9643c1d192e1be330ae9d07302c7f559c5205e11c3",
   "pins" : [
     {
       "identity" : "cryptoswift",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/krzyzanowskim/CryptoSwift",
+      "location" : "https://github.com/bowman-mw/CryptoSwift",
       "state" : {
-        "revision" : "f2a627b84c1ff96f21ac2fcb623ab36142dd5512",
-        "version" : "1.10.0"
+        "revision" : "81cbac5a4d4c80a5680a41e0069631f7c42f66ec",
+        "version" : "1.10.0-fernlet.2"
       }
     },
     {
