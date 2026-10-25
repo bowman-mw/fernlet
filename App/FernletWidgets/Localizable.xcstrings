@@ -89,6 +89,17 @@
         }
       }
     },
+    "A picture of the map around you, with your marked places and saved trails." : {
+      "comment" : "The large map widget's description in the widget gallery (the privacy policy's own words)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Una imagen del mapa a tu alrededor, con tus lugares marcados y tus rutas guardadas."
+          }
+        }
+      }
+    },
     "A stamp from your stamp book, and the one you earned today." : {
       "localizations" : {
         "es" : {
@@ -1351,6 +1362,17 @@
         }
       }
     },
+    "Your map" : {
+      "comment" : "The large map widget's name in the widget gallery",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu mapa"
+          }
+        }
+      }
+    },
     "Your rest is already at its 10-minute limit." : {
       "comment" : "Spoken when '+15 s' did nothing because the rest is already 10 minutes long (Siri, Shortcuts, and VoiceOver in the runner).",
       "localizations" : {
@@ -1972,6 +1994,96 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "dos corazones dorados de amigos"
+          }
+        }
+      }
+    },
+    "widget.macro.carbs" : {
+      "comment" : "The letter before the carbs bar on the map widget (Spanish: C)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "C"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "C"
+          }
+        }
+      }
+    },
+    "widget.macro.fat" : {
+      "comment" : "The letter before the fat bar on the map widget (Spanish: G, grasa)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "F"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "G"
+          }
+        }
+      }
+    },
+    "widget.macro.protein" : {
+      "comment" : "The letter before the protein bar on the map widget (Spanish: P)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "P"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "P"
+          }
+        }
+      }
+    },
+    "widget.macros.spoken" : {
+      "comment" : "The map widget, VoiceOver: today's macros against their targets (the app's status plate says the same)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Protein %1$lld of %2$lld grams, carbs %3$lld of %4$lld, fat %5$lld of %6$lld."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Proteína %1$lld de %2$lld gramos, carbohidratos %3$lld de %4$lld, grasa %5$lld de %6$lld."
+          }
+        }
+      }
+    },
+    "widget.map.takenAt" : {
+      "comment" : "The map widget's tag: when its picture of the map was taken, a time today or else a date. Example: 'Map from 9:40 AM'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Map from %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mapa de %@"
           }
         }
       }

@@ -31646,6 +31646,16 @@
         }
       }
     },
+    "Your photos appear tomorrow night, after %@ goes to sleep." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tus fotos aparecen mañana por la noche, cuando %@ se duerma."
+          }
+        }
+      }
+    },
     "Your photos appear tonight, after %@ goes to sleep." : {
       "localizations" : {
         "es" : {
@@ -39156,9 +39166,27 @@
         }
       }
     },
+    "friendsNearby.startHangout" : {
+      "comment" : "Friends nearby and the blue button: start a hangout (a friend session) with a friend nearby; their first name (Spanish: Empezar una quedada con …)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start a hangout with %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Empezar una quedada con %@"
+          }
+        }
+      }
+    },
     "friendsNearby.startSession" : {
       "comment" : "Friends nearby and the blue button: start a friend session with a friend nearby; their first name",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -39175,7 +39203,7 @@
       }
     },
     "friendsNearby.startSession.detail" : {
-      "comment" : "Friends nearby and the blue button: under 'Start a session with Sam'",
+      "comment" : "Friends nearby and the blue button: under 'Start a hangout with Sam'",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
@@ -45802,6 +45830,42 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Caminatas, carreras y lugares donde abriste Fernlet. Activa el mapeo en segundo plano para todo el día."
+          }
+        }
+      }
+    },
+    "privatePlaces.openInMaps" : {
+      "comment" : "Private, Places: opens a place you return to in Apple's Maps app, which shows its name and address (Spanish: Abrir en Mapas de Apple)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Open in Apple Maps"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abrir en Mapas de Apple"
+          }
+        }
+      }
+    },
+    "privatePlaces.openInMaps.failed" : {
+      "comment" : "Private, Places: the alert when Open in Apple Maps finds nothing (offline, or the place is gone)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Apple Maps couldn't find this place right now."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mapas de Apple no encuentra este lugar ahora mismo."
           }
         }
       }
@@ -54321,7 +54385,7 @@
       }
     },
     "worldQuickStart.label.announcement" : {
-      "comment" : "World Home: what VoiceOver says once when the blue button's action changes, 'Quick start: Camera'",
+      "comment" : "World Home: what VoiceOver says when the blue button's action changes, 'Quick start: Camera'",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
@@ -54797,7 +54861,7 @@
     },
     "worldQuickStart.status.friendNearby" : {
       "comment" : "World Home: the blue button's VoiceOver value with a friend nearby; the heading, e.g. 'Sam is nearby'",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -54809,6 +54873,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%@. Empieza una sesión o una actividad."
+          }
+        }
+      }
+    },
+    "worldQuickStart.status.friendNearbyHangout" : {
+      "comment" : "World Home: the blue button's VoiceOver value with a friend nearby; the heading, e.g. 'Sam is nearby' (Spanish: … Empieza una quedada o una actividad.)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@. Start a hangout or an activity."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@. Empieza una quedada o una actividad."
           }
         }
       }
