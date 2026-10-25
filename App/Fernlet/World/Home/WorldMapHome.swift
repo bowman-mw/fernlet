@@ -204,7 +204,11 @@ struct WorldMapHome: View {
                           isQuiet: isBubbleQuiet, isNight: phase(at: Date()) == .night, hint: isHintShowing, onHintEnded: endHint) {
             isCustomizing = true
         }
-        .fixedSize()
+        // Measured at the bubble's own wrap width, so a line of two or three rows is measured as it is
+        // drawn and the feet stay on `point` (an unbounded measure took one row and pushed the sprite
+        // down by the rest, off the house, the z's and the suitcase that stand at `point`).
+        .frame(width: 236)
+        .fixedSize(horizontal: false, vertical: true)
         .frame(width: 0, height: 0, alignment: Alignment.bottom)
         .position(point)
     }
