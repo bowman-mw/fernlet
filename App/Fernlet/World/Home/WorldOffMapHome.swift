@@ -15,6 +15,8 @@ struct WorldOffMapHome<Companion: View>: View {
     let date: Date
     let status: WorldStatus
     let onOpen: (WorldPanel) -> Void
+    /// A print on the photo wall: its photo in the Album (`ref-wall-photo`), or the Album (nil).
+    let onOpenPrint: (FriendsRoute?) -> Void
     @ViewBuilder let companion: () -> Companion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -23,7 +25,7 @@ struct WorldOffMapHome<Companion: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             header
                 .padding(.horizontal, 18)
-            WorldPhotoPrints(store: store, arrangement: .row(compact: large)) { onOpen(.friends) }
+            WorldPhotoPrints(store: store, arrangement: .row(compact: large), onOpen: onOpenPrint)
                 .padding(.leading, 14)
                 .padding(.top, 8)
             scene(large: large)
