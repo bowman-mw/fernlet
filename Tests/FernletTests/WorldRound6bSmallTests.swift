@@ -1,5 +1,7 @@
 import Foundation
+import SwiftUI
 import Testing
+import UIKit
 import FernletDomainModel
 import FernletScoring
 @testable import Fernlet
@@ -111,5 +113,82 @@ struct WorldRound6bSmallTests {
             #expect(!code.contains(".image(pixel: 2") && !code.contains(".image(pixel: 3"),
                     "\(file) draws a pixel icon at a fixed size, which stays small at the largest text")
         }
+    }
+
+    // MARK: 47 · "Keep as friends?" as soon as the other sheet closes
+
+    /// A sheet already up when a session ends (a panel's, which the root host can't see): the prompt
+    /// waits under no retry budget, however long the sheet stays, and shows as soon as it closes.
+    @Test func keepAsFriendsShowsAsSoonAsTheOtherSheetCloses() async throws {
+        let store = makeTestStore()
+        let scene = try OverlayTestSupport.scene()
+        let other = KeepFriendsOtherSheet()
+        other.isUp = true
+        let (window, hosting) = OverlayTestSupport.window(on: scene, root: KeepFriendsBehindSheetHarness(store: store, other: other))
+        defer { OverlayTestSupport.close(window, hosting) }
+        try await Self.wait(seconds: 3) { holdsForeignCover(hosting.presentedViewController) }
+        try #require(holdsForeignCover(hosting.presentedViewController), "precondition: the other sheet is up")
+
+        let manager = store.meshNetworkManager
+        HeldPhotos.openGate(on: manager)
+        manager.recordSessionParticipant(displayName: "Bea", fingerprint: "bea-fp-0011223344",
+                                         signingPublicKey: Data([7]), keyAgreementPublicKey: Data([8]))
+        manager.leaveSession()
+        try #require(store.meshFeatures.photos.pendingFriendReview?.entries.count == 1)
+        // Past the check's delay, a landing grace and the four retries the old watchdog had.
+        try await Task.sleep(for: .seconds(12))
+        #expect(holdsForeignCover(hosting.presentedViewController), "the other sheet stays; nothing replaced it")
+
+        other.isUp = false
+        try await Self.wait(seconds: 8) { Self.promptIsUp(hosting) }
+        #expect(Self.promptIsUp(hosting), "the prompt shows once the other sheet has closed")
+    }
+
+    /// The host's waits are read in its own window, and a covering sheet costs no retry.
+    @Test func keepAsFriendsWaitsInItsOwnWindowWithoutGivingUp() throws {
+        let source = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("App/Fernlet/World/Friends/KeepFriendsPromptHost.swift"))
+        let deferred = try #require(MeshRoutedSourceScan.bracedBody(after: "private func runDeferredReviewCheck() async", in: source))
+        let wait = try #require(deferred.range(of: "await waitUntilNothingIsPresented()"))
+        let present = try #require(deferred.range(of: "presentDisconnectReviewIfNeeded()"))
+        #expect(wait.lowerBound < present.lowerBound, "it waits for the other sheet before it asks")
+        let watchdog = try #require(MeshRoutedSourceScan.bracedBody(after: "private func confirmSessionEndSheetLanded() async", in: source))
+        #expect(watchdog.contains("if !windowAnchor.somethingIsPresented {"), "a covering sheet spends no retry")
+        #expect(!source.contains("UIApplication.shared"), "only the host's own window counts, never another one")
+    }
+
+    /// The prompt (not the other sheet) is what `hosting` presents.
+    private static func promptIsUp(_ hosting: UIViewController) -> Bool {
+        hosting.presentedViewController != nil && !holdsForeignCover(hosting.presentedViewController)
+    }
+
+    /// Polls `condition` every 50 ms for at most `seconds` (R2: bounded).
+    private static func wait(seconds: Int, until condition: () -> Bool) async throws {
+        for _ in 0..<(seconds * 20) where !condition() {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+    }
+}
+
+/// The other sheet in ``KeepFriendsBehindSheetHarness``, raised and lowered by the test.
+@MainActor
+@Observable
+final class KeepFriendsOtherSheet {
+    /// Whether the other sheet is up.
+    var isUp = false
+}
+
+/// The root's keep-as-friends host, as ContentView hangs it, with another sheet over the same window
+/// that the host is not told about (a panel's sheet, such as Food's meal sheet).
+struct KeepFriendsBehindSheetHarness: View {
+    let store: FernletStore
+    @Bindable var other: KeepFriendsOtherSheet
+    @State private var isPromptUp = false
+
+    var body: some View {
+        Color.clear
+            .sheet(isPresented: $other.isUp) { ForeignCoverMarker() }
+            .modifier(KeepFriendsPromptHost(store: store, isRootSheetUp: false, launchComplete: true, isCoverUp: false,
+                                            keepFriendsPromptPresented: $isPromptUp))
     }
 }
