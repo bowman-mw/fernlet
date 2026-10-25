@@ -1,4 +1,5 @@
 import FernletFoundation
+import FernletLock
 import FernletUI
 import SwiftUI
 import WorldMapStore
@@ -30,6 +31,7 @@ struct WorldPlacesPage: View {
     @State private var renaming: PlaceRecord?
     @State private var newName = ""
     @State private var confirmsDeleteAll = false
+    @Environment(FernletLockService.self) private var lockService
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -54,7 +56,9 @@ struct WorldPlacesPage: View {
             .fernletPageBackground()
             .navigationDestination(for: WorldPlacesRoute.self) { route in destination(route) }
         }
-        .task { reload() }
+        // Read again whenever the lock changes: the page is built under the Private tab's gate, before
+        // the hub key exists, so the first read finds nothing until the person unlocks.
+        .task(id: lockService.state) { reload() }
         .task(id: log) { await resolveNames() }
         .alert(Text(WorldPlacesCopy.renameTitle), isPresented: isRenaming, presenting: renaming) { place in
             TextField("Place name", text: $newName, prompt: .fieldPrompt("Place name"))
@@ -124,9 +128,10 @@ extension WorldPlacesPage {
     }
 
     /// Reads the log afresh, folding in what waits on the device (nothing while Private is closed or in a
-    /// decoy).
+    /// decoy, and then no names are held either).
     private func reload() {
         log = store.worldPlaceLog()
+        if log == nil { names = [:] }
     }
 
     /// Asks Apple Maps again, by reference, for the name of each place the person hasn't named (at most
