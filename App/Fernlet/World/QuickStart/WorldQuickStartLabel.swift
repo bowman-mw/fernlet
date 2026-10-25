@@ -46,49 +46,55 @@ nonisolated enum WorldQuickStartLabel: String, CaseIterable, Sendable {
                       comment: "World Home: the blue button's VoiceOver name with its action, 'Quick start, Camera'")
     }
 
-    /// What VoiceOver says once, politely, when the label shows: "Quick start: Camera".
+    /// What VoiceOver says, politely, each time the label shows: "Quick start: Camera".
     var announcement: String {
         let base = String(localized: WorldQuickStartCopy.buttonLabel)
         let word = String(localized: title)
         return String(localized: "worldQuickStart.label.announcement", defaultValue: "\(base): \(word)",
-                      comment: "World Home: what VoiceOver says once when the blue button's action changes, 'Quick start: Camera'")
+                      comment: "World Home: what VoiceOver says when the blue button's action changes, 'Quick start: Camera'")
     }
 }
 
-/// When the label shows (`ref-blue-how`): only when the button's action changes to one with a label,
-/// never on a timer, and never twice for the same action in a day. The first glyph the button shows is
-/// where it starts, not a change. Pure, so the tests drive it.
+/// When the label shows (`ref-blue-how`; owner's form answer 28, 2026-10-25: "Everytime it changes, but it
+/// should slide back in after 30s"): every time the button's action changes to one with a label, and it
+/// slides back in after 30 seconds. A change to an action with no label (Walk together, the resting day)
+/// tucks a showing label away at once, so the word never names an action the button no longer has. The
+/// first glyph the button shows is where it starts, not a change. Pure, so the tests drive it.
 nonisolated struct WorldQuickStartLabelRule: Equatable, Sendable {
     /// The glyph last seen, and whether one has been seen at all.
     private(set) var glyph: WorldQuickStartGlyph?
     private(set) var hasSeen = false
-    /// The day the shown labels count for, and the labels already shown that day.
-    private(set) var day: Date?
-    private(set) var shown: [WorldQuickStartLabel] = []
 
-    /// The label slides out in 0.3 s, stays 3 s, then shrinks back in 0.3 s.
+    /// The label slides out in 0.3 s, stays 30 s, then slides back in 0.3 s.
     static let slideDuration: TimeInterval = 0.3
-    static let holdDuration: TimeInterval = 3
+    static let holdDuration: TimeInterval = 30
     static let shrinkDuration: TimeInterval = 0.3
 
-    /// Notes the button's glyph on `day` (the day's start) and returns the label to show now, if any.
-    mutating func observe(_ next: WorldQuickStartGlyph?, day: Date) -> WorldQuickStartLabel? {
-        if self.day != day {
-            self.day = day
-            shown = []
-        }
+    /// Notes the button's glyph and returns what the label does now.
+    mutating func observe(_ next: WorldQuickStartGlyph?) -> WorldQuickStartLabelStep {
         let changed = hasSeen && next != glyph
         glyph = next
         hasSeen = true
-        guard changed, let label = WorldQuickStartLabel.label(for: next), !shown.contains(label) else { return nil }
-        shown.append(label)
-        return label
+        guard changed else { return .stay }
+        guard let label = WorldQuickStartLabel.label(for: next) else { return .tuckAway }
+        return .show(label)
     }
 
     /// How the label moves in and out: a 0.3-s slide, or with Reduce Motion a fade in place.
     static func transition(reduceMotion: Bool) -> WorldQuickStartLabelMotion {
         reduceMotion ? .fade : .slide
     }
+}
+
+/// What the label does when the button's glyph is noted: nothing, slide out with a word (said politely
+/// to VoiceOver), or tuck a showing word away.
+nonisolated enum WorldQuickStartLabelStep: Equatable, Sendable {
+    /// No change: a showing label keeps its 30 seconds.
+    case stay
+    /// The action changed to one with a label: show it.
+    case show(WorldQuickStartLabel)
+    /// The action changed to one without a label: tuck any showing label away.
+    case tuckAway
 }
 
 /// How the label appears: sliding out from the button and shrinking back, or (Reduce Motion) fading
@@ -99,8 +105,8 @@ nonisolated enum WorldQuickStartLabelMotion: Sendable, Equatable {
 }
 
 extension View {
-    /// The blue button's label (`ref-blue-how`): watches `glyph` and, when the action changes, slides
-    /// the action's word out beside the button for three seconds and says it once to VoiceOver.
+    /// The blue button's label (`ref-blue-how`, form answer 28): watches `glyph` and, every time the action
+    /// changes, slides the action's word out beside the button for 30 seconds and says it to VoiceOver.
     func worldQuickStartLabel(for glyph: WorldQuickStartGlyph) -> some View {
         modifier(WorldQuickStartLabelModifier(glyph: glyph))
     }
@@ -127,20 +133,23 @@ struct WorldQuickStartLabelModifier: ViewModifier {
             }
             .onAppear(perform: start)
             .onChange(of: glyph) { _, next in
-                guard let label = rule.observe(next, day: Calendar.current.startOfDay(for: .now)) else { return }
-                show(label)
+                switch rule.observe(next) {
+                case .stay: break
+                case .show(let label): show(label)
+                case .tuckAway: tuckAway()
+                }
             }
     }
 
     /// Notes the first glyph (where the button starts, not a change). DEBUG screenshots (`label`) show
     /// its label and keep it out; the scene list is empty in release builds.
     private func start() {
-        _ = rule.observe(glyph, day: Calendar.current.startOfDay(for: .now))
+        _ = rule.observe(glyph)
         guard UITestSupport.worldHomeScenes.contains("label"), let label = WorldQuickStartLabel.label(for: glyph) else { return }
         show(label, holds: true)
     }
 
-    /// Slides `label` out, says it once, holds it, then shrinks it back (unless `holds`).
+    /// Slides `label` out, says it politely, holds it 30 seconds, then slides it back in (unless `holds`).
     private func show(_ label: WorldQuickStartLabel, holds: Bool = false) {
         showID += 1
         let id = showID
@@ -158,6 +167,14 @@ struct WorldQuickStartLabelModifier: ViewModifier {
             guard showID == id else { return }
             withAnimation(.easeIn(duration: WorldQuickStartLabelRule.shrinkDuration)) { isOut = false }
         }
+    }
+
+    /// The action changed to one without a word: a showing label goes back in now, and its pending
+    /// hold is forgotten.
+    private func tuckAway() {
+        showID += 1
+        guard isOut else { return }
+        withAnimation(.easeIn(duration: WorldQuickStartLabelRule.shrinkDuration)) { isOut = false }
     }
 }
 

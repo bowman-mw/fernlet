@@ -5,7 +5,7 @@ import FernletDomainModel
 
 /// The owner's refinements 1, 4 and 6 (World Review Refinements, approved 2026-10-24): the companion up
 /// close (a pet that changes no score, its motion and Reduce Motion), the Today tab on the status plate,
-/// and the blue button's label (once per action, its timing, its words).
+/// and the blue button's label (every time the action changes, its timing, its words).
 @MainActor
 struct WorldRefinementTests {
 
@@ -100,43 +100,39 @@ struct WorldRefinementTests {
 
     // MARK: 6 · The blue button's label
 
-    private let today = Calendar.current.startOfDay(for: Date(timeIntervalSince1970: 1_800_000_000))
-
     /// The first glyph is where the button starts, not a change; a change to a labelled action shows
-    /// its word; Walk together and the resting day never do.
+    /// its word; a change to Walk together or the resting day tucks a showing word away.
     @Test func theLabelShowsOnlyWhenTheActionChanges() {
-        // The first glyph is not a change, nor is the same glyph again; Walk together and the resting
-        // day keep the icon alone.
-        let shown = labels([(.camera, today), (.camera, today), (.walk, today), (.space, today), (.rest, today),
-                            (.run, today), (.trail, today), (nil, today)])
-        #expect(shown == [nil, nil, nil, .workout, nil, .run, nil, nil])
+        let shown = steps([.camera, .camera, .walk, .space, .rest, .run, .trail, nil])
+        #expect(shown == [.stay, .stay, .tuckAway, .show(.workout), .tuckAway, .show(.run), .tuckAway, .tuckAway])
     }
 
-    /// Never twice for the same action in a day; a new day starts afresh.
-    @Test func neverTwiceForTheSameAction() {
-        let tomorrow = today.addingTimeInterval(86_400)
-        let shown = labels([(.walk, today), (.camera, today), (.walk, today), (.camera, today), (.space, today),
-                            (.walk, tomorrow), (.camera, tomorrow)])
-        #expect(shown == [nil, .camera, nil, nil, .workout, nil, .camera], "the camera's word shows once a day")
+    /// Every time the action changes (owner's form answer 28, 2026-10-25): the same word shows again,
+    /// with no daily limit.
+    @Test func everyTimeTheActionChanges() {
+        let shown = steps([.walk, .camera, .walk, .camera, .space, .camera])
+        #expect(shown == [.stay, .show(.camera), .tuckAway, .show(.camera), .show(.workout), .show(.camera)],
+                "the camera's word shows each time the button becomes the camera")
     }
 
-    /// Runs one rule over a sequence of glyphs, returning what each showed.
-    private func labels(_ glyphs: [(WorldQuickStartGlyph?, Date)]) -> [WorldQuickStartLabel?] {
+    /// Runs one rule over a sequence of glyphs, returning what each did.
+    private func steps(_ glyphs: [WorldQuickStartGlyph?]) -> [WorldQuickStartLabelStep] {
         var rule = WorldQuickStartLabelRule()
-        return glyphs.map { rule.observe($0.0, day: $0.1) }
+        return glyphs.map { rule.observe($0) }
     }
 
-    /// It slides out in 0.3 s, stays 3 s and shrinks back in 0.3 s; with Reduce Motion it fades in place.
+    /// It slides out in 0.3 s, stays 30 s (form answer 28) and slides back in 0.3 s; with Reduce Motion
+    /// it fades in place.
     @Test func theLabelsTimingAndReduceMotion() {
         #expect(WorldQuickStartLabelRule.slideDuration == 0.3)
-        #expect(WorldQuickStartLabelRule.holdDuration == 3)
+        #expect(WorldQuickStartLabelRule.holdDuration == 30)
         #expect(WorldQuickStartLabelRule.shrinkDuration == 0.3)
         #expect(WorldQuickStartLabelRule.transition(reduceMotion: false) == .slide)
         #expect(WorldQuickStartLabelRule.transition(reduceMotion: true) == .fade)
     }
 
     /// The words: Camera for a session or a hike, Workout at a space, Run on a saved route. The
-    /// button's name always carries the action; VoiceOver hears "Quick start: Camera" once.
+    /// button's name always carries the action; VoiceOver hears "Quick start: Camera" each time.
     @Test func theWordsAndTheButtonsName() {
         #expect(WorldQuickStartLabel.label(for: .camera) == .camera)
         #expect(WorldQuickStartLabel.label(for: .space) == .workout)
