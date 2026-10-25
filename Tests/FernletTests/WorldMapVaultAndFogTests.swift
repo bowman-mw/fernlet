@@ -60,6 +60,38 @@ struct WorldMapVaultAndFogTests {
         #expect(excluded == true, "the map folder must stay out of device backups")
     }
 
+    /// "Never in a backup" holds for a folder whatever made it (round 6b): a folder that is already there
+    /// without the flag (an older build's, a restore's) gets it on the next write and when the vault is
+    /// opened, and a flag something cleared comes back — not only when the vault creates the folder.
+    @Test func theBackupFlagIsSetOnEveryOpenNotOnlyOnCreation() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("WorldMap-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        func excluded() throws -> Bool {
+            var url = directory
+            url.removeAllCachedResourceValues()
+            return try url.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true
+        }
+        func clearFlag() throws {
+            var values = URLResourceValues()
+            values.isExcludedFromBackup = false
+            var url = directory
+            try url.setResourceValues(values)
+        }
+        #expect(try excluded() == false, "the folder starts without the flag, as an older build left it")
+        let vault = WorldMapVault(directory: directory, keys: .ephemeral())
+        defer { _ = vault.clearAll() }
+        try vault.write(Data("fog".utf8), to: .fog)
+        #expect(try excluded(), "a write into an existing folder sets the flag")
+        try clearFlag()
+        try vault.write(Data("fog again".utf8), to: .fog)
+        #expect(try excluded(), "and sets it again on the next write")
+        try clearFlag()
+        vault.reassertBackupExclusion()
+        #expect(try excluded(), "opening the vault re-asserts it")
+        vault.reassertBackupExclusion()
+        #expect(try excluded(), "idempotent")
+    }
+
     @Test func aLockedKeyIsAnErrorNotAFreshStart() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("WorldMap-\(UUID().uuidString)")
         let key = SymmetricKey(size: .bits256)

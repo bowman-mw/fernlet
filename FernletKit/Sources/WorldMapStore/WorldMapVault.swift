@@ -168,12 +168,26 @@ public final class WorldMapVault {
         self.keys = keys
     }
 
-    /// The app's vault: `Application Support/WorldMap`, keys in the device keychain.
+    /// The app's vault: `Application Support/WorldMap`, keys in the device keychain. Opening it re-asserts
+    /// the folder's backup exclusion when the folder is already there (``keepOutOfBackups(_:)``).
     public static func production() -> WorldMapVault {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
-        return WorldMapVault(directory: support.appendingPathComponent("WorldMap", isDirectory: true),
-                             keys: .keychain(service: keychainService))
+        let vault = WorldMapVault(directory: support.appendingPathComponent("WorldMap", isDirectory: true),
+                                  keys: .keychain(service: keychainService))
+        vault.reassertBackupExclusion()
+        return vault
+    }
+
+    /// Re-sets the folder's backup exclusion if the folder exists (a missing folder gets it when created).
+    /// A failure is logged, never fatal: the next write sets it again before anything new lands.
+    public func reassertBackupExclusion() {
+        guard FileManager.default.fileExists(atPath: directory.path) else { return }
+        do {
+            try Self.keepOutOfBackups(directory)
+        } catch {
+            FernletAuditLog.log("worldMap.vault.backupFlagFailed")
+        }
     }
 
     /// A vault in a fresh temporary folder with in-memory keys: tests, previews and a test-built store.
@@ -272,13 +286,24 @@ public final class WorldMapVault {
         return removed && keysRemoved
     }
 
-    /// Creates the folder if needed and keeps it out of device backups.
+    /// Creates the folder if needed and keeps it out of device backups — on every write, not only when it
+    /// creates the folder (round 6b): a folder made by an older build, restored, or whose flag something
+    /// cleared gets it back before anything new is written into it. Idempotent.
     private func prepareDirectory() throws {
-        guard !FileManager.default.fileExists(atPath: directory.path) else { return }
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        if !FileManager.default.fileExists(atPath: directory.path) {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+        try Self.keepOutOfBackups(directory)
+    }
+
+    /// Sets `isExcludedFromBackup` on `folder` unless it already carries it. Every write and the app's vault
+    /// at launch (``production()``) call it, so "never in a backup" holds for a folder whatever made it.
+    nonisolated static func keepOutOfBackups(_ folder: URL) throws {
+        var target = folder
+        target.removeAllCachedResourceValues()
+        guard try target.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup != true else { return }
         var values = URLResourceValues()
         values.isExcludedFromBackup = true
-        var folder = directory
-        try folder.setResourceValues(values)
+        try target.setResourceValues(values)
     }
 }
