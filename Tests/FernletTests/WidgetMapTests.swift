@@ -241,4 +241,18 @@ struct WidgetMapTests {
         #expect(targets.carbs == Double(store.nutritionTargets.carbs))
         #expect(targets.fat == Double(store.nutritionTargets.fat))
     }
+
+    /// The store publishes the day's macro targets with every snapshot.
+    @Test func theStorePublishesTheMacroTargets() {
+        let store = makeTestStore()
+        #expect(store.currentWidgetSnapshot().macroTargets == store.widgetMacroTargets())
+    }
+
+    /// A store's fog keeper deletes the picture in that store's own app-group folder, so a test store's
+    /// wipes never reach the test host's real group folder.
+    @Test func theKeepersPictureIsTheStoresOwn() {
+        let directory = uniqueAppGroupDirectory()
+        let store = makeTestStore(appGroupDirectory: directory)
+        #expect(store.worldFog.widgetMap.fileURL == WorldWidgetMapFile(directory: directory).fileURL)
+    }
 }

@@ -755,8 +755,13 @@ final class FernletStore {
     /// uses the production one. Reached for the wipe through ``worldFog`` (`resetAll`).
     @ObservationIgnored let worldMapVault: WorldMapVault
     /// The World map's fog: whether readings lift it, the lifted cells, and the decoy rule
-    /// (`WorldFogKeeper`). Lazy, so a store that never shows the map never reads the vault.
-    @ObservationIgnored private(set) lazy var worldFog = WorldFogKeeper(vault: worldMapVault)
+    /// (`WorldFogKeeper`). Lazy, so a store that never shows the map never reads the vault. Its map-widget
+    /// picture (round 6b) is this store's `appGroupDirectory`'s, so a test store's wipes stay in its folder.
+    @ObservationIgnored private(set) lazy var worldFog: WorldFogKeeper = {
+        let keeper = WorldFogKeeper(vault: worldMapVault)
+        keeper.widgetMap = WorldWidgetMapFile(directory: appGroupDirectory)
+        return keeper
+    }()
     /// The World map's location (`WorldLocationSource`), following the permission the person gave.
     /// Lazy, so nothing asks CoreLocation for anything until the map is on screen; every reading goes
     /// to ``worldFog``, which decides whether it lifts the fog.
@@ -7417,7 +7422,8 @@ final class FernletStore {
     /// companion's state, name and look (the worn Creation Studio pieces included, none in a decoy;
     /// `FernletStore+CompanionLook.swift`), its widget-safe emotion timeline, when a friend's gold hearts
     /// fade and the stamp book's tokens and days only (both empty in a decoy;
-    /// `FernletStore+WidgetExtras.swift`).
+    /// `FernletStore+WidgetExtras.swift`), and the day's protein, carbs and fat targets the map widget's
+    /// bars are drawn against (`FernletStore+WidgetMap.swift`).
     ///
     /// Lifted out of `publishWidgetSnapshot()` unchanged — same fields, same order, same `Date()`
     /// stamp — so the background refresh can DIFF a snapshot before deciding whether publishing it
@@ -7446,7 +7452,8 @@ final class FernletStore {
             companionName: widgetCompanionName,
             companionLook: widgetCompanionLook,
             goldHeartEnds: widgetGoldHeartEnds(),
-            stamps: widgetStamps()
+            stamps: widgetStamps(),
+            macroTargets: widgetMacroTargets()
         )
     }
 

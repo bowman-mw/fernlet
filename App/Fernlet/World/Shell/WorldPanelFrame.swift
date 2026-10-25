@@ -33,7 +33,8 @@ struct WorldPanelFrame<Content: View>: View {
     /// Whether the wooden plate shows (false while the disposable camera fills the screen).
     var showsPlate = true
     /// A Back in the icon's place at the root, for a frame opened over a page of its own panel (a "Just
-    /// you" set over the Album, `b4-mem-solo-open`): the name of the page it returns to.
+    /// you" set over the Album, `b4-mem-solo-open`; a wall photo, `ref-wall-photo`): the name of the page it
+    /// returns to, drawn whatever the title's length (the arrow alone only at accessibility sizes).
     var backTitle: String? = nil
     /// What that Back does (close this frame); the Back shows only when both are set.
     var onBack: (() -> Void)? = nil
@@ -81,7 +82,9 @@ struct WorldPanelFrame<Content: View>: View {
                     .padding(.trailing, 6)
                 plateText(page.title)
             } else if let backTitle, let onBack {
-                FernletBackButton(verbatim: backTitle, compact: FernletBackButton.isCompact(title: plateTitle), action: onBack)
+                // Always the word: the approved "‹ Album" (`ref-wall-photo`, `b4-mem-solo-open`) names the panel
+                // itself, a short word, and a long title (a hangout or a phone's name) shrinks instead.
+                FernletBackButton(verbatim: backTitle, action: onBack)
                     .padding(.trailing, 6)
                 plateText(plateTitle)
             } else {
