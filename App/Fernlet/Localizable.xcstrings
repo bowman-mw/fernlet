@@ -122,6 +122,16 @@
         }
       }
     },
+    "%@ are already saved, so they aren't offered again." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ ya están guardados, así que no se ofrecen otra vez."
+          }
+        }
+      }
+    },
     "%@ asked to remove %@ from this session. A different participant must second the decision." : {
       "localizations" : {
         "en" : {
@@ -200,6 +210,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%1$@ en lugar de %2$@"
+          }
+        }
+      }
+    },
+    "%@ is already saved, so it isn't offered again." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ ya está guardado, así que no se ofrece otra vez."
           }
         }
       }
@@ -4666,6 +4686,7 @@
       }
     },
     "Back to locations" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -4686,6 +4707,7 @@
       }
     },
     "Back to your spaces" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -15290,7 +15312,18 @@
         }
       }
     },
+    "Make the first little thing for your companion to wear. New creations appear on your companion right away, and on the map as pixel art." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Crea la primera cosita para que la lleve tu compañero. Aparece enseguida, y en el mapa en pixel art."
+          }
+        }
+      }
+    },
     "Make the first little thing for your companion to wear. New creations appear on your companion right away." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -20851,6 +20884,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Guardarlo de todos modos"
+          }
+        }
+      }
+    },
+    "Remember places I eat out" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Recordar los lugares donde como fuera"
           }
         }
       }
@@ -28950,6 +28993,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Líneas de caminatas y carreras, en este iPhone."
+          }
+        }
+      }
+    },
+    "Walk or run" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Caminata o carrera"
           }
         }
       }
@@ -40105,7 +40158,7 @@
     },
     "homeMap.delete.history.message" : {
       "comment" : "Settings, Home map: what deleting the map history does",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -40117,6 +40170,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Se borran la niebla, las líneas de caminatas y carreras, Dónde has estado y las marcas de este iPhone. Tus entrenamientos se quedan en Moverse."
+          }
+        }
+      }
+    },
+    "homeMap.delete.history.message.homes" : {
+      "comment" : "Settings, Home map: what deleting the map history does",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The fog, the walk and run lines, Where you've been, your homes and hotels, and the pins on this iPhone go. Your workouts stay in Move."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se borran la niebla, las líneas de caminatas y carreras, Dónde has estado, tus casas y hoteles, y las marcas de este iPhone. Tus entrenamientos se quedan en Moverse."
           }
         }
       }
@@ -40207,6 +40278,222 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "¿Olvidar dónde están los espacios de entrenamiento?"
+          }
+        }
+      }
+    },
+    "homeMap.homes.add" : {
+      "comment" : "Settings, Home map: the row that sets a first home",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Add a home"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Añadir una casa"
+          }
+        }
+      }
+    },
+    "homeMap.homes.addSecond" : {
+      "comment" : "Settings, Home map: the row that sets a second home",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Add a second home"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Añadir una segunda casa"
+          }
+        }
+      }
+    },
+    "homeMap.homes.checkIn" : {
+      "comment" : "Settings, Home map: the row that starts a hotel stay",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Check in at a hotel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Registrarte en un hotel"
+          }
+        }
+      }
+    },
+    "homeMap.homes.checkOut" : {
+      "comment" : "The hotel's sheet from Settings: ends the stay; the hotel is remembered for a welcome back",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Check out"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Salir del hotel"
+          }
+        }
+      }
+    },
+    "homeMap.homes.footnote" : {
+      "comment" : "Settings, Home map: under Homes and hotels",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Each home and your hotel uncovers the map for 1 km around it and stays sealed on this iPhone. Getting home checks you out of a hotel; Fernlet remembers hotels for a welcome back."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cada casa y tu hotel descubren el mapa 1 km a su alrededor y quedan sellados en este iPhone. Al volver a casa sales del hotel; Fernlet recuerda los hoteles para darte la bienvenida."
+          }
+        }
+      }
+    },
+    "homeMap.homes.hotel" : {
+      "comment" : "Settings, Home map: the row of the current hotel stay; its name is the value",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hotel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hotel"
+          }
+        }
+      }
+    },
+    "homeMap.homes.houseHere" : {
+      "comment" : "Settings, Home map: under a home's row; the companion's name, e.g. 'Sprout's house is here'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@'s house is here"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aquí está la casa de %@"
+          }
+        }
+      }
+    },
+    "homeMap.homes.removeHome" : {
+      "comment" : "A home's sheet from Settings: removes it; its circle fogs again except where the person has been",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Remove this home"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Quitar esta casa"
+          }
+        }
+      }
+    },
+    "homeMap.homes.removeHotel" : {
+      "comment" : "The hotel's sheet from Settings: forgets it (no welcome back)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Remove this hotel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Quitar este hotel"
+          }
+        }
+      }
+    },
+    "homeMap.homes.title" : {
+      "comment" : "Settings, Home map: the section of the person's homes and hotel",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Homes and hotels"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Casas y hoteles"
+          }
+        }
+      }
+    },
+    "homeMap.homes.untilCheckOut" : {
+      "comment" : "Settings, Home map: under the hotel row",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Until you check out or get home"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hasta que salgas o vuelvas a casa"
+          }
+        }
+      }
+    },
+    "homeMap.homes.upToTwo" : {
+      "comment" : "Settings, Home map: under 'Add a second home'; at most two homes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Up to 2"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hasta 2"
           }
         }
       }
@@ -40405,6 +40692,60 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "intervalos, distancia, notas"
+          }
+        }
+      }
+    },
+    "intimacy.dateTime.date" : {
+      "comment" : "Log intimacy, VoiceOver: the date half of the Date and time button (then the date)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Date"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fecha"
+          }
+        }
+      }
+    },
+    "intimacy.dateTime.open" : {
+      "comment" : "Log intimacy, VoiceOver: a half of the Date and time button while its picker is open: the date or time, then that it is open",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@, expanded"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@, abierto"
+          }
+        }
+      }
+    },
+    "intimacy.dateTime.time" : {
+      "comment" : "Log intimacy, VoiceOver: the time half of the Date and time button (then the time)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Time"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hora"
           }
         }
       }
@@ -45123,6 +45464,24 @@
         }
       }
     },
+    "privatePlaces.cameHome" : {
+      "comment" : "Private, Places: under a home's (or the hotel's) name on the timeline, when the person got back",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "you got back"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "volviste"
+          }
+        }
+      }
+    },
     "privatePlaces.countNoDates" : {
       "comment" : "Private, Places: beside 'Places you return to'; only a visit count is kept",
       "extractionState" : "extracted_with_value",
@@ -45393,6 +45752,24 @@
         }
       }
     },
+    "privatePlaces.leftHome" : {
+      "comment" : "Private, Places: under a home's (or the hotel's) name on the timeline, when the person left",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "you left"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "saliste"
+          }
+        }
+      }
+    },
     "privatePlaces.noPlaces" : {
       "comment" : "Private, Places: the empty 'Places you return to' card",
       "extractionState" : "extracted_with_value",
@@ -45425,6 +45802,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Caminatas, carreras y lugares donde abriste Fernlet. Activa el mapeo en segundo plano para todo el día."
+          }
+        }
+      }
+    },
+    "privatePlaces.outAndAbout" : {
+      "comment" : "Private, Places: under a day, how long the person was away from home that day, e.g. 'Out and about 9 h 40 min'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Out and about %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fuera de casa %@"
           }
         }
       }
@@ -48446,6 +48841,24 @@
         }
       }
     },
+    "settings.search.title.homesAndHotels" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Homes and hotels"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Casas y hoteles"
+          }
+        }
+      }
+    },
     "settings.search.title.includeLocalDataInIOSBackup" : {
       "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data › Local backup page. Short, sentence case, like the row it leads to.",
       "extractionState" : "extracted_with_value",
@@ -48838,6 +49251,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Recetas que compartes"
+          }
+        }
+      }
+    },
+    "settings.search.title.rememberEatingOut" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Remember places I eat out"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Recordar los lugares donde como fuera"
           }
         }
       }
@@ -52007,6 +52438,150 @@
         }
       }
     },
+    "worldCustomize.night.glasses" : {
+      "comment" : "Customize after the companion's bedtime, under the previews (its body keeps a fixed color): the companion's name, then its bedtime",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@'s asleep, as on the map (bedtime %2$@). Its glasses are off until morning."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ duerme, como en el mapa (se acuesta a las %2$@). Se quitó las gafas hasta mañana."
+          }
+        }
+      }
+    },
+    "worldCustomize.night.glassesAndMood" : {
+      "comment" : "Customize after the companion's bedtime, under the previews: the companion's name, then its bedtime ('10:30 PM'). Spanish: 'Sprout duerme, como en el mapa (se acuesta a las 22:30). Se quitó las gafas y su color de ánimo descansa hasta mañana.'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@'s asleep, as on the map (bedtime %2$@). Its glasses are off and its mood color rests until morning."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ duerme, como en el mapa (se acuesta a las %2$@). Se quitó las gafas y su color de ánimo descansa hasta mañana."
+          }
+        }
+      }
+    },
+    "worldCustomize.night.glassesSlot" : {
+      "comment" : "Customize › Accessory after the companion's bedtime, with glasses picked: why they don't show. The companion's name follows 'while'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Glasses come off while %@ sleeps. Hold to peek at them."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Las gafas se quitan mientras %@ duerme. Mantén para verlas."
+          }
+        }
+      }
+    },
+    "worldCustomize.night.holdToPeek" : {
+      "comment" : "Customize at night: hold this button to see the companion awake. Spanish: 'Mantén para ver'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hold to peek"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mantén para ver"
+          }
+        }
+      }
+    },
+    "worldCustomize.night.mood" : {
+      "comment" : "Customize after the companion's bedtime, under the previews (no glasses worn): the companion's name, then its bedtime",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@'s asleep, as on the map (bedtime %2$@). Its mood color rests until morning."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ duerme, como en el mapa (se acuesta a las %2$@). Su color de ánimo descansa hasta mañana."
+          }
+        }
+      }
+    },
+    "worldCustomize.night.peekHint" : {
+      "comment" : "Customize at night, VoiceOver hint on 'Hold to peek': activating it switches the previews between awake and asleep",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Shows the previews awake, or asleep again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Muestra las vistas despierto, o dormido otra vez."
+          }
+        }
+      }
+    },
+    "worldCustomize.night.peeking" : {
+      "comment" : "Customize at night, VoiceOver: the 'Hold to peek' button is on and the previews show the companion awake",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Showing it awake"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se ve despierto"
+          }
+        }
+      }
+    },
+    "worldCustomize.night.plain" : {
+      "comment" : "Customize after the companion's bedtime, under the previews (nothing it wears changes): the companion's name, then its bedtime",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@'s asleep, as on the map (bedtime %2$@)."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ duerme, como en el mapa (se acuesta a las %2$@)."
+          }
+        }
+      }
+    },
     "worldFriend.nearby" : {
       "comment" : "World Home, VoiceOver: a friend's companion beside yours; their first name",
       "extractionState" : "extracted_with_value",
@@ -52075,6 +52650,420 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Toca dos veces a %@ para saludar"
+          }
+        }
+      }
+    },
+    "worldHome.asleep" : {
+      "comment" : "World Home, VoiceOver: at bedtime at home the companion sleeps by its house; the companion's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@, asleep by its house."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ duerme junto a su casa."
+          }
+        }
+      }
+    },
+    "worldHome.count.first" : {
+      "comment" : "Remember this place sheet with Home picked and no home yet",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Up to 2 homes. This is your first."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hasta 2 casas. Esta es la primera."
+          }
+        }
+      }
+    },
+    "worldHome.count.full" : {
+      "comment" : "Remember this place sheet with Home picked and two homes already",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Up to 2 homes. This one replaces one of them."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hasta 2 casas. Esta reemplaza a una de ellas."
+          }
+        }
+      }
+    },
+    "worldHome.count.second" : {
+      "comment" : "Remember this place sheet with Home picked and one home already",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Up to 2 homes. This is your second."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hasta 2 casas. Esta es la segunda."
+          }
+        }
+      }
+    },
+    "worldHome.defaultName" : {
+      "comment" : "The name a new home starts with; the person can change it",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Home"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Casa"
+          }
+        }
+      }
+    },
+    "worldHome.greeting.door" : {
+      "comment" : "World Home: Sprout's line on getting home after an hour or more away (one of three that rotate)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "There's the door."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ahí está la puerta."
+          }
+        }
+      }
+    },
+    "worldHome.greeting.home" : {
+      "comment" : "World Home: Sprout's line on getting home after an hour or more away",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You're home! Long day?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Ya en casa! ¿Día largo?"
+          }
+        }
+      }
+    },
+    "worldHome.greeting.hotel" : {
+      "comment" : "World Home: Sprout's line on checking in at a hotel for the first time",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ooh, a hotel! I'll unpack."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Uy, un hotel! Voy a deshacer la maleta."
+          }
+        }
+      }
+    },
+    "worldHome.greeting.hotelAgain" : {
+      "comment" : "World Home: Sprout's line on checking in again at a hotel stayed at before; the hotel's name, e.g. 'Welcome back to the Ace!'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Welcome back to the %@!"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡De vuelta en el %@!"
+          }
+        }
+      }
+    },
+    "worldHome.greeting.sweet" : {
+      "comment" : "World Home: Sprout's line on getting home after an hour or more away (one of three that rotate)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Home sweet home."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hogar, dulce hogar."
+          }
+        }
+      }
+    },
+    "worldHome.hotel.note" : {
+      "comment" : "Remember this place sheet with Hotel picked: the lock note",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your hotel stays sealed on this iPhone, like your journal. Fernlet uncovers the map for 1 km around it until you check out or get home."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu hotel queda sellado en este iPhone, como tu diario. Fernlet descubre el mapa 1 km a su alrededor hasta que salgas o vuelvas a casa."
+          }
+        }
+      }
+    },
+    "worldHome.hotel.replaces" : {
+      "comment" : "Remember this place sheet with Hotel picked while another hotel stay goes on; the current hotel's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "One hotel at a time. This replaces %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un hotel cada vez. Este reemplaza a %@."
+          }
+        }
+      }
+    },
+    "worldHome.hotel.save" : {
+      "comment" : "Remember this place sheet with Hotel picked: the main button",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Check in here"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Registrarse aquí"
+          }
+        }
+      }
+    },
+    "worldHome.hotel.spoken" : {
+      "comment" : "World Home, VoiceOver: the pixel hotel of the person's stay; the hotel's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@, your hotel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@, tu hotel"
+          }
+        }
+      }
+    },
+    "worldHome.house.spoken" : {
+      "comment" : "World Home, VoiceOver: the pixel house at one of the person's homes; the companion's name, then the home's name, e.g. 'Sprout's house, at Home'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@'s house, at %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La casa de %1$@, en %2$@"
+          }
+        }
+      }
+    },
+    "worldHome.kind.home" : {
+      "comment" : "Remember this place sheet: This is · Home",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Home"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Casa"
+          }
+        }
+      }
+    },
+    "worldHome.kind.hotel" : {
+      "comment" : "Remember this place sheet: This is · Hotel",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hotel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hotel"
+          }
+        }
+      }
+    },
+    "worldHome.kind.place" : {
+      "comment" : "Remember this place sheet: This is · A place",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A place"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un lugar"
+          }
+        }
+      }
+    },
+    "worldHome.note" : {
+      "comment" : "Remember this place sheet with Home picked: the lock note; the companion's name, e.g. Sprout",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Home stays sealed on this iPhone, like your journal. Fernlet uncovers the map for 1 km around it, and %@ gets a house here."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu casa queda sellada en este iPhone, como tu diario. Fernlet descubre el mapa 1 km a su alrededor, y %@ tendrá aquí su casa."
+          }
+        }
+      }
+    },
+    "worldHome.replace.title" : {
+      "comment" : "Confirmation when a third home is made: up to two homes; the person picks one to replace",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Which home does this replace?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Qué casa reemplaza?"
+          }
+        }
+      }
+    },
+    "worldHome.save" : {
+      "comment" : "Remember this place sheet with Home picked: the main button",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Make it home"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Guardar como casa"
+          }
+        }
+      }
+    },
+    "worldHome.suitcase" : {
+      "comment" : "World Home, VoiceOver: the little suitcase beside the companion during a hotel stay; the companion's name, e.g. 'Sprout's suitcase'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@'s suitcase"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La maleta de %@"
+          }
+        }
+      }
+    },
+    "worldHome.thisIs" : {
+      "comment" : "Remember this place sheet: the label over A place / Home / Hotel",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This is"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Esto es"
           }
         }
       }
@@ -52439,6 +53428,24 @@
         }
       }
     },
+    "worldMarker.gym" : {
+      "comment" : "World Home, VoiceOver: a workout space's icon on the map; its name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@, a gym"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@, un gimnasio"
+          }
+        }
+      }
+    },
     "worldMarker.photos" : {
       "comment" : "World Home, VoiceOver: a map marker where the person took photos on their own; how many",
       "extractionState" : "extracted_with_value",
@@ -52453,6 +53460,83 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Tus fotos aquí, %lld"
+          }
+        }
+      }
+    },
+    "worldMarker.restaurant" : {
+      "comment" : "World Home, VoiceOver: a favourite place to eat on the map; its name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@, a restaurant"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@, un restaurante"
+          }
+        }
+      }
+    },
+    "worldMarker.unnamedEating" : {
+      "comment" : "World Home: a favourite place to eat whose name can't be shown (offline) and that the person hasn't named",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A place you eat"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un sitio donde comes"
+          }
+        }
+      }
+    },
+    "worldMarker.yourPhotos" : {
+      "comment" : "World Home, VoiceOver: after a place's name, how many of the person's own photos were taken there. Plural on the number (1 of your photos.)",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld of your photos."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld of your photos."
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld foto tuya."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld fotos tuyas."
+                }
+              }
+            }
           }
         }
       }
@@ -52745,6 +53829,60 @@
         }
       }
     },
+    "worldPhotos.print.empty" : {
+      "comment" : "World Home, VoiceOver: a print on the photo wall with no photo yet (it opens the Album)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Empty print"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Foto vacía"
+          }
+        }
+      }
+    },
+    "worldPhotos.print.hint" : {
+      "comment" : "World Home, VoiceOver: what tapping a print on the photo wall does: opens that photo",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Opens it."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La abre."
+          }
+        }
+      }
+    },
+    "worldPhotos.print.label" : {
+      "comment" : "World Home, VoiceOver: one print on the photo wall. The hangout's name (or the friend's), then the day, e.g. Photo from Picnic, October 12",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Photo from %1$@, %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Foto de %1$@, %2$@"
+          }
+        }
+      }
+    },
     "worldQuickStart.backToWorkout" : {
       "comment" : "World Home quick start during a guided workout: returns to it; the workout's name",
       "extractionState" : "extracted_with_value",
@@ -52854,6 +53992,42 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Solo tuyas · 10 al día · aparecen esta noche"
+          }
+        }
+      }
+    },
+    "worldQuickStart.findMenu" : {
+      "comment" : "World Home quick start at a favourite place to eat: searches the web for its menu by the place's name (Spanish: Buscar el menú de …)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Find %@'s menu"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Buscar el menú de %@"
+          }
+        }
+      }
+    },
+    "worldQuickStart.findMenu.detail" : {
+      "comment" : "World Home quick start: under 'Find …'s menu'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Searches the web by name. Your location isn't sent."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Busca en la web por el nombre. Tu ubicación no se envía."
           }
         }
       }
@@ -53058,7 +54232,7 @@
     },
     "worldQuickStart.heading.walk" : {
       "comment" : "World Home quick-start card heading when nothing is saved where the person stands",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -53070,6 +54244,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Salir a caminar"
+          }
+        }
+      }
+    },
+    "worldQuickStart.heading.walkOrRun" : {
+      "comment" : "World Home quick-start card heading when nothing is saved where the person stands (Spanish: Salir a caminar o correr)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Go for a walk or run"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Salir a caminar o correr"
           }
         }
       }
@@ -53218,6 +54410,106 @@
         }
       }
     },
+    "worldQuickStart.logUsual" : {
+      "comment" : "World Home quick start at a favourite place to eat: logs the meal logged there most often; its name, e.g. 'Log your usual: tonkotsu ramen'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Log your usual: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Registrar lo de siempre: %@"
+          }
+        }
+      }
+    },
+    "worldQuickStart.logUsual.detail" : {
+      "comment" : "World Home quick start: under 'Log your usual'; how many meals were logged at this place. Plural on the number",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "From your meal here"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "From your %lld meals here"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "De tu comida aquí"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "De tus %lld comidas aquí"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "worldQuickStart.note.loggedMealsHere" : {
+      "comment" : "World Home quick-start card at a favourite place to eat: how many meals were logged there. Plural on the number",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've logged a meal here once"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've logged meals here %lld times"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Has registrado una comida aquí"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Has registrado comidas aquí %lld veces"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "worldQuickStart.note.nothingPlanned" : {
       "comment" : "World Home quick-start card at a workout space with no plan today; the number is how many pieces of equipment the space holds. Plural on the number",
       "localizations" : {
@@ -53261,7 +54553,7 @@
     },
     "worldQuickStart.note.nothingSaved" : {
       "comment" : "World Home quick-start card away from any saved place",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -53273,6 +54565,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Aún no hay nada guardado aquí. Aparecerá cuando hayas entrenado, caminado o comido aquí varias veces."
+          }
+        }
+      }
+    },
+    "worldQuickStart.note.nothingSaved.run" : {
+      "comment" : "World Home quick-start card away from any saved place (`ref-run-first`)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nothing saved here yet. It shows up once you've trained, run, hiked or eaten here a few times."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aún no hay nada guardado aquí. Aparecerá cuando hayas entrenado, corrido, caminado o comido aquí varias veces."
           }
         }
       }
@@ -53559,7 +54869,7 @@
     },
     "worldQuickStart.walk" : {
       "comment" : "World Home quick start: start a walk with the companion, recorded on the map",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -53577,7 +54887,7 @@
     },
     "worldQuickStart.walk.detail" : {
       "comment" : "World Home quick start: under Walk together; precise location is used for this walk only",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -53589,6 +54899,42 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Ubicación precisa solo para esta caminata"
+          }
+        }
+      }
+    },
+    "worldQuickStart.walkOrRun" : {
+      "comment" : "World Home quick start: start a walk or a run with the companion, recorded on the map and logged as one or the other from its pace (Spanish: Caminar o correr juntos)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Walk or run together"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Caminar o correr juntos"
+          }
+        }
+      }
+    },
+    "worldQuickStart.walkOrRun.detail" : {
+      "comment" : "World Home quick start: under Walk or run together; precise location is used for this walk or run only",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Precise location for this walk or run only"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ubicación precisa solo para esta caminata o carrera"
           }
         }
       }
@@ -53851,6 +55197,348 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Hoy"
+          }
+        }
+      }
+    },
+    "worldStudio.canvas" : {
+      "comment" : "Creation Studio, VoiceOver: the drawing canvas and its size in squares, columns by rows. Spanish: 'Lienzo, 18 por 11'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Drawing canvas, %1$lld by %2$lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lienzo, %1$lld por %2$lld"
+          }
+        }
+      }
+    },
+    "worldStudio.heldNote" : {
+      "comment" : "Creation Studio, Held item, under the canvas: where held items sit. Both placeholders are the companion's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Held items sit against %1$@'s side: the box overlaps the body by 5 squares and reaches 2 past the old edge, so %2$@ can hold something big."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los objetos en la mano van pegados al costado de %1$@: la caja tapa 5 cuadros del cuerpo y llega 2 más allá del borde anterior, para que %2$@ sostenga algo grande."
+          }
+        }
+      }
+    },
+    "worldStudio.onTheMap" : {
+      "comment" : "Creation Studio, under the canvas: the companion wearing the drawing at the map's size",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "On the map"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "En el mapa"
+          }
+        }
+      }
+    },
+    "worldStudio.saveNote" : {
+      "comment" : "Creation Studio, Save item: the drawing is already its size on the companion; older pieces shrink to fit. The placeholder is the companion's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your drawing is the size it shows on %@: one square, one pixel, on the map and up close. Items made before, or bought from friends on the old Fernlet, are shrunk to fit automatically."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu dibujo tiene el tamaño con que sale en %@: un cuadro, un píxel, en el mapa y de cerca. Los objetos de antes, o comprados a amigos con el Fernlet anterior, se reducen solos para que quepan."
+          }
+        }
+      }
+    },
+    "worldStudio.size" : {
+      "comment" : "Creation Studio, under the kind chips: the kind of item, then its canvas in squares, columns × rows. Example: 'Hat · 18 × 11'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$lld × %3$lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ · %2$lld × %3$lld"
+          }
+        }
+      }
+    },
+    "worldStudio.squares" : {
+      "comment" : "Creation Studio, under the size: one square of the canvas is one pixel of the companion; the faint shape behind is the companion. Both placeholders are the companion's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "One square is one pixel on %1$@. The faint shape is %2$@, so you draw in place."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un cuadro es un píxel de %1$@. La forma tenue es %2$@, para dibujar en su sitio."
+          }
+        }
+      }
+    },
+    "worldStudio.upClose" : {
+      "comment" : "Creation Studio, under the canvas: the companion wearing the drawing, large",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Up close"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De cerca"
+          }
+        }
+      }
+    },
+    "worldTag.map.label" : {
+      "comment" : "Remember this place sheet, VoiceOver: the small map",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Map, pin at your spot"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mapa, pin en tu sitio"
+          }
+        }
+      }
+    },
+    "worldTag.name" : {
+      "comment" : "Remember this place sheet: the label over the name field",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Name"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nombre"
+          }
+        }
+      }
+    },
+    "worldTag.note" : {
+      "comment" : "Remember this place sheet: the lock note",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet didn't name this spot, to be careful. If you add it, it joins your places on this iPhone only, and you can delete it in Where you've been."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no le puso nombre a este sitio, por prudencia. Si lo añades, se une a tus lugares solo en este iPhone, y puedes borrarlo en Dónde has estado."
+          }
+        }
+      }
+    },
+    "worldTag.photo.hint" : {
+      "comment" : "Put on the map sheet: under the small map; the pin starts where the map is",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Move the map to where you took the photo."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mueve el mapa hasta donde hiciste la foto."
+          }
+        }
+      }
+    },
+    "worldTag.photo.noPlace" : {
+      "comment" : "A Just you photo kept with no place: the line after its date",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No place, to be careful"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sin lugar, por prudencia"
+          }
+        }
+      }
+    },
+    "worldTag.photo.optional" : {
+      "comment" : "Put on the map sheet: the name field's prompt; a name is optional",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Optional"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Opcional"
+          }
+        }
+      }
+    },
+    "worldTag.photo.put" : {
+      "comment" : "A Just you photo with no place: the small button, the sheet's title and its main button",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Put on the map"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Poner en el mapa"
+          }
+        }
+      }
+    },
+    "worldTag.pin.hint" : {
+      "comment" : "Remember this place sheet: under the small map",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The pin is where you're standing. Move the map if it's a little off."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El pin está donde estás. Mueve el mapa si no está justo."
+          }
+        }
+      }
+    },
+    "worldTag.remember" : {
+      "comment" : "World Home: the quiet button beside the blue button at a spot Fernlet didn't name; opens the naming sheet",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Remember this place"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Recordar este lugar"
+          }
+        }
+      }
+    },
+    "worldTag.remember.hint" : {
+      "comment" : "World Home, VoiceOver: after 'Remember this place, button'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet didn't name this spot."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no le puso nombre a este sitio."
+          }
+        }
+      }
+    },
+    "worldTag.save" : {
+      "comment" : "Remember this place sheet: the main button",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Remember it"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Recordarlo"
+          }
+        }
+      }
+    },
+    "worldTag.sheet.title" : {
+      "comment" : "Sheet title: naming a place yourself",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Remember this place"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Recordar este lugar"
           }
         }
       }
