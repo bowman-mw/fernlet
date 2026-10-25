@@ -86,6 +86,13 @@ struct FernletMessagesSprite: Sendable {
         }
     }
 
+    /// Points per key for an icon drawn `base` points a key at the standard text sizes: one step bigger
+    /// at the accessibility sizes, so the iMessage panel's icons grow with its words as the app's sprites
+    /// step up (`FernletIcon`, the blue button; owner's form answer 42, 2026-10-25).
+    nonisolated static func pixel(_ base: CGFloat, accessibilitySize: Bool) -> CGFloat {
+        accessibilitySize ? base + 1 : base
+    }
+
     /// The sprite as an image at the screen's scale, `pixel` points per key. A one-colour icon is
     /// drawn as a template, so an image view's dynamic `tintColor` inks it in light and dark mode.
     func image(pixel: CGFloat, template: Bool = false) -> UIImage {

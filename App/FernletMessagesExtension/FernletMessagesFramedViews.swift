@@ -62,24 +62,71 @@ class FernletMessagesFramedView: UIView {
     }
 }
 
-/// A framed square holding one pixel icon: the cards' bowl or dumbbell, the notice's, and the ⓘ of a
-/// card that can't be opened. Raised paper, no shadow, as FernletUI's `FernletIconTile` draws it.
-final class FernletMessagesIconTile: FernletMessagesFramedView {
-    private let imageView = UIImageView()
+/// One pixel icon that grows with the text size in steps (owner's form answer 42, 2026-10-25): `base`
+/// points a key at the standard sizes and one step bigger at the accessibility sizes
+/// (``FernletMessagesLook/pixel(_:for:)``), redrawn whenever the text size changes. A one-colour sprite
+/// is drawn as a template and inked by `tintColor`; a coloured one (the fern, the bowl) keeps its colours.
+final class FernletMessagesPixelIcon: UIImageView {
+    private var sprite: FernletMessagesSprite
+    private let base: CGFloat
 
-    /// A `side`-point tile showing `sprite` at `pixel` points a key.
-    init(side: CGFloat, sprite: FernletMessagesSprite, pixel: CGFloat) {
-        super.init(fill: FernletMessagesLook.raised, radius: side < 36 ? 6 : 9, shadowDrop: 0)
-        imageView.tintColor = FernletMessagesLook.iconInk
-        imageView.contentMode = .center
-        imageView.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(imageView)
-        FernletMessagesLayout.pin(imageView, to: contentView)
-        translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([widthAnchor.constraint(equalToConstant: side),
-                                     heightAnchor.constraint(equalToConstant: side)])
+    /// `sprite` at `base` points a key at the standard text sizes.
+    init(sprite: FernletMessagesSprite, base: CGFloat) {
+        self.sprite = sprite
+        self.base = base
+        super.init(frame: .zero)
+        contentMode = .center
         isAccessibilityElement = false
-        show(sprite, pixel: pixel)
+        redraw()
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) {
+            (icon: FernletMessagesPixelIcon, _: UITraitCollection) in icon.redraw()
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { nil }
+
+    /// Swaps the icon, at the same size.
+    func show(_ next: FernletMessagesSprite) {
+        sprite = next
+        redraw()
+    }
+
+    private func redraw() {
+        let oneColour = Set(sprite.palette.values).count == 1
+        image = sprite.image(pixel: FernletMessagesLook.pixel(base, for: traitCollection), template: oneColour)
+    }
+}
+
+/// A framed square holding one pixel icon: the cards' bowl or dumbbell, the notice's, the ⓘ of a card
+/// that can't be opened, and the picked card's check. Raised paper, no shadow, as FernletUI's
+/// `FernletIconTile` draws it. The square grows with its icon, in the same step (form answer 42).
+final class FernletMessagesIconTile: FernletMessagesFramedView {
+    private let icon: FernletMessagesPixelIcon
+    private let side: CGFloat
+    private let base: CGFloat
+    private var sideConstraints: [NSLayoutConstraint] = []
+
+    /// A `side`-point tile showing `sprite` at `pixel` points a key (at the standard text sizes), on
+    /// `fill`, a one-colour sprite inked in `ink`.
+    init(side: CGFloat, sprite: FernletMessagesSprite, pixel: CGFloat, fill: UIColor = FernletMessagesLook.raised,
+         ink: UIColor = FernletMessagesLook.iconInk) {
+        icon = FernletMessagesPixelIcon(sprite: sprite, base: pixel)
+        self.side = side
+        base = pixel
+        super.init(fill: fill, radius: side < 36 ? 6 : 9, shadowDrop: 0)
+        icon.tintColor = ink
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(icon)
+        FernletMessagesLayout.pin(icon, to: contentView)
+        translatesAutoresizingMaskIntoConstraints = false
+        sideConstraints = [widthAnchor.constraint(equalToConstant: side), heightAnchor.constraint(equalToConstant: side)]
+        NSLayoutConstraint.activate(sideConstraints)
+        isAccessibilityElement = false
+        resize()
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) {
+            (tile: FernletMessagesIconTile, _: UITraitCollection) in tile.resize()
+        }
     }
 
     @available(*, unavailable)
@@ -87,9 +134,14 @@ final class FernletMessagesIconTile: FernletMessagesFramedView {
 
     /// Swaps the icon. A one-colour sprite (the dumbbell, the ⓘ) is inked by the tile's ink token, so
     /// it stays visible on dark paper; a coloured one (the bowl) keeps its colours.
-    func show(_ sprite: FernletMessagesSprite, pixel: CGFloat) {
-        let oneColour = Set(sprite.palette.values).count == 1
-        imageView.image = sprite.image(pixel: pixel, template: oneColour)
+    func show(_ sprite: FernletMessagesSprite) {
+        icon.show(sprite)
+    }
+
+    /// The square's side at the current text size.
+    private func resize() {
+        let grown = FernletMessagesLook.grown(side, base: base, for: traitCollection)
+        sideConstraints.forEach { $0.constant = grown }
     }
 }
 
@@ -117,6 +169,10 @@ final class FernletMessagesButton: UIButton {
             (button as? FernletMessagesButton)?.restyle()
         }
         restyle()
+        // Its pixel icon grows with the words, in steps (form answer 42).
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) {
+            (button: FernletMessagesButton, _: UITraitCollection) in button.setNeedsUpdateConfiguration()
+        }
     }
 
     @available(*, unavailable)
@@ -136,7 +192,7 @@ final class FernletMessagesButton: UIButton {
         words.foregroundColor = ink
         configuration.attributedTitle = words
         configuration.titleLineBreakMode = .byWordWrapping
-        configuration.image = sprite?.image(pixel: 2, template: true)
+        configuration.image = sprite?.image(pixel: FernletMessagesLook.pixel(2, for: traitCollection), template: true)
         configuration.imagePadding = 8
         configuration.baseForegroundColor = ink
         // The framed primary keeps its own ink while disabled, as the app's does: the faded face is

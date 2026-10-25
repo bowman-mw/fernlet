@@ -664,19 +664,21 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UITextFi
     }
 
     /// A workout plan someone sent: the sender in the status line, the proposed day and the count in
-    /// the framed card.
+    /// the framed card, and "Notes included" there too when the sender's notes travel with it, as its
+    /// bubble says (owner's form answer 41, 2026-10-25). The note text is never shown here.
     private func showReceivedWorkout(_ record: FernletMessagesWorkoutInboxRecord, card: ExchangeCardMetadata) {
         let schedule = record.suggestedStartDayKey.map { FernletMessagesCopy.scheduled(dayKey: $0) }
             ?? FernletMessagesCopy.chooseDateInFernlet
         let status = card.senderLabel.map { FernletMessagesCopy.receivedWorkoutPlan(from: $0) }
             ?? FernletMessagesCopy.receivedWorkoutPlan
+        let counts = "\(schedule) · \(FernletMessagesCopy.workoutCount(record.packet.plan.sessionCount))"
         receivedRecipe = nil
         receivedWorkout = record
         showReceived(
             title: card.title,
             status: status,
             preview: "",
-            details: "\(schedule) · \(FernletMessagesCopy.workoutCount(record.packet.plan.sessionCount))"
+            details: record.packet.includesNotes ? FernletMessagesCopy.workoutSubtitleWithNotes(summary: counts) : counts
         )
     }
 

@@ -79,19 +79,11 @@ final class FernletMessagesItemCard: UIControl {
         return stack
     }
 
-    /// The picked card's check: the accent in a small ink frame, the tick in the on-accent ink.
+    /// The picked card's check: the accent in a small ink frame, the tick in the on-accent ink, growing
+    /// with the text in steps.
     private func checkBadge() -> UIView {
-        let badge = FernletMessagesFramedView(fill: FernletMessagesLook.accent, radius: 6, shadowDrop: 0)
-        let tick = UIImageView(image: FernletMessagesSprite.check.image(pixel: 2, template: true))
-        tick.tintColor = FernletMessagesLook.onAccent
-        tick.contentMode = .center
-        tick.translatesAutoresizingMaskIntoConstraints = false
-        badge.contentView.addSubview(tick)
-        FernletMessagesLayout.pin(tick, to: badge.contentView)
-        badge.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([badge.widthAnchor.constraint(equalToConstant: 26),
-                                     badge.heightAnchor.constraint(equalToConstant: 26)])
-        return badge
+        FernletMessagesIconTile(side: 26, sprite: .check, pixel: 2, fill: FernletMessagesLook.accent,
+                                ink: FernletMessagesLook.onAccent)
     }
 }
 
@@ -184,10 +176,9 @@ final class FernletMessagesSearchField: FernletMessagesFramedView {
     /// An empty field; the controller sets its prompt for the chosen kind.
     init() {
         super.init(fill: FernletMessagesLook.raised, radius: FernletMessagesLook.controlRadius, shadowDrop: 0)
-        let icon = UIImageView(image: FernletMessagesSprite.search.image(pixel: 2, template: true))
+        let icon = FernletMessagesPixelIcon(sprite: .search, base: 2)
         icon.tintColor = FernletMessagesLook.iconInk
         icon.setContentHuggingPriority(.required, for: .horizontal)
-        icon.isAccessibilityElement = false
         textField.font = FernletMessagesLook.field
         textField.adjustsFontForContentSizeCategory = true
         textField.textColor = FernletMessagesLook.text
@@ -246,7 +237,7 @@ final class FernletMessagesNoticeCard: FernletMessagesFramedView {
     func show(_ text: String, sprite: FernletMessagesSprite? = nil) {
         label.text = text
         guard let sprite, let tile else { return }
-        tile.show(sprite, pixel: 2)
+        tile.show(sprite)
     }
 }
 
@@ -254,8 +245,7 @@ final class FernletMessagesNoticeCard: FernletMessagesFramedView {
 final class FernletMessagesBrandView: UIStackView {
     /// The fern, then the name in the link moss, left-aligned.
     init() {
-        let fern = UIImageView(image: FernletMessagesSprite.fern.image(pixel: 2))
-        fern.isAccessibilityElement = false
+        let fern = FernletMessagesPixelIcon(sprite: .fern, base: 2)
         fern.setContentHuggingPriority(.required, for: .horizontal)
         let name = FernletMessagesLayout.label(font: FernletMessagesLook.brand, colour: FernletMessagesLook.link, lines: 1)
         name.text = FernletMessagesCopy.brandName
