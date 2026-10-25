@@ -2,7 +2,7 @@ import Foundation
 
 /// Who one nearby phone is to this person, as the Friends nearby page draws it (World Review Batch 4,
 /// `b4-mem-blue-friend`, `b4-mem-blue-join`, `b4-mem-blue-new`, approved 2026-10-24): a kept friend
-/// ("Start a session with Sam"), someone in an open hangout ("Join Sam's hangout"), or someone with
+/// ("Start a hangout with Sam"), someone in an open hangout ("Join Sam's hangout"), or someone with
 /// Fernlet who isn't a friend yet ("Make a friend").
 ///
 /// Read only from what the discovery radio already exposes while the page is on screen (the slot's
@@ -95,13 +95,13 @@ nonisolated enum FriendsNearbyCopy {
                       comment: "Friends nearby: someone nearby who isn't a friend is in a hangout; how many others are in it. Plural on the number (1: 'with 1 other person')")
     }
 
-    /// The choice's name: "Start a session with Sam", "Join Sam's hangout", "Make a friend".
+    /// The choice's name: "Start a hangout with Sam", "Join Sam's hangout", "Make a friend".
     static func title(_ kind: FriendsNearbyKind, someoneNearby: String) -> String {
         switch kind {
         case .unknown:
             return someoneNearby
         case .friend(let name):
-            return startSession(with: name)
+            return startHangout(with: name)
         case .hangout(.some(let name), _, _):
             return String(localized: "friendsNearby.join.friend", defaultValue: "Join \(name)'s hangout",
                           comment: "Friends nearby: asks to join a nearby friend's hangout; their first name")
@@ -114,10 +114,11 @@ nonisolated enum FriendsNearbyCopy {
         }
     }
 
-    /// "Start a session with Sam".
-    static func startSession(with name: String) -> String {
-        String(localized: "friendsNearby.startSession", defaultValue: "Start a session with \(name)",
-               comment: "Friends nearby and the blue button: start a friend session with a friend nearby; their first name")
+    /// "Start a hangout with Sam" (owner's form answer 33, 2026-10-25; it was "Start a session with Sam"),
+    /// matching "Join Sam's hangout".
+    static func startHangout(with name: String) -> String {
+        String(localized: "friendsNearby.startHangout", defaultValue: "Start a hangout with \(name)",
+               comment: "Friends nearby and the blue button: start a hangout (a friend session) with a friend nearby; their first name (Spanish: Empezar una quedada con …)")
     }
 
     /// The choice's line: what it is, as the approved cards say it.
@@ -143,6 +144,6 @@ nonisolated enum FriendsNearbyCopy {
     /// "Photos, messages and walks together, while you're in person".
     static var sessionDetail: String {
         String(localized: "friendsNearby.startSession.detail", defaultValue: "Photos, messages and walks together, while you're in person",
-               comment: "Friends nearby and the blue button: under 'Start a session with Sam'")
+               comment: "Friends nearby and the blue button: under 'Start a hangout with Sam'")
     }
 }

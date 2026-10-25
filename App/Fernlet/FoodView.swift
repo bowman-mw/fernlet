@@ -2731,6 +2731,10 @@ struct MealSheet: View {
     @State private var path: [MealFlowDestination] = []
     /// The typed product query held while the user reads the one-time egress disclosure.
     @State private var pendingWebNutritionLookup: String?
+    /// Import was tapped with web lookup off: its disclosure is up (form answer 43).
+    @State private var asksImportConsent = false
+    /// Import was tapped with AI features off: the note saying which switches turn lookup on is up.
+    @State private var explainsImportOff = false
     @State private var isResolvingMeal = false
     /// True while the by-hand macro fields (FOOD-24) are revealed. With any nonzero value typed,
     /// Save logs those numbers directly instead of running the resolve cascade.
@@ -3368,8 +3372,9 @@ struct MealSheet: View {
     }
 
     /// Log meal's three small helpers in one row (`b3-meal` draft 2): Recent (its own surface,
-    /// FOOD-07; only with recent meals), Import (a web lookup end to end, so only while web nutrition
-    /// lookup is on) and By hand (the stated macros path, FOOD-24). They stack at the largest sizes.
+    /// FOOD-07; only with recent meals), Import (always since form answer 43: a web lookup end to end,
+    /// so with lookup off its tap asks first, ``FoodImportTap``) and By hand (the stated macros path,
+    /// FOOD-24). They stack at the largest sizes.
     private var helperButtons: some View {
         let layout = dynamicTypeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
@@ -3377,14 +3382,35 @@ struct MealSheet: View {
             if !store.recentMeals.isEmpty {
                 FoodHelperButton(title: "Recent", sprite: FoodSprites.clock) { showingRecentMeals = true }
             }
-            if store.allowsWebNutritionLookup {
-                FoodHelperButton(title: "Import", sprite: FoodSprites.link) { path.append(.productPageImport) }
-            }
+            FoodHelperButton(title: "Import", sprite: FoodSprites.link, action: tapImport)
             FoodHelperButton(title: "By hand", sprite: WorldSprites.pen, isOn: isEnteringMacrosByHand) {
                 withAnimation(FernletMotion.ui) { isEnteringMacrosByHand.toggle() }
             }
             .accessibilityLabel("Enter macros by hand")
             .accessibilityInputLabels([Text("By hand"), Text("Enter macros by hand")])
+        }
+        // The same disclosure the typed product search shows before its first lookup.
+        .alert("Search the web for nutrition?", isPresented: $asksImportConsent) {
+            Button("Not now", role: .cancel) { store.declineWebNutritionLookupConsent() }
+            Button("Allow web lookup") {
+                store.acceptWebNutritionLookupConsent()
+                path.append(.productPageImport)
+            }
+        } message: {
+            Text("Fernlet will send the typed product search to DuckDuckGo’s private HTML search. It sends no account identifier, cookies, or health data. Fernlet may then open a product page from the result to read its nutrition label. You can revoke this in Settings at any time. Each web lookup is recorded only on this device in Connection history.")
+        }
+        .alert(Text(FoodImportTap.aiOffNotice), isPresented: $explainsImportOff) {
+            Button("OK", role: .cancel) {}
+        }
+    }
+
+    /// Import's tap (form answer 43): open it while lookup is on, ask for consent first while it is off,
+    /// and with AI features off say which switches turn it on.
+    private func tapImport() {
+        switch FoodImportTap.resolve(for: store.settings) {
+        case .open: path.append(.productPageImport)
+        case .askFirst: asksImportConsent = true
+        case .explainAIOff: explainsImportOff = true
         }
     }
 
@@ -3970,9 +3996,7 @@ private struct FoodProductPageImportView: View {
     /// mode…") was a double negative naming a mode by a label the user may never have seen.
     private var webNutritionLookupDisabledMessage: String {
         store.settings.aiStatus == .off
-            ? String(localized: "productImport.notice.lookupOffWithAI",
-                     defaultValue: "Web nutrition lookup is off. Turn on AI features and Web nutrition lookup in Settings to search the web.",
-                     comment: "Import product screen: web nutrition lookup is off and AI features are off too. Names the two Settings switches.")
+            ? FoodImportTap.aiOffNotice
             : String(localized: "productImport.notice.lookupOff",
                      defaultValue: "Web nutrition lookup is off. Turn on Web nutrition lookup in Settings to search the web.",
                      comment: "Import product screen: web nutrition lookup is off. Names the Settings switch that turns it on.")

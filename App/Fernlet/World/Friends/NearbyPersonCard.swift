@@ -5,7 +5,7 @@ import SwiftUI
 
 /// One nearby phone on Friends nearby, drawn as the approved blue-button card for who they are
 /// (`b4-mem-blue-friend`, `-blue-join`, `-blue-new`): the heading ("Sam is nearby"), a line when there is
-/// one ("Sam is in a hangout with 1 other person."), and the teal choice ("Start a session with Sam",
+/// one ("Sam is in a hangout with 1 other person."), and the teal choice ("Start a hangout with Sam",
 /// "Join Sam's hangout · Picnic · Sam says yes before you're in", "Make a friend · Show each other a
 /// code, in person") with what the phones are doing under it.
 ///

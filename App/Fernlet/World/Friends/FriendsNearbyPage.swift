@@ -13,7 +13,7 @@ import SwiftUI
 /// live here, each nearby phone drawn as the approved blue-button card for who they are.
 ///
 /// It is a page of the Album panel's own stack (`FriendsRoute.nearby`), opened from Home's blue button
-/// ("Start a session with Sam", or "Friends nearby"). That is deliberate: the discovery radio runs only
+/// ("Start a hangout with Sam", or "Friends nearby"). That is deliberate: the discovery radio runs only
 /// while the Album tab is in front (`ProximityRunPolicy`), exactly as it did for the Friends tab, so this
 /// page adds no new radio behaviour; strangers are never drawn on the map. Starting works as today: tap
 /// the phones together (or Connect / the code exchange on phones without ranging), and the session's

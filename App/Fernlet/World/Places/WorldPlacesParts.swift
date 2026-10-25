@@ -135,6 +135,9 @@ struct WorldReturnedPlacesCard: View {
     let places: [PlaceRecord]
     /// The names Apple Maps gave again for this look, by place id.
     let names: [UUID: WorldPlaceName]
+    /// Opens a place with Apple's reference in Apple Maps (form answer 53): the row's long-press menu
+    /// and VoiceOver action, beside the rename alert's button.
+    let onOpenInMaps: (PlaceRecord) -> Void
     let onRename: (PlaceRecord) -> Void
 
     var body: some View {
@@ -157,21 +160,48 @@ struct WorldReturnedPlacesCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 ForEach(places) { place in
-                    Button { onRename(place) } label: {
-                        HStack(alignment: .firstTextBaseline) {
-                            Text(verbatim: WorldPlacesCopy.placeTitle(place, name: names[place.id])).font(FernletFramedFont.rowTitle)
-                            Spacer(minLength: 8)
-                            Text(verbatim: WorldPlacesCopy.visits(place.visits)).font(FernletFramedFont.button)
-                        }
-                        .foregroundStyle(WorldPalette.bark)
-                        .frame(minHeight: 44)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityHint(Text(WorldPlacesCopy.renameHint))
+                    row(place)
                 }
             }
         }
+    }
+
+    /// One place: its name and visit count; a tap renames it, and a place with Apple's reference also
+    /// opens in Apple Maps from its long-press menu and its VoiceOver actions.
+    @ViewBuilder
+    private func row(_ place: PlaceRecord) -> some View {
+        let button = Button { onRename(place) } label: {
+            rowLabel(place)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(Text(WorldPlacesCopy.renameHint))
+        if place.placeID != nil {
+            button
+                .contextMenu {
+                    Button { onOpenInMaps(place) } label: { Text(WorldPlacesCopy.openInMaps) }
+                } preview: {
+                    // The row lifted on paper, so the page under the menu never shows through it.
+                    rowLabel(place)
+                        .padding(16)
+                        .frame(width: 320)
+                        .background(WorldPalette.paperLight)
+                }
+                .accessibilityAction(named: Text(WorldPlacesCopy.openInMaps)) { onOpenInMaps(place) }
+        } else {
+            button
+        }
+    }
+
+    /// The place's name and its visit count.
+    private func rowLabel(_ place: PlaceRecord) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(verbatim: WorldPlacesCopy.placeTitle(place, name: names[place.id])).font(FernletFramedFont.rowTitle)
+            Spacer(minLength: 8)
+            Text(verbatim: WorldPlacesCopy.visits(place.visits)).font(FernletFramedFont.button)
+        }
+        .foregroundStyle(WorldPalette.bark)
     }
 }
 
@@ -293,6 +323,13 @@ nonisolated enum WorldPlacesCopy {
                                                      comment: "Private, Places: the rename alert's title")
     static let renameHint = LocalizedStringResource("privatePlaces.rename.hint", defaultValue: "Renames it.",
                                                     comment: "Private, Places, VoiceOver: what tapping a place does")
+    /// The kept place's action that opens it in Apple's Maps app (form answer 53).
+    static let openInMaps = LocalizedStringResource("privatePlaces.openInMaps", defaultValue: "Open in Apple Maps",
+                                                    comment: "Private, Places: opens a place you return to in Apple's Maps app, which shows its name and address (Spanish: Abrir en Mapas de Apple)")
+    /// Said when Apple Maps could not be reached for the place (offline, or the place is gone).
+    static let openInMapsFailed = LocalizedStringResource("privatePlaces.openInMaps.failed",
+                                                          defaultValue: "Apple Maps couldn't find this place right now.",
+                                                          comment: "Private, Places: the alert when Open in Apple Maps finds nothing (offline, or the place is gone)")
 
     /// A day's name: "Today", "Yesterday", else the weekday and date.
     static func dayName(_ day: Date, calendar: Calendar = .current) -> String {

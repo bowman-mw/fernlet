@@ -65,8 +65,8 @@ extension FernletStore {
         // so a relaunch that drops the flag puts the coach gate back off rather than leaving it on
         // from an earlier run.
         settings.coachExchangeEnabled = UITestSupport.enableCoachExchange
-        // Log meal's Import helper is a web lookup end to end, so it shows only while the lane is open
-        // (AI on, asked for, consented): a screenshot of the `b3-meal` row asks for it explicitly.
+        // Log meal's Import helper is a web lookup end to end: it shows always (form answer 43) and asks
+        // first while the lane is closed, so a screenshot of Import at work opens the lane explicitly.
         if UITestSupport.enableWebNutritionLookup {
             if settings.aiStatus == .off { settings.aiStatus = .ready }
             settings.webNutritionLookupEnabled = true

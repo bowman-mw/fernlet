@@ -61,7 +61,7 @@ struct WorldAlbumTests {
         let someone = "Someone nearby"
         let sam = FriendsNearbyKind.friend(name: "Sam")
         #expect(FriendsNearbyCopy.heading(sam, someoneNearby: someone) == "Sam is nearby")
-        #expect(FriendsNearbyCopy.title(sam, someoneNearby: someone) == "Start a session with Sam")
+        #expect(FriendsNearbyCopy.title(sam, someoneNearby: someone) == "Start a hangout with Sam")
         #expect(FriendsNearbyCopy.detail(sam) == "Photos, messages and walks together, while you're in person")
         let picnic = FriendsNearbyKind.hangout(friend: "Sam", hangoutName: "Picnic", others: 1)
         #expect(FriendsNearbyCopy.note(picnic) == "Sam is in a hangout with 1 other person.", "the count's plural forms")
@@ -86,7 +86,7 @@ struct WorldAlbumTests {
         return context
     }
 
-    /// A friend nearby: Start a session with Sam, Start an activity, then the usual choices.
+    /// A friend nearby: Start a hangout with Sam, Start an activity, then the usual choices.
     @Test func aFriendNearbyLeadsWithASessionAndAnActivity() throws {
         var context = Self.friendly()
         context.nearbyFriends = ["Sam"]
@@ -95,8 +95,8 @@ struct WorldAlbumTests {
         #expect(card.options == [.startSession(friend: "Sam"), .startActivity, .walkTogether])
         #expect(WorldQuickStart.glyph(for: context) == .friends)
         #expect(WorldQuickStartCopy.heading(card.heading) == "Sam is nearby")
-        #expect(WorldQuickStartCopy.title(.startSession(friend: "Sam")) == "Start a session with Sam")
-        #expect(WorldQuickStartCopy.spokenStatus(card) == "Sam is nearby. Start a session or an activity.")
+        #expect(WorldQuickStartCopy.title(.startSession(friend: "Sam")) == "Start a hangout with Sam")
+        #expect(WorldQuickStartCopy.spokenStatus(card) == "Sam is nearby. Start a hangout or an activity.")
         context.nearbyFriends = ["Sam", "Rae"]
         #expect(WorldQuickStartCopy.heading(.friendNearby(["Sam", "Rae"])) == "Sam and Rae are nearby")
     }

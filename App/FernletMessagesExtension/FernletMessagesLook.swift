@@ -58,6 +58,21 @@ nonisolated enum FernletMessagesLook {
     /// A frame's width.
     static let frameWidth: CGFloat = 2
 
+    // MARK: Pixel icons (form answer 42: they grow with the text, in steps)
+
+    /// Points per sprite key at `traits`' text size, for an icon drawn `base` points a key at the
+    /// standard sizes (``FernletMessagesSprite/pixel(_:accessibilitySize:)``).
+    @MainActor static func pixel(_ base: CGFloat, for traits: UITraitCollection) -> CGFloat {
+        FernletMessagesSprite.pixel(base, accessibilitySize: traits.preferredContentSizeCategory.isAccessibilityCategory)
+    }
+
+    /// The side of a square holding such an icon, grown in the same step: `side` points at the
+    /// standard sizes, scaled as the icon's keys are.
+    @MainActor static func grown(_ side: CGFloat, base: CGFloat, for traits: UITraitCollection) -> CGFloat {
+        guard base > 0 else { return side }
+        return (side * pixel(base, for: traits) / base).rounded()
+    }
+
     // MARK: Type (the app's FernletFramedFont sizes, scaled with Dynamic Type)
 
     /// The panel's title: Fraunces 22.

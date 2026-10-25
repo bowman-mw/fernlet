@@ -31,11 +31,11 @@ nonisolated enum WorldQuickStartType {
 /// The blue quick-start button, bottom right over the map (design `b1-home-day`: 60 × 60 pt, teal in
 /// its own dark frame, a white pixel icon). It quick-starts what the person usually does where they
 /// stand (``WorldQuickStart``); it never badges, buzzes or notifies. When its action changes to the
-/// camera, a workout or a run, the word slides out beside it for three seconds
+/// camera, a workout or a run, the word slides out beside it for 30 seconds, every time
 /// (``WorldQuickStartLabel``), and VoiceOver hears "Quick start, Camera" as its name.
 struct WorldQuickStartButton: View {
     let glyph: WorldQuickStartGlyph
-    /// What VoiceOver hears after the name when the button has news ("Sam is nearby. Start a session
+    /// What VoiceOver hears after the name when the button has news ("Sam is nearby. Start a hangout
     /// or an activity."), nil otherwise.
     var spokenStatus: String? = nil
     let action: () -> Void

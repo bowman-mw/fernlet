@@ -182,8 +182,9 @@ enum FernletMessagesCopy {
     }
 
     /// The workout's composer row and preview when its notes travel with it (tracker §2.6, 2026-10-18),
-    /// and since World Review Batch 4 (`b4-msg-bubbles`, owner, 2026-10-24) the sent card's subcaption
-    /// too, as the recipe card already says so. Never the note text itself.
+    /// since World Review Batch 4 (`b4-msg-bubbles`, owner, 2026-10-24) the sent card's subcaption too,
+    /// as the recipe card already says so, and since round 6b (form answer 41) the received plan's
+    /// framed card. Never the note text itself.
     static func workoutSubtitleWithNotes(summary: String) -> String {
         String(localized: "messages.workout.subtitleWithNotes", defaultValue: "\(summary) · Notes included",
                comment: "Composer subtitle, preview line and sent card subcaption for a planned workout whose own written notes travel with it, so the sender and the recipient know. %@ is the date and workout count, e.g. '2026-10-18 · 1 workout'.")

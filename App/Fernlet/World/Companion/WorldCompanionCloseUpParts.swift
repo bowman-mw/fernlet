@@ -53,29 +53,23 @@ struct WorldCompanionCloseUpPresenter: ViewModifier {
     }
 }
 
-/// The softened map: the page's parchment over it, 80 % in light mode and 84 % in dark around the
-/// companion, so it and its paper bubble stand out in both. Behind the name and behind the footer it
-/// thickens to 96 %, so Home's plate, prints, blue button and item bar don't show through the words
-/// (the approved page drew the map alone under the veil).
+/// The softened map: the page's parchment over it, one even veil from top to bottom, 80 % in light mode
+/// and 84 % in dark, as the approved page draws it (`ref-comp-close`, `.cuveil`), so the companion and its
+/// paper bubble stand out in both. The owner chose the one even veil over a thicker band behind the name
+/// and the footer (2026-10-25, question 27).
 struct WorldCloseUpVeil: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        let base = colorScheme == .dark ? 0.84 : 0.8
-        let page = WorldPalette.page
-        LinearGradient(stops: [.init(color: page.opacity(Self.edge), location: 0),
-                               .init(color: page.opacity(Self.edge), location: 0.3),
-                               .init(color: page.opacity(base), location: 0.42),
-                               .init(color: page.opacity(base), location: 0.68),
-                               .init(color: page.opacity(Self.edge), location: 0.78),
-                               .init(color: page.opacity(Self.edge), location: 1)],
-                       startPoint: .top, endPoint: .bottom)
+        WorldPalette.page.opacity(Self.opacity(dark: colorScheme == .dark))
             .ignoresSafeArea()
             .accessibilityHidden(true)
     }
 
-    /// The veil behind the name and the footer.
-    static let edge = 0.96
+    /// The veil's one opacity: 80 % over the light map, 84 % over the dark one.
+    static func opacity(dark: Bool) -> Double {
+        dark ? 0.84 : 0.8
+    }
 }
 
 /// The name in Fraunces, the state and feeling under it, and the ✕ top right.

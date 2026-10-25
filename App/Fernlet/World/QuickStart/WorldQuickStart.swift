@@ -131,7 +131,7 @@ nonisolated enum WorldQuickStartOption: Equatable, Hashable, Sendable {
     case soloCamera
     /// Back to the guided workout under way.
     case backToWorkout(title: String)
-    /// "Start a session with Sam" (`b4-mem-blue-friend`): Friends nearby, where the phones meet.
+    /// "Start a hangout with Sam" (`b4-mem-blue-friend`): Friends nearby, where the phones meet.
     case startSession(friend: String)
     /// "Start an activity": Activities, a walk, coffee or meal that friends nearby can join.
     case startActivity
@@ -223,7 +223,7 @@ nonisolated enum WorldQuickStartGlyph: Equatable, Sendable {
 /// 2. **During a walk or run** the camera, when there is one to offer (the walk bar holds End).
 /// 3. **During a guided workout** the camera, and the way back to the workout.
 /// 4. **In a session** the session's camera, then Walk together.
-/// 5. **With a friend nearby** (`b4-mem-blue-friend`) "Sam is nearby": Start a session with Sam,
+/// 5. **With a friend nearby** (`b4-mem-blue-friend`) "Sam is nearby": Start a hangout with Sam,
 ///    Start an activity, and the usual choices below so nothing is taken away.
 /// 6a. **At a favourite place to eat** (away from a pinned space, round 6: `b1-qs-food`, `b3-qs-food-camera`)
 ///    its name: Log your usual, the disposable camera on your own, Find its menu; on a resting day too. The

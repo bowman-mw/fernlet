@@ -102,7 +102,7 @@ private struct AppleMutedMapView: UIViewRepresentable {
 }
 
 /// Phase 1's place lookup (``WorldPlaceLooking``; World build step 5c and round 5). Two requests, both to
-/// Apple Maps, the map's own destination:
+/// Apple Maps, the map's own destination, and one hand-off to Apple's Maps app:
 ///
 /// - **What is near** (``nearbyPlaces(around:)``): Apple's points of interest within 300 m of where the
 ///   person stands (a park's one point can be that far from someone inside it), asked in the foreground
@@ -114,6 +114,9 @@ private struct AppleMutedMapView: UIViewRepresentable {
 ///   returns to that has a reference is asked for by it (`MKMapItemRequest`); its name and kind are held in
 ///   memory only (`names`), never written (Apple's terms: the identifier may be kept, the place's data
 ///   only cached for a while), and forgotten with the wipes. Offline, nothing is named.
+/// - **Open in Apple Maps** (``openInMaps(placeID:)``, round 6b, form answer 53): on the person's tap on a
+///   kept place, the same request by its reference, and the item it returns opened in Maps, which shows
+///   the name and address itself. Nothing that comes back is kept.
 ///
 /// The kinds: food and drink (restaurant, café, bakery, brewery, winery, distillery, food market,
 /// nightlife), gyms (fitness centre), parks (park, national park), beaches and campgrounds (campground,
@@ -169,6 +172,17 @@ final class ApplePlaceLookup: WorldPlaceLooking {
 
     func forgetNames() {
         names.removeAll()
+    }
+
+    func openInMaps(placeID: String) async -> Bool {
+        guard let identifier = MKMapItem.Identifier(rawValue: placeID) else { return false }
+        do {
+            // The same request as the name refresh; the item goes straight to Maps and is not kept.
+            let item = try await MKMapItemRequest(mapItemIdentifier: identifier).mapItem
+            return item.openInMaps()
+        } catch {
+            return false   // offline, throttled or gone: the page says Maps couldn't find it
+        }
     }
 
     /// Fernlet's kind for one of Apple's categories. A place Apple gives no category (a lake, a pond, a

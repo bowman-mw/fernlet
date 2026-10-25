@@ -4,6 +4,7 @@ import FernletSocial
 import FernletUI
 import ProximityKit
 import SwiftUI
+import UIKit
 
 /// The session-end KEEP-AS-FRIENDS prompt (`b3-keep-friends`), presented from the root wherever the
 /// person is, Home included (owner, 2026-10-24, question 2: "Show it wherever you are, Home
@@ -36,8 +37,11 @@ import SwiftUI
 /// C-F2/L-F2). It waits out the root's own presentations (``isRootSheetUp``), which its request would
 /// otherwise REPLACE, and every full-screen cover below the root (``isCoverUp``: Home's camera, the
 /// Album's wall photo, a "Just you" set, the session celebration), over which a sheet request is
-/// dropped; each schedules a re-check when it goes. A request that still does not land is withdrawn
-/// unconsumed and re-asked a bounded number of times by ``confirmSessionEndSheetLanded()``.
+/// dropped; each schedules a re-check when it goes. Since the owner's form answer 47 (2026-10-25) it
+/// also waits out any sheet or cover a panel has up (Food's meal sheet, Move's runner…), read from
+/// UIKit's presentation chain in its own window (``KeepFriendsWindowAnchor``), and asks as soon as that closes,
+/// with no giving up after a few tries. A request that still does not land with nothing covering it
+/// is withdrawn unconsumed and re-asked a bounded number of times by ``confirmSessionEndSheetLanded()``.
 ///
 /// **A decoy never sees it**: a duress session shows and keeps nothing real, so the check refuses
 /// while one is open and a prompt that is up is withdrawn, unanswered, when one starts.
@@ -68,16 +72,24 @@ struct KeepFriendsPromptHost: ViewModifier {
     @State private var reviewLandingRequest = 0
     /// Set by the prompt's content appearing — the only proof a request landed.
     @State private var sessionEndSheetLanded = false
-    /// Watchdog re-requests left for the current trigger (R2: each trigger resets it to the bound).
+    /// Watchdog re-requests left for the current trigger, for a request that missed with nothing covering
+    /// it (R2: each trigger resets it to the bound). A covering sheet costs none: the check waits it out.
     @State private var reviewRetriesLeft = 0
     @Environment(\.scenePhase) private var scenePhase
+    /// The window this host lives in, so it waits only for what that window presents (form answer 47).
+    @State private var windowAnchor = KeepFriendsWindowAnchor()
 
     /// How long a trigger waits before presenting: past the dismissal of whatever it fired beside.
     private static let reviewCheckDelay: Duration = .milliseconds(700)
     /// How long a request has to land before the watchdog withdraws it.
     private static let reviewLandingGrace: Duration = .seconds(2)
-    /// Re-requests per trigger after a request that did not land (R2).
+    /// Re-requests per trigger after a request that did not land with nothing covering it (R2).
     private static let maxReviewRetries = 4
+    /// How often the check looks again while another sheet or cover is up (form answer 47).
+    private static let coverPollInterval: Duration = .milliseconds(500)
+    /// The most looks one wait takes: twelve hours at ``coverPollInterval`` (R2: bounded). A longer
+    /// cover is waited out by the next trigger instead (the app coming back, a root sheet closing).
+    private static let maxCoverPolls = 86_400
 
     private var manager: MeshNetworkManager { store.meshNetworkManager }
     /// The session photos (`features.photos`): the review batch and its keep-as-friend candidates.
@@ -93,6 +105,7 @@ struct KeepFriendsPromptHost: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            .background { KeepFriendsWindowReader(anchor: windowAnchor).frame(width: 0, height: 0) }
             // A review that predates the root (a session that ended before this launch) is model state.
             .onAppear { scheduleReviewCheck() }
             // Every trigger schedules rather than presents (see scheduleReviewCheck).
@@ -228,15 +241,33 @@ struct KeepFriendsPromptHost: ViewModifier {
         reviewCheckRequest &+= 1
     }
 
-    /// The deferred half of ``scheduleReviewCheck()``: waits out ``reviewCheckDelay``, then presents
-    /// if the prompt is still due.
+    /// The deferred half of ``scheduleReviewCheck()``: waits out ``reviewCheckDelay`` and, while a
+    /// review waits, any sheet or cover still up (form answer 47: the prompt shows as soon as the other
+    /// sheet closes), then presents if the prompt is still due.
     private func runDeferredReviewCheck() async {
         do {
             try await Task.sleep(for: Self.reviewCheckDelay)
         } catch {
             return   // superseded by a newer request (R7: nothing owed)
         }
+        if features.photos.pendingFriendReview != nil, !keepFriendsPromptPresented {
+            guard await waitUntilNothingIsPresented() else { return }
+        }
         presentDisconnectReviewIfNeeded()
+    }
+
+    /// Looks every ``coverPollInterval`` until nothing is presented over the root; false when the task
+    /// was superseded or the wait reached ``maxCoverPolls``.
+    private func waitUntilNothingIsPresented() async -> Bool {
+        for _ in 0..<Self.maxCoverPolls {
+            guard windowAnchor.somethingIsPresented else { return true }
+            do {
+                try await Task.sleep(for: Self.coverPollInterval)
+            } catch {
+                return false   // superseded by a newer request (R7: nothing owed)
+            }
+        }
+        return false
     }
 
     /// Marks a request unlanded and arms its watchdog.
@@ -248,7 +279,9 @@ struct KeepFriendsPromptHost: ViewModifier {
     /// The landing watchdog. A prompt whose content has not appeared within ``reviewLandingGrace``
     /// was dropped (or queued behind a sheet below the root), and its flag, left true, would latch
     /// ``aPresentationIsUp`` shut. So it is withdrawn WITHOUT consuming anything and re-requested
-    /// through the deferred check, at most ``maxReviewRetries`` times per trigger (R2).
+    /// through the deferred check. A sheet or cover that came up over it costs no retry: the deferred
+    /// check waits for it to close and asks again at once (form answer 47). A miss with nothing
+    /// covering it is re-asked at most ``maxReviewRetries`` times per trigger (R2).
     private func confirmSessionEndSheetLanded() async {
         guard keepFriendsPromptPresented else { return }
         do {
@@ -258,8 +291,10 @@ struct KeepFriendsPromptHost: ViewModifier {
         }
         guard keepFriendsPromptPresented, !sessionEndSheetLanded else { return }
         withdrawUnlandedSessionEndSheet()
-        guard reviewRetriesLeft > 0 else { return }
-        reviewRetriesLeft -= 1
+        if !windowAnchor.somethingIsPresented {
+            guard reviewRetriesLeft > 0 else { return }
+            reviewRetriesLeft -= 1
+        }
         reviewCheckRequest &+= 1
     }
 
@@ -270,5 +305,50 @@ struct KeepFriendsPromptHost: ViewModifier {
         friendCandidates = []
         keptFriendFingerprints = []
         keepFriendsPromptPresented = false
+    }
+}
+
+/// The window the keep-as-friends host lives in, and whether that window presents anything now: a sheet
+/// or a full-screen cover from any panel, or the root's own (form answer 47). Read from UIKit's
+/// presentation chain, so the prompt waits for whatever is up to close instead of being dropped under
+/// it. Before the host is in a window, nothing counts as presented (the host asks as it always has).
+/// Main actor, as UIKit is.
+final class KeepFriendsWindowAnchor {
+    /// The host's window, set by ``KeepFriendsWindowReader`` as it moves in and out of one.
+    weak var window: UIWindow?
+
+    /// True while the window's root view controller is presenting something.
+    var somethingIsPresented: Bool {
+        window?.rootViewController?.presentedViewController != nil
+    }
+}
+
+/// A zero-size, untouchable view behind the host's content that tells its ``KeepFriendsWindowAnchor``
+/// which window it is in.
+struct KeepFriendsWindowReader: UIViewRepresentable {
+    let anchor: KeepFriendsWindowAnchor
+
+    func makeUIView(context: Context) -> KeepFriendsWindowView {
+        let view = KeepFriendsWindowView()
+        view.anchor = anchor
+        view.isUserInteractionEnabled = false
+        view.isAccessibilityElement = false
+        return view
+    }
+
+    func updateUIView(_ uiView: KeepFriendsWindowView, context: Context) {
+        uiView.anchor = anchor
+        anchor.window = uiView.window
+    }
+}
+
+/// The UIKit half of ``KeepFriendsWindowReader``: hands its window to the anchor whenever it moves.
+final class KeepFriendsWindowView: UIView {
+    /// Where the window goes.
+    var anchor: KeepFriendsWindowAnchor?
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        anchor?.window = window
     }
 }

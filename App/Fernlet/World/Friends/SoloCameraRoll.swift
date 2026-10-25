@@ -39,6 +39,22 @@ nonisolated enum SoloCameraRules {
         return next
     }
 
+    /// Whether a shot taken at `now` waits for tomorrow night (owner's form answer 44, 2026-10-25): the
+    /// companion has already fallen asleep, so ``revealsAt(takenAt:window:calendar:)`` is its NEXT night,
+    /// and the camera says "tomorrow night" instead of "tonight". In the wind-down it is not asleep yet,
+    /// so tonight still holds; a window with no night uses the standard one, as the reveal does.
+    ///
+    /// - Parameters:
+    ///   - now: The moment the camera speaks for.
+    ///   - window: The person's night, as Settings has it now.
+    ///   - calendar: The calendar (and time zone) the night is read in.
+    static func waitsForTomorrowNight(at now: Date, window: CompanionSleepWindow, calendar: Calendar) -> Bool {
+        let night = window.isEmpty ? CompanionSleepWindow.standard : window
+        let clock = calendar.dateComponents([.hour, .minute], from: now)
+        guard let hour = clock.hour, let minute = clock.minute else { return false }
+        return night.isPastWindDown(atMinute: hour * 60 + minute)
+    }
+
     /// Shots left on a day that has used `used` (never negative).
     static func shotsLeft(used: Int) -> Int {
         max(0, photosPerDay - max(0, used))

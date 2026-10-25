@@ -72,8 +72,8 @@ enum UITestSupport {
     static var enableCoachExchange: Bool { env["FERNLET_UI_TEST_COACH_EXCHANGE"] == "1" }
 
     /// `FERNLET_UI_TEST_WEB_LOOKUP=1` — seed the demo persona with AI on and web nutrition lookup
-    /// allowed (asked for and consented), so Log meal shows its Import helper (`b3-meal`'s Recent /
-    /// Import / By hand row), which only a web lookup can serve. Consumed by
+    /// allowed (asked for and consented), so Log meal's Import helper (`b3-meal`'s Recent / Import / By
+    /// hand row, shown always since form answer 43) opens without asking first. Consumed by
     /// `FernletStore.seedDemoContent`; applied only when set, so other suites keep the lane closed.
     static var enableWebNutritionLookup: Bool { env["FERNLET_UI_TEST_WEB_LOOKUP"] == "1" }
 

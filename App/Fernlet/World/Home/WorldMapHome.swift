@@ -248,7 +248,9 @@ struct WorldMapHome: View {
                 HStack(alignment: .bottom, spacing: 10) {
                     // Round 6 (`ref-tag-home`): beside the blue button at a spot Fernlet refused.
                     if cardContext == nil, let spot = store.worldRefusedSpot(near: store.worldLocation.latest) {
+                        // Above the blue button's label, which slides out over it for 30 s (form answer 28).
                         WorldTagPlaceButton { placeSheet = .remember(start: spot, kind: .place) }
+                            .zIndex(1)
                     }
                     if let glyph = WorldQuickStart.glyph(for: buttonContext) {
                         WorldQuickStartButton(glyph: glyph, spokenStatus: WorldQuickStartCopy.spokenStatus(WorldQuickStart.card(for: buttonContext)),
