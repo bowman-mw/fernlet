@@ -111,7 +111,8 @@ struct WorldRoundSixFixesTests {
     /// A moving pace of 2.2 m/s or more is a run; slower, or too little to go on, a walk.
     @Test func thePaceTellsAWalkFromARun() {
         #expect(WorldWalkRecorder.paceKind(metres: 1_000, seconds: 400) == .run, "2.5 m/s")
-        #expect(WorldWalkRecorder.paceKind(metres: 1_000, seconds: 455) == .run, "2.2 m/s")
+        #expect(WorldWalkRecorder.paceKind(metres: 1_100, seconds: 500) == .run, "2.2 m/s")
+        #expect(WorldWalkRecorder.paceKind(metres: 1_000, seconds: 455) == .walk, "just under 2.2 m/s")
         #expect(WorldWalkRecorder.paceKind(metres: 1_000, seconds: 600) == .walk, "1.7 m/s, a brisk walk")
         #expect(WorldWalkRecorder.paceKind(metres: 140, seconds: 50) == .walk, "too little to say")
         #expect(WorldWalkRecorder.paceKind(metres: 0, seconds: 0) == .walk)
