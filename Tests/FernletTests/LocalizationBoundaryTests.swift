@@ -3947,6 +3947,14 @@ struct LocalizationBoundaryTests {
         // through a substitution, which this one-count check does not read (WorldAlbumTests pins it).
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "friendsNearby.note.theirHangout",
                      source: "Friends nearby: someone new in a hangout with others ('1 other person')"),
+        // World step 5c (2026-10-24): Where you've been's counts and the saved run route's card,
+        // which would read "1 visits", "1 stops" and "run this route 1 times".
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "privatePlaces.visits",
+                     source: "Private, Places: a place's visit count ('1 visit')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "privatePlaces.stops",
+                     source: "Private, Places: a day's stop count on the delete list ('1 stop')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "worldQuickStart.note.ranFromHere",
+                     source: "World Home quick-start card at a saved run route ('run this route once')"),
     ]
 
     /// Every count-bearing key carries real plural variations.

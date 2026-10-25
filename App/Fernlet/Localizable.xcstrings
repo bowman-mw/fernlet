@@ -4141,6 +4141,16 @@
         }
       }
     },
+    "Always, in low power. Fills the fog along your day." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Siempre, con bajo consumo. Llena la niebla durante tu día."
+          }
+        }
+      }
+    },
     "Amount of %@" : {
       "localizations" : {
         "es" : {
@@ -7919,6 +7929,16 @@
         }
       }
     },
+    "Delete all stored routes" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Borrar todas las rutas guardadas"
+          }
+        }
+      }
+    },
     "Delete everything" : {
       "localizations" : {
         "es" : {
@@ -7975,6 +7995,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Eliminar entrada del diario"
+          }
+        }
+      }
+    },
+    "Delete map history" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Borrar el historial del mapa"
           }
         }
       }
@@ -8530,6 +8560,7 @@
       }
     },
     "Double tap to see it up close." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -11265,6 +11296,16 @@
         }
       }
     },
+    "Food, drink, gyms, parks" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Comida, bebida, gimnasios, parques"
+          }
+        }
+      }
+    },
     "For a recipe made in stages, like a dressing you make first and a salad you put together after." : {
       "localizations" : {
         "es" : {
@@ -11348,6 +11389,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "¿Olvidar las búsquedas corregidas?"
+          }
+        }
+      }
+    },
+    "Forget workout-space locations" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Olvidar dónde están los espacios de entrenamiento"
           }
         }
       }
@@ -12640,6 +12691,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Guarda un corazón hasta la próxima vez que estén cerca."
+          }
+        }
+      }
+    },
+    "Home map" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mapa de inicio"
           }
         }
       }
@@ -14545,6 +14606,16 @@
         }
       }
     },
+    "Location, fog, routes, places" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ubicación, niebla, rutas, lugares"
+          }
+        }
+      }
+    },
     "Locations & equipment" : {
       "localizations" : {
         "es" : {
@@ -15307,6 +15378,26 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "El intercambio manual de planes está desactivado"
+          }
+        }
+      }
+    },
+    "Map history stays on this iPhone. A decoy session shows none of it." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El historial del mapa se queda en este iPhone. Una sesión señuelo no muestra nada."
+          }
+        }
+      }
+    },
+    "Map the world in the background" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mapear el mundo en segundo plano"
           }
         }
       }
@@ -16255,6 +16346,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Necesita que compartas los entrenamientos con Salud — actívalo en Configuración › Salud."
+          }
+        }
+      }
+    },
+    "Never doctors, lawyers or therapists." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nunca médicos, abogados ni terapeutas."
           }
         }
       }
@@ -19317,6 +19418,46 @@
         }
       }
     },
+    "Place name" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nombre del lugar"
+          }
+        }
+      }
+    },
+    "Places" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lugares"
+          }
+        }
+      }
+    },
+    "Places Fernlet can name" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lugares que Fernlet puede nombrar"
+          }
+        }
+      }
+    },
+    "Places pinned" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lugares marcados"
+          }
+        }
+      }
+    },
     "Plan" : {
       "localizations" : {
         "es" : {
@@ -20730,6 +20871,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "¿Te acuerdas de este?"
+          }
+        }
+      }
+    },
+    "Remember where my workout spaces are" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Recordar dónde están mis espacios de entrenamiento"
           }
         }
       }
@@ -22203,6 +22354,16 @@
         }
       }
     },
+    "Routes stored on this iPhone" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Rutas guardadas en este iPhone"
+          }
+        }
+      }
+    },
     "Rubber Duck" : {
       "comment" : "Silly stats stamp name, earned when Bathtub Index (water drunk) first appears",
       "localizations" : {
@@ -22391,6 +22552,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Guardar lugar"
+          }
+        }
+      }
+    },
+    "Save new routes" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Guardar rutas nuevas"
           }
         }
       }
@@ -26432,6 +26603,16 @@
         }
       }
     },
+    "The map" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El mapa"
+          }
+        }
+      }
+    },
     "The other phone is now showing a code of its own. Scan it." : {
       "localizations" : {
         "es" : {
@@ -28204,6 +28385,16 @@
         }
       }
     },
+    "Uncover the map as you go" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Descubrir el mapa mientras vas"
+          }
+        }
+      }
+    },
     "Undo" : {
       "localizations" : {
         "es" : {
@@ -28729,6 +28920,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Hora de despertar"
+          }
+        }
+      }
+    },
+    "Walk and run lines, on this iPhone." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Líneas de caminatas y carreras, en este iPhone."
           }
         }
       }
@@ -39882,6 +40083,204 @@
         }
       }
     },
+    "homeMap.delete.history.message" : {
+      "comment" : "Settings, Home map: what deleting the map history does",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The fog, the walk and run lines, Where you've been and the pins on this iPhone go. Your workouts stay in Move."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se borran la niebla, las líneas de caminatas y carreras, Dónde has estado y las marcas de este iPhone. Tus entrenamientos se quedan en Moverse."
+          }
+        }
+      }
+    },
+    "homeMap.delete.history.title" : {
+      "comment" : "Settings, Home map: confirming deleting the whole map history",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Delete map history?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Borrar el historial del mapa?"
+          }
+        }
+      }
+    },
+    "homeMap.delete.routes.message" : {
+      "comment" : "Settings, Home map: what deleting all stored routes does",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The walk and run lines on this iPhone go. Your walks and runs stay in Move."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se borran las líneas de caminatas y carreras de este iPhone. Tus caminatas y carreras se quedan en Moverse."
+          }
+        }
+      }
+    },
+    "homeMap.delete.routes.title" : {
+      "comment" : "Settings, Home map: confirming deleting every saved walk and run line",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Delete all stored routes?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Borrar todas las rutas guardadas?"
+          }
+        }
+      }
+    },
+    "homeMap.delete.spaces.message" : {
+      "comment" : "Settings, Home map: what forgetting workout-space locations does",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The map forgets where your workout spaces are. The spaces themselves stay."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El mapa olvida dónde están tus espacios de entrenamiento. Los espacios se quedan."
+          }
+        }
+      }
+    },
+    "homeMap.delete.spaces.title" : {
+      "comment" : "Settings, Home map: confirming forgetting where the workout spaces are",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Forget workout-space locations?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Olvidar dónde están los espacios de entrenamiento?"
+          }
+        }
+      }
+    },
+    "homeMap.location" : {
+      "comment" : "Settings, Home map: the section and row for the iPhone's location permission (Spanish: Ubicación)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Location"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ubicación"
+          }
+        }
+      }
+    },
+    "homeMap.location.always" : {
+      "comment" : "Settings, Home map: location allowed always (background mapping)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Always"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Siempre"
+          }
+        }
+      }
+    },
+    "homeMap.location.notAsked" : {
+      "comment" : "Settings, Home map: location has not been asked for yet",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Not turned on"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sin activar"
+          }
+        }
+      }
+    },
+    "homeMap.location.off" : {
+      "comment" : "Settings, Home map: location is off for Fernlet in iOS",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Off"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Desactivada"
+          }
+        }
+      }
+    },
+    "homeMap.location.whileUsing" : {
+      "comment" : "Settings, Home map: location allowed while using the app (Spanish: Al usar la app)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "While using"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Al usar la app"
+          }
+        }
+      }
+    },
     "host" : {
       "localizations" : {
         "es" : {
@@ -44704,6 +45103,574 @@
         }
       }
     },
+    "privatePlaces.countNoDates" : {
+      "comment" : "Private, Places: beside 'Places you return to'; only a visit count is kept",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "a count, no dates"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "un conteo, sin fechas"
+          }
+        }
+      }
+    },
+    "privatePlaces.deleteAll" : {
+      "comment" : "Private, Places: deletes the whole timeline and the places",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Delete all of it"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Borrarlo todo"
+          }
+        }
+      }
+    },
+    "privatePlaces.deleteAll.message" : {
+      "comment" : "Private, Places: what deleting all of it does",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The 30 days, the places you return to, and the lines of those walks and runs go. The walks and runs stay in Move."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se borran los 30 días, los lugares a los que vuelves y las líneas de esas caminatas y carreras. Las caminatas y carreras se quedan en Moverse."
+          }
+        }
+      }
+    },
+    "privatePlaces.deleteAll.title" : {
+      "comment" : "Private, Places: confirming deleting the whole timeline",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Delete all of it?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Borrarlo todo?"
+          }
+        }
+      }
+    },
+    "privatePlaces.deleteDay" : {
+      "comment" : "Private, Places: the row that opens the list of days to delete",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Delete a day"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Borrar un día"
+          }
+        }
+      }
+    },
+    "privatePlaces.deleteDay.note" : {
+      "comment" : "Private, Places: what deleting a day does",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The day's places and the lines of its walks and runs go. The walks and runs stay in Move."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se borran los lugares del día y las líneas de sus caminatas y carreras. Las caminatas y carreras se quedan en Moverse."
+          }
+        }
+      }
+    },
+    "privatePlaces.deleteDay.title" : {
+      "comment" : "Private, Places: confirming a day's delete",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Delete this day?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Borrar este día?"
+          }
+        }
+      }
+    },
+    "privatePlaces.empty" : {
+      "comment" : "Private, Places: the day card before anything is collected",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nothing here yet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aún no hay nada"
+          }
+        }
+      }
+    },
+    "privatePlaces.kept" : {
+      "comment" : "Private, Places: beside a day's name; the timeline keeps 30 days",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "kept 30 days"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "se guarda 30 días"
+          }
+        }
+      }
+    },
+    "privatePlaces.kind.beach" : {
+      "comment" : "Private, Places: a kind of place",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Beach"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Playa"
+          }
+        }
+      }
+    },
+    "privatePlaces.kind.campground" : {
+      "comment" : "Private, Places: a kind of place",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Campground"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Camping"
+          }
+        }
+      }
+    },
+    "privatePlaces.kind.food" : {
+      "comment" : "Private, Places: a kind of place",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Food and drink"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Comida y bebida"
+          }
+        }
+      }
+    },
+    "privatePlaces.kind.gym" : {
+      "comment" : "Private, Places: a kind of place",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Gym"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Gimnasio"
+          }
+        }
+      }
+    },
+    "privatePlaces.kind.park" : {
+      "comment" : "Private, Places: a kind of place",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Park"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Parque"
+          }
+        }
+      }
+    },
+    "privatePlaces.lastDays" : {
+      "comment" : "Private, Places: the row that opens every day's card",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The last 30 days"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los últimos 30 días"
+          }
+        }
+      }
+    },
+    "privatePlaces.noPlaces" : {
+      "comment" : "Private, Places: the empty 'Places you return to' card",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Food and drink, gyms, parks, beaches and campgrounds show here. Doctors, lawyers and therapists never do."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aquí aparecen comida y bebida, gimnasios, parques, playas y campings. Médicos, abogados y terapeutas, nunca."
+          }
+        }
+      }
+    },
+    "privatePlaces.note" : {
+      "comment" : "Private, Places: what the timeline collects, under the day's card",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Walks, runs and places you opened Fernlet. Turn on background mapping for the whole day."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Caminatas, carreras y lugares donde abriste Fernlet. Activa el mapeo en segundo plano para todo el día."
+          }
+        }
+      }
+    },
+    "privatePlaces.placeGone" : {
+      "comment" : "Private, Places: a stop whose place was removed",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A place"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un lugar"
+          }
+        }
+      }
+    },
+    "privatePlaces.rename.hint" : {
+      "comment" : "Private, Places, VoiceOver: what tapping a place does",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Renames it."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Le cambia el nombre."
+          }
+        }
+      }
+    },
+    "privatePlaces.rename.title" : {
+      "comment" : "Private, Places: the rename alert's title",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rename this place"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cambiar el nombre de este lugar"
+          }
+        }
+      }
+    },
+    "privatePlaces.returned" : {
+      "comment" : "Private, Places: the card of everyday places and their visit counts",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Places you return to"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lugares a los que vuelves"
+          }
+        }
+      }
+    },
+    "privatePlaces.run" : {
+      "comment" : "Private, Places: a run on the timeline",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A run"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Una carrera"
+          }
+        }
+      }
+    },
+    "privatePlaces.stops" : {
+      "comment" : "Private, Places: how many stops a day has, on the delete list. Plural on the number (1 stop)",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld stop"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld stops"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld parada"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld paradas"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "privatePlaces.tab" : {
+      "comment" : "Private: the fourth tab, Where you've been (Spanish: Lugares)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Places"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lugares"
+          }
+        }
+      }
+    },
+    "privatePlaces.title" : {
+      "comment" : "Private, Places tab: the page's heading",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Where you've been"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dónde has estado"
+          }
+        }
+      }
+    },
+    "privatePlaces.today" : {
+      "comment" : "Private, Places: today's card",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Today"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy"
+          }
+        }
+      }
+    },
+    "privatePlaces.visits" : {
+      "comment" : "Private, Places: a place's visit count. Plural on the number (1 visit)",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld visit"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld visits"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld visita"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "%lld visitas"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "privatePlaces.walk" : {
+      "comment" : "Private, Places: a walk on the timeline",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A walk"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Una caminata"
+          }
+        }
+      }
+    },
+    "privatePlaces.yesterday" : {
+      "comment" : "Private, Places: yesterday's card",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Yesterday"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ayer"
+          }
+        }
+      }
+    },
     "productImport.error.emptyHTML" : {
       "comment" : "Inline notice when a product page loaded but its body decoded to empty or whitespace-only text.",
       "extractionState" : "extracted_with_value",
@@ -46320,6 +47287,24 @@
         }
       }
     },
+    "settings.search.breadcrumb.homeMap" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Home map"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mapa de inicio"
+          }
+        }
+      }
+    },
     "settings.search.breadcrumb.nearbyFriends" : {
       "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
       "extractionState" : "extracted_with_value",
@@ -46775,6 +47760,24 @@
         }
       }
     },
+    "settings.search.title.backgroundMapping" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Map the world in the background"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mapear el mundo en segundo plano"
+          }
+        }
+      }
+    },
     "settings.search.title.bodyMeasurements" : {
       "comment" : "Settings search result: the name of a setting a search can find, on the Goal & nutrition › Body & preferences page. Short, sentence case, like the row it leads to.",
       "extractionState" : "extracted_with_value",
@@ -47117,6 +48120,24 @@
         }
       }
     },
+    "settings.search.title.deleteMapHistory" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Delete map history"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Borrar el historial del mapa"
+          }
+        }
+      }
+    },
     "settings.search.title.deliverHeartsWhenApart" : {
       "comment" : "Settings search result: the name of a setting a search can find, on the Nearby friends page. Short, sentence case, like the row it leads to.",
       "extractionState" : "extracted_with_value",
@@ -47329,6 +48350,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Integración con Salud"
+          }
+        }
+      }
+    },
+    "settings.search.title.homeMap" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Home map"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mapa de inicio"
           }
         }
       }
@@ -47801,6 +48840,24 @@
         }
       }
     },
+    "settings.search.title.saveRoutes" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Save new routes"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Guardar rutas nuevas"
+          }
+        }
+      }
+    },
     "settings.search.title.sealedBackupForJournalEntries" : {
       "comment" : "Settings search result: the name of a setting a search can find, on the Privacy & Data › iCloud page. Short, sentence case, like the row it leads to.",
       "extractionState" : "extracted_with_value",
@@ -48049,6 +49106,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Desactivar código"
+          }
+        }
+      }
+    },
+    "settings.search.title.uncoverMap" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Uncover the map as you go"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Descubrir el mapa mientras vas"
           }
         }
       }
@@ -49498,6 +50573,24 @@
         }
       }
     },
+    "soloPhoto.dayAndPlace" : {
+      "comment" : "A solo photo's card: the day it was taken, then where (a workout space's name)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
     "sourdough toast" : {
       "localizations" : {
         "es" : {
@@ -50858,6 +51951,60 @@
         }
       }
     },
+    "worldHint.companionHint" : {
+      "comment" : "World Home, VoiceOver: what the companion does when activated or held",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Double-tap to say hi. Hold for Customize."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Toca dos veces para saludar. Mantén pulsado para personalizar."
+          }
+        }
+      }
+    },
+    "worldHint.line" : {
+      "comment" : "World Home: the companion's one-time hint in its bubble (Spanish: ¡Tócame para saludar!)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tap me to say hi!"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Tócame para saludar!"
+          }
+        }
+      }
+    },
+    "worldHint.spoken" : {
+      "comment" : "World Home, VoiceOver: the one-time hint; the companion's name (Spanish: Toca dos veces a Sprout para saludar)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Double-tap %@ to say hi"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Toca dos veces a %@ para saludar"
+          }
+        }
+      }
+    },
     "worldLine.approximate" : {
       "comment" : "World Home with approximate location: the companion's speech",
       "extractionState" : "extracted_with_value",
@@ -50998,6 +52145,240 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Hoy me quedo en casa. El mapa espera."
+          }
+        }
+      }
+    },
+    "worldLocationIntro.notNow" : {
+      "comment" : "World map intro: leave location off for now",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Not now"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ahora no"
+          }
+        }
+      }
+    },
+    "worldLocationIntro.plate" : {
+      "comment" : "World map intro: the title on its wooden plate (Spanish: El mapa)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The map"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El mapa"
+          }
+        }
+      }
+    },
+    "worldLocationIntro.private" : {
+      "comment" : "World map intro, row 3: the places timeline is in Private",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Where you've been stays private"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dónde has estado es privado"
+          }
+        }
+      }
+    },
+    "worldLocationIntro.private.detail" : {
+      "comment" : "World map intro, row 3's line",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sealed in Private like your journal. Delete it any time."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sellado en Privado como tu diario. Bórralo cuando quieras."
+          }
+        }
+      }
+    },
+    "worldLocationIntro.saved" : {
+      "comment" : "World map intro, row 2: walk and run lines are kept on the phone",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Walks and runs are saved"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se guardan caminatas y carreras"
+          }
+        }
+      }
+    },
+    "worldLocationIntro.saved.detail" : {
+      "comment" : "World map intro, row 2's line",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "On this iPhone, so the blue button can start them again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "En este iPhone, para que el botón azul pueda volver a iniciarlas."
+          }
+        }
+      }
+    },
+    "worldLocationIntro.title" : {
+      "comment" : "World map intro: the heading, before iOS asks for location",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your companion lives on a map now"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu compañero ahora vive en un mapa"
+          }
+        }
+      }
+    },
+    "worldLocationIntro.turnOn" : {
+      "comment" : "World map intro: the button that asks iOS for location",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Turn on location"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Activar ubicación"
+          }
+        }
+      }
+    },
+    "worldLocationIntro.uncovers" : {
+      "comment" : "World map intro, row 1: the fog lifts where you walk",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "It uncovers as you go"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se descubre mientras vas"
+          }
+        }
+      }
+    },
+    "worldLocationIntro.uncovers.detail" : {
+      "comment" : "World map intro, row 1's line",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The fog lifts where you walk, from today. Turn it off in Settings."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La niebla se levanta por donde caminas, desde hoy. Puedes desactivarlo en Ajustes."
+          }
+        }
+      }
+    },
+    "worldLocationIntro.whileUsing" : {
+      "comment" : "World map intro, row 4: location only while the app is in use",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Only while you use Fernlet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Solo mientras usas Fernlet"
+          }
+        }
+      }
+    },
+    "worldLocationIntro.whileUsing.detail" : {
+      "comment" : "World map intro, row 4's line",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Background mapping is a setting, off unless you turn it on."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El mapeo en segundo plano es un ajuste, desactivado salvo que lo actives."
+          }
+        }
+      }
+    },
+    "worldMarker.photos" : {
+      "comment" : "World Home, VoiceOver: a map marker where the person took photos on their own; how many",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your photos here, %lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tus fotos aquí, %lld"
           }
         }
       }
@@ -51529,6 +52910,24 @@
         }
       }
     },
+    "worldQuickStart.heading.running" : {
+      "comment" : "World Home quick-start card heading while a run records",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "On your run"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "En tu carrera"
+          }
+        }
+      }
+    },
     "worldQuickStart.heading.savedLine" : {
       "comment" : "World Home quick-start card heading where one of the person's saved walks starts",
       "extractionState" : "extracted_with_value",
@@ -51543,6 +52942,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Tu caminata desde aquí"
+          }
+        }
+      }
+    },
+    "worldQuickStart.heading.savedRun" : {
+      "comment" : "World Home quick-start card heading where one of the person's saved run routes starts",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your run from here"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu carrera desde aquí"
           }
         }
       }
@@ -51786,6 +53203,47 @@
         }
       }
     },
+    "worldQuickStart.note.ranFromHere" : {
+      "comment" : "World Home quick-start card where a saved run route starts: how many recent runs started here. Plural on the number",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've run this route once"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "You've run this route %lld times"
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Has corrido esta ruta %lld vez"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "Has corrido esta ruta %lld veces"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "worldQuickStart.note.resting" : {
       "comment" : "World Home quick-start card on a resting or unwell day, before the gentle choices",
       "extractionState" : "extracted_with_value",
@@ -51877,6 +53335,42 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%@ · tu recorrido guardado"
+          }
+        }
+      }
+    },
+    "worldQuickStart.savedRun" : {
+      "comment" : "World Home quick start where a saved run route starts: run that same route again",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Run it again"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Correrla otra vez"
+          }
+        }
+      }
+    },
+    "worldQuickStart.savedRun.detail" : {
+      "comment" : "World Home quick start: under 'Run it again'; the saved run route's length",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ · your saved route"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ · tu ruta guardada"
           }
         }
       }
@@ -52377,6 +53871,24 @@
         }
       }
     },
+    "worldWalk.end.run" : {
+      "comment" : "World Home walk bar, VoiceOver: the End button stops and logs the run",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "End run"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Terminar carrera"
+          }
+        }
+      }
+    },
     "worldWalk.logged" : {
       "comment" : "World Home: the note after a walk ends; its distance and minutes",
       "extractionState" : "extracted_with_value",
@@ -52391,6 +53903,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Caminata registrada · %@ · %lld min"
+          }
+        }
+      }
+    },
+    "worldWalk.logged.run" : {
+      "comment" : "World Home: the note after a run ends; its distance and minutes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Run logged · %1$@ · %2$lld min"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Carrera registrada · %1$@ · %2$lld min"
           }
         }
       }
@@ -52413,6 +53943,42 @@
         }
       }
     },
+    "worldWalk.precise.run" : {
+      "comment" : "World Home walk bar during a run: precise location is used for this run only",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Precise location on for this run"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ubicación precisa activada para esta carrera"
+          }
+        }
+      }
+    },
+    "worldWalk.running" : {
+      "comment" : "World Home walk bar: what is happening while a run on a saved route records",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Running"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Corriendo"
+          }
+        }
+      }
+    },
     "worldWalk.spoken" : {
       "comment" : "World Home walk bar, VoiceOver: the walk so far, e.g. 'Walking together, 0.6 kilometres'",
       "extractionState" : "extracted_with_value",
@@ -52427,6 +53993,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Caminando juntos, %@"
+          }
+        }
+      }
+    },
+    "worldWalk.spoken.run" : {
+      "comment" : "World Home walk bar, VoiceOver: the run so far, e.g. 'Running, 0.6 kilometres'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Running, %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Corriendo, %@"
           }
         }
       }
@@ -52463,6 +54047,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Caminata eliminada."
+          }
+        }
+      }
+    },
+    "worldWalk.undone.run" : {
+      "comment" : "World Home, VoiceOver: said after the run note's Undo removed the run",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Run removed."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Carrera eliminada."
           }
         }
       }

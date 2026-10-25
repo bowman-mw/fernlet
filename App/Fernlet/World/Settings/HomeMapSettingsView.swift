@@ -68,11 +68,11 @@ struct HomeMapSettingsView: View {
 
     /// Location: what iOS allows, and background mapping.
     private var locationSection: some View {
-        FernletFramedSection("Location") {
+        FernletFramedSection(header: Text(HomeMapCopy.location)) {
             Button(action: openLocation) {
                 // At the accessibility sizes the value takes the second line, so the name never breaks mid-word.
                 let value = Text(HomeMapCopy.permission(store.worldLocation.permission))
-                FernletRowLabel(title: Text("Location"), detail: isLarge ? value : nil, value: isLarge ? nil : value)
+                FernletRowLabel(title: Text(HomeMapCopy.location), detail: isLarge ? value : nil, value: isLarge ? nil : value)
             }
             .buttonStyle(FernletRowButtonStyle(showsChevron: true))
             .accessibilityIdentifier("settings.homeMap.location")
@@ -264,6 +264,13 @@ nonisolated enum HomeMapDeletion: String, Identifiable, Sendable {
 
 /// Home map's words that carry a value.
 nonisolated enum HomeMapCopy {
+    /// The Location section's label and row name: its own key, because the catalog's bare "Location" is a workout
+    /// space's name field (Spanish "Lugar"), and here it is the iPhone's location (Spanish "Ubicación").
+    static var location: LocalizedStringResource {
+        LocalizedStringResource("homeMap.location", defaultValue: "Location",
+                                comment: "Settings, Home map: the section and row for the iPhone's location permission (Spanish: Ubicación)")
+    }
+
     /// The Location row's value for `permission`.
     static func permission(_ permission: WorldLocationPermission) -> LocalizedStringResource {
         switch permission {
