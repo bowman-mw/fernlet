@@ -140,9 +140,16 @@ struct FernletCompanionEntry: TimelineEntry {
     /// state face only — the drawn face never shows a passing feeling but asleep, as on Home's map — so
     /// the Lock Screen's state-only rule holds for every family.
     var companionGrid: WidgetCompanionGrid {
+        companionGrid(increasedContrast: false)
+    }
+
+    /// The pixel companion for this entry, its outline darker with Increase Contrast (W-03), as the
+    /// map draws it.
+    func companionGrid(increasedContrast: Bool) -> WidgetCompanionGrid {
         let state = currentDayCompanionState
         let pixelLook = WidgetPixelLook(look: look, state: state, asleep: hidesTheDay)
-        return WidgetCompanionPainter.paint(state: state, look: pixelLook, asleep: hidesTheDay)
+        return WidgetCompanionPainter.paint(state: state, look: pixelLook, asleep: hidesTheDay,
+                                            increasedContrast: increasedContrast)
     }
 
     /// The written word under the companion: "Asleep" while asleep, else the state's name, else the

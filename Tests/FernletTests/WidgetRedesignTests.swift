@@ -72,24 +72,28 @@ struct WidgetRedesignTests {
         for field in ["var companionName: String? = nil", "var companionLook: WidgetCompanionLook? = nil",
                       "var bodyStyleRaw: String", "var bodyColorHex: String?",
                       "var accessoryRaw: String", "var accessoryColorHex: String?",
-                      "var scarfColorHex: String? = nil"] {
+                      "var scarfColorHex: String? = nil", "var capColorHex: String? = nil",
+                      "var sideItemRaw: String? = nil", "var sideItemColorHex: String? = nil",
+                      "var items: [ItemArt]? = nil", "struct ItemArt: Codable, Equatable {",
+                      "var palette: [String]", "var pixels: [Int]", "var coversHead: Bool"] {
             #expect(widget.contains(field), "the widget twin lost `\(field)`")
         }
     }
 
     // MARK: - Glasses
 
-    /// The widget's pixel companion wears the glasses as the map's does (World Review Batch 4): drawn
-    /// unless the eyes are closed lines (resting, sick or asleep), line for line with the app's painter.
-    /// The map adds its night wind-down (`pose.drowsy`, `b1-home-night`), which the widget does not draw.
+    /// The widget's pixel companion wears the glasses as the map's does (World Review Batch 4; in their
+    /// colour since W-03): drawn unless the eyes are closed lines, by the very painter the map runs
+    /// (`WidgetWorldTests.thePixelCompanionIsTheMaps` holds the twin). A widget draws only asleep or awake
+    /// (never the map's wind-down), and its one-colour renderings cut the glasses out with the face.
     @Test func theWidgetWearsTheGlassesAsTheMapDoes() throws {
         let widget = try RepoRoot.source(Self.figurePath)
         let app = try RepoRoot.source(Self.appPainterPath)
-        #expect(widget.contains("if look.topper == .glasses && !closesEyes(state: face, asleep: asleep) { paintGlasses(&grid, eyeRow: eyeRow) }"))
-        #expect(app.contains("if look.topper == .glasses && !closesEyes(state: state, pose: pose) { paintGlasses(&grid, eyeRow: eyeRow) }"))
-        #expect(widget.contains("asleep || state == .resting || state == .sick")
-                    && app.contains("pose.asleep || pose.drowsy || state == .resting || state == .sick"),
-                "the closed-eyes rule drifted between the widget's painter and the map's")
+        let glasses = "if look.topper == .glasses && !closesEyes(state: state, pose: pose) {"
+        #expect(widget.contains(glasses) && app.contains(glasses))
+        #expect(widget.contains("pose: WidgetCompanionPose(asleep: asleep)"), "the widget's pose is asleep or awake")
+        #expect(widget.contains("case .silhouette(let hex): return grid.isFace(frameX: x, y: y) ? nil : hex"))
+        #expect(app.contains("grid.put(gx, eyeRow - 1, color, face: true)"), "the glasses are part of the cut-out face")
     }
 
     // MARK: - Kinds and links

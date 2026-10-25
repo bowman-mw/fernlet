@@ -45,6 +45,8 @@ struct CompanionCustomizationPage: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// Drives the root-level push into a NEW item's studio (HOME-30), binding-driven with `onExit`.
     @State private var isDesigningFromRoot = false
+    /// "Hold to peek" at night, shared by the page and its slot pages (`comp-cust-night`).
+    @State private var peek = CustomizePeek()
 
     /// "Customize", the page's title on the plate.
     static let title = LocalizedStringResource("Customize", comment: "Customize page title: the companion's look, Wardrobe and Creation Studio")
@@ -53,7 +55,7 @@ struct CompanionCustomizationPage: View {
         ScrollView {
             VStack(spacing: 14) {
                 topRow
-                CustomizePreviewCard(store: store, petCount: petCount)
+                CustomizePreviewSection(store: store, peek: $peek)
                 libraryRows
                 NavigationLink {
                     AppColorsPage(store: store)
@@ -162,7 +164,7 @@ struct CompanionCustomizationPage: View {
         } label: {
             CustomizeSlotRowLabel(slot: Text("Body"), value: appearance.bodyStyle.label, isEmpty: false) {
                 Circle()
-                    .fill(appearance.bodyColor.color(for: store.companionState))
+                    .fill(appearance.bodyColor.color(for: store.liveCompanionState))
                     .frame(width: 22, height: 22)
                     .overlay(Circle().strokeBorder(WorldPalette.ink, lineWidth: 2))
             }
@@ -295,7 +297,9 @@ struct CompanionCustomizationPage: View {
     ) -> some View {
         ScrollView {
             VStack(spacing: 14) {
-                CustomizePreviewCard(store: store, petCount: petCount)
+                // The Accessory page (the only one holding the face slot) says why glasses don't show
+                // at night (`comp-slot-night`).
+                CustomizePreviewSection(store: store, showsGlassesLine: customSlots.contains(.face), peek: $peek)
                 CompanionCustomizationCard(
                     title: title,
                     items: items,
@@ -304,7 +308,7 @@ struct CompanionCustomizationPage: View {
                     colorSelection: colorSelection,
                     customColorHex: customColorHex,
                     customColor: customColor,
-                    state: store.companionState,
+                    state: store.liveCompanionState,
                     // Recolor is a built-in-only control: hidden when no built-in is equipped in
                     // this slot (custom items paint their own colors).
                     showsColor: isBuiltInEquipped,
@@ -414,7 +418,7 @@ struct CompanionCustomizationPage: View {
                 if let hex = appearance[keyPath: customKeyPath], let color = Color(fernletHex: hex) {
                     return color
                 }
-                return appearance[keyPath: presetKeyPath].color(for: store.companionState)
+                return appearance[keyPath: presetKeyPath].color(for: store.liveCompanionState)
             },
             set: { newValue in
                 var appearance = store.settings.companionAppearance

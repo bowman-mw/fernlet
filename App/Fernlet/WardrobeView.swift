@@ -324,7 +324,9 @@ struct WardrobeView: View {
                     .font(.fernlet(.headerMedium))
                     .foregroundStyle(WorldPalette.bark)
                     .multilineTextAlignment(.center)
-                Text("Make the first little thing for your companion to wear. New creations appear on your companion right away.")
+                // The end of this line was held back until the map drew custom pieces (owner Q6); it
+                // shows since round 6 lane 2 ("wardrobe drawings on the map").
+                Text("Make the first little thing for your companion to wear. New creations appear on your companion right away, and on the map as pixel art.")
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(WorldPalette.dim)
                     .multilineTextAlignment(.center)

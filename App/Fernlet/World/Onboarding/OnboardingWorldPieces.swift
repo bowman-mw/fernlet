@@ -162,11 +162,13 @@ struct OnboardingPixelCompanion: View {
     var scale: CGFloat = 7
     /// Whether the small map version sits beside it.
     var showsMap = false
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         let look = WorldCompanionLook(appearance: appearance, state: state, asleep: false)
         let grid = WorldCompanionPainter.paint(state: state, look: look,
-                                               pose: WorldCompanionPose(breathIn: false, settled: false, asleep: false))
+                                               pose: WorldCompanionPose(breathIn: false, settled: false, asleep: false),
+                                               increasedContrast: contrast == .increased)
         HStack(alignment: .bottom, spacing: 30) {
             canvas(grid, scale: scale)
             if showsMap {

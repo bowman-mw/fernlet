@@ -6,8 +6,8 @@ import FernletDomainModel
 /// Covers the item-editor reprojection that runs whenever an existing item is opened for editing.
 ///
 /// This path is worth real tests because its failure mode is silent and permanent: `save()` re-encodes
-/// the texture at the CURRENT slot dimensions, so anything this function gets wrong is written back over
-/// the user's art the first time they tap Edit.
+/// the texture at the slot's CANVAS size (its box on the companion since W-07), so anything this function
+/// gets wrong is written back over the user's art the first time they tap Edit.
 @MainActor
 struct CreationStudioEditorTests {
 
@@ -22,75 +22,64 @@ struct CreationStudioEditorTests {
         )
     }
 
-    /// A texture already at the slot's dimensions must survive untouched — the common case.
+    /// The canvas for a slot, in squares (its box on the companion, W-07).
+    private func canvas(_ slot: ItemSlot) -> (cols: Int, rows: Int) { CreationStudioView.canvasSize(for: slot) }
+
+    /// A texture already at the slot's canvas size must survive untouched — the common case.
     @Test func matchingDimensionsRoundTripExactly() {
-        var texture = ItemGridTexture.blank(for: .body, palette: palette)
-        texture.pixels[0] = 3
-        texture.pixels[texture.pixels.count - 1] = 5
-        let mid = (texture.rows / 2) * texture.cols + (texture.cols / 2)
-        texture.pixels[mid] = 2
+        let (cols, rows) = canvas(.body)
+        var pixels = Array(repeating: ItemGridTexture.transparent, count: cols * rows)
+        pixels[0] = 3
+        pixels[pixels.count - 1] = 5
+        pixels[(rows / 2) * cols + (cols / 2)] = 2
+        let texture = ItemGridTexture(cols: cols, rows: rows, palette: palette, pixels: pixels)
 
         let result = CreationStudioView.editorPixels(for: item(slot: .body, texture: texture), palette: palette)
 
         #expect(result == texture.pixels)
     }
 
-    /// Regression: this used to be a 1:1 top-left copy, so a texture drawn at a smaller budget opened
-    /// with its art crammed into one corner — and saving made that permanent. A half-size source must
-    /// SCALE UP to fill the canvas, not sit in the corner.
-    @Test func halfResolutionTextureUpscalesToFillTheCanvas() {
-        let slot = ItemSlot.body
-        let halfCols = slot.gridCols / 2
-        let halfRows = slot.gridRows / 2
-        // Every cell painted: if this crops, the bottom-right of the canvas stays transparent.
-        let texture = ItemGridTexture(
-            cols: halfCols,
-            rows: halfRows,
-            palette: palette,
-            pixels: Array(repeating: 4, count: halfCols * halfRows)
-        )
+    /// A texture SMALLER than the canvas keeps every pixel 1:1 in the place the companion wears it —
+    /// never stretched (the map draws it 1:1 too), centred across, a hat on the box's bottom edge.
+    @Test func aSmallerTextureKeepsItsPixelsOneToOne() {
+        let (cols, rows) = canvas(.hat)
+        let texture = ItemGridTexture(cols: 4, rows: 2, palette: palette, pixels: Array(repeating: 4, count: 8))
 
-        let result = CreationStudioView.editorPixels(for: item(slot: slot, texture: texture), palette: palette)
+        let result = CreationStudioView.editorPixels(for: item(slot: .hat, texture: texture), palette: palette)
 
-        #expect(result.count == slot.gridCols * slot.gridRows)
-        #expect(result.allSatisfy { $0 == 4 })
+        #expect(result.count == cols * rows)
+        #expect(result.filter { $0 == 4 }.count == 8, "every pixel kept, none stretched")
+        for y in (rows - 2)..<rows {
+            for x in 7..<11 { #expect(result[y * cols + x] == 4, "(\(x), \(y))") }
+        }
     }
 
-    /// The exact-2× case must be lossless: each source cell maps to a clean 2×2 block.
-    @Test func exactDoublingMapsEachSourceCellToATwoByTwoBlock() {
-        let slot = ItemSlot.body
-        let halfCols = slot.gridCols / 2
-        let halfRows = slot.gridRows / 2
-        var pixels = Array(repeating: ItemGridTexture.transparent, count: halfCols * halfRows)
-        pixels[0] = 1  // top-left source cell only
+    /// An old piece at exactly twice the canvas (each source cell a clean 2×2 block of one colour)
+    /// shrinks by half losslessly: each block becomes one square.
+    @Test func anExactlyDoubledTextureShrinksBlockForBlock() {
+        let (cols, rows) = canvas(.hat)
+        var pixels = Array(repeating: ItemGridTexture.transparent, count: cols * 2 * rows * 2)
+        for (x, y) in [(0, 0), (1, 0), (0, 1), (1, 1)] { pixels[y * cols * 2 + x] = 1 }  // the top-left block only
+        let texture = ItemGridTexture(cols: cols * 2, rows: rows * 2, palette: palette, pixels: pixels)
 
-        let texture = ItemGridTexture(cols: halfCols, rows: halfRows, palette: palette, pixels: pixels)
-        let result = CreationStudioView.editorPixels(for: item(slot: slot, texture: texture), palette: palette)
+        let result = CreationStudioView.editorPixels(for: item(slot: .hat, texture: texture), palette: palette)
 
-        // Exactly the 2x2 block at the origin is painted...
         #expect(result[0] == 1)
-        #expect(result[1] == 1)
-        #expect(result[slot.gridCols] == 1)
-        #expect(result[slot.gridCols + 1] == 1)
-        // ...and its neighbours are not.
-        #expect(result[2] == ItemGridTexture.transparent)
-        #expect(result[slot.gridCols * 2] == ItemGridTexture.transparent)
-        #expect(result.filter { $0 == 1 }.count == 4)
+        #expect(result[1] == ItemGridTexture.transparent)
+        #expect(result[cols] == ItemGridTexture.transparent)
+        #expect(result.filter { $0 == 1 }.count == 1)
     }
 
-    /// A texture from a NEWER build at a higher budget must down-sample rather than crop, so a friend's
-    /// shop item doesn't lose its right/bottom edges on open.
-    ///
-    /// Asserts survival of the region, not of an individual cell: point-sampling a 2× source reads only
-    /// even-indexed cells, so some source cells are legitimately dropped. Cropping is the bug; lossy
-    /// resampling is the deal.
+    /// A piece from the old, bigger canvas (a friend's shop item) shrinks to fit rather than cropping,
+    /// so it never loses its right or bottom edge on open.
     @Test func higherResolutionTextureDownsamplesRatherThanCropping() {
         let slot = ItemSlot.face
+        let (cols, rows) = canvas(slot)
         let bigCols = slot.gridCols * 2
         let bigRows = slot.gridRows * 2
         var pixels = Array(repeating: ItemGridTexture.transparent, count: bigCols * bigRows)
         // Paint ONLY the source's right half. A top-left crop keeps the left portion, so it would
-        // return an entirely blank canvas; a resample must show paint on the right.
+        // return an entirely blank canvas; a fit must show paint on the right.
         for y in 0..<bigRows {
             for x in (bigCols / 2)..<bigCols {
                 pixels[y * bigCols + x] = 2
@@ -100,25 +89,23 @@ struct CreationStudioEditorTests {
         let texture = ItemGridTexture(cols: bigCols, rows: bigRows, palette: palette, pixels: pixels)
         let result = CreationStudioView.editorPixels(for: item(slot: slot, texture: texture), palette: palette)
 
-        #expect(result.count == slot.gridCols * slot.gridRows)
+        #expect(result.count == cols * rows)
+        let fitted = WorldItemBox.fit(texture, slot: slot)
+        let top = fitted.y - WorldItemBox.box(for: slot).y
         // Right half painted, left half untouched — i.e. the art was scaled, not cropped.
-        for y in 0..<slot.gridRows {
-            #expect(result[y * slot.gridCols + slot.gridCols - 1] == 2)
-            #expect(result[y * slot.gridCols] == ItemGridTexture.transparent)
+        for y in top..<(top + fitted.height) {
+            #expect(result[y * cols + cols - 1] == 2)
+            #expect(result[y * cols] == ItemGridTexture.transparent)
         }
     }
 
-    /// Palette remapping must survive the resample — a texture authored against a different palette is
+    /// Palette remapping must survive the fit — a texture authored against a different palette is
     /// matched by hex, not by index, or the colours silently shuffle.
     @Test func foreignPaletteIsRemappedByHexDuringResample() {
         let slot = ItemSlot.hat
+        let (cols, rows) = canvas(slot)
         let foreignPalette = [palette[5], palette[2]]  // index 0 -> palette[5], index 1 -> palette[2]
-        let texture = ItemGridTexture(
-            cols: slot.gridCols,
-            rows: slot.gridRows,
-            palette: foreignPalette,
-            pixels: Array(repeating: 0, count: slot.gridCols * slot.gridRows)
-        )
+        let texture = ItemGridTexture(cols: cols, rows: rows, palette: foreignPalette, pixels: Array(repeating: 0, count: cols * rows))
 
         let result = CreationStudioView.editorPixels(for: item(slot: slot, texture: texture), palette: palette)
 
@@ -128,19 +115,22 @@ struct CreationStudioEditorTests {
     /// A malformed texture must produce a blank canvas rather than crash or index out of bounds.
     @Test func malformedTextureYieldsBlankCanvas() {
         let slot = ItemSlot.body
+        let (cols, rows) = canvas(slot)
         let texture = ItemGridTexture(cols: 4, rows: 4, palette: palette, pixels: [1, 2])  // count mismatch
 
         let result = CreationStudioView.editorPixels(for: item(slot: slot, texture: texture), palette: palette)
 
-        #expect(result.count == slot.gridCols * slot.gridRows)
+        #expect(result.count == cols * rows)
         #expect(result.allSatisfy { $0 == ItemGridTexture.transparent })
     }
 
-    /// Symmetry mirrors across a clean axis only if every grid is even-width; an odd width would put a
-    /// self-mirroring column at the centre and need a special case. This pins that assumption.
+    /// Symmetry mirrors across a clean axis only if every canvas is even-width; an odd width would put a
+    /// self-mirroring column at the centre and need a special case. This pins that assumption, for the
+    /// canvases and for the shop's acceptance bounds.
     @Test func everySlotGridIsEvenWidthSoTheMirrorAxisIsClean() {
         for slot in ItemSlot.allCases {
-            #expect(slot.gridCols % 2 == 0, "\(slot) grid width \(slot.gridCols) must be even for mirror mode")
+            #expect(canvas(slot).cols % 2 == 0, "\(slot) canvas width \(canvas(slot).cols) must be even for mirror mode")
+            #expect(slot.gridCols % 2 == 0, "\(slot) grid width \(slot.gridCols) must be even")
         }
     }
 

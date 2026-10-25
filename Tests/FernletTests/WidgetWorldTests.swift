@@ -139,24 +139,33 @@ struct WidgetWorldTests {
         #expect(declared.count == SillyStatKind.allCases.count, "the widget knows \(declared.count) stamps, the app \(SillyStatKind.allCases.count)")
     }
 
-    /// The pixel companion is the map's: the state colours, the ink and blush, the first breath's
-    /// ellipse and every mouth.
+    /// The pixel companion is the map's, word for word (phone test W-02, W-03, W-07): the painter
+    /// between the twin markers is the app's with `WorldCompanionLook` spelled `WidgetPixelLook`, every
+    /// other `WorldCompanion` spelled `WidgetCompanion` and no `nonisolated`, so every pixel test of
+    /// the map's painter (`WorldCompanionWardrobeTests`) holds for the widget's too.
     @Test func thePixelCompanionIsTheMaps() throws {
         let widget = try RepoRoot.source(Self.widgetRoot + "WidgetPixelCompanion.swift")
         let app = try RepoRoot.source("App/Fernlet/World/Companion/WorldCompanionPainter.swift")
+        let appTwin = try #require(Self.twin(in: app), "the app painter lost its twin markers")
+            .replacingOccurrences(of: "WorldCompanionLook", with: "WidgetPixelLook")
+            .replacingOccurrences(of: "WorldCompanion", with: "WidgetCompanion")
+            .replacingOccurrences(of: "nonisolated ", with: "")
+        let widgetTwin = try #require(Self.twin(in: widget), "the widget painter lost its twin markers")
+        #expect(appTwin == widgetTwin, "the widget's painter drifted from the map's: copy the app's twin region over")
+        #expect(appTwin.contains("static func paint(state: WidgetCompanionMood"), "the twin region holds the painter")
+        #expect(widget.contains("typealias WidgetCompanionMood = WidgetCompanionState"))
         for state in [CompanionState.thriving, .okay, .tired, .resting, .sick] {
             let hex = String(format: "0x%06X", WorldCompanionLook.stateHex(state))
             #expect(widget.contains("case .\(state.rawValue.lowercased()): \(hex)"), "\(state)'s body colour drifted")
         }
-        for line in ["static let ink: UInt32 = 0x2A1A10", "static let blush: UInt32 = 0xE8A3A0",
-                     "case .thriving: [(8, 0), (9, 1), (10, 1), (11, 0)]", "case .okay, .resting: [(9, 0), (10, 0)]",
-                     "case .tired: [(9, 1), (10, 1)]", "case .sick: [(8, 0), (9, -1), (10, 0), (11, -1)]",
-                     "let sink = state == .resting ? 0.6 : 0", "for x in [6, 7, 12, 13] { grid.put(x, eyeRow + 1, ink) }"] {
-            #expect(widget.contains(line) && app.contains(line), "the painter drifted: `\(line)`")
-        }
-        #expect(app.contains("pose.breathIn ? 12.8 : 13.2") && app.contains("pose.breathIn ? 7.6 : 7.4, pose.breathIn ? 7.3 : 6.9"))
-        #expect(widget.contains("(cx, cy, rx, ry) = (10, 13.2 + sink, 7.4, 6.9)"), "the widget's companion is no longer the map's first breath")
         #expect(WidgetSnapshot.CompanionLook.scarfRed == String(format: "#%06X", WorldCompanionLook.scarfRed))
+    }
+
+    /// The source between the twin markers, or nil.
+    static func twin(in source: String) -> String? {
+        guard let start = source.range(of: "// MARK: - Twin: begin"),
+              let end = source.range(of: "// MARK: - Twin: end"), start.upperBound <= end.lowerBound else { return nil }
+        return String(source[start.lowerBound..<end.upperBound])
     }
 
     /// The hearts and the water row follow Home's status plate: the same step math, at most two gold

@@ -168,8 +168,8 @@ enum WidgetEmotionTimeline {
     }
 }
 
-/// The person's companion look, as the widget draws it: the app's `CompanionAppearance` reduced to
-/// the four values a widget-sized companion can show.
+/// The person's companion look, as the widget draws it: the app's `CompanionAppearance` as tokens and
+/// resolved colours, and the Creation Studio pieces worn, already in their place.
 ///
 /// Byte-identical twin of the app-side `WidgetSnapshot.CompanionLook` (App/Fernlet/WidgetBridge.swift):
 /// the JSON keys are the contract. The two raw strings are the app's FROZEN `CompanionBodyStyle` and
@@ -188,6 +188,29 @@ struct WidgetCompanionLook: Codable, Equatable {
     /// The scarf's colour when the companion wears one, else nil. ADDITIVE (2026-10-24): the pixel
     /// companion draws the scarf as the map's does, so a file an older app wrote simply has none.
     var scarfColorHex: String? = nil
+    /// The sleep cap's colour when the companion wears it, else nil. ADDITIVE (2026-10-25), like every
+    /// key below: the built-in wardrobe in pixels (phone test W-02).
+    var capColorHex: String? = nil
+    /// The app's FROZEN `CompanionSideItem` token; nil holds nothing.
+    var sideItemRaw: String? = nil
+    /// The side item's colour, or nil for the design's bark.
+    var sideItemColorHex: String? = nil
+    /// The Creation Studio pieces worn, in their place and size on the 24 × 24 item frame (W-07).
+    var items: [ItemArt]? = nil
+
+    /// One worn piece: its top-left cell in the companion's body coordinates, its size, its palette
+    /// (`#RRGGBB`) and its row-major palette indices (−1 clear). Byte-identical twin of the app's
+    /// `WidgetSnapshot.CompanionLook.ItemArt`; ``WidgetPixelLook/item(_:)`` drops a malformed one.
+    struct ItemArt: Codable, Equatable {
+        var x: Int
+        var y: Int
+        var width: Int
+        var height: Int
+        var palette: [String]
+        var pixels: [Int]
+        /// Whether it sits on the head (a hat), so the sprout and the flower step aside.
+        var coversHead: Bool
+    }
 
     /// The plain companion: a round body in the state's colour with a fern sprout — the app's
     /// `CompanionAppearance.standard`, used before the app has published a look.

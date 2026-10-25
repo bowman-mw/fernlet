@@ -24,6 +24,9 @@ struct ZoomablePixelCanvas: UIViewRepresentable {
     let cols: Int
     let rows: Int
     let palette: [String]
+    /// The companion faintly under the canvas (W-07, `comp-studio-hat`): one colour per cell, row by
+    /// row, or nil; drawn at ``StudioCanvasImage/ghostOpacity`` wherever the drawing leaves a cell clear.
+    var ghost: [UInt32?] = []
     /// Called once at the start of each paint stroke (a drag or a tap), so the editor can snapshot for undo.
     /// It is also where the editor's one stroke tick lives (report C6).
     var onStrokeBegan: () -> Void
@@ -48,7 +51,8 @@ struct ZoomablePixelCanvas: UIViewRepresentable {
         uiView.gridCols = cols
         uiView.gridRows = rows
         let texture = ItemGridTexture(cols: cols, rows: rows, palette: palette, pixels: pixels)
-        uiView.content.image = ItemTextureRenderer.image(for: texture).map { UIImage(cgImage: $0) }
+        uiView.content.image = StudioCanvasImage.image(for: texture, ghost: ghost).map { UIImage(cgImage: $0) }
+        uiView.lines.setGrid(cols: cols, rows: rows)
         // A grid resize (slot change) invalidates any current zoom/scroll; snap back so the fresh grid
         // fills the frame.
         if uiView.gridColsRowsChanged {
@@ -240,6 +244,8 @@ struct ZoomablePixelCanvas: UIViewRepresentable {
 /// snap the zoom back to 1× for the fresh grid.
 final class ZoomScrollView: UIScrollView {
     let content = UIImageView()
+    /// The squares' faint lines, over the drawing and zooming with it (`comp-studio-hat`).
+    let lines = PixelGridLinesView()
     var gridCols = 0 { didSet { if gridCols != oldValue { gridColsRowsChanged = true } } }
     var gridRows = 0 { didSet { if gridRows != oldValue { gridColsRowsChanged = true } } }
     var gridColsRowsChanged = false
@@ -265,6 +271,9 @@ final class ZoomScrollView: UIScrollView {
         // Nearest-neighbour magnification keeps painted blocks crisp at every zoom level.
         content.layer.magnificationFilter = .nearest
         addSubview(content)
+        lines.isUserInteractionEnabled = false
+        lines.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        content.addSubview(lines)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -277,5 +286,84 @@ final class ZoomScrollView: UIScrollView {
             content.frame = bounds
             contentSize = bounds.size
         }
+        lines.frame = content.bounds
+    }
+}
+
+/// The Creation Studio canvas's squares as faint lines (`comp-studio-hat`: ink at 18 % on paper, cream
+/// at 18 % in dark mode), one per column and row edge. Drawn over the drawing so a square reads as
+/// one pixel on the companion; it takes no touches.
+final class PixelGridLinesView: UIView {
+    private var cols = 0
+    private var rows = 0
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isOpaque = false
+        backgroundColor = .clear
+        contentMode = .redraw
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    /// The grid to draw; redraws only when it changes.
+    func setGrid(cols: Int, rows: Int) {
+        guard cols != self.cols || rows != self.rows else { return }
+        self.cols = cols
+        self.rows = rows
+        setNeedsDisplay()
+    }
+
+    override func draw(_ rect: CGRect) {
+        guard cols > 0, rows > 0, let context = UIGraphicsGetCurrentContext() else { return }
+        let ink = UIColor { trait in
+            trait.userInterfaceStyle == .dark
+                ? UIColor(red: 1, green: 241 / 255, blue: 207 / 255, alpha: 0.18)
+                : UIColor(red: 74 / 255, green: 46 / 255, blue: 28 / 255, alpha: 0.18)
+        }
+        context.setFillColor(ink.resolvedColor(with: traitCollection).cgColor)
+        let line = 1 / max(1, traitCollection.displayScale)
+        // R2: bounded by the canvas's own columns and rows (at most 18 and 13).
+        for column in 1..<cols {
+            context.fill(CGRect(x: bounds.width * CGFloat(column) / CGFloat(cols) - line / 2, y: 0, width: line, height: bounds.height))
+        }
+        for row in 1..<rows {
+            context.fill(CGRect(x: 0, y: bounds.height * CGFloat(row) / CGFloat(rows) - line / 2, width: bounds.width, height: line))
+        }
+    }
+}
+
+/// The Studio canvas's picture: the drawing over the companion's faint shape, one image pixel per
+/// cell (shown nearest-neighbour by ``ZoomScrollView``).
+enum StudioCanvasImage {
+    /// How strongly the companion shows under the canvas (the design's 28 %).
+    static let ghostOpacity = 0.28
+
+    /// The drawing's colours where painted, the ghost's at ``ghostOpacity`` where clear, else clear.
+    /// Nil for a malformed texture, as ``ItemTextureRenderer`` answers.
+    static func image(for texture: ItemGridTexture, ghost: [UInt32?]) -> CGImage? {
+        let width = texture.cols, height = texture.rows
+        guard width > 0, height > 0, texture.pixels.count == width * height,
+              width <= ItemTextureRenderer.maxRenderSide, height <= ItemTextureRenderer.maxRenderSide else { return nil }
+        var bytes = [UInt8](repeating: 0, count: width * height * 4)
+        for index in 0..<(width * height) {
+            let paint = texture.pixels[index]
+            if paint >= 0, paint < texture.palette.count, let rgb = ItemTextureRenderer.rgb(texture.palette[paint]) {
+                bytes.replaceSubrange((index * 4)..<(index * 4 + 4), with: [rgb.0, rgb.1, rgb.2, 255])
+            } else if index < ghost.count, let hex = ghost[index] {
+                bytes.replaceSubrange((index * 4)..<(index * 4 + 4), with: premultiplied(hex))
+            }
+        }
+        guard let provider = CGDataProvider(data: Data(bytes) as CFData) else { return nil }
+        return CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: width * 4,
+                       space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                       provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)
+    }
+
+    /// A ghost cell's bytes, premultiplied at ``ghostOpacity``.
+    private static func premultiplied(_ hex: UInt32) -> [UInt8] {
+        let alpha = ghostOpacity
+        func channel(_ shift: UInt32) -> UInt8 { UInt8((Double((hex >> shift) & 0xFF) * alpha).rounded()) }
+        return [channel(16), channel(8), channel(0), UInt8((255 * alpha).rounded())]
     }
 }

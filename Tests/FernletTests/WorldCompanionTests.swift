@@ -9,12 +9,13 @@ import AppServices
 @MainActor
 struct WorldCompanionTests {
 
-    /// Each band draws in its own colour, with the design's mouth, and stays inside the 20 × 22 grid.
+    /// Each band draws in its own colour, with the design's mouth, in the 24 × 24 item frame round the
+    /// 20 × 22 body (W-07).
     @Test func eachBandDrawsItsFaceInItsColour() {
         for state in [CompanionState.thriving, .okay, .tired, .resting, .sick] {
             let look = WorldCompanionLook(body: WorldCompanionLook.stateHex(state))
             let grid = WorldCompanionPainter.paint(state: state, look: look, pose: WorldCompanionPose())
-            #expect(grid.cells.count == WorldCompanionGrid.width * WorldCompanionGrid.height)
+            #expect(grid.cells.count == WorldCompanionGrid.frameWidth * WorldCompanionGrid.frameHeight)
             #expect(grid.cells.contains(WorldCompanionLook.stateHex(state)), "\(state) lost its body colour")
             #expect(grid.cells.contains(WorldCompanionPainter.ink), "\(state) has no face")
         }
@@ -62,19 +63,21 @@ struct WorldCompanionTests {
         #expect(rest != settled)
     }
 
-    /// Only the wardrobe with approved pixel art is drawn: the sprout, the glasses and the scarf. The
-    /// flower and the sleep cap leave the head bare rather than drawing something unapproved.
-    @Test func theLookDrawsOnlyTheApprovedWardrobe() {
+    /// The whole built-in wardrobe is drawn since its pixel art was approved (phone test W-02,
+    /// 2026-10-25): the sprout, the flower, the glasses, the scarf and the sleep cap (which share the
+    /// clothing slot). `WorldCompanionWardrobeTests` diffs every piece against the reference painter.
+    @Test func theLookDrawsTheWholeBuiltInWardrobe() {
         var appearance = CompanionAppearance()
         #expect(WorldCompanionLook(appearance: appearance, state: .okay, asleep: false).topper == .sprout)
         appearance.accessory = .glasses
         #expect(WorldCompanionLook(appearance: appearance, state: .okay, asleep: false).topper == .glasses)
         appearance.accessory = .flower
         appearance.clothing = .sleepCap
-        let bare = WorldCompanionLook(appearance: appearance, state: .okay, asleep: false)
-        #expect(bare.topper == .none && bare.scarf == nil)
+        let capped = WorldCompanionLook(appearance: appearance, state: .okay, asleep: false)
+        #expect(capped.topper == .flower && capped.cap != nil && capped.scarf == nil)
         appearance.clothing = .scarf
-        #expect(WorldCompanionLook(appearance: appearance, state: .okay, asleep: false).scarf != nil)
+        let scarfed = WorldCompanionLook(appearance: appearance, state: .okay, asleep: false)
+        #expect(scarfed.scarf != nil && scarfed.cap == nil)
     }
 
     /// The body follows the band by default, wears the night colour asleep, and keeps a fixed colour.

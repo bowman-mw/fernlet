@@ -31,17 +31,19 @@ struct WorldCompanionCloseUp: View {
     @Environment(\.fernletTermOfAddress) private var termOfAddress
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
-            let emotion = emotion(at: context.date)
+            let now = now(at: context.date)
+            let emotion = now.emotion
             ZStack {
                 WorldCloseUpVeil()
                 VStack(spacing: 0) {
                     WorldCloseUpHeader(name: name, status: statusLine(emotion), onClose: onClose)
                     Spacer(minLength: 12)
                     WorldCloseUpBubble(text: reaction.line ?? store.companionAmbientThought(addressing: termOfAddress))
-                    stage(emotion: emotion, date: context.date)
+                    stage(now: now, date: context.date)
                     Spacer(minLength: 12)
                     WorldCloseUpFooter(status: WorldStatus.current(store: store, date: context.date), onCustomize: onCustomize)
                 }
@@ -55,18 +57,16 @@ struct WorldCompanionCloseUp: View {
         .accessibilityAction(.escape) { onClose() }
     }
 
-    /// The companion on its patch of grass, with the pet's hearts over it.
-    private func stage(emotion: CompanionEmotion?, date: Date) -> some View {
-        let state = store.liveCompanionState
-        let asleep = emotion?.hidesTheDay == true
-        let look = WorldCompanionLook(appearance: store.settings.companionAppearance, state: state, asleep: asleep)
-        let pose = WorldCompanionPose(settled: reaction.blushes, asleep: asleep)
+    /// The companion on its patch of grass, with the pet's hearts over it: the map's picture of it
+    /// (W-06a), the same pixels at ten points each in the 240 × 240 pt item frame (W-07).
+    private func stage(now: WorldCompanionNow, date: Date) -> some View {
+        var pose = now.pose
+        pose.settled = reaction.blushes
         return ZStack(alignment: .bottom) {
             WorldCloseUpGround()
-            WorldCompanionCanvas(grid: WorldCompanionPainter.paint(state: state, look: look, pose: pose),
+            WorldCompanionCanvas(grid: WorldCompanionPainter.paint(state: now.state, look: now.look, pose: pose,
+                                                                   increasedContrast: contrast == .increased),
                                  scale: WorldCloseUpMotion.pixelScale)
-                .frame(width: WorldCompanionSprite.size(scale: WorldCloseUpMotion.pixelScale).width,
-                       height: WorldCompanionSprite.size(scale: WorldCloseUpMotion.pixelScale).height)
                 .scaleEffect(x: reaction.squishes ? 1.08 : 1, y: reaction.squishes ? 0.9 : 1, anchor: .bottom)
                 .offset(y: WorldCloseUpMotion.bobLift(at: date, reduceMotion: reduceMotion) + hopLift - 26)
                 .overlay(alignment: .top) {
@@ -82,7 +82,7 @@ struct WorldCompanionCloseUp: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: name))
-        .accessibilityValue(Text(verbatim: spokenValue(emotion: emotion, date: date)))
+        .accessibilityValue(Text(verbatim: spokenValue(emotion: now.emotion, date: date)))
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { pet() }
         .accessibilityAction(named: Text("Customize"), onCustomize)
@@ -107,11 +107,9 @@ struct WorldCompanionCloseUp: View {
         return "\(status). \(WorldStatusPlate.spokenCare(WorldStatus.current(store: store, date: date)))"
     }
 
-    /// The companion's feeling at `date`, from the same inputs the map companion reads.
-    private func emotion(at date: Date) -> CompanionEmotion? {
-        store.companionEmotion(at: date, bodySignal: bodySignal, playfulUntil: playfulUntil,
-                               appetiteCuesEnabled: CompanionEmotionPreferences.appetiteCuesEnabled(),
-                               sleepWindow: CompanionEmotionPreferences.sleepWindow())
+    /// The companion at `date` as the map draws it (W-06a), with the close-up's own pets.
+    private func now(at date: Date) -> WorldCompanionNow {
+        WorldCompanionLook.current(store: store, at: date, night: .map, bodySignal: bodySignal, playfulUntil: playfulUntil)
     }
 
     /// Fades in, and hops once on a thriving day.

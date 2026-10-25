@@ -15,11 +15,10 @@ struct TodayCompanionCard: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
-            let state = store.liveCompanionState
-            let asleep = WorldMapCompanion.isAsleep(store: store, at: context.date)
-            let sprite = WorldCompanionSprite(state: state, look: WorldCompanionLook(appearance: store.settings.companionAppearance,
-                                                                                     state: state, asleep: asleep),
-                                              asleep: asleep, isActive: isActive)
+            // The map's picture of it (W-06a): the same live state, look, pieces and night.
+            let now = WorldCompanionLook.current(store: store, at: context.date, night: .map)
+            let state = now.state
+            let sprite = WorldCompanionSprite(now: now, isActive: isActive)
             FernletCard {
                 // At accessibility sizes the row stacks, so the name and Customize never break mid-word.
                 if dynamicTypeSize.isAccessibilitySize {

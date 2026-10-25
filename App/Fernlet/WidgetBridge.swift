@@ -64,6 +64,35 @@ struct WidgetSnapshot: Codable, Equatable {
         /// The scarf's colour when the companion wears one, else nil — the pixel companion draws it as
         /// the map's does. ADDITIVE (2026-10-24) and optional.
         var scarfColorHex: String? = nil
+        /// The sleep cap's colour when the companion wears it, else nil (phone test W-02). ADDITIVE
+        /// (2026-10-25) and optional, like every key below.
+        var capColorHex: String? = nil
+        /// The side item's FROZEN `CompanionSideItem` token; nil holds nothing.
+        var sideItemRaw: String? = nil
+        /// The side item's resolved colour, or nil for the design's bark.
+        var sideItemColorHex: String? = nil
+        /// The Creation Studio pieces worn, already in their place and size on the 24 × 24 item frame
+        /// (W-07): never in a decoy session.
+        var items: [ItemArt]? = nil
+
+        /// One worn piece, as the painter draws it: its top-left cell in the companion's body
+        /// coordinates, its size, its palette (`#RRGGBB`) and its row-major palette indices (−1 clear).
+        /// A drawing the person made for their companion, nothing more. Byte-identical to the widget's
+        /// `WidgetCompanionLook.ItemArt`.
+        struct ItemArt: Codable, Equatable {
+            var x: Int
+            var y: Int
+            var width: Int
+            var height: Int
+            var palette: [String]
+            var pixels: [Int]
+            /// Whether it sits on the head (a hat), so the sprout and the flower step aside.
+            var coversHead: Bool
+
+            /// The most colours a published piece keeps (the Studio's palette has sixteen); the widget
+            /// reads no more than this either.
+            static let maxPalette = 64
+        }
     }
 
     /// One stamp from the device-local stamp book, as the stamp widget shows it (World build,

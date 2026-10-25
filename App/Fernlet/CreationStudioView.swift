@@ -83,12 +83,15 @@ struct CreationStudioView: View {
     @State private var viewportHeight: CGFloat = 0
     @State private var headerHeight: CGFloat = 0
     @State private var toolsHeight: CGFloat = 0
+    /// The measured held-item note and previews under the canvas (W-07).
+    @State private var noteHeight: CGFloat = 0
+    @State private var previewsHeight: CGFloat = 0
     /// Returned to the top whenever the layout comes to fit (a text-size change back down, say): with
     /// scrolling switched off, an offset left over from the scrolling layout could not be undone.
     @State private var scrollPosition = ScrollPosition(edge: .top)
 
-    /// Bounded so a long session can't grow without limit. A body grid is 48×40 Ints ≈ 15 KB, so 32
-    /// snapshots is ~0.5 MB worst case — irrelevant next to the images this app already holds.
+    /// Bounded so a long session can't grow without limit. An outfit canvas is 18×13 Ints ≈ 2 KB, so
+    /// 32 snapshots is ~60 KB worst case — irrelevant next to the images this app already holds.
     private static let maxUndoSteps = 32
 
     private let palette = ItemDesignPalette.hexes
@@ -99,9 +102,9 @@ struct CreationStudioView: View {
     /// around it, so page padding is the one thing directly costing drawing resolution — and it was
     /// being paid twice (here and inside `editorCanvas`).
     private static let pagePadding: CGFloat = 12
-    /// The live preview, beside the slot chips. It was a 140pt row of its own above them until the
-    /// screen stopped scrolling (2026-09-29); at 88pt it shares the chips' two rows.
-    private static let previewSize: CGFloat = 88
+    /// The live pixel preview beside the slot chips: three points a pixel, the map's own size, so the
+    /// 24 × 24 item frame is 72 pt and shares the chips' two rows (`comp-studio-hat`).
+    private static let previewScale: CGFloat = 3
 
     init(store: FernletStore,
          editingItem: CustomizationItem? = nil,
@@ -149,6 +152,7 @@ struct CreationStudioView: View {
                 editorCanvas
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .frame(height: layout.canvasHeight)
+                studioFooter(showsPreviews: layout.showsPreviews)
             }
             .padding(Self.pagePadding)
         }
@@ -261,36 +265,47 @@ struct CreationStudioView: View {
     /// The fit-or-scroll decision for the current measurements (see ``CreationStudioLayout``).
     private var studioLayout: CreationStudioLayout {
         CreationStudioLayout(viewportHeight: viewportHeight, headerHeight: headerHeight,
-                             toolsHeight: toolsHeight, spacing: Self.sectionSpacing,
-                             padding: Self.pagePadding)
+                             toolsHeight: toolsHeight, footerHeight: slot == .heldItem ? noteHeight : 0,
+                             previewsHeight: previewsHeight, spacing: Self.sectionSpacing, padding: Self.pagePadding)
     }
 
     // MARK: - Sections
 
-    /// The live preview beside the slot chips — one row rather than two, which is most of the
-    /// height the canvas needed to fit without scrolling. The edit path has no chips, so its
-    /// preview sits centred on its own.
+    /// The live pixel preview beside the slot chips — one row rather than two, which is most of the
+    /// height the canvas needed to fit without scrolling — then the kind's size in squares
+    /// (`comp-studio-hat`). The edit path has no chips, so its preview sits on its own.
     private var studioHeader: some View {
-        HStack(alignment: .center, spacing: 12) {
-            preview
-            if editingItem == nil {
-                slotPicker
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 12) {
+                // Decorative: a live render of the item being designed, on the pixel companion at the
+                // map's scale (W-06b). The chips and fields are the semantics.
+                StudioPixelPreview(store: store, items: previewEquipped, scale: Self.previewScale)
+                if editingItem == nil {
+                    slotPicker
+                }
             }
+            .frame(maxWidth: .infinity, alignment: editingItem == nil ? .leading : .center)
+            StudioSizeLine(slot: slot, name: companionName)
         }
-        .frame(maxWidth: .infinity)
     }
 
-    private var preview: some View {
-        CompanionView(
-            state: store.companionState,
-            appearance: store.settings.companionAppearance,
-            size: Self.previewSize,
-            equippedItems: previewEquipped
-        )
-        .frame(width: Self.previewSize, height: Self.previewSize)
-        // Decorative: a live render of the item being designed. The chips and fields below are
-        // the semantics; the drawing has nothing to say that they do not.
-        .accessibilityHidden(true)
+    /// Under the canvas (W-07): the held item's note, and the up-close and on-the-map previews where
+    /// they fit without turning scrolling on (``CreationStudioLayout/showsPreviews``).
+    @ViewBuilder
+    private func studioFooter(showsPreviews: Bool) -> some View {
+        if slot == .heldItem {
+            StudioHeldNote(name: companionName)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { noteHeight = $0 }
+        }
+        if showsPreviews {
+            StudioPreviewsRow(store: store, items: previewEquipped)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { previewsHeight = $0 }
+        }
+    }
+
+    /// The companion's own name, or Fernlet, for the Studio's words.
+    private var companionName: String {
+        CustomizeNightCopy.companionName(store)
     }
 
     /// The slot picker as Fernlet chips (3e), replacing the system segmented control — the one
@@ -380,16 +395,18 @@ struct CreationStudioView: View {
         // pixel/undo/symmetry logic stays here; the canvas just reports the touched cell + stroke start.
         ZoomablePixelCanvas(
             pixels: $pixels,
-            cols: slot.gridCols,
-            rows: slot.gridRows,
+            cols: Self.canvasSize(for: slot).cols,
+            rows: Self.canvasSize(for: slot).rows,
             palette: palette,
+            // The companion faintly under the canvas, so a hat sits on the head (`comp-studio-hat`).
+            ghost: StudioGhost.cells(store: store, slot: slot),
             onStrokeBegan: { beginStroke() },
             onStrokeCancelled: { cancelStroke() },
             onPaintCell: { x, y in paintCell(x: x, y: y) }
         )
         // Fitted into whatever slot `body` gives it — the full width, or the height the layout
         // left, whichever binds first — so the card hugs the grid rather than the slot.
-        .aspectRatio(CGFloat(slot.gridCols) / CGFloat(slot.gridRows), contentMode: .fit)
+        .aspectRatio(CGFloat(Self.canvasSize(for: slot).cols) / CGFloat(Self.canvasSize(for: slot).rows), contentMode: .fit)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(WorldPalette.paperLight)
@@ -415,11 +432,11 @@ struct CreationStudioView: View {
                     .accessibilityHidden(true)
             }
         }
-        // 8pt, not 16 — see the outer padding note. Together these give the grid back ~32pt of width,
-        // which at 48 columns is real cell size rather than decoration.
         .background {
             RoundedRectangle(cornerRadius: 12, style: .continuous).fill(WorldPalette.ink.opacity(0.22)).offset(y: 3)
         }
+        // "Drawing canvas, 18 by 11" (`comp-studio-hat`).
+        .accessibilityLabel(Text(verbatim: Self.canvasSpokenName(for: slot)))
         .accessibilityIdentifier("studio.canvas")
     }
 
@@ -595,10 +612,11 @@ struct CreationStudioView: View {
     private var confirmationScreen: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                // The previews (design `b2-studio-save`), wearing the drawing. One element with a real
-                // label: this step has no header above it, so VoiceOver hears the drawing survived.
-                CustomizePreviewCard(store: store, petCount: 0, previewItems: previewEquipped,
-                                     spokenName: Text("Preview of your item on your companion"))
+                // The previews (design `b2-studio-save`): the pixel companion awake, wearing the
+                // drawing (W-06b). One element with a real label: this step has no header above it, so
+                // VoiceOver hears the drawing survived.
+                CustomizePreviewCard(store: store, previewItems: previewEquipped,
+                                     spokenName: Text("Preview of your item on your companion"), night: .awake)
                 .accessibilityIdentifier("studio.confirm.preview")
 
                 SheetField("Name") {
@@ -615,6 +633,9 @@ struct CreationStudioView: View {
                 if canSell {
                     shopSection
                 }
+
+                // `comp-studio-save`: the drawing is already its size on the companion.
+                StudioSaveNote(name: companionName)
             }
             .padding(20)
             .padding(.bottom, 24)
@@ -696,7 +717,7 @@ struct CreationStudioView: View {
     // MARK: - Behavior
 
     private var canSave: Bool {
-        !ItemGridTexture(cols: slot.gridCols, rows: slot.gridRows, palette: palette, pixels: pixels).isBlank
+        !ItemGridTexture(cols: Self.canvasSize(for: slot).cols, rows: Self.canvasSize(for: slot).rows, palette: palette, pixels: pixels).isBlank
     }
 
     /// Only your own designs can be sold. New items are always yours; a friend-received item never is.
@@ -721,7 +742,7 @@ struct CreationStudioView: View {
             id: editingItem?.id ?? draftID(for: slot),
             name: name,
             slot: slot,
-            texture: ItemGridTexture(cols: slot.gridCols, rows: slot.gridRows, palette: palette, pixels: pixels),
+            texture: ItemGridTexture(cols: Self.canvasSize(for: slot).cols, rows: Self.canvasSize(for: slot).rows, palette: palette, pixels: pixels),
             designer: ItemDesigner(id: store.localDesignerID)
         )
     }
@@ -731,9 +752,9 @@ struct CreationStudioView: View {
     private func paintCell(x: Int, y: Int) {
         setCell(x: x, y: y)
         if isSymmetric {
-            // Every grid is even-width (32/36/48/28), so the axis falls cleanly between the two centre
+            // Every canvas is even-width (18/16/18/10), so the axis falls cleanly between the two centre
             // columns and there is no self-mirroring centre column to special-case.
-            setCell(x: slot.gridCols - 1 - x, y: y)
+            setCell(x: Self.canvasSize(for: slot).cols - 1 - x, y: y)
         }
     }
 
@@ -741,8 +762,8 @@ struct CreationStudioView: View {
     /// to early-return out of `paint` itself, which would have silently skipped the mirrored cell
     /// whenever the touched cell happened to already match the selected colour.
     private func setCell(x: Int, y: Int) {
-        guard x >= 0, x < slot.gridCols, y >= 0, y < slot.gridRows else { return }
-        let index = y * slot.gridCols + x
+        guard x >= 0, x < Self.canvasSize(for: slot).cols, y >= 0, y < Self.canvasSize(for: slot).rows else { return }
+        let index = y * Self.canvasSize(for: slot).cols + x
         guard index >= 0, index < pixels.count, pixels[index] != selectedColor else { return }
         pixels[index] = selectedColor
     }
@@ -829,7 +850,7 @@ struct CreationStudioView: View {
         // about — including on the refusal branches that deliberately keep the user on this screen.
         didSave = true
         savedPixels = pixels
-        let texture = ItemGridTexture(cols: slot.gridCols, rows: slot.gridRows, palette: palette, pixels: pixels)
+        let texture = ItemGridTexture(cols: Self.canvasSize(for: slot).cols, rows: Self.canvasSize(for: slot).rows, palette: palette, pixels: pixels)
         // R5: the UNLISTED save also persists this name (the shop gate's moderation only runs when
         // listing), and it later renders in the Wardrobe and on the companion — so apply the same
         // charset/length sanitizer here, and fall back to the slot label when nothing survives.
@@ -889,7 +910,7 @@ struct CreationStudioView: View {
     // MARK: - Helpers
 
     private static func blankPixels(for slot: ItemSlot) -> [Int] {
-        Array(repeating: ItemGridTexture.transparent, count: slot.gridCols * slot.gridRows)
+        Array(repeating: ItemGridTexture.transparent, count: Self.canvasSize(for: slot).cols * Self.canvasSize(for: slot).rows)
     }
 
     /// A minimally-painted canvas (one filled row) used ONLY by the UI-test seed hook, so `canSave` is
@@ -897,23 +918,24 @@ struct CreationStudioView: View {
     /// hard-coded `false` outside DEBUG.
     private static func seededPixels(for slot: ItemSlot) -> [Int] {
         var pixels = blankPixels(for: slot)
-        let row = slot.gridRows / 2
-        for x in 0..<slot.gridCols {
-            pixels[row * slot.gridCols + x] = 0
+        let row = Self.canvasSize(for: slot).rows / 2
+        for x in 0..<Self.canvasSize(for: slot).cols {
+            pixels[row * Self.canvasSize(for: slot).cols + x] = 0
         }
         return pixels
     }
 
-    /// Builds an editor pixel buffer sized exactly to the item's slot grid (`gridCols * gridRows`),
-    /// reprojecting the stored texture cell-by-cell so the buffer always matches what the canvas indexes
-    /// — even if the stored texture's dimensions differ from the current slot grid (a friend-received
-    /// item, or data authored under different grid constants). Palette indices are remapped onto the
-    /// editor palette by exact hex match (unmatched → transparent); a matching palette is a fast copy.
-    /// Internal rather than private so the resample below is reachable from tests — it is the one path
-    /// here that can silently destroy a user's art, and it must not be verified by eye.
+    /// Builds an editor pixel buffer sized exactly to the item's canvas (its box on the companion,
+    /// ``canvasSize(for:)``), holding the art exactly as the companion wears it: a piece drawn at its
+    /// box's size is copied 1:1, and one drawn bigger (made before the Studio went to the companion's
+    /// own scale, or bought from a friend on the old Fernlet) is shrunk to fit and placed as the map
+    /// places it (``WorldItemBox/fit(_:slot:)``). Palette indices are remapped onto the editor palette
+    /// by exact hex match (unmatched → transparent); a matching palette is a fast copy. Saving then
+    /// re-encodes at the canvas size, so the first edit of an old piece keeps what the person saw.
+    /// Internal rather than private so the path is reachable from tests — it is the one path here that
+    /// can silently destroy a user's art, and it must not be verified by eye.
     static func editorPixels(for item: CustomizationItem, palette: [String]) -> [Int] {
-        let cols = item.slot.gridCols
-        let rows = item.slot.gridRows
+        let (cols, rows) = canvasSize(for: item.slot)
         var buffer = Array(repeating: ItemGridTexture.transparent, count: cols * rows)
         let texture = item.texture
         guard texture.cols > 0, texture.rows > 0, texture.pixels.count == texture.cols * texture.rows else {
@@ -924,23 +946,32 @@ struct CreationStudioView: View {
         if !samePalette {
             for (index, hex) in palette.enumerated() { lookup[hex.uppercased()] = index }
         }
-        // Nearest-neighbour RESAMPLE across the whole canvas, rather than the 1:1 top-left copy this
-        // used to do. That copy was harmless only while every texture already matched the current slot
-        // dimensions: any texture drawn at a different budget (a smaller one from an older build, or a
-        // larger one from a newer build via the P2P shop) opened with its art crammed into one corner —
-        // and `save()` re-encodes at the current slot dims, making the damage permanent on first edit.
-        //
-        // Sampling by ratio is exact for the 2× case (each source cell fills a clean 2×2 block, so a
-        // round-trip is lossless) and merely approximate for arbitrary ratios, which beats corrupting.
-        for y in 0..<rows {
-            let sourceY = texture.rows == rows ? y : min(texture.rows - 1, y * texture.rows / rows)
-            for x in 0..<cols {
-                let sourceX = texture.cols == cols ? x : min(texture.cols - 1, x * texture.cols / cols)
-                let source = texture.pixels[sourceY * texture.cols + sourceX]
-                guard source >= 0, source < texture.palette.count else { continue }
-                buffer[y * cols + x] = samePalette ? source : (lookup[texture.palette[source].uppercased()] ?? ItemGridTexture.transparent)
+        let box = WorldItemBox.box(for: item.slot)
+        let fitted = WorldItemBox.fit(texture, slot: item.slot)
+        let left = fitted.x - box.x, top = fitted.y - box.y
+        for y in 0..<fitted.height {
+            for x in 0..<fitted.width {
+                let source = fitted.indices[y * fitted.width + x]
+                let (cx, cy) = (left + x, top + y)
+                guard source >= 0, source < texture.palette.count, cx >= 0, cx < cols, cy >= 0, cy < rows else { continue }
+                buffer[cy * cols + cx] = samePalette ? source : (lookup[texture.palette[source].uppercased()] ?? ItemGridTexture.transparent)
             }
         }
         return buffer
+    }
+
+    /// A slot's canvas: its box on the companion, one square per sprite pixel (W-07, draft 2) — Hat
+    /// 18 × 11, Face 16 × 8, Outfit 18 × 13, Held item 10 × 12. Every width is even, so Mirror's axis
+    /// falls between two columns. (`ItemSlot.gridCols`/`gridRows` stay the shop's acceptance bounds.)
+    static func canvasSize(for slot: ItemSlot) -> (cols: Int, rows: Int) {
+        let box = WorldItemBox.box(for: slot)
+        return (box.width, box.height)
+    }
+
+    /// What VoiceOver calls the canvas: "Drawing canvas, 18 by 11".
+    static func canvasSpokenName(for slot: ItemSlot) -> String {
+        let size = canvasSize(for: slot)
+        return String(localized: "worldStudio.canvas", defaultValue: "Drawing canvas, \(size.cols) by \(size.rows)",
+                      comment: "Creation Studio, VoiceOver: the drawing canvas and its size in squares, columns by rows. Spanish: 'Lienzo, 18 por 11'")
     }
 }
