@@ -78,7 +78,7 @@
 	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
 	<dict>
 		<key>WorldWalk</key>
-		<string>Precise location draws the line of this walk. The line stays on this iPhone.</string>
+		<string>Precise location draws the line of this walk or run. The line stays on this iPhone.</string>
 	</dict>
 	<key>UIBackgroundModes</key>
 	<array>

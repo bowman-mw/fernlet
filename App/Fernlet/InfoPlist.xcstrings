@@ -192,13 +192,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Precise location draws the line of this walk. The line stays on this iPhone."
+            "value" : "Precise location draws the line of this walk or run. The line stays on this iPhone."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "La ubicación precisa dibuja la línea de esta caminata. La línea se queda en este iPhone."
+            "value" : "La ubicación precisa dibuja la línea de esta caminata o carrera. La línea se queda en este iPhone."
           }
         }
       }

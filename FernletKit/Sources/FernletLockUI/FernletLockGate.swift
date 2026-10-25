@@ -74,6 +74,20 @@ enum GateCopy {
                comment: "Message in the reset confirmation dialog. 'Permanently deleted' is literal: there is no recovery on this iPhone. Only what Fernlet copied to Apple Health (if anything) stays there, and an encrypted Sealed backup in iCloud (if the user turned it on) can be restored from Privacy & Data after the reset. The journal and intimacy backups restore only into an empty store, so the sentence tells the user to restore before adding new entries.")
     }
 
+    /// The reset confirmation's own line on Where you've been (World build round 5; the owner allowed a
+    /// reset to clear it only if this screen says so plainly). Its 30-day log is sealed under the hub key
+    /// the reset replaces, so it starts again empty; it is a rolling record no backup restores.
+    static var resetConfirmWhereYouveBeen: String {
+        String(localized: "lock.reset.confirm.whereYouveBeen", defaultValue: "This also deletes Where you've been.",
+               bundle: .module,
+               comment: "Last line of the reset app lock confirmation. 'Where you've been' is the name of the Places page in Private (the 30-day timeline of places), so match how that page's title is translated. It is deleted for good: no backup restores it.")
+    }
+
+    /// The whole confirmation message: what the reset deletes, then Where you've been on its own line.
+    static var resetConfirmFullMessage: String {
+        resetConfirmMessage + "\n\n" + resetConfirmWhereYouveBeen
+    }
+
     /// Title of the nothing-silent alert after a reset that could not finish cleanly.
     static var resetRebuildFailedTitle: String {
         String(localized: "lock.reset.rebuildFailed.title", defaultValue: "App lock reset", bundle: .module,
@@ -233,7 +247,7 @@ struct FernletLockGateModifier: ViewModifier {
             Button(FernletLockCopy.Action.resetAppLock, role: .destructive) { performReset() }
             Button(FernletLockCopy.Action.cancel, role: .cancel) { }
         } message: {
-            Text(GateCopy.resetConfirmMessage)
+            Text(GateCopy.resetConfirmFullMessage)
         }
         .alert(GateCopy.resetRebuildFailedTitle, isPresented: $showResetRebuildFailure) {
             Button(FernletLockCopy.Action.ok, role: .cancel) { }

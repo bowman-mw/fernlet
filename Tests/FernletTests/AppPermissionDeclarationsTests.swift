@@ -23,10 +23,11 @@ struct AppPermissionDeclarationsTests {
         "NSLocationAlwaysAndWhenInUseUsageDescription": "With background mapping on, Fernlet uncovers the map from the places you visit during the day, using little battery. It stays on this iPhone."
     ]
 
-    /// The walk's temporary full-accuracy purpose (owner-approved 2026-10-24), under the frozen purpose
-    /// key `WorldLocationSource.walkAccuracyPurposeKey` asks with.
+    /// The walk's temporary full-accuracy purpose (owner-approved 2026-10-24; "or run" added with the
+    /// owner's round-5 answer, since runs record their line too), under the frozen purpose key
+    /// `WorldLocationSource.walkAccuracyPurposeKey` asks with.
     private static let walkPurposeKey = "WorldWalk"
-    private static let walkPurposeText = "Precise location draws the line of this walk. The line stays on this iPhone."
+    private static let walkPurposeText = "Precise location draws the line of this walk or run. The line stays on this iPhone."
 
     /// Photo-library READ APIs. The app reads the library only through the system pickers
     /// (`PhotosPicker`, `UIImagePickerController`), which need no permission, so it declares no

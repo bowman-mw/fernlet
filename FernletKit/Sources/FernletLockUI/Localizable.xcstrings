@@ -757,6 +757,24 @@
         }
       }
     },
+    "lock.reset.confirm.whereYouveBeen" : {
+      "comment" : "Last line of the reset app lock confirmation. 'Where you've been' is the name of the Places page in Private (the 30-day timeline of places), so match how that page's title is translated. It is deleted for good: no backup restores it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This also deletes Where you've been."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Esto también elimina Dónde has estado."
+          }
+        }
+      }
+    },
     "lock.reset.rebuildFailed.message" : {
       "comment" : "Message of the alert shown when the reset destroyed the passcode and the notes but could not recreate the empty sealed store. Both halves are true and neither may be dropped: the data really is gone, and the app needs relaunching. 'Fernlet' is the app's name.",
       "extractionState" : "extracted_with_value",

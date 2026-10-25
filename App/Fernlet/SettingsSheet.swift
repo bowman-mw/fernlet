@@ -2033,13 +2033,7 @@ struct AppLockSettingsView: View {
                 Button("Cancel", role: .cancel) { }
                 Button("Reset app lock", role: .destructive) { resetAppLock() }
             } message: {
-                // The same words as the gate's confirmation (`lock.reset.confirm.message.v2` in
-                // FernletLockUI): the loss is the whole cycle history saved in Fernlet now, not
-                // "notes" beside a Health copy (period-data design 2026-09-30, §10.5), and the Sealed
-                // backup restores afterwards from Privacy & Data's owner-checked "Restore".
-                Text(String(localized: "settings.appLock.reset.message.v2",
-                            defaultValue: "Your journal, cycle history and intimacy entries saved in Fernlet will be permanently deleted. Anything Fernlet copied to Apple Health stays there. If Sealed backup is on, restore it from Privacy & Data afterwards, before you add new entries.",
-                            comment: "Message in the Reset app lock confirmation in Settings. Keep it identical to the lock screen's own reset confirmation. The journal and intimacy backups restore only into an empty store, so the sentence tells the user to restore before adding new entries."))
+                Text(Self.resetMessage)
             }
             .alert("App lock reset", isPresented: $showResetRebuildFailure) {
                 Button("OK", role: .cancel) { dismiss() }
@@ -2057,6 +2051,21 @@ struct AppLockSettingsView: View {
                 Text("Private will open with a tap instead. Your entries stay encrypted on this iPhone and nothing is deleted. \(biometricName(lockService.biometricType)) unlock, your duress code and any recovery device are removed.",
                      comment: "Message of the confirmation before the app passcode is turned off. The placeholder is Face ID or Touch ID (an Apple product name). Nothing is deleted: the entries stay encrypted on this iPhone, and the Private tab opens with a tap afterwards.")
             }
+    }
+
+    /// The Reset app lock confirmation's message: the same words as the gate's confirmation
+    /// (`lock.reset.confirm.message.v2` in FernletLockUI): the loss is the whole cycle history saved in
+    /// Fernlet now, not "notes" beside a Health copy (period-data design 2026-09-30, §10.5), and the Sealed
+    /// backup restores afterwards from Privacy & Data's owner-checked "Restore". Then, on its own line,
+    /// that Where you've been goes too (World build round 5: the owner allowed a reset to clear it only if
+    /// this screen says so plainly; its log is sealed under the hub key the reset replaces).
+    private static var resetMessage: String {
+        String(localized: "settings.appLock.reset.message.v2",
+               defaultValue: "Your journal, cycle history and intimacy entries saved in Fernlet will be permanently deleted. Anything Fernlet copied to Apple Health stays there. If Sealed backup is on, restore it from Privacy & Data afterwards, before you add new entries.",
+               comment: "Message in the Reset app lock confirmation in Settings. Keep it identical to the lock screen's own reset confirmation. The journal and intimacy backups restore only into an empty store, so the sentence tells the user to restore before adding new entries.")
+            + "\n\n"
+            + String(localized: "settings.appLock.reset.whereYouveBeen", defaultValue: "This also deletes Where you've been.",
+                     comment: "Last line of the Reset app lock confirmation in Settings; keep it identical to the lock screen's. 'Where you've been' is the name of the Places page in Private (the 30-day timeline of places), so match how that page's title is translated.")
     }
 
     /// Destroys the lock and its keys, dismissing only if the sealed store was rebuilt.

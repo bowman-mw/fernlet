@@ -11306,6 +11306,16 @@
         }
       }
     },
+    "For Where you've been, in Private." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Para Dónde has estado, en Privado."
+          }
+        }
+      }
+    },
     "For a recipe made in stages, like a dressing you make first and a salad you put together after." : {
       "localizations" : {
         "es" : {
@@ -20841,6 +20851,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Guardarlo de todos modos"
+          }
+        }
+      }
+    },
+    "Remember places I stop at" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Recordar los lugares donde me detengo"
           }
         }
       }
@@ -45594,6 +45614,24 @@
         }
       }
     },
+    "privatePlaces.unnamedPlace" : {
+      "comment" : "Private, Places: a kept place whose name can't be shown (offline, or Apple Maps has none) and that the person hasn't named; tap renames it",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A place you return to"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un lugar al que vuelves"
+          }
+        }
+      }
+    },
     "privatePlaces.visits" : {
       "comment" : "Private, Places: a place's visit count. Plural on the number (1 visit)",
       "localizations" : {
@@ -46671,6 +46709,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Tu diario, tu historial del ciclo y tus registros de intimidad guardados en Fernlet se eliminarán de forma permanente. Lo que Fernlet haya copiado a Salud se queda ahí. Si la Copia de seguridad sellada está activada, restáurala desde Privacidad y datos después, antes de agregar registros nuevos."
+          }
+        }
+      }
+    },
+    "settings.appLock.reset.whereYouveBeen" : {
+      "comment" : "Last line of the Reset app lock confirmation in Settings; keep it identical to the lock screen's. 'Where you've been' is the name of the Places page in Private (the 30-day timeline of places), so match how that page's title is translated.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This also deletes Where you've been."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Esto también elimina Dónde has estado."
           }
         }
       }
@@ -48782,6 +48838,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Recetas que compartes"
+          }
+        }
+      }
+    },
+    "settings.search.title.rememberPlaces" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Remember places I stop at"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Recordar los lugares donde me detengo"
           }
         }
       }
@@ -53230,7 +53304,7 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "needs_review",
-                  "value" : "Has corrido esta ruta %lld vez"
+                  "value" : "Has corrido esta ruta una vez"
                 }
               },
               "other" : {
