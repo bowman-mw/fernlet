@@ -80,6 +80,19 @@ struct WorldRoundSixFixesTests {
         #expect(PrivateDateTimeButton.merged(day: withSeconds, time: withSeconds, latest: now, calendar: calendar) == (try at(23, 8, 5)))
     }
 
+    /// The date half reads "Fri, Oct 23, 2026", and in Spanish starts lower-case ("vie, 23 oct 2026").
+    @Test func theDateHalfReadsAsDrawn() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "America/Los_Angeles"))
+        let date = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 23, hour: 21, minute: 40)))
+        var english = PrivateDateTimeButton.dayFormat.locale(Locale(identifier: "en_US"))
+        english.timeZone = calendar.timeZone
+        var spanish = PrivateDateTimeButton.dayFormat.locale(Locale(identifier: "es_ES"))
+        spanish.timeZone = calendar.timeZone
+        #expect(date.formatted(english) == "Fri, Oct 23, 2026")
+        #expect(date.formatted(spanish).hasPrefix("vie"), "got \(date.formatted(spanish))")
+    }
+
     /// The sheet's Date and time is the framed two-half button, and its save still sends `eventDate`
     /// to Apple Health.
     @Test func logIntimacyUsesTheTwoHalfButton() throws {

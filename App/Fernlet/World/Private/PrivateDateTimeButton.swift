@@ -28,7 +28,7 @@ struct PrivateDateTimeButton: View {
 
     var body: some View {
         DateTimeHalves(ratio: 1.55) {
-            half(.date) { Text(date, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day().year()) }
+            half(.date) { Text(date, format: Self.dayFormat) }
             half(.time) {
                 HStack(spacing: 8) {
                     WorldSpriteView(sprite: FoodSprites.clock, scale: 2)
@@ -115,6 +115,14 @@ struct PrivateDateTimeButton: View {
         guard isOpen else { return Text(verbatim: value) }
         return Text(verbatim: String(localized: "intimacy.dateTime.open", defaultValue: "\(value), expanded",
                                      comment: "Log intimacy, VoiceOver: a half of the Date and time button while its picker is open: the date or time, then that it is open"))
+    }
+
+    /// "Fri, Oct 23, 2026"; Spanish "vie, 23 oct 2026", lower-case as the language writes it mid-sentence
+    /// (the button's words, not a heading).
+    static var dayFormat: Date.FormatStyle {
+        var style = Date.FormatStyle.dateTime.weekday(.abbreviated).month(.abbreviated).day().year()
+        style.capitalizationContext = .middleOfSentence
+        return style
     }
 
     /// `day`'s calendar day at `time`'s hour and minute (seconds dropped), never later than `latest`.

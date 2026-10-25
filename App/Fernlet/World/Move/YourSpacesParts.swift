@@ -106,14 +106,22 @@ struct YourSpacesNameChip: View {
         HStack(spacing: 8) {
             WorldSpriteView(sprite: WorldSprites.pin, scale: 2)
             // Editable, not a label: the model has always had `name`, and the chip is where it's renamed.
-            TextField("Location", text: $name, prompt: .fieldPrompt("Location"))
-                .font(FernletFramedFont.fieldBold)
-                .foregroundStyle(look?.text ?? WorldPalette.bark)
-                .textInputAutocapitalization(.words)
-                .submitLabel(.done)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: 200, alignment: .leading)
-                .accessibilityIdentifier("workout.location.name")
+            // The chip hugs the name (a hidden copy sizes it, up to 200 pt); a longer name scrolls inside the
+            // field, so the pencil never leaves the screen.
+            YourSpacesCappedWidth(cap: 200) {
+                Text(verbatim: name.isEmpty ? String(localized: "Location") : name)
+                    .font(FernletFramedFont.fieldBold)
+                    .lineLimit(1)
+                    .hidden()
+            }
+                .overlay(alignment: .leading) {
+                    TextField("Location", text: $name, prompt: .fieldPrompt("Location"))
+                        .font(FernletFramedFont.fieldBold)
+                        .foregroundStyle(look?.text ?? WorldPalette.bark)
+                        .textInputAutocapitalization(.words)
+                        .submitLabel(.done)
+                        .accessibilityIdentifier("workout.location.name")
+                }
             (look?.ink ?? WorldPalette.ink).frame(width: 2, height: 22)
             WorldSpriteView(sprite: WorldSprites.pen, scale: 2)
                 .accessibilityHidden(true)
@@ -122,6 +130,22 @@ struct YourSpacesNameChip: View {
         .frame(minHeight: 44)
         .background(WorldPalette.sage, in: shape)
         .overlay(shape.strokeBorder(look?.ink ?? WorldPalette.ink, lineWidth: 2))
+    }
+}
+
+/// Lays its one child at the child's own ideal width, never wider than `cap` (nor than offered): the name
+/// chip hugs a short name and stops growing at a long one.
+struct YourSpacesCappedWidth: Layout {
+    let cap: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let child = subviews.first else { return .zero }
+        let width = min(child.sizeThatFits(.unspecified).width, cap, proposal.width ?? cap)
+        return CGSize(width: width, height: child.sizeThatFits(ProposedViewSize(width: width, height: nil)).height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
     }
 }
 
