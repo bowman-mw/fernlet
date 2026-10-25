@@ -36,11 +36,11 @@ enum WorldPlacesTestScenes {
     /// Hoshi (three photos), Full gym and Café Lune (one photo) round `point`, as `ref-places-map` draws them.
     static func markers(near point: GeoPoint) -> [WorldMapMarker] {
         let photo = { (n: Int) in UUID(uuidString: "6C000000-0000-0000-0000-0000000001\(String(format: "%02d", n))") ?? UUID() }
-        let hoshi = point.offset(east: 120, north: 160), lune = point.offset(east: 170, north: -230)
+        let hoshi = point.offset(east: 90, north: 110), lune = point.offset(east: 70, north: -110)
         return [
             WorldMapMarker(id: photo(90), kind: .eatingPlace(placeID: "I-test-hoshi"), name: "Hoshi", point: hoshi,
                            photos: WorldPhotoPlace(id: photo(1), point: hoshi, photoIDs: [photo(1), photo(2), photo(3)])),
-            WorldMapMarker(id: photo(91), kind: .space, name: "Full gym", point: point.offset(east: -170, north: 230)),
+            WorldMapMarker(id: photo(91), kind: .space, name: "Full gym", point: point.offset(east: -100, north: 60)),
             WorldMapMarker(id: photo(92), kind: .eatingPlace(placeID: "I-test-lune"), name: "Café Lune", point: lune,
                            photos: WorldPhotoPlace(id: photo(4), point: lune, photoIDs: [photo(4)])),
         ]
@@ -52,7 +52,7 @@ enum WorldPlacesTestScenes {
         let day = calendar.startOfDay(for: now)
         let at = { (hour: Int, minute: Int) in day.addingTimeInterval(TimeInterval(hour * 3_600 + minute * 60)) }
         let hoshi = PlaceRecord(label: "Hoshi Noodle Bar", point: GeoPoint(45.5203, -122.6273), visits: 4)
-        let park = PlaceRecord(label: "Oak Park", point: GeoPoint(45.5213, -122.6253), visits: 3)
+        let park = PlaceRecord(label: "Oak Park", point: GeoPoint(45.5190, -122.6380), visits: 3)
         let stops = [PlaceStop(kind: .leftHome, at: at(8, 40), placeID: home), PlaceStop(kind: .visit, at: at(12, 10), placeID: hoshi.id),
                      PlaceStop(kind: .walk, at: at(17, 30), metres: 1_000), PlaceStop(kind: .cameHome, at: at(18, 20), placeID: home)]
         return PlaceLog(places: [hoshi, park], stops: stops)
