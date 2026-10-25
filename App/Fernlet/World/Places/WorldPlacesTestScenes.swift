@@ -51,7 +51,8 @@ enum WorldPlacesTestScenes {
     static func log(home: UUID, now: Date, calendar: Calendar = .current) -> PlaceLog {
         let day = calendar.startOfDay(for: now)
         let at = { (hour: Int, minute: Int) in day.addingTimeInterval(TimeInterval(hour * 3_600 + minute * 60)) }
-        let hoshi = PlaceRecord(label: "Hoshi Noodle Bar", point: GeoPoint(45.5203, -122.6273), visits: 4)
+        // Apple's reference stands in, so the place offers Open in Apple Maps (form answer 53; a fake one finds nothing).
+        let hoshi = PlaceRecord(label: "Hoshi Noodle Bar", placeID: "I-hoshi", point: GeoPoint(45.5203, -122.6273), visits: 4)
         let park = PlaceRecord(label: "Oak Park", point: GeoPoint(45.5190, -122.6380), visits: 3)
         let stops = [PlaceStop(kind: .leftHome, at: at(8, 40), placeID: home), PlaceStop(kind: .visit, at: at(12, 10), placeID: hoshi.id),
                      PlaceStop(kind: .walk, at: at(17, 30), metres: 1_000), PlaceStop(kind: .cameHome, at: at(18, 20), placeID: home)]
