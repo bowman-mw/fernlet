@@ -1244,10 +1244,10 @@
 /* Begin XCRemoteSwiftPackageReference section */
 		684018C92FBE9AD400EFC6D6 /* XCRemoteSwiftPackageReference "CryptoSwift" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/krzyzanowskim/CryptoSwift";
+			repositoryURL = "https://github.com/bowman-mw/CryptoSwift";
 			requirement = {
-				kind = upToNextMinorVersion;
-				minimumVersion = 1.10.0;
+				kind = exactVersion;
+				version = "1.10.0-fernlet.2";
 			};
 		};
 		A13A0000000000000000A001 /* XCRemoteSwiftPackageReference "proximitykit" */ = {

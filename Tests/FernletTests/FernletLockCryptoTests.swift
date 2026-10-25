@@ -272,6 +272,30 @@ struct FernletLockCryptoTests {
         }
     }
 
+    // MARK: Pins scrypt to RFC 7914 §12's published vector at the lock's own r=8 and p=1
+    // (P="pleaseletmein", S="SodiumChloride", N=16384). The lock asks for 32 bytes, and scrypt ends in
+    // PBKDF2, whose first block does not depend on the output length, so the answer is the first half
+    // of the RFC's 64-byte vector. It is the standard's answer, not a library's, so it holds whichever
+    // scrypt build sits behind deriveVerifier.
+    @Test func scryptMatchesTheRFC7914VectorAtTheLocksRAndP() async throws {
+        let derived = try await FernletLockCrypto.deriveVerifier(
+            passcode: "pleaseletmein",
+            salt: Data("SodiumChloride".utf8),
+            n: 16384
+        )
+        #expect(derived.hexString == "7023bdcb3afd7348461c06cd81fd38ebfda8fbba904f8e3ea9b543f6545da1f2")
+    }
+
+    // MARK: Pins the derivation every passcode-wrapped content key was wrapped under (N=65536, r=8,
+    // p=1, 32 bytes) to a known answer. A drift here — another scrypt build, a changed parameter, a new
+    // passcode encoding — strands every one of those keys. N is passed, not defaulted, so raising
+    // scryptN for new credentials leaves this pin alone. The value was cross-checked against an
+    // independent RFC 7914 implementation, not only against CryptoSwift.
+    @Test func scryptKnownAnswerAtTheProductionParametersIsPinned() async throws {
+        let derived = try await FernletLockCrypto.deriveVerifier(passcode: "123456", salt: saltA, n: 65536)
+        #expect(derived.hexString == "1d1aa6ea3ef665392d0e278c6da7a3b529b9ca887c2d30bf994a58be8360e70d")
+    }
+
     // MARK: Proves verifier comparison does not use plain Data equality.
     @Test func verifierComparisonIsConstantTime() throws {
         let source = try String(contentsOf: lockServiceSourceURL(), encoding: .utf8)
