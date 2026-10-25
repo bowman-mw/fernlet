@@ -105,33 +105,45 @@ for the simulator, so the suite is what catches a device-only break before an ar
     Store Connect page, or add `INFOPLIST_KEY_LSMinimumSystemVersion = 26.5` to the Fernlet target, which
     iOS ignores, with a cell in `EnhancedSecurityConfigurationTests` to hold it. Otherwise a Mac on
     26.0–26.4 would offer the app and then fail to launch it.
-- **The app's `arm64e` slice has no class_ro_t pointer signing (found 2026-10-17).** Every iOS archive
-  prints 29 linker warnings: "'<Module>.o' was built with class_ro_t pointer signing enabled, but
-  previous .o file was not", once per FernletKit module, plus the reverse for `CryptoSwift.o`.
+- **The app's `arm64e` slice had no class_ro_t pointer signing (found 2026-10-17, fixed 2026-10-25).**
+  Every iOS archive printed 29 linker warnings: "'<Module>.o' was built with class_ro_t pointer signing
+  enabled, but previous .o file was not", once per FernletKit module, plus the reverse for `CryptoSwift.o`.
   - **Cause.** For `arm64e`, swiftc signs the Objective-C `class_ro_t` pointer in each class's metadata
     only when the deployment target is iOS 16 or later. That is bit `0x10` of `__objc_imageinfo`, and it
     can also be forced with `-Xfrontend -sign-class-ro`. Xcode builds a remote package at the floor its
-    own `Package.swift` declares, not at the app's floor, and no client-side setting raises it.
-    CryptoSwift 1.10.0, the newest release, declares `.iOS(.v11)`, so its objects are unsigned. Every
+    own `Package.swift` declares, not at the app's floor. Upstream CryptoSwift 1.10.0, the newest
+    release, declares `.iOS(.v11)` (Xcode lifts it to 12.0), so its objects were unsigned. Every
     FernletKit module and ProximityKit declare `.iOS(.v26)`, so theirs are signed. When the signed and
     unsigned objects meet, `ld` keeps the image consistent by clearing the flag for the whole image. A
     two-object link reproduces both the warning and the cleared bit.
-  - **Effect, measured on a local Xcode 26.5 archive.** `Fernlet.app/Fernlet`'s `arm64e` slice has
-    imageinfo flags `0x06030740`: the bit is clear. The three extensions, which do not link CryptoSwift,
-    have `0x06030750`: the bit is set. So the main app runs without this one hardening. Pointer
-    authentication of code pointers, the hardened heap, memory tagging and the rest are unaffected. The
-    warnings do not fail the build.
-  - **Proof of the fix.** The same archive with `IPHONEOS_DEPLOYMENT_TARGET=26.0` passed on the
-    command line raises every target, CryptoSwift included. It prints zero of these warnings, and the
-    app's `arm64e` slice reads `0x06030750` like the extensions. That override is a diagnostic only:
-    Xcode Cloud and Xcode's own archive take no command-line settings.
-  - **Fix: the owner's call.** The fix is to build CryptoSwift at iOS 16 or later. That means either
-    (a) a fork of CryptoSwift whose `Package.swift` declares a higher floor, with the same code and so
-    byte-identical scrypt output; the package URL moves in the no-tracking allowlist, its doc, the
-    manifests, both `Package.resolved` files and the `CIGateSelectorBoundaryTests` pins; or (b) dropping
-    CryptoSwift for a FernletKit scrypt (RFC 7914), held to CryptoSwift's output for the lock's exact
-    parameters before the dependency goes, since a mismatch would strand every passcode-wrapped key.
-    Until then the warnings are expected and the gap is the one stated above.
+  - **Effect, measured on a local Xcode 26.5 archive before the fix.** `Fernlet.app/Fernlet`'s `arm64e`
+    slice had imageinfo flags `0x06030740`: the bit clear. The three extensions, which do not link
+    CryptoSwift, had `0x06030750`: the bit set. So the main app ran without this one hardening. Pointer
+    authentication of code pointers, the hardened heap, memory tagging and the rest were unaffected.
+  - **Why the fix is a fork, not a setting.** No client-side setting reaches Xcode's own Build or
+    Archive. Xcode 26.5 reads no workspace or project key for a package's floor: the only package key in
+    `WorkspaceSettings.xcsettings` is `iOSPackagesShouldBuildARM64e`. `IPHONEOS_DEPLOYMENT_TARGET=26.0`
+    on the `xcodebuild` command line, or in an xcconfig named by the `XCODE_XCCONFIG_FILE` environment
+    variable, does raise every target, CryptoSwift included: zero warnings, `0x06030750`. Only
+    `xcodebuild` reads either, though, and Apple documents Xcode Cloud's custom environment variables for
+    its `ci_scripts` only. Writing Fernlet's own scrypt would have meant owning the cryptography.
+  - **The fix.** Fernlet builds CryptoSwift from its fork, `https://github.com/bowman-mw/CryptoSwift`,
+    at tag `1.10.0-fernlet.2` (commit `81cbac5a`). That tag is upstream 1.10.0 (`f2a627b8`) with one line
+    of `Package.swift` changed, `.iOS(.v11)` to `.iOS("26.0")`, under a comment marking the file as
+    altered, as CryptoSwift's license asks. No source file differs (`git diff 1.10.0 1.10.0-fernlet.2`
+    in the fork shows just those lines), and `NOTICE` carries the license and its acknowledgment. The
+    same sources built at upstream's floor and at 26.0 gave the same scrypt bytes (measured on macOS,
+    2026-10-25). `FernletLockCryptoTests` pins scrypt two ways: to RFC 7914's published vector at the
+    lock's own r=8 and p=1, and to a known answer at the production parameters, cross-checked against an
+    independent RFC 7914 implementation.
+    `CIGateSelectorBoundaryTests.theFourPinSpellingsNameOneTagOfTheCryptoSwiftFork` holds both
+    manifests and both `Package.resolved` files to that tag's commit. On a Release build for a generic
+    iOS device, the link prints zero of these warnings, and the app's `arm64e` slice reads `0x06030750`
+    like the extensions.
+  - **Moving to a new CryptoSwift release.** Cut a tag on the fork: upstream's release with the same
+    floor line and marking comment, and nothing else. Then, in one commit, move the manifest's `exact:`
+    and the project's `exactVersion`, re-resolve both `Package.resolved` files, and add the tag's row to
+    `releasedCryptoSwiftRevisions`. Both scrypt known-answer tests must pass unchanged.
 - **Debugging.** Pointer-authentication faults only reproduce on device; tagging faults also
   reproduce in the Simulator on an M5 Mac (rollout step 2), in hard mode. Apple warns the
   checks "can impact the performance and stability" of code not built for them; that is what the soft

@@ -841,8 +841,10 @@ import Testing
 
     /// The packages both of ``resolvedFiles`` must pin, each once and to a released version, and the
     /// only ones either may pin: CryptoSwift, the Scrypt KDF behind FernletLock (ProximityKit plan step
-    /// A0.8.1), and ProximityKit, the peer-to-peer subsystem, from its own repository (A1.3), at exactly
-    /// 0.1.1 since the re-pin of 2026-10-17 (``theFourPinSpellingsNameOneReleasedProximityKitVersion()``).
+    /// A0.8.1), from Fernlet's fork at exactly 1.10.0-fernlet.2 since 2026-10-25
+    /// (``theFourPinSpellingsNameOneTagOfTheCryptoSwiftFork()``), and ProximityKit, the peer-to-peer
+    /// subsystem, from its own repository (A1.3), at exactly 0.1.1 since the re-pin of 2026-10-17
+    /// (``theFourPinSpellingsNameOneReleasedProximityKitVersion()``).
     /// The floor that keeps ``expectOneRevisionPerSharedPin()`` from passing on two files that pin
     /// nothing in common, and, since A1.3's review fixes, the ceiling that refuses a third pin: a
     /// package a later ProximityKit tag depended on would reach Fernlet as one more pin in both files
@@ -1018,11 +1020,16 @@ import Testing
         return (pins, problems)
     }
 
-    // MARK: - The pin's four spellings (the re-pin to ProximityKit 0.1.1)
+    // MARK: - The pin's four spellings (the re-pin to ProximityKit 0.1.1, CryptoSwift's fork)
 
     /// ProximityKit's repository, as the manifest's `.package(url:)` and the app project's remote
     /// reference both spell it.
     static let proximityKitURL = "https://github.com/bowman-mw/proximitykit"
+
+    /// Fernlet's fork of CryptoSwift, as the manifest's `.package(url:)` and the app project's remote
+    /// reference both spell it. Each of its tags is upstream's release of the same number with only
+    /// `Package.swift`'s iOS floor raised and marked as altered (Docs/Enhanced-Security.md, class_ro_t).
+    static let cryptoSwiftURL = "https://github.com/bowman-mw/CryptoSwift"
 
     /// The manifest that names ProximityKit's version for every build through ``workspacePath``.
     private static let manifestPath = "FernletKit/Package.swift"
@@ -1041,8 +1048,17 @@ import Testing
         "0.1.1": "e09affe44af0d763478a1f84207bdad7a3d650c1"
     ]
 
-    /// One spelling of the ProximityKit pin: the file that writes it, the version it names (nil when
-    /// none can be read as an exact one), and, for a resolved file, the revision it resolves.
+    /// Every tag of the CryptoSwift fork Fernlet has pinned, each with the commit its tag names, under
+    /// the same rules as ``releasedRevisions``. Fernlet owns these tags, so a moved one would change the
+    /// scrypt every passcode-wrapped content key depends on without changing a line here; the lock's
+    /// known-answer tests (`FernletLockCryptoTests`) are the other half of that guard.
+    static let releasedCryptoSwiftRevisions = [
+        "1.10.0-fernlet.2": "81cbac5a4d4c80a5680a41e0069631f7c42f66ec"
+    ]
+
+    /// One spelling of a package's pin (ProximityKit's or CryptoSwift's): the file that writes it, the
+    /// version it names (nil when none can be read as an exact one), and, for a resolved file, the
+    /// revision it resolves.
     struct PinSpelling: Equatable {
         /// The repo-relative file that writes the spelling.
         let site: String
@@ -1062,20 +1078,7 @@ import Testing
     /// passed it. Each spelling is a manifest or JSON fact with no compiler half (SwiftPM resolves
     /// whatever the files say), read here so it reds with no simulator.
     @Test func theFourPinSpellingsNameOneReleasedProximityKitVersion() throws {
-        var spellings = [
-            PinSpelling(site: Self.manifestPath, version: Self.manifestExactVersion(
-                try RepoRoot.source(Self.manifestPath), url: Self.proximityKitURL), revision: nil),
-            PinSpelling(site: Self.projectPath, version: Self.projectExactVersion(
-                try RepoRoot.source(Self.projectPath), url: Self.proximityKitURL), revision: nil)
-        ]
-        // R2: bounded by the two files.
-        for path in Self.resolvedFiles {
-            // A pin reads as (location, revision, version), its version empty when it names none.
-            let pin = Self.pins(inResolved: try Data(contentsOf: RepoRoot.url(path)), path: path).pins["proximitykit"]
-            let version = pin.flatMap { $0.count == 3 && !$0[2].isEmpty ? $0[2] : nil }
-            spellings.append(PinSpelling(site: path, version: version, revision: pin.flatMap { $0.count == 3 ? $0[1] : nil }))
-        }
-        let problems = Self.pinAgreementProblems(spellings)
+        let problems = Self.pinAgreementProblems(try Self.pinSpellings(identity: "proximitykit", url: Self.proximityKitURL))
         #expect(problems.isEmpty, """
             The ProximityKit pin is spelled four ways, and they must name one released tag at the commit \
             `releasedRevisions` holds for it. A re-pin moves \(Self.manifestPath)'s `exact:` and \
@@ -1085,14 +1088,57 @@ import Testing
             """)
     }
 
-    /// The ways the pin's spellings fall short: a spelling that names no exact version, spellings that
-    /// name more than one version, and a resolved spelling whose version ``releasedRevisions`` does not
-    /// hold or whose revision is not the one it holds for that version.
+    /// The same four spellings of the CryptoSwift pin name one tag of Fernlet's fork, and both resolved
+    /// files resolve it to the commit ``releasedCryptoSwiftRevisions`` holds for that tag (added with the
+    /// fork, 2026-10-25). The pin moved from a range on upstream to an exact tag Fernlet owns, so it is
+    /// held the way ProximityKit's is.
+    @Test func theFourPinSpellingsNameOneTagOfTheCryptoSwiftFork() throws {
+        let spellings = try Self.pinSpellings(identity: "cryptoswift", url: Self.cryptoSwiftURL)
+        let problems = Self.pinAgreementProblems(
+            spellings, identity: "cryptoswift", released: Self.releasedCryptoSwiftRevisions)
+        #expect(problems.isEmpty, """
+            The CryptoSwift pin is spelled four ways, and they must name one tag of the fork at the commit \
+            `releasedCryptoSwiftRevisions` holds for it. A re-pin cuts the tag on the fork (upstream's \
+            release with only Package.swift's iOS floor raised, marked as altered), moves \
+            \(Self.manifestPath)'s `exact:` and \(Self.projectPath)'s `exactVersion` by hand, re-resolves both \
+            of \(Self.resolvedFiles) through the workspace and through `-project` (never by hand), and adds \
+            the tag's row, in one commit:
+            \(problems.joined(separator: "\n"))
+            """)
+    }
+
+    /// The four spellings of `identity`'s pin: ``manifestPath``'s `exact:` and ``projectPath``'s
+    /// `exactVersion` for `url`, and the version and revision each of ``resolvedFiles`` pins.
+    static func pinSpellings(identity: String, url: String) throws -> [PinSpelling] {
+        var spellings = [
+            PinSpelling(site: manifestPath, version: manifestExactVersion(
+                try RepoRoot.source(manifestPath), url: url), revision: nil),
+            PinSpelling(site: projectPath, version: projectExactVersion(
+                try RepoRoot.source(projectPath), url: url), revision: nil)
+        ]
+        // R2: bounded by the two files.
+        for path in resolvedFiles {
+            // A pin reads as (location, revision, version), its version empty when it names none.
+            let pin = pins(inResolved: try Data(contentsOf: RepoRoot.url(path)), path: path).pins[identity]
+            let version = pin.flatMap { $0.count == 3 && !$0[2].isEmpty ? $0[2] : nil }
+            spellings.append(PinSpelling(site: path, version: version, revision: pin.flatMap { $0.count == 3 ? $0[1] : nil }))
+        }
+        return spellings
+    }
+
+    /// ``pinAgreementProblems(_:identity:released:)`` for ProximityKit's pin and ``releasedRevisions``.
     static func pinAgreementProblems(_ spellings: [PinSpelling]) -> [String] {
+        pinAgreementProblems(spellings, identity: "proximitykit", released: releasedRevisions)
+    }
+
+    /// The ways `identity`'s pin spellings fall short: a spelling that names no exact version, spellings
+    /// that name more than one version, and a resolved spelling whose version `released` does not hold
+    /// or whose revision is not the one it holds for that version.
+    static func pinAgreementProblems(_ spellings: [PinSpelling], identity: String, released: [String: String]) -> [String] {
         var problems: [String] = []
         // R2: bounded by the spellings.
         for spelling in spellings where spelling.version == nil {
-            problems.append("\(spelling.site) names no exact version of proximitykit: Fernlet pins it `exact:`, all four ways")
+            problems.append("\(spelling.site) names no exact version of \(identity): Fernlet pins it `exact:`, all four ways")
         }
         let versions = Set(spellings.compactMap(\.version))
         if versions.count > 1 {
@@ -1102,16 +1148,16 @@ import Testing
         // R2: bounded by the spellings.
         for spelling in spellings {
             guard let version = spelling.version, let revision = spelling.revision else { continue }
-            guard let expected = releasedRevisions[version] else {
+            guard let expected = released[version] else {
                 problems.append("""
-                    \(spelling.site) resolves proximitykit \(version), which `releasedRevisions` does not hold: \
-                    a re-pin adds its tag's row, `git rev-parse \(version)^{commit}`, in the same commit
+                    \(spelling.site) resolves \(identity) \(version), which its released-revision table does not \
+                    hold: a re-pin adds its tag's row, `git rev-parse \(version)^{commit}`, in the same commit
                     """)
                 continue
             }
             if revision != expected {
                 problems.append("""
-                    \(spelling.site) resolves proximitykit \(version) to \(revision), not the tag's commit \
+                    \(spelling.site) resolves \(identity) \(version) to \(revision), not the tag's commit \
                     \(expected): the tag moved, the version is mistyped, or the file was edited by hand
                     """)
             }
@@ -1599,7 +1645,8 @@ import Testing
 
     /// The pin's agreement, both ways: four spellings of one tag at its table commit pass; each spelling
     /// moved out of step alone, a resolved revision that is not the tag's, a version the table does not
-    /// hold and a spelling with no exact version are each named.
+    /// hold and a spelling with no exact version are each named; and the CryptoSwift fork's check reads
+    /// its own table and names its own identity, so a ProximityKit commit under the fork's tag is refused.
     private static func expectPinAgreementFixtured() {
         let commit = releasedRevisions["0.1.1"] ?? ""
         let sites = ["M", "P", "R1", "R2"]
@@ -1625,5 +1672,10 @@ import Testing
         let unpinned = pinAgreementProblems(spellings([nil, "0.1.1", "0.1.1", "0.1.1"]))
         #expect(unpinned.contains { $0.contains("M names no exact version") },
                 "a spelling with no exact version was not named: \(unpinned)")
+        let tag = "1.10.0-fernlet.2"
+        let forkSpellings = spellings([tag, tag, tag, tag], [nil, nil, releasedCryptoSwiftRevisions[tag], commit])
+        let fork = pinAgreementProblems(forkSpellings, identity: "cryptoswift", released: releasedCryptoSwiftRevisions)
+        #expect(fork.count == 1 && fork.contains { $0.contains("R2 resolves cryptoswift \(tag) to \(commit)") },
+                "the fork's own table and identity were not the ones read: \(fork)")
     }
 }

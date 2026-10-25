@@ -1,7 +1,9 @@
 // FernletLockService.swift
 // Fernlet
 //
-// Scrypt KDF via krzyzanowskim/CryptoSwift (https://github.com/krzyzanowskim/CryptoSwift).
+// Scrypt KDF via CryptoSwift (upstream https://github.com/krzyzanowskim/CryptoSwift), built from
+// Fernlet's fork https://github.com/bowman-mw/CryptoSwift: upstream 1.10.0 with only the iOS floor
+// raised, so the app keeps class_ro_t signing (Docs/Enhanced-Security.md).
 // Memory-hard KDF, no PBKDF2 fallback.
 
 import Foundation
