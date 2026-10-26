@@ -121,52 +121,51 @@ h2{font-family:var(--font-header);font-size:clamp(28px,3.6vw,42px);font-weight:4
   letter-spacing:-.02em;margin:0 0 20px}
 .hero .lede{font-size:clamp(19px,2vw,23px);max-width:34ch}
 .hero .sub{font-family:var(--font-body);font-size:18px;line-height:1.6;color:var(--color-slate);margin:0 0 30px;max-width:40ch}
-.hero-art{flex:1 1 440px;min-width:320px;display:flex;flex-direction:column;align-items:center;gap:14px}
-.room{position:relative;width:100%;max-width:520px;border-radius:var(--radius-xl);overflow:hidden;
-  box-shadow:var(--shadow-float);border:1px solid rgba(61,46,30,.1)}
-.room-wall{position:relative;height:300px;background:repeating-linear-gradient(180deg,#E2D4B8 0 19px,#D8C9A8 19px 38px);
-  border-top:10px solid #C0A878}
-.window{position:absolute;top:34px;right:30px}
-.string{position:absolute;top:0;left:0;width:100%;height:300px;overflow:visible}
-.polaroid{position:absolute;margin:0;background:#F5EDE0;border:2px solid #C8A87A;padding:6px 6px 18px;
-  transform-origin:50% 0;animation:sway var(--d,6s) ease-in-out infinite}
-.polaroid .photo{width:84px;height:68px}
-.polaroid figcaption{font-family:var(--font-ui);font-size:9px;color:#9B8060;text-align:center;margin-top:6px;letter-spacing:.03em}
-.polaroid.sm{padding:4px 4px 12px}
-.polaroid.sm .photo{width:58px;height:46px}
-.room-floor{position:relative;height:172px;
-  background:repeating-linear-gradient(180deg,#C8A96A 0 16px,#BFA05E 16px 20px,#D4B878 20px 36px,#C0A060 36px 40px);
-  border-top:2px solid #7A5C38}
-.plant{position:absolute;bottom:18px;left:26px}
-.stage{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:8px}
-.pet{background:none;border:none;padding:0;cursor:pointer;transition:transform .4s cubic-bezier(.34,1.56,.64,1)}
-.pet.poked{transform:scale(1.06)}
-.creature{animation:breathe 3.5s ease-in-out infinite}
-.creature .body{fill:var(--state,#6B9E62);transition:fill .4s cubic-bezier(.22,.61,.36,1)}
-.sclera{fill:rgba(255,255,255,.94)}
-.eye{animation:blink 5s ease-in-out infinite;transform-origin:46px 56px}
-.eye2{animation-delay:.3s;transform-origin:82px 56px}
+.hero-art{flex:1 1 440px;min-width:300px;display:flex;flex-direction:column;align-items:center;gap:18px}
+/* The hero pairs a real Home capture with the poke demo. The plate is the app's own paper plate (cream,
+   a bark outline and a hard drop) and the companion is the app's own painter, rendered to SVG by
+   Scripts/render-site-companion.sh. Like the phone, the plate is a lit object: it keeps its light
+   colours in dark mode. */
+.hero-scene{position:relative;width:100%;max-width:540px;display:flex;justify-content:flex-end;padding-bottom:26px}
+.hero-phone{width:290px}
+.plate{background:#FBF7EE;color:#3D2E1E;border:3px solid #3A2414;border-radius:16px;
+  box-shadow:0 4px 0 rgba(58,36,20,.28),var(--shadow-float)}
+.pet-plate{position:absolute;left:0;bottom:0;z-index:2;width:232px;overflow:hidden;display:flex;flex-direction:column;
+  align-items:center;padding:14px 14px 0}
+.bubble{position:relative;align-self:stretch;min-height:58px;display:flex;align-items:center;background:#FFFDF7;
+  border:2px solid #3A2414;border-radius:10px;padding:8px 12px}
+.bubble p{font-family:var(--font-ui);font-size:13px;line-height:1.4;margin:0;color:#3D2E1E}
+.bubble::after{content:"";position:absolute;left:50%;bottom:-7px;width:10px;height:10px;margin-left:-5px;background:#FFFDF7;
+  border-right:2px solid #3A2414;border-bottom:2px solid #3A2414;transform:rotate(45deg)}
+.stage{position:relative;z-index:1;margin-top:8px}
+.pet{display:block;background:none;border:none;padding:0;cursor:pointer;transition:transform .4s cubic-bezier(.34,1.56,.64,1)}
+.pet.poked{transform:translateY(-8px)}
+.sprite{position:relative;display:block;width:144px;height:144px}
+.sprite img{position:absolute;inset:0;width:100%;height:100%}
+/* Two frames, as the app breathes: the in-breath frame shows for half of each cycle. Its resting
+   opacity is 0, so with Reduce Motion (one instant run) the companion simply stands still. */
+.sprite-breath{opacity:0;animation:breath 3.2s infinite}
+.pet.settled .sprite-breath{animation:none;opacity:0}
 .hearts{position:absolute;inset:-30px;pointer-events:none}
-.hearts svg{position:absolute;bottom:40px;animation:heartFloat 1.5s cubic-bezier(.22,.61,.36,1) both}
-.statechip{display:inline-flex;align-items:center;gap:6px;padding:4px 14px;background:var(--color-cream);
-  border-radius:var(--radius-sm);box-shadow:var(--shadow-sm);font-family:var(--font-ui);font-size:12px;
+.hearts svg{position:absolute;bottom:60px;animation:heartFloat 1.5s cubic-bezier(.22,.61,.36,1) both}
+.meadow{align-self:stretch;margin:-16px -14px 0;padding:22px 0 12px;display:flex;justify-content:center;
+  background:#A3CB82 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 12' shape-rendering='crispEdges'%3E%3Crect width='32' height='12' fill='%23A3CB82'/%3E%3Cg fill='%236E9E52'%3E%3Crect x='3' y='3' width='1' height='2'/%3E%3Crect x='4' y='2' width='1' height='3'/%3E%3Crect x='5' y='3' width='1' height='2'/%3E%3Crect x='14' y='7' width='1' height='2'/%3E%3Crect x='15' y='6' width='1' height='3'/%3E%3Crect x='16' y='7' width='1' height='2'/%3E%3Crect x='25' y='2' width='1' height='2'/%3E%3Crect x='26' y='1' width='1' height='3'/%3E%3Crect x='27' y='2' width='1' height='2'/%3E%3C/g%3E%3Cg fill='%23FFFFFF'%3E%3Crect x='9' y='1' width='1' height='1'/%3E%3Crect x='8' y='2' width='3' height='1'/%3E%3Crect x='9' y='3' width='1' height='1'/%3E%3C/g%3E%3Crect x='9' y='2' width='1' height='1' fill='%23F4C542'/%3E%3Cg fill='%23F2A7B8'%3E%3Crect x='21' y='7' width='1' height='1'/%3E%3Crect x='20' y='8' width='3' height='1'/%3E%3Crect x='21' y='9' width='1' height='1'/%3E%3C/g%3E%3Crect x='21' y='8' width='1' height='1' fill='%23FFFFFF'/%3E%3C/svg%3E") repeat;background-size:128px 48px;border-top:3px solid #7FAF5E}
+.statechip{display:inline-flex;align-items:center;gap:6px;padding:4px 14px;background:#FBF7EE;color:#3D2E1E;
+  border:2px solid #3A2414;border-radius:var(--radius-sm);font-family:var(--font-ui);font-size:12px;
   font-weight:500;letter-spacing:.03em}
-.statedot{background:var(--state,#6B9E62);width:7px;height:7px;transition:background .4s}
-.bubble{position:absolute;bottom:96px;left:18px;max-width:172px;background:var(--color-cream);
-  border-radius:var(--radius-lg);padding:13px 16px;box-shadow:var(--shadow-card);z-index:1}
-.bubble p{font-family:var(--font-body);font-style:italic;font-size:14px;line-height:1.5;margin:0}
-.bubble .tail{position:absolute;bottom:-9px;left:26px;width:11px;height:11px;border-radius:50%;background:var(--color-cream);
-  box-shadow:9px 5px 0 -3px var(--color-cream)}
+.statedot{background:var(--state,#5E844D);width:7px;height:7px;transition:background .4s}
 .statepicker{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;
   font-family:var(--font-body);font-size:15px;color:var(--color-slate)}
-.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
 .chips button{padding:6px 13px;border-radius:var(--radius-sm);border:1.5px solid var(--hair-2);
   background:transparent;color:var(--color-slate);cursor:pointer;font-family:var(--font-ui);font-size:12px;
   font-weight:500;letter-spacing:.02em;transition:all .2s cubic-bezier(.22,.61,.36,1)}
-.chips button.on[data-state=thriving]{background:rgba(90,122,82,.14);color:#3A5C34;border-color:#8AAD7E}
-.chips button.on[data-state=okay]{background:rgba(201,150,74,.16);color:#7A5518;border-color:#C9964A}
-.chips button.on[data-state=tired]{background:rgba(139,123,158,.16);color:#4A3A5E;border-color:#8B7B9E}
-.chips button.on[data-state=sick]{background:rgba(192,103,74,.14);color:#8A3F26;border-color:#C0674A}
+/* The app's state colours (CompanionState.color), as tints with ink dark enough for 4.5:1. */
+.chips button.on[data-state=thriving]{background:rgba(94,132,77,.14);color:#3A5C34;border-color:#5E844D}
+.chips button.on[data-state=okay]{background:rgba(210,151,59,.16);color:#7A5518;border-color:#D2973B}
+.chips button.on[data-state=tired]{background:rgba(182,112,115,.16);color:#7A3B3F;border-color:#B67073}
+.chips button.on[data-state=resting]{background:rgba(92,107,120,.14);color:#3E4A55;border-color:#5C6B78}
+.chips button.on[data-state=sick]{background:rgba(185,84,61,.14);color:#8A3F26;border-color:#B9543D}
 
 /* ── Refusals ────────────────────────────────────── */
 .refusals{display:flex;flex-wrap:wrap;gap:clamp(24px,4vw,56px);align-items:center;border-radius:var(--radius-xl)}
@@ -203,71 +202,42 @@ h2{font-family:var(--font-header);font-size:clamp(28px,3.6vw,42px);font-weight:4
 .note-lichen{background:var(--color-lichen);border-radius:var(--radius-md);padding:18px 20px}
 .note-lichen p{font-family:var(--font-body);font-size:16px;line-height:1.6;color:#33502C;margin:0}
 
-/* ── Phone mock ──────────────────────────────────── */
-.phone-col{flex:1 1 300px;min-width:280px;display:flex;flex-direction:column;align-items:center;gap:16px}
-.phone{width:330px;height:668px;max-width:100%;background:var(--color-parchment);border-radius:54px;
-  border:10px solid #1A1714;box-shadow:0 0 0 1px #3A3530,0 30px 70px rgba(61,46,30,.28);overflow:hidden;
-  position:relative;flex-shrink:0}
-.notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:108px;height:28px;background:#1A1714;
-  border-radius:0 0 18px 18px;z-index:30}
-.statusbar{position:absolute;top:0;left:0;right:0;z-index:20;display:flex;align-items:center;justify-content:space-between;
-  padding:38px 24px 0;font-family:var(--font-ui);font-size:14px;font-weight:600}
-.sb-icons{display:flex;align-items:center;gap:5px}
-.screen{position:absolute;inset:0;display:flex;flex-direction:column}
-.screen[hidden]{display:none}
-.screen-pad{padding:78px 18px 18px;display:flex;flex-direction:column;gap:14px}
-.screen-title{font-family:var(--font-display);font-weight:600;font-size:26px}
-.screen-sub{font-family:var(--font-body);font-style:italic;font-size:14px;color:var(--color-slate)}
-.mini-room{position:relative;height:268px;flex-shrink:0;
-  background:repeating-linear-gradient(180deg,#E2D4B8 0 16px,#D8C9A8 16px 32px)}
-.mini-floor{position:absolute;bottom:0;left:0;right:0;height:96px;border-top:6px solid #A8865A;
-  background:repeating-linear-gradient(180deg,#C8A96A 0 12px,#BFA05E 12px 15px,#D4B878 15px 27px,#C0A060 27px 30px)}
-.mini-pet{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;
-  align-items:center;gap:5px}
-.mini-badge{padding:2px 11px;background:var(--color-lichen);border:2px solid var(--color-fern);
-  font-family:var(--font-ui);font-size:10px;font-weight:500;color:#3A5C34}
-.mini-bubble{position:absolute;bottom:108px;left:14px;max-width:148px;background:var(--color-cream);
-  border-radius:22px;padding:10px 13px;box-shadow:var(--shadow-card)}
-.mini-bubble p{font-family:var(--font-body);font-style:italic;font-size:12px;line-height:1.5;margin:0}
-.screen-body{flex:1;padding:12px 16px;display:flex;flex-direction:column;gap:10px}
-.minicard{background:var(--color-cream);border-radius:var(--radius-md);padding:13px}
-.minicard-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-.minicard .h{font-family:var(--font-header);font-size:16px}
-.minicard .t{font-family:var(--font-ui);font-size:10px;color:var(--color-slate)}
-.healthbar{display:flex;align-items:center;gap:8px}
-.segs{flex:1;display:flex;gap:3px;height:8px}
-.segs i{flex:1;border-radius:4px;background:rgba(61,46,30,.12);transition:background .4s cubic-bezier(.22,.61,.36,1)}
-.segs i.on{background:var(--state,#6B9E62)}
-.bonus{display:flex;gap:3px}
-.bonus i{width:8px;height:8px;border-radius:2px;background:var(--color-goldenrod)}
-.minicard .tiny{margin-top:9px}
-.quicklog{display:flex;justify-content:space-between;background:var(--color-cream);border-radius:var(--radius-md);padding:11px 6px}
-.quicklog div{display:flex;flex-direction:column;align-items:center;gap:4px;padding:4px 6px;
-  font-family:var(--font-ui);font-size:9px;font-weight:500;color:var(--color-slate)}
-.quicklog span{width:22px;height:22px;border-radius:7px}
-.heatmap{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
-.heatmap i{aspect-ratio:1;border-radius:5px;background:rgba(184,176,164,.22)}
-.legend{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px;font-family:var(--font-ui);font-size:10px;color:var(--color-slate)}
-.legend span{display:flex;align-items:center;gap:4px}
-.legend i{width:8px;height:8px;border-radius:2px}
-.entrybox{background:var(--color-cream);border:1.5px dashed rgba(61,46,30,.18);border-radius:var(--radius-md);
-  padding:15px;font-family:var(--font-body);font-style:italic;font-size:15px;color:var(--color-slate)}
-.rings{display:flex;justify-content:space-around;margin-top:12px}
-.ring{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
-.ring text{font-family:var(--font-ui);font-size:11px;font-weight:500;fill:#3D2E1E}
-.ring b{font-family:var(--font-ui);font-size:11px;font-weight:500}
-.ring i{font-family:var(--font-ui);font-size:10px;font-style:normal;color:var(--color-slate)}
-.meals{display:flex;flex-direction:column;gap:9px}
-.meal{background:var(--color-cream);border-radius:var(--radius-md);padding:12px 14px;display:flex;
-  justify-content:space-between;align-items:center}
-.meal b{font-family:var(--font-body);font-size:15px;font-weight:400;display:block}
-.meal i{font-family:var(--font-ui);font-size:10px;font-style:normal;color:var(--color-slate);margin-top:3px;display:block}
-.meal>span{width:8px;height:8px;border-radius:50%;background:var(--color-fern);flex-shrink:0}
-.tabs{display:flex;gap:7px}
+/* ── Screenshots ─────────────────────────────────── */
+/* Real simulator captures, from the DEBUG demo data only — never anyone's own phone. The capture
+   carries its own status bar and Dynamic Island, so the frame is only the black edge. */
+.phone-col{flex:1 1 300px;min-width:260px;display:flex;flex-direction:column;align-items:center;gap:16px}
+.phone{position:relative;width:310px;max-width:100%;aspect-ratio:600/1304;margin:0;flex-shrink:0;overflow:hidden;
+  background:#1A1714;border:9px solid #1A1714;border-radius:48px;box-shadow:0 0 0 1px #3A3530,0 30px 70px rgba(61,46,30,.28)}
+.phone img{width:100%;height:100%;object-fit:cover}
+.phone picture{display:block;height:100%}
+.phone .screen{position:absolute;inset:0}
+.phone .screen[hidden]{display:none}
+.phone.sm{width:100%;max-width:220px;border-width:6px;border-radius:30px;box-shadow:0 0 0 1px #3A3530,0 14px 34px rgba(61,46,30,.22)}
+.tabs{display:flex;gap:7px;flex-wrap:wrap;justify-content:center}
 .tabs button{padding:7px 16px;border-radius:var(--radius-sm);border:none;cursor:pointer;font-family:var(--font-ui);
   font-size:12px;font-weight:500;letter-spacing:.02em;background:var(--sunken);color:var(--color-slate);
   transition:all .2s cubic-bezier(.22,.61,.36,1)}
 .tabs button.on{background:var(--color-moss);color:#FBF7EE}
+
+/* ── Your map / Small joys ───────────────────────── */
+.shot-pair{flex:1 1 380px;min-width:290px;display:flex;justify-content:center;gap:clamp(12px,2vw,24px);
+  position:sticky;top:96px}
+.shot-pair .phone.sm{flex:0 1 220px}
+.shot-pair .phone.sm:last-child{margin-top:56px}
+.joy-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:16px}
+.joy{display:flex;gap:20px;align-items:center}
+.joy .phone.sm{flex:0 0 116px;width:116px;border-width:4px;border-radius:20px}
+.joy h3,.widgets-copy h3{font-family:var(--font-header);font-size:21px;font-weight:400;margin:0 0 6px}
+.joy p,.widgets-copy p{font-family:var(--font-body);font-size:16px;line-height:1.55;color:var(--ink2);margin:0}
+.gold-hearts{flex:0 0 116px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:14px 10px;
+  background:#FBF7EE;border:3px solid #3A2414;border-radius:14px}
+.gold-hearts span{aspect-ratio:9/8;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 9 8' shape-rendering='crispEdges'%3E%3Cg fill='%235A1E14'%3E%3Crect x='1' y='0' width='3' height='1'/%3E%3Crect x='5' y='0' width='3' height='1'/%3E%3Crect x='0' y='1' width='9' height='3'/%3E%3Crect x='1' y='4' width='7' height='1'/%3E%3Crect x='2' y='5' width='5' height='1'/%3E%3Crect x='3' y='6' width='3' height='1'/%3E%3Crect x='4' y='7' width='1' height='1'/%3E%3C/g%3E%3Cg fill='%23D9453B'%3E%3Crect x='2' y='1' width='1' height='1'/%3E%3Crect x='6' y='1' width='1' height='1'/%3E%3Crect x='1' y='2' width='7' height='2'/%3E%3Crect x='2' y='4' width='5' height='1'/%3E%3Crect x='3' y='5' width='3' height='1'/%3E%3Crect x='4' y='6' width='1' height='1'/%3E%3C/g%3E%3Crect x='2' y='2' width='1' height='1' fill='%23FFFFFF' fill-opacity='.55'/%3E%3C/svg%3E") center/contain no-repeat}
+.gold-hearts span.gold{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 9 8' shape-rendering='crispEdges'%3E%3Cg fill='%236B4A0E'%3E%3Crect x='1' y='0' width='3' height='1'/%3E%3Crect x='5' y='0' width='3' height='1'/%3E%3Crect x='0' y='1' width='9' height='3'/%3E%3Crect x='1' y='4' width='7' height='1'/%3E%3Crect x='2' y='5' width='5' height='1'/%3E%3Crect x='3' y='6' width='3' height='1'/%3E%3Crect x='4' y='7' width='1' height='1'/%3E%3C/g%3E%3Cg fill='%23E8B93A'%3E%3Crect x='2' y='1' width='1' height='1'/%3E%3Crect x='6' y='1' width='1' height='1'/%3E%3Crect x='1' y='2' width='7' height='2'/%3E%3Crect x='2' y='4' width='5' height='1'/%3E%3Crect x='3' y='5' width='3' height='1'/%3E%3Crect x='4' y='6' width='1' height='1'/%3E%3C/g%3E%3Crect x='2' y='2' width='1' height='1' fill='%23FFFFFF' fill-opacity='.55'/%3E%3C/svg%3E")}
+.widgets{display:flex;flex-wrap:wrap;gap:clamp(20px,4vw,48px);align-items:center;margin-top:clamp(26px,4vw,48px)}
+.widget-shots{flex:2 1 440px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(10px,2vw,20px)}
+.widget-shots .phone.sm{max-width:none;border-width:5px;border-radius:24px}
+.widgets-copy{flex:1 1 260px}
+.widgets-copy p+p{margin-top:12px}
 
 /* ── Friend mesh demo ────────────────────────────── */
 .mesh-demo{display:flex;flex-direction:column;align-self:flex-start}
@@ -280,6 +250,7 @@ h2{font-family:var(--font-header);font-size:clamp(28px,3.6vw,42px);font-weight:4
 .mesh-stage.together .mini[data-slot=r]{transform:translateX(-10px)}
 .mini-body{width:74px;height:138px;border-radius:16px;border:4px solid #2A2420;background:var(--color-parchment);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;box-shadow:var(--shadow-card)}
+.mini-sprite{width:48px;height:48px}
 .mini-body b{font-family:var(--font-ui);font-size:10px;font-weight:500;color:#7B6040}
 .vibe{padding:2px 8px;border-radius:6px;font-family:var(--font-ui);font-size:9px;font-style:normal;font-weight:500;
   opacity:0;transition:opacity .4s}
@@ -411,6 +382,8 @@ h2{font-family:var(--font-header);font-size:clamp(28px,3.6vw,42px);font-weight:4
 .dbox.sm b{font-size:12px} .dbox.sm i{font-size:14px}
 .sealedbox{background:rgba(90,122,82,.1);border:1.5px solid rgba(90,122,82,.35)}
 .sealedbox b{color:#3A5C34} .sealedbox i{color:#4B6244}
+.mapbox{background:rgba(148,174,191,.14);border:1.5px solid rgba(94,108,121,.35)}
+.mapbox b{color:#3E4F5C} .mapbox i{color:#4D5D69}
 .drow{display:flex;gap:12px;flex-wrap:wrap}
 .drow .dbox{flex:1 1 130px}
 .divider{display:flex;align-items:center;gap:12px;margin:16px 0 4px;padding:0 4px}
@@ -506,29 +479,30 @@ footer{border-top:1px solid var(--hair);padding:30px 0 44px}
 .disclaimer p{font-style:italic;font-size:16px;color:var(--color-slate);margin:0}
 
 /* ── Motion / responsive ─────────────────────────── */
-@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.025)}}
-@keyframes blink{0%,92%,100%{transform:scaleY(1)}96%{transform:scaleY(.08)}}
-@keyframes sway{0%,100%{transform:rotate(var(--r,0deg))}50%{transform:rotate(calc(var(--r,0deg) + 1.1deg))}}
+@keyframes breath{0%,50%{opacity:0}50.01%,100%{opacity:1}}
 @keyframes heartFloat{0%{opacity:0;transform:translateY(0) scale(.6)}25%{opacity:1}100%{opacity:0;transform:translateY(-92px) scale(1)}}
-@media (max-width:1160px){
+@media (max-width:1260px){
   /* Two nav buttons plus the full anchor row no longer fit together anywhere between phone
      and small-laptop widths — the anchors wrap mid-row and split away from the brand. Drop
      them across that whole range, not just under 720px: the page reads top-to-bottom anyway,
      and brand + the two buttons alone always fit (stacking cleanly if a phone is narrow).
-     With six anchors the row needs about 1100px on fallback fonts, hence 1160px of margin. */
+     With seven anchors the row needs about 1190px on fallback fonts, hence 1260px of margin. */
   .navlinks a:not(.btn){display:none}
 }
-@media (max-width:720px){
-  .hero .room{max-width:100%}
-  .bubble{position:static;max-width:none;margin:0 14px 12px;box-shadow:none}
-  .bubble .tail{display:none}
-  .room-floor{height:200px}
+@media (max-width:620px){
+  .hero-scene{flex-direction:column;align-items:center;padding-bottom:0}
+  .hero-phone{width:min(270px,76vw)}
+  .pet-plate{position:relative;align-self:flex-start;width:210px;margin-top:-110px}
+  .shot-pair{position:static}
+  .shot-pair .phone.sm:last-child{margin-top:32px}
+  .joy .phone.sm,.gold-hearts{flex-basis:96px;width:96px}
 }
 /* ── Dark theme ──────────────────────────────────────
    Follows the OS. The palette is the app's own dark theme (FernletThemeDefaults): a bark-green
-   ground, cream ink, brighter moss. Two things deliberately stay light — the hero room and the
-   phone mock are illustrations of a lit room and a glowing screen, so they re-declare the light
-   tokens locally instead of flipping with the page. */
+   ground, cream ink, brighter moss. Two things deliberately stay light — the companion's paper
+   plates and the mesh demo's little phones are illustrations of lit objects, so they re-declare the
+   light tokens locally instead of flipping with the page. The screenshots switch to their own
+   dark-mode captures through <picture>. */
 @media (prefers-color-scheme:dark){
   :root{
     color-scheme:dark;
@@ -547,12 +521,11 @@ footer{border-top:1px solid var(--hair);padding:30px 0 44px}
   a:hover{color:#9BC98A}
 
   /* The lit-object islands. Everything inside keeps the light palette. */
-  .room,.phone,.mini-body{
+  .plate,.mini-body{
     --color-parchment:#F5EFE0; --color-cream:#FBF7EE; --color-bark:#3D2E1E; --color-slate:#5E6C79;
     --color-lichen:#C8DBC2; --ink2:#5B4A38; --ink3:#4A3A2A;
     --hair:rgba(61,46,30,.09); --hair-2:rgba(61,46,30,.18); --sunken:rgba(61,46,30,.07);
     color:#3D2E1E}
-  .room{border-color:rgba(0,0,0,.45)}
 
   /* Buttons: moss stays the light theme's mid green so cream text keeps its contrast (4.77:1;
      the brighter #5E8054 it had was 3.90:1), and the bark chip inverts to a light chip — a
@@ -575,9 +548,13 @@ footer{border-top:1px solid var(--hair);padding:30px 0 44px}
   .sealedbox b{color:#A8C89C}
   .sealedbox i{color:#B4C6AD}
   .chips button.on[data-state=thriving]{background:rgba(127,176,105,.20);color:#B9D6AE;border-color:#6E9C5E}
-  .chips button.on[data-state=okay]{background:rgba(201,150,74,.22);color:#E3BE7E;border-color:#A8792F}
-  .chips button.on[data-state=tired]{background:rgba(139,123,158,.24);color:#C4B6D4;border-color:#7A6B8C}
-  .chips button.on[data-state=sick]{background:rgba(192,103,74,.20);color:#DFA48D;border-color:#A85536}
+  .chips button.on[data-state=okay]{background:rgba(210,151,59,.22);color:#E3BE7E;border-color:#A8792F}
+  .chips button.on[data-state=tired]{background:rgba(182,112,115,.24);color:#E2AEB0;border-color:#9A5A5D}
+  .chips button.on[data-state=resting]{background:rgba(92,107,120,.30);color:#B8C5D0;border-color:#6F8091}
+  .chips button.on[data-state=sick]{background:rgba(185,84,61,.20);color:#DFA48D;border-color:#A85536}
+  .mapbox{background:rgba(148,174,191,.10);border-color:rgba(148,174,191,.30)}
+  .mapbox b{color:#B5C7D4}
+  .mapbox i{color:#AEBDC8}
 
   /* Workouts: the soft ink goes back to the dark theme's slate, which already clears 6:1 there. */
   #workouts{--wk-soft:var(--color-slate)}

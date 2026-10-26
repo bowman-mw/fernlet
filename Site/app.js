@@ -22,35 +22,34 @@
     }, { passive: true });
   }
 
-  /* ── Companion state ── */
+  /* ── Companion state ──
+     The companion is the app's own pixel painter, rendered to SVG (assets/companion/, by
+     Scripts/render-site-companion.sh): a resting frame, an in-breath frame and the "settled"
+     face a poke shows. Colours are CompanionState's. */
   var STATES = {
-    thriving: { color: "#6B9E62", label: "Thriving", fill: 10, eye: 8.5, mouth: 9 },
-    okay:     { color: "#C9964A", label: "Okay",     fill: 7,  eye: 8.5, mouth: 6 },
-    tired:    { color: "#8B7B9E", label: "Tired",    fill: 4,  eye: 5,   mouth: 4 },
-    sick:     { color: "#C0674A", label: "Sick",     fill: 3,  eye: 6.5, mouth: 4 }
+    thriving: { color: "#5E844D", label: "Thriving" },
+    okay:     { color: "#D2973B", label: "Okay" },
+    tired:    { color: "#B67073", label: "Tired" },
+    resting:  { color: "#5C6B78", label: "Resting" },
+    sick:     { color: "#B9543D", label: "Sick" }
   };
+  var current = "thriving";
 
   var stateLabel = document.getElementById("statelabel");
-  var miniLabel = document.getElementById("minilabel");
-  var segs = document.getElementById("segs");
   var chips = document.getElementById("statechips");
+  var sprite = document.getElementById("sprite");
+  var spriteBreath = document.getElementById("spritebreath");
+
+  function frame(key, suffix) { return "assets/companion/" + key + suffix + ".svg"; }
 
   function setState(key) {
     var s = STATES[key];
     if (!s) return;
+    current = key;
     document.documentElement.style.setProperty("--state", s.color);
     if (stateLabel) stateLabel.textContent = s.label;
-    if (miniLabel) miniLabel.textContent = s.label;
-    if (segs) {
-      var kids = segs.children;
-      for (var i = 0; i < kids.length; i++) kids[i].classList.toggle("on", i < s.fill);
-    }
-    document.querySelectorAll(".creature .sclera").forEach(function (el) {
-      el.setAttribute("ry", s.eye);
-    });
-    document.querySelectorAll(".creature .mouth").forEach(function (el) {
-      el.setAttribute("height", s.mouth);
-    });
+    if (sprite) sprite.src = frame(key, "");
+    if (spriteBreath) spriteBreath.src = frame(key, "-breath");
     if (chips) {
       Array.prototype.forEach.call(chips.children, function (b) {
         b.classList.toggle("on", b.dataset.state === key);
@@ -68,23 +67,34 @@
   /* ── Poke the companion ── */
   var BUBBLES = [
     "Slept a little better last night.",
+    "We uncovered a new corner of the park.",
     "I've been out in the sun a lot lately.",
     "Had some iron-rich meals this week — felt good.",
     "A bit tired today. That's okay.",
     "Someone said hello in person yesterday.",
     "Drank more water than usual. Nice."
   ];
-  var HEART = '<svg width="18" height="18" viewBox="0 0 24 24" fill="#D4A843"><path d="M12 21s-7.5-4.6-9.3-9A5.3 5.3 0 0 1 12 6.5 5.3 5.3 0 0 1 21.3 12c-1.8 4.4-9.3 9-9.3 9Z"/></svg>';
+  // A pixel heart, the status plate's own shape.
+  var HEART = '<svg width="27" height="24" viewBox="0 0 9 8" shape-rendering="crispEdges"><path fill="#5A1E14" d="M1 0h3v1H1zM5 0h3v1H5zM0 1h9v3H0zM1 4h7v1H1zM2 5h5v1H2zM3 6h3v1H3zM4 7h1v1H4z"/><path fill="#D9453B" d="M2 1h1v1H2zM6 1h1v1H6zM1 2h7v2H1zM2 4h5v1H2zM3 5h3v1H3zM4 6h1v1H4z"/></svg>';
 
   var pet = document.getElementById("pet");
   var heartBox = document.getElementById("hearts");
   var bubble = document.getElementById("bubble");
-  var bubbleIdx = 0;
+  var bubbleIdx = 0, settleTimer = null;
 
   if (pet) {
     pet.addEventListener("click", function () {
       pet.classList.add("poked");
       setTimeout(function () { pet.classList.remove("poked"); }, 260);
+
+      // The settled face: happy-arc eyes and a blush, then back to the day's face.
+      clearTimeout(settleTimer);
+      pet.classList.add("settled");
+      if (sprite) sprite.src = frame(current, "-settled");
+      settleTimer = setTimeout(function () {
+        pet.classList.remove("settled");
+        if (sprite) sprite.src = frame(current, "");
+      }, 1400);
 
       if (bubble) {
         bubbleIdx = (bubbleIdx + 1) % BUBBLES.length;
@@ -93,7 +103,7 @@
       }
 
       if (heartBox) {
-        [18, 46, 72].forEach(function (left, i) {
+        [22, 48, 74].forEach(function (left, i) {
           var d = document.createElement("div");
           d.innerHTML = HEART;
           var svg = d.firstChild;

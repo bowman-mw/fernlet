@@ -54,11 +54,12 @@
       <span class="label">Contents</span>
       <nav>
         <a href="#t1">No central copy of your data</a>
-        <a href="#t2">Two kinds of storage</a>
+        <a href="#t2">Three kinds of storage</a>
         <a href="#t3">iCloud is optional</a>
         <a href="#t4">No ads or tracking</a>
         <a href="#t5">Friends are local and intentional</a>
         <a href="#t6">On-device AI</a>
+        <a href="#map">The map and your location</a>
         <a href="#workouts">How the workout planner decides</a>
         <a href="#t7">Inspect the work</a>
         <a href="#acknowledgments">Acknowledgments</a>
@@ -78,13 +79,16 @@
     </section>
 
     <section>
-      <h2 id="t2">Two kinds of storage</h2>
-      <p>Fernlet separates everyday information from especially sensitive information.</p>
+      <h2 id="t2">Three kinds of storage</h2>
+      <p>Fernlet separates everyday information from especially sensitive information, and keeps your map apart from both.</p>
       <div class="callout">
         <p><strong>Everyday information</strong> — meals, movement, hydration, sleep, settings, and companion state are stored locally. You may choose to sync this information through your private iCloud database. What Fernlet reads from Apple Health is the exception: it stays on the device that read it and is never part of that sync.</p>
       </div>
       <div class="callout">
         <p><strong>Sealed information</strong> — journal text, cycle data, intimate notes, and similar information are stored in a separate encrypted area on your device. Fernlet's networking code and its AI features are deliberately kept from reading that raw information — a build script blocks it: importing the sealed store from either one fails the build.</p>
+      </div>
+      <div class="callout">
+        <p><strong>Map information</strong> — the parts of the map you've uncovered, the routes you save, Where you've been, Places you return to, your homes and hotel, and where your photos sit. It is encrypted on this iPhone only: never synced, backed up, exported, shared, given to the AI or sent to us.</p>
       </div>
     </section>
 
@@ -103,13 +107,25 @@
     <section>
       <h2 id="t5">Friends are local and intentional</h2>
       <p>Friend features are designed for people who meet in person. There is no discovery feed, public directory, or remote friend server.</p>
-      <p>Friends exchange only the information needed for the connection: display names, public keys, companion appearance, and a broad wellbeing state. They do not receive raw health records, scores, cycle data, or journal text.</p>
+      <p>Friends exchange only the information needed for the connection: display names, public keys, companion appearance, and a broad wellbeing state. They do not receive raw health records, scores, cycle data, journal text, or anything from your map.</p>
     </section>
 
     <section>
       <h2 id="t6">On-device AI</h2>
       <p>Fernlet's AI features run on your iPhone, using Apple's on-device models. Your journal, health data, photos, cycle information, and friend data don't get sent to an external AI service.</p>
       <p>The sealed store is intentionally outside the AI feature boundary. On-device AI does not read raw cycle data, intimate notes, or sealed journal entries. The full on-device experience needs an iPhone 15 Pro or newer; on older supported phones, Fernlet falls back to simpler, deterministic logic instead of reaching for a server.</p>
+    </section>
+
+    <section>
+      <h2 id="map">The map and your location</h2>
+      <p>Location is optional. If you allow it, Fernlet uses it on your phone to place your companion on the map and to uncover the map as you go. It uses location in the background only during a walk you started, or if you turn on the optional low-power background mapping.</p>
+      <ul>
+        <li><span><strong>What it keeps.</strong> A coarse record of the parts of the map you have uncovered, in cells about 35 m across; while “Save new routes” is on, the line of each walk you record yourself; and where your workout spaces are, if you ask it to remember them.</span></li>
+        <li><span><strong>Places.</strong> Where you've been, in Private, is a rolling 30-day timeline of the places you stopped at. Places you return to holds only a visit count, never dates. Both cover everyday places only: food and drink, gyms, parks, beaches and campgrounds. Places like doctors' offices, lawyers or therapists are never named or kept, unless you add one yourself. Homes (up to two) and a hotel you mark stay until you remove them.</span></li>
+        <li><span><strong>Apple Maps.</strong> The map is drawn by Apple Maps, which receives the area on your screen in order to send its map images, under Apple's privacy terms. It never receives your map history or your walks. To name a place you stop at, Fernlet asks Apple Maps what is near you, only while Fernlet is open. For a place you return to, it keeps only Apple's reference to it and your own label, never Apple's name or category.</span></li>
+        <li><span><strong>The map widget.</strong> If you add it, the widget gets a picture of the map around you, with your marked places and saved trails, on this iPhone only and never in a backup. Your visit counts and the history of where you've been stay in Private, and the widget's copy is deleted whenever you delete your map history.</span></li>
+        <li><span><strong>Deleting.</strong> You can delete a day, a photo, or all of it, at any time, in Settings → Home map.</span></li>
+      </ul>
     </section>
 
     <section>
@@ -141,7 +157,7 @@
 
     <section>
       <h2 id="acknowledgments">Acknowledgments</h2>
-      <p>Fernlet's passcode lock uses CryptoSwift's scrypt. This product includes software developed by the "Marcin Krzyzanowski" (http://krzyzanowskim.com/). CryptoSwift's full license and the notices for Fernlet's fonts are in the app, under Settings → Acknowledgments, and in the source repository's <a href="https://github.com/bowman-mw/fernlet/blob/main/NOTICE">NOTICE</a> file.</p>
+      <p>Fernlet's passcode lock uses CryptoSwift's scrypt. This product includes software developed by the "Marcin Krzyzanowski" (http://krzyzanowskim.com/). CryptoSwift's full license and the notices for Fernlet's fonts are in the app, under Settings → Privacy &amp; data → Acknowledgments, and in the source repository's <a href="https://github.com/bowman-mw/fernlet/blob/main/NOTICE">NOTICE</a> file.</p>
     </section>
 
     <div class="disclaimer">
