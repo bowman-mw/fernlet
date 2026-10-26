@@ -53,6 +53,10 @@ public struct MealPhotoStore {
     /// path resolve to nil (fail-closed) rather than being laundered into authentic ciphertext by an
     /// attacker-dropped JPEG. Matches the index's own fail-closed refusal in `ProgressPhotoStore`.
     private let allowsLegacyPlaintextUpgrade: Bool
+    /// Where ``restoreSealedPhoto(_:forID:)`` moves a present-but-unreadable file before writing over
+    /// its id (W-19), and which ``deleteAll()`` clears with the corpus. Nil (the default) keeps the
+    /// old write-over; every store the escrow restore or Delete everything builds passes one.
+    private let legacyQuarantine: OwnPhotoLegacyQuarantine?
 
     /// Longest-side cap for stored photos. Ample for the polaroid card and a full-screen detail view,
     /// while keeping originals off disk. Small images are passed through at their native size.
@@ -89,18 +93,22 @@ public struct MealPhotoStore {
     ///     were born sealed (recipe/body photos) so unsealed bytes are refused, not laundered.
     ///   - legacyKeyProvider: Optional pre-split key for the dual-open safety net (see
     ///     ``legacyKeyProvider``). Nil — the default — means no fallback.
+    ///   - legacyQuarantine: Where a restore moves an unreadable file before writing over its id;
+    ///     cleared by ``deleteAll()``. Nil — the default — writes over it as before.
     public init(
         directory: URL,
         keyProvider: PrivateMediaKeyProviding = KeychainPrivateMediaKeyProvider(role: .ownPhotos),
         allowsLegacyPlaintextUpgrade: Bool = true,
         legacyKeyProvider: PrivateMediaKeyProviding? = nil,
-        purpose: CryptographicPurpose = FernletCryptoPurpose.AEAD.mealPhotoV2
+        purpose: CryptographicPurpose = FernletCryptoPurpose.AEAD.mealPhotoV2,
+        legacyQuarantine: OwnPhotoLegacyQuarantine? = nil
     ) {
         self.directory = directory
         self.keyProvider = keyProvider
         self.allowsLegacyPlaintextUpgrade = allowsLegacyPlaintextUpgrade
         self.legacyKeyProvider = legacyKeyProvider
         self.atRestPurpose = purpose
+        self.legacyQuarantine = legacyQuarantine
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         } catch {
@@ -202,13 +210,40 @@ public struct MealPhotoStore {
     ///   that means opened from an escrow-sealed record whose manifest entry's content hash matched.
     ///   It is NOT a general write path and must never be handed unauthenticated input; the
     ///   image-bounds check below is a cheap backstop, not the authorization.
+    /// - Important: a file already at `id` that no read path opens is MOVED to the
+    ///   ``OwnPhotoLegacyQuarantine`` first (W-19): it may be a pre-`FMA2` photo whose bytes are the
+    ///   only local copy, and a restore must never be what destroys it.
     /// - Returns: whether the sealed bytes reached disk (false on oversize or non-image input, absurd
-    ///   dimensions, no key, or a write failure — fail-closed, nothing written). R7: deliberately not
-    ///   `@discardableResult` — a discarded false is a photo silently missing from a restore.
+    ///   dimensions, no key, a quarantine that could not take the old file, or a write failure —
+    ///   fail-closed, nothing written). R7: deliberately not `@discardableResult` — a discarded false
+    ///   is a photo silently missing from a restore.
     public func restoreSealedPhoto(_ normalizedJPEG: Data, forID id: UUID) -> Bool {
         guard normalizedJPEG.count <= Self.maxIncomingPhotoBytes else { return false }
         guard PrivateMediaStore.isWithinSafePixelBounds(normalizedJPEG) else { return false }
+        guard setAsideIfUnreadable(id) else { return false }
         return keyProvider.sealAndWrite(normalizedJPEG, to: url(for: id), purpose: atRestPurpose)
+    }
+
+    /// Moves the file at `id` into the quarantine when it is present, non-empty and opens under no
+    /// read path, so the write that follows lands on an empty name. True when the write may go ahead:
+    /// nothing there, an empty file, a file that opens (a live photo, written over as always), no
+    /// quarantine configured, or the move succeeded. False, and nothing moved, when the bytes cannot
+    /// be read or no key is available: "I cannot look" never reads as "it is dead".
+    private func setAsideIfUnreadable(_ id: UUID) -> Bool {
+        guard let legacyQuarantine else { return true }
+        let target = url(for: id)
+        guard FileManager.default.fileExists(atPath: target.path) else { return true }
+        guard keyProvider.mediaKey() != nil, let stored = try? Data(contentsOf: target) else { return false }
+        guard !stored.isEmpty, !isOpenable(stored) else { return true }
+        return legacyQuarantine.moveAside(target)
+    }
+
+    /// Whether any path this store's READ uses opens `stored`: the own key, the dual-open legacy
+    /// key, or — only where the corpus has one — a pre-sealing plaintext JPEG.
+    private func isOpenable(_ stored: Data) -> Bool {
+        if keyProvider.gcmOpen(stored, purpose: atRestPurpose) != nil { return true }
+        if let legacyKeyProvider, legacyKeyProvider.gcmOpen(stored, purpose: atRestPurpose) != nil { return true }
+        return allowsLegacyPlaintextUpgrade && PrivateMediaStore.isWithinSafePixelBounds(stored)
     }
 
     /// The ids this store currently holds files for, parsed from the flat `<uuid>.jpg` file names.
@@ -294,9 +329,7 @@ public struct MealPhotoStore {
             sawFile = true
             guard let stored = try? Data(contentsOf: url) else { return false }
             guard !stored.isEmpty else { continue }
-            if keyProvider.gcmOpen(stored, purpose: atRestPurpose) != nil { return false }
-            if let legacyKeyProvider, legacyKeyProvider.gcmOpen(stored, purpose: atRestPurpose) != nil { return false }
-            if allowsLegacyPlaintextUpgrade, PrivateMediaStore.isWithinSafePixelBounds(stored) { return false }
+            if isOpenable(stored) { return false }
         }
         return sawFile
     }
@@ -335,10 +368,14 @@ public struct MealPhotoStore {
     /// A "delete everything" that skipped this would strand the user's food photos on disk permanently,
     /// unreferenced and invisible. Removing the directory itself also takes any stray non-.jpg contents.
     ///
+    /// The corpus's ``OwnPhotoLegacyQuarantine`` folder goes with it (W-19): photos a restore set
+    /// aside are still the user's photos.
+    ///
     /// R7: not `@discardableResult` — `false` means the user's photos survived "delete everything".
-    /// - Returns: whether the corpus is now empty.
+    /// - Returns: whether the corpus and its quarantine are now empty.
     public func deleteAll() -> Bool {
-        guard FileManager.default.fileExists(atPath: directory.path) else { return true }
+        let quarantineCleared = legacyQuarantine?.deleteAll() ?? true
+        guard FileManager.default.fileExists(atPath: directory.path) else { return quarantineCleared }
         do {
             try FileManager.default.removeItem(at: directory)
         } catch {
@@ -349,7 +386,7 @@ public struct MealPhotoStore {
         // this session's saves, and each save also re-ensures the folder (`ensureDirectory()`), so a
         // failed recreate no longer leaves meal-photo saves failing until the next launch.
         ensureDirectory()
-        return true
+        return quarantineCleared
     }
 
     /// Creates the store's folder if it is missing, naming a failure.

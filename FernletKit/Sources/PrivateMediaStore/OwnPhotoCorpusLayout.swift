@@ -31,6 +31,10 @@ public enum OwnPhotoCorpusLayout {
     /// key as the bytes, so the migration must cover it too — a timeline whose index still opens
     /// only under the old key would read as empty after binding.
     public static let progressIndexFileName = "index.bin"
+    /// Root of ``OwnPhotoLegacyQuarantine``: present-but-unreadable files a restore moved aside
+    /// instead of writing over them, one folder per corpus directory name. Deliberately NOT in
+    /// ``sealedLocations(in:)``: nothing backs it up, uploads it, censuses it or migrates it.
+    public static let legacyQuarantineDirectoryName = "LegacyQuarantine"
 
     /// Meal-photo directory under `documentsDirectory`.
     public static func mealPhotosDirectory(in documentsDirectory: URL) -> URL {

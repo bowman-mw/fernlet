@@ -1,3 +1,4 @@
+import CloudKit
 import ProximityKit
 import FernletConnections
 import CloudKitSync
@@ -52,9 +53,13 @@ protocol OwnPhotoBackupContext: AnyObject {
 ///   the very restore the user paid iCloud quota for. So a corpus that holds nothing this install
 ///   can open is restored INTO, exactly like an empty one. The stranded files are never deleted to
 ///   achieve that — "unopenable" also covers truncated files and the meal corpus's legitimate
-///   pre-sealing plaintext, which the read path still returns; the restore simply writes the
-///   corpus's real photos back over their own ids. Neither half may close the restore on a corpus
-///   this install has NEVER uploaded to: a new phone's first photo, taken before its backup was
+///   pre-sealing plaintext, which the read path still returns; the restore writes the corpus's
+///   real photos back over their own ids, and since W-19 (2026-10-26) the store first MOVES any
+///   unreadable file at such an id (and an unreadable progress index) to
+///   `LegacyQuarantine/<corpus>/` — never uploaded, excluded from backup, cleared only by Delete
+///   everything — because pre-`FMA2` photos read as dead here and are still intact. Neither half
+///   may close the restore on a corpus this install has NEVER uploaded to: a new phone's first
+///   photo, taken before its backup was
 ///   turned on, made the corpus "in use" and its backup never came down (bug confirmation 2026-10-15
 ///   §2). Such a corpus is restored AROUND what it holds — only ids it lacks are fetched, its own are
 ///   never written over, and the progress timeline gains the restored rows instead of refusing them.
@@ -191,7 +196,14 @@ final class OwnPhotoBackupCoordinator {
             legacyKeyProvider: legacyKeyProvider(),
             purpose: recipe
                 ? FernletCryptoPurpose.AEAD.recipePhotoV2
-                : FernletCryptoPurpose.AEAD.mealPhotoV2
+                : FernletCryptoPurpose.AEAD.mealPhotoV2,
+            // W-19: a restore writing over an id moves an unreadable file aside first.
+            legacyQuarantine: OwnPhotoLegacyQuarantine(
+                documentsDirectory: documentsDirectory,
+                corpusDirectoryName: recipe
+                    ? OwnPhotoCorpusLayout.recipePhotosDirectoryName
+                    : OwnPhotoCorpusLayout.mealPhotosDirectoryName
+            )
         )
     }
 
@@ -199,7 +211,12 @@ final class OwnPhotoBackupCoordinator {
         ProgressPhotoStore(
             directory: OwnPhotoCorpusLayout.progressPhotosDirectory(in: documentsDirectory),
             keyProvider: ownKeyProvider(),
-            legacyKeyProvider: legacyKeyProvider()
+            legacyKeyProvider: legacyKeyProvider(),
+            // W-19: the index merge and the body writes move an unreadable file aside first.
+            legacyQuarantine: OwnPhotoLegacyQuarantine(
+                documentsDirectory: documentsDirectory,
+                corpusDirectoryName: OwnPhotoCorpusLayout.progressPhotosDirectoryName
+            )
         )
     }
 
@@ -749,7 +766,9 @@ final class OwnPhotoBackupCoordinator {
         ledger: OwnPhotoUploadLedger
     ) -> Set<UUID>? {
         guard !access.isEmpty() else { return ledger.hasUploaded(for: corpus) ? nil : [] }
-        // Stranded bytes (the device-backup-onto-a-new-phone case) are written over by id, as always.
+        // Stranded bytes (the device-backup-onto-a-new-phone case) are restored over by id — but
+        // never destroyed: the store moves each unreadable file to `LegacyQuarantine/<corpus>/`
+        // before writing its id (W-19), and refuses the write when it cannot.
         guard !access.holdsOnlyUnopenableFiles() else { return [] }
         guard !ledger.hasUploaded(for: corpus), let localIDs = access.ids() else { return nil }
         return Set(localIDs)
@@ -964,9 +983,41 @@ final class OwnPhotoBackupCoordinator {
         case IdentityError.notProvisioned:
             return .deferredKeyNotSynced
         default:
-            FernletAuditLog.log("sealedPhoto.restoreFailed", context: ["corpus": corpus.rawValue])
+            var context = Self.restoreFailureReason(error)
+            context["corpus"] = corpus.rawValue
+            FernletAuditLog.log("sealedPhoto.restoreFailed", context: context)
             return .deferredTransient
         }
+    }
+
+    /// The sanitized reason `sealedPhoto.restoreFailed` carries (W-19): the error's TYPE, plus the
+    /// CloudKit code when it is a CloudKit error (`ckCode`, the `CKError.Code` raw value) or the case
+    /// name of one of the route's own error enums (`case`). Never a description, user info, record
+    /// name or associated value — those can name a record or carry a server message.
+    ///
+    /// A CloudKit failure reaches the catch as a plain `NSError` in `CKErrorDomain`, so the domain
+    /// and code are read off the bridged `NSError` rather than matched as `CKError`.
+    nonisolated static func restoreFailureReason(_ error: Error) -> [String: String] {
+        var reason = ["errorType": String(describing: type(of: error))]
+        let bridged = error as NSError
+        if bridged.domain == CKErrorDomain { reason["ckCode"] = String(bridged.code) }
+        switch error {
+        case let sealed as SealedBackupError:
+            switch sealed {
+            case .keyAgreementIdentityMismatch: reason["case"] = "keyAgreementIdentityMismatch"
+            case .malformedRecord: reason["case"] = "malformedRecord"
+            case .staleGeneration: reason["case"] = "staleGeneration"
+            }
+        case let cloud as CloudKitDataServiceError:
+            switch cloud {
+            case .notSignedIn: reason["case"] = "notSignedIn"
+            case .confirmationRequired: reason["case"] = "confirmationRequired"
+            case .cloudKitOperationFailed: reason["case"] = "cloudKitOperationFailed"
+            }
+        default:
+            break
+        }
+        return reason
     }
 
     // MARK: - Teardown
