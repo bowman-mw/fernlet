@@ -12,7 +12,10 @@
 //  LICENSE.txt`, copied unaltered from the fork tag Fernlet pins, and `Fonts/LICENSES/*-OFL.txt` —
 //  never retyped here. So they stay word for word in English, as their authors wrote them, and their
 //  URLs stay out of Swift source, where `NoTrackingBoundaryTests` would read them as destinations.
-//  Nothing on the screen is a link. The OFL texts are hard-wrapped at about 70 columns, which broke
+//  No notice is a link. The weather section (added 2026-10-25, the owner's pick of WeatherKit
+//  attribution placements) credits Apple Weather as WeatherKit's terms ask and carries the screen's one
+//  link, Apple's legal page of weather data sources, which Safari opens (`AppleWeatherAttribution`;
+//  `AppleWeatherAttributionTests` pins it). The OFL texts are hard-wrapped at about 70 columns, which broke
 //  twice on a phone (seen on the simulator, 2026-10-25), so their line breaks are rejoined for the
 //  screen; their words are not touched. `AcknowledgmentsTests` pins the files, the sentence, NOTICE and
 //  the website's copy (Site/technical/index.html).
@@ -135,8 +138,8 @@ private struct FontNotice: Identifiable {
 ///
 /// Pushed from ``SettingsSheet`` via `SettingsRoute.acknowledgments`. The explanations localize; the
 /// notices are drawn `verbatim` from the files the bundle carries (``AcknowledgmentNotices``), word
-/// for word in English (the font licenses' hard wraps rejoined), selectable, and never a link — the
-/// screen opens no network destination.
+/// for word in English (the font licenses' hard wraps rejoined), selectable, and never a link. The one
+/// link is the weather section's Apple legal page, which Safari opens; the app fetches nothing.
 struct AcknowledgmentsView: View {
     private let cryptoSwiftLicense = AcknowledgmentNotices.bundledText(
         AcknowledgmentNotices.cryptoSwiftLicenseResource, in: .main)
@@ -151,6 +154,7 @@ struct AcknowledgmentsView: View {
                 cryptoSwiftSection
                 fontsSection
                 foodDataSection
+                weatherSection
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -210,6 +214,17 @@ struct AcknowledgmentsView: View {
     @ViewBuilder private var foodDataSection: some View {
         header(Text("Food data"))
         paragraph(Text("Products found with a barcode lookup come from Open Food Facts, under the Open Database License (ODbL). The foods built into Fernlet come from USDA FoodData Central, which is in the public domain."))
+    }
+
+    /// Where the weather comes from: the Apple Weather mark, the notice that Fernlet modifies Apple's
+    /// data, and Apple's legal page, as WeatherKit's terms ask (``AppleWeatherAttribution``). "Ten" is
+    /// `WeatherRequestBudget.dailyLimit`; `AppleWeatherAttributionTests` holds the two together.
+    @ViewBuilder private var weatherSection: some View {
+        header(Text("Weather"))
+        AppleWeatherAttribution.markText(.body)
+            .foregroundStyle(Color.bark)
+        paragraph(Text("When weather-aware recovery prompts are on, Fernlet asks Apple Weather for the current conditions near you, at most ten times a day. Fernlet modifies the data Apple provides: it becomes the sky behind your companion, the gentler-day note and the short-walk idea, never a forecast."))
+        AppleWeatherSourcesLink()
     }
 
     // MARK: - Pieces

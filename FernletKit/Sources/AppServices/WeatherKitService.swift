@@ -217,11 +217,17 @@ public final class WeatherKitService: NSObject, CLLocationManagerDelegate {
     }
 
     /// A gentle recovery prompt when conditions are heavy/gloomy, or `nil` when unavailable or fine.
+    ///
+    /// Display text, localized in this module's catalog (`bundle: .module`, or it would read English
+    /// forever); the app draws it on the gentler-day card under its Apple Weather credit.
     public func moodRecoveryPrompt() async -> String? {
         #if canImport(WeatherKit)
         guard let conditions = await currentConditions() else { return nil }
         guard Self.gloomyConditions.contains(conditions.condition) else { return nil }
-        return "The weather outside is heavy today. Be a little gentler with yourself — a small, warm thing still counts."
+        return String(localized: "weather.gentlerDay.prompt",
+                      defaultValue: "The weather outside is heavy today. Be a little gentler with yourself — a small, warm thing still counts.",
+                      bundle: .module,
+                      comment: "Home card on a heavy, gloomy weather day (rain, snow, fog, cloud). An invitation to self-kindness, never an instruction; 'a small, warm thing' is any small act of care.")
         #else
         return nil
         #endif

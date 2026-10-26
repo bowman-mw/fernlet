@@ -9686,6 +9686,17 @@
         }
       }
     },
+    "Fernlet modifies the data Apple provides into its own gentle signals, never a forecast." : {
+      "comment" : "Settings, under the weather switch and the Apple Weather mark: the notice Apple's terms ask for, that Fernlet changes Apple's weather data. 'Gentle signals' are the sky behind the companion, the gentler-day note and the short-walk idea.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet modifica los datos que proporciona Apple para crear sus propias señales suaves, nunca un pronóstico."
+          }
+        }
+      }
+    },
     "Fernlet nearby" : {
       "localizations" : {
         "es" : {
@@ -10646,6 +10657,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "De %1$@ a %2$@, en incrementos de %3$@."
+          }
+        }
+      }
+    },
+    "From %@, modified by Fernlet" : {
+      "comment" : "Caption at the foot of a Home card made from Apple's weather data. %@ is the Apple Weather mark (the Apple logo and \"Weather\"), a trademark that stays as it is in every language. Apple's terms ask the card to credit Apple Weather and to say the data was changed.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De %@, modificado por Fernlet"
           }
         }
       }
@@ -16817,6 +16839,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Abre %@ directamente"
+          }
+        }
+      }
+    },
+    "Opens Apple's page in Safari" : {
+      "comment" : "VoiceOver hint on the Weather data sources link: it leaves Fernlet for Apple's page in Safari.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre la página de Apple en Safari"
           }
         }
       }
@@ -26951,6 +26984,27 @@
         }
       }
     },
+    "Weather" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Clima"
+          }
+        }
+      }
+    },
+    "Weather data sources" : {
+      "comment" : "Link to Apple's legal page listing where its weather data comes from. Opens in Safari.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fuentes de datos del clima"
+          }
+        }
+      }
+    },
     "Weather-aware recovery prompts" : {
       "localizations" : {
         "es" : {
@@ -27273,6 +27327,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Cuando está activado, Fernlet compara con cuidado tu variabilidad de la frecuencia cardiaca, tu frecuencia cardiaca en reposo, tu respiración y la temperatura de tu muñeca mientras duermes, tomadas de Salud, con tu propio rango habitual — nunca con el de otra persona — y puede señalar con discreción cuando tu cuerpo parece un poco más tenso de lo normal. Se calcula y se guarda solo en este dispositivo."
+          }
+        }
+      }
+    },
+    "When weather-aware recovery prompts are on, Fernlet asks Apple Weather for the current conditions near you, at most ten times a day. Fernlet modifies the data Apple provides: it becomes the sky behind your companion, the gentler-day note and the short-walk idea, never a forecast." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cuando las sugerencias de recuperación según el clima están activadas, Fernlet pide a Apple Weather las condiciones actuales cerca de ti, como máximo diez veces al día. Fernlet modifica los datos que proporciona Apple: se convierten en el cielo detrás de tu compañero, la nota de un día más tranquilo y la idea de un paseo corto, nunca en un pronóstico."
           }
         }
       }

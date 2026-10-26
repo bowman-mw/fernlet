@@ -441,5 +441,6 @@ The app's front door and its conscience: first-run onboarding, the Settings hub 
 - ``FernletDataExport``
 - ``PrivacyPolicyView``
 - ``AcknowledgmentsView``
+- ``AppleWeatherAttribution``
 - ``PhotoCaptureControl``
 - ``MonthCalendarCard``

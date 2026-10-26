@@ -160,6 +160,8 @@ struct AmbientCardsView: View {
                                     .font(.fernlet(.body))
                                     .foregroundStyle(Color.bark)
                                     .fernletWrappingText()
+                                // The walk is the one offer the weather decides, so it credits it.
+                                if kind == .shortWalk { AppleWeatherCaption() }
                             }
                             Spacer(minLength: 0)
                         }
@@ -408,6 +410,7 @@ struct AmbientCardsView: View {
                             .font(.fernlet(.body))
                             .foregroundStyle(Color.bark)
                             .fernletWrappingText()
+                        AppleWeatherCaption()
                     }
                     Spacer(minLength: 0)
                 }
