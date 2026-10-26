@@ -142,7 +142,8 @@ struct WorldDiscoveryTests {
 
     // MARK: W-13, look up where the person stops
 
-    /// Staying within 50 m for three minutes, or slower than walking for a minute, is a stop; driving is not.
+    /// Staying within 50 m for three minutes, or three readings slower than walking over a minute after
+    /// walking (W-14), is a stop; driving is not.
     @Test func aStopIsStayingOrSlow() {
         var watch = WorldStopWatch()
         let arrived = watch.observe(Self.here, at: Self.now)
@@ -153,13 +154,21 @@ struct WorldDiscoveryTests {
         let stayed = watch.observe(Self.here.offset(east: 10, north: 10), at: Self.now.addingTimeInterval(181))
         #expect(stayed)
 
+        // W-14: a slow spell takes three slow readings over a minute, straight after walking.
         var slow = WorldStopWatch()
         let start = Self.here.offset(east: 500, north: 0)
         let first = slow.observe(start, at: Self.now)
         let second = slow.observe(start.offset(east: 30, north: 0), at: Self.now.addingTimeInterval(40))
         let third = slow.observe(start.offset(east: 60, north: 0), at: Self.now.addingTimeInterval(80))
-        #expect(!first && !second)
-        #expect(third, "below walking for a minute")
+        #expect(!first && !second && !third, "two slow readings with no walk before them are no stop")
+        var walker = WorldStopWatch()
+        let path = [0.0, 14, 28, 43, 58, 73]   // 1.4 m/s, then 0.5 m/s every 30 s
+        let times = [0.0, 10, 20, 50, 80, 110]
+        var stops: [Bool] = []
+        for (east, second) in zip(path, times) {
+            stops.append(walker.observe(start.offset(east: east, north: 0), at: Self.now.addingTimeInterval(second)))
+        }
+        #expect(stops == [false, false, false, false, false, true], "below walking for a minute after a walk")
 
         var driving = WorldStopWatch()
         var everStopped = false
@@ -189,13 +198,101 @@ struct WorldDiscoveryTests {
         let restaurant = Self.here.offset(east: 40 * 140 + 60, north: 0)
         let arrived = WorldFix(point: restaurant, accuracy: 10, at: at, isPrecise: true)
         #expect(!(await keeper.handleForeground(arrived, now: at)), "just arrived")
-        let settled = at.addingTimeInterval(WorldStopWatch.stayTime + 1)
+        // W-14: straight after a drive, three minutes is not yet a stop; five within 30 m is.
+        let early = at.addingTimeInterval(WorldStopWatch.stayTime + 1)
+        #expect(!(await keeper.handleForeground(WorldFix(point: restaurant.offset(east: 4, north: 2), accuracy: 10, at: early,
+                                                         isPrecise: true), now: early)))
+        let settled = at.addingTimeInterval(WorldStopWatch.dwellTime + 1)
         #expect(await keeper.handleForeground(WorldFix(point: restaurant.offset(east: 8, north: 4), accuracy: 10, at: settled,
                                                        isPrecise: true), now: settled))
         #expect(lookup.calls == 1)
         let state = try keeper.store.deviceState()
         #expect(state.newPlaces.map(\.placeID) == ["I-hoshi"])
         #expect(keeper.eatingVisit?.placeID == "I-hoshi", "the eating visit starts at the stop")
+    }
+
+    // MARK: W-14, red lights are not stops
+
+    private static let burgers = [NearbyPlace(name: "Burger Barn", kind: .allowed(.foodAndDrink), metres: 15, placeID: "I-burger")]
+
+    /// A reading on the road `east` metres along at `at`, with CoreLocation's `speed` when `knowsSpeed`.
+    private static func road(_ east: Double, _ at: Date, speed: Double, knowsSpeed: Bool = true) -> WorldFix {
+        WorldFix(point: here.offset(east: east, north: 0), accuracy: 10, at: at, isPrecise: true, speed: knowsSpeed ? speed : nil)
+    }
+
+    /// A drive with 90-second red lights beside fast food learns nothing, with CoreLocation's speed or without
+    /// it: the reading pulling away never decides, the gap at the light makes no slow spell, and straight
+    /// after a drive a light is no dwell (a recheck at the light decides nothing either).
+    @Test func aDriveWithRedLightsBesideFastFoodLearnsNothing() async throws {
+        for knowsSpeed in [true, false] {
+            let lookup = DiscoveryLookup(answer: Self.burgers)
+            let keeper = WorldPlacesKeeper(vault: WorldMapVault.ephemeral(), lookup: lookup, remembersPlaces: { true },
+                                           remembersEatingOut: { true })
+            var at = Self.now, east = 0.0
+            for light in 0..<6 {
+                for _ in 0..<8 {
+                    east += 150
+                    at.addTimeInterval(10)
+                    #expect(!(await keeper.handleForeground(Self.road(east, at, speed: 15, knowsSpeed: knowsSpeed), now: at)))
+                }
+                east += 20
+                at.addTimeInterval(4)
+                let braking = Self.road(east, at, speed: 3, knowsSpeed: knowsSpeed)
+                #expect(!(await keeper.handleForeground(braking, now: at)), "braking at light \(light)")
+                #expect(!(await keeper.handleForeground(braking, now: at.addingTimeInterval(89), recheck: true)), "waiting")
+                east += 10
+                at.addTimeInterval(90)
+                #expect(!(await keeper.handleForeground(Self.road(east, at, speed: 4.5, knowsSpeed: knowsSpeed), now: at)),
+                        "pulling away from light \(light)")
+            }
+            #expect(lookup.calls == 0 && keeper.refusedSpot == nil && keeper.eatingVisit == nil)
+            #expect(try keeper.store.deviceState() == .empty, "nothing learned")
+        }
+    }
+
+    /// Crawling in a jam straight after a drive, below walking for minutes, is no stop: after a drive only a
+    /// dwell counts.
+    @Test func aJamAfterADriveIsNoStop() {
+        var watch = WorldStopWatch()
+        var stopped = false
+        for step in 0..<10 {
+            if watch.observe(Self.here.offset(east: Double(step) * 150, north: 0), speed: 15, at: Self.now.addingTimeInterval(Double(step) * 10)) {
+                stopped = true
+            }
+        }
+        for step in 1...12 {
+            let at = Self.now.addingTimeInterval(100 + Double(step) * 20)
+            if watch.observe(Self.here.offset(east: 1_350 + Double(step) * 10, north: 0), speed: 0.5, at: at) { stopped = true }
+        }
+        #expect(!stopped)
+    }
+
+    /// Parked twenty minutes at a restaurant after a drive, the place is learned once, where the car stopped:
+    /// three minutes is not yet a stop, the recheck with no newer reading confirms the dwell at five, and a
+    /// reading still inside at twenty is the same visit.
+    @Test func twentyMinutesParkedAtARestaurantLearnsIt() async throws {
+        let lookup = DiscoveryLookup(answer: Self.burgers)
+        let keeper = WorldPlacesKeeper(vault: WorldMapVault.ephemeral(), lookup: lookup, remembersPlaces: { true },
+                                       remembersEatingOut: { true })
+        var at = Self.now
+        for step in 1...8 {
+            at.addTimeInterval(10)
+            #expect(!(await keeper.handleForeground(Self.road(Double(step) * 150, at, speed: 15), now: at)))
+        }
+        at.addTimeInterval(8)
+        let lot = Self.here.offset(east: 8 * 150 + 40, north: 0)
+        #expect(!(await keeper.handleForeground(WorldFix(point: lot, accuracy: 10, at: at, isPrecise: true, speed: 2), now: at)))
+        let parked = WorldFix(point: lot.offset(east: 12, north: 6), accuracy: 10, at: at.addingTimeInterval(30), isPrecise: true, speed: 0)
+        #expect(!(await keeper.handleForeground(parked, now: parked.at)), "just parked")
+        #expect(!(await keeper.handleForeground(parked, now: at.addingTimeInterval(WorldStopWatch.stayTime + 1), recheck: true)),
+                "three minutes after a drive is not yet a stop")
+        #expect(await keeper.handleForeground(parked, now: at.addingTimeInterval(WorldStopWatch.dwellTime + 1), recheck: true))
+        #expect(lookup.calls == 1)
+        let inside = WorldFix(point: lot.offset(east: 5, north: 10), accuracy: 10, at: at.addingTimeInterval(20 * 60), isPrecise: true, speed: 0)
+        #expect(!(await keeper.handleForeground(inside, now: inside.at)), "the same visit twenty minutes in")
+        let state = try keeper.store.deviceState()
+        #expect(state.newPlaces.map(\.placeID) == ["I-burger"] && state.newPlaces.first?.point == lot, "learned where the car stopped")
+        #expect(keeper.eatingVisit?.placeID == "I-burger")
     }
 }
 

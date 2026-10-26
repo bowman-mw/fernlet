@@ -7,7 +7,8 @@ import WorldMapStore
 /// `b2-where-been`; owner's option A, 2026-10-24). It captures; Private reads, under the hub key.
 ///
 /// - **While Fernlet is open** (a precise reading of 50 m or better, the app in front), **once the person has
-///   stopped** (W-13: stayed within 50 m for three minutes, or slower than walking for a minute;
+///   stopped** (W-13: stayed within 50 m for three minutes, or three readings slower than walking over a
+///   minute after walking; W-14: after a drive, five minutes within 30 m, decided where they dwelt;
 ///   ``WorldStopWatch``; readings on the way are passed by): a reading within 75 m of a place already known is
 ///   a visit there. Otherwise, at most once per 150 m moved or 30
 ///   minutes, the place lookup (``WorldPlaceLooking``) is asked about where the person stands, and the
@@ -116,44 +117,47 @@ final class WorldPlacesKeeper {
     }
 
     /// A reading taken while Fernlet is open and in front: home or away, then a visit at a known
-    /// place, or a lookup when the rules allow one. Whether a visit was noted.
+    /// place, or a lookup when the rules allow one. `recheck`: no new reading, only the check that the
+    /// person is still where the last one was (`scheduleStopCheck`). Whether a visit was noted.
     @discardableResult
-    func handleForeground(_ fix: WorldFix, now: Date = Date()) async -> Bool {
+    func handleForeground(_ fix: WorldFix, now: Date = Date(), recheck: Bool = false) async -> Bool {
         guard !isDecoy, fix.point.isValid else { return false }
         if fix.isPrecise, fix.accuracy <= Self.maxHomeAccuracy { observeHomes(fix.point, at: now) }
         followEatingVisit(fix.point, now: now)
         if let spot = refusedSpot, spot.point.distance(to: fix.point) > Self.refusedSpotReach { refusedSpot = nil }
         guard remembersPlaces() || remembersEatingOut(), fix.isPrecise, fix.accuracy <= Self.maxAccuracy else { return false }
-        // W-13: only where the person has stopped. Readings on the way (a drive, a walk past a pharmacy) look
-        // nothing up, note no visit and leave the lookup spacing alone.
-        guard stopWatch.observe(fix.point, at: now) else {
+        // W-13, W-14: only where the person has stopped, decided at the stop's own spot (after a drive, where
+        // they dwelt). Readings on the way (a drive and its red lights, a walk past a pharmacy) look nothing
+        // up, note no visit and leave the lookup spacing alone.
+        let stopped = recheck ? stopWatch.isStopped(at: now) : stopWatch.observe(fix.point, speed: fix.speed, at: now)
+        guard stopped, let point = stopWatch.stopPoint else {
             scheduleStopCheck(fix, now: now)
             return false
         }
-        guard !isLookingUp, homes.base(near: fix.point) == nil else { return false }
-        if let noted = noteKnownVisit(at: fix.point, now: now) { return noted }
-        guard lookupIsDue(at: fix.point, now: now) else { return false }
+        guard !isLookingUp, homes.base(near: point) == nil else { return false }
+        if let noted = noteKnownVisit(at: point, now: now) { return noted }
+        guard lookupIsDue(at: point, now: now) else { return false }
         isLookingUp = true
-        let nearby = await lookup.nearbyPlaces(around: fix.point)
+        let nearby = await lookup.nearbyPlaces(around: point)
         isLookingUp = false
-        lastLookup = (fix.point, now)
+        lastLookup = (point, now)
         let verdict = nearby.map(PlaceClassifier.visitVerdict)
         // The outcome's shape only (never a name, a reference or a point), for the device pass.
         FernletAuditLog.log("worldMap.places.lookup", context: ["answered": nearby == nil ? "no" : "yes",
                                                                  "places": "\(nearby?.count ?? 0)",
                                                                  "verdict": Self.token(verdict)])
         guard !isDecoy else { return false }
-        refusedSpot = verdict == .refused && remembersPlaces() ? (fix.point, now) : nil
+        refusedSpot = verdict == .refused && remembersPlaces() ? (point, now) : nil
         var noted = false
         if remembersPlaces(), case .allowed(let placeID) = verdict {
             noted = update { state in
                 if let known = state.knownPlace(withPlaceID: placeID) { return state.recordingVisit(to: known.id, at: now) }
-                guard state.knownPlace(near: fix.point) == nil else { return state }
-                return state.learning(PlaceRecord(placeID: placeID, point: fix.point), at: now)
+                guard state.knownPlace(near: point) == nil else { return state }
+                return state.learning(PlaceRecord(placeID: placeID, point: point), at: now)
             }
         }
         // After the visit is learned, so a place to eat shares its place's id.
-        startEatingVisit(nearby.flatMap(PlaceClassifier.eatingPlaceID), at: fix.point, now: now)
+        startEatingVisit(nearby.flatMap(PlaceClassifier.eatingPlaceID), at: point, now: now)
         return noted
     }
 
@@ -240,7 +244,7 @@ final class WorldPlacesKeeper {
             }
             guard let self, mayRecheck() else { return }
             let still = WorldFix(point: fix.point, accuracy: fix.accuracy, at: Date(), isPrecise: fix.isPrecise)
-            await self.handleForeground(still)
+            await self.handleForeground(still, recheck: true)
         }
     }
 
