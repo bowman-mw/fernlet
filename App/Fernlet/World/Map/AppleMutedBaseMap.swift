@@ -61,24 +61,38 @@ private struct AppleMutedMapView: UIViewRepresentable {
         map.cameraZoomRange = MKMapView.CameraZoomRange(minCenterCoordinateDistance: WorldCamera.distanceRange.lowerBound,
                                                         maxCenterCoordinateDistance: WorldCamera.distanceRange.upperBound)
         map.insetsLayoutMarginsFromSafeArea = false
-        map.delegate = context.coordinator
-        context.coordinator.view = self
-        context.coordinator.tileStatus = tileStatus
-        context.coordinator.revision = camera.revision
-        map.setCamera(AppleMapGeometry.mapCamera(for: camera), animated: false)
+        let coordinator = context.coordinator
+        coordinator.view = self
+        coordinator.tileStatus = tileStatus
+        coordinator.revision = camera.revision
+        // W-15: MapKit reports this jump before `setCamera` returns; the gate holds it past SwiftUI's update.
+        coordinator.gate.updating {
+            map.delegate = coordinator
+            map.setCamera(AppleMapGeometry.mapCamera(for: camera), animated: false)
+        }
         return map
     }
 
+    /// Every write to the map happens inside the gate's update stretch (W-15): a style, margin or camera
+    /// change MapKit answers at once reports after SwiftUI's update, never during it.
     func updateUIView(_ map: MKMapView, context: Context) {
         let coordinator = context.coordinator
         coordinator.view = self
         coordinator.tileStatus = tileStatus
-        map.overrideUserInterfaceStyle = darkStyle ? .dark : .light
+        coordinator.gate.updating { apply(to: map, coordinator: coordinator) }
+    }
+
+    /// The style, the credit's margins and Fernlet's latest camera request. A request MapKit already shows
+    /// (a panel closing while the map follows) moves nothing.
+    private func apply(to map: MKMapView, coordinator: AppleMutedMapCoordinator) {
+        let style: UIUserInterfaceStyle = darkStyle ? .dark : .light
+        if map.overrideUserInterfaceStyle != style { map.overrideUserInterfaceStyle = style }
         let margins = AppleMapGeometry.margins(bottomInset: bottomInset)
         if map.layoutMargins != margins { map.layoutMargins = margins }
-        guard camera.revision != coordinator.revision else { return }
+        let move = AppleMapGeometry.cameraMove(for: camera, applied: coordinator.revision, showing: map.camera)
         coordinator.revision = camera.revision
-        map.setCamera(AppleMapGeometry.mapCamera(for: camera), animated: !reduceMotion)
+        guard let move else { return }
+        map.setCamera(move, animated: !reduceMotion)
     }
 
     /// The person moved the map (W-10): a pan that moves the centre takes the new place and stops
@@ -136,6 +150,17 @@ enum AppleMapGeometry {
     static func mapCamera(for camera: WorldCamera) -> MKMapCamera {
         let centre = CLLocationCoordinate2D(latitude: camera.center.latitude, longitude: camera.center.longitude)
         return MKMapCamera(lookingAtCenter: centre, fromDistance: camera.distance, pitch: 0, heading: 0)
+    }
+
+    /// The camera to hand MapKit for `camera`, or nil when there is nothing to move (W-15): no request
+    /// since revision `applied`, or MapKit's camera (`current`) already shows it, within
+    /// ``WorldCamera/stillMetres`` of its centre and its height.
+    static func cameraMove(for camera: WorldCamera, applied: Int, showing current: MKMapCamera) -> MKMapCamera? {
+        guard camera.revision != applied else { return nil }
+        let shown = GeoPoint(current.centerCoordinate.latitude, current.centerCoordinate.longitude)
+        let still = shown.distance(to: camera.center) < WorldCamera.stillMetres
+            && abs(current.centerCoordinateDistance - camera.distance) < WorldCamera.stillMetres
+        return still ? nil : mapCamera(for: camera)
     }
 
     /// The whole view's area in normalised Web Mercator: its top-left and bottom-right corners through
@@ -303,7 +328,8 @@ final class ApplePlaceLookup: WorldPlaceLooking {
 }
 
 /// The map's delegate: the viewport on every move, the person's pans written back, and the tiles'
-/// progress. Main actor, as MapKit calls it there.
+/// progress. Main actor, as MapKit calls it there. Every report goes through ``gate`` (W-15), so one raised
+/// while SwiftUI makes or updates the map view waits for the next main-queue turn.
 @MainActor
 private final class AppleMutedMapCoordinator: NSObject, MKMapViewDelegate {
     /// The view as last updated (its binding and callbacks).
@@ -312,6 +338,8 @@ private final class AppleMutedMapCoordinator: NSObject, MKMapViewDelegate {
     var revision = 0
     /// Where the tiles' progress goes (the Home's), read from the environment at each update.
     var tileStatus: WorldTileStatus?
+    /// Holds the reports raised inside `makeUIView` and `updateUIView` until SwiftUI's update is over.
+    let gate = WorldMapReportGate()
     /// Whether the move under way began with the person's finger.
     private var movedByPerson = false
     /// Where the map's centre was, and how far up its camera, when that move began.
@@ -336,24 +364,27 @@ private final class AppleMutedMapCoordinator: NSObject, MKMapViewDelegate {
         let now = mapView.convert(mapView.centerCoordinate, toPointTo: mapView)
         let move = AppleMapGeometry.personMove(from: startDistance, to: mapView.camera.centerCoordinateDistance,
                                                centreMoved: hypot(now.x - then.x, now.y - then.y))
-        view?.adopt(mapView, move: move)
+        gate.send(.camera) { [weak self, weak mapView] in
+            guard let mapView else { return }
+            self?.view?.adopt(mapView, move: move)
+        }
     }
 
     /// Hands the layers the whole view's viewport (W-12), never `visibleMapRect`'s inset one.
     private func report(_ mapView: MKMapView) {
-        view?.onViewport(AppleMapGeometry.viewport(of: mapView))
+        gate.report(AppleMapGeometry.viewport(of: mapView)) { [weak self] viewport in self?.view?.onViewport(viewport) }
     }
 
     func mapViewWillStartLoadingMap(_ mapView: MKMapView) {
-        tileStatus?.loading()
+        gate.send(.tiles) { [weak self] in self?.tileStatus?.loading() }
     }
 
     func mapViewDidFinishLoadingMap(_ mapView: MKMapView) {
-        tileStatus?.loaded()
+        gate.send(.tiles) { [weak self] in self?.tileStatus?.loaded() }
     }
 
     func mapViewDidFailLoadingMap(_ mapView: MKMapView, withError error: any Error) {
-        tileStatus?.failed()
+        gate.send(.tiles) { [weak self] in self?.tileStatus?.failed() }
     }
 
     /// Whether a finger is on the map now (one of its gesture recognisers has begun or is moving).
