@@ -234,6 +234,24 @@
           }
         }
       }
+    },
+    "weather.gentlerDay.prompt" : {
+      "comment" : "Home card on a heavy, gloomy weather day (rain, snow, fog, cloud). An invitation to self-kindness, never an instruction; 'a small, warm thing' is any small act of care.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The weather outside is heavy today. Be a little gentler with yourself — a small, warm thing still counts."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hoy el clima está pesado. Sé un poco más amable contigo: algo pequeño y cálido también cuenta."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

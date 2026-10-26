@@ -1392,6 +1392,8 @@ struct SettingsSheet: View {
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
+            // The Apple Weather credit WeatherKit's terms ask for, where the feature is chosen.
+            AppleWeatherNotice()
             Text(FernletVoice.message(for: store.aiStatusPresentation.voiceLine, addressing: termOfAddress))
                 .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
