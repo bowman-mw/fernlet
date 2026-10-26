@@ -45,7 +45,7 @@ Three concrete commitments follow from it:
    `script-src 'self'` (no `'unsafe-inline'`, so no inline `<script>` and no `on*` handlers can run
    even if one were added), `font-src 'self'` over self-hosted fonts, and `img-src 'self' data:`.
    The one loosening is `style-src 'self' 'unsafe-inline'`, needed because the pages position
-   polaroids and cycle-dial rings with inline `style=""` attributes; it is not an external-load
+   cycle-dial dots, workout range bars and swatch colours with inline `style=""` attributes; it is not an external-load
    allowance, and the site has no user-generated content for an injection to ride in on. The policy
    lives in both `Site/_headers` (Cloudflare) and a `<meta http-equiv>` in every page, because
    GitHub Pages ignores `_headers` entirely.

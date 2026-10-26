@@ -15,7 +15,7 @@ second small script of its own, `probe/probe.js`, under the same rules.
 
 | Path | Purpose |
 | --- | --- |
-| `index.html` | Landing page — the companion, the workout planner, the friend mesh, period tracking, the privacy architecture, FAQ, roadmap. |
+| `index.html` | Landing page — the companion, the map, small joys, the workout planner, the friend mesh, period tracking, the privacy architecture, FAQ, roadmap. |
 | `privacy/index.html` | The privacy policy — **generated from [`Docs/Privacy-Policy.md`](../Docs/Privacy-Policy.md)**, which stays the source of truth. When the policy changes, regenerate this page (and update `App/Fernlet/PrivacyPolicyView.swift`) so all three copies match. This URL goes in App Store Connect as the Privacy Policy URL. |
 | `support/index.html` | Support/contact page — the ASC Support URL. |
 | `404.html` | Not-found page (both GitHub Pages and Cloudflare Pages pick it up automatically). |
@@ -24,7 +24,7 @@ second small script of its own, `probe/probe.js`, under the same rules.
 | `.well-known/apple-app-site-association` | The universal-links association file. Right now it claims one path for one app: `/probe/*` for the link probe (`3RTUPF8FFH.MBO.FernletLinkProbe`). See *Universal links* below. |
 | `style.css` | The whole site's styling, light **and** dark (`prefers-color-scheme`, no toggle — it follows the OS). Design tokens mirror the Fernlet Design System (parchment/cream/bark/moss, Fraunces + DM Serif Display + Instrument Serif + DM Sans); the dark palette is the app's own (`FernletThemeDefaults`). |
 | `app.js` | Progressive-enhancement interactions. Optional by construction. |
-| `assets/` | The brand mark and the favicons. `fernlet-mark-header.svg` is the nav/footer logo; `fernlet-mark-header-dark.svg` is the same mark with the bark-brown branch recoloured to pale sage (`#C8DBC2`, the app's own dark-icon treatment) because the brown vanishes on the dark ground — the pages pick between them with `<picture media="(prefers-color-scheme:dark)">`. `favicon.svg` is the tab icon, with `favicon-32.png` / `favicon-16.png` as the raster fallback and `apple-touch-icon.png` (180px) for iOS home screens. All five come from the app icon set, so the tab, the header and the App Store icon are the same mark. |
+| `assets/` | The brand mark and the favicons. `fernlet-mark-header.svg` is the nav/footer logo; `fernlet-mark-header-dark.svg` is the same mark with the bark-brown branch recoloured to pale sage (`#C8DBC2`, the app's own dark-icon treatment) because the brown vanishes on the dark ground — the pages pick between them with `<picture media="(prefers-color-scheme:dark)">`. `favicon.svg` is the tab icon, with `favicon-32.png` / `favicon-16.png` as the raster fallback and `apple-touch-icon.png` (180px) for iOS home screens. All five come from the app icon set, so the tab, the header and the App Store icon are the same mark. `assets/companion/` is the pixel companion, five states × three frames (resting, in-breath, settled), drawn by the app's own painter through [`Scripts/render-site-companion.sh`](../Scripts/render-site-companion.sh): rerun it when the painter changes. `assets/screens/` holds the app screenshots, 600 px wide JPEGs with a `.dark` twin each, captured on a simulator from the DEBUG demo data only (Laurelhurst Park) — never from anyone's own phone. |
 | `fonts/` | Self-hosted woff2 files — see [`fonts/README.md`](fonts/README.md) for what to drop in. |
 | `_headers` | Cloudflare/Netlify header rules: security baseline + font caching + the `application/json` content-type rule for the association file. **Ignored by GitHub Pages** (see below). |
 | `.nojekyll` | Stops any Jekyll processing, so `_headers` and future `_`-prefixed paths publish verbatim. |
@@ -47,15 +47,13 @@ effective date in all three.
 
 1. **Add the font files** listed in [`fonts/README.md`](fonts/README.md). The site degrades to
    system serifs without them, so this is not blocking — but it is not on-brand until done.
-2. **Swap in real screenshots.** The phone mock on the landing page is a faithful HTML
-   recreation of the Home / Journal / Food screens, not a capture. Once there are simulator
-   shots worth showing, replace it (and give the photowall real polaroids).
 
 When editing `style.css`, remember the dark theme at the bottom of the file. Anything hard-coded
 as `rgba(61,46,30,…)` — a hairline, a sunken fill, a track — is invisible on the dark ground, so
-use the `--hair` / `--hair-2` / `--hair-3` / `--sunken` / `--track` tokens instead. The hero room,
-the phone mock and the mesh demo's little phones deliberately stay light in dark mode: they are
+use the `--hair` / `--hair-2` / `--hair-3` / `--sunken` / `--track` tokens instead. The companion's
+paper plates and the mesh demo's little phones deliberately stay light in dark mode: they are
 illustrations of lit objects, and they re-declare the light tokens locally rather than flipping.
+The screenshots switch to their dark-mode captures through `<picture>`.
 
 ## Deploying — GitHub Pages (the wired-up path)
 

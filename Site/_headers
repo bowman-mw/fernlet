@@ -7,7 +7,7 @@
 # Changed from the original policy (which was `default-src 'none'; style-src 'unsafe-inline'`):
 #   style-src  'self'  — the site now uses /style.css instead of a per-page <style> block
 #              plus 'unsafe-inline' — REQUIRED, and not a loosening of the external-load ban:
-#              the pages position polaroids, cycle-dial dots and rings with inline `style=""`
+#              the pages position cycle-dial dots, workout range bars and swatch colours with inline `style=""`
 #              attributes, which `style-src 'self'` alone blocks (the layout silently collapses).
 #              There is no user-generated content on this site for an injection to ride in on.
 #   script-src 'self'  — /app.js adds progressive-enhancement interactions only; every page
