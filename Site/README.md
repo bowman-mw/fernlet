@@ -48,6 +48,12 @@ effective date in all three.
 1. **Add the font files** listed in [`fonts/README.md`](fonts/README.md). The site degrades to
    system serifs without them, so this is not blocking — but it is not on-brand until done.
 
+After editing `style.css`, `app.js` or `probe/probe.js`, run
+[`Scripts/site-asset-versions.py`](../Scripts/site-asset-versions.py). GitHub Pages caches the pages for
+10 minutes but stylesheets and scripts for 4 hours, so every page links them as `style.css?v=<content
+hash>`. A changed file then gets a new URL, and the new page never renders with a stale stylesheet. The
+Pages workflow runs the script with `--check` and refuses to deploy a stale reference.
+
 When editing `style.css`, remember the dark theme at the bottom of the file. Anything hard-coded
 as `rgba(61,46,30,…)` — a hairline, a sunken fill, a track — is invisible on the dark ground, so
 use the `--hair` / `--hair-2` / `--hair-3` / `--sunken` / `--track` tokens instead. The companion's

@@ -92,6 +92,13 @@ jobs:
             exit 1
           fi
 
+      # Pages caches the pages for 10 minutes but style.css and the scripts for 4 hours, so an
+      # unversioned stylesheet shows a returning visitor the new page with the old styles for hours
+      # after a deploy (2026-10-26, the World update on the owner's laptop). Every reference carries
+      # ?v=<the file's content hash>; Scripts/site-asset-versions.py writes them, and this refuses a stale one.
+      - name: Stylesheet and script references carry their current version
+        run: python3 Scripts/site-asset-versions.py --check
+
       # The self-hosted fonts are SIL Open Font License 1.1, which lets the site serve them only with
       # each family's license beside the files: <Family>.woff2 or <Family>-<Style>.woff2 needs
       # <Family>-OFL.txt (the table is in Site/fonts/README.md).
