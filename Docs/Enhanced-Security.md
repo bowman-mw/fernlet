@@ -132,6 +132,9 @@ for the simulator, so the suite is what catches a device-only break before an ar
     of `Package.swift` changed, `.iOS(.v11)` to `.iOS("26.0")`, under a comment marking the file as
     altered, as CryptoSwift's license asks. No source file differs (`git diff 1.10.0 1.10.0-fernlet.2`
     in the fork shows just those lines), and `NOTICE` carries the license and its acknowledgment. The
+    app carries them too: the license, unaltered, at `App/Fernlet/Acknowledgments/CryptoSwift-LICENSE.txt`
+    in the bundle, drawn with the acknowledgment by Settings → Acknowledgments (`AcknowledgmentsView`),
+    and fernlet.com/technical carries the acknowledgment. The
     same sources built at upstream's floor and at 26.0 gave the same scrypt bytes (measured on macOS,
     2026-10-25). `FernletLockCryptoTests` pins scrypt two ways: to RFC 7914's published vector at the
     lock's own r=8 and p=1, and to a known answer at the production parameters, cross-checked against an
@@ -143,7 +146,9 @@ for the simulator, so the suite is what catches a device-only break before an ar
   - **Moving to a new CryptoSwift release.** Cut a tag on the fork: upstream's release with the same
     floor line and marking comment, and nothing else. Then, in one commit, move the manifest's `exact:`
     and the project's `exactVersion`, re-resolve both `Package.resolved` files, and add the tag's row to
-    `releasedCryptoSwiftRevisions`. Both scrypt known-answer tests must pass unchanged.
+    `releasedCryptoSwiftRevisions`. Both scrypt known-answer tests must pass unchanged. In the same
+    commit, copy the new tag's `LICENSE` over `App/Fernlet/Acknowledgments/CryptoSwift-LICENSE.txt`,
+    unaltered, and move `AcknowledgmentsTests`' tag and hash (it fails until both are moved).
 - **Debugging.** Pointer-authentication faults only reproduce on device; tagging faults also
   reproduce in the Simulator on an M5 Mac (rollout step 2), in hard mode. Apple warns the
   checks "can impact the performance and stability" of code not built for them; that is what the soft
