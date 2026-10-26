@@ -738,6 +738,7 @@
 				INFOPLIST_FILE = Fernlet/Info.plist;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
+				INFOPLIST_KEY_LSMinimumSystemVersion = 26.5;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Fernlet uses your camera to scan barcodes and nutrition labels, photograph meals, take progress photos, and take photos during sessions with friends.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Fernlet uses Face ID to unlock your private health data.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Fernlet reads selected Health data only when you enable it — including workouts, body metrics, sleep, recovery, heart rate during guided cardio, and (optionally) cycle data — to give you a complete, on-device picture of your wellbeing.";
@@ -795,6 +796,7 @@
 				INFOPLIST_FILE = Fernlet/Info.plist;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
+				INFOPLIST_KEY_LSMinimumSystemVersion = 26.5;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Fernlet uses your camera to scan barcodes and nutrition labels, photograph meals, take progress photos, and take photos during sessions with friends.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Fernlet uses Face ID to unlock your private health data.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Fernlet reads selected Health data only when you enable it — including workouts, body metrics, sleep, recovery, heart rate during guided cardio, and (optionally) cycle data — to give you a complete, on-device picture of your wellbeing.";
