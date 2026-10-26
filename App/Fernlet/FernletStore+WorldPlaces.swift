@@ -54,6 +54,14 @@ extension FernletStore {
         applyWorldBackgroundMapping()
     }
 
+    /// The map's location while Fernlet is open (W-09 (i)), from the app's own edges (the launch screen
+    /// lifting, the app back in front), so it runs even when Home isn't drawn (a launch straight into a
+    /// panel). A no-op without permission or when already running.
+    func startWorldMapLocation() {
+        worldFog.load()
+        worldLocation.startForeground()
+    }
+
     /// The app went to the background: the map's own updates stop (a walk and background mapping keep
     /// theirs) and the lifted cells are written. Home does the same when it sees the edge; this is the
     /// app's own, for when Home isn't drawn.

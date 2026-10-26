@@ -55021,6 +55021,42 @@
         }
       }
     },
+    "worldRecenter.followingAgain" : {
+      "comment" : "World Home, VoiceOver: the map follows the companion again by itself; the companion's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Following %@ again"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Siguiendo a %@ otra vez"
+          }
+        }
+      }
+    },
+    "worldRecenter.label" : {
+      "comment" : "World Home, the button that brings the map back to the companion; the companion's name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Back to %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Volver con %@"
+          }
+        }
+      }
+    },
     "worldStatus.a11y.bottles" : {
       "comment" : "World Home status plate, VoiceOver: bottles of water today. Plural on the number",
       "localizations" : {

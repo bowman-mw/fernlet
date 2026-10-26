@@ -763,8 +763,9 @@ final class FernletStore {
         return keeper
     }()
     /// The World map's location (`WorldLocationSource`), following the permission the person gave.
-    /// Lazy, so nothing asks CoreLocation for anything until the map is on screen, or, with background
-    /// mapping on, until launch (`armWorldBackgroundMappingAtLaunch()`, W-09 B1); every reading goes to
+    /// Lazy, so nothing asks CoreLocation for anything until the launch screen lifts (the map's location runs
+    /// while Fernlet is open, W-09 (i)), or, with background mapping on, until the store loads
+    /// (`armWorldBackgroundMappingAtLaunch()`, W-09 B1); every reading goes to
     /// ``worldFog``, which decides whether it lifts the fog.
     @ObservationIgnored private(set) lazy var worldLocation: WorldLocationSource = {
         let source = WorldLocationSource()

@@ -436,6 +436,8 @@ struct ContentView: View {
 
     private func handleScenePhaseChange(_ phase: ScenePhase) {
         if phase == .active {
+            // World W-09 (i): back in front, the map's location runs again, whatever is over the map.
+            if launcher.isDone { store.startWorldMapLocation() }
             // If the app stayed resident across local midnight, roll the store over to the new
             // day FIRST (flushes yesterday under its own key, re-keys "today") so the widget/
             // coin refreshers below and any subsequent logging operate on the correct day.
@@ -707,6 +709,8 @@ struct ContentView: View {
         async let _ = autoImportHealthContextIfAvailable()
         await launcher.prepare(store: store)
         store.markLaunchScreenDismissed()
+        // World W-09 (i): the map's location runs while Fernlet is open, even on a launch straight into a panel.
+        store.startWorldMapLocation()
         #if DEBUG
         // UX appearance tests: jump straight to a sheet by its FernletSheet.id
         // (generalizes the older FERNLET_UI_TEST_OPEN_SETTINGS hook).

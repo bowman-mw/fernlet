@@ -103,6 +103,11 @@ final class WorldPlacesKeeper {
         self.remembersEatingOut = remembersEatingOut
     }
 
+    /// The stop check goes with the keeper.
+    isolated deinit {
+        stopCheck?.cancel()
+    }
+
     /// Enters or leaves a decoy session: nothing is read or written while one shows, and no name is held.
     func setDecoy(_ on: Bool) {
         isDecoy = on
