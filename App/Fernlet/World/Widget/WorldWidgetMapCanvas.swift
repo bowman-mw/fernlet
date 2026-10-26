@@ -63,7 +63,7 @@ struct WorldWidgetMapContent: Equatable {
 }
 
 /// The map widget's picture for one appearance: Apple's muted map, Fernlet's saved trails, a decorative
-/// fog ring at the edges (Home's look; never the fog of where you've been, which stays sealed), and the
+/// nature-fog ring at the edges (Home's look, in its reduced detail and still; never the fog of where you've been, which stays sealed), and the
 /// homes, hotel and kept places as the map draws them. Sprout, the hearts and "Map from 9:40" are the
 /// widget's own, drawn over it live.
 struct WorldWidgetMapCanvas: View {
@@ -111,7 +111,8 @@ struct WorldWidgetMapCanvas: View {
                 }
                 context.stroke(path, with: .color(trailColor), style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
             }
-            WorldFogPainter(viewport: viewport, lifted: ringOpening, darkStyle: dark, uncovered: uncovered)
+            NatureFogPicturePainter(viewport: viewport, clearing: NatureFogClearing(lifted: ringOpening, uncovered: uncovered),
+                                    palette: NatureFogPalette(dark: dark, highContrast: false))
                 .paint(&context, size: canvasSize)
         }
         .frame(width: size.width, height: size.height)

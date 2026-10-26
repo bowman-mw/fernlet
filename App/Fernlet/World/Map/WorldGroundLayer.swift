@@ -18,8 +18,9 @@ struct WorldGround: Equatable {
     var traces: [[GeoPoint]] = []
 }
 
-/// Fernlet's own ground layer over whichever base map is underneath: trails, the hex fog with its
-/// lifted cells, and dotted traces.
+/// Fernlet's own ground layer over whichever base map is underneath: trails, the nature fog with its
+/// lifted cells (``NatureFogLayer``: ground hexes, grass, flowers, ponds, boulders and trees, approved
+/// 2026-10-26), and dotted traces.
 ///
 /// Everything is placed from the reported `MapViewport` and the global `MercatorHexGrid`; nothing
 /// here knows the base map is Apple's. It never takes touches, so pans and pinches reach the map, and
@@ -28,16 +29,31 @@ struct WorldGroundLayer: View {
     let viewport: MapViewport
     let ground: WorldGround
     let darkStyle: Bool
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        Canvas { context, size in
-            let trailColor = darkStyle ? WorldPalette.nightTrail : WorldPalette.trail
-            for trail in ground.trails {
-                context.stroke(path(for: trail, size: size), with: .color(trailColor),
-                               style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+        ZStack(alignment: .topLeading) {
+            Canvas { context, size in
+                let trailColor = darkStyle ? WorldPalette.nightTrail : WorldPalette.trail
+                for trail in ground.trails {
+                    context.stroke(path(for: trail, size: size), with: .color(trailColor),
+                                   style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+                }
             }
-            WorldFogPainter(viewport: viewport, lifted: ground.lifted, darkStyle: darkStyle, uncovered: ground.uncovered)
-                .paint(&context, size: size)
+            NatureFogLayer(scene: NatureFogScene(viewport: viewport,
+                                                 clearing: NatureFogClearing(lifted: ground.lifted, uncovered: ground.uncovered),
+                                                 palette: NatureFogPalette(dark: darkStyle, highContrast: contrast == .increased),
+                                                 motion: NatureFogMotion(reduceMotion: reduceMotion)))
+            traces
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    /// The dotted footsteps of lines in progress, over the fog.
+    private var traces: some View {
+        Canvas { context, size in
             for trace in ground.traces {
                 let line = path(for: trace, size: size)
                 context.stroke(line, with: .color(WorldPalette.gameCream.opacity(0.9)),
@@ -58,65 +74,5 @@ struct WorldGroundLayer: View {
             if index == 0 { path.move(to: screen) } else { path.addLine(to: screen) }
         }
         return path
-    }
-}
-
-/// Paints the fog: every visible cell not yet lifted.
-///
-/// Cells on the frontier (next to a lifted one) are lighter, so the edge of what you've uncovered
-/// reads at a glance; a hairline marks each fogged hex, and every third diagonal is a shade darker so
-/// the grid reads as tiles rather than a flat sheet.
-struct WorldFogPainter {
-    let viewport: MapViewport
-    let lifted: Set<HexCell>
-    let darkStyle: Bool
-    /// Cells drawn clear around homes and kept places (round 6), as if lifted.
-    var uncovered: Set<HexCell> = []
-
-    /// Whether `cell` shows clear: lifted, or uncovered around a place.
-    private func isClear(_ cell: HexCell) -> Bool {
-        lifted.contains(cell) || uncovered.contains(cell)
-    }
-
-    /// The smallest a cell may draw, in points; below it the fog is skipped (zoomed too far out).
-    static let minimumCellPoints = 2.0
-
-    /// Fills the fog's three tones and strokes its edges into `context`.
-    func paint(_ context: inout GraphicsContext, size: CGSize) {
-        let perUnit = viewport.pointsPerUnit(in: size)
-        let cellPoints = MercatorHexGrid.radius * perUnit
-        guard cellPoints >= Self.minimumCellPoints else { return }
-        // Half a point of overlap closes the antialiased seams, so the map never peeks between cells.
-        let grow = (cellPoints + 0.5) / cellPoints
-        let corners = MercatorHexGrid.cornerOffsets.map { CGSize(width: $0.x * perUnit * grow, height: $0.y * perUnit * grow) }
-        var deep = Path(), shade = Path(), frontier = Path()
-        for cell in MercatorHexGrid.cells(in: viewport) where !isClear(cell) {
-            let centre = MercatorHexGrid.centre(of: cell)
-            let point = viewport.screenPoint(x: centre.x, y: centre.y, in: size)
-            let hex = Path { shape in
-                shape.addLines(corners.map { CGPoint(x: point.x + $0.width, y: point.y + $0.height) })
-                shape.closeSubpath()
-            }
-            if MercatorHexGrid.neighbours(of: cell).contains(where: isClear) {
-                frontier.addPath(hex)
-            } else if (cell.q - cell.r) % 3 == 0 {
-                shade.addPath(hex)
-            } else {
-                deep.addPath(hex)
-            }
-        }
-        fill(&context, deep: deep, shade: shade, frontier: frontier)
-    }
-
-    /// The three fog tones and the hairline edges.
-    private func fill(_ context: inout GraphicsContext, deep: Path, shade: Path, frontier: Path) {
-        let fog = darkStyle ? WorldPalette.nightFog : WorldPalette.fog
-        let fogShade = darkStyle ? WorldPalette.nightFogShade : WorldPalette.fogShade
-        context.fill(deep, with: .color(fog.opacity(0.97)))
-        context.fill(shade, with: .color(fogShade.opacity(0.97)))
-        context.fill(frontier, with: .color(fog.opacity(0.72)))
-        var edges = deep
-        edges.addPath(shade)
-        context.stroke(edges, with: .color((darkStyle ? Color.black : WorldPalette.fogEdge).opacity(0.55)), lineWidth: 0.75)
     }
 }
