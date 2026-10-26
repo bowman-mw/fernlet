@@ -8,7 +8,8 @@ import FernletExchange
 /// iCloud container, `fernlet://` scheme, exported file types and the name "Fernlet". A run from Xcode
 /// therefore installs over the TestFlight app as an update and opens the owner's existing data — the
 /// same data container, the same app-group files, the same keychain items and the same CloudKit
-/// container, in the Production environment the TestFlight app uses.
+/// container. CloudKit's environment is left to the signing, as on main: a TestFlight or App Store
+/// build uses Production and a run from Xcode uses Development (owner, 2026-10-26, ready for main).
 ///
 /// **Why a wall.** Two silent failures, both of which compile clean:
 /// - Step 0's World identity coming back (a cherry-pick or a merge from an older World branch). The
@@ -16,8 +17,9 @@ import FernletExchange
 ///   away from the others', so the widget, the share sheet and the Messages inbox read nothing.
 /// - The real data becoming unreachable without any identity string changing: a keychain access group
 ///   (items would move out of the default group, team ID plus bundle ID, that the TestFlight app's
-///   lock, journal, media and preferences keys live in), or the CloudKit environment dropping back to
-///   Development (a development-signed run would sync against an empty container).
+///   lock, journal, media and preferences keys live in), or a CloudKit environment pin coming back (a
+///   World-only `Production` pin would ship to main, and the Simulator and a schema push work only with
+///   Development).
 ///
 /// What is NOT checked here: the mesh namespace (Bonjour types, ALPN, the `fernlet://verify` and
 /// duress-ceremony QR codes), which never changed; background-task identifiers; the test bundles' IDs;
@@ -79,7 +81,7 @@ struct WorldIdentityBoundaryTests {
     }
 
     /// Every entitlements file names exactly the shipping app group; the app names the shipping
-    /// container under both iCloud keys, in CloudKit's Production environment, with no keychain access
+    /// container under both iCloud keys, with no CloudKit environment pin and no keychain access
     /// group.
     @Test func entitlementsReachTheRealData() throws {
         for path in Self.entitlementsPaths {
@@ -91,8 +93,8 @@ struct WorldIdentityBoundaryTests {
         let app = try Self.plist(Self.entitlementsPaths[0])
         #expect(app["com.apple.developer.icloud-container-identifiers"] as? [String] == [Self.iCloudContainer])
         #expect(app["com.apple.developer.ubiquity-container-identifiers"] as? [String] == [Self.iCloudContainer])
-        #expect(app["com.apple.developer.icloud-container-environment"] as? String == "Production",
-                "a development-signed run must use the Production environment the TestFlight app's data is in")
+        #expect(app["com.apple.developer.icloud-container-environment"] == nil,
+                "the CloudKit environment is the signing's: TestFlight and the App Store use Production, an Xcode run Development")
     }
 
     /// No shipping Swift file spells step 0's identity or picks a keychain access group, so every
