@@ -130,6 +130,11 @@ struct PrivacyPolicyParityTests {
     /// verbatim swap of "while the map is open" in both sentences) pin when places are noted and looked up:
     /// - `collected while Fernlet is open` — Where you've been's timeline, a panel or sheet over the map or not;
     /// - `only while Fernlet is open` — the Apple Maps lookup.
+    ///
+    /// The marker added when the World build readied for main (owner, 2026-10-26, option (a): "like
+    /// your journal" goes, word for word in all three copies) pins how the places are kept:
+    /// - `All of this is encrypted on this iPhone only: never synced` — Where you've been, Places you
+    ///   return to and solo photos' places.
     private static let substanceMarkers = [
         "iOS may refuse or end it at any time",
         "never retroactively repurposed",
@@ -175,7 +180,8 @@ struct PrivacyPolicyParityTests {
         "If you add the map widget, Fernlet gives it a picture of the map around you",
         "the widget's copy is deleted whenever you delete your map history",
         "collected while Fernlet is open",
-        "only while Fernlet is open"
+        "only while Fernlet is open",
+        "All of this is encrypted on this iPhone only: never synced"
     ]
 
     /// Loads each copy's text, keyed by its repo-relative path.

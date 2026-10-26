@@ -43,11 +43,11 @@ nonisolated enum WorldHomeCopy {
     /// The lock note with Home picked: "…and Sprout gets a house here." (the companion's name).
     static func homeNote(companion: String) -> String {
         String(localized: "worldHome.note",
-               defaultValue: "Home stays sealed on this iPhone, like your journal. Fernlet uncovers the map for 1 km around it, and \(companion) gets a house here.",
+               defaultValue: "Home stays encrypted on this iPhone only. Fernlet uncovers the map for 1 km around it, and \(companion) gets a house here.",
                comment: "Remember this place sheet with Home picked: the lock note; the companion's name, e.g. Sprout")
     }
     static let hotelNote = LocalizedStringResource("worldHome.hotel.note",
-                                                   defaultValue: "Your hotel stays sealed on this iPhone, like your journal. Fernlet uncovers the map for 1 km around it until you check out or get home.",
+                                                   defaultValue: "Your hotel stays encrypted on this iPhone only. Fernlet uncovers the map for 1 km around it until you check out or get home.",
                                                    comment: "Remember this place sheet with Hotel picked: the lock note")
     static let makeHome = LocalizedStringResource("worldHome.save", defaultValue: "Make it home",
                                                   comment: "Remember this place sheet with Home picked: the main button")

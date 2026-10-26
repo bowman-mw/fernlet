@@ -85,7 +85,7 @@ nonisolated enum WorldHomeSettingsCopy {
     static let untilCheckOut = LocalizedStringResource("homeMap.homes.untilCheckOut", defaultValue: "Until you check out or get home",
                                                        comment: "Settings, Home map: under the hotel row")
     static let footnote = LocalizedStringResource("homeMap.homes.footnote",
-                                                  defaultValue: "Each home and your hotel uncovers the map for 1 km around it and stays sealed on this iPhone. Getting home checks you out of a hotel; Fernlet remembers hotels for a welcome back.",
+                                                  defaultValue: "Each home and your hotel uncovers the map for 1 km around it and stays encrypted on this iPhone only. Getting home checks you out of a hotel; Fernlet remembers hotels for a welcome back.",
                                                   comment: "Settings, Home map: under Homes and hotels")
     static let checkOut = LocalizedStringResource("homeMap.homes.checkOut", defaultValue: "Check out",
                                                   comment: "The hotel's sheet from Settings: ends the stay; the hotel is remembered for a welcome back")

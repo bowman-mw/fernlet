@@ -40543,13 +40543,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Each home and your hotel uncovers the map for 1 km around it and stays sealed on this iPhone. Getting home checks you out of a hotel; Fernlet remembers hotels for a welcome back."
+            "value" : "Each home and your hotel uncovers the map for 1 km around it and stays encrypted on this iPhone only. Getting home checks you out of a hotel; Fernlet remembers hotels for a welcome back."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Cada casa y tu hotel descubren el mapa 1 km a su alrededor y quedan sellados en este iPhone. Al volver a casa sales del hotel; Fernlet recuerda los hoteles para darte la bienvenida."
+            "value" : "Cada casa y tu hotel descubren el mapa 1 km a su alrededor y quedan cifrados solo en este iPhone. Al volver a casa sales del hotel; Fernlet recuerda los hoteles para darte la bienvenida."
           }
         }
       }
@@ -53095,13 +53095,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Your hotel stays sealed on this iPhone, like your journal. Fernlet uncovers the map for 1 km around it until you check out or get home."
+            "value" : "Your hotel stays encrypted on this iPhone only. Fernlet uncovers the map for 1 km around it until you check out or get home."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Tu hotel queda sellado en este iPhone, como tu diario. Fernlet descubre el mapa 1 km a su alrededor hasta que salgas o vuelvas a casa."
+            "value" : "Tu hotel queda cifrado solo en este iPhone. Fernlet descubre el mapa 1 km a su alrededor hasta que salgas o vuelvas a casa."
           }
         }
       }
@@ -53239,13 +53239,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Home stays sealed on this iPhone, like your journal. Fernlet uncovers the map for 1 km around it, and %@ gets a house here."
+            "value" : "Home stays encrypted on this iPhone only. Fernlet uncovers the map for 1 km around it, and %@ gets a house here."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Tu casa queda sellada en este iPhone, como tu diario. Fernlet descubre el mapa 1 km a su alrededor, y %@ tendrá aquí su casa."
+            "value" : "Tu casa queda cifrada solo en este iPhone. Fernlet descubre el mapa 1 km a su alrededor, y %@ tendrá aquí su casa."
           }
         }
       }

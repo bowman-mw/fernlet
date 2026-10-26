@@ -277,7 +277,7 @@ struct WorldPlacesRound6Tests {
         let ace = HomePlace(kind: .hotel, label: "Ace", point: Self.cafe)
         #expect(WorldHomeMapCopy.greeting(HomeGreeting(kind: .hotelAgain, placeID: ace.id), place: ace) == "Welcome back to the Ace!")
         #expect(WorldHomeCopy.homeNote(companion: "Sprout")
-                == "Home stays sealed on this iPhone, like your journal. Fernlet uncovers the map for 1 km around it, and Sprout gets a house here.")
+                == "Home stays encrypted on this iPhone only. Fernlet uncovers the map for 1 km around it, and Sprout gets a house here.")
         #expect(WorldPlacesCopy.outAndAbout(9 * 3_600 + 40 * 60, style: .abbreviated).hasPrefix("Out and about 9"))
     }
 }

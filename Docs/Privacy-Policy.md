@@ -84,7 +84,7 @@
      2026-10-25 (the World build's round 6, both additions approved by the owner word for word: a place
      Fernlet won't name can be added by the person ("unless you add one yourself"), a solo photo with no
      place can be put on the map by the person, and a home (up to two) or a hotel the person marks is
-     kept, sealed on this iPhone, to uncover the map around it and to welcome them back, until they remove
+     kept, encrypted on this iPhone only, to uncover the map around it and to welcome them back, until they remove
      it in Settings › Home map. Everything stays on the device; nothing new is sent to the developer and
      no promise is weakened under §13). Before
      submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
@@ -410,8 +410,9 @@ cover everyday places only: food and drink, gyms, parks, beaches and campgrounds
 doctors' offices, lawyers or therapists are never named or kept, unless you add one yourself.
 When you take a photo with the camera on your own at one of those everyday places, Fernlet keeps
 where it was taken, so the photo can sit on your map; anywhere else, it keeps no place.
-You can put a photo on the map yourself. All of this is sealed on this iPhone like your journal:
-never synced, backed up, exported, shared, given to the AI or sent to us.
+You can put a photo on the map yourself.
+All of this is encrypted on this iPhone only: never synced, backed up, exported, shared,
+given to the AI or sent to us.
 You can delete a day, a photo, or all of it, at any time.
 If you mark a place as your home (up to two) or as a hotel you stay at, Fernlet keeps it,
 encrypted on this iPhone only and never in a backup, to uncover the map around it and to welcome
