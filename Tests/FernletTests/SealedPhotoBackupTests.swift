@@ -2654,6 +2654,177 @@ struct SealedPhotoBackupTests {
         #expect(FernletStore.sealedBackupPayloadsToDelete(preferences: periodOn, found: found)
                 == [.sensitiveNotes, .periodData, .journalNarratives])
     }
+
+    // MARK: - 8. Legacy quarantine (W-19, 2026-10-26)
+
+    /// The files a quarantine folder holds, by content: what a test asserts was kept.
+    private func quarantinedContents(_ quarantine: OwnPhotoLegacyQuarantine) throws -> [Data] {
+        try FileManager.default.contentsOfDirectory(at: quarantine.directory, includingPropertiesForKeys: nil)
+            .map { try Data(contentsOf: $0) }
+    }
+
+    /// THE owner's case: a meal corpus holding only a pre-`FMA2` photo reads as dead bytes, so the
+    /// restore writes the cloud copy over its id. The old file must be moved aside, not destroyed
+    /// (a later one-time reader may still open it), and the quarantine must stay out of the backup.
+    @Test func aRestoreQuarantinesAnUnreadableMealPhotoBeforeWritingItsID() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let deviceOne = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: deviceOne) }
+        let id = try #require(mealStore(in: deviceOne).save(jpeg(width: 120, height: 90)))
+        let uploadedBytes = try #require(mealStore(in: deviceOne).imageData(for: id))
+        let one = makeCoordinator(documents: deviceOne, identity: identity, database: database, defaults: isolatedDefaults())
+        #expect(await one.coordinator.setEnabled(true))
+
+        // The phone: the SAME id holds bytes no read path opens (the unmarked at-rest format).
+        let phone = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: phone) }
+        let legacyBytes = Data(repeating: 0xAB, count: 512)
+        let mealDirectory = OwnPhotoCorpusLayout.mealPhotosDirectory(in: phone)
+        try FileManager.default.createDirectory(at: mealDirectory, withIntermediateDirectories: true)
+        try legacyBytes.write(to: mealDirectory.appendingPathComponent("\(id.uuidString).jpg"))
+        #expect(mealStore(in: phone).holdsOnlyUnopenableFiles())
+
+        let two = makeCoordinator(documents: phone, identity: identity, database: database, defaults: isolatedDefaults())
+        _ = await two.coordinator.synchronize(preferenceOverride: true)
+
+        #expect(mealStore(in: phone).imageData(for: id) == uploadedBytes, "the restore did not land")
+        let quarantine = OwnPhotoLegacyQuarantine(
+            documentsDirectory: phone, corpusDirectoryName: OwnPhotoCorpusLayout.mealPhotosDirectoryName
+        )
+        #expect(try quarantinedContents(quarantine) == [legacyBytes], "the restore destroyed the unreadable photo")
+        #expect(FileManager.default.fileExists(
+            atPath: quarantine.directory.appendingPathComponent("\(id.uuidString).jpg").path
+        ))
+        #expect(try quarantine.root.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true)
+        #expect(two.host.outcomes.last == .restored(1))
+    }
+
+    /// A second restore over the same id (a repair pass, a later Retry) must keep BOTH set-aside
+    /// copies: a quarantined file is never written over. A file that opens is a live photo and is
+    /// written over as before, never quarantined.
+    @Test func aSecondQuarantineOfTheSameIDKeepsBothCopies() throws {
+        let documents = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: documents) }
+        let quarantine = OwnPhotoLegacyQuarantine(
+            documentsDirectory: documents, corpusDirectoryName: OwnPhotoCorpusLayout.mealPhotosDirectoryName
+        )
+        let directory = OwnPhotoCorpusLayout.mealPhotosDirectory(in: documents)
+        let store = MealPhotoStore(
+            directory: directory,
+            keyProvider: InMemoryPrivateMediaKeyProvider(),
+            allowsLegacyPlaintextUpgrade: false,
+            legacyQuarantine: quarantine
+        )
+        // What a backup would have uploaded: an already-normalized photo read back out of a store.
+        let source = MealPhotoStore(
+            directory: documents.appendingPathComponent("source", isDirectory: true),
+            keyProvider: InMemoryPrivateMediaKeyProvider(),
+            allowsLegacyPlaintextUpgrade: false
+        )
+        let sourceID = try #require(source.save(jpeg(width: 64, height: 48)))
+        let restored = try #require(source.imageData(for: sourceID))
+        let id = UUID()
+        let file = directory.appendingPathComponent("\(id.uuidString).jpg")
+        let first = Data(repeating: 0xA1, count: 256)
+        let second = Data(repeating: 0xB2, count: 256)
+
+        try first.write(to: file)
+        #expect(store.restoreSealedPhoto(restored, forID: id))
+        #expect(store.imageData(for: id) == restored)
+        try second.write(to: file)
+        #expect(store.restoreSealedPhoto(restored, forID: id))
+
+        let kept = try quarantinedContents(quarantine)
+        #expect(kept.count == 2 && Set(kept) == [first, second], "a second quarantine overwrote the first copy")
+        #expect(store.restoreSealedPhoto(restored, forID: id))
+        #expect(try quarantinedContents(quarantine).count == 2, "a readable photo was quarantined")
+    }
+
+    /// The progress index merge replaces an unreadable index whole. The dead index may be a pre-`FMA2`
+    /// timeline whose dates and captions exist nowhere else, so it is moved aside first.
+    @Test func anUnreadableProgressIndexIsQuarantinedBeforeTheMergeReplacesIt() throws {
+        let documents = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: documents) }
+        let quarantine = OwnPhotoLegacyQuarantine(
+            documentsDirectory: documents, corpusDirectoryName: OwnPhotoCorpusLayout.progressPhotosDirectoryName
+        )
+        let root = OwnPhotoCorpusLayout.progressPhotosDirectory(in: documents)
+        let store = ProgressPhotoStore(
+            directory: root, keyProvider: InMemoryPrivateMediaKeyProvider(), legacyQuarantine: quarantine
+        )
+        let deadIndex = Data(repeating: 0xCD, count: 300)
+        try deadIndex.write(to: root.appendingPathComponent(OwnPhotoCorpusLayout.progressIndexFileName))
+        let record = ProgressPhotoRecord(capturedAt: Date(timeIntervalSince1970: 1_790_000_000), caption: "week 1")
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+
+        #expect(store.mergeRestoredIndexPayload(try encoder.encode([record]), restoredIDs: [record.id]))
+        #expect(store.records().map(\.caption) == ["week 1"])
+        let kept = quarantine.directory.appendingPathComponent(OwnPhotoCorpusLayout.progressIndexFileName)
+        #expect(try Data(contentsOf: kept) == deadIndex, "the merge destroyed the unreadable index")
+    }
+
+    /// Delete everything (and so the duress silent wipe, which runs it) clears every corpus's
+    /// quarantine: set-aside photos are still the user's photos.
+    @Test func deleteEverythingClearsTheLegacyQuarantine() async throws {
+        let store = makeTestStore()
+        defer { try? FileManager.default.removeItem(at: store.photoDocumentsDirectory) }
+        let names = [
+            OwnPhotoCorpusLayout.mealPhotosDirectoryName,
+            OwnPhotoCorpusLayout.recipePhotosDirectoryName,
+            OwnPhotoCorpusLayout.progressPhotosDirectoryName
+        ]
+        let quarantines = names.map {
+            OwnPhotoLegacyQuarantine(documentsDirectory: store.photoDocumentsDirectory, corpusDirectoryName: $0)
+        }
+        for quarantine in quarantines {
+            try FileManager.default.createDirectory(at: quarantine.directory, withIntermediateDirectories: true)
+            try Data(repeating: 0xEE, count: 64)
+                .write(to: quarantine.directory.appendingPathComponent("\(UUID().uuidString).jpg"))
+        }
+
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+
+        for quarantine in quarantines {
+            #expect(!FileManager.default.fileExists(atPath: quarantine.directory.path),
+                    "Delete everything left \(quarantine.directory.lastPathComponent)'s quarantined photos")
+        }
+    }
+
+    /// `sealedPhoto.restoreFailed` used to carry no reason, so a CloudKit Development run could not
+    /// be told from a real failure. It now names the error's type and CloudKit code (or the case of
+    /// the route's own error), and never its description, user info or a record name.
+    @Test func aFailedRestoreLogsItsCloudKitCodeAndTypeButNoDescription() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        database.unfetchableRecordNames = ["sealed-photo.meal.manifest"]
+        database.fetchFailure = NSError(
+            domain: CKErrorDomain,
+            code: CKError.Code.networkFailure.rawValue,
+            userInfo: [NSLocalizedDescriptionKey: "SECRET sealed-photo.meal.manifest"]
+        )
+        let capture = AuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+        let phone = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: phone) }
+        let route = makeCoordinator(documents: phone, identity: identity, database: database, defaults: isolatedDefaults())
+        _ = await route.coordinator.synchronize(preferenceOverride: true)
+
+        let lines = capture.contexts(for: "sealedPhoto.restoreFailed")
+        let line = try #require(lines.first { $0["corpus"] == "meal" && $0["ckCode"] != nil })
+        #expect(line["ckCode"] == String(CKError.Code.networkFailure.rawValue))
+        #expect(["NSError", "CKError"].contains(line["errorType"] ?? ""), "no error type: \(line)")
+        #expect(lines.allSatisfy { context in !context.values.contains { $0.contains("SECRET") } })
+
+        let sealed = OwnPhotoBackupCoordinator.restoreFailureReason(
+            SealedBackupError.staleGeneration(found: 7, lastSeen: 9)
+        )
+        #expect(sealed == ["errorType": "SealedBackupError", "case": "staleGeneration"])
+    }
 }
 
 // MARK: - Test doubles
@@ -2694,15 +2865,23 @@ private final class RecordingOwnPhotoHost: OwnPhotoBackupContext {
 private final class AuditCapture {
     private let lock = NSLock()
     private var storedEvents: [String] = []
+    private var storedContexts: [(event: String, context: [String: String])] = []
     private var token: UUID?
 
     func install() {
-        token = FernletAuditLog.addCaptureHandler { [weak self] event, _ in
+        token = FernletAuditLog.addCaptureHandler { [weak self] event, context in
             guard let self else { return }
             self.lock.lock()
             self.storedEvents.append(event)
+            self.storedContexts.append((event, context))
             self.lock.unlock()
         }
+    }
+
+    /// Every captured context for `event`, in log order.
+    func contexts(for event: String) -> [[String: String]] {
+        lock.lock(); defer { lock.unlock() }
+        return storedContexts.filter { $0.event == event }.map(\.context)
     }
 
     func uninstall() {
@@ -2729,6 +2908,9 @@ private final class MockPhotoRecordDatabase: CloudKitRecordDatabase {
     /// Record names whose fetch throws, modelling a transient CloudKit failure confined to one
     /// record while everything else works.
     var unfetchableRecordNames: Set<String> = []
+    /// What a fetch of an `unfetchableRecordNames` record throws (a CloudKit `NSError` in the test
+    /// that reads the logged reason).
+    var fetchFailure: Error = InjectedFailure()
     /// How many `saveRecords` calls succeed before every LATER one throws, or nil for no limit.
     /// `failSaves` is all-or-nothing for a whole run, so it cannot express the one shape a
     /// multi-pass migration run needs: a first pass that commits and a second that fails.
@@ -2755,7 +2937,7 @@ private final class MockPhotoRecordDatabase: CloudKitRecordDatabase {
 
     func records(for recordIDs: [CKRecord.ID]) async throws -> [CKRecord] {
         let requested = Set(recordIDs.map(\.recordName))
-        if !unfetchableRecordNames.isDisjoint(with: requested) { throw InjectedFailure() }
+        if !unfetchableRecordNames.isDisjoint(with: requested) { throw fetchFailure }
         return records.filter { requested.contains($0.recordID.recordName) }
     }
 

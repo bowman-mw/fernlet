@@ -681,17 +681,25 @@ final class FernletStore {
     }
     /// Lazy (rather than an inline initializer) so it can hang off the per-instance
     /// `photoDocumentsDirectory` — see that property for why the root is not static.
+    /// Each own-photo corpus carries its W-19 quarantine (`LegacyQuarantine/<corpus>/`), so the
+    /// corpus's `deleteAll()` in `deletePhotoCorpora` clears the photos a restore set aside too.
     @ObservationIgnored private lazy var mealPhotoStore = MealPhotoStore(
         directory: OwnPhotoCorpusLayout.mealPhotosDirectory(in: photoDocumentsDirectory),
         keyProvider: FernletStore.ownPhotoKeyProvider(),
-        legacyKeyProvider: FernletStore.ownPhotoLegacyKeyProvider()
+        legacyKeyProvider: FernletStore.ownPhotoLegacyKeyProvider(),
+        legacyQuarantine: OwnPhotoLegacyQuarantine(
+            documentsDirectory: photoDocumentsDirectory, corpusDirectoryName: OwnPhotoCorpusLayout.mealPhotosDirectoryName
+        )
     )
     /// The user's gym progress-photo timeline (#11). Body photos, so it seals the bytes AND the dated
     /// index; reuses the same hardened media path as meal photos, in its own directory.
     @ObservationIgnored private lazy var progressPhotoStore = ProgressPhotoStore(
         directory: OwnPhotoCorpusLayout.progressPhotosDirectory(in: photoDocumentsDirectory),
         keyProvider: FernletStore.ownPhotoKeyProvider(),
-        legacyKeyProvider: FernletStore.ownPhotoLegacyKeyProvider()
+        legacyKeyProvider: FernletStore.ownPhotoLegacyKeyProvider(),
+        legacyQuarantine: OwnPhotoLegacyQuarantine(
+            documentsDirectory: photoDocumentsDirectory, corpusDirectoryName: OwnPhotoCorpusLayout.progressPhotosDirectoryName
+        )
     )
     /// The recipe's picture (#1), sealed and keyed by the recipe id. Holds the user's own photo —
     /// which always wins — or, since the 2026-08-09 owner decision (reversing the 2026-07-16
@@ -703,7 +711,10 @@ final class FernletStore {
         // Recipe photos never had a plaintext generation — fail closed on unsealed on-disk bytes.
         allowsLegacyPlaintextUpgrade: false,
         legacyKeyProvider: FernletStore.ownPhotoLegacyKeyProvider(),
-        purpose: FernletCryptoPurpose.AEAD.recipePhotoV2
+        purpose: FernletCryptoPurpose.AEAD.recipePhotoV2,
+        legacyQuarantine: OwnPhotoLegacyQuarantine(
+            documentsDirectory: photoDocumentsDirectory, corpusDirectoryName: OwnPhotoCorpusLayout.recipePhotosDirectoryName
+        )
     )
     /// Backing store for ``RecipeWebImageAttemptMemory`` — the device-local "one automatic
     /// web-image attempt per device" bookkeeping (the synced half of that contract is
@@ -6805,8 +6816,9 @@ final class FernletStore {
         }
     }
 
-    /// Wipe leg 4: the three sealed own-photo corpora (meal, progress, recipe), and the session photos
-    /// nobody has chosen yet (4d).
+    /// Wipe leg 4: the three sealed own-photo corpora (meal, progress, recipe) — each `deleteAll()`
+    /// also clears that corpus's `LegacyQuarantine/` folder (W-19) — and the session photos nobody
+    /// has chosen yet (4d).
     private func deletePhotoCorpora(into outcome: inout DeleteAllOutcome) {
         // Photo bytes before the days that reference them: ownership lives in `Meal.photoID`, so once
         // the days are gone nothing knows these files exist and they can never be reached again.

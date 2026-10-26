@@ -280,6 +280,14 @@ supplies only the local seam it needs, and each piece is shaped by a hazard:
   turned on, keep their rows, and the restored rows join them — only for bodies that actually landed,
   so no row names a photo that is not on disk (bug confirmation 2026-10-15 §2). With no live index it
   is ``ProgressPhotoStore/restoreIndexPayload(_:)`` exactly.
+- ``OwnPhotoLegacyQuarantine`` — `LegacyQuarantine/<corpus>/` beside the corpora (W-19, 2026-10-26).
+  Photos sealed before the `FMA2` marker read as dead bytes to this build yet are intact, and a
+  corpus holding only them is restored over by id. So before ``MealPhotoStore/restoreSealedPhoto(_:forID:)``
+  writes an id holding a file no read path opens, and before
+  ``ProgressPhotoStore/restoreIndexPayload(_:)`` replaces an unreadable index, the store MOVES the
+  file there (a unique name when one is taken; never deleted, never overwritten) and refuses the
+  write when it cannot. The folder is excluded from backup, outside every location the backup, the
+  census and the migration enumerate, and cleared only by the corpus's own `deleteAll()`.
 
 ### Position relative to the S3 wall
 
@@ -365,6 +373,7 @@ provider instance across isolation domains.
 ### Own-photo corpus layout
 
 - ``OwnPhotoCorpusLayout``
+- ``OwnPhotoLegacyQuarantine``
 - ``OwnPhotoSealedLocations``
 
 ### At-rest format census (Phase 0)

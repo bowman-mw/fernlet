@@ -61,6 +61,9 @@ public struct ProgressPhotoStore {
     /// migration that reached the photos but not `index.bin` would render an empty timeline over a
     /// full photo directory. See `MealPhotoStore.legacyKeyProvider`.
     private let legacyKeyProvider: PrivateMediaKeyProviding?
+    /// Where a restore moves an unreadable `index.bin` before replacing it, shared with the inner
+    /// photo store for the bodies (W-19). Nil (the default) keeps the old replace.
+    private let legacyQuarantine: OwnPhotoLegacyQuarantine?
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
@@ -75,14 +78,18 @@ public struct ProgressPhotoStore {
     ///     photos are the user's own, never friend-wall media).
     ///   - legacyKeyProvider: Optional pre-split key for the dual-open safety net, applied to both
     ///     the index and the inner photo store. Nil — the default — means no fallback.
+    ///   - legacyQuarantine: Where a restore moves an unreadable index or body before writing over
+    ///     it, cleared by ``deleteAll()``. Nil — the default — writes over them as before.
     public init(
         directory: URL,
         keyProvider: PrivateMediaKeyProviding = KeychainPrivateMediaKeyProvider(role: .ownPhotos),
-        legacyKeyProvider: PrivateMediaKeyProviding? = nil
+        legacyKeyProvider: PrivateMediaKeyProviding? = nil,
+        legacyQuarantine: OwnPhotoLegacyQuarantine? = nil
     ) {
         self.directory = directory
         self.keyProvider = keyProvider
         self.legacyKeyProvider = legacyKeyProvider
+        self.legacyQuarantine = legacyQuarantine
         // Body photos never had a plaintext generation, so the legacy-plaintext-upgrade read path is
         // disabled: an unsealed file dropped at a valid id path (tampered restore, shared-container
         // write) resolves to nil rather than being trusted and re-sealed into authentic ciphertext.
@@ -94,7 +101,8 @@ public struct ProgressPhotoStore {
             keyProvider: keyProvider,
             allowsLegacyPlaintextUpgrade: false,
             legacyKeyProvider: legacyKeyProvider,
-            purpose: FernletCryptoPurpose.AEAD.progressPhotoV2
+            purpose: FernletCryptoPurpose.AEAD.progressPhotoV2,
+            legacyQuarantine: legacyQuarantine
         )
         self.indexURL = directory.appendingPathComponent(OwnPhotoCorpusLayout.progressIndexFileName)
         let enc = JSONEncoder()
@@ -212,7 +220,9 @@ public struct ProgressPhotoStore {
     }
 
     /// Removes every progress photo and the index. Reached by "delete everything": progress photos are
-    /// the user's own logged pictures (like meal photos), so a full wipe includes them.
+    /// the user's own logged pictures (like meal photos), so a full wipe includes them. The inner
+    /// photo store's `deleteAll()` also clears the shared quarantine folder (W-19), which holds any
+    /// set-aside index as well as bodies.
     ///
     /// R7: not `@discardableResult` — `false` means the photos or the sealed index survived
     /// "delete everything".
@@ -259,7 +269,9 @@ public struct ProgressPhotoStore {
     /// index sealed under a key that did not travel to this device, and refusing there would restore
     /// every body photo into a corpus that can never render them. The key check is what keeps the
     /// two apart — an unavailable key ALSO resolves `.undecodable`, and overwriting then would
-    /// destroy a perfectly good timeline that is merely locked right now.
+    /// destroy a perfectly good timeline that is merely locked right now. Even then the dead index is
+    /// never destroyed: with a quarantine it is MOVED there first (W-19 — it may be a pre-`FMA2`
+    /// timeline whose dates and captions exist nowhere else), and a failed move refuses the write.
     ///
     /// - Returns: whether the index was written (false = refused or the seal/write failed). R7:
     ///   deliberately not `@discardableResult` — ignoring it would let a restore report success
@@ -268,16 +280,19 @@ public struct ProgressPhotoStore {
         // R5: a restore boundary — validate the caller-supplied bytes before decoding them, and the
         // decoded record count before sealing it back as the user's index.
         guard payload.count <= Self.maxIndexPayloadBytes else { return false }
+        let replacesUnreadableIndex: Bool
         switch readIndex() {
         case .absent:
-            break
+            replacesUnreadableIndex = false
         case .records:
             return false
         case .undecodable:
             guard keyProvider.mediaKey() != nil else { return false }
+            replacesUnreadableIndex = true
         }
         guard let records = try? decoder.decode([ProgressPhotoRecord].self, from: payload),
               records.count <= Self.maxRecords else { return false }
+        if replacesUnreadableIndex, let legacyQuarantine, !legacyQuarantine.moveAside(indexURL) { return false }
         return persist(records)
     }
 
