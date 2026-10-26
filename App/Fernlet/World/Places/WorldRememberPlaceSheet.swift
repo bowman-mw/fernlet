@@ -232,12 +232,17 @@ struct WorldPinMap: View {
     @Binding var camera: WorldCamera
     @Environment(\.colorScheme) private var colorScheme
 
+    /// How far up the small map keeps Apple's credit (its bottom layout margin).
+    static let creditInset: CGFloat = 6
+
     var body: some View {
         WorldMapStack(kind: .appleMuted, camera: $camera,
                       ground: WorldGround(lifted: store.duressSessionActive ? [] : store.worldFog.visibleCells),
-                      phase: .day, darkMode: colorScheme == .dark, creditInset: 6) { _, size in
+                      phase: .day, darkMode: colorScheme == .dark, creditInset: Self.creditInset) { _, size in
+            // On the spot the sheet keeps: MapKit's camera centre, the middle of the area above the credit's
+            // inset (W-12), where the fog now lines up with the tiles.
             WorldSpriteView(sprite: WorldSprites.pin, scale: 4)
-                .position(x: size.width / 2, y: size.height / 2 - 14)
+                .position(x: size.width / 2, y: (size.height - Self.creditInset) / 2 - 14)
                 .allowsHitTesting(false)
         }
         .frame(height: 170)

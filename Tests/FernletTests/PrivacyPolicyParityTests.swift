@@ -125,6 +125,11 @@ struct PrivacyPolicyParityTests {
     /// - `If you add the map widget, Fernlet gives it a picture of the map around you` — the map widget
     ///   (Q36): marked places and saved trails reach the widget, on this iPhone only and never in a backup;
     /// - `the widget's copy is deleted whenever you delete your map history` — and it goes with the history.
+    ///
+    /// The two markers added with W-09 (i) (owner, 2026-10-26: "Change that to while fernlet is open"; a
+    /// verbatim swap of "while the map is open" in both sentences) pin when places are noted and looked up:
+    /// - `collected while Fernlet is open` — Where you've been's timeline, a panel or sheet over the map or not;
+    /// - `only while Fernlet is open` — the Apple Maps lookup.
     private static let substanceMarkers = [
         "iOS may refuse or end it at any time",
         "never retroactively repurposed",
@@ -168,7 +173,9 @@ struct PrivacyPolicyParityTests {
         "it stays until you remove it in Settings › Home map",
         "encrypted on this iPhone only and never in a backup, to uncover the map around it",
         "If you add the map widget, Fernlet gives it a picture of the map around you",
-        "the widget's copy is deleted whenever you delete your map history"
+        "the widget's copy is deleted whenever you delete your map history",
+        "collected while Fernlet is open",
+        "only while Fernlet is open"
     ]
 
     /// Loads each copy's text, keyed by its repo-relative path.

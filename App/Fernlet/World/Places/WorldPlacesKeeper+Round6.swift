@@ -173,7 +173,7 @@ extension WorldPlacesKeeper {
     }
 
     /// Asks Apple Maps again, by reference, for the name of each favourite place to eat the person hasn't
-    /// named, while the map is open (in memory only, at most ``EatingPlace/maxPlaces``, one at a time). A
+    /// named, while Fernlet is open (in memory only, at most ``EatingPlace/maxPlaces``, one at a time). A
     /// name that now reads as a place Fernlet never names is not shown.
     func resolveEatingNames() async {
         for place in eatingPlaces.prefix(EatingPlace.maxPlaces) where place.isFavourite && place.label == nil && eatingNames[place.id] == nil {

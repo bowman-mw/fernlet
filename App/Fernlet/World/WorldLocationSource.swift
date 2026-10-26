@@ -46,8 +46,9 @@ nonisolated enum WorldLocationPermission: Equatable, Sendable {
 /// app plan step 5a). **The only new file in the app that imports CoreLocation**
 /// (`MapAndLocationConfinementBoundaryTests`; the other is `WeatherKitService.swift`).
 ///
-/// - **While Using:** updates run only while the map is on screen and the app is active
-///   (``startForeground()`` / ``stopForeground()``), every 10 m of movement.
+/// - **While Using:** updates run only while Fernlet is open, a panel or sheet over the map or not (W-09 (i),
+///   owner 2026-10-26), and stop when the app goes to the background (``startForeground()`` /
+///   ``stopForeground()``), every 10 m of movement. Every reading iOS delivers is handed on, in order.
 /// - **Always, low power (opt-in, off by default):** iOS's visit and significant-change updates
 ///   (``setLowPowerAlways(_:)``), which need no `location` background mode and use little battery.
 /// - **Asking:** ``requestWhileUsing()`` and ``requestAlways()`` are called only from the approved
@@ -60,7 +61,9 @@ nonisolated enum WorldLocationPermission: Equatable, Sendable {
 ///   pocket keeps its line. Both Info.plist halves ship with the approved strings (step 5c); a build
 ///   without one skips it, never crashes into it.
 /// - **Background mapping on** (``WorldMapPreferences/alwaysLowPower(in:)``) arms the low-power mode as soon
-///   as Always is allowed, including when iOS relaunches the app for a visit.
+///   as Always is allowed, including when iOS relaunches the app for a visit (the store builds this source at
+///   launch when the switch is on, W-09 B1). Allowing Always later, in iOS's Settings, turns the switch on
+///   (``turnsOnBackgroundMapping(from:to:)``).
 ///
 /// Every reading goes to ``onFix`` as a ``WorldFix``, and every low-power visit to ``onVisit`` as a
 /// ``WorldVisit``; what to do with them (lift the fog, note a stop) is the keepers' call. Delegate
@@ -98,7 +101,7 @@ final class WorldLocationSource: NSObject {
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBest
         manager.distanceFilter = 10
-        apply(status: manager.authorizationStatus, accuracy: manager.accuracyAuthorization)
+        apply(status: manager.authorizationStatus, accuracy: manager.accuracyAuthorization, observed: false)
     }
 
     /// Whether iOS's location prompt is up: asked for, not answered yet (the companion hint waits for it).
@@ -117,14 +120,14 @@ final class WorldLocationSource: NSObject {
         manager.requestAlwaysAuthorization()
     }
 
-    /// Starts updates while the map shows; a no-op without permission or when already running.
+    /// Starts updates while Fernlet is open; a no-op without permission or when already running.
     func startForeground() {
         guard permission == .whileUsing || permission == .always, !isUpdating else { return }
         isUpdating = true
         manager.startUpdatingLocation()
     }
 
-    /// Stops the map's updates (the map left the screen, or the app went to the background); a walk
+    /// Stops the map's updates (the app went to the background); a walk
     /// keeps them running until it ends.
     func stopForeground() {
         guard isUpdating, !isWalking else { return }
@@ -183,10 +186,20 @@ final class WorldLocationSource: NSObject {
         }
     }
 
-    /// Records the permission and accuracy CoreLocation reports.
-    private func apply(status: CLAuthorizationStatus, accuracy: CLAccuracyAuthorization) {
+    /// Whether a change of answer CoreLocation reported while running turns background mapping's switch on
+    /// (W-09): Always newly allowed, in iOS's upgrade prompt or later in iOS's Settings. The answer read when
+    /// the source is built is not a change, so a switch the person turned off stays off.
+    nonisolated static func turnsOnBackgroundMapping(from old: WorldLocationPermission, to new: WorldLocationPermission) -> Bool {
+        old != .always && new == .always
+    }
+
+    /// Records the permission and accuracy CoreLocation reports; `observed` when it is a change reported
+    /// while running (not the answer read at start).
+    private func apply(status: CLAuthorizationStatus, accuracy: CLAccuracyAuthorization, observed: Bool = true) {
+        let old = permission
         permission = Self.permission(for: status)
         isPrecise = accuracy == .fullAccuracy
+        if observed, Self.turnsOnBackgroundMapping(from: old, to: permission) { WorldMapPreferences.setAlwaysLowPower(true) }
         if permission != .notAsked { isAsking = false }
         guard permission != .always else {
             // Background mapping, when the person turned it on, runs as soon as Always is allowed.
@@ -232,12 +245,25 @@ extension WorldLocationSource: CLLocationManagerDelegate {
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let last = locations.last else { return }
-        let precise = manager.accuracyAuthorization == .fullAccuracy
-        let fix = WorldFix(point: GeoPoint(last.coordinate.latitude, last.coordinate.longitude),
-                           accuracy: last.horizontalAccuracy, at: last.timestamp, isPrecise: precise)
-        Task { @MainActor in self.deliver(fix) }
+        // Every reading, oldest first: iOS batches them (a walk in a pocket, a slow wake), and the fog and the
+        // walk's line want each one, not only the last (W-09).
+        let fixes = Self.fixes(from: locations, precise: manager.accuracyAuthorization == .fullAccuracy)
+        guard !fixes.isEmpty else { return }
+        Task { @MainActor in
+            for fix in fixes { self.deliver(fix) }
+        }
     }
+
+    /// The readings iOS delivered, as plain values in the order delivered (at most ``maxBatch``, the newest).
+    nonisolated static func fixes(from locations: [CLLocation], precise: Bool) -> [WorldFix] {
+        locations.suffix(maxBatch).map { location in
+            WorldFix(point: GeoPoint(location.coordinate.latitude, location.coordinate.longitude),
+                     accuracy: location.horizontalAccuracy, at: location.timestamp, isPrecise: precise)
+        }
+    }
+
+    /// The most readings one delivery hands on (a bound on a batch; iOS's are far smaller).
+    nonisolated static let maxBatch = 500
 
     nonisolated func locationManager(_ manager: CLLocationManager, didVisit visit: CLVisit) {
         let precise = manager.accuracyAuthorization == .fullAccuracy

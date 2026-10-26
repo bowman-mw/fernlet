@@ -9,7 +9,7 @@ import WorldMapStore
 /// "Where you've been" and the solo photos' places (World build step 5c; `b2-where-been`, owner's option A
 /// and Q24, 2026-10-24): the store's side of ``WorldPlacesKeeper`` and `PhotoPlaceStore`.
 ///
-/// - **Capture** happens on the map: readings while it is open (``noteWorldPlace(from:)``), iOS's
+/// - **Capture** happens on the map: readings while Fernlet is open (``noteWorldPlace(from:)``), iOS's
 ///   low-power visits with background mapping on, and the walks and runs it records.
 /// - **Private reads it under the hub key** (``worldPlaceLog(now:)`` and the deletes), the key the
 ///   journal's entries are sealed under, from ``hubContentKeyProvider``. No key (Private closed) or a
@@ -21,20 +21,45 @@ import WorldMapStore
 extension FernletStore {
     // MARK: Capture
 
-    /// A reading from the map's location source: while the map itself is open and the app in front (not a
-    /// walk, not a background reading), it may note a visit. Nothing in a decoy.
+    /// A reading from the map's location source: while Fernlet is open and in front (the map's own
+    /// updates, a panel or sheet over the map or not; not a walk, not a background reading), it may note a
+    /// visit once the person has stopped (W-13). Nothing in a decoy.
     func noteWorldPlace(from fix: WorldFix) {
-        guard !duressSessionActive, worldLocation.isFollowingMap,
-              UIApplication.shared.applicationState == .active else { return }
+        guard worldPlaceNotingAllowed else { return }
         let keeper = worldPlaces
         Task { await keeper.handleForeground(fix) }
     }
 
-    /// Arms background mapping when the person turned it on and Always is allowed (at launch, so a visit
-    /// iOS relaunches the app for is heard), or turns it off.
+    /// Whether a reading may note a place now: the map's own updates, the app active, no decoy.
+    var worldPlaceNotingAllowed: Bool {
+        !duressSessionActive && worldLocation.isFollowingMap && UIApplication.shared.applicationState == .active
+    }
+
+    /// A reading for the fog: lifted, and saved at once when it arrived while the app isn't active (W-09 B2).
+    func liftWorldFog(_ fix: WorldFix) {
+        worldFog.handle(fix, saveNow: UIApplication.shared.applicationState != .active)
+    }
+
+    /// Arms background mapping when the person turned it on and Always is allowed, or turns it off.
     func applyWorldBackgroundMapping() {
         let on = WorldMapPreferences.alwaysLowPower()
         worldLocation.setLowPowerAlways(on && worldLocation.permission == .always)
+    }
+
+    /// At launch, once the store is ready (W-09 B1): with background mapping's switch on, builds the map's
+    /// location source and arms it, so a visit or a significant move iOS launches the app for is heard
+    /// without Home ever drawing. With the switch off nothing is built (CoreLocation waits for the map).
+    func armWorldBackgroundMappingAtLaunch() {
+        guard WorldMapPreferences.alwaysLowPower() else { return }
+        applyWorldBackgroundMapping()
+    }
+
+    /// The app went to the background: the map's own updates stop (a walk and background mapping keep
+    /// theirs) and the lifted cells are written. Home does the same when it sees the edge; this is the
+    /// app's own, for when Home isn't drawn.
+    func worldAppDidEnterBackground() {
+        worldLocation.stopForeground()
+        worldFog.flush()
     }
 
     // MARK: Settings → Home map

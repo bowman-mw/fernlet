@@ -763,12 +763,13 @@ final class FernletStore {
         return keeper
     }()
     /// The World map's location (`WorldLocationSource`), following the permission the person gave.
-    /// Lazy, so nothing asks CoreLocation for anything until the map is on screen; every reading goes
-    /// to ``worldFog``, which decides whether it lifts the fog.
+    /// Lazy, so nothing asks CoreLocation for anything until the map is on screen, or, with background
+    /// mapping on, until launch (`armWorldBackgroundMappingAtLaunch()`, W-09 B1); every reading goes to
+    /// ``worldFog``, which decides whether it lifts the fog.
     @ObservationIgnored private(set) lazy var worldLocation: WorldLocationSource = {
         let source = WorldLocationSource()
         source.onFix = { [weak self] fix in
-            self?.worldFog.handle(fix)
+            self?.liftWorldFog(fix)
             self?.worldWalk.record(fix)
             self?.noteWorldPlace(from: fix)
         }
@@ -780,7 +781,13 @@ final class FernletStore {
     /// "Where you've been"'s capture (`WorldPlacesKeeper`; `FernletStore+WorldPlaces`): the stops the map
     /// notes, waiting in the same vault as the fog until Private folds them under its hub key. Lazy, like
     /// the fog, and it follows the decoy.
-    @ObservationIgnored private(set) lazy var worldPlaces = WorldPlacesKeeper(vault: worldMapVault, lookup: worldPlaceLookup)
+    @ObservationIgnored private(set) lazy var worldPlaces: WorldPlacesKeeper = {
+        let keeper = WorldPlacesKeeper(vault: worldMapVault, lookup: worldPlaceLookup)
+        // A stop's look-up, asked again once the person has stayed (W-13), runs only under the same gate as
+        // a reading's: the map's own location, the app in front, no decoy.
+        keeper.mayRecheck = { [weak self] in self?.worldPlaceNotingAllowed ?? false }
+        return keeper
+    }()
     /// Where each solo camera photo was taken (`PhotoPlaceStore`; `FernletStore+WorldPlaces`), in the same
     /// vault and cleared with it.
     @ObservationIgnored private(set) lazy var worldPhotoPlaces = PhotoPlaceStore(vault: worldMapVault)

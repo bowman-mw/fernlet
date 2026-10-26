@@ -24,6 +24,9 @@ struct WorldMapStack<Overlay: View>: View {
     var veiled = false
     /// Drawn over the map in the same coordinate space; receives the current viewport.
     @ViewBuilder let overlay: (MapViewport, CGSize) -> Overlay
+    /// Where the caller reads the last viewport back without redrawing (Home: whether Sprout left the
+    /// visible map); nil for none.
+    var geometry: WorldMapGeometry? = nil
     @State private var viewport: MapViewport?
 
     var body: some View {
@@ -32,6 +35,8 @@ struct WorldMapStack<Overlay: View>: View {
                 BaseMapLayer(kind: kind, camera: $camera, darkStyle: isDark, bottomInset: creditInset) { reported in
                     guard reported.isUsable else { return }
                     viewport = reported
+                    geometry?.viewport = reported
+                    geometry?.size = proxy.size
                 }
                 .accessibilityHidden(true)
                 if veiled {
@@ -54,6 +59,22 @@ struct WorldMapStack<Overlay: View>: View {
 
     /// Whether the map draws dark: in Dark Mode only (night is a tint, `b1-home-night`).
     private var isDark: Bool { darkMode }
+}
+
+/// The map's last viewport and size as the base map reported them, held for reading only: not
+/// observed, so writing it on every frame of a move redraws nothing (``WorldMapStack/geometry``).
+@MainActor
+final class WorldMapGeometry {
+    /// The last usable viewport, nil before the first.
+    var viewport: MapViewport?
+    /// The map's size when it was reported.
+    var size: CGSize = .zero
+
+    /// Whether `point` falls on the visible map now; false before the first viewport.
+    func shows(_ point: GeoPoint) -> Bool {
+        guard let viewport, viewport.isUsable, size.width > 0, size.height > 0 else { return false }
+        return CGRect(origin: .zero, size: size).contains(viewport.screenPoint(for: point, in: size))
+    }
 }
 
 /// A mask with one small hole over the base map's own credit, so Fernlet's fog and wash never cover

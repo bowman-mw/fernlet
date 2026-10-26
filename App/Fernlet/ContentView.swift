@@ -933,7 +933,7 @@ struct ContentView: View {
         TabView(selection: $selectedTab) {
             // World build (plan step 1b): Home is the live map; the four other tabs are full-screen
             // panels in the approved frame. Same pages, same tab gates, same @State lifetimes.
-            WorldMapHome(store: store, isFrontmost: isWorldMapFrontmost,
+            WorldMapHome(store: store, isFrontmost: isWorldMapFrontmost, isLaunched: launcher.isDone,
                          bodySignal: HomeView.companionBodySignal(enabled: store.settings.stressAwarenessEnabled,
                                                                   assessment: stressService.assessment),
                          onOpen: openWorldPanel,
@@ -1001,7 +1001,8 @@ struct ContentView: View {
     }
 
     /// Whether the World map is what the person sees: launch done, Home, no panel over it, no root sheet.
-    /// The companion's first line and the location updates wait for the launch screen to lift.
+    /// The companion's first line waits for the launch screen to lift, as the location updates do (which
+    /// then keep running under panels and sheets while Fernlet is open, W-09 (i)).
     private var isWorldMapFrontmost: Bool {
         launcher.isDone && selectedTab == .home && worldOverlay == nil && !rootSheetIsCoveringTabs
     }

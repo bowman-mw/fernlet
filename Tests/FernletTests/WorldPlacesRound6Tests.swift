@@ -139,7 +139,7 @@ struct WorldPlacesRound6Tests {
         let keeper = WorldPlacesKeeper(vault: WorldMapVault.ephemeral(), lookup: lookup, remembersPlaces: { true },
                                        remembersEatingOut: { false })
         let fix = WorldFix(point: Self.cafe, accuracy: 10, at: Self.now, isPrecise: true)
-        #expect(!(await keeper.handleForeground(fix, now: Self.now)))
+        #expect(!(await keeper.stayed(at: fix, until: Self.now)))
         #expect(keeper.refusedSpot?.point == Self.cafe)
         #expect(try keeper.store.deviceState() == .empty, "nothing kept unless they add it")
         _ = await keeper.handleForeground(WorldFix(point: Self.cafe.offset(east: 80, north: 0), accuracy: 10, at: Self.now, isPrecise: true),
@@ -163,8 +163,8 @@ struct WorldPlacesRound6Tests {
         #expect(keeper.saveHome(home))
         let atHome = WorldFix(point: Self.home, accuracy: 10, at: Self.now, isPrecise: true)
         #expect(!(await keeper.handleForeground(atHome, now: Self.now)), "no visit at home, even above a café")
-        _ = await keeper.handleForeground(WorldFix(point: Self.cafe, accuracy: 10, at: Self.now, isPrecise: true),
-                                          now: Self.now.addingTimeInterval(3_600))
+        _ = await keeper.stayed(at: WorldFix(point: Self.cafe, accuracy: 10, at: Self.now, isPrecise: true),
+                                until: Self.now.addingTimeInterval(3_600))
         _ = await keeper.handleForeground(atHome, now: Self.now.addingTimeInterval(4 * 3_600))
         let kinds = try keeper.store.deviceState().pending.map(\.kind)
         #expect(kinds == [.leftHome, .visit, .cameHome])
@@ -178,7 +178,7 @@ struct WorldPlacesRound6Tests {
         let lookup = FixedPlaceLookup(answer: [NearbyPlace(name: "Hoshi Noodle Bar", kind: .allowed(.foodAndDrink), metres: 8, placeID: "I-hoshi")])
         let keeper = WorldPlacesKeeper(vault: WorldMapVault.ephemeral(), lookup: lookup, remembersPlaces: { true },
                                        remembersEatingOut: { true })
-        _ = await keeper.handleForeground(WorldFix(point: Self.cafe, accuracy: 10, at: Self.now, isPrecise: true), now: Self.now)
+        _ = await keeper.stayed(at: WorldFix(point: Self.cafe, accuracy: 10, at: Self.now, isPrecise: true), until: Self.now)
         let ramen = WorldLoggedMeal(id: UUID(), name: "tonkotsu ramen", loggedAt: Self.now.addingTimeInterval(600))
         let before = WorldLoggedMeal(id: UUID(), name: "toast", loggedAt: Self.now.addingTimeInterval(-3 * 3_600))
         #expect(keeper.noteMeals([ramen, before], now: Self.now.addingTimeInterval(900)))

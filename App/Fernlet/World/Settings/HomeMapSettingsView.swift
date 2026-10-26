@@ -9,7 +9,8 @@ import WorldMapStore
 ///
 /// - **Location:** what iOS allows (a tap opens the map intro while iOS hasn't asked, else Fernlet's page in
 ///   the Settings app), and background mapping, off by default: Always, in low power. Turning it on asks
-///   iOS to change location to Always; it runs once Always is allowed.
+///   iOS to change location to Always (or, once iOS has used its one prompt, opens Fernlet's page in the
+///   Settings app); it runs once Always is allowed, and allowing Always there later turns it on (W-09).
 /// - **The map:** "Uncover the map as you go" and "Save new routes" (both on by default), how many routes
 ///   are stored on this iPhone, and Delete all stored routes (the walks and runs stay in Move).
 /// - **Places:** "Remember where my workout spaces are", "Remember places I stop at" (on by default; off,
@@ -31,9 +32,12 @@ struct HomeMapSettingsView: View {
     @State private var pinCount = 0
     /// Background mapping was turned on while only While Using is allowed: it starts once iOS says Always.
     @State private var awaitsAlways = false
+    /// Whether iOS's Always prompt showed after the switch asked (the app left active for it).
+    @State private var alwaysPromptShown = false
     @State private var confirming: HomeMapDeletion?
     @State private var isIntroUp = false
     @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// Whether the text is at an accessibility size: values move under their names.
@@ -56,6 +60,7 @@ struct HomeMapSettingsView: View {
         .fernletPushedPage("Home map")
         .task { reload() }
         .onChange(of: store.worldLocation.permission) { _, permission in permissionChanged(permission) }
+        .onChange(of: scenePhase) { _, phase in alwaysPromptPhase(phase) }
         .alert(Text(confirming?.title ?? HomeMapDeletion.history.title), isPresented: isConfirming, presenting: confirming) { deletion in
             Button("Delete", role: .destructive) { delete(deletion) }
             Button("Cancel", role: .cancel) {}
@@ -182,19 +187,55 @@ extension HomeMapSettingsView {
             store.applyWorldBackgroundMapping()
         case .whileUsing:
             awaitsAlways = true
+            alwaysPromptShown = false
             store.worldLocation.requestAlways()
+            Task { await openSettingsIfNoPrompt() }
         case .notAsked, .denied:
             return
         }
     }
 
-    /// iOS answered: background mapping starts when Always was what was asked for.
+    /// iOS answered: background mapping starts when Always was allowed, here or later in iOS's Settings
+    /// (the location source turns the preference on for either, W-09).
     private func permissionChanged(_ permission: WorldLocationPermission) {
-        if awaitsAlways, permission == .always {
+        if permission == .always, WorldMapPreferences.alwaysLowPower() || awaitsAlways {
             WorldMapPreferences.setAlwaysLowPower(true)
             store.applyWorldBackgroundMapping()
         }
         awaitsAlways = false
+    }
+
+    /// iOS gives the upgrade to Always one prompt only (W-09): when none showed, the switch says nothing
+    /// and stays off, so the person goes to Fernlet's page in the Settings app, where Always is chosen;
+    /// coming back with it allowed turns the switch on.
+    private func openSettingsIfNoPrompt() async {
+        do {
+            try await Task.sleep(for: .seconds(1))
+        } catch {
+            return
+        }
+        guard awaitsAlways, !alwaysPromptShown, store.worldLocation.permission != .always else { return }
+        awaitsAlways = false
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        openURL(url)
+    }
+
+    /// While waiting on iOS's Always prompt: the app leaving active means it showed; coming back with
+    /// While Using kept puts the switch back off.
+    private func alwaysPromptPhase(_ phase: ScenePhase) {
+        guard awaitsAlways else { return }
+        guard phase == .active else {
+            alwaysPromptShown = true
+            return
+        }
+        Task {
+            do {
+                try await Task.sleep(for: .milliseconds(600))
+            } catch {
+                return
+            }
+            if store.worldLocation.permission != .always { awaitsAlways = false }
+        }
     }
 
     /// The Location row: the intro while iOS hasn't asked, else Fernlet's page in the Settings app.

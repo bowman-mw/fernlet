@@ -15,7 +15,7 @@ import WorldMapStore
 /// MapKit draws its own "Maps" logo and "Legal" link inside the map's layout margins, so the bottom
 /// inset lifts them clear of the item bar and they stay visible (MapKit terms). Pitch and rotation are
 /// off, so the map stays north-up and flat and Fernlet's layers can place themselves from the visible
-/// `MKMapRect` alone.
+/// viewport alone (the whole view's, ``AppleMapGeometry``).
 ///
 /// It is an `MKMapView` (not SwiftUI's `Map`) because only the UIKit map says how its tiles are doing:
 /// it reports loading, loaded and failed to the Home's ``WorldTileStatus`` (designs `b1-home-loading`
@@ -41,6 +41,8 @@ private struct AppleMutedMapView: UIViewRepresentable {
     let bottomInset: CGFloat
     let onViewport: (MapViewport) -> Void
     @Environment(\.worldTileStatus) private var tileStatus
+    /// Reduce Motion: Fernlet's own camera moves (following, Back to Sprout) jump instead of gliding.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeCoordinator() -> AppleMutedMapCoordinator {
         AppleMutedMapCoordinator()
@@ -63,7 +65,7 @@ private struct AppleMutedMapView: UIViewRepresentable {
         context.coordinator.view = self
         context.coordinator.tileStatus = tileStatus
         context.coordinator.revision = camera.revision
-        map.setCamera(Self.mapCamera(for: camera), animated: false)
+        map.setCamera(AppleMapGeometry.mapCamera(for: camera), animated: false)
         return map
     }
 
@@ -72,11 +74,62 @@ private struct AppleMutedMapView: UIViewRepresentable {
         coordinator.view = self
         coordinator.tileStatus = tileStatus
         map.overrideUserInterfaceStyle = darkStyle ? .dark : .light
-        let margins = UIEdgeInsets(top: 0, left: 8, bottom: bottomInset, right: 8)
+        let margins = AppleMapGeometry.margins(bottomInset: bottomInset)
         if map.layoutMargins != margins { map.layoutMargins = margins }
         guard camera.revision != coordinator.revision else { return }
         coordinator.revision = camera.revision
-        map.setCamera(Self.mapCamera(for: camera), animated: true)
+        map.setCamera(AppleMapGeometry.mapCamera(for: camera), animated: !reduceMotion)
+    }
+
+    /// The person moved the map (W-10): a pan that moves the centre takes the new place and stops
+    /// following; a pinch or a double-tap zoom keeps following and takes only the new distance (Home
+    /// re-centres on the companion at it). Off following, every move is taken whole.
+    func adopt(_ map: MKMapView, move: AppleMapGeometry.PersonMove) {
+        camera.distance = map.camera.centerCoordinateDistance
+        guard move == .pan || !camera.follows else { return }
+        let centre = map.camera.centerCoordinate
+        camera.center = GeoPoint(centre.latitude, centre.longitude)
+        if move == .pan { camera.follows = false }
+    }
+}
+
+/// How Apple's map lays itself out, in the plain values Fernlet's layers read (World build W-12, W-10).
+///
+/// MapKit keeps its "Maps" logo and "Legal" link inside the view's layout margins, and on iOS 26 its
+/// `visibleMapRect` and camera centre describe only the area inside those margins while the tiles fill
+/// the whole view. Fernlet's layers cover the whole view, so the viewport is built from the view's own
+/// corners through MapKit's projection (`viewport(of:)` for a map view), never from `visibleMapRect`. The
+/// camera's centre stays MapKit's (the middle of the area inside the margins), which
+/// `WorldMapHome.lookAt(_:distance:)` allows for.
+@MainActor
+enum AppleMapGeometry {
+    /// How far a person's move must carry the map's centre, in points, to count as a pan (a finger that
+    /// only rests or jiggles keeps following).
+    static let panDistance: CGFloat = 24
+    /// How much the camera distance must change, as a share, for a move to count as a zoom.
+    static let zoomShare = 0.02
+
+    /// What a move by the person was (W-10).
+    enum PersonMove: Equatable {
+        /// The distance changed: a pinch, a double-tap or a one-handed zoom. Following stays on.
+        case zoom
+        /// The centre moved with the distance unchanged. Following stops.
+        case pan
+        /// Neither, past the thresholds (a resting finger).
+        case none
+    }
+
+    /// The move from a camera `from` metres up to `to` metres up whose centre moved `centreMoved` points
+    /// on screen. A zoom never counts as a pan, even when the fingers also carry the map.
+    static func personMove(from: Double, to: Double, centreMoved: CGFloat) -> PersonMove {
+        guard from > 0, to > 0 else { return .none }
+        if abs(to - from) / from > zoomShare { return .zoom }
+        return centreMoved >= panDistance ? .pan : .none
+    }
+
+    /// The map's layout margins: the bottom inset lifts MapKit's credit above the item bar.
+    static func margins(bottomInset: CGFloat) -> UIEdgeInsets {
+        UIEdgeInsets(top: 0, left: 8, bottom: bottomInset, right: 8)
     }
 
     /// MapKit's camera for Fernlet's camera: north-up, flat.
@@ -85,22 +138,25 @@ private struct AppleMutedMapView: UIViewRepresentable {
         return MKMapCamera(lookingAtCenter: centre, fromDistance: camera.distance, pitch: 0, heading: 0)
     }
 
-    /// The visible map rect in normalised Web Mercator (MapKit's map points over the world's size).
+    /// The whole view's area in normalised Web Mercator: its top-left and bottom-right corners through
+    /// MapKit's own projection, so a layer placed from it lands on the tiles under it however large the
+    /// layout margins are. Empty before the view has a size.
+    static func viewport(of map: MKMapView) -> MapViewport {
+        let bounds = map.bounds
+        guard bounds.width > 0, bounds.height > 0 else { return MapViewport(minX: 0, minY: 0, width: 0, height: 0) }
+        let topLeft = MKMapPoint(map.convert(CGPoint(x: bounds.minX, y: bounds.minY), toCoordinateFrom: map))
+        let bottomRight = MKMapPoint(map.convert(CGPoint(x: bounds.maxX, y: bounds.maxY), toCoordinateFrom: map))
+        return viewport(of: MKMapRect(x: topLeft.x, y: topLeft.y, width: bottomRight.x - topLeft.x,
+                                      height: bottomRight.y - topLeft.y))
+    }
+
+    /// A map rect in normalised Web Mercator (MapKit's map points over the world's size).
     static func viewport(of rect: MKMapRect) -> MapViewport {
         let world = MKMapSize.world
         guard world.width > 0, world.height > 0 else { return MapViewport(minX: 0, minY: 0, width: 0, height: 0) }
         return MapViewport(minX: rect.origin.x / world.width, minY: rect.origin.y / world.height,
                            width: rect.size.width / world.width, height: rect.size.height / world.height)
     }
-
-    /// The person moved the map: Fernlet's camera takes the new place and stops following.
-    func adopt(_ map: MKMapView) {
-        let centre = map.camera.centerCoordinate
-        camera.center = GeoPoint(centre.latitude, centre.longitude)
-        camera.distance = map.camera.centerCoordinateDistance
-        camera.follows = false
-    }
-
 }
 
 /// The map widget's base picture (owner's Q36, `b4-new-map`, round 6b): Apple's muted map for one area,
@@ -258,20 +314,34 @@ private final class AppleMutedMapCoordinator: NSObject, MKMapViewDelegate {
     var tileStatus: WorldTileStatus?
     /// Whether the move under way began with the person's finger.
     private var movedByPerson = false
+    /// Where the map's centre was, and how far up its camera, when that move began.
+    private var startCentre = CLLocationCoordinate2D()
+    private var startDistance = 0.0
 
     func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool) {
         movedByPerson = Self.isTouched(mapView)
+        startCentre = mapView.centerCoordinate
+        startDistance = mapView.camera.centerCoordinateDistance
     }
 
     func mapViewDidChangeVisibleRegion(_ mapView: MKMapView) {
-        view?.onViewport(AppleMutedMapView.viewport(of: mapView.visibleMapRect))
+        report(mapView)
     }
 
     func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
-        view?.onViewport(AppleMutedMapView.viewport(of: mapView.visibleMapRect))
+        report(mapView)
         guard movedByPerson else { return }
         movedByPerson = false
-        view?.adopt(mapView)
+        let then = mapView.convert(startCentre, toPointTo: mapView)
+        let now = mapView.convert(mapView.centerCoordinate, toPointTo: mapView)
+        let move = AppleMapGeometry.personMove(from: startDistance, to: mapView.camera.centerCoordinateDistance,
+                                               centreMoved: hypot(now.x - then.x, now.y - then.y))
+        view?.adopt(mapView, move: move)
+    }
+
+    /// Hands the layers the whole view's viewport (W-12), never `visibleMapRect`'s inset one.
+    private func report(_ mapView: MKMapView) {
+        view?.onViewport(AppleMapGeometry.viewport(of: mapView))
     }
 
     func mapViewWillStartLoadingMap(_ mapView: MKMapView) {

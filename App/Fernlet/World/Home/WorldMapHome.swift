@@ -37,6 +37,9 @@ struct WorldMapHome: View {
     @Bindable var store: FernletStore
     /// Whether the map is what the person sees (no panel or sheet over it).
     let isFrontmost: Bool
+    /// Whether the launch screen has lifted. The map's location runs from then while Fernlet is open, a
+    /// panel or sheet over the map or not (W-09 (i)), and stops when the app leaves the foreground.
+    var isLaunched = true
     /// The opt-in body-signal reading for the companion's feeling, as Home reads it.
     var bodySignal: CompanionBodySignal?
     /// Opens a panel: Today from the status plate, the Album from an empty photo print.
@@ -86,6 +89,8 @@ struct WorldMapHome: View {
     @State private var uncovered: Set<HexCell> = []
     @State private var placeSheet: WorldPlaceSheetMode?
     @State private var menuSearch: WorldMenuSearch?
+    /// The map's last viewport, read back to tell when Sprout walks off the visible map (`ref-recenter-auto`).
+    @State private var geometry = WorldMapGeometry()
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -124,11 +129,17 @@ struct WorldMapHome: View {
         .task(id: tiles.state) { await watchLoading() }
         // The map widget's picture (round 6b, Q36): only while this map is in front and following the person.
         .worldWidgetMap(store: store, isActive: isFrontmost && scenePhase == .active && hasPlace && camera.follows && !isOffline)
+        // Location keeps running while a panel or sheet is over the map (W-09 (i)); only the app leaving
+        // the foreground stops it (`updateLocation()`, and the app's own background edge).
         .onAppear { updateLocation() }
-        .onDisappear { store.worldLocation.stopForeground() }
-        .onChange(of: isFrontmost) { updateLocation() }
+        .onChange(of: isFrontmost) { _, front in frontmostChanged(front) }
+        .onChange(of: isLaunched) { updateLocation() }
         .onChange(of: scenePhase) { updateLocation() }
-        .onChange(of: store.worldLocation.latest) { _, fix in follow(fix) }
+        .onChange(of: store.worldLocation.latest) { old, fix in moved(from: old, to: fix) }
+        // A pinch or a double-tap zoom keeps following at the new distance (W-10).
+        .onChange(of: camera.distance) { if camera.follows { follow(store.worldLocation.latest) } }
+        // Ten seconds without a touch, off following: Sprout again (`ref-recenter-auto`).
+        .task(id: camera) { await refollowWhenIdle() }
         .onChange(of: notice) { _, kind in announce(kind) }
         .onChange(of: cameraMode) { _, mode in isCameraOpen.wrappedValue = mode != nil || isLocationIntroUp }
         .onChange(of: isLocationIntroUp) { _, up in isCameraOpen.wrappedValue = up || cameraMode != nil }
@@ -157,9 +168,9 @@ struct WorldMapHome: View {
         ZStack(alignment: .topLeading) {
             WorldMapStack(kind: hasPlace ? .appleMuted : .plain, camera: $camera, ground: ground, phase: phase(at: date),
                           darkMode: colorScheme == .dark, creditInset: Self.creditInset,
-                          veiled: isOffline) { viewport, size in
+                          veiled: isOffline, overlay: { viewport, size in
                 onMap(viewport: viewport, size: size)
-            }
+            }, geometry: geometry)
             if let sky, sky == .rain || sky == .snow {
                 WorldWeatherLayer(sky: sky, isActive: isFrontmost).ignoresSafeArea()
             }
@@ -246,6 +257,11 @@ struct WorldMapHome: View {
                 if let card = cardContext.flatMap(WorldQuickStart.card(for:)) {
                     WorldQuickStartCardView(card: card, onChoose: choose, onClose: closeCard)
                         .transition(.opacity)
+                } else if showsRecenter {
+                    // `ref-recenter`: right 18, its bottom 206 pt up (the blue button's top plus the 14-pt gap).
+                    WorldRecenterButton(store: store) { refollow(announce: false) }
+                        .padding(.trailing, 6)
+                        .transition(.opacity)
                 }
                 HStack(alignment: .bottom, spacing: 10) {
                     // Round 6 (`ref-tag-home`): beside the blue button at a spot Fernlet refused.
@@ -273,7 +289,11 @@ struct WorldMapHome: View {
         }
         .ignoresSafeArea(edges: .bottom)
         .animation(.easeOut(duration: 0.18), value: cardContext)
+        .animation(.easeOut(duration: 0.18), value: showsRecenter)
     }
+
+    /// Whether Back to Sprout shows: the map placed on the person and not following them.
+    private var showsRecenter: Bool { hasPlace && !camera.follows && store.worldLocation.latest != nil }
 
     /// The blue button's distance off the physical bottom: above the item bar with the design's gap.
     /// The session button bottom left mirrors it.
@@ -547,23 +567,75 @@ extension WorldMapHome {
         return viewport.screenPoint(for: fix.point, in: size)
     }
 
-    /// Starts location while the map is in front and the app active; stops it otherwise (a walk keeps
-    /// it running). Reads the space markers each time the map comes to the front.
+    /// Location while Fernlet is open (W-09 (i), owner 2026-10-26): it starts once the launch screen lifts
+    /// with the app active, keeps running under any panel or sheet and while the app is only inactive, and
+    /// stops when the app goes to the background (a walk or background mapping keeps its own updates). Reads
+    /// the space markers each time the map comes to the front; the lifted cells are saved whenever the map is
+    /// covered.
     private func updateLocation() {
         let location = store.worldLocation
-        guard isFrontmost, scenePhase == .active else {
-            location.stopForeground()
+        if !isFrontmost || scenePhase != .active {
             store.worldFog.flush()
             if !isFrontmost { cardContext = nil }
             homeGreeting = nil
+        }
+        guard isLaunched, scenePhase != .background else {
+            location.stopForeground()
             return
         }
+        guard scenePhase == .active else { return }
         store.worldFog.load()
-        readPlaces()
-        readSavedLine()
+        if isFrontmost {
+            readPlaces()
+            readSavedLine()
+        }
         location.startForeground()
         follow(location.latest)
     }
+
+    /// The map came to the front (a panel or sheet closed: following again, `ref-recenter-auto`) or went
+    /// behind one.
+    private func frontmostChanged(_ front: Bool) {
+        if front { refollow(announce: true) }
+        updateLocation()
+    }
+
+    /// A new reading: off following, Sprout walking off the visible map brings following back
+    /// (`ref-recenter-auto`); otherwise the camera follows as before.
+    private func moved(from old: WorldFix?, to fix: WorldFix?) {
+        if !camera.follows, isFrontmost, let old, let fix, geometry.shows(old.point), !geometry.shows(fix.point) {
+            refollow(announce: true)
+            return
+        }
+        follow(fix)
+    }
+
+    /// Following again: Back to Sprout's tap, or by itself (`ref-recenter-auto`: ten seconds without a
+    /// touch, Sprout off the visible map, a panel closing), the map gliding back (Reduce Motion: jumping,
+    /// the base map's rule). By itself, VoiceOver hears "Following Sprout again" once, politely.
+    private func refollow(announce: Bool) {
+        guard !camera.follows, hasPlace else { return }
+        camera.follows = true
+        follow(store.worldLocation.latest)
+        guard announce, isFrontmost else { return }
+        FernletAnnouncer.system.announce(.status, resolved: WorldRecenterCopy.followingAgain(name: WorldRecenterCopy.companionName(store)))
+    }
+
+    /// Ten seconds after the person last moved the map (each move changes the camera and restarts this),
+    /// following comes back while the map is in front.
+    private func refollowWhenIdle() async {
+        guard !camera.follows, hasPlace else { return }
+        do {
+            try await Task.sleep(for: Self.idleRefollow)
+        } catch {
+            return
+        }
+        guard isFrontmost else { return }
+        refollow(announce: true)
+    }
+
+    /// How long the map rests untouched, off following, before it follows again (`ref-recenter-auto`).
+    static let idleRefollow = Duration.seconds(10)
 
     /// Reads the kept places as the map comes to the front (round 6): the meals just logged at a place to
     /// eat, the homes and hotel, every kept place's icon with its photos and the photos elsewhere, the
@@ -602,8 +674,12 @@ extension WorldMapHome {
         point.offset(east: 0, north: distance * PlainBaseMap.heightPerDistance * companionDrop)
     }
 
-    /// How far below the middle the person stands, as a share of the map's height.
-    static let companionDrop = 0.08
+    /// How far south of the camera's centre the person stands, in ``PlainBaseMap/heightPerDistance`` units
+    /// (W-12, retuned 2026-10-26). Apple's camera centre is the middle of the area above the credit's
+    /// 112-pt inset, about 44% of the way down an iPhone 17's map; this carries the person from there to
+    /// about 58% (`WorldDiscoveryTests` pins it on a real `MKMapView`). Before W-12 the layers were drawn
+    /// stretched from the inset area, and 0.08 looked right only there.
+    static let companionDrop = 0.147
 
     /// How far back the camera stands with approximate location: the area, not the street.
     static let areaDistance = 5_000.0
@@ -691,7 +767,26 @@ extension WorldMapHome {
         if scenes.contains("walk") { startWalk() }
         if scenes.contains("qs") { openCard(spaceID: hereSpaceID) }
         if scenes.contains("photo") { await checkTestPhotoPlace() }
+        // The discovery round's shots: the map zoomed in or out (W-12's fog at two zooms), and panned away
+        // (Back to Sprout) once the map is in front.
+        if scenes.contains("near") { camera.distance = 600 }
+        if scenes.contains("far") { camera.distance = 3_000 }
+        if scenes.contains("recenter") { await panAwayForTest() }
         applyPlacesTestScenes(scenes)
+    }
+
+    /// DEBUG `recenter`: once the map is in front with a reading (waiting at most 15 s), moves it off the
+    /// companion as a pan would, so Back to Sprout shows (until the ten seconds' re-follow).
+    private func panAwayForTest() async {
+        for _ in 0..<15 where !isFrontmost || store.worldLocation.latest == nil {
+            do {
+                try await Task.sleep(for: .seconds(1))
+            } catch {
+                return
+            }
+        }
+        guard let fix = store.worldLocation.latest else { return }
+        camera.move(to: fix.point.offset(east: 260, north: 220), follows: false)
     }
 
     /// DEBUG round 6 scenes (``WorldPlacesTestScenes``): Sprout's welcome-home line, and the Remember this

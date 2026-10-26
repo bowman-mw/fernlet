@@ -77,9 +77,18 @@ final class WorldFogKeeper {
         visibleCells = store.cells
     }
 
-    /// Lifts the fog around `fix` when the rules allow; returns how many cells were new.
+    /// Lifts the fog around `fix` when the rules allow; returns how many cells were new. With `saveNow`
+    /// (a reading delivered while the app isn't active: background mapping, a walk with Maps in front) new
+    /// cells are written at once rather than at the next 40, since iOS may end a suspended app first (W-09 B2).
     @discardableResult
-    func handle(_ fix: WorldFix) -> Int {
+    func handle(_ fix: WorldFix, saveNow: Bool = false) -> Int {
+        let added = lift(fix)
+        if saveNow, added > 0 { flush() }
+        return added
+    }
+
+    /// Lifts the fog around `fix` when the rules allow; returns how many cells were new.
+    private func lift(_ fix: WorldFix) -> Int {
         guard WorldMapPreferences.uncoverAsYouGo(in: defaults), fix.isPrecise,
               fix.accuracy <= Self.maxAccuracy, fix.point.isValid else { return 0 }
         let cells = MercatorHexGrid.cells(around: fix.point, within: Self.liftRadius)

@@ -351,6 +351,8 @@ struct FernletApp: App {
         if newPhase == .background {
             if case .ready(let store) = loader.phase {
                 store.flushPendingSnapshotSave()
+                // World W-09 (i): the map's location runs while Fernlet is open and stops here.
+                store.worldAppDidEnterBackground()
                 // P5 item 10: the foreground falling leg. Custody keeps running on
                 // ciphertext; plaintext stops here. Since P7 item 2 the edge hands the raw phase
                 // to the run-policy funnel, which decides the gate.

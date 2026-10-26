@@ -233,7 +233,7 @@ public nonisolated struct HomeBook: Codable, Equatable, Sendable {
 extension HomeBook {
     // MARK: Leaving and getting back
 
-    /// This book after the person was seen at `point` at `date` (a reading while the map is open, or one of
+    /// This book after the person was seen at `point` at `date` (a reading while Fernlet is open, or one of
     /// iOS's low-power visits, which also says when they `departed`), and the leaves and returns noticed.
     ///
     /// - Seen at a home or the hotel after being seen away: a return. Getting home after ``greetingAway`` or

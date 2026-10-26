@@ -240,21 +240,21 @@ struct WorldPlacesTests {
         let lookup = CountingLookup(answer: [NearbyPlace(name: "Laurelhurst Park", kind: .allowed(.park), metres: 10, placeID: "I-park")])
         let keeper = WorldPlacesKeeper(vault: WorldMapVault.ephemeral(), lookup: lookup, remembersPlaces: { true })
         let fix = WorldFix(point: Self.park, accuracy: 10, at: Self.now, isPrecise: true)
-        #expect(await keeper.handleForeground(fix, now: Self.now))
+        #expect(await keeper.stayed(at: fix, until: Self.now))
         #expect(!(await keeper.handleForeground(fix, now: Self.now.addingTimeInterval(60))), "the same visit")
         #expect(lookup.calls == 1)
         let state = try keeper.store.deviceState()
         #expect(state.newPlaces.map(\.placeID) == ["I-park"] && state.newPlaces.first?.label == nil && state.pending.count == 1)
 
         let farSide = WorldFix(point: Self.park.offset(east: 400, north: 0), accuracy: 10, at: Self.now, isPrecise: true)
-        #expect(await keeper.handleForeground(farSide, now: Self.now.addingTimeInterval(4 * 3_600)))
+        #expect(await keeper.stayed(at: farSide, until: Self.now.addingTimeInterval(4 * 3_600)))
         let after = try keeper.store.deviceState()
         #expect(after.known.count == 1 && after.pending.count == 2, "the same park by its reference, not a second place")
 
         let refused = WorldPlacesKeeper(vault: WorldMapVault.ephemeral(),
                                         lookup: CountingLookup(answer: [NearbyPlace(name: "Lakeside Therapy", kind: .other, metres: 5)]),
                                         remembersPlaces: { true })
-        #expect(!(await refused.handleForeground(fix, now: Self.now)))
+        #expect(!(await refused.stayed(at: fix, until: Self.now)))
         #expect(try refused.store.deviceState() == .empty, "a therapist's office is never kept")
     }
 
@@ -265,7 +265,7 @@ struct WorldPlacesTests {
         let lookup = CountingLookup(answer: [NearbyPlace(name: "Laurelhurst Park", kind: .allowed(.park), metres: 10, placeID: "I-park")])
         let keeper = WorldPlacesKeeper(vault: WorldMapVault.ephemeral(), lookup: lookup, remembersPlaces: { remembers })
         let fix = WorldFix(point: Self.park, accuracy: 10, at: Self.now, isPrecise: true)
-        #expect(await keeper.handleForeground(fix, now: Self.now))
+        #expect(await keeper.stayed(at: fix, until: Self.now))
         let kept = try keeper.store.deviceState()
         remembers = false
         #expect(!(await keeper.handleForeground(fix, now: Self.now.addingTimeInterval(5 * 3_600))))

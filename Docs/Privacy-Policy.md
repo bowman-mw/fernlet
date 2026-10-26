@@ -404,7 +404,7 @@ it never receives your map history or your walks. Location is never attached to 
 us.
 
 With Where you've been in Private, Fernlet also keeps a rolling 30-day timeline of the places you
-stopped at, collected while the map is open and, if you turn on background mapping, through the day.
+stopped at, collected while Fernlet is open and, if you turn on background mapping, through the day.
 It also keeps a list of Places you return to, which holds only a visit count, never dates. Both
 cover everyday places only: food and drink, gyms, parks, beaches and campgrounds. Places like
 doctors' offices, lawyers or therapists are never named or kept, unless you add one yourself.
@@ -421,7 +421,7 @@ and saved trails, on this iPhone only and never in a backup; your visit counts a
 where you've been stay sealed in Private, and the widget's copy is deleted whenever you delete your map history.
 
 To name a place you stop at, or to check where a photo you take on your own was taken, Fernlet asks
-Apple Maps what is near you, only while the map is open. For a place you return to, Fernlet
+Apple Maps what is near you, only while Fernlet is open. For a place you return to, Fernlet
 keeps only Apple's reference to it, never its details, and asks Apple Maps for its name again when
 you look at your places.
 

@@ -23,7 +23,7 @@ public nonisolated struct EatingMeal: Codable, Equatable, Sendable {
 ///
 /// What is kept follows the MapKit terms (round 5): Apple's reference to the place, the person's own name
 /// for it when they gave one, Fernlet's own point, and the meals. Never Apple's name or category: the name
-/// is asked for again by the reference while the map is open. Only food-and-drink places are ever noted
+/// is asked for again by the reference while Fernlet is open. Only food-and-drink places are ever noted
 /// (the allowlist), decided on the device at the moment of the visit.
 ///
 /// Frozen at rest: `id`, `placeID`, `label`, `point`, `meals` and `mealCount` are field names.

@@ -6,8 +6,10 @@ import WorldMapStore
 /// Notes the places the person stops at, for "Where you've been" in Private (World build step 5c;
 /// `b2-where-been`; owner's option A, 2026-10-24). It captures; Private reads, under the hub key.
 ///
-/// - **While the map is open** (a precise reading of 50 m or better, the app in front): a reading within
-///   75 m of a place already known is a visit there. Otherwise, at most once per 150 m moved or 30
+/// - **While Fernlet is open** (a precise reading of 50 m or better, the app in front), **once the person has
+///   stopped** (W-13: stayed within 50 m for three minutes, or slower than walking for a minute;
+///   ``WorldStopWatch``; readings on the way are passed by): a reading within 75 m of a place already known is
+///   a visit there. Otherwise, at most once per 150 m moved or 30
 ///   minutes, the place lookup (``WorldPlaceLooking``) is asked about where the person stands, and the
 ///   device decides at that moment (``PlaceClassifier/visitVerdict(_:)``): an everyday place (food and drink,
 ///   gyms, parks, beaches, campgrounds) is learned with the person's own point and the lookup's reference to
@@ -66,6 +68,14 @@ final class WorldPlacesKeeper {
     @ObservationIgnored let remembersEatingOut: () -> Bool
     @ObservationIgnored private var lastLookup: (point: GeoPoint, at: Date)?
     @ObservationIgnored private var isLookingUp = false
+    /// Whether the person has stopped (W-13); in memory only.
+    @ObservationIgnored private var stopWatch = WorldStopWatch()
+    /// The check that runs once the person may have stayed long enough, with no new reading to say so (the
+    /// map's 10 m filter sends none while they sit still).
+    @ObservationIgnored private var stopCheck: Task<Void, Never>?
+    /// Whether that check may run when it comes due: the store's gate for a reading (the map's own location,
+    /// the app in front, no decoy). Nil (a test) schedules none.
+    @ObservationIgnored var mayRecheck: (() -> Bool)?
     /// Whether each place's reference read as food and drink when asked this session (in memory only).
     @ObservationIgnored var eatsAt: [String: Bool] = [:]
     /// Whether a decoy session is showing.
@@ -100,7 +110,7 @@ final class WorldPlacesKeeper {
         if !on { reloadDeviceSide() }
     }
 
-    /// A reading taken while the map is open and the app in front: home or away, then a visit at a known
+    /// A reading taken while Fernlet is open and in front: home or away, then a visit at a known
     /// place, or a lookup when the rules allow one. Whether a visit was noted.
     @discardableResult
     func handleForeground(_ fix: WorldFix, now: Date = Date()) async -> Bool {
@@ -108,8 +118,14 @@ final class WorldPlacesKeeper {
         if fix.isPrecise, fix.accuracy <= Self.maxHomeAccuracy { observeHomes(fix.point, at: now) }
         followEatingVisit(fix.point, now: now)
         if let spot = refusedSpot, spot.point.distance(to: fix.point) > Self.refusedSpotReach { refusedSpot = nil }
-        guard remembersPlaces() || remembersEatingOut(), !isLookingUp, fix.isPrecise, fix.accuracy <= Self.maxAccuracy,
-              homes.base(near: fix.point) == nil else { return false }
+        guard remembersPlaces() || remembersEatingOut(), fix.isPrecise, fix.accuracy <= Self.maxAccuracy else { return false }
+        // W-13: only where the person has stopped. Readings on the way (a drive, a walk past a pharmacy) look
+        // nothing up, note no visit and leave the lookup spacing alone.
+        guard stopWatch.observe(fix.point, at: now) else {
+            scheduleStopCheck(fix, now: now)
+            return false
+        }
+        guard !isLookingUp, homes.base(near: fix.point) == nil else { return false }
         if let noted = noteKnownVisit(at: fix.point, now: now) { return noted }
         guard lookupIsDue(at: fix.point, now: now) else { return false }
         isLookingUp = true
@@ -167,6 +183,9 @@ final class WorldPlacesKeeper {
     /// decoy).
     func forget() {
         lastLookup = nil
+        stopWatch = WorldStopWatch()
+        stopCheck?.cancel()
+        stopCheck = nil
         refusedSpot = nil
         eatingVisit = nil
         eatsAt = [:]
@@ -200,6 +219,24 @@ final class WorldPlacesKeeper {
         let next = state.recordingVisit(to: place.id, at: now)
         guard next != state else { return false }
         return save(next)
+    }
+
+    /// Asks again once the person will have stayed at `fix` long enough to count as stopped, in case no
+    /// reading comes to say so; a newer reading replaces the check. Runs only under the store's gate.
+    private func scheduleStopCheck(_ fix: WorldFix, now: Date) {
+        stopCheck?.cancel()
+        stopCheck = nil
+        guard let mayRecheck, let wait = stopWatch.timeToStop(at: now) else { return }
+        stopCheck = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(wait + 1))
+            } catch {
+                return
+            }
+            guard let self, mayRecheck() else { return }
+            let still = WorldFix(point: fix.point, accuracy: fix.accuracy, at: Date(), isPrecise: fix.isPrecise)
+            await self.handleForeground(still)
+        }
     }
 
     /// Whether a lookup may run at `point` now: the first, or after moving far enough, or after long enough.
