@@ -14,6 +14,9 @@ nonisolated struct WorldFix: Equatable, Sendable {
     /// Whether the person allowed precise location (with approximate location iOS hands over a point
     /// somewhere in the area).
     let isPrecise: Bool
+    /// CoreLocation's own speed for the reading, in metres a second; nil when it gave none (W-14: the stop
+    /// watch tells a car pulling away from a red light from a person who stopped).
+    var speed: Double? = nil
 }
 
 /// A stop iOS noticed in Always mode's low-power visits, in plain values: where, how sure, and when the
@@ -257,8 +260,10 @@ extension WorldLocationSource: CLLocationManagerDelegate {
     /// The readings iOS delivered, as plain values in the order delivered (at most ``maxBatch``, the newest).
     nonisolated static func fixes(from locations: [CLLocation], precise: Bool) -> [WorldFix] {
         locations.suffix(maxBatch).map { location in
+            // A negative speed is CoreLocation's "unknown".
             WorldFix(point: GeoPoint(location.coordinate.latitude, location.coordinate.longitude),
-                     accuracy: location.horizontalAccuracy, at: location.timestamp, isPrecise: precise)
+                     accuracy: location.horizontalAccuracy, at: location.timestamp, isPrecise: precise,
+                     speed: location.speed >= 0 ? location.speed : nil)
         }
     }
 

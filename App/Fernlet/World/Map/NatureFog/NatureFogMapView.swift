@@ -62,6 +62,8 @@ final class NatureFogMapView: UIView {
     private var lastViewport: MapViewport?
     private var lastMove: CFTimeInterval = 0
     private var settlePending = false
+    /// Writes the audit line when a computed frame is refused (W-20).
+    private let rejections = WorldLayerRejections()
     /// Whether grass and flowers sway now.
     private(set) var isSwaying = false
 
@@ -102,6 +104,9 @@ final class NatureFogMapView: UIView {
         let perUnit = scale.pointsPerUnit
         let map = Mapping(originX: viewport.minX * perUnit, originY: viewport.minY * perUnit,
                           stretchX: Double(size.width) / viewport.width / perUnit, stretchY: Double(size.height) / viewport.height / perUnit)
+        // W-20: a stretch out of proportion (a skewed viewport, a size mid-change) drops this frame; the tiles
+        // keep the last good one.
+        guard rejections.note(WorldLayerGuard.accepts(stretchX: map.stretchX, stretchY: map.stretchY), at: .fogStretch) else { return }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         let change = sync(scale: scale, scene: scene)
@@ -124,7 +129,8 @@ final class NatureFogMapView: UIView {
         return nil
     }
 
-    /// Shows the tiles on screen and drops the ones that left it.
+    /// Shows the tiles on screen (only the ones the visible rect reaches) and drops the ones that left it. A
+    /// tile whose frame fails ``WorldLayerGuard`` keeps its last good one, or isn't built (W-20).
     private func place(_ map: Mapping, size: CGSize) {
         guard let book, map.stretchX > 0, map.stretchY > 0 else { return }
         let low = NatureFogTileBook.key(at: CGPoint(x: map.originX, y: map.originY))
@@ -139,12 +145,20 @@ final class NatureFogMapView: UIView {
             tile.container.removeFromSuperlayer()
             shown[key] = nil
         }
+        let side = CGSize(width: NatureFogTileBook.tileSize * map.stretchX, height: NatureFogTileBook.tileSize * map.stretchY)
+        var rejected = 0
         for key in visible {
+            let corner = map.screen(NatureFogTileBook.area(of: key).origin)
+            guard WorldLayerGuard.accepts(CGRect(origin: corner, size: side), in: size) else {
+                rejected += 1
+                continue
+            }
             let layers = shown[key] ?? build(book.tile(key))
             shown[key] = layers
-            layers.container.position = map.screen(NatureFogTileBook.area(of: key).origin)
+            layers.container.position = corner
             layers.container.transform = CATransform3DMakeScale(map.stretchX, map.stretchY, 1)
         }
+        rejections.note(rejected == 0, at: .fogTile)
         book.evict(keeping: visible)
     }
 
@@ -161,7 +175,7 @@ final class NatureFogMapView: UIView {
     }
 
     /// Puts `tile`'s picture and sprites into `container` in depth order, replacing what was there; returns
-    /// the sprites that sway.
+    /// the sprites that sway. Only the pieces that reach the tile get a sprite (W-20).
     private func fill(_ container: CALayer, with tile: NatureFogTile) -> [(layer: CALayer, group: Int)] {
         container.sublayers?.forEach { $0.removeFromSuperlayer() }
         let ground = CALayer()
@@ -169,14 +183,15 @@ final class NatureFogMapView: UIView {
         ground.contents = tile.ground
         container.addSublayer(ground)
         guard let book else { return [] }
-        let origin = NatureFogTileBook.area(of: tile.key).origin
+        let culled = NatureFogTileBook.visible(tile.pieces, in: tile.key)
+        rejections.note(culled.rejected == 0, at: .fogPiece)
         var swaying: [(layer: CALayer, group: Int)] = []
-        for piece in tile.pieces {
+        for (piece, frame) in culled.kept {
             guard let sprite = book.atlas.sprite(piece.sprite) else { continue }
             let sprout = CALayer()
             sprout.contents = sprite.image
             sprout.magnificationFilter = .nearest
-            sprout.frame = piece.frame.offsetBy(dx: -origin.x, dy: -origin.y)
+            sprout.frame = frame
             container.addSublayer(sprout)
             if let group = piece.swayGroup { swaying.append((sprout, group)) }
         }
@@ -281,6 +296,8 @@ extension NatureFogMapView {
         guard animate, scene.motion.scatters else { return }
         sweepEffects()
         let unit = book.scale.unit * map.stretchX, reach = book.scale.radius * map.stretchX
+        let tallest = CGRect(x: 0, y: 0, width: unit, height: unit * 2)
+        guard rejections.note(reach.isFinite && WorldLayerGuard.accepts(tallest, in: bounds.size), at: .fogBlade) else { return }
         let blades = [scene.palette.color(.bladeLight), scene.palette.color(.bladeMid)]
         for cell in change.cleared.prefix(NatureFogMotion.maxScattering) {
             let at = NatureFogRules.offset(of: cell), kind = NatureFogRules.ground(at.col, at.row)

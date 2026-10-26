@@ -1,12 +1,23 @@
 import Foundation
 import WorldMapStore
 
-/// Whether the person has stopped somewhere, from the map's readings alone (W-13, issue desk 2026-10-26),
-/// so a place is looked up where they stay, not along the road on the way. In memory only.
+/// Whether the person has stopped somewhere, from the map's readings alone (W-13, made stricter by W-14,
+/// issue desk 2026-10-26), so a place is looked up where they stay, not along the road on the way. In memory only.
 ///
-/// The person has stopped once they have stayed within ``stayRadius`` of one spot for ``stayTime``, or
-/// moved slower than walking (``slowSpeed``) for ``slowTime``. A reading farther than ``stayRadius`` from
-/// the spot starts a new one there; a reading at walking speed or faster ends a slow spell.
+/// - **Staying:** within ``stayRadius`` of one spot for ``stayTime``. A reading farther than that from the
+///   spot starts a new one there.
+/// - **Slow:** at least ``slowReadings`` readings in a row, each slower than walking (``slowSpeed``), spanning
+///   ``slowTime``, straight after walking-pace movement (no faster than ``walkingSpeed``). A gap between two
+///   readings alone never makes a slow spell: the map hears nothing while a car waits at a red light, so
+///   the reading as it pulls away looks slow over the gap.
+/// - **After a drive** (a reading faster than ``carSpeed`` within ``carWindow`` before the dwell began, or
+///   during it): only a real dwell counts, within ``dwellRadius`` for ``dwellTime``, confirmed by a reading
+///   still inside it or by the keeper's recheck with no newer reading. This holds until car detection exists.
+/// - A reading whose own speed is above walking pace never decides (a car pulling away), and after a drive
+///   the stop is at the dwell's spot, not at the moving reading (``stopPoint``).
+///
+/// A reading's speed is CoreLocation's own when it gave one, otherwise the pace from the reading before
+/// (unknown across a gap longer than ``maxGap``, when the app was closed).
 nonisolated struct WorldStopWatch: Equatable, Sendable {
     /// How near the spot the person must stay, in metres.
     static let stayRadius = 50.0
@@ -14,62 +25,118 @@ nonisolated struct WorldStopWatch: Equatable, Sendable {
     static let stayTime: TimeInterval = 3 * 60
     /// Slower than this is below walking speed, in metres a second.
     static let slowSpeed = 1.0
-    /// How long below walking speed counts as a stop.
+    /// How long the slow readings must span to count as a stop.
     static let slowTime: TimeInterval = 60
+    /// How many readings in a row a slow spell takes.
+    static let slowReadings = 3
+    /// The fastest walking pace, in metres a second: a reading faster than this never decides.
+    static let walkingSpeed = 2.5
+    /// Faster than this is a car's speed, in metres a second.
+    static let carSpeed = 7.0
+    /// How long before a dwell a car's speed still makes it a stop after a drive.
+    static let carWindow: TimeInterval = 3 * 60
+    /// How near the dwell's spot the person must stay after a drive, in metres.
+    static let dwellRadius = 30.0
+    /// How long they must stay there after a drive.
+    static let dwellTime: TimeInterval = 5 * 60
     /// The longest gap between two readings whose pace still counts.
     static let maxGap: TimeInterval = 5 * 60
 
     /// Where the person has been staying, and since when.
     private(set) var spot: GeoPoint?
     private(set) var since: Date?
-    /// The last reading, for the speed between readings.
+    /// Where the person has stayed within ``dwellRadius``, and since when (the rule after a drive).
+    private(set) var dwell: GeoPoint?
+    private(set) var dwellSince: Date?
+    /// The last reading, for the pace between readings.
     private var last: GeoPoint?
     private var lastAt: Date?
-    /// Since when every reading has been slower than walking.
+    /// The last reading's speed; nil when unknown.
+    private var lastSpeed: Double?
+    /// The run of readings slower than walking: how many (counted up to ``slowReadings``), since when, and
+    /// whether walking-pace movement led into it.
+    private var slowCount = 0
     private var slowSince: Date?
+    private var walkedIn = false
+    /// When a reading was last faster than ``carSpeed``.
+    private var fastAt: Date?
 
-    /// Takes a reading at `point` at `date`; whether the person has stopped.
-    mutating func observe(_ point: GeoPoint, at date: Date) -> Bool {
-        let leftSpot = spot.map { $0.distance(to: point) > Self.stayRadius } ?? true
-        if leftSpot {
+    /// Takes a reading at `point` at `date`, with CoreLocation's own `speed` when it gave one; whether the
+    /// person has stopped.
+    mutating func observe(_ point: GeoPoint, speed own: Double? = nil, at date: Date) -> Bool {
+        if spot.map({ $0.distance(to: point) > Self.stayRadius }) ?? true {
             spot = point
             since = date
         }
-        observeSpeed(point, at: date)
+        if dwell.map({ $0.distance(to: point) > Self.dwellRadius }) ?? true {
+            dwell = point
+            dwellSince = date
+        }
+        observeSpeed(own ?? pace(to: point, at: date), at: date)
         last = point
         lastAt = date
+        if let own, own > Self.walkingSpeed { return false }
         return isStopped(at: date)
     }
 
-    /// Whether, as of `date`, the person has stayed long enough or been slow long enough.
+    /// Whether, as of `date`, the person has stayed long enough or been slow long enough. The keeper's
+    /// recheck asks this with no newer reading.
     func isStopped(at date: Date) -> Bool {
+        if isAfterDrive {
+            guard let dwellSince else { return false }
+            return date.timeIntervalSince(dwellSince) >= Self.dwellTime
+        }
         if let since, date.timeIntervalSince(since) >= Self.stayTime { return true }
-        if let slowSince, date.timeIntervalSince(slowSince) >= Self.slowTime { return true }
-        return false
+        return isSlowSpell
     }
+
+    /// Where the stop is decided: the dwell's spot after a drive, otherwise the last reading.
+    var stopPoint: GeoPoint? { isAfterDrive ? dwell : last }
 
     /// How long from `date` until staying at the spot counts as a stop, if the person stays put; nil
     /// once it does (or with no spot yet).
     func timeToStop(at date: Date) -> TimeInterval? {
-        guard let since else { return nil }
-        let left = Self.stayTime - date.timeIntervalSince(since)
+        let afterDrive = isAfterDrive
+        guard let start = afterDrive ? dwellSince : since else { return nil }
+        let left = (afterDrive ? Self.dwellTime : Self.stayTime) - date.timeIntervalSince(start)
         return left > 0 ? left : nil
     }
 
-    /// Starts or ends a slow spell from the speed since the last reading. Readings far apart in time (the
-    /// app was closed) say nothing about the pace between them, so they start no spell.
-    private mutating func observeSpeed(_ point: GeoPoint, at date: Date) {
-        guard let last, let lastAt else { return }
+    /// Whether a reading at a car's speed came within ``carWindow`` before the dwell began, or during it.
+    private var isAfterDrive: Bool {
+        guard let fastAt, let dwellSince else { return false }
+        return fastAt >= dwellSince.addingTimeInterval(-Self.carWindow)
+    }
+
+    /// Whether the slow run has enough readings, spans long enough and followed walking-pace movement.
+    private var isSlowSpell: Bool {
+        guard slowCount >= Self.slowReadings, walkedIn, let slowSince, let lastAt else { return false }
+        return lastAt.timeIntervalSince(slowSince) >= Self.slowTime
+    }
+
+    /// The pace from the last reading to `point` at `date`, in metres a second; nil with no last reading or
+    /// across a gap too long to say anything about the pace between.
+    private func pace(to point: GeoPoint, at date: Date) -> Double? {
+        guard let last, let lastAt else { return nil }
         let seconds = date.timeIntervalSince(lastAt)
-        guard seconds > 0 else { return }
-        guard seconds <= Self.maxGap else {
-            slowSince = nil
-            return
-        }
-        if last.distance(to: point) / seconds < Self.slowSpeed {
-            if slowSince == nil { slowSince = lastAt }
+        guard seconds > 0, seconds <= Self.maxGap else { return nil }
+        return last.distance(to: point) / seconds
+    }
+
+    /// Notes a car's speed, and starts, extends or ends the slow run, from one reading's speed.
+    private mutating func observeSpeed(_ speed: Double?, at date: Date) {
+        if let speed, speed > Self.carSpeed { fastAt = date }
+        if let speed, speed < Self.slowSpeed {
+            if slowCount == 0 {
+                slowSince = date
+                walkedIn = lastSpeed.map { $0 >= Self.slowSpeed && $0 <= Self.walkingSpeed } ?? false
+            }
+            slowCount = min(slowCount + 1, Self.slowReadings)
         } else {
+            slowCount = 0
             slowSince = nil
+            walkedIn = false
         }
+        lastSpeed = speed
     }
 }

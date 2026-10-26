@@ -109,20 +109,28 @@ public nonisolated struct MapViewport: Equatable, Sendable {
 ///
 /// The camera belongs to Fernlet, not to the base map: a base map follows it and reports back when the
 /// person pans or zooms. `revision` goes up only when Fernlet moves the camera itself (following the
-/// companion, recentring), so a base map can tell a request from an echo of its own report.
+/// companion, recentring), so a base map can tell a request from an echo of its own report. A move that
+/// goes nowhere (within ``stillMetres`` of the centre, the height as it was) is no request (issue desk
+/// W-15: a panel closing while the map follows asks for the camera already shown).
 public nonisolated struct WorldCamera: Equatable, Sendable {
     /// Where the camera looks.
     public var center: GeoPoint
     /// Camera height in metres (MapKit's camera distance; the plain map scales it to the same zoom).
     public var distance: Double
-    /// Bumped by every programmatic move.
+    /// Bumped by every programmatic move that goes somewhere.
     public var revision: Int
     /// Whether the camera keeps the companion in view; a pan by the person turns it off.
     public var follows: Bool
+    /// The height as of the last revision, so a move after a change of height is a request even when
+    /// the centre stays put.
+    private var revisedDistance: Double
 
     /// The nearest and farthest the camera may sit, in metres (the shell's bounds: a street to a
     /// neighbourhood, so the fog's cells stay at least a few points across on screen).
     public static let distanceRange: ClosedRange<Double> = 300...7_000
+
+    /// How far a move must carry the centre, or change the height, in metres, to be a move at all.
+    public static let stillMetres = 0.5
 
     /// A camera over `center` at `distance` metres, following the companion.
     public init(center: GeoPoint, distance: Double, revision: Int = 0, follows: Bool = true) {
@@ -130,13 +138,18 @@ public nonisolated struct WorldCamera: Equatable, Sendable {
         self.distance = min(max(distance, Self.distanceRange.lowerBound), Self.distanceRange.upperBound)
         self.revision = revision
         self.follows = follows
+        revisedDistance = self.distance
     }
 
-    /// Moves the camera to `center` as Fernlet's own request (bumps ``revision``).
+    /// Moves the camera to `center` as Fernlet's own request (bumps ``revision``). A move to where the
+    /// camera already looks, within ``stillMetres`` and at the same height, sets only `follows`.
     public mutating func move(to center: GeoPoint, follows: Bool = true) {
         guard center.isValid else { return }
-        self.center = center
         self.follows = follows
+        let still = center.distance(to: self.center) < Self.stillMetres && abs(distance - revisedDistance) < Self.stillMetres
+        guard !still else { return }
+        self.center = center
+        revisedDistance = distance
         revision &+= 1
     }
 }
