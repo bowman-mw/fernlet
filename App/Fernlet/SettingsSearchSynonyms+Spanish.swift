@@ -134,6 +134,8 @@ extension SettingsSearchSynonyms {
                             "historial de ia", "auditoría", "qué salió de mi dispositivo", "salió de mi dispositivo",
                             "enviado"],
         "Privacy Policy": ["política de privacidad", "política", "términos", "legal", "privacidad"],
+        "Acknowledgments": ["reconocimientos", "licencias", "licencia", "código abierto", "créditos", "atribución",
+                            "avisos", "fuentes", "tipografías", "legal"],
         "Safety & reporting": ["seguridad y reportes", "seguridad", "reportar", "reporte", "bloquear", "abuso",
                                "crisis", "ayuda", "bloqueado", "línea de crisis", "suicidio", "primeros auxilios"],
         // App lock

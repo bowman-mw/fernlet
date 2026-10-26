@@ -3082,6 +3082,16 @@
         }
       }
     },
+    "Acknowledgments" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Reconocimientos"
+          }
+        }
+      }
+    },
     "Action" : {
       "localizations" : {
         "es" : {
@@ -10459,6 +10469,16 @@
         }
       }
     },
+    "Fernlet couldn't read this notice from the app. It is also in the NOTICE file of Fernlet's source code." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet no pudo leer este aviso desde la app. También está en el archivo NOTICE del código fuente de Fernlet."
+          }
+        }
+      }
+    },
     "Fernlet couldn't seal this photo to your private timeline. Please try again." : {
       "localizations" : {
         "es" : {
@@ -10547,6 +10567,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Fernlet incluye un registro privado de la actividad íntima. Las notas que agregues se sellan en este dispositivo. Viene activado."
+          }
+        }
+      }
+    },
+    "Fernlet is built with software, fonts and data made by other people. Their licenses ask Fernlet to carry these notices, so they appear here word for word, in English, as their authors wrote them." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet está hecho con software, tipografías y datos creados por otras personas. Sus licencias piden que Fernlet incluya estos avisos, así que aparecen aquí palabra por palabra, en inglés, tal como los escribieron sus autores."
           }
         }
       }
@@ -10667,6 +10697,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Red de Fernlet"
+          }
+        }
+      }
+    },
+    "Fernlet modifies the data Apple provides into its own gentle signals, never a forecast." : {
+      "comment" : "Settings, under the weather switch and the Apple Weather mark: the notice Apple's terms ask for, that Fernlet changes Apple's weather data. 'Gentle signals' are the sky behind the companion, the gentler-day note and the short-walk idea.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet modifica los datos que proporciona Apple para crear sus propias señales suaves, nunca un pronóstico."
           }
         }
       }
@@ -10928,6 +10969,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Fernlet no volverá a sugerirlo."
+          }
+        }
+      }
+    },
+    "Fernlet's lettering uses four font families under the SIL Open Font License 1.1. Each license travels inside the app beside its font." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Las letras de Fernlet usan cuatro familias tipográficas con la licencia SIL Open Font License 1.1. Cada licencia viaja dentro de la app junto a su tipografía."
           }
         }
       }
@@ -11288,12 +11339,32 @@
         }
       }
     },
+    "Fonts" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tipografías"
+          }
+        }
+      }
+    },
     "Food" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Comida"
+          }
+        }
+      }
+    },
+    "Food data" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Datos de alimentos"
           }
         }
       }
@@ -11689,6 +11760,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "De %1$@ a %2$@, en incrementos de %3$@."
+          }
+        }
+      }
+    },
+    "From %@, modified by Fernlet" : {
+      "comment" : "Caption at the foot of a Home card made from Apple's weather data. %@ is the Apple Weather mark (the Apple logo and \"Weather\"), a trademark that stays as it is in every language. Apple's terms ask the card to credit Apple Weather and to say the data was changed.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De %@, modificado por Fernlet"
           }
         }
       }
@@ -14424,6 +14506,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Fototeca"
+          }
+        }
+      }
+    },
+    "License text" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Texto de la licencia"
           }
         }
       }
@@ -18373,6 +18465,17 @@
         }
       }
     },
+    "Opens Apple's page in Safari" : {
+      "comment" : "VoiceOver hint on the Weather data sources link: it leaves Fernlet for Apple's page in Safari.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre la página de Apple en Safari"
+          }
+        }
+      }
+    },
     "Opens Arrange Today" : {
       "localizations" : {
         "es" : {
@@ -20177,6 +20280,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Búsqueda de producto o URL de la página"
+          }
+        }
+      }
+    },
+    "Products found with a barcode lookup come from Open Food Facts, under the Open Database License (ODbL). The foods built into Fernlet come from USDA FoodData Central, which is in the public domain." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los productos que encuentras con una consulta de código de barras vienen de Open Food Facts, con la licencia Open Database License (ODbL). Los alimentos incluidos en Fernlet vienen de USDA FoodData Central, que es de dominio público."
           }
         }
       }
@@ -26696,6 +26809,16 @@
         }
       }
     },
+    "The passcode lock uses CryptoSwift's scrypt to turn your passcode into a key. Fernlet builds it from a copy that changes one line of its package file (the oldest iOS it builds for) and none of its code. Its license asks every copy of Fernlet to say:" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El bloqueo con código usa el scrypt de CryptoSwift para convertir tu código en una clave. Fernlet lo compila a partir de una copia que cambia una línea de su archivo de paquete (la versión de iOS más antigua para la que se compila) y nada de su código. Su licencia pide que cada copia de Fernlet diga:"
+          }
+        }
+      }
+    },
     "The plan" : {
       "localizations" : {
         "es" : {
@@ -29282,6 +29405,27 @@
         }
       }
     },
+    "Weather" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Clima"
+          }
+        }
+      }
+    },
+    "Weather data sources" : {
+      "comment" : "Link to Apple's legal page listing where its weather data comes from. Opens in Safari.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fuentes de datos del clima"
+          }
+        }
+      }
+    },
     "Weather-aware recovery prompts" : {
       "localizations" : {
         "es" : {
@@ -29636,6 +29780,16 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Cuando está activado, Fernlet compara con cuidado tu variabilidad de la frecuencia cardiaca, tu frecuencia cardiaca en reposo, tu respiración y la temperatura de tu muñeca mientras duermes, tomadas de Salud, con tu propio rango habitual — nunca con el de otra persona — y puede señalar con discreción cuando tu cuerpo parece un poco más tenso de lo normal. Se calcula y se guarda solo en este dispositivo."
+          }
+        }
+      }
+    },
+    "When weather-aware recovery prompts are on, Fernlet asks Apple Weather for the current conditions near you, at most ten times a day. Fernlet modifies the data Apple provides: it becomes the sky behind your companion, the gentler-day note and the short-walk idea, never a forecast." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cuando las sugerencias de recuperación según el clima están activadas, Fernlet pide a Apple Weather las condiciones actuales cerca de ti, como máximo diez veces al día. Fernlet modifica los datos que proporciona Apple: se convierten en el cielo detrás de tu compañero, la nota de un día más tranquilo y la idea de un paseo corto, nunca en un pronóstico."
           }
         }
       }
@@ -47334,6 +47488,24 @@
         }
       }
     },
+    "settings.search.breadcrumb.acknowledgments" : {
+      "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Acknowledgments"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Reconocimientos"
+          }
+        }
+      }
+    },
     "settings.search.breadcrumb.aiActivityLog" : {
       "comment" : "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it.",
       "extractionState" : "extracted_with_value",
@@ -48163,6 +48335,24 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "settings.search.title.acknowledgments" : {
+      "comment" : "Settings search result: the name of a setting a search can find, on the Acknowledgments page. Short, sentence case, like the row it leads to.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Acknowledgments"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Reconocimientos"
           }
         }
       }

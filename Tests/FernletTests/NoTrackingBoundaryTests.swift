@@ -241,6 +241,16 @@ struct NoTrackingBoundaryTests {
             """
         ),
         PermittedDestination(
+            host: "weather-data.apple.com",
+            reason: """
+            Not fetched. Apple's legal attribution page of WeatherKit's data sources, which Apple's \
+            WeatherKit terms ask an app showing anything made from its weather data to link. A `Link` \
+            hands it to Safari when the user taps "Weather data sources" (Settings → AI & data sources, \
+            under the weather switch; Acknowledgments); the app sends it nothing and holds no client \
+            for it (Fernlet/AppleWeatherAttribution.swift).
+            """
+        ),
+        PermittedDestination(
             host: "example.com",
             reason: """
             RFC 2606 reserved documentation domain. Appears as UI placeholder TEXT in the product-import \

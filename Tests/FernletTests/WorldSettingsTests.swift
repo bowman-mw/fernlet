@@ -119,7 +119,9 @@ struct WorldSettingsTests {
             ("App/Fernlet/NearbyFriendsSettingsView.swift", "Nearby friends"),
             ("App/Fernlet/SoundsHapticsSettingsView.swift", "Sounds & haptics"),
             ("App/Fernlet/QuickLogShortcutsEditor.swift", "Quick-log shortcuts"),
-            ("App/Fernlet/PrivacyDataSettingsView.swift", "Privacy & Data")
+            ("App/Fernlet/PrivacyDataSettingsView.swift", "Privacy & Data"),
+            // From main (#67), adapted in integration main merge 2.
+            ("App/Fernlet/AcknowledgmentsView.swift", "Acknowledgments")
         ]
         for (path, title) in pages {
             let source = try RepoRoot.source(path)

@@ -103,6 +103,12 @@
  },
  {
   "rule": "A9-INPUT-LABELS",
+  "path": "App/Fernlet/AppleWeatherAttribution.swift",
+  "line_contains": "modified by Fernlet\"))",
+  "reason": "Not actionable on its own, so Voice Control never names it by this label. `AppleWeatherCaption` is a caption `Text`: on the gentler-day card it sits in a plain VStack with no gesture, and on the short-walk offer it is part of the offer Button's label, where the Button keeps its own name. The label exists only so VoiceOver says \"Apple Weather\" for the mark (the Apple logo and \"Weather\"), whose own label is lost once it is interpolated into the sentence (XCUITest read the caption with the bare logo character, 2026-10-25); nothing here is ever spoken BY the user."
+ },
+ {
+  "rule": "A9-INPUT-LABELS",
   "path": "App/Fernlet/BarcodeScanView.swift",
   "line_contains": "grams protein, \\(item.macros.carbs) grams carbs",
   "reason": "Not actionable, so Voice Control never names it. This is `foodChip`, the created-item summary on the scan's success screen: an `HStack` flattened by `.accessibilityElement(children: .ignore)` with no tap gesture, no Button around it and no button trait, sitting beside the screen's one control (Done). The long label exists so VoiceOver reads the name and all three macros as one utterance; nothing here is ever spoken BY the user."

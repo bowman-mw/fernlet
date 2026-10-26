@@ -69,6 +69,19 @@ jobs:
           Manual plan exchange
           MARKERS
 
+      # CryptoSwift's license asks every redistribution to keep one exact sentence, and the site is
+      # Fernlet's product documentation: the technical page must carry it word for word, as NOTICE
+      # does (whitespace folded, since NOTICE wraps it). Xcode-free half of FernletTests/
+      # AcknowledgmentsTests, which also holds the in-app screen to the bundled license.
+      - name: The acknowledgment CryptoSwift's license requires is on the site
+        run: |
+          set -euo pipefail
+          sentence='This product includes software developed by the "Marcin Krzyzanowski" (http://krzyzanowskim.com/).'
+          for f in NOTICE Site/technical/index.html; do
+            tr -s '[:space:]' ' ' < "$f" | grep -qF "$sentence" \
+              || { echo "::error file=$f::missing CryptoSwift's required acknowledgment: $sentence"; exit 1; }
+          done
+
       # The no-tracking wall applies to the website too: nothing may load from another origin.
       - name: No third-party assets in the site
         run: |
