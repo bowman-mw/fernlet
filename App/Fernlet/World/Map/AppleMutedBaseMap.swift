@@ -97,11 +97,14 @@ private struct AppleMutedMapView: UIViewRepresentable {
 
     /// The person moved the map (W-10): a pan that moves the centre takes the new place and stops
     /// following; a pinch or a double-tap zoom keeps following and takes only the new distance (Home
-    /// re-centres on the companion at it). Off following, every move is taken whole.
+    /// re-centres on the companion at it). Off following, every move is taken whole. A camera MapKit reports
+    /// mid-gesture with no finite height or a centre off the globe is never written back (W-20), so the
+    /// re-centre never asks MapKit for one.
     func adopt(_ map: MKMapView, move: AppleMapGeometry.PersonMove) {
-        camera.distance = map.camera.centerCoordinateDistance
+        let distance = map.camera.centerCoordinateDistance, centre = map.camera.centerCoordinate
+        guard distance.isFinite, distance > 0, CLLocationCoordinate2DIsValid(centre) else { return }
+        camera.distance = distance
         guard move == .pan || !camera.follows else { return }
-        let centre = map.camera.centerCoordinate
         camera.center = GeoPoint(centre.latitude, centre.longitude)
         if move == .pan { camera.follows = false }
     }
@@ -340,6 +343,8 @@ private final class AppleMutedMapCoordinator: NSObject, MKMapViewDelegate {
     var tileStatus: WorldTileStatus?
     /// Holds the reports raised inside `makeUIView` and `updateUIView` until SwiftUI's update is over.
     let gate = WorldMapReportGate()
+    /// Writes the audit line when a reported viewport is refused (W-20).
+    private let rejections = WorldLayerRejections()
     /// Whether the move under way began with the person's finger.
     private var movedByPerson = false
     /// Where the map's centre was, and how far up its camera, when that move began.
@@ -370,9 +375,13 @@ private final class AppleMutedMapCoordinator: NSObject, MKMapViewDelegate {
         }
     }
 
-    /// Hands the layers the whole view's viewport (W-12), never `visibleMapRect`'s inset one.
+    /// Hands the layers the whole view's viewport (W-12), never `visibleMapRect`'s inset one. A usable one
+    /// out of proportion with the view (W-20) is dropped, so every layer keeps the last good one.
     private func report(_ mapView: MKMapView) {
-        gate.report(AppleMapGeometry.viewport(of: mapView)) { [weak self] viewport in self?.view?.onViewport(viewport) }
+        let viewport = AppleMapGeometry.viewport(of: mapView)
+        let sound = !viewport.isUsable || WorldLayerGuard.accepts(viewport, in: mapView.bounds.size)
+        guard rejections.note(sound, at: .mapViewport) else { return }
+        gate.report(viewport) { [weak self] viewport in self?.view?.onViewport(viewport) }
     }
 
     func mapViewWillStartLoadingMap(_ mapView: MKMapView) {

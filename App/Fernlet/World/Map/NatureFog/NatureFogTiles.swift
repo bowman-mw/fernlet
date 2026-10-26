@@ -113,6 +113,29 @@ final class NatureFogTileBook {
         return NatureFogChange(dirty: dirty, cleared: changed.filter(next.isClear))
     }
 
+    /// How far past a tile's edge a piece may start and still be kept (W-20), in points.
+    static let cullMargin = 4.0
+
+    /// `pieces` of the tile at `key` with their frames made tile-local, keeping only the ones that reach the
+    /// tile (within ``cullMargin``), so no sprite is ever sized or placed from global points (W-20).
+    /// `rejected` counts the pieces whose frame failed ``WorldLayerGuard`` (not finite, or absurdly large or
+    /// far); a sound piece that only lies off the tile is culled without counting.
+    static func visible(_ pieces: [NaturePiece], in key: NatureTileKey) -> (kept: [(piece: NaturePiece, frame: CGRect)], rejected: Int) {
+        let origin = area(of: key).origin, side = CGSize(width: tileSize, height: tileSize)
+        let reach = CGRect(origin: .zero, size: side).insetBy(dx: -cullMargin, dy: -cullMargin)
+        var kept: [(piece: NaturePiece, frame: CGRect)] = []
+        var rejected = 0
+        for piece in pieces {
+            let local = piece.frame.offsetBy(dx: -origin.x, dy: -origin.y)
+            guard WorldLayerGuard.accepts(local, in: side) else {
+                rejected += 1
+                continue
+            }
+            if local.intersects(reach) { kept.append((piece, local)) }
+        }
+        return (kept, rejected)
+    }
+
     /// Forgets the tiles farthest from `keep` once more than ``cacheLimit`` are held.
     func evict(keeping keep: Set<NatureTileKey>) {
         guard tiles.count > Self.cacheLimit, let anchor = keep.first else { return }
