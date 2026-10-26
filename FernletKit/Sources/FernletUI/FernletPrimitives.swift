@@ -24,12 +24,51 @@ public struct FernletCard<Content: View>: View {
     /// Increase Contrast the card therefore grows a real hairline; at default settings it draws
     /// exactly as it did, which is why the branch is an `if` rather than a variable alpha.
     @Environment(\.colorSchemeContrast) private var contrast
+    /// The World build's framed look, when the surface opted in (``FernletFramedLook``).
+    @Environment(\.fernletFramedLook) private var framedLook
+    /// Whether this card sits inside another section (the frame rule: then it draws no frame).
+    @Environment(\.fernletInFramedSection) private var inSection
+    /// Whether it is one row of a framed section, whose hairlines already part it from its neighbours.
+    @Environment(\.fernletInFramedRow) private var inRow
 
     public init(@ViewBuilder content: () -> Content) {
         self.content = content()
     }
 
     public var body: some View {
+        if let framedLook {
+            if inSection { nested } else { framed(framedLook) }
+        } else {
+            standard
+        }
+    }
+
+    /// The look's card, one section (the frame rule, ``FernletFrameRule``): paper in a 2-pt ink frame
+    /// with a solid shadow 3 pt down, 14/15-pt padding. The frame is the edge at every contrast setting,
+    /// so it needs no Increase Contrast branch. Its content is inside a section, so the pieces in it
+    /// (a nested card, an icon square, a note) drop their own frames.
+    private func framed(_ look: FernletFramedLook) -> some View {
+        let shape = RoundedRectangle(cornerRadius: FernletFrameRule.cornerRadius, style: .continuous)
+        return content
+            .environment(\.fernletInFramedSection, true)
+            .padding(FernletFrameRule.padding)
+            .background(look.paper, in: shape)
+            .overlay(shape.strokeBorder(look.ink, lineWidth: FernletFrameRule.frameWidth))
+            .background { shape.fill(look.shadow).offset(y: FernletFrameRule.shadowOffset) }
+    }
+
+    /// A card inside a section (the frame rule's `.ac .ac`): no frame, fill or shadow; a full-width
+    /// hairline above it and 10 pt of air under that, or, as a section's row, the row's own 10 pt above
+    /// and below.
+    private var nested: some View {
+        VStack(alignment: .leading, spacing: FernletFrameRule.rowSpacing) {
+            if !inRow { FernletDottedRule() }
+            content
+        }
+        .padding(.vertical, inRow ? FernletFrameRule.rowSpacing : 0)
+    }
+
+    private var standard: some View {
         let shape = RoundedRectangle(cornerRadius: FernletMetrics.radiusMd, style: .continuous)   // 18
         return content
             .padding(FernletMetrics.spaceMd)   // 16
@@ -85,11 +124,40 @@ public struct SectionLabel: View {
         self.text = Text(verbatim: text)
     }
 
+    /// The `Text` initializer, for a label a component was handed as `Text` (``FernletFramedSection``'s
+    /// header). `Text` is not a literal, so this never steals a call site that meant to localize.
+    public init(_ text: Text) {
+        self.text = text
+    }
+
+    /// The World build's framed look, when the surface opted in: the label goes bold in ink, after a
+    /// small framed square (``FernletFramedLook``).
+    @Environment(\.fernletFramedLook) private var framedLook
+
     public var body: some View {
-        text
+        if let framedLook {
+            HStack(spacing: 7) {
+                framedLook.mark
+                    .frame(width: 7, height: 7)
+                    .padding(2)
+                    .background(framedLook.ink)
+                    .accessibilityHidden(true)
+                // The Bold face itself (a weight asked of the single-weight face drew it regular).
+                styled(text.font(FernletFramedFont.sectionLabel), color: framedLook.text)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityHeading(.h2)
+        } else {
+            styled(text, color: Color.slate)
+        }
+    }
+
+    private func styled(_ label: Text, color: Color) -> some View {
+        label
             .font(.fernlet(.labelSmall))
             .tracking(0.8)
-            .foregroundStyle(Color.slate)
+            .foregroundStyle(color)
             // `.textCase` rather than `String.uppercased()`: the transform now runs *after* the
             // lookup, on the translated string, which is the only locale-correct order. German ß
             // has to become SS, French capitals keep their accents, and Turkish i must not become
@@ -145,21 +213,25 @@ public struct EmptyState: View {
         self.systemImage = systemImage
     }
 
+    /// The World build's framed look: the line in the look's dim ink and body face, with less air
+    /// around it (the mockups' empty lines, "No workouts planned", sit close to their card's edges).
+    @Environment(\.fernletFramedLook) private var look
+
     public var body: some View {
         VStack(spacing: 10) {
             if let systemImage {
                 Image(systemName: systemImage)
                     .font(.system(size: 30, weight: .light))
-                    .foregroundStyle(Color.slate)
+                    .foregroundStyle(look?.dim ?? Color.slate)
                     .accessibilityHidden(true)
             }
             text
-                .font(.fernlet(.bubble))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.bubble) : FernletFramedFont.body)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .center)
-        .padding(.vertical, 18)
+        .padding(.vertical, look == nil ? 18 : 8)
     }
 }

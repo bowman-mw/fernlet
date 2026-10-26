@@ -41,19 +41,26 @@ public nonisolated struct ReceivedHeartRecord: Codable, Equatable, Identifiable,
     /// When the Home bubble for this heart was dismissed. The health-bar glow keeps decaying
     /// on its own 24h clock regardless — dismissal only hides the bubble.
     public var bubbleDismissedAt: Date?
+    /// Whether the heart was given in person (the live mesh or presence path: true) or picked up from
+    /// a dead drop (false). Only hearts given in person become gold hearts (`GoldHeartRules`; World
+    /// build). Nil on a record written before the field existed, which reads as not in person; such a
+    /// record is at most 48 hours old (`heartRetention`). Optional, so older builds still decode it.
+    public var deliveredInPerson: Bool?
 
     public init(
         id: UUID,
         senderDisplayName: String,
         senderFingerprint: String,
         receivedAt: Date,
-        bubbleDismissedAt: Date? = nil
+        bubbleDismissedAt: Date? = nil,
+        deliveredInPerson: Bool? = nil
     ) {
         self.id = id
         self.senderDisplayName = senderDisplayName
         self.senderFingerprint = senderFingerprint
         self.receivedAt = receivedAt
         self.bubbleDismissedAt = bubbleDismissedAt
+        self.deliveredInPerson = deliveredInPerson
     }
 }
 
@@ -231,7 +238,8 @@ public final class ProximityHeartLedger {
                 id: id,
                 senderDisplayName: senderDisplayName,
                 senderFingerprint: senderFingerprint,
-                receivedAt: at
+                receivedAt: at,
+                deliveredInPerson: true
             ))
             Self.prune(&state, at: at)
         }
@@ -255,7 +263,8 @@ public final class ProximityHeartLedger {
                 id: id,
                 senderDisplayName: senderDisplayName,
                 senderFingerprint: senderFingerprint,
-                receivedAt: at
+                receivedAt: at,
+                deliveredInPerson: false
             ))
             Self.prune(&state, at: at)
         }
@@ -324,6 +333,14 @@ public final class ProximityHeartLedger {
         return receivedHearts
             .map { HeartGlowMath.glow(receivedAt: $0.receivedAt, at: at) }
             .max() ?? 0
+    }
+
+    /// The arrival times of the hearts that are gold at `date` (now when nil), newest first: given in
+    /// person, under 12 hours old, at most two (`GoldHeartRules`; World build). Dead-drop hearts never
+    /// count.
+    public func goldHeartArrivals(at date: Date? = nil) -> [Date] {
+        let inPerson = receivedHearts.filter { $0.deliveredInPerson == true }.map(\.receivedAt)
+        return GoldHeartRules.activeArrivals(inPerson, at: date ?? now())
     }
 
     /// Wipes all received-heart records and rate-limit keys and removes the on-disk sidecar. Wired

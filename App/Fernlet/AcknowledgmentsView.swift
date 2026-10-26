@@ -20,6 +20,12 @@
 //  screen; their words are not touched. `AcknowledgmentsTests` pins the files, the sentence, NOTICE and
 //  the website's copy (Site/technical/index.html).
 //
+//  World build (integration main merge 2, 2026-10-26): a page in the Settings panel, like Privacy
+//  Policy and Safety & reporting beside it. The plate carries the title and Back
+//  (`fernletPushedPage`), the dotted page shows through (`fernletPageBackground`), and each section is
+//  one `FernletFramedSection` under the frame rule, its label the section's heading. The words and the
+//  one link are main's, unchanged.
+//
 
 import SwiftUI
 import os
@@ -139,7 +145,8 @@ private struct FontNotice: Identifiable {
 /// Pushed from ``SettingsSheet`` via `SettingsRoute.acknowledgments`. The explanations localize; the
 /// notices are drawn `verbatim` from the files the bundle carries (``AcknowledgmentNotices``), word
 /// for word in English (the font licenses' hard wraps rejoined), selectable, and never a link. The one
-/// link is the weather section's Apple legal page, which Safari opens; the app fetches nothing.
+/// link is the weather section's Apple legal page, which Safari opens; the app fetches nothing. In the
+/// World build each section is a framed card (``FernletFramedSection``) whose label is its heading.
 struct AcknowledgmentsView: View {
     private let cryptoSwiftLicense = AcknowledgmentNotices.bundledText(
         AcknowledgmentNotices.cryptoSwiftLicenseResource, in: .main)
@@ -149,95 +156,97 @@ struct AcknowledgmentsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                paragraph(Text("Fernlet is built with software, fonts and data made by other people. Their licenses ask Fernlet to carry these notices, so they appear here word for word, in English, as their authors wrote them."))
+            // The frame rule: one frame per section, 16 pt between them.
+            VStack(alignment: .leading, spacing: 16) {
+                FernletFramedSection(header: nil) {
+                    paragraph(Text("Fernlet is built with software, fonts and data made by other people. Their licenses ask Fernlet to carry these notices, so they appear here word for word, in English, as their authors wrote them."))
+                }
                 cryptoSwiftSection
                 fontsSection
                 foodDataSection
                 weatherSection
             }
-            .padding(20)
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 30)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(Color.parchment)
-        .navigationTitle("Acknowledgments")
-        .navigationBarTitleDisplayMode(.inline)
+        .fernletPageBackground()
+        // A page in the Settings panel: the plate carries the title and Back.
+        .fernletPushedPage("Acknowledgments")
     }
 
     // MARK: - Sections
 
-    /// The required acknowledgment, then CryptoSwift's whole license.
-    @ViewBuilder private var cryptoSwiftSection: some View {
-        header(Text(verbatim: "CryptoSwift"))
-        paragraph(Text("The passcode lock uses CryptoSwift's scrypt to turn your passcode into a key. Fernlet builds it from a copy that changes one line of its package file (the oldest iOS it builds for) and none of its code. Its license asks every copy of Fernlet to say:"))
-        if let license = cryptoSwiftLicense, let sentence = AcknowledgmentNotices.requiredAcknowledgment(in: license) {
-            Text(verbatim: sentence)
-                .font(.fernlet(.body))
-                .italic()
-                .foregroundStyle(Color.bark)
-                .fixedSize(horizontal: false, vertical: true)
-                .textSelection(.enabled)
-            notice(license)
-        } else {
-            unreadableNotice
+    /// The required acknowledgment, then CryptoSwift's whole license: one framed section, each its own row.
+    private var cryptoSwiftSection: some View {
+        FernletFramedSection(header: Text(verbatim: "CryptoSwift")) {
+            paragraph(Text("The passcode lock uses CryptoSwift's scrypt to turn your passcode into a key. Fernlet builds it from a copy that changes one line of its package file (the oldest iOS it builds for) and none of its code. Its license asks every copy of Fernlet to say:"))
+            if let license = cryptoSwiftLicense, let sentence = AcknowledgmentNotices.requiredAcknowledgment(in: license) {
+                Text(verbatim: sentence)
+                    .font(.fernlet(.body))
+                    .italic()
+                    .foregroundStyle(Color.bark)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+                notice(license)
+            } else {
+                unreadableNotice
+            }
         }
     }
 
-    /// Each family's copyright lines, with its whole license folded under a disclosure.
-    @ViewBuilder private var fontsSection: some View {
-        header(Text("Fonts"))
-        paragraph(Text("Fernlet's lettering uses four font families under the SIL Open Font License 1.1. Each license travels inside the app beside its font."))
-        ForEach(fontNotices) { font in
-            VStack(alignment: .leading, spacing: 6) {
-                Text(verbatim: font.family.name)
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.bark)
-                if let license = font.license {
-                    notice(AcknowledgmentNotices.copyrightNotice(in: license))
-                    DisclosureGroup {
-                        licenseText(license).padding(.top, 6)
-                    } label: {
-                        Text("License text")
-                            .font(.fernlet(.label))
-                            .foregroundStyle(Color.bark)
+    /// Each family's copyright lines, with its whole license folded under a disclosure: one framed
+    /// section, a row per family.
+    private var fontsSection: some View {
+        FernletFramedSection(header: Text("Fonts")) {
+            paragraph(Text("Fernlet's lettering uses four font families under the SIL Open Font License 1.1. Each license travels inside the app beside its font."))
+            ForEach(fontNotices) { font in
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(verbatim: font.family.name)
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.bark)
+                    if let license = font.license {
+                        notice(AcknowledgmentNotices.copyrightNotice(in: license))
+                        DisclosureGroup {
+                            licenseText(license).padding(.top, 6)
+                        } label: {
+                            Text("License text")
+                                .font(.fernlet(.label))
+                                .foregroundStyle(Color.bark)
+                        }
+                        .tint(Color.bark)
+                    } else {
+                        unreadableNotice
                     }
-                    .tint(Color.bark)
-                } else {
-                    unreadableNotice
                 }
             }
-            .padding(.top, 4)
         }
     }
 
     /// Where the food data comes from. Open Food Facts is also credited wherever its data appears.
-    @ViewBuilder private var foodDataSection: some View {
-        header(Text("Food data"))
-        paragraph(Text("Products found with a barcode lookup come from Open Food Facts, under the Open Database License (ODbL). The foods built into Fernlet come from USDA FoodData Central, which is in the public domain."))
+    private var foodDataSection: some View {
+        FernletFramedSection(header: Text("Food data")) {
+            paragraph(Text("Products found with a barcode lookup come from Open Food Facts, under the Open Database License (ODbL). The foods built into Fernlet come from USDA FoodData Central, which is in the public domain."))
+        }
     }
 
     /// Where the weather comes from: the Apple Weather mark, the notice that Fernlet modifies Apple's
     /// data, and Apple's legal page, as WeatherKit's terms ask (``AppleWeatherAttribution``). "Ten" is
     /// `WeatherRequestBudget.dailyLimit`; `AppleWeatherAttributionTests` holds the two together.
-    @ViewBuilder private var weatherSection: some View {
-        header(Text("Weather"))
-        AppleWeatherAttribution.markText(.body)
-            .foregroundStyle(Color.bark)
-        paragraph(Text("When weather-aware recovery prompts are on, Fernlet asks Apple Weather for the current conditions near you, at most ten times a day. Fernlet modifies the data Apple provides: it becomes the sky behind your companion, the gentler-day note and the short-walk idea, never a forecast."))
-        AppleWeatherSourcesLink()
+    /// One framed section: the mark over the paragraph in one row, the link in its own.
+    private var weatherSection: some View {
+        FernletFramedSection(header: Text("Weather")) {
+            VStack(alignment: .leading, spacing: 6) {
+                AppleWeatherAttribution.markText(.body)
+                    .foregroundStyle(Color.bark)
+                paragraph(Text("When weather-aware recovery prompts are on, Fernlet asks Apple Weather for the current conditions near you, at most ten times a day. Fernlet modifies the data Apple provides: it becomes the sky behind your companion, the gentler-day note and the short-walk idea, never a forecast."))
+            }
+            AppleWeatherSourcesLink()
+        }
     }
 
     // MARK: - Pieces
-
-    /// A section header, on the Headings rotor like the Privacy Policy's.
-    private func header(_ text: Text) -> some View {
-        text
-            .font(.fernlet(.headerMedium))
-            .foregroundStyle(Color.bark)
-            .padding(.top, 8)
-            .accessibilityAddTraits(.isHeader)
-            .accessibilityHeading(.h2)
-    }
 
     /// A localized explanation.
     private func paragraph(_ text: Text) -> some View {

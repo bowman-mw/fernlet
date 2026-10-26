@@ -259,6 +259,9 @@ nonisolated enum DuressModeCopy {
 /// unconfigured one are indistinguishable from the outside, which is also why configuring one emits
 /// no audit event.
 struct DuressPINSetupView: View {
+    /// The World's framed look (`b3-duress`): the sheet on paper with Done top right and its title
+    /// inside, framed cards, the three responses as framed radio cards.
+    @Environment(\.fernletFramedLook) private var look
     @Environment(FernletLockService.self) private var lockService
     @Environment(\.dismiss) private var dismiss
 
@@ -349,23 +352,17 @@ struct DuressPINSetupView: View {
                     commitCard(availability)
                     if availability.hasDuressConfigured { removeCard }
                 }
-                .padding(20)
-                .padding(.bottom, 20)
+                .padding(.horizontal, 18)
+                .padding(.top, 8)
+                .padding(.bottom, 24)
             }
-            .scrollContentBackground(.hidden)
-            .background(Color.parchment)
-            .navigationTitle("Duress code")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                // Trailing, like every other "this screen is finished" control — the leading slot
-                // is where the sibling lock sheets put Cancel, and "Done" there read as one.
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.moss)
-                }
-            }
+            .fernletSheetStyle()
+            // Done is the way out, trailing like every other "this screen is finished" control —
+            // the leading slot is where the sibling lock sheets put Cancel. The title sits inside
+            // the sheet (`b3-duress`).
+            .fernletSheetToolbar(title: "Duress code", onDone: { dismiss() })
         }
+        .fernletSheet()
     }
 
     /// Removes the duress code, surfacing the service's own refusal (it declines during a duress
@@ -385,34 +382,36 @@ struct DuressPINSetupView: View {
     private var introCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("A second code you can give away")
-                .font(.fernlet(.header))
-                .foregroundStyle(Color.bark)
+                .font(look == nil ? .fernlet(.header) : FernletFramedFont.rowTitleBold)
+                .foregroundStyle(look?.text ?? Color.bark)
             Text("If someone makes you unlock Fernlet, type your duress code instead of your passcode. Fernlet does what you choose below and looks completely normal doing it — no warning, no message, nothing on screen that says anything happened.")
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.body) : FernletFramedFont.body)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .fernletWrappingText()
             Text("It works even while Fernlet is counting down from too many wrong attempts, and it never counts as a wrong attempt itself.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.note)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .fernletWrappingText()
         }
         // Spans the column like the Status card below it, instead of hugging its longest line.
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+        .settingsCard()
     }
 
     private func statusCard(_ availability: DuressSetupAvailability) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel("Status")
             HStack(spacing: 12) {
-                Circle()
+                // The status as a framed square; its words say the state.
+                Rectangle()
                     .fill(availability.hasDuressConfigured ? Color.moss : Color.softTaupe)
                     .frame(width: 10, height: 10)
+                    .padding(2)
+                    .background(look?.ink ?? Color.clear)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(availability.hasDuressConfigured ? "Duress code set" : "No duress code")
-                        .font(.fernlet(.header))
-                        .foregroundStyle(Color.bark)
+                        .font(look == nil ? .fernlet(.header) : FernletFramedFont.rowTitleBold)
+                        .foregroundStyle(look?.text ?? Color.bark)
                         .accessibilityIdentifier("duress.status.title")
                     if let mode = availability.configuredMode {
                         Text(DuressModeCopy.title(mode))
@@ -424,14 +423,14 @@ struct DuressPINSetupView: View {
                 Spacer()
             }
             Text(shapeNote)
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.note)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .fernletWrappingText()
         }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+        .settingsCard()
     }
 
+    /// The three responses under their label, each its own framed radio card (`b3-duress`).
     private func responseCard(_ availability: DuressSetupAvailability) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionLabel("What it does")
@@ -439,8 +438,6 @@ struct DuressPINSetupView: View {
                 modeCard(mode, availability: availability)
             }
         }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
     private func modeCard(_ mode: DuressMode, availability: DuressSetupAvailability) -> some View {
@@ -451,60 +448,105 @@ struct DuressPINSetupView: View {
             selectedMode = mode
             errorMessage = nil
         } label: {
+            if let look {
+                framedModeCard(mode, availability: availability, isSelected: isSelected, look: look)
+            } else {
+                standardModeCard(mode, availability: availability, isSelected: isSelected)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(!selectable)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+        .accessibilityIdentifier("duress.mode.\(mode.accessibilitySuffix)")
+    }
+
+    /// One response as a framed radio card: its name in Fraunces (terracotta for the erase), its
+    /// summary, the detail once chosen; dimmed with the reason when it can't be picked yet.
+    private func framedModeCard(_ mode: DuressMode, availability: DuressSetupAvailability,
+                                isSelected: Bool, look: FernletFramedLook) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(DuressModeCopy.title(mode))
+                    .font(FernletFramedFont.cardTitle)
+                    .foregroundStyle(mode == .silentWipe ? Color.terracottaInk : look.text)
+                    .fernletWrappingText()
+                Text(DuressModeCopy.summary(mode))
+                    .font(FernletFramedFont.body)
+                    .foregroundStyle(look.dim)
+                    .fernletWrappingText()
+                if isSelected {
+                    Text(DuressModeCopy.detail(mode))
+                        .font(FernletFramedFont.note)
+                        .foregroundStyle(look.dim)
+                        .fernletWrappingText()
+                }
+            }
+            .opacity(availability.isSelectable(mode) ? 1 : 0.55)
+            if let reason = availability.unavailableReason(for: mode) {
+                // Outside the dim, deliberately: this is the readable reason the option is withheld.
+                Text(reason)
+                    .font(FernletFramedFont.note)
+                    .foregroundStyle(Color.terracottaInk)
+                    .fernletWrappingText()
+            }
+        }
+        .modifier(LockRadioCardChrome(isSelected: isSelected, look: look))
+    }
+
+    /// Today's response card: a radio circle, the name and summary on parchment.
+    private func standardModeCard(_ mode: DuressMode, availability: DuressSetupAvailability,
+                                  isSelected: Bool) -> some View {
+        let selectable = availability.isSelectable(mode)
+        return VStack(alignment: .leading, spacing: 8) {
+            // Only the OPTION is dimmed when it can't be picked — see the reason line below.
             VStack(alignment: .leading, spacing: 8) {
-                // Only the OPTION is dimmed when it can't be picked — see the reason line below.
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .top, spacing: 14) {
-                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(isSelected ? Color.moss : Color.slate)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(DuressModeCopy.title(mode))
-                                .font(.fernlet(.label))
-                                .foregroundStyle(mode == .silentWipe ? Color.terracottaInk : Color.bark)
-                                .fernletWrappingText()
-                            Text(DuressModeCopy.summary(mode))
-                                .font(.fernlet(.bodySmall))
-                                .foregroundStyle(Color.slate)
-                                .fernletWrappingText()
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    if isSelected {
-                        Text(DuressModeCopy.detail(mode))
+                HStack(alignment: .top, spacing: 14) {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(isSelected ? Color.moss : Color.slate)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(DuressModeCopy.title(mode))
+                            .font(.fernlet(.label))
+                            .foregroundStyle(mode == .silentWipe ? Color.terracottaInk : Color.bark)
+                            .fernletWrappingText()
+                        Text(DuressModeCopy.summary(mode))
                             .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
                     }
+                    Spacer(minLength: 0)
                 }
-                .opacity(selectable ? 1 : 0.55)
-
-                if let reason = availability.unavailableReason(for: mode) {
-                    // Outside the dim, deliberately: this is the readable reason the option is
-                    // withheld, and at 55% it was the least legible text on the card.
-                    Text(reason)
+                if isSelected {
+                    Text(DuressModeCopy.detail(mode))
                         .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.terracottaInk)
+                        .foregroundStyle(Color.slate)
                         .fernletWrappingText()
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .background(
-                isSelected ? Color.moss.opacity(0.06) : Color.parchment,
-                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(
-                        isSelected ? Color.moss.opacity(0.4) : Color.bark.opacity(0.08),
-                        lineWidth: 1
-                    )
-            )
+            .opacity(selectable ? 1 : 0.55)
+
+            if let reason = availability.unavailableReason(for: mode) {
+                // Outside the dim, deliberately: this is the readable reason the option is
+                // withheld, and at 55% it was the least legible text on the card.
+                Text(reason)
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.terracottaInk)
+                    .fernletWrappingText()
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(!selectable)
-        .accessibilityIdentifier("duress.mode.\(mode.accessibilitySuffix)")
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(
+            isSelected ? Color.moss.opacity(0.06) : Color.parchment,
+            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(
+                    isSelected ? Color.moss.opacity(0.4) : Color.bark.opacity(0.08),
+                    lineWidth: 1
+                )
+        )
     }
 
     private func recoveryDeviceCard(_ availability: DuressSetupAvailability) -> some View {
@@ -521,9 +563,7 @@ struct DuressPINSetupView: View {
                 recoveryDeviceEnrollButton
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+        .settingsCard()
     }
 
     /// The enrolled branch of ``recoveryDeviceCard(_:)``: the confirmation row, the superseded-key
@@ -585,39 +625,29 @@ struct DuressPINSetupView: View {
     /// cards left no way to tell which was the screen's real primary. The filled one is "Set duress
     /// code" below.
     private var recoveryDeviceEnrollButton: some View {
-        Button("Set up a recovery device") { showRecoveryEnrollment = true }
-            .buttonStyle(.plain)
-            .font(.fernlet(.label))
-            .foregroundStyle(Color.moss)
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .padding(.vertical, 10)
-            .background(Color.parchment, in: RoundedRectangle(cornerRadius: 14))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.moss.opacity(0.45), lineWidth: 1)
-            )
-            .accessibilityIdentifier("duress.recovery.enroll")
+        Button { showRecoveryEnrollment = true } label: {
+            Text("Set up a recovery device").frame(maxWidth: .infinity)
+        }
+        .buttonStyle(ActionPillButtonStyle(.secondary))
+        .accessibilityIdentifier("duress.recovery.enroll")
     }
 
     private func commitCard(_ availability: DuressSetupAvailability) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Button(availability.hasDuressConfigured ? "Change duress code" : "Set duress code") {
+            Button {
                 errorMessage = nil
                 if DuressModeCopy.armConfirmationTitle(selectedMode) != nil {
                     pendingDestructiveMode = selectedMode
                 } else {
                     showEntrySheet = true
                 }
+            } label: {
+                // Two whole literals, so each is its own catalog key.
+                (availability.hasDuressConfigured ? Text("Change duress code") : Text("Set duress code"))
+                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.plain)
-            .font(.fernlet(.label))
-            .foregroundStyle(availability.isSelectable(selectedMode) ? Color.onMoss : Color.bark)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(
-                Color.mossFill.opacity(availability.isSelectable(selectedMode) ? 1 : 0.55),
-                in: RoundedRectangle(cornerRadius: 14)
-            )
+            // The screen's one framed primary (`b3-duress`); faded while the response can't be set.
+            .buttonStyle(ActionPillButtonStyle(.primary))
             .disabled(!availability.isSelectable(selectedMode))
             .accessibilityIdentifier("duress.commit")
 
@@ -627,47 +657,27 @@ struct DuressPINSetupView: View {
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
+                .padding(.horizontal, 4)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
+    /// Removing the duress code: the framed danger row (`.sr.danger`), no chevron.
     private var removeCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionLabel("Danger zone")
+        FernletFramedSection("Danger zone") {
             Button(role: .destructive) {
                 showRemoveConfirm = true
             } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "trash")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.terracottaInk)
-                        .frame(width: 28)
-                    Text("Remove duress code")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.terracottaInk)
-                    Spacer()
-                }
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
+                FernletRowLabel("Remove duress code", destructive: true)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(FernletRowButtonStyle(showsChevron: false))
             .accessibilityIdentifier("duress.remove")
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
+    /// The flow's error as the framed warning notice.
     private func errorBanner(_ message: String) -> some View {
-        Text(message)
-            .font(.fernlet(.body))
-            .foregroundStyle(Color.terracotta)
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.terracotta.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
-            .fernletWrappingText()
+        FernletNotice(text: Text(verbatim: message), tone: .warn) { EmptyView() }
             .accessibilityIdentifier("duress.error")
     }
 
@@ -737,6 +747,8 @@ private struct DuressPINEntrySheet: View {
 
     @Environment(FernletLockService.self) private var lockService
     @Environment(\.dismiss) private var dismiss
+    /// The World's framed look (`b3-duress-entry`): paper, the title inside, framed pad and dots.
+    @Environment(\.fernletFramedLook) private var look
 
     /// The real passcode, typed on the first step and handed to `configureDuress` at commit.
     @State private var current = ""
@@ -751,25 +763,19 @@ private struct DuressPINEntrySheet: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.parchment.ignoresSafeArea()
+                (look?.paper ?? Color.parchment).ignoresSafeArea()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
                         Text(stepTitle)
-                            .font(.fernlet(.header))
-                            .foregroundStyle(Color.bark)
+                            .font(look == nil ? .fernlet(.header) : FernletFramedFont.cardTitle)
+                            .foregroundStyle(look?.text ?? Color.bark)
                         stepExplanation
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
+                            .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.body)
+                            .foregroundStyle(look?.dim ?? Color.slate)
                             .fernletWrappingText()
 
                         if let errorMessage {
-                            Text(errorMessage)
-                                .font(.fernlet(.body))
-                                .foregroundStyle(Color.terracotta)
-                                .padding(12)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color.terracotta.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
-                                .fernletWrappingText()
+                            FernletNotice(text: Text(verbatim: errorMessage), tone: .warn) { EmptyView() }
                                 .accessibilityIdentifier("duress.entry.error")
                         }
 
@@ -784,16 +790,11 @@ private struct DuressPINEntrySheet: View {
             .safeAreaInset(edge: .bottom) {
                 numericPadInset
             }
-            .navigationTitle("Duress code")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                        .foregroundStyle(Color.slate)
-                }
-            }
+            // Cancel top left and the title inside the sheet (`b3-duress-entry`).
+            .fernletSheetToolbar(title: "Duress code", onCancel: { dismiss() })
         }
         .tint(Color.moss)
+        .fernletSheet()
     }
 
     /// The heading for the step in progress.
@@ -842,17 +843,11 @@ private struct DuressPINEntrySheet: View {
                     .textContentType(step == .verify ? .password : .newPassword)
                     .sheetTextInput()
                     .accessibilityIdentifier("duress.entry.field")
-                Button("Continue") { advance() }
-                    .buttonStyle(.plain)
-                    .font(.fernlet(.label))
-                    .foregroundStyle(isSubmitting ? Color.bark : Color.onMoss)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(
-                        Color.mossFill.opacity(isSubmitting ? 0.55 : 1),
-                        in: RoundedRectangle(cornerRadius: 14)
-                    )
-                    .disabled(isSubmitting)
+                Button { advance() } label: {
+                    Text("Continue").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(ActionPillButtonStyle(.primary))
+                .disabled(isSubmitting)
                     .accessibilityIdentifier("duress.entry.continue")
             }
         } else {
@@ -885,7 +880,7 @@ private struct DuressPINEntrySheet: View {
                 .dynamicTypeSize(...Self.padTypeSizeCap)
                 .padding(.horizontal, 24)
                 .padding(.bottom, 12)
-                .background(Color.parchment)
+                .background(look?.paper ?? Color.parchment)
                 .onChange(of: current) { _, new in
                     if step == .verify, new.count == pinLength { advance() }
                 }
@@ -1001,14 +996,8 @@ private struct DuressPINEntrySheet: View {
 /// the two files render the same 14pt dots and hoisting them into `FernletUI` for six lines would
 /// put a lock-specific primitive in the design system.
 private func duressPinDots(current: String, total: Int) -> some View {
-    HStack(spacing: 16) {
-        ForEach(0..<total, id: \.self) { index in
-            Circle()
-                .fill(index < current.count ? Color.bark : Color.clear)
-                .frame(width: 14, height: 14)
-                .overlay(Circle().stroke(Color.bark.opacity(0.35), lineWidth: 1.5))
-        }
-    }
+    // The same dots as the passcode sheets, so a duress code is typed exactly as the passcode is.
+    SettingsPinDots(entered: current.count, total: total)
 }
 
 // MARK: - Accessibility naming

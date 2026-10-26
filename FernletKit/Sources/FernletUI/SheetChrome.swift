@@ -53,6 +53,8 @@ public struct SheetHeader<Accessory: View>: View {
     /// Leading informational content shown when there is no Cancel (e.g. a coin balance).
     var accessory: Accessory
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// World build: the framed look's sheet (b1-frame-sheet): paper, ink title, a plain DM Sans subtitle.
+    @Environment(\.fernletFramedLook) private var look
 
     /// The full-slot initializer. Prefer the `Accessory == EmptyView` conveniences below unless
     /// the sheet genuinely leads with information.
@@ -75,6 +77,74 @@ public struct SheetHeader<Accessory: View>: View {
     }
 
     public var body: some View {
+        if let look {
+            framedBody(look)
+        } else {
+            standardBody
+        }
+    }
+
+    /// The framed look's sheet top (`b1-frame-sheet` draft 3, `.sht3`): Cancel top left and Done top
+    /// right, then the title inside the sheet in Fraunces 30, on the sheet's paper. It also asks for the
+    /// sheet's paper and corners and hides the system grabber (where the presenter has not asked for
+    /// it); ``SwiftUI/View/fernletSheet()`` at the sheet's root adds full height, the ink top edge and
+    /// the wooden grabber above this header.
+    private func framedBody(_ look: FernletFramedLook) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if hasControlRow {
+                controlRow
+                    .padding(.horizontal, 14)
+                    .padding(.top, 4)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                if let eyebrow { eyebrowText(eyebrow, color: look.link, font: FernletFramedFont.noteBold) }
+                titleText(look: look)
+                if let subtitle, !dynamicTypeSize.isAccessibilitySize {
+                    subtitleText(subtitle, color: look.dim, font: FernletFramedFont.body, italic: false)
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, hasControlRow ? 4 : 14)
+        }
+        .padding(.bottom, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(look.paper)
+        .modifier(FernletSheetPresentationChrome(fallbackIndicator: nil))
+    }
+
+    /// The eyebrow above the title, read first of the three header texts.
+    private func eyebrowText(_ eyebrow: Text, color: Color, font: Font) -> some View {
+        eyebrow
+            .font(font)
+            .foregroundStyle(color)
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilitySortPriority(12)
+    }
+
+    /// The framed title: Fraunces 30 in the look's ink, the sheet's h1.
+    private func titleText(look: FernletFramedLook) -> some View {
+        title
+            .font(FernletFramedFont.sheetTitle)
+            .foregroundStyle(look.text)
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityHeading(.h1)
+            .accessibilitySortPriority(11)
+    }
+
+    /// The one-line subtitle, last of the header texts.
+    private func subtitleText(_ subtitle: Text, color: Color, font: Font, italic: Bool) -> some View {
+        subtitle
+            .font(font)
+            .italic(italic)
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .accessibilitySortPriority(10)
+    }
+
+    private var standardBody: some View {
         VStack(alignment: .leading, spacing: 6) {
             if hasControlRow { controlRow }
             if let eyebrow {
@@ -90,7 +160,7 @@ public struct SheetHeader<Accessory: View>: View {
             }
             title
                 .font(.fernlet(.displayMedium))
-                .foregroundStyle(Color.bark)
+                .foregroundStyle(look?.text ?? Color.bark)
                 // Two lines, lifted at accessibility sizes as ``ScreenHeader``'s are: the audit
                 // reported every sheet title that carried the limit there as text that may clip.
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
@@ -118,8 +188,8 @@ public struct SheetHeader<Accessory: View>: View {
             if let subtitle, !dynamicTypeSize.isAccessibilitySize {
                 subtitle
                     .font(.fernlet(.bodySmall))
-                    .italic()
-                    .foregroundStyle(Color.slate)
+                    .italic(look == nil)
+                    .foregroundStyle(look?.dim ?? Color.slate)
                     .lineLimit(1)
                     // Last of the three header texts, still ahead of the controls.
                     .accessibilitySortPriority(10)
@@ -129,7 +199,7 @@ public struct SheetHeader<Accessory: View>: View {
         .padding(.top, 10)
         .padding(.bottom, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.parchment)
+        .background(look?.paper ?? Color.parchment)
     }
 
     /// Whether anything occupies the control row — an empty row would just push the title down.
@@ -145,8 +215,9 @@ public struct SheetHeader<Accessory: View>: View {
                 // `FernletUICopy`, not a literal: a LocalizedStringKey written inside this package
                 // resolves against Bundle.main and never sees the module's catalog (§4.0).
                 Button(FernletUICopy.cancel, action: onCancel)
-                    .font(.custom(FernletFontName.dmSansMedium, size: 16, relativeTo: .body))
-                    .foregroundStyle(Color.slate)
+                    .font(look == nil ? .custom(FernletFontName.dmSansMedium, size: 16, relativeTo: .body)
+                                      : FernletFramedFont.sheetControl)
+                    .foregroundStyle(look?.dim ?? Color.slate)
                     .buttonStyle(.plain)
                     .fernletTapTarget()
                     // T2-19 (Full Keyboard Access): Escape leaves the sheet. The escape hatch is
@@ -169,8 +240,9 @@ public struct SheetHeader<Accessory: View>: View {
             Spacer(minLength: 0)
             if let onDone {
                 Button(FernletUICopy.done, action: onDone)
-                    .font(.custom(FernletFontName.dmSansMedium, size: 16, relativeTo: .body))
-                    .foregroundStyle(Color.moss.opacity(doneDisabled ? 0.45 : 1))
+                    .font(look == nil ? .custom(FernletFontName.dmSansMedium, size: 16, relativeTo: .body)
+                                      : FernletFramedFont.button)
+                    .foregroundStyle((look?.link ?? Color.moss).opacity(doneDisabled ? 0.45 : 1))
                     .buttonStyle(.plain)
                     .disabled(doneDisabled)
                     .fernletTapTarget()

@@ -15,6 +15,12 @@ extension FernletStore {
         editGuidedRun { $0.setActualReps(reps, forExercise: exerciseID) }
     }
 
+    /// Each set's reps and weight, and which are drop sets (`b3-edit-reps` draft 2).
+    func guidedSetActualSets(_ rows: [GuidedRepsRow], exerciseID: UUID) {
+        let sets = GuidedRepsRow.saved(rows)
+        editGuidedRun { $0.setActualSets(reps: sets.reps, weights: sets.weights, drops: sets.drops, forExercise: exerciseID) }
+    }
+
     /// The optional effort tap; nil clears it.
     func guidedSetEffort(_ effort: ExerciseEffort?, exerciseID: UUID) {
         editGuidedRun { $0.setEffort(effort?.rawValue, forExercise: exerciseID) }
@@ -100,12 +106,14 @@ struct GuidedLoadPanel: View {
     let exercise: GuidedWorkoutRunState.Exercise
     let isLastSet: Bool
     @State private var editingReps = false
+    /// World build (`b3-runner-set`): a framed card, the weight centred between framed − and +.
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
         if let tracking = exercise.tracking {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: look == nil ? .leading : .center, spacing: 14) {
                 if let cue = GuidedCalibrationCue.text(for: tracking.calibrationRaw) {
-                    cue.font(.fernlet(.body)).foregroundStyle(Color.bark).fernletWrappingText()
+                    cue.font(.fernlet(.body)).foregroundStyle(look?.text ?? Color.bark).fernletWrappingText()
                 }
                 if tracking.isLoadable {
                     GuidedWeightPicker(store: store, exerciseID: exercise.id, tracking: tracking)
@@ -129,9 +137,9 @@ struct GuidedLoadPanel: View {
                     GuidedEditRepsButton(store: store, exercise: exercise, label: Text("Edit reps"))
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: look == nil ? .leading : .center)
             .padding(16)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 16))
+            .modifier(MoveInsetCardFrame(cornerRadius: look == nil ? 16 : 14))
         }
     }
 }
@@ -163,18 +171,22 @@ struct GuidedWeightPicker: View {
     var store: FernletStore
     let exerciseID: UUID
     let tracking: GuidedWorkoutRunState.Tracking
+    /// World build (`b3-runner-set`): the weight in big Fraunces between framed − and + squares.
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: look == nil ? .leading : .center, spacing: 8) {
             guide
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.labelSmall) : FernletFramedFont.body)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .fernletWrappingText()
             HStack(spacing: 16) {
                 stepButton(systemImage: "minus", label: Text("Lighter"), identifier: "workout.guided.weight.lighter", direction: -1)
                 selectedText
-                    .font(.fernlet(.stat))
-                    .foregroundStyle(Color.bark)
+                    .font(look == nil ? .fernlet(.stat) : .custom(FernletFontName.frauncesSemiBold, size: 40, relativeTo: .largeTitle))
+                    .foregroundStyle(look?.text ?? Color.bark)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
                     .frame(minWidth: 96)
                     .accessibilityIdentifier("workout.guided.weight")
                 stepButton(systemImage: "plus", label: Text("Heavier"), identifier: "workout.guided.weight.heavier", direction: 1)
@@ -220,11 +232,19 @@ struct GuidedWeightPicker: View {
             store.guidedSelectWeight(next, exerciseID: exerciseID)
             GuidedTouchCue.play(GuidedTouchCue.weightStep(before: before, after: runWeight()))
         } label: {
-            Image(systemName: systemImage)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.onMoss)
-                .frame(width: 44, height: 44)
-                .background(Color.mossFill, in: Circle())
+            if let look {
+                Text(verbatim: direction < 0 ? "\u{2212}" : "+")
+                    .font(FernletFramedFont.stepperGlyph)
+                    .foregroundStyle(look.text)
+                    .frame(width: 44, height: 44)
+                    .fernletFramed(look, cornerRadius: 9)
+            } else {
+                Image(systemName: systemImage)
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.onMoss)
+                    .frame(width: 44, height: 44)
+                    .background(Color.mossFill, in: Circle())
+            }
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
@@ -326,19 +346,22 @@ struct GuidedEditRepsButton: View {
     let label: Text
     @State private var editing = false
 
+    @Environment(\.fernletFramedLook) private var look
+
     var body: some View {
         Button { editing = true } label: {
             label
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.moss)
-                .underline()
+                .font(look == nil ? .fernlet(.label) : FernletFramedFont.sheetControl)
+                .foregroundStyle(look?.link ?? Color.moss)
+                .underline(look == nil)
         }
         .buttonStyle(.plain)
+        .fernletTapTarget()
         .accessibilityIdentifier("workout.guided.editReps")
         .sheet(isPresented: $editing) {
+            // World build: full height in the sheet frame, like every sheet.
             GuidedRepsEditor(store: store, exercise: exercise)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+                .fernletSheet()
         }
     }
 }
@@ -366,12 +389,76 @@ struct GuidedPreviousLiftFix: View {
     }
 }
 
-/// Per-set reps for one lift. Only the sets that went differently need touching.
+/// One set in the reps editor (`b3-edit-reps` draft 2): its reps, its weight as typed, and whether it is
+/// a drop set (a lighter set straight after the one before it, marked ↳).
+struct GuidedRepsRow: Identifiable, Equatable {
+    var id = UUID()
+    var reps: Int
+    /// The weight as typed; blank repeats the set above, like the Log sheet's set rows.
+    var weight: String
+    var isDrop = false
+
+    /// The editor's rows for a tracked lift: the saved reps (or the target for each set), each at its
+    /// saved weight (or the selected one), with the saved drop marks.
+    static func rows(for tracking: GuidedWorkoutRunState.Tracking?, sets: Int) -> [GuidedRepsRow] {
+        let target = tracking?.targetReps ?? 0
+        let reps = tracking?.actualReps
+            ?? Array(repeating: target, count: min(max(1, sets), GuidedWorkoutRunState.Tracking.maxSets))
+        let weights = tracking?.actualWeights
+        let drops = tracking?.actualDrops
+        return reps.prefix(GuidedWorkoutRunState.Tracking.maxSets).enumerated().map { index, count in
+            let weight = weights.flatMap { $0.indices.contains(index) ? $0[index] : nil } ?? tracking?.selected
+            let drop = drops.flatMap { $0.indices.contains(index) ? $0[index] : nil } ?? false
+            return GuidedRepsRow(reps: count, weight: SetRowDraft.text(for: weight), isDrop: drop)
+        }
+    }
+
+    /// The rows with a drop set added under the last one: its reps, and about three quarters of its
+    /// weight rounded down to the lift's step (never below one step). Unchanged at the set cap.
+    static func addingDrop(to rows: [GuidedRepsRow], step: Double?) -> [GuidedRepsRow] {
+        guard rows.count < GuidedWorkoutRunState.Tracking.maxSets, let last = rows.last else { return rows }
+        let heavier = filledWeights(rows).last ?? nil
+        let unit = max(step ?? 5, 0.5)
+        let lighter = heavier.map { max(unit, ($0 * 0.75 / unit).rounded(.down) * unit) }
+        return rows + [GuidedRepsRow(reps: last.reps, weight: SetRowDraft.text(for: lighter), isDrop: true)]
+    }
+
+    /// Each row's weight, a blank one repeating the row above (nil until any row has one).
+    static func filledWeights(_ rows: [GuidedRepsRow]) -> [Double?] {
+        var carried: Double?
+        return rows.prefix(GuidedWorkoutRunState.Tracking.maxSets).map { row in
+            carried = SetRowDraft.weight(from: row.weight) ?? carried
+            return carried
+        }
+    }
+
+    /// What the editor saves: the reps, each set's weight (0 where none was ever given), the drop marks.
+    static func saved(_ rows: [GuidedRepsRow]) -> (reps: [Int], weights: [Double], drops: [Bool]) {
+        let capped = Array(rows.prefix(GuidedWorkoutRunState.Tracking.maxSets))
+        return (capped.map { min(max($0.reps, 0), 50) }, filledWeights(capped).map { $0 ?? 0 }, capped.map(\.isDrop))
+    }
+
+    /// The row's set number, counting only the sets that are not drop sets; nil for a drop set.
+    static func setNumber(at index: Int, in rows: [GuidedRepsRow]) -> Int? {
+        guard rows.indices.contains(index), !rows[index].isDrop else { return nil }
+        return rows.prefix(index + 1).filter { !$0.isDrop }.count
+    }
+
+    /// The row's name: "Set 3" (``setNumber(at:in:)``), or "Drop set".
+    static func label(at index: Int, in rows: [GuidedRepsRow]) -> Text {
+        guard let number = setNumber(at: index, in: rows) else { return Text("Drop set") }
+        return Text("Set \(number)")
+    }
+}
+
+/// Per-set reps and weight for one lift, and drop sets (`b3-edit-reps` draft 2). Only the sets that
+/// went differently need touching.
 struct GuidedRepsEditor: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
     let exercise: GuidedWorkoutRunState.Exercise
-    @State private var reps: [Int]
+    @State private var rows: [GuidedRepsRow]
+    @Environment(\.fernletFramedLook) private var look
 
     /// Reps a set may be edited to.
     static let repsRange = 0...50
@@ -379,10 +466,11 @@ struct GuidedRepsEditor: View {
     init(store: FernletStore, exercise: GuidedWorkoutRunState.Exercise) {
         self.store = store
         self.exercise = exercise
-        let target = exercise.tracking?.targetReps ?? 0
-        _reps = State(initialValue: exercise.tracking?.actualReps
-            ?? Array(repeating: target, count: min(max(1, exercise.sets), GuidedWorkoutRunState.Tracking.maxSets)))
+        _rows = State(initialValue: GuidedRepsRow.rows(for: exercise.tracking, sets: exercise.sets))
     }
+
+    /// Whether the lift takes a load, so each set shows its weight and a drop set can be added.
+    private var takesLoad: Bool { exercise.tracking?.isLoadable == true }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -390,25 +478,126 @@ struct GuidedRepsEditor: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Change only the sets that went differently.")
-                        .font(.fernlet(.bubble))
-                        .foregroundStyle(Color.slate)
+                        .font(look == nil ? .fernlet(.bubble) : FernletFramedFont.body)
+                        .foregroundStyle(look?.dim ?? Color.slate)
                         .fernletWrappingText()
-                    ForEach(reps.indices, id: \.self) { index in
-                        Stepper(value: $reps[index], in: Self.repsRange) {
-                            Text("Set \(index + 1): \(reps[index]) reps")
-                                .foregroundStyle(Color.bark)
+                    FernletFramedSection {
+                        ForEach($rows) { $row in
+                            let index = rows.firstIndex { $0.id == row.id } ?? 0
+                            GuidedRepsRowEditor(row: $row, label: GuidedRepsRow.label(at: index, in: rows), number: index + 1,
+                                                showsWeight: takesLoad, unit: exercise.tracking?.unitRaw,
+                                                onRemove: row.isDrop ? { rows.removeAll { $0.id == row.id } } : nil)
                         }
-                        .accessibilityIdentifier("workout.guided.editReps.set\(index + 1)")
+                    }
+                    if takesLoad && rows.count < GuidedWorkoutRunState.Tracking.maxSets {
+                        Button { rows = GuidedRepsRow.addingDrop(to: rows, step: exercise.tracking?.step) } label: {
+                            HStack(spacing: 8) {
+                                FernletIcon(.plus, scale: 2)
+                                Text("Add a drop set")
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(ActionPillButtonStyle(.secondary))
+                        .accessibilityHint(Text("Adds a lighter set under the last one."))
+                        .accessibilityIdentifier("workout.guided.editReps.addDrop")
                     }
                 }
                 .padding(20)
             }
             SheetSaveBar(label: "Save") {
-                store.guidedSetActualReps(reps, exerciseID: exercise.id)
+                store.guidedSetActualSets(rows, exerciseID: exercise.id)
                 dismiss()
             }
         }
-        .background(Color.parchment)
+        .background((look?.paper ?? Color.parchment).ignoresSafeArea())
         .tint(Color.moss)
+    }
+}
+
+/// One set's row in the reps editor: "Set 1: 10 reps" (or "↳ Drop set: 8 reps"), the framed − + stepper,
+/// and its weight with the unit; a drop set can be removed. Stacks at accessibility sizes.
+private struct GuidedRepsRowEditor: View {
+    @Binding var row: GuidedRepsRow
+    let label: Text
+    let number: Int
+    let showsWeight: Bool
+    let unit: String?
+    let onRemove: (() -> Void)?
+    @Environment(\.fernletFramedLook) private var look
+
+    /// The lift's unit (pounds unless the run says kilograms).
+    private var loadUnit: LoadUnit { unit == LoadUnit.kg.rawValue ? .kg : .lb }
+    private var unitSymbol: String { SetLoadFormat.symbol(loadUnit) }
+    /// The unit as VoiceOver says it ("pounds").
+    private var unitSpoken: String { SetLoadFormat.spokenName(loadUnit) }
+
+    var body: some View {
+        Group {
+            if row.isDrop && look != nil {
+                // World build (`b3-edit-reps` draft 2): a drop set's line sits over its controls, so its ✕
+                // never squeezes the words into three lines.
+                VStack(alignment: .leading, spacing: 6) {
+                    rowLabel
+                    controls.frame(maxWidth: .infinity, alignment: .trailing)
+                }
+            } else {
+                AdaptiveStack(spacing: 10, horizontalAlignment: .leading) {
+                    rowLabel
+                    controls
+                }
+            }
+        }
+        .padding(.vertical, 8)
+    }
+
+    /// "Set 1: 10 reps", or "↳ Drop set: 8 reps"; the stepper speaks it, so the words are hidden.
+    private var rowLabel: some View {
+        HStack(spacing: 4) {
+            if row.isDrop { Text(verbatim: "\u{21B3}").accessibilityHidden(true) }
+            Text("\(label): \(row.reps) reps")
+        }
+        // The kit's 15-pt strong face (`b3-edit-reps` draft 2).
+        .font(look == nil ? .fernlet(.body) : MoveFont.body)
+        .foregroundStyle(look?.text ?? Color.bark)
+        .padding(.leading, row.isDrop ? 16 : 0)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityHidden(true)
+    }
+
+    /// The reps stepper, the weight and its unit, and a drop set's ✕.
+    private var controls: some View {
+        HStack(spacing: 8) {
+            FernletStepper("Set \(number) reps", value: $row.reps, in: GuidedRepsEditor.repsRange, step: 1)
+                .accessibilityLabel(Text("\(label): \(row.reps) reps"))
+                .accessibilityIdentifier("workout.guided.editReps.set\(number)")
+            if showsWeight { weightField }
+            if let onRemove {
+                Button(action: onRemove) { FernletIcon(.close, scale: 2).frame(width: 30, height: 44) }
+                    .buttonStyle(.plain)
+                    .fernletIconButton("Remove drop set")
+                    .accessibilityIdentifier("workout.guided.editReps.removeDrop")
+            }
+        }
+        // The controls take their full width first; the row's words wrap instead (the unit was
+        // squeezed out when the two shared the row evenly).
+        .layoutPriority(1)
+    }
+
+    /// The set's weight, typed on the decimal pad, with the unit after it.
+    private var weightField: some View {
+        HStack(spacing: 6) {
+            TextField("Weight", text: $row.weight, prompt: .fieldPrompt("Weight"))
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                // Under the look the framed field's 14-pt insets need a little more room for "Weight".
+                .sheetTextInput(font: look == nil ? .fernlet(.label) : MoveFont.body)
+                .frame(width: look == nil ? 70 : 78)
+                .accessibilityLabel(Text("\(label) weight, \(unitSpoken)"))
+                .accessibilityIdentifier("workout.guided.editReps.weight\(number)")
+            Text(verbatim: unitSymbol)
+                .font(.fernlet(.label))
+                .foregroundStyle(look?.dim ?? Color.slate)
+                .accessibilityHidden(true)
+        }
     }
 }

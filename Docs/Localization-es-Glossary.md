@@ -239,6 +239,7 @@ Say what happened and what to do next, with Fernlet as the subject rather than a
 | coins · shop | monedas · tienda |  |
 | hearts | corazones |  |
 | creation studio | estudio de creación |  |
+| stamp · stamp book | sello · álbum de sellos | The silly stats' stamps (draft, 2026-10-22, needs the owner's review): the kind pressed into a passport or an album, not a postage stamp. Each stamp's name is a joke drafted to keep the joke (“Encore” → “¡Otra, otra!”, “Small Step” → “Un pequeño paso”), and a name that would describe the user (“Floss Boss”) becomes one that doesn't (“Hilo de oro”), so no stamp needs gender agreement. |
 
 ### Buttons and common UI
 

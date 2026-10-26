@@ -67,9 +67,10 @@ struct LogIntimacySheet: View {
                         dateField
                         noteField
 
-                        Text("Add who was involved and any details you want to remember. This note stays encrypted on this device.")
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
+                        // World (b3-log-intimacy): the encryption note as a framed notice with a pixel lock.
+                        FernletNotice(text: Text("Add who was involved and any details you want to remember. This note stays encrypted on this device.")) {
+                            FernletIcon(.lock, scale: 2)
+                        }
 
                         appleHealthField
                     }
@@ -87,7 +88,7 @@ struct LogIntimacySheet: View {
                 if savedWithCaveat { dismiss() } else { Task { await save() } }
             }
         }
-        .background(Color.parchment)
+        .fernletSheetStyle()
         // A swipe-down used to throw away a typed private note with no warning. The guard also
         // renders the pinned template header (Cancel + title).
         .fernletDraftGuard(isDirty: isDirty, title: "Log intimacy") { dismiss() }
@@ -96,18 +97,13 @@ struct LogIntimacySheet: View {
         .captureProtected(surface: "logIntimacy")
     }
 
-    /// The event's date and time, never in the future.
+    /// The event's date and time, never in the future: the framed two-half button (`ref-int-date`,
+    /// `ref-int-time`) under its section label, the date opening iOS's calendar and the time its wheels.
+    /// Apple Health gets the picked date and time (``save()`` writes `eventDate`).
     private var dateField: some View {
         SheetField("Date and time") {
-            DatePicker("Date and time", selection: $eventDate, in: ...Date())
-                .labelsHidden()
+            PrivateDateTimeButton(date: $eventDate, latest: Date())
                 .onChange(of: eventDate) { _, _ in dateAdjusted = true }
-                .tint(Color.moss)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
         }
     }
 
@@ -130,12 +126,15 @@ struct LogIntimacySheet: View {
     private var appleHealthField: some View {
         SheetField("Apple Health") {
             VStack(alignment: .leading, spacing: 10) {
-                Label(
-                    writesToHealthKit ? "Apple Health sync is on" : "Apple Health sync is off",
-                    systemImage: writesToHealthKit ? "heart.text.square.fill" : "heart.slash"
-                )
-                .font(.fernlet(.label))
-                .foregroundStyle(writesToHealthKit ? Color.moss : Color.slate)
+                // World (b3-log-intimacy): the pixel heart beside the sync state.
+                Label {
+                    Text(writesToHealthKit ? "Apple Health sync is on" : "Apple Health sync is off")
+                } icon: {
+                    WorldSpriteView(sprite: WorldSprites.heartSm, scale: 2,
+                                    tint: writesToHealthKit ? nil : WorldPalette.dim)
+                }
+                .font(FernletFramedFont.rowTitleBold)
+                .foregroundStyle(writesToHealthKit ? WorldPalette.mossInk : WorldPalette.dim)
 
                 if writesToHealthKit {
                     FlowLayout(spacing: 8) {
@@ -150,16 +149,16 @@ struct LogIntimacySheet: View {
                 }
 
                 Text(healthKitSummary)
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.field)
+                    .foregroundStyle(WorldPalette.dim)
                     .fernletWrappingText()
             }
             // Full width like the date and note fields above it — the card used to hug its text and
             // stop short of the right edge.
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+            // World: the framed card of the design language.
+            .fernletFramed(WorldTheme.framedLook, fill: WorldPalette.paper, cornerRadius: FernletFramedLook.cardRadius)
         }
     }
 

@@ -104,7 +104,9 @@ enum UXTestApp {
         XCTContext.runActivity(named: "Wait for the launch overlay to hand over") { activity in
             let deadline = Date().addingTimeInterval(launchHandoverTimeout)
             func remaining() -> TimeInterval { max(deadline.timeIntervalSinceNow, 1) }
-            let homeTab = app.buttons["Home"].firstMatch
+            // World build: Home is the map, whose status plate is the first control to hand over
+            // (there is no "Home" tab button any more; the item bar names the other five).
+            let homeTab = app.buttons["world.statusPlate"].firstMatch
             let overlay = app.descendants(matching: .any)[launchOverlayIdentifier]
             let tabBarUp = homeTab.exists || homeTab.waitForExistence(timeout: remaining())
             let homeReady = tabBarUp && (sheetID != nil || homeTab.isHittable

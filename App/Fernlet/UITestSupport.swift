@@ -71,6 +71,12 @@ enum UITestSupport {
     /// launch, so a relaunch without it puts the gate back.
     static var enableCoachExchange: Bool { env["FERNLET_UI_TEST_COACH_EXCHANGE"] == "1" }
 
+    /// `FERNLET_UI_TEST_WEB_LOOKUP=1` — seed the demo persona with AI on and web nutrition lookup
+    /// allowed (asked for and consented), so Log meal's Import helper (`b3-meal`'s Recent / Import / By
+    /// hand row, shown always since form answer 43) opens without asking first. Consumed by
+    /// `FernletStore.seedDemoContent`; applied only when set, so other suites keep the lane closed.
+    static var enableWebNutritionLookup: Bool { env["FERNLET_UI_TEST_WEB_LOOKUP"] == "1" }
+
     /// `FERNLET_UI_TEST_HEALTH_SHARING_OFF=1` — turn Fernlet's master Health switch and its Cycle
     /// tracking switch off at launch (the shipped defaults), so a test that needs cycle sharing OFF
     /// gets it on any simulator. The preferences keychain outlives the app, and two Settings suites
@@ -114,11 +120,101 @@ enum UITestSupport {
     /// capture-protection UI tests. Consumed by `JournalView` (DEBUG-only presenter).
     static var shouldOpenDayEditSheet: Bool { env["FERNLET_UI_TEST_OPEN_DAY_EDIT"] == "1" }
 
+    /// `FERNLET_UI_TEST_PRIVATE_SECTION=journal|cycle|worryBox|places` — open the Private panel on that page
+    /// (World screenshots of Batch 2's Private tabs; the picker is otherwise only reachable by a tap).
+    /// Consumed by `PrivateHubView`. An unknown or hidden page leaves the selection alone.
+    static var initialPrivateHubSection: PrivateHubSection? {
+        switch env["FERNLET_UI_TEST_PRIVATE_SECTION"] {
+        case "journal": .journal
+        case "cycle": .cycle
+        case "worryBox": .worryBox
+        case "places": .places
+        default: nil
+        }
+    }
+
+    /// `FERNLET_UI_TEST_PRIVATE_DAY=1` — push today's day page from the Private page that opens
+    /// (Journal's day, or Cycle's day), for the World screenshots of `b2-journal-day` and
+    /// `b2-cycle-day`. Consumed by `JournalView` and `CycleTrackerView`.
+    static var opensPrivateDayPage: Bool { env["FERNLET_UI_TEST_PRIVATE_DAY"] == "1" }
+
+    /// `FERNLET_UI_TEST_SEED_PIN=1` — after the app-lock reset (only with
+    /// `FERNLET_UI_TEST_RESET_APP_LOCK=1`), configure a throwaway 6-digit test PIN, so the NEXT launch
+    /// (without the reset) meets the passcode pad on the Private panel (World screenshot of
+    /// `b2-private-pin`). Consumed by `UITestPrivateHubSeed`; the PIN lives there.
+    static var seedsTestPIN: Bool { env["FERNLET_UI_TEST_SEED_PIN"] == "1" }
+
+    /// `FERNLET_UI_TEST_TODAY_PAGE=trends|bodySignals` — push that page in the World Today panel once
+    /// it opens (with `FERNLET_UI_TEST_WORLD_PANEL=today`), for the screenshots of `b2-trends` and
+    /// `b2-stress`. Consumed by `HomeView`.
+    static var initialTodayPage: String? { env["FERNLET_UI_TEST_TODAY_PAGE"] }
+
     /// `FERNLET_UI_TEST_SEED_STUDIO_CANVAS=1` — open the Creation Studio's editor with a pre-painted
     /// canvas. XCUITest can't drive the custom zoomable canvas's paint gesture, and "Next" stays disabled
     /// while the canvas is blank, so without this the naming / shop-listing confirmation step (and its
     /// moderation alert) is unreachable from a UI test.
     static var shouldSeedStudioCanvas: Bool { env["FERNLET_UI_TEST_SEED_STUDIO_CANVAS"] == "1" }
+
+    /// `FERNLET_UI_TEST_WORLD_MAP_HARNESS=1` — render the World map seam on its own
+    /// (`WorldMapHarnessView`: fixture fog and a fixture trail, no store load, no location), for the
+    /// World app plan's step 1a screenshots. Consumed by `FernletApp`.
+    static var shouldOpenWorldMapHarness: Bool { env["FERNLET_UI_TEST_WORLD_MAP_HARNESS"] == "1" }
+
+    /// `FERNLET_UI_TEST_WORLD_GALLERY=rows|push|push2|controls|sheet|legacySheet|toolbarSheet|keyboard|focus`
+    /// — render the World foundation gallery (`WorldFoundationGallery`) at that scene in place of the
+    /// whole app: every framed primitive, no store load. Consumed by `FernletApp`.
+    static var worldFoundationGallery: String? { env["FERNLET_UI_TEST_WORLD_GALLERY"] }
+
+    /// `FERNLET_UI_TEST_FOOD_SCREEN=meal|macros|review|adjust|serving|recent|targets|chooser|veil|camera|cameraOff|remember|remembered|labelScan|productReview|mealPhoto`
+    /// — open that Food screen over the Food panel with fixtures (`FoodLaneScreen`): the World build's
+    /// screenshots of sheets a simulator cannot reach by tapping. Consumed by `FoodView`.
+    static var foodLaneScreen: String? { env["FERNLET_UI_TEST_FOOD_SCREEN"] }
+
+    /// `FERNLET_UI_TEST_WORLD_MAP_PLAIN=1` — the harness draws the plain (offline) base map instead of
+    /// Apple's.
+    static var worldMapHarnessPlain: Bool { env["FERNLET_UI_TEST_WORLD_MAP_PLAIN"] == "1" }
+
+    /// `FERNLET_UI_TEST_WORLD_MAP_PHASE=dawn|day|dusk|night` — the harness's fixed time of day (the
+    /// live clock when absent or unreadable).
+    /// `FERNLET_UI_TEST_WORLD_PANEL=today|food|move|log|friends|personal|settings` — open that World
+    /// panel once the launch finishes (World app screenshots; a panel is only reachable by a tap).
+    /// Consumed by `ContentView`'s launch hand-over, beside ``initialSheet``.
+    static var initialWorldPanel: WorldPanel? {
+        env["FERNLET_UI_TEST_WORLD_PANEL"].flatMap(WorldPanel.init(rawValue:))
+    }
+
+    static var worldMapHarnessPhase: CompanionDayPhase? {
+        switch env["FERNLET_UI_TEST_WORLD_MAP_PHASE"] {
+        case "dawn": .dawn
+        case "day": .day
+        case "dusk": .dusk
+        case "night": .night
+        default: nil
+        }
+    }
+
+    /// `FERNLET_UI_TEST_WORLD_HOME=<comma list>` — put the World Home into the states the approved
+    /// Batch 1 designs draw, for screenshots: `offline`, `loading`, `approx` (the map's notices, display
+    /// only), `rain`, `snow` (the weather layer), `sick` (marks today unwell on the demo seed; any list without it, such as `well`,
+    /// clears it), `space`
+    /// (the first saved workout space stands in for a pinned one), `pin` (its marker near the
+    /// companion), `friend` (a nearby friend, "Sam"), `solo` / `session` (the quick start with the
+    /// camera of your own, now on by default, or as if in a session with Sam and Rae; display only),
+    /// `qs` (opens the quick-start card), `walk` (starts Walk together), `hold` (the companion's line
+    /// stays up instead of fading after six seconds), `closeup` (opens the companion up close), `label`
+    /// (the blue button's action word shows and stays), `intro` (the map intro may show under the test
+    /// harness, which otherwise holds it back), `hint` (the one-time "Tap me to say hi!" may show), `run`
+    /// (a saved run route starts here, display only), `photo` (three solo photos stand in beside the
+    /// companion as a photo marker, display only, and only where a photo taken there would keep its place),
+    /// `namesOffline` (Private's Places page gets no place
+    /// names back, as offline), and round 6's places scenes (`homes`, `hotel`, `greeting`, `asleep`, `places`,
+    /// `restaurant`, `refused`, `where`, `tagSheet`, `homeSheet`, `photoSheet`; ``WorldPlacesTestScenes``, display
+    /// only). Consumed by `WorldMapHome`, `WorldMapCompanion`,
+    /// `WorldLocationIntroPresenter`, the blue button's label and `FernletStore+WorldPlaces`;
+    /// `FERNLET_UI_TEST_WORLD_MAP_PHASE` fixes its time of day too.
+    static var worldHomeScenes: Set<String> {
+        Set((env["FERNLET_UI_TEST_WORLD_HOME"] ?? "").split(separator: ",").map(String.init))
+    }
 
     /// `FERNLET_MESH_CONTINUATION=refused|expired|endedBySystem` — seed `FernletStore`'s
     /// background-continuation projection at launch, so the Friends tab renders P8 item 7's card.
@@ -198,13 +294,25 @@ enum UITestSupport {
     static var hidePeriodSurface: Bool { false }
     static var hideIntimacySurface: Bool { false }
     static var enableCoachExchange: Bool { false }
+    static var enableWebNutritionLookup: Bool { false }
     static var pinsHealthSharingOff: Bool { false }
     static var initialSheet: FernletSheet? { nil }
     static var forceCaptureCover: Bool { false }
     static var shouldOpenJournalEditor: Bool { false }
     static var shouldOpenDayEditSheet: Bool { false }
+    static var initialPrivateHubSection: PrivateHubSection? { nil }
+    static var opensPrivateDayPage: Bool { false }
+    static var seedsTestPIN: Bool { false }
+    static var initialTodayPage: String? { nil }
     static var shouldOpenCustomize: Bool { false }
     static var shouldSeedStudioCanvas: Bool { false }
+    static var shouldOpenWorldMapHarness: Bool { false }
+    static var worldFoundationGallery: String? { nil }
+    static var foodLaneScreen: String? { nil }
+    static var worldMapHarnessPlain: Bool { false }
+    static var worldMapHarnessPhase: CompanionDayPhase? { nil }
+    static var worldHomeScenes: Set<String> { [] }
+    static var initialWorldPanel: WorldPanel? { nil }
     static var seededMeshContinuationCard: MeshContinuationCardKind? { nil }
     static var seededHeldSessionPhotoCount: Int? { nil }
     static func seedHeldSessionPhotosIfRequested(on photos: MeshSessionPhotos) {}
@@ -235,6 +343,9 @@ extension FernletSheet {
         case "sillyStats":        self = .sillyStats
         case "stressExplainer":   self = .stressExplainer
         case "firstAid":          self = .firstAid(nil)
+        case "firstAid.breathing": self = .firstAid(.breathing)
+        case "firstAid.grounding": self = .firstAid(.grounding)
+        case "firstAid.worryBox":  self = .firstAid(.worryBox)
         case "logPeriod":         self = .logPeriod(targetDate: nil, editingRecord: nil)
         case "logIntimacy":       self = .logIntimacy
         case "editRecipe":        self = .editRecipe(Self.uiTestRecipeFixture())

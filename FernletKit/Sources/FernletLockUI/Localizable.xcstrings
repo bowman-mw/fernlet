@@ -757,6 +757,24 @@
         }
       }
     },
+    "lock.reset.confirm.whereYouveBeen" : {
+      "comment" : "Last line of the reset app lock confirmation: the reset also deletes the 30-day timeline of places kept in Private (its Where you've been page), for good; no backup restores it. Owner-approved wording, 2026-10-25. Keep it identical to Settings' Reset app lock confirmation.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This also deletes the places you've been."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esto también elimina los lugares donde has estado."
+          }
+        }
+      }
+    },
     "lock.reset.rebuildFailed.message" : {
       "comment" : "Message of the alert shown when the reset destroyed the passcode and the notes but could not recreate the empty sealed store. Both halves are true and neither may be dropped: the data really is gone, and the app needs relaunching. 'Fernlet' is the app's name.",
       "extractionState" : "extracted_with_value",

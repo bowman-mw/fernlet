@@ -27,73 +27,95 @@ struct StressExplainerSheet: View {
     var assessment: StressAssessment?
     /// Set by ContentView to chain into the First Aid sheet (dismiss-then-represent).
     var onFirstAid: (() -> Void)? = nil
+    /// World (`b2-stress`): pushed under the Today panel's plate ("‹ Today  Body signals  ✕") instead
+    /// of presented as a sheet with Done.
+    var isPushed = false
     @Environment(\.dismiss) private var dismiss
     /// The user's term of address (the app root sets it from the body profile), for the lines that
     /// describe the user: the tense reading titles and "marked yourself sick".
     @Environment(\.fernletTermOfAddress) private var termOfAddress
 
     var body: some View {
-        VStack(spacing: 0) {
-            SheetHeader(title: "Body signals", onDone: { dismiss() })
-            ScrollView {
-                readingContent
+        if isPushed {
+            ScrollView { readingContent }
+                .fernletPageBackground()
+                .fernletPushedPage(LocalizedStringResource("Body signals"))
+        } else {
+            VStack(spacing: 0) {
+                SheetHeader(title: "Body signals", onDone: { dismiss() })
+                ScrollView {
+                    readingContent
+                }
             }
+            .background(Color.parchment)
         }
-        .background(Color.parchment)
     }
 
     /// The scrolling half: the current-reading card, the First Aid offer, and the two prose
-    /// sections (how it's estimated, and the not-medical note).
+    /// sections (how it's estimated, and the not-medical note), each a framed card in the World look.
     private var readingContent: some View {
         VStack(alignment: .leading, spacing: 18) {
-            VStack(alignment: .leading, spacing: 8) {
-                currentReadingTitle
-                    .font(.fernlet(.header))
-                    .foregroundStyle(Color.bark)
-                Text(currentReadingBody)
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-                if let annotationLine {
-                    Text(annotationLine)
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-                }
-                if let confidenceLine {
-                    Text(confidenceLine)
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-                }
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-
+            readingCard
             firstAidLink
-
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel("How Fernlet estimates this")
-                AddressedText("Fernlet quietly compares your recent heart rate variability and resting heart rate with your own usual range from the last several weeks — never anyone else's numbers. Days you moved a lot, marked yourself sick, or showed signs of coming down with something are taken into account so a hard workout doesn't read as a hard week.")
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-                Text("Everything is estimated and stored on this device only.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
+                FernletCard {
+                    VStack(alignment: .leading, spacing: 8) {
+                        AddressedText("Fernlet quietly compares your recent heart rate variability and resting heart rate with your own usual range from the last several weeks — never anyone else's numbers. Days you moved a lot, marked yourself sick, or showed signs of coming down with something are taken into account so a hard workout doesn't read as a hard week.")
+                            .font(FernletFramedFont.field)
+                            .foregroundStyle(WorldPalette.dim)
+                            .fernletWrappingText()
+                        Text("Everything is estimated and stored on this device only.")
+                            .font(FernletFramedFont.body)
+                            .foregroundStyle(WorldPalette.dim)
+                            .fernletWrappingText()
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
-
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel("A gentle note")
-                Text("This is a wellbeing reflection, not a medical measurement, diagnosis, or advice. If you're worried about how you feel, please talk to a health professional you trust.")
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.slate)
+                FernletCard {
+                    Text("This is a wellbeing reflection, not a medical measurement, diagnosis, or advice. If you're worried about how you feel, please talk to a health professional you trust.")
+                        .font(FernletFramedFont.field)
+                        .foregroundStyle(WorldPalette.dim)
+                        .fernletWrappingText()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    /// The current reading (`b2-stress`): a sage card in the kit's ink frame, the reading as a
+    /// Fraunces title over today's lines.
+    private var readingCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            currentReadingTitle
+                .font(FernletFramedFont.sheetTitle)
+                .foregroundStyle(WorldPalette.bark)
+                .accessibilityAddTraits(.isHeader)
+            Text(currentReadingBody)
+                .font(FernletFramedFont.field)
+                .foregroundStyle(WorldPalette.dim)
+                .fernletWrappingText()
+            if let annotationLine {
+                Text(annotationLine)
+                    .font(FernletFramedFont.field)
+                    .foregroundStyle(WorldPalette.dim)
+                    .fernletWrappingText()
+            }
+            if let confidenceLine {
+                Text(confidenceLine)
+                    .font(FernletFramedFont.body)
+                    .foregroundStyle(WorldPalette.dim)
                     .fernletWrappingText()
             }
         }
-        .padding(20)
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .fernletFramed(WorldTheme.framedLook, fill: WorldPalette.sage, cornerRadius: FernletFramedLook.cardRadius)
     }
 
     /// A soft door to the First Aid tools — worded as an offer, shown whenever the host wired it.
@@ -103,29 +125,30 @@ struct StressExplainerSheet: View {
             Button {
                 onFirstAid()
             } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "heart.circle")
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(Color.moss)
-                        .frame(width: 34, height: 34)
-                        .background(Color.moss.opacity(0.14), in: Circle())
+                HStack(spacing: 14) {
+                    // World (b2-stress): the pixel aid heart (its tile bare inside the card), the pixel chevron.
+                    FernletIconTile(size: 48) {
+                        WorldSpriteView(sprite: WorldSprites.aid, scale: 3)
+                    }
+                    .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Something for right now?")
-                            .font(.fernlet(.label))
-                            .foregroundStyle(Color.bark)
+                            .font(FernletFramedFont.rowTitleBold)
+                            .foregroundStyle(WorldPalette.bark)
                         Text("First aid has slow breathing, grounding, and a worry box — only if it sounds nice.")
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
+                            .font(FernletFramedFont.note)
+                            .foregroundStyle(WorldPalette.dim)
                             .fernletWrappingText()
                     }
                     Spacer(minLength: 0)
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(Color.slate)
+                    FernletIcon(.chevron, scale: 2)
+                        .accessibilityHidden(true)
                 }
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+                // The frame rule (ref-frames-rule): pieces inside this card draw flat.
+                .environment(\.fernletInFramedSection, true)
+                .fernletFramed(WorldTheme.framedLook, fill: WorldPalette.paper, cornerRadius: FernletFramedLook.cardRadius)
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("stressExplainer.firstAid")

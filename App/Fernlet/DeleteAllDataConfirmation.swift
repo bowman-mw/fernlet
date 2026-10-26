@@ -370,6 +370,9 @@ nonisolated enum DeleteAllStoreNames {
         "session photos you hadn't chosen yet": LocalizedStringResource(
             "deleteAll.store.unchosenSessionPhotos", defaultValue: "session photos you hadn't chosen yet",
             comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "photos from the camera on your own": LocalizedStringResource(
+            "deleteAll.store.soloCameraPhotos", defaultValue: "photos from the camera on your own",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
         "shared recipe inbox": LocalizedStringResource(
             "deleteAll.store.sharedRecipeInbox", defaultValue: "shared recipe inbox",
             comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
@@ -430,6 +433,9 @@ nonisolated enum DeleteAllStoreNames {
         "your day summaries": LocalizedStringResource(
             "deleteAll.store.daySummaries", defaultValue: "your day summaries",
             comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
+        "your map history": LocalizedStringResource(
+            "deleteAll.store.mapHistory", defaultValue: "your map history",
+            comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. The World map's record of where the person has been (its uncovered fog). Keep it lowercase unless it is a name."),
         "your Worry Box notes": LocalizedStringResource(
             "deleteAll.store.worryBoxNotes", defaultValue: "your Worry Box notes",
             comment: "Delete everything, the failure alert: one item in the list of what could not be deleted, read mid-sentence after 'couldn't finish:'. Keep it lowercase unless it is a name."),
@@ -457,19 +463,10 @@ struct DeletingEverythingOverlay: View {
     var body: some View {
         ZStack {
             Color.black.opacity(0.20).ignoresSafeArea()
-            VStack(spacing: 12) {
-                // Hidden, not labelled: "Deleting everything…" below is the label, and this
-                // overlay is the app's most consequential busy state — the one place a doubled or
-                // empty utterance is least welcome.
-                ProgressView()
-                    .tint(Color.moss)
-                    .accessibilityHidden(true)
-                Text("Deleting everything…")
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.bark)
-            }
-            .padding(20)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+            // The framed busy card with its pixel spinner (`b3-deleting`). The spinner is hidden,
+            // not labelled: "Deleting everything…" is the label, and this overlay is the app's most
+            // consequential busy state — the one place a doubled or empty utterance is least welcome.
+            SettingsBusyCard(text: "Deleting everything…")
         }
         .accessibilityIdentifier("deleteAll.spinner")
         // T1-4: dims and swallows taps over the settings rows behind it, but was transparent to

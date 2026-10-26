@@ -335,7 +335,7 @@ struct MeshSessionHeartTests {
     /// switch with nothing to run, and the tap fired a haptic and did nothing. Enablement is now the
     /// transport's own answer, and this column is what says the two cannot drift apart again.
     @Test func thePresenceOrderPrefersADeliveredHeartOverACustodiedOne() throws {
-        typealias Transport = DisposableCameraView.SessionHeartTransport
+        typealias Transport = SessionInfoSheet.SessionHeartTransport
         let table: [(linked: Bool, presence: Bool, addressable: Bool, want: Transport, enabled: Bool)] = [
             (true, true, true, .mesh, true),      // linked and addressable: delivered now, over a slot
             (true, false, true, .mesh, true),
@@ -354,7 +354,7 @@ struct MeshSessionHeartTests {
                 "row 4 is the one shape where the old disjunction and the transport disagree")
         // R2: bounded by the table.
         for row in table {
-            let transport = DisposableCameraView.sessionHeartTransport(
+            let transport = SessionInfoSheet.sessionHeartTransport(
                 meshLinked: row.linked, presenceReachable: row.presence,
                 meshAddressable: row.addressable
             )
@@ -366,7 +366,7 @@ struct MeshSessionHeartTests {
         // And the button really consults it, rather than re-deciding in the body — both halves: the
         // transport itself, and the enablement derived from it rather than from the three seams.
         let camera = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("App/Fernlet/DisposableCameraView.swift")
+            try RepoRoot.source("App/Fernlet/World/Friends/SessionInfoSheet.swift")
         )
         #expect(camera.contains("let transport = Self.sessionHeartTransport("),
                 "the order is read from the pinned function, not re-derived in the view body")

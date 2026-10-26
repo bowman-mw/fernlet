@@ -49,19 +49,6 @@ struct FirstAidView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var path: [FirstAidTool] = []
 
-    // Menu geometry — mockup §1a runs off the shared 8pt/radius grid, so these live here as
-    // named surface-local constants rather than FernletMetrics tokens.
-    private let tileSize: CGFloat = 46
-    private let tileRadius: CGFloat = 15
-    private let rowRadius: CGFloat = 20
-
-    // Surface-local warm hues that override the app's cool secondary ink for this menu.
-    // Captions warm to taupe; the support card (``CrisisSupportCard``) carries its own amber-browns.
-    private static let captionInk = Color(light: Color(red: 0.478, green: 0.416, blue: 0.333),
-                                          dark:  Color(red: 0.663, green: 0.612, blue: 0.522))
-    private static let groundingInk = Color(light: Color(red: 0.369, green: 0.486, blue: 0.549),
-                                            dark:  Color(red: 0.682, green: 0.776, blue: 0.831))
-
     var body: some View {
         NavigationStack(path: $path) {
             // The pinned header lives on the menu ROOT only — pushed tool screens replace this
@@ -79,7 +66,10 @@ struct FirstAidView: View {
                     .padding(.bottom, FernletMetrics.spaceXl)
                 }
             }
-            .background(Color.parchment)
+            // World (b3-first-aid): the sheet's paper; the tools push pages with their own header
+            // (``FirstAidToolHeader``) in place of the navigation bar.
+            .fernletSheetStyle()
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: FirstAidTool.self) { tool in
                 switch tool {
                 case .breathing:
@@ -100,37 +90,33 @@ struct FirstAidView: View {
 
     /// The Instrument Serif strapline — the first content line under the pinned header.
     private var strapline: some View {
+        // World (b3-first-aid): the strapline in Fraunces, the design language's one serif.
         Text("Small tools for a heavy moment. Pick whatever feels kind — or nothing at all.")
-            .font(.custom(FernletFontName.instrumentSerif, size: 22, relativeTo: .title2))
-            .foregroundStyle(Color.bark)
-            .lineSpacing(9)  // ~1.42 leading at 22pt
+            .font(.custom(FernletFontName.frauncesSemiBold, size: 22, relativeTo: .title2))
+            .foregroundStyle(WorldPalette.bark)
+            .lineSpacing(3)
             .fernletWrappingText()
     }
 
     /// The three tool cards, in the menu's fixed order: breathing, grounding, worry box.
     private var toolList: some View {
         VStack(spacing: 12) {
+            // World (b3-first-aid): framed rows with the pixel breathe, target and box.
             toolCard(
                 .breathing,
-                icon: "wind",
-                tileFill: Color.fern.opacity(0.20),
-                iconColor: .moss,
+                sprite: WorldSprites.breathe,
                 title: "Slow breathing",
                 caption: "A quiet minute or three with a slowly swelling circle."
             )
             toolCard(
                 .grounding,
-                icon: "target",
-                tileFill: Color.journalQuiet.opacity(0.24),
-                iconColor: Self.groundingInk,
+                sprite: WorldSprites.target,
                 title: "5·4·3·2·1 grounding",
                 caption: "Arrive back in the room, one gentle sense at a time."
             )
             toolCard(
                 .worryBox,
-                icon: "archivebox",
-                tileFill: Color.goldenrod.opacity(0.20),
-                iconColor: .goldenrod,
+                sprite: WorldSprites.box,
                 title: "Worry box",
                 caption: "Write a worry down and let the box hold it for a while."
             )
@@ -139,35 +125,11 @@ struct FirstAidView: View {
 
     /// One tool card. `title` and `caption` are `LocalizedStringKey` so the three cards' literals reach
     /// the catalog; as `String` they bound `Text`'s verbatim initializer and were never harvested.
-    private func toolCard(_ tool: FirstAidTool, icon: String, tileFill: Color, iconColor: Color, title: LocalizedStringKey, caption: LocalizedStringKey) -> some View {
+    private func toolCard(_ tool: FirstAidTool, sprite: WorldSprite, title: LocalizedStringKey, caption: LocalizedStringKey) -> some View {
         Button {
             path.append(tool)
         } label: {
-            HStack(spacing: 15) {
-                Image(systemName: icon)
-                    .font(.system(size: 21, weight: .regular))
-                    .foregroundStyle(iconColor)
-                    .frame(width: tileSize, height: tileSize)
-                    .background(tileFill, in: RoundedRectangle(cornerRadius: tileRadius, style: .continuous))
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
-                        .font(.fernlet(.headerMedium))
-                        .foregroundStyle(Color.bark)
-                    Text(caption)
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Self.captionInk)
-                        .fernletWrappingText()
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(Color.softTaupe)
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 17)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: rowRadius, style: .continuous))
-            .fernletSmallShadow()
+            FirstAidToolCardLabel(sprite: sprite, title: title, caption: caption)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("firstAid.tool.\(tool.rawValue)")

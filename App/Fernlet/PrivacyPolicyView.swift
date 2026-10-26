@@ -35,7 +35,9 @@
 //  device" lists the workout details and workout settings — the full account is the maintainer note in
 //  Docs/Privacy-Policy.md); revised 2026-10-21, a DRAFT for the owner's review (companion widgets: the
 //  companion falls asleep after the bedtime wind-down — seven feelings on the Home Screen widget, and
-//  asleep, which says nothing about the day, the one feeling the Lock Screen may show).
+//  asleep, which says nothing about the day, the one feeling the Lock Screen may show); revised 2026-10-25
+//  (World build round 6, owner-approved word for word: places the person adds themselves, a solo photo put
+//  on the map by hand, and homes and hotels kept encrypted on this iPhone only until removed in Settings › Home map).
 //  Any material change to the policy must update the effective date below AND in Docs/Privacy-Policy.md AND
 //  Site/privacy/index.html, and be surfaced in the app per the policy's own terms.
 //
@@ -54,7 +56,7 @@ struct PrivacyPolicyView: View {
     // MARK: - Publication facts (keep in lockstep with Docs/Privacy-Policy.md)
     private static let developerName = "Michael Bowman Olay"
     private static let supportEmail: String? = "fernletapp@gmail.com"
-    private static let effectiveDate = "October 21, 2026"
+    private static let effectiveDate = "October 25, 2026"
 
     private static var contactClause: String {
         if let supportEmail { return "contact \(supportEmail)" }
@@ -63,17 +65,43 @@ struct PrivacyPolicyView: View {
 
     var body: some View {
         ScrollView {
+            // One framed card per section (`b3-privacy-policy`): the title's card, then a card per
+            // "##" header with everything under it. The words are the policy's, unchanged.
             VStack(alignment: .leading, spacing: 14) {
-                ForEach(Array(Self.blocks.enumerated()), id: \.offset) { _, block in
-                    block.view
+                ForEach(Array(Self.sections.enumerated()), id: \.offset) { _, section in
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(Array(section.enumerated()), id: \.offset) { _, block in
+                            block.view
+                        }
+                    }
+                    .settingsCard()
                 }
             }
-            .padding(20)
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 30)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(Color.parchment)
-        .navigationTitle("Privacy Policy")
-        .navigationBarTitleDisplayMode(.inline)
+        .fernletPageBackground()
+        // A page in the Settings panel: the plate carries the title and Back.
+        .fernletPushedPage("Privacy Policy")
+    }
+
+    /// The parsed policy cut into sections: a new section starts at every header (`##`), and the
+    /// blocks before the first header (the title and its preamble) are the first. Bounded by the
+    /// block count; no block is dropped or reordered.
+    private static var sections: [[PolicyBlock]] {
+        var result: [[PolicyBlock]] = []
+        for block in blocks {
+            if case .header = block, !(result.last?.isEmpty ?? true) {
+                result.append([block])
+            } else if result.isEmpty {
+                result.append([block])
+            } else {
+                result[result.count - 1].append(block)
+            }
+        }
+        return result
     }
 
     // MARK: - Content (display copy)
@@ -115,11 +143,15 @@ struct PrivacyPolicyView: View {
     Photos are stored encrypted in the app's private storage and are never sent to any server or to any AI service. The only analysis of a photo happens on your device, with Apple's Vision framework, and only to log food: it reads a barcode or a nutrition label in a photo you take or choose for that, and — if the on-device AI helper is on and you ask Fernlet to identify a meal from a photo — it suggests what food the photo shows, which you review before anything is logged. By default photos are also never uploaded to CloudKit: they leave your phone only inside your standard iCloud device backup, through the app container. There is exactly one exception, and it is off unless you turn it on. If you switch on "Sealed backup for your photos" in Privacy & Data, your own meal, recipe and gym-progress photos are backed up to your own iCloud private database — encrypted on your device first (AES-256-GCM), so Apple stores only unreadable ciphertext, and still never sent to us or to any AI. Photos friends have shared with you are never part of that backup. Once that backup has actually stored your photos, Fernlet locks their encryption key to this device so future device backups can no longer open them. The lock protects only backups made *after* you turn it on — a device backup made *before* still carries a working copy of the key. The lock is permanent, and from then on the encrypted backup is how those photos come back on a new phone. You may explicitly export an individual photo to your system Photos library with a "Save to Photos" action — a one-time export you initiate, not automatic sync. Fernlet does no face recognition, and apart from the food-logging reads above, no analysis of your photos.
 
     ## Friend features (in-person only)
-    To support optional in-person friend features, Fernlet generates a cryptographic identity for your device. The keys stay in this device's Keychain and never sync to iCloud Keychain — a new phone starts with a fresh identity, and you re-add friends in person. Your public key is the only persistent identifier shared with friends; your private keys never leave your device. By default, friend features work only when two people are physically near each other, over a short-range encrypted connection — no friend server, and no remote friend activity. When a session is live, Fernlet may ask iOS for a short spell of background time so the connection survives you leaving the app; that continuation uses your local network and some battery, iOS may refuse or end it at any time, and nothing already saved is lost when it does. When you add a friend in person, your devices exchange display names, public keys, avatar appearances, and a *fuzzy* wellbeing vibe (e.g. "thriving," "okay," "struggling"). Friends never see your numeric score, goals, cycle information, or any raw health data. Optional approximate location may be used only for gentle weather prompts and, if you choose, to tag an in-person activity; location is never tracked over time.
+    To support optional in-person friend features, Fernlet generates a cryptographic identity for your device. The keys stay in this device's Keychain and never sync to iCloud Keychain — a new phone starts with a fresh identity, and you re-add friends in person. Your public key is the only persistent identifier shared with friends; your private keys never leave your device. By default, friend features work only when two people are physically near each other, over a short-range encrypted connection — no friend server, and no remote friend activity. When a session is live, Fernlet may ask iOS for a short spell of background time so the connection survives you leaving the app; that continuation uses your local network and some battery, iOS may refuse or end it at any time, and nothing already saved is lost when it does. When you add a friend in person, your devices exchange display names, public keys, avatar appearances, and a *fuzzy* wellbeing vibe (e.g. "thriving," "okay," "struggling"). Friends never see your numeric score, goals, cycle information, or any raw health data.
 
     There is one optional exception, off unless you turn it on. With "Deliver hearts later," a heart you send to a friend you already added in person is sealed end to end and left in a shared iCloud drop-off area under a rotating, meaningless tag, so their phone can pick it up later. Only sealed hearts go there — never your own data, and nothing that names either of you; we cannot read them. Only the device that sent a heart can delete it, so use Delete Everything (or turn the setting off) before you uninstall and Fernlet clears the ones still waiting; otherwise they stay there as unreadable ciphertext that nothing can address afterwards.
 
     **Separately from the friend features: sharing a recipe or a planned workout in Messages.** Fernlet includes an iMessage app. It lists the recipes and upcoming planned workouts the Fernlet app has prepared for it — a list kept on your phone that only Fernlet and its extensions can read, which never contains your journal, cycle or intimate data, health readings, photos, friends, or location. When you pick one and send the message, the card carries that item to everyone in the conversation through Apple's Messages service, under Apple's privacy terms and not through any server of ours: a recipe's name, servings, ingredients with their amounts and macros, steps, any notes you wrote on it, and — if you made it in parts, like a salad and its homemade dressing — the name of each part; a workout's name, planned day, exercises, and notes. Anyone in the conversation, and anyone they forward it to, can read what the card carries; we never see it, and Fernlet cannot take it back once sent — it stays in that conversation under Apple's retention, not ours. A card you receive is only a suggestion: nothing is saved until you open it in Fernlet, review it, and confirm. The copy Fernlet keeps while a card waits for your review is deleted after seven days, or by Delete Everything, which also empties the list the iMessage app shows.
+
+    **Location and the map.** Location is optional. If you allow it, Fernlet uses it on your phone to place your companion on the map and to uncover the map as you go, and, as before, for gentle weather-based prompts and, if you choose, to tag an in-person group activity. What Fernlet keeps is a coarse record of the parts of the map you have uncovered (cells about 35 m across) and, while "Save new routes" is on, the line of each walk you record yourself, plus where your workout spaces are if you ask it to remember them. All of it is encrypted on this iPhone only: never synced, backed up, exported, shared with friends, given to the AI or sent to us, and you can delete it at any time in Settings → Home map. Fernlet uses location in the background only during a walk you started, or if you turn on the optional low-power background mapping. The map itself is drawn by Apple Maps, which receives the area on your screen in order to send its map images, under Apple's privacy terms; it never receives your map history or your walks. Location is never attached to your identity for us.
+    With Where you've been in Private, Fernlet also keeps a rolling 30-day timeline of the places you stopped at, collected while Fernlet is open and, if you turn on background mapping, through the day. It also keeps a list of Places you return to, which holds only a visit count, never dates. Both cover everyday places only: food and drink, gyms, parks, beaches and campgrounds. Places like doctors' offices, lawyers or therapists are never named or kept, unless you add one yourself. When you take a photo with the camera on your own at one of those everyday places, Fernlet keeps where it was taken, so the photo can sit on your map; anywhere else, it keeps no place. You can put a photo on the map yourself. All of this is encrypted on this iPhone only: never synced, backed up, exported, shared, given to the AI or sent to us. You can delete a day, a photo, or all of it, at any time. If you mark a place as your home (up to two) or as a hotel you stay at, Fernlet keeps it, encrypted on this iPhone only and never in a backup, to uncover the map around it and to welcome you back when you return; it stays until you remove it in Settings › Home map. If you add the map widget, Fernlet gives it a picture of the map around you, with your marked places and saved trails, on this iPhone only and never in a backup; your visit counts and the history of where you've been stay sealed in Private, and the widget's copy is deleted whenever you delete your map history.
+    To name a place you stop at, or to check where a photo you take on your own was taken, Fernlet asks Apple Maps what is near you, only while Fernlet is open. For a place you return to, Fernlet keeps only Apple's reference to it, never its details, and asks Apple Maps for its name again when you look at your places.
 
     ## Artificial intelligence
     Fernlet's AI features run on your device using Apple's on-device models. Your journal text, memories, health data, photos, period data, and friend data are not sent to any external AI service. With the AI helper on, Fernlet may summarize a journal entry in a few words for your Core memory — on your device only, and never as a copy of your entry; with it off, Core memory keeps only the entry's mood. Some optional convenience features may look up non-personal reference data from public sources (for example, the nutrition facts for a packaged product), sending only the minimal query needed — such as a product name or a barcode number — and never your identity or sensitive information. Fernlet does not generate mental-health diagnoses and filters clinical language out of anything it stores.
@@ -192,9 +224,8 @@ private enum PolicyBlock {
                 .accessibilityHeading(.h1)
         case .header(let s):
             Text(s)
-                .font(.fernlet(.headerMedium))
+                .font(FernletFramedFont.cardTitle)
                 .foregroundStyle(Color.bark)
-                .padding(.top, 8)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityHeading(.h2)
         case .paragraph(let s):
@@ -204,14 +235,21 @@ private enum PolicyBlock {
                 .fixedSize(horizontal: false, vertical: true)
         case .bullet(let s):
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("•").font(.fernlet(.body)).foregroundStyle(Color.moss)
+                // The bullet as a framed moss pixel square (`b3-privacy-policy`).
+                Rectangle()
+                    .fill(Color.moss)
+                    .frame(width: 6, height: 6)
+                    .padding(1.5)
+                    .background(Color.bark)
+                    .alignmentGuide(.firstTextBaseline) { $0[.bottom] }
+                    .accessibilityHidden(true)
                 Text(PolicyMarkdown.inline(s))
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                     .fixedSize(horizontal: false, vertical: true)
             }
         case .rule:
-            Divider().background(Color.slate.opacity(0.4)).padding(.vertical, 4)
+            FernletDottedRule().padding(.vertical, 4)
         }
     }
 }

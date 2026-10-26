@@ -116,8 +116,10 @@ enum FernletMessagesCardCopy {
                comment: "Small line in the lower-right corner of every sent recipe or workout card. Every recipient reads it, including one whose device cannot open the card (no Fernlet, an older Fernlet, an iPad or a Mac), so it says where the card opens, neutrally, without instructions. 'Fernlet' is the product name and must NOT be translated; 'iPhone' is Apple's product name. Keep it short — Messages truncates this corner hard.")
     }
 
-    static var recipeWordmark: String {
-        String(localized: "messages.card.wordmark.recipe", defaultValue: "FERNLET RECIPE", bundle: catalog,
-               comment: "Wordmark DRAWN INTO the card artwork the recipient sees in the conversation. Rendered at 28pt into a 1200×630 image, so a much longer translation will not fit; upper case matches the mark. 'Fernlet' is the product name and must not be translated.")
+    /// The tag drawn into the recipe card's pixel artwork (World Review Batch 4, `b4-msg-bubbles`),
+    /// replacing the upper-case "FERNLET RECIPE" wordmark of the SF Symbol artwork.
+    static var recipeTag: String {
+        String(localized: "messages.card.tag.recipe", defaultValue: "Fernlet recipe", bundle: catalog,
+               comment: "Tag DRAWN INTO the card artwork the recipient sees in the conversation, in a small framed label top left beside the pixel fern. It has room for about 30 characters; a longer translation is cut off. 'Fernlet' is the product name and must not be translated.")
     }
 }

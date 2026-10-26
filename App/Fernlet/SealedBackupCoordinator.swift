@@ -1,6 +1,7 @@
 import ProximityKit
 import FernletConnections
 import CryptoKit
+import CloudKit
 import CloudKitSync
 import FernletFoundation
 import Foundation
@@ -567,11 +568,24 @@ final class SealedBackupCoordinator {
         do {
             try await service.reconcile(Data(), payloadType: payload, enabled: false)
         } catch {
-            FernletAuditLog.log("sealedBackup.retiredPayloadDeleteFailed", context: ["payload": payload.rawValue])
+            FernletAuditLog.log("sealedBackup.retiredPayloadDeleteFailed",
+                                context: Self.retiredDeleteFailureContext(payload: payload, error: error))
             return
         }
         FernletAuditLog.log("sealedBackup.retiredPayloadDeleted", context: ["payload": payload.rawValue])
         host.recordRetiredSealedBackupDeleted(payload)
+    }
+
+    /// The sanitized reason a retired-payload delete failed (W-16): the error's type and, for a
+    /// `CKError` (bridged or not), its code's raw value (`networkUnavailable` is 3), so the device log
+    /// tells offline, signed-out and a Production query that won't run apart. Never the error's
+    /// description or a record name: those can carry identifiers; a code and a type name carry no user data.
+    static func retiredDeleteFailureContext(payload: SealedBackupPayloadType, error: any Error) -> [String: String] {
+        var context = ["payload": payload.rawValue, "errorType": "\(type(of: error))"]
+        if let ckError = error as? CKError {
+            context["ckErrorCode"] = "\(ckError.code.rawValue)"
+        }
+        return context
     }
 
     /// The gated cycle-record funnel the period backup works through — injected (tests) or a fresh

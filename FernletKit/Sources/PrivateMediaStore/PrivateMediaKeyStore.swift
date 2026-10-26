@@ -75,15 +75,21 @@ extension PrivateMediaKeyProviding {
 ///   `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, non-sync, from the first mint: the corpus
 ///   it seals is excluded from the device backup and never escrowed, so nothing about it is meant
 ///   to reach another phone.
+/// - ``Role/soloCameraPhotos`` (World build, 2026-10-24) — account
+///   `com.fernlet.private-media.soloCameraContentKey`, the row behind ``SoloCameraPhotoStore`` (the
+///   disposable camera used on your own). Born device-bound like the pending row, for the same
+///   reason: its corpus is excluded from the device backup and never escrowed, so it is meant to
+///   stay on this phone.
 ///
 /// ## Delete-all
 ///
 /// NO row is deleted by "delete everything" (owner decision, Phase 5; extended to the pending row
 /// on 2026-09-30). The friend row must survive because the wall it protects deliberately survives;
-/// the own and pending rows are kept for the same stale-cache reason that made
+/// the own, pending and solo-camera rows are kept for the same stale-cache reason that made
 /// ``deleteKeychainRowForWipe()`` callerless — their STORES are emptied instead
 /// (`MealPhotoStore.deleteAll` / `ProgressPhotoStore.deleteAll` /
-/// ``PendingSessionPhotoStore/purgeAll()``), and a key whose stores are empty protects nothing.
+/// ``PendingSessionPhotoStore/purgeAll()`` / ``SoloCameraPhotoStore/purgeAll()``), and a key whose
+/// stores are empty protects nothing.
 /// The duress silent wipe is the exception for all of them: it sweeps the whole service.
 ///
 /// Concurrency: NOT `Sendable` — `cachedKey` is unsynchronized mutable state, safe only because
@@ -92,7 +98,7 @@ extension PrivateMediaKeyProviding {
 /// keychain can't store or return the key, ``mediaKey()`` returns nil and every dependent store
 /// fails closed (nothing written in plaintext).
 public final class KeychainPrivateMediaKeyProvider: PrivateMediaKeyProviding {
-    /// Which of the module's two at-rest media keys a provider instance vends.
+    /// Which of the module's at-rest media keys a provider instance vends.
     ///
     /// The role fixes the keychain account and the mint-time binding policy; everything else about
     /// the provider is identical. Deliberately NOT `Codable`/persisted anywhere — it is a
@@ -109,6 +115,10 @@ public final class KeychainPrivateMediaKeyProvider: PrivateMediaKeyProviding {
         /// device-bound (``defaultDeviceBinding(for:)``): nothing pending is ever meant to leave
         /// this phone, so there is no escrow route to protect and no restore to survive.
         case pendingSessionPhotos
+        /// Photos from the disposable camera used on your own (``SoloCameraPhotoStore``; World build,
+        /// owner 2026-10-24). Born device-bound like ``pendingSessionPhotos``: the corpus is excluded
+        /// from the device backup and never escrowed, so nothing about it is meant to leave this phone.
+        case soloCameraPhotos
 
         /// The `kSecAttrAccount` this role's key lives under (all roles share one service).
         var account: String {
@@ -116,6 +126,7 @@ public final class KeychainPrivateMediaKeyProvider: PrivateMediaKeyProviding {
             case .friendWall: return KeychainPrivateMediaKeyProvider.account
             case .ownPhotos:  return KeychainPrivateMediaKeyProvider.ownAccount
             case .pendingSessionPhotos: return KeychainPrivateMediaKeyProvider.pendingAccount
+            case .soloCameraPhotos: return KeychainPrivateMediaKeyProvider.soloCameraAccount
             }
         }
     }
@@ -131,6 +142,8 @@ public final class KeychainPrivateMediaKeyProvider: PrivateMediaKeyProviding {
     /// Pending session-photo key row (2026-09-30 session-photo review). Frozen token: renaming it
     /// strands every held photo behind a row nothing reads.
     static let pendingAccount = "com.fernlet.private-media.pendingContentKey"
+    /// Solo-camera key row (World build, 2026-10-24). Frozen token, like ``pendingAccount``.
+    static let soloCameraAccount = "com.fernlet.private-media.soloCameraContentKey"
 
     /// Mint-time binding policy per role — what class a row is created under when it does not yet
     /// exist. **Not** the authority on an existing row's custody: see ``OwnPhotoKeyBinder``.
@@ -155,11 +168,14 @@ public final class KeychainPrivateMediaKeyProvider: PrivateMediaKeyProviding {
     ///   backup and never escrowed, so binding strands nothing that was ever meant to travel. It is
     ///   defence in depth behind the backup exclusion — a lost exclusion flag still yields nothing
     ///   off-device. Pinned by `KeyCustodyBoundaryTests.pendingSessionPhotoKeyIsDeviceBoundAtMint`.
+    /// - `.soloCameraPhotos` is `true` for the pending row's reason: its corpus is excluded from the
+    ///   backup and never escrowed. Pinned by `KeyCustodyBoundaryTests.soloCameraKeyIsDeviceBoundAtMint`.
     public static func defaultDeviceBinding(for role: Role) -> Bool {
         switch role {
         case .friendWall: return false
         case .ownPhotos:  return false
         case .pendingSessionPhotos: return true
+        case .soloCameraPhotos: return true
         }
     }
 

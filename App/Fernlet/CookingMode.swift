@@ -47,9 +47,14 @@ enum CookingModeAvailability {
 enum RecipeIngredientLine {
     /// The line for `ingredient`, naming it `name`, or the localized stand-in when `name` is nil.
     static func text(_ ingredient: RecipeIngredient, name: String?) -> String {
-        let shown = name ?? String(localized: "recipe.ingredient.unresolvedName", defaultValue: "Ingredient",
-                                   comment: "Stands in for the name of a recipe ingredient whose food can't be found, on the recipe page and in cooking mode")
-        return "\(ingredient.amountText) · \(shown)"
+        "\(ingredient.amountText) · \(displayName(name))"
+    }
+
+    /// The name an ingredient's compact row shows (World `.ingr` rows): `name`, or the localized
+    /// stand-in when the food can't be found.
+    static func displayName(_ name: String?) -> String {
+        name ?? String(localized: "recipe.ingredient.unresolvedName", defaultValue: "Ingredient",
+                       comment: "Stands in for the name of a recipe ingredient whose food can't be found, on the recipe page and in cooking mode")
     }
 }
 
@@ -97,28 +102,32 @@ struct StepTimerControl: View {
 
     private var minutes: Int { max((durationSeconds ?? 0) / 60, 1) }
 
+    /// World build (`b3-recipe-new`): the pixel clock, then "Add timer", or the minutes on the framed
+    /// stepper with a pixel ✕ to take the timer off.
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "timer")
-                .font(.caption)
-                .foregroundStyle(Color.slate)
+            WorldSpriteView(sprite: WorldSprites.clock, scale: 2)
             if durationSeconds == nil {
                 Button("Add timer") { durationSeconds = 60 }
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.moss)
+                    .font(FernletFramedFont.rowDetailBold)
+                    .foregroundStyle(WorldPalette.mossInk)
                     .buttonStyle(.plain)
+                    .frame(minHeight: 44)
                     .accessibilityIdentifier("recipeEditor.step.addTimer")
+                Spacer(minLength: 0)
             } else {
-                Stepper(
-                    "\(minutes) min timer",
-                    value: Binding(get: { minutes }, set: { durationSeconds = max($0, 1) * 60 }),
-                    in: 1...240
-                )
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.bark)
+                Text("\(minutes) min timer")
+                    .font(FernletFramedFont.rowDetail)
+                    .foregroundStyle(WorldPalette.bark)
+                    .accessibilityHidden(true)
+                Spacer(minLength: 4)
+                FernletStepper("\(minutes) min timer",
+                               value: Binding(get: { minutes }, set: { durationSeconds = max($0, 1) * 60 }),
+                               in: 1...240, step: 1)
                 Button { durationSeconds = nil } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(Color.slate)
+                    FernletIcon(.close, scale: 2)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .fernletIconButton("Remove timer")
@@ -132,6 +141,11 @@ struct StepTimerControl: View {
 /// The F5 full-screen cooking flow: mise en place (with F4 "cook for N" scaling) → a one-step-per-
 /// screen walker with an explicit Next/Back pair and a passive per-step countdown → a finish screen
 /// that offers to log the meal to the day the cook began.
+///
+/// The World build draws it as a focused flow (``FernletFocusedFlow``; `b3-cook-mise`, `b3-cook-step`,
+/// `b3-cook-finish`, approved 2026-10-24): no grabber, the ✕ top right (it was "Close" on the left),
+/// the compact ingredient rows of the recipe page, the wooden Start cooking, pixel progress squares,
+/// and Log this meal as one meal-type menu.
 ///
 /// Presented as a full-screen cover from `RecipeDetailView` (fresh cook) and the Food-root resume
 /// card (`resuming: true`, jumping straight into the walker). Once a run starts, the SHARED
@@ -240,14 +254,14 @@ struct CookingModeView: View {
         return RecipeScaling.scaledIngredients(recipe, forYield: cookYield)
     }
 
+    /// World build: a focused flow (`b3-cook-mise`, `b3-cook-step`, `b3-cook-finish`, approved
+    /// 2026-10-24): full screen on dotted parchment with no grabber, the recipe's name (or "Step N of M")
+    /// top left and the framed ✕ top right, the stage below and its buttons at the bottom.
     var body: some View {
-        ZStack {
-            Color.parchment.ignoresSafeArea()
-            VStack(spacing: 0) {
-                header
-                Divider().overlay(Color.bark.opacity(0.08))
-                content
-            }
+        FernletFocusedFlow(title: stageTitle, onClose: { closeCooking() }) {
+            content
+        } footer: {
+            footer
         }
         .keepsScreenAwake(true)
         .destructiveConfirmation($pendingDestructiveAction)
@@ -298,26 +312,6 @@ struct CookingModeView: View {
 
     // MARK: Header
 
-    private var header: some View {
-        HStack {
-            Button { closeCooking() } label: {
-                Text("Close")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.slate)
-            }
-            .accessibilityIdentifier("cookingMode.close")
-            Spacer()
-            stageTitle
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.bark)
-            Spacer()
-            // Balance the leading "Close" so the title stays centered.
-            Text("Close").font(.fernlet(.label)).foregroundStyle(.clear).accessibilityHidden(true)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-    }
-
     /// The header's title: the recipe's name, or the step position while walking. `Text`: as a
     /// `String` "Step 3 of 8" was drawn verbatim.
     private var stageTitle: Text {
@@ -337,49 +331,49 @@ struct CookingModeView: View {
         }
     }
 
+    /// The bottom row of each stage: the wooden Start cooking, the dots with Back and Next, or Log this
+    /// meal with Not now.
+    @ViewBuilder private var footer: some View {
+        switch stage {
+        case .mise:
+            Button {
+                beginCooking()
+            } label: {
+                hasSteps ? Text("Start cooking") : Text(AddressedCopy.attributed("I'm ready", addressing: termOfAddress))
+            }
+            .buttonStyle(RecipeWoodButtonStyle())
+            .accessibilityIdentifier("cookingMode.start")
+        case .cooking:
+            walkerFooter
+        case .finished:
+            finishFooter
+        }
+    }
+
     // MARK: Mise en place
 
     private var miseEnPlace: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Mise en place")
-                        .font(.fernlet(.displayMedium))
-                        .foregroundStyle(Color.bark)
+                        .font(RecipeType.display(34))
+                        .foregroundStyle(WorldPalette.bark)
+                        .accessibilityAddTraits(.isHeader)
                     Text("Everything you'll need, laid out before you start.")
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.slate)
+                        .font(FernletFramedFont.body)
+                        .foregroundStyle(WorldPalette.dim)
                         .fernletWrappingText()
                     if miseParts.count > 1, let first = miseParts.first?.name {
                         Text("Made in \(miseParts.count) parts. Start with \(first).")
-                            .font(.fernlet(.body))
-                            .foregroundStyle(Color.bark)
+                            .font(FernletFramedFont.body)
+                            .foregroundStyle(WorldPalette.bark)
                             .fernletWrappingText()
                     }
                 }
-
-                if isScalable {
-                    FernletCard {
-                        VStack(alignment: .leading, spacing: 8) {
-                            SectionLabel("Cook for")
-                            // Grammar agreement, never an English "s" picked by count.
-                            Stepper(value: Binding(get: { cookYield }, set: { cookYield = RecipeScaling.clampedYield($0) }),
-                                    in: RecipeScaling.yieldRange) {
-                                Text("^[\(cookYield) serving](inflect: true)")
-                            }
-                            .accessibilityIdentifier("cookingMode.cookForYield")
-                            if cookYield != recipe.servings {
-                                Text("Scaled from ^[\(recipe.servings) serving](inflect: true) — amounts below adjust to match. Logging still records one serving.")
-                                    .font(.fernlet(.bodySmall))
-                                    .foregroundStyle(Color.slate)
-                                    .fernletWrappingText()
-                            }
-                        }
-                    }
-                }
-
+                if isScalable { cookForCard }
                 FernletCard {
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 6) {
                         SectionLabel("Ingredients")
                         ingredientList
                     }
@@ -388,18 +382,34 @@ struct CookingModeView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .padding(20)
+            .padding(.top, 8)
             .padding(.bottom, 12)
         }
-        .safeAreaInset(edge: .bottom) {
-            primaryBar {
-                Button {
-                    beginCooking()
-                } label: {
-                    primaryButtonLabel(hasSteps ? Text("Start cooking") : Text(AddressedCopy.attributed("I'm ready", addressing: termOfAddress)))
+    }
+
+    /// "Cook for [− 2 servings +]" (`b3-cook-mise`), and the scaled note while it differs.
+    private var cookForCard: some View {
+        FernletCard {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    Text("Cook for")
+                        .font(FernletFramedFont.rowTitleBold)
+                        .foregroundStyle(WorldPalette.bark)
+                        .accessibilityHidden(true)
+                    Spacer(minLength: 8)
+                    // Grammar agreement, never an English "s" picked by count.
+                    FernletStepper("Cook for",
+                                   value: Binding(get: { cookYield }, set: { cookYield = RecipeScaling.clampedYield($0) }),
+                                   in: RecipeScaling.yieldRange, step: 1,
+                                   display: Text("^[\(cookYield) serving](inflect: true)"))
+                        .accessibilityIdentifier("cookingMode.cookForYield")
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("cookingMode.start")
+                if cookYield != recipe.servings {
+                    Text("Scaled from ^[\(recipe.servings) serving](inflect: true) — amounts below adjust to match. Logging still records one serving.")
+                        .font(FernletFramedFont.note)
+                        .foregroundStyle(WorldPalette.dim)
+                        .fernletWrappingText()
+                }
             }
         }
     }
@@ -407,45 +417,34 @@ struct CookingModeView: View {
     @ViewBuilder private var ingredientList: some View {
         if let webImport = recipe.webImport, !webImport.ingredientLines.isEmpty {
             // Web imports have free-text lines and no structured quantities to scale — render as-is.
-            ForEach(webImport.ingredientLines, id: \.self) { line in
-                ingredientRow(line)
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(webImport.ingredientLines, id: \.self) { line in
+                    RecipeIngredientRow(name: line, amount: "")
+                }
             }
         } else if miseParts.count > 1 {
             // A multipart recipe lays each part's ingredients out under its own heading.
-            RecipePartsIngredientList(parts: miseParts) { ingredient in
-                ingredientRow(ingredientLine(ingredient), isEstimate: isTypicalSizeEstimate(ingredient))
-            }
+            RecipePartsIngredientList(parts: miseParts) { ingredientRow($0) }
         } else if !displayIngredients.isEmpty {
-            ForEach(displayIngredients) { ingredient in
-                ingredientRow(ingredientLine(ingredient), isEstimate: isTypicalSizeEstimate(ingredient))
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(displayIngredients) { ingredientRow($0) }
             }
         } else {
             Text("No ingredients listed.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.body)
+                .foregroundStyle(WorldPalette.dim)
         }
     }
 
-    /// One ingredient line; `isEstimate` adds the "USDA typical size, estimate" note beneath a household
-    /// amount read from the curated table (F4b fix round 1, finding s2-L-F4b-DT-2).
-    private func ingredientRow(_ text: String, isEstimate: Bool = false) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Circle().fill(Color.moss.opacity(0.5)).frame(width: 5, height: 5).padding(.top, 7)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(text)
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.bark)
-                    .fernletWrappingText()
-                if isEstimate {
-                    RecipeTypicalSizeEstimateNote()
-                }
-            }
-        }
-    }
-
-    /// "118 g · Bananas, raw", or "1 medium (118 g) · Bananas, raw" for a household choice (F4a).
-    private func ingredientLine(_ ingredient: RecipeIngredient) -> String {
-        RecipeIngredientLine.text(ingredient, name: resolvedItems[ingredient.foodItemId]?.name)
+    /// One ingredient as the recipe page's compact row (icon, name, amount); a household amount read
+    /// from the curated table keeps its "USDA typical size, estimate" note (F4b fix round 1, finding
+    /// s2-L-F4b-DT-2).
+    private func ingredientRow(_ ingredient: RecipeIngredient) -> some View {
+        let name = resolvedItems[ingredient.foodItemId]?.name
+        return RecipeIngredientRow(
+            name: RecipeIngredientLine.displayName(name), amount: ingredient.amountText, artName: name,
+            note: isTypicalSizeEstimate(ingredient) ? AnyView(RecipeTypicalSizeEstimateNote()) : nil
+        ) { EmptyView() }
     }
 
     /// Whether the line's household amount is a USDA typical size rather than the food's own portion.
@@ -456,54 +455,52 @@ struct CookingModeView: View {
     // MARK: Cooking walker
 
     private var cookingWalker: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    if let step = currentStep {
-                        if let part = store.cookingRunState?.currentPart {
-                            // Which part of a multipart recipe this step belongs to ("make the dressing
-                            // first"). Read as part of the step's own label below, so hidden here.
-                            Text("Part \(part.position) of \(part.count) · \(part.name)")
-                                .font(.fernlet(.labelSmall))
-                                .foregroundStyle(Color.moss)
-                                .fernletWrappingText()
-                                .accessibilityHidden(true)
-                        }
-                        Text(step.text)
-                            .font(.fernlet(.header))
-                            .foregroundStyle(Color.bark)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                if let step = currentStep {
+                    if let part = store.cookingRunState?.currentPart {
+                        // Which part of a multipart recipe this step belongs to ("make the dressing
+                        // first"). Read as part of the step's own label below, so hidden here.
+                        Text("Part \(part.position) of \(part.count) · \(part.name)")
+                            .font(FernletFramedFont.noteBold)
+                            .foregroundStyle(WorldPalette.mossInk)
+                            .fernletWrappingText()
+                            .accessibilityHidden(true)
+                    }
+                    Text(step.text)
+                        .font(RecipeType.display(30))
+                        .foregroundStyle(WorldPalette.bark)
+                        .fernletWrappingText()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        // The step is this screen's heading, so it lands in the Headings rotor,
+                        // and it carries its own position: the "Step 3 of 8" in the header is a
+                        // separate element the cook would have to go looking for.
+                        .accessibilityAddTraits(.isHeader)
+                        .accessibilityLabel(stepAccessibilityLabel(step))
+                        .accessibilityFocused($isStepFocused)
+                        .transition(.opacity)
+                        .id(stepIndex)
+
+                    if let duration = step.durationSeconds, duration > 0 {
+                        stepTimer(duration: duration)
+                    }
+
+                    // Mise en place scales ingredient amounts to the cook-for yield, but a step's PROSE
+                    // ("add 200 g flour") is authored text we don't rescale — so when cooking at a
+                    // different yield, say so once rather than let the step quietly disagree with the
+                    // scaled ingredient list. (A substitution fork's steps still name the swapped-out
+                    // ingredient for the same reason — a documented, accepted tradeoff.)
+                    if isScalable, cookYield != recipe.servings {
+                        Text("Amounts written into the steps reflect the original \(recipe.servings)-serving recipe, not the \(cookYield)-serving scale above.")
+                            .font(FernletFramedFont.note)
+                            .foregroundStyle(WorldPalette.dim)
                             .fernletWrappingText()
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            // The step is this screen's heading, so it lands in the Headings rotor,
-                            // and it carries its own position: the "Step 3 of 8" in the header is a
-                            // separate element the cook would have to go looking for.
-                            .accessibilityAddTraits(.isHeader)
-                            .accessibilityLabel(stepAccessibilityLabel(step))
-                            .accessibilityFocused($isStepFocused)
-                            .transition(.opacity)
-                            .id(stepIndex)
-
-                        if let duration = step.durationSeconds, duration > 0 {
-                            stepTimer(duration: duration)
-                        }
-
-                        // Mise en place scales ingredient amounts to the cook-for yield, but a step's PROSE
-                        // ("add 200 g flour") is authored text we don't rescale — so when cooking at a
-                        // different yield, say so once rather than let the step quietly disagree with the
-                        // scaled ingredient list. (A substitution fork's steps still name the swapped-out
-                        // ingredient for the same reason — a documented, accepted tradeoff.)
-                        if isScalable, cookYield != recipe.servings {
-                            Text("Amounts written into the steps reflect the original \(recipe.servings)-serving recipe, not the \(cookYield)-serving scale above.")
-                                .font(.fernlet(.bodySmall))
-                                .foregroundStyle(Color.slate)
-                                .fernletWrappingText()
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
                     }
                 }
-                .padding(24)
             }
-            walkerFooter
+            .padding(.top, 10)
+            .padding(.bottom, 12)
         }
         // Driven from the CURSOR, never from `goNext()`: at the moment the button's action runs, the
         // step view for the new index does not exist yet, so a focus request there lands on nothing.
@@ -525,42 +522,34 @@ struct CookingModeView: View {
         return Text("\(part.name), part \(part.position) of \(part.count). Step \(stepIndex + 1) of \(steps.count). \(step.text)")
     }
 
+    /// The step's timer in a framed card (`b3-cook-step`): the big Fraunces time, Start (or Reset once
+    /// it runs), the "timer's up" line, and the Timer sound switch.
     private func stepTimer(duration: Int) -> some View {
         FernletCard {
             VStack(spacing: 12) {
                 if let started = timerStartedAt, let ends = timerEndsAt, started <= ends {
                     // GuidedWorkout idiom: a fixed window clamps to 0:00 at expiry and stays valid however
                     // long the cook over-runs it — a live `Date()` lower bound would invert past the deadline.
-                    // The design system's timer face (DM Sans, monospaced digits) rather than SF
-                    // Rounded — this was the app's largest piece of system-font text.
                     Text(timerInterval: started...ends, countsDown: true)
-                        .font(.fernletTimer())
-                        .foregroundStyle(timerFired ? Color.goldenrod : Color.bark)
+                        .font(FernletFramedFont.bigTime)
+                        .monospacedDigit()
+                        .foregroundStyle(timerFired ? Color.goldenrod : WorldPalette.bark)
                         .accessibilityIdentifier("cookingMode.stepTimer")
                     if timerFired {
                         AddressedText("Timer's up — tap Next when you're ready. Nothing advances on its own.")
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
+                            .font(FernletFramedFont.note)
+                            .foregroundStyle(WorldPalette.dim)
                             .multilineTextAlignment(.center)
                             .fernletWrappingText()
                     }
-                    Button { store.cookingClearTimer() } label: {
-                        Text("Reset timer").font(.fernlet(.labelSmall)).foregroundStyle(Color.moss)
-                    }
-                    .buttonStyle(.plain)
+                    Button { store.cookingClearTimer() } label: { Text("Reset timer").frame(maxWidth: .infinity) }
+                        .buttonStyle(ActionPillButtonStyle(.secondary))
                 } else {
-                    Text(formattedDuration(duration))
-                        .font(.fernletTimer(size: 44))
-                        .foregroundStyle(Color.slate)
+                    FernletBigTime(Text(formattedDuration(duration)))
                     Button { store.cookingStartTimer() } label: {
-                        Label("Start \(formattedDuration(duration)) timer", systemImage: "timer")
-                            .font(.fernlet(.label))
-                            .foregroundStyle(Color.onMoss)
-                            .padding(.horizontal, 18)
-                            .padding(.vertical, 10)
-                            .background(Color.moss, in: Capsule())
+                        Text("Start \(formattedDuration(duration)) timer").frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(ActionPillButtonStyle(.primary))
                     .accessibilityIdentifier("cookingMode.startStepTimer")
                 }
                 // The shortcut to Settings › Sounds & haptics' cooking switch, on the card it changes.
@@ -570,40 +559,39 @@ struct CookingModeView: View {
         }
     }
 
+    /// The pixel progress squares, then Back and Next (`b3-cook-step`). Next carries a sun ring once
+    /// the step's timer is up; it never advances on its own.
     private var walkerFooter: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 12) {
             progressDots
-            HStack(spacing: 12) {
+            AdaptiveStack(spacing: 10) {
                 Button { goBack() } label: {
-                    secondaryLabel("Back", icon: "chevron.left")
+                    secondaryLabel("Back")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ActionPillButtonStyle(.secondary))
                 .accessibilityIdentifier("cookingMode.back")
 
                 Button { goNext() } label: {
-                    HStack(spacing: 6) {
-                        Text(stepIndex == steps.count - 1 ? "Finish" : "Next")
-                        Image(systemName: "chevron.right")
+                    Group {
+                        if stepIndex == steps.count - 1 { Text("Finish") } else { Text("Next") }
                     }
-                    .font(.fernlet(.label))
-                    // Each fill carries its own ink: `onGoldenrod` on the timer-fired amber,
-                    // `onMoss` on the moss. Cream on goldenrod measured ~2.2:1.
-                    .foregroundStyle(timerFired ? Color.onGoldenrod : Color.onMoss)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(timerFired ? Color.goldenrod : Color.moss, in: RoundedRectangle(cornerRadius: 12))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ActionPillButtonStyle(.primary))
+                .overlay {
+                    if timerFired {
+                        RoundedRectangle(cornerRadius: 12).strokeBorder(Color.goldenrod, lineWidth: 3).padding(-4)
+                            .accessibilityHidden(true)
+                    }
+                }
                 .accessibilityIdentifier("cookingMode.next")
             }
         }
-        .padding(20)
-        .background(Color.parchment)
     }
 
     /// A dot row reads well only for short recipes; web imports routinely carry 20–40 steps, where a
     /// fixed-size unbounded HStack of dots runs off-screen. Above the threshold fall back to a compact
-    /// capsule progress bar + "n / total" label that fits any step count.
+    /// framed progress bar + "n / total" label that fits any step count.
     private static let maxProgressDots = 12
 
     @ViewBuilder
@@ -611,12 +599,14 @@ struct CookingModeView: View {
         if steps.count <= Self.maxProgressDots {
             HStack(spacing: 8) {
                 ForEach(steps.indices, id: \.self) { index in
-                    Circle()
-                        .fill(index <= stepIndex ? Color.moss : Color.moss.opacity(0.25))
-                        .frame(width: 8, height: 8)
+                    Rectangle()
+                        .fill(index <= stepIndex ? WorldPalette.moss : WorldPalette.paperLight)
+                        .frame(width: 10, height: 10)
+                        .overlay(Rectangle().strokeBorder(WorldPalette.ink, lineWidth: 2))
                 }
             }
             .animation(.easeInOut(duration: 0.35), value: stepIndex)
+            .accessibilityHidden(true)
         } else {
             compactProgressBar
         }
@@ -628,16 +618,17 @@ struct CookingModeView: View {
         return HStack(spacing: 10) {
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color.moss.opacity(0.25))
-                    Capsule()
-                        .fill(Color.moss)
+                    Rectangle().fill(WorldPalette.barEmpty)
+                    Rectangle()
+                        .fill(WorldPalette.moss)
                         .frame(width: max(6, proxy.size.width * fraction))
                 }
+                .overlay(Rectangle().strokeBorder(WorldPalette.ink, lineWidth: 2))
             }
-            .frame(height: 6)
+            .frame(height: 10)
             Text("\(stepIndex + 1) / \(total)")
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.rowDetailBold)
+                .foregroundStyle(WorldPalette.dim)
                 .monospacedDigit()
         }
         .animation(.easeInOut(duration: 0.35), value: stepIndex)
@@ -645,81 +636,77 @@ struct CookingModeView: View {
 
     // MARK: Finish
 
+    /// "All done." under a gold medal (`b3-cook-finish`), centred in the flow.
     private var finishScreen: some View {
         ScrollView {
-            VStack(spacing: 20) {
-                Image(systemName: "checkmark.seal.fill")
-                    .font(.system(size: 46, weight: .regular))
-                    .foregroundStyle(Color.moss)
+            VStack(spacing: 14) {
+                ZStack {
+                    Circle().fill(WorldPalette.ink.opacity(0.22)).offset(y: 4)
+                    Circle().fill(WorldPalette.rgb(0xF2D58A))
+                    Circle().strokeBorder(WorldPalette.ink, lineWidth: 3)
+                    WorldSpriteView(sprite: WorldSprites.stampMed, scale: 4)
+                }
+                .frame(width: 96, height: 96)
+                .accessibilityHidden(true)
                 Text("All done.")
-                    .font(.fernlet(.displayMedium))
-                    .foregroundStyle(Color.bark)
+                    .font(RecipeType.display(34))
+                    .foregroundStyle(WorldPalette.bark)
+                    .accessibilityAddTraits(.isHeader)
                 Text("Nicely cooked. Want to log \(recipe.name) as a meal?")
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.body)
+                    .foregroundStyle(WorldPalette.dim)
                     .multilineTextAlignment(.center)
                     .fernletWrappingText()
-                    .frame(maxWidth: 300)
             }
             .frame(maxWidth: .infinity)
-            .padding(.top, 48)
-            .padding(20)
+            .padding(.top, 96)
         }
-        .safeAreaInset(edge: .bottom) {
-            primaryBar {
-                VStack(spacing: 10) {
-                    Menu {
-                        ForEach(MealType.allCases) { mealType in
-                            Button { logMeal(mealType) } label: { Text(verbatim: mealType.displayName) }
-                        }
-                    } label: {
-                        primaryButtonLabel(Text("Log this meal"))
-                    }
-                    .accessibilityIdentifier("cookingMode.logMeal")
-                    Button { closeCooking() } label: {
-                        Text("Not now")
-                            .font(.fernlet(.label))
-                            .foregroundStyle(Color.slate)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                    }
-                    .buttonStyle(.plain)
+    }
+
+    /// Log this meal as one menu of meal types (owner, 2026-10-24: meal type is one dropdown), then a
+    /// quiet Not now.
+    private var finishFooter: some View {
+        VStack(spacing: 6) {
+            Menu {
+                ForEach(MealType.allCases) { mealType in
+                    Button { logMeal(mealType) } label: { Text(verbatim: mealType.displayName) }
                 }
+            } label: {
+                primaryButtonLabel(Text("Log this meal"))
             }
+            .menuStyle(.button)
+            .buttonStyle(ActionPillButtonStyle(.primary))
+            .accessibilityIdentifier("cookingMode.logMeal")
+            Button { closeCooking() } label: {
+                Text("Not now")
+                    .font(FernletFramedFont.sheetControl)
+                    .foregroundStyle(WorldPalette.mossInk)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.plain)
         }
     }
 
     // MARK: Shared bits
 
-    private func primaryBar<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        content()
-            .padding(20)
-            .background(Color.parchment)
-    }
-
-    /// The moss primary. A `Text` the caller builds, never `String` (as `String` the "Start cooking",
-    /// "Log this meal" and "Back" labels were drawn verbatim): `Text("…")` extracts like any literal,
-    /// and "I'm ready", which describes the cook, arrives agreed with them through `AddressedCopy`.
+    /// The primary's word with the dropdown's chevron, full width. A `Text` the caller builds, never
+    /// `String` (as `String` the "Start cooking", "Log this meal" and "Back" labels were drawn
+    /// verbatim): `Text("…")` extracts like any literal.
     private func primaryButtonLabel(_ title: Text) -> some View {
-        title
-            .font(.fernlet(.label))
-            .foregroundStyle(Color.onMoss)
-            .frame(maxWidth: .infinity)
-            .padding(14)
-            .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+        HStack(spacing: 8) {
+            title
+            FernletIcon(.chevronDown, scale: 2, tint: WorldPalette.onAccent)
+        }
+        .frame(maxWidth: .infinity)
     }
 
-    private func secondaryLabel(_ title: LocalizedStringKey, icon: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
+    /// Back's pixel arrow and word, full width.
+    private func secondaryLabel(_ title: LocalizedStringKey) -> some View {
+        HStack(spacing: 7) {
+            FernletIcon(.back, scale: 2)
             Text(title)
         }
-        .font(.fernlet(.label))
-        .foregroundStyle(Color.moss)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
     }
 
     // MARK: Navigation

@@ -160,7 +160,7 @@ import FernletSocial
     /// passes the manager's sentence, which `thePresenceFirstNameNeverAnswersAnIdentifier` covers.
     @Test func presenceHeartStatusBuildersNameNoRawRecipient() throws {
         let sites = [
-            ("App/Fernlet/DisposableCameraView.swift", "private var presenceHeartStatusText: Text? {"),
+            ("App/Fernlet/World/Friends/SessionInfoSheet.swift", "private var presenceHeartStatusText: Text? {"),
             ("App/Fernlet/FriendListView.swift", "private var heartStatusText: Text? {")
         ]
         // R2: bounded by the literal site list.
@@ -186,6 +186,15 @@ import FernletSocial
             "App/Fernlet/JoinPromptSheet.swift",
             "App/Fernlet/ActivitiesView.swift",
             "App/Fernlet/DisposableCameraView.swift",
+            // World build (Friends lane): the session pieces that left the camera.
+            "App/Fernlet/World/Friends/SessionInfoSheet.swift",
+            "App/Fernlet/World/Friends/SessionPrompts.swift",
+            "App/Fernlet/World/Friends/WorldSessionButton.swift",
+            "App/Fernlet/World/Friends/FriendsPanelPieces.swift",
+            // b4-mem-blue-*: the nearby rows moved off the album onto Friends nearby.
+            "App/Fernlet/World/Friends/FriendsNearbyPage.swift",
+            "App/Fernlet/World/Friends/NearbyPersonCard.swift",
+            "App/Fernlet/World/Friends/FriendsNearbyKind.swift",
             "App/Fernlet/VerifyQRViews.swift",
             "App/Fernlet/SessionChatPanel.swift",
             "App/Fernlet/Proximity/UI/ProximityRecipeShareSheet.swift",

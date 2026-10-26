@@ -19,9 +19,11 @@ import FernletLockUI
 /// The Settings hub: a searchable, four-group Form (2026-08-21 restructure, artboard 5a —
 /// SETT-14/26/28/29) that routes to every settings sub-page. Each row carries a one-line sub-label
 /// breadcrumb saying what is inside it; the groups are **Your day** (Appearance, Goal & nutrition,
-/// Reminders, Personal care tasks, Quick-log shortcuts, Sounds & haptics), **Data & sources** (AI & data sources,
+/// Reminders, Personal care tasks, Quick-log shortcuts, Sounds & haptics), **Home map** (World build step 5c:
+/// ``HomeMapSettingsView``, location, the fog, routes and places), **Friends** (Friends & Blocks,
+/// Nearby friends; `b4-mem-settings-friends`), **Data & sources** (AI & data sources,
 /// Health), **Privacy & data** (Privacy & Data, App lock, Safety & reporting, Privacy Policy, AI
-/// activity log), and **Friends & private** (Nearby friends, Period & sensitive content), followed
+/// activity log), and **Private** (Period & sensitive content), followed
 /// by the Danger zone and — in DEBUG builds only — an Advanced section holding the one Connection
 /// log row (SETT-28 folded Debug + Connection Inspector behind `#if DEBUG`).
 ///
@@ -64,14 +66,15 @@ struct SettingsSheet: View {
     /// describes them: the memory headings' feeling names and the AI section's companion line.
     @Environment(\.fernletTermOfAddress) private var termOfAddress
     @Bindable var store: FernletStore
+    /// World build: set when Settings shows in a World panel, which closes through its own ✕, so the
+    /// sheet's Done button steps aside and a finished delete closes the panel; nil in a sheet.
+    var onClose: (() -> Void)? = nil
     @Environment(FernletLockService.self) private var lockService
     @Environment(StoragePreferencesStore.self) private var storagePreferencesStore
     /// System / Light / Dark. The app root reads the same key and hands ``FernletAppearanceMode``'s
     /// `colorScheme` (nil for `.system`) to `preferredColorScheme`, so "System" really does follow
     /// the phone; the legacy Dark-mode Bool is migrated once at launch.
     @AppStorage(FernletAppearanceMode.storageKey) private var appearanceMode: FernletAppearanceMode = .system
-    @AppStorage(FernletThemeDefaults.customLightBackgroundKey) private var customLightBackgroundHex = FernletThemeDefaults.lightBackgroundHex
-    @AppStorage(FernletThemeDefaults.customDarkBackgroundKey) private var customDarkBackgroundHex = FernletThemeDefaults.darkBackgroundHex
     /// This screen's own "delete everything" wipe state (busy / success / failure) plus the shared
     /// confirmation glue — deliberately per-screen, never shared with ``PrivacyDataSettingsView``'s.
     @State private var deleteFlow = DeleteEverythingFlow()
@@ -96,10 +99,9 @@ struct SettingsSheet: View {
     @State private var showDeleteEverything = false
     /// Sub-labels drop at accessibility sizes (5a·AX3): the breadcrumb line is the first casualty.
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    /// Read for the Appearance page's live "Contrast" readout only. The renderer's colour providers
-    /// already forward `trait.accessibilityContrast`; this is the SwiftUI-side spelling of the same
-    /// axis, so the number the picker quotes is the number the user will actually get.
-    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+    /// The World's framed look (set at the app's root): Settings draws its own framed search field
+    /// and framed rows under it, and today's system chrome without it.
+    @Environment(\.fernletFramedLook) private var framedLook
     /// Settings search query (item 10). Non-empty swaps the Form for a results List; the search bar
     /// lives on the stable `settingsContent` so it persists across that swap.
     @State private var settingsSearch = ""
@@ -137,8 +139,7 @@ struct SettingsSheet: View {
 
     var body: some View {
         NavigationStack {
-            settingsContent
-                .navigationTitle("Settings")
+            settingsRoot
                 .navigationDestination(for: SettingsRoute.self) { route in
                     destination(for: route)
                         // Each pushed page's keyboard "Done" (the nutrition targets' number pads,
@@ -146,10 +147,6 @@ struct SettingsSheet: View {
                         // outside this stack and reaches no page in it.
                         .keyboardDoneToolbar()
                 }
-                // navigationBarDrawer keeps the field at the top (classic settings idiom). The
-                // iOS 26 default docks a floating capsule over the sheet's bottom rows, where it
-                // swallows taps on whatever row settles behind it.
-                .searchable(text: $settingsSearch, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search settings")
                 // T2-14: the Form ⇄ results swap is silent to VoiceOver — nothing moves the cursor
                 // and the field's own value is the typed query, not the outcome. Watches the COUNT,
                 // not the query, so keystrokes that leave the same number of matches standing say
@@ -157,38 +154,24 @@ struct SettingsSheet: View {
                 .onChange(of: searchResultCount) { _, count in
                     announceSearchResultCount(count)
                 }
-                // Setting names, not sentences: the automatic capitalization turned a typed
-                // "lock" into "Lock" while the user was still choosing what to search for.
-                .textInputAutocapitalization(.never)
-                // Done lives in the nav bar, not a permanent bottom inset: the inset pill plus the
-                // search field left exactly one row visible at accessibility text sizes, and every
-                // other sheet closes from its chrome.
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { dismiss() }
-                            .font(.fernlet(.label))
-                            .foregroundStyle(Color.moss)
-                            .disabled(deleteFlow.isDeleting)
-                            .accessibilityIdentifier("settings.done")
-                    }
-                }
         }
         // The Settings sheet is a separate presentation from the tab content, so ContentView's
         // `.tint(Color.moss)` never reached it — every hub Toggle rendered the system green.
         .tint(Color.moss)
-        .background(Color.parchment)
+        .fernletPageBackground()
         .overlay {
             if deleteFlow.isDeleting {
                 DeletingEverythingOverlay()
             }
         }
         // No swipe-to-dismiss mid-wipe: a wipe is multi-second and the sheet must not close (or re-run)
-        // out from under it.
+        // out from under it. In a World panel the plate's ✕ is held off the same way.
         .interactiveDismissDisabled(deleteFlow.isDeleting)
+        .worldPanelHeld(deleteFlow.isDeleting)
         .destructiveConfirmation($pendingDestructiveAction)
         // Success ("Done") dismisses the sheet — the visit is over; failure keeps it put for a retry.
         .deleteEverythingAlerts(deleteFlow, successButtonTitle: "Done", successButtonRole: nil) {
-            dismiss()
+            if let onClose { onClose() } else { dismiss() }
         }
         // The typed-gate confirm (artboard 5e). The offer and iCloud claims are computed at
         // presentation time; nothing mutates until the sheet's armed confirm calls `runWipe`.
@@ -203,6 +186,52 @@ struct SettingsSheet: View {
             ) { includeHealth in
                 deleteFlow.runWipe(store: store, includingHealthSamples: includeHealth)
             }
+        }
+    }
+
+    /// Settings' first page. Under the World's framed look (`b2-settings-root`): the framed search
+    /// field pinned under the plate (or under the sheet's header), then the page, with no navigation
+    /// bar, so nothing sits between the plate and the field. Without the look: today's system search
+    /// drawer and the navigation bar's Done.
+    @ViewBuilder
+    private var settingsRoot: some View {
+        if framedLook != nil {
+            // The field sits ABOVE the list, not in the list's safe-area inset: the first keystroke
+            // swaps the page for the results (`settingsContent`), and a field hosted in the swapped
+            // list's inset lost the keyboard on that swap, so only the first letter was ever typed.
+            VStack(spacing: 0) {
+                SettingsSearchField(title: "Search settings", text: $settingsSearch)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 14)
+                settingsContent
+            }
+            // The dotted page behind the field too (the list paints only its own area).
+            .fernletPageBackground()
+            .modifier(SettingsRootChrome(inPanel: onClose != nil, isDeleting: deleteFlow.isDeleting) { dismiss() })
+        } else {
+            settingsContent
+                .navigationTitle(Text("Settings"))
+                // navigationBarDrawer keeps the field at the top (classic settings idiom). The
+                // iOS 26 default docks a floating capsule over the sheet's bottom rows, where it
+                // swallows taps on whatever row settles behind it.
+                .searchable(text: $settingsSearch, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search settings")
+                // Setting names, not sentences: the automatic capitalization turned a typed
+                // "lock" into "Lock" while the user was still choosing what to search for.
+                .textInputAutocapitalization(.never)
+                // Done lives in the nav bar, not a permanent bottom inset: the inset pill plus the
+                // search field left exactly one row visible at accessibility text sizes, and every
+                // other sheet closes from its chrome.
+                .toolbar {
+                    if onClose == nil {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { dismiss() }
+                                .font(.fernlet(.label))
+                                .foregroundStyle(Color.moss)
+                                .disabled(deleteFlow.isDeleting)
+                                .accessibilityIdentifier("settings.done")
+                        }
+                    }
+                }
         }
     }
 
@@ -275,31 +304,28 @@ struct SettingsSheet: View {
     /// are frozen English tokens and must never reach a `Text`: as a `String` either would take
     /// `Text`'s verbatim initializer and render untranslated.
     private var searchResultsList: some View {
-        List {
-            let results = SettingsSearchIndex.results(for: settingsSearch)
-            if results.isEmpty {
-                Text("No matching settings")
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.slate)
-                    .listRowBackground(Color.cream)
-            } else {
-                ForEach(results) { entry in
-                    NavigationLink(value: entry.route) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(entry.displayTitle)
-                                .font(.fernlet(.label))
-                                .foregroundStyle(Color.bark)
-                            Text(entry.displayBreadcrumb)
-                                .font(.fernlet(.labelSmall))
-                                .foregroundStyle(Color.slate)
+        // A Form, so under the framed look the results are one framed card of rows with dotted
+        // rules, like the page they replace (`b2-settings-root`).
+        Form {
+            Section {
+                let results = SettingsSearchIndex.results(for: settingsSearch)
+                if results.isEmpty {
+                    Text("No matching settings")
+                        .font(framedLook == nil ? .fernlet(.body) : FernletFramedFont.rowTitle)
+                        .foregroundStyle(framedLook?.dim ?? Color.slate)
+                        .listRowBackground(Color.cream)
+                } else {
+                    ForEach(results) { entry in
+                        NavigationLink(value: entry.route) {
+                            FernletRowLabel(title: Text(entry.displayTitle), detail: Text(entry.displayBreadcrumb))
                         }
+                        .listRowBackground(Color.cream)
                     }
-                    .listRowBackground(Color.cream)
                 }
             }
         }
         .scrollContentBackground(.hidden)
-        .background(Color.parchment)
+        .fernletPageBackground()
     }
 
     /// The route factory: the single place each sub-page destination is built, replacing the former
@@ -318,6 +344,8 @@ struct SettingsSheet: View {
             QuickLogShortcutsEditor(store: store)
         case .soundsHaptics:
             SoundsHapticsSettingsView()
+        case .homeMap:
+            HomeMapSettingsView(store: store)
         case .aiDataSources:
             settingsDestination(title: "AI & data sources") { aiDataSourcesTab }
         case .health:
@@ -349,9 +377,13 @@ struct SettingsSheet: View {
                 .fernletLockGate(scope: .appLockSettings, active: lockService.isLockConfigured)
                 .environment(lockService)
         case .sharing:
-            settingsDestination(title: "Sharing settings") { sharingSettingsTab }
+            SharingSettingsView(store: store)
         case .nearbyFriends:
             NearbyFriendsSettingsView(store: store)
+        case .friendsBlocks:
+            // The page the Friends tab's header used to push (b2-friend-list), with Back to Settings.
+            FriendListView(store: store, isTabBarCompact: .constant(false), tabResetToken: .constant(0))
+                .fernletPushedPage("Friends & Blocks")
         case .periodSensitive:
             PeriodSensitiveSettingsView(store: store)
         }
@@ -360,6 +392,8 @@ struct SettingsSheet: View {
     private var settingsForm: some View {
         Form {
             yourDaySection
+            homeMapSection
+            friendsSection
             dataSourcesSection
             privacyHubSection
             friendsPrivateSection
@@ -396,9 +430,7 @@ struct SettingsSheet: View {
     /// literal and quietly re-introduce the bug).
     private func hubLink(_ title: LocalizedStringKey, _ route: SettingsRoute) -> some View {
         NavigationLink(value: route) {
-            Text(title)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.bark)
+            FernletRowLabel(title)
         }
     }
 
@@ -409,17 +441,8 @@ struct SettingsSheet: View {
     /// accessibility sizes (5a·AX3: the breadcrumb line is the first casualty).
     private func hubLink(_ title: LocalizedStringKey, subtitle: Text, _ route: SettingsRoute) -> some View {
         NavigationLink(value: route) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.bark)
-                if !dynamicTypeSize.isAccessibilitySize {
-                    subtitle
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
-                        .lineLimit(2)
-                }
-            }
+            // The framed row's name and second line (`.sl`, `b2-settings-root`).
+            FernletRowLabel(title: Text(title), detail: dynamicTypeSize.isAccessibilitySize ? nil : subtitle)
         }
         // The spoken/queryable label stays the row NAME alone: folding the sub-label into it made
         // every row a sentence (and broke every `buttons["Goal & nutrition"]`-style lookup other
@@ -436,7 +459,7 @@ struct SettingsSheet: View {
     /// (spec note 3: every row on the old hub has a stated home).
     private var yourDaySection: some View {
         Section {
-            hubLink("Appearance", subtitle: Text("Theme, backgrounds, companion, Home widgets"), .appearance)
+            hubLink("Appearance", subtitle: Text("Theme, backgrounds, companion, Today panel"), .appearance)
                 .accessibilityIdentifier("settings.row.appearance")
             hubLink("Goal & nutrition", subtitle: Text("Goal, body, targets, hydration, calories"), .goalNutrition)
                 .accessibilityIdentifier("settings.row.goalNutrition")
@@ -444,12 +467,24 @@ struct SettingsSheet: View {
                 .accessibilityIdentifier("settings.row.reminders")
             hubLink("Personal care tasks", subtitle: personalCareRowSubtitle, .personalCare)
                 .accessibilityIdentifier("settings.row.personalCare")
-            hubLink("Quick-log shortcuts", subtitle: Text("Six tiles on Home"), .layoutShortcuts)
+            hubLink("Quick-log shortcuts", subtitle: Text("Six tiles in Log"), .layoutShortcuts)
                 .accessibilityIdentifier("settings.row.quickLog")
             hubLink("Sounds & haptics", subtitle: Text("Haptics, workout sounds, spoken cues"), .soundsHaptics)
                 .accessibilityIdentifier("settings.row.soundsHaptics")
         } header: {
             hubSectionHeader("Your day")
+        }
+        .listRowBackground(Color.cream)
+    }
+
+    /// "Home map" (World build step 5c; `b2-settings-root` draws it between Your day and the groups
+    /// below): location, the fog, routes and places, one page (`b1-settings-map`).
+    private var homeMapSection: some View {
+        Section {
+            hubLink("Home map", subtitle: Text("Location, fog, routes, places"), .homeMap)
+                .accessibilityIdentifier("settings.row.homeMap")
+        } header: {
+            hubSectionHeader("Home map")
         }
         .listRowBackground(Color.cream)
     }
@@ -493,17 +528,30 @@ struct SettingsSheet: View {
         .listRowBackground(Color.cream)
     }
 
-    /// "Friends & private": the in-person sharing page and the sensitive-surface gates. Carries
+    /// "Friends" (World Review Batch 4, `b4-mem-settings-friends`): Friends & Blocks — the friend list and
+    /// the name you appear as, which left the Friends tab's header when the tab became the Album — and
+    /// Nearby friends, each saying what it holds now.
+    private var friendsSection: some View {
+        Section {
+            hubLink("Friends & Blocks", subtitle: friendsRowSubtitle, .friendsBlocks)
+                .accessibilityIdentifier("settings.row.friendsBlocks")
+            hubLink("Nearby friends", subtitle: nearbyFriendsRowSubtitle, .nearbyFriends)
+                .accessibilityIdentifier("settings.row.nearbyFriends")
+        } header: {
+            hubSectionHeader("Friends")
+        }
+        .listRowBackground(Color.cream)
+    }
+
+    /// "Private": the sensitive-surface gates (Nearby friends moved up to the Friends group). Carries
     /// the hub's one-sentence standing promise as its footer — the ~90-word paragraph became this
     /// line (SETT-14); the detail moved to the pages that own it.
     private var friendsPrivateSection: some View {
         Section {
-            hubLink("Nearby friends", subtitle: Text("Presence, vibe, hearts, sharing"), .nearbyFriends)
-                .accessibilityIdentifier("settings.row.nearbyFriends")
             hubLink("Period & sensitive content", subtitle: Text("Visibility, gating, app lock"), .periodSensitive)
                 .accessibilityIdentifier("settings.row.periodSensitive")
         } header: {
-            hubSectionHeader("Friends & private")
+            hubSectionHeader("Private")
         } footer: {
             Text("Everything stays on your device unless you turn it on.")
         }
@@ -520,9 +568,9 @@ struct SettingsSheet: View {
                 .accessibilityIdentifier("settings.row.connectionLog")
             NavigationLink {
                 NetworkMeshFeasibilityProbeView()
+                    .fernletPushedPage("Mesh network feasibility")
             } label: {
-                Text("Mesh network feasibility")
-                    .font(.fernlet(.label))
+                FernletRowLabel("Mesh network feasibility")
             }
             .accessibilityIdentifier("settings.row.meshNetworkFeasibility")
         } header: {
@@ -542,6 +590,18 @@ struct SettingsSheet: View {
         } else {
             Text("Daily check-in off")
         }
+    }
+
+    /// "You appear as Redesign iPhone 17 · 2 friends": the name nearby people see, and how many kept
+    /// friends there are (not blocked, not removed).
+    private var friendsRowSubtitle: Text {
+        let friends = store.trustedProximityPeers.filter { $0.blockedAt == nil && $0.revokedAt == nil }.count
+        return Text("You appear as \(store.resolvedProximityDisplayName) · ^[\(friends) friends](inflect: true)")
+    }
+
+    /// "Presence on" / "Presence off": whether friends can see you're nearby.
+    private var nearbyFriendsRowSubtitle: Text {
+        store.settings.allowNearbyPresence ? Text("Presence on") : Text("Presence off")
     }
 
     /// "N tasks". (The design canvas's "N daily, M weekly" cannot be said truthfully — care tasks
@@ -573,11 +633,14 @@ struct SettingsSheet: View {
     /// (which would win for a plain literal and quietly re-introduce the bug). The signature is
     /// source-pinned by `SettingsSearchIndexTests`, and the moved sub-pages
     /// (``PeriodSensitiveSettingsView``, ``NearbyFriendsSettingsView``) follow the same shape.
-    private func hubToggle(_ title: LocalizedStringKey, isOn: Binding<Bool>) -> some View {
+    ///
+    /// In a framed section it is one row (`.sr` with its switch): the name, and `detail` as the row's
+    /// second line when given (`b2-settings-ai`).
+    private func hubToggle(_ title: LocalizedStringKey, detail: Text? = nil, isOn: Binding<Bool>) -> some View {
         Toggle(isOn: isOn) {
-            Text(title)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.bark)
+            // A two-line row takes the kit's row padding above and below its words.
+            FernletRowLabel(title: Text(title), detail: detail)
+                .padding(.vertical, detail == nil ? 0 : 7)
         }
     }
 
@@ -600,414 +663,91 @@ struct SettingsSheet: View {
     /// The scroll-wrapped page shell shared by the inline tabs. `title` is `LocalizedStringKey`
     /// (never `String` — same rule as ``hubLink(_:_:)``); every call site passes a literal.
     private func settingsDestination<Content: View>(
-        title: LocalizedStringKey,
+        title: LocalizedStringResource,
         @ViewBuilder content: () -> Content
     ) -> some View {
         ScrollView {
+            // The framed page's margins (`.pnl`): 16 pt in, 14 under the plate, as a framed Form.
             content()
-                .padding(20)
-                .padding(.bottom, 20)
+                .padding(.horizontal, 16)
+                .padding(.top, 14)
+                .padding(.bottom, 30)
         }
         .scrollContentBackground(.hidden)
-        .background(Color.parchment)
-        .navigationTitle(title)
+        .fernletPageBackground()
+        // In the World panel the title and Back go on the wooden plate (`b1-frame-push`); in the
+        // Settings sheet it is the navigation title, as before.
+        .fernletPushedPage(title)
     }
 
     private var appearanceTab: some View {
         VStack(alignment: .leading, spacing: 14) {
+            SectionLabel("Appearance")
             appearanceModeCard
             SectionLabel("Companion feelings")
             // A change re-derives the widget's emotion timeline, so republish it at once.
             CompanionFeelingsSettingsCard(onChange: { store.publishWidgetSnapshot() })
-            SectionLabel("Backgrounds")
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Choose separate backgrounds for light and dark mode. Cards and input boxes stay in the same color family so the existing text colors remain readable.")
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-
-                themeColorRow(
-                    title: "Light mode",
-                    color: themeColorBinding(
-                        keyPath: \.customLightBackgroundHex,
-                        defaultHex: FernletThemeDefaults.lightBackgroundHex
-                    ),
-                    hex: customLightBackgroundHex,
-                    defaultHex: FernletThemeDefaults.lightBackgroundHex,
-                    isDarkRow: false
-                ) {
-                    customLightBackgroundHex = FernletThemeDefaults.lightBackgroundHex
+            // `b2-settings-appearance` (redrawn with `b2-colors`): today's two background pickers
+            // moved into App colors (Paper, with Wood and Accent), one row here that pushes it.
+            SectionLabel("Colors")
+            FernletFramedSection(header: nil) {
+                NavigationLink {
+                    AppColorsPage(store: store)
+                } label: {
+                    AppColorsSettingsRow()
                 }
-
-                themeColorRow(
-                    title: "Dark mode",
-                    color: themeColorBinding(
-                        keyPath: \.customDarkBackgroundHex,
-                        defaultHex: FernletThemeDefaults.darkBackgroundHex
-                    ),
-                    hex: customDarkBackgroundHex,
-                    defaultHex: FernletThemeDefaults.darkBackgroundHex,
-                    isDarkRow: true
-                ) {
-                    customDarkBackgroundHex = FernletThemeDefaults.darkBackgroundHex
-                }
+                .buttonStyle(FernletRowButtonStyle(showsChevron: true))
+                .accessibilityIdentifier("settings.appColors")
             }
-            .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-            homeWidgetsSection
+            todayPanelSection
         }
     }
 
-    /// System / Light / Dark chips plus the follows-your-phone note.
+    /// System / Light / Dark as the framed segmented control (`b2-settings-appearance`), plus the
+    /// follows-your-phone note, on one card. The control ticks when the mode really changes.
     private var appearanceModeCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SheetField("Appearance") {
-                FlowLayout(spacing: 8) {
-                    ForEach(FernletAppearanceMode.allCases) { mode in
-                        Button(mode.label) { chooseAppearanceMode(mode) }
-                            .buttonStyle(ChipButtonStyle(selected: appearanceMode == mode))
-                    }
-                }
-            }
+        VStack(alignment: .leading, spacing: 12) {
+            FernletSegmentedPicker("Appearance", selection: $appearanceMode,
+                                   options: FernletAppearanceMode.allCases) { Text(verbatim: $0.label) }
             Text("“System” follows your phone's Light/Dark setting, the way onboarding already does.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.body)
+                .foregroundStyle(framedLook?.dim ?? Color.slate)
                 .fernletWrappingText()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+        .settingsCard()
     }
 
-    /// One background row: the colour picker, its hex, the live contrast line and Reset.
-    ///
-    /// `title` is a `LocalizedStringKey`, not a `String`: as a `String` it took `ColorPicker`'s
-    /// verbatim initializer, so "Light mode" and "Dark mode" never reached the catalog.
-    private func themeColorRow(title: LocalizedStringKey, color: Binding<Color>, hex: String, defaultHex: String, isDarkRow: Bool, reset: @escaping () -> Void) -> some View {
-        HStack(spacing: 12) {
-            ColorPicker(title, selection: color, supportsOpacity: false)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.bark)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(hex.uppercased())
-                    .font(.fernlet(.stat))
-                    .foregroundStyle(Color.slate)
-                themeContrastLine(hex: hex, defaultHex: defaultHex, isDarkRow: isDarkRow)
-            }
-            Button("Reset", action: reset)
-                .buttonStyle(.plain)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.mossInk)
-                // Voice Control: both colour rows draw "Reset"; the row's title tells them apart.
-                .accessibilityInputLabels([Text("Reset"), Text("Reset \(Text(title))")])
-                .disabled(hex.caseInsensitiveCompare(defaultHex) == .orderedSame)
-        }
-        .padding(12)
-        .background(Color.parchment.opacity(0.65), in: RoundedRectangle(cornerRadius: 12))
-    }
-
-    /// T2-7's live readout: what the picked background will actually measure, computed from the
-    /// same ``FernletThemePalette/fitted(background:contrast:)`` the renderer uses, while the
-    /// picker is open — **on the same contrast axis the reader is running**.
-    ///
-    /// Before the ink-fit guardrail, a mid-grey like `#B3B3B3` fell on the dark-ink side of one
-    /// binary luminance threshold and produced 1.79:1 primary ink and 1.13:1 secondary — on every
-    /// screen, including the Reset button that would undo it. The fit means the *ink* is now safe
-    /// whatever the user picks, and this line is how they can see that rather than take it on
-    /// trust. The residual risk the fit cannot cover is the **accents**, which are fixed hues that
-    /// do not adapt to a custom background, so the line calls that out separately when one of them
-    /// drops under the 3:1 non-text floor.
-    ///
-    /// The contrast axis is forwarded because it changes the answer: with Increase Contrast on, the
-    /// palette the renderer builds is fitted to raised targets (and the *default* background swaps
-    /// to the approved high-contrast secondary ink), so a readout computed at `.unspecified` quotes
-    /// a number the user will never see. A settings line that disagrees with what the app actually
-    /// renders is worse than no line — the same reason the default hex takes the default palette
-    /// below rather than the fitted one.
-    @ViewBuilder
-    private func themeContrastLine(hex: String, defaultHex: String, isDarkRow: Bool) -> some View {
-        #if canImport(UIKit)
-        if let background = UIColor(hex: hex) {
-            // SwiftUI's spelling of the axis, in UIKit's. `.increased` is `.high`; `.standard` and
-            // anything the environment cannot answer stay `.unspecified`, which is what every
-            // palette call in the app meant before it carried a contrast at all.
-            let contrast: UIAccessibilityContrast = colorSchemeContrast == .increased ? .high : .unspecified
-            // The DEFAULT hex takes the default palette, not the fitted one — the two differ by a
-            // few tenths, and a settings line that disagrees with what the app actually renders is
-            // worse than no line. `fitted()` only ever runs on a genuinely custom colour, exactly
-            // as `current(for:contrast:)` does.
-            let palette = hex.caseInsensitiveCompare(defaultHex) == .orderedSame
-                ? FernletThemePalette.current(for: isDarkRow ? .dark : .light, contrast: contrast)
-                : FernletThemePalette.fitted(background: background, contrast: contrast)
-            // The WORST of the four pairs, not the flattering one. Text is drawn on both surfaces
-            // and in both inks, so the number a user needs is the one they will actually struggle
-            // with — reporting `primary on box` would have read 12:1 for the mid-grey background
-            // whose *secondary ink on the page* was 1.13:1.
-            let ratio = Self.ratioText(Self.worstInkContrast(palette))
-            // Two separate `Text` literals rather than a ternary INSIDE one: a ternary of two
-            // interpolated literals infers `String`, which silently opts the line out of the string
-            // catalog (the localization wall's sharpest edge). Each literal here is its own
-            // `LocalizedStringKey` and each harvests as its own "Contrast %@:1…" format string.
-            if Self.accentsFallBelowFloor(on: background) {
-                Text("Contrast \(ratio):1 · accents may be hard to see")
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.goldenrodInk)
-                    // Wraps rather than truncating: at large content sizes this sentence needs more
-                    // than two lines and the audit reported it clipped. A contrast readout that
-                    // truncates is a particularly poor thing to lose at large text sizes.
-                    .fernletWrappingText()
-            } else {
-                Text("Contrast \(ratio):1")
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-            }
-        }
-        #endif
-    }
-
-    /// The ratio rendered to one decimal place, locale-formatted (Phase 0 ships comma decimals).
-    private static func ratioText(_ ratio: CGFloat) -> String {
-        (Double(ratio)).formatted(.number.precision(.fractionLength(1)))
-    }
-
-    /// The worst of the four ink/surface pairs a fitted palette produces — primary and secondary
-    /// ink against both the page background and the card box.
-    private static func worstInkContrast(_ palette: FernletThemePalette) -> CGFloat {
-        min(
-            min(palette.primaryText.contrastRatio(to: palette.background),
-                palette.primaryText.contrastRatio(to: palette.box)),
-            min(palette.secondaryText.contrastRatio(to: palette.background),
-                palette.secondaryText.contrastRatio(to: palette.box))
-        )
-    }
-
-    /// Whether either of the two accents that carry *meaning* on a background — moss (the app's
-    /// affirmative tint, 179 foreground sites) and terracotta (destructive) — falls under the 3:1
-    /// WCAG non-text floor on either surface the chosen colour produces.
-    ///
-    /// Accents are fixed hues with no dependence on the background, so unlike the inks they cannot
-    /// be fitted; the honest move is to warn rather than to silently recolour the whole design
-    /// system out from under the user's choice. This is the one risk the T2-7 guardrail does not
-    /// remove, which is exactly why the line says so.
-    ///
-    /// Deliberately takes no contrast argument, unlike the ratio beside it: the two colours it
-    /// measures against are the background itself and `palette.box`, and `boxColor(from:…)` is a
-    /// fixed 0.97/0.17 brightness pin with no contrast axis at all. Only the *inks* move with
-    /// Increase Contrast, so threading it here would imply a dependence that does not exist.
-    private static func accentsFallBelowFloor(on background: UIColor) -> Bool {
-        let palette = FernletThemePalette.fitted(background: background)
-        let isDark = background.relativeLuminance < FernletThemePalette.inkFamilyCrossover
-        let moss = isDark
-            ? UIColor(red: 0.498, green: 0.690, blue: 0.412, alpha: 1)
-            : UIColor(red: 0.369, green: 0.518, blue: 0.302, alpha: 1)
-        let terracotta = isDark
-            ? UIColor(red: 0.839, green: 0.459, blue: 0.345, alpha: 1)
-            : UIColor(red: 0.724, green: 0.329, blue: 0.239, alpha: 1)
-        let worst = [moss, terracotta]
-            .flatMap { [$0.contrastRatio(to: background), $0.contrastRatio(to: palette.box)] }
-            .min() ?? 21
-        return worst < 3.0
-    }
-
-    private func themeColorBinding(keyPath: ReferenceWritableKeyPath<SettingsSheet, String>, defaultHex: String) -> Binding<Color> {
-        Binding(
-            get: {
-                #if canImport(UIKit)
-                return Color(UIColor(hex: self[keyPath: keyPath]) ?? UIColor(hex: defaultHex) ?? .systemBackground)
-                #else
-                return Color.parchment
-                #endif
-            },
-            set: { newValue in
-                #if canImport(UIKit)
-                self[keyPath: keyPath] = UIColor(newValue).hexString ?? defaultHex
-                #endif
-            }
-        )
-    }
-
-    /// The Home-widget layout card, on the Appearance page since the 2026-08-21 hub restructure
-    /// (the old Layout & shortcuts page became ``QuickLogShortcutsEditor``; widgets are how Home
-    /// looks, so they moved in with Appearance).
+    /// The Today panel's row on the Appearance page (World build, design `b1-today-editor`, approved
+    /// 2026-10-23): "Cards and their order" opens Arrange Today (``WorldTodayEditor``), which replaced
+    /// the Home widgets editor here. The stored order and its ids are unchanged.
     ///
     /// NOTE: quick-log editing lives in ``QuickLogShortcutsEditor`` and edits the STORED array —
     /// never a visibility-filtered one (the destructive-filtering record lives on that type).
-    private var homeWidgetsSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SectionLabel("Home widgets")
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Choose what appears on the main page and put the widgets in the order you want. Your companion always stays on Home — you can move it, but not remove it.")
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-
-                ForEach(Array(store.settings.homeWidgets.enumerated()), id: \.element.id) { index, widget in
-                    homeWidgetLayoutRow(widget, index: index)
-                }
-
-                FlowLayout(spacing: 8) {
-                    ForEach(availableHomeWidgets) { widget in
-                        Button {
-                            addHomeWidget(widget)
-                        } label: {
-                            Label(widget.title, systemImage: widget.systemImage)
-                        }
-                        .buttonStyle(ChipButtonStyle(selected: false))
-                    }
-                }
-
-                Button("Reset home widgets") { resetHomeWidgets() }
-                .buttonStyle(.plain)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.moss)
+    private var todayPanelSection: some View {
+        FernletFramedSection("Today panel") {
+            NavigationLink {
+                WorldTodayEditor(store: store)
+                    .fernletPushedPage("Arrange Today")
+                    .background { WorldPageBackground().ignoresSafeArea() }
+            } label: {
+                FernletRowLabel("Cards and their order", detail: "Opens Arrange Today")
             }
-            .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+            .buttonStyle(FernletRowButtonStyle())
+            .accessibilityIdentifier("settings.todayPanel")
         }
-        .onAppear {
-            store.setHomeWidgets(store.settings.homeWidgets)
-        }
-    }
-
-    private var availableHomeWidgets: [HomeWidget] {
-        HomeWidget.allCases.filter { !store.settings.homeWidgets.contains($0) }
-    }
-
-    private func homeWidgetLayoutRow(_ widget: HomeWidget, index: Int) -> some View {
-        HStack(spacing: 10) {
-            reorderControls(
-                name: widget.title,
-                canMoveUp: index > 0,
-                canMoveDown: index < store.settings.homeWidgets.count - 1
-            ) { offset in
-                moveHomeWidget(from: index, by: offset)
-            }
-
-            Label(widget.title, systemImage: widget.systemImage)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.bark)
-                // Without the priority the fixed chevron/remove frames squeezed the label until
-                // "Companion" broke mid-word as "Companio / n" at accessibility sizes.
-                .fernletWrappingText()
-                .layoutPriority(1)
-
-            Spacer(minLength: 4)
-
-            // The companion is the surface the whole app is built around, so it stays pinned:
-            // reorderable, but never one stray tap away from being gone.
-            if widget != .companion {
-                Button {
-                    removeHomeWidget(widget)
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(Color.slate)
-                }
-                .buttonStyle(.plain)
-                .fernletIconButton("Remove \(widget.title) from Home")
-                // Voice Control: one X per widget row; the widget's name is what tells them apart.
-                .accessibilityInputLabels([Text("Remove \(widget.title)")])
-            }
-        }
-        .padding(10)
-        .background(Color.parchment.opacity(0.65), in: RoundedRectangle(cornerRadius: 12))
-    }
-
-    /// The stacked move-up / move-down controls shared by the widget and quick-log rows.
-    ///
-    /// 44pt targets with spoken labels: the old 28×24pt chevrons were both under the minimum target
-    /// and announced by VoiceOver as "chevron.up". An unavailable end-of-list arrow is hidden rather
-    /// than greyed — colour alone was the only signal that it did nothing.
-    private func reorderControls(
-        name: String,
-        canMoveUp: Bool,
-        canMoveDown: Bool,
-        move: @escaping (Int) -> Void
-    ) -> some View {
-        VStack(spacing: 0) {
-            Button { move(-1) } label: { Image(systemName: "chevron.up") }
-                .fernletIconButton("Move \(name) up")
-                .disabled(!canMoveUp)
-                .opacity(canMoveUp ? 1 : 0)
-                .accessibilityHidden(!canMoveUp)
-
-            Button { move(1) } label: { Image(systemName: "chevron.down") }
-                .fernletIconButton("Move \(name) down")
-                .disabled(!canMoveDown)
-                .opacity(canMoveDown ? 1 : 0)
-                .accessibilityHidden(!canMoveDown)
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(Color.slate)
-    }
-
-    /// One Appearance chip: a choice on a custom control, so a tick when it changes the mode (the
-    /// system's own segmented controls tick; these chips otherwise said nothing).
-    private func chooseAppearanceMode(_ mode: FernletAppearanceMode) {
-        if appearanceMode != mode { FernletFeedback.system.play(.tick) }
-        appearanceMode = mode
-    }
-
-    // Every layout change below plays `moved` (report B13) when it really changes the list, and the
-    // list redrawing in its new order is the visual twin. A no-op — Reset on the default layout —
-    // says nothing.
-
-    private func addHomeWidget(_ widget: HomeWidget) {
-        var widgets = store.settings.homeWidgets
-        guard !widgets.contains(widget) else { return }
-        widgets.append(widget)
-        FernletFeedback.system.play(.moved)
-        store.setHomeWidgets(widgets)
-    }
-
-    private func removeHomeWidget(_ widget: HomeWidget) {
-        var widgets = store.settings.homeWidgets
-        guard widgets.contains(widget) else { return }
-        widgets.removeAll { $0 == widget }
-        FernletFeedback.system.play(.moved)
-        store.setHomeWidgets(widgets)
-    }
-
-    private func moveHomeWidget(from index: Int, by offset: Int) {
-        let destination = index + offset
-        var widgets = store.settings.homeWidgets
-        guard widgets.indices.contains(index), widgets.indices.contains(destination) else { return }
-        widgets.swapAt(index, destination)
-        FernletFeedback.system.play(.moved)
-        store.setHomeWidgets(widgets)
-    }
-
-    private func resetHomeWidgets() {
-        if store.settings.homeWidgets != HomeWidget.defaultWidgets { FernletFeedback.system.play(.moved) }
-        store.setHomeWidgets(HomeWidget.defaultWidgets)
     }
 
     private var memoriesTab: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Edit or remove the notes Fernlet keeps from journals, plus the local trends it is inferring.")
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.body)
+                .foregroundStyle(framedLook?.dim ?? Color.slate)
                 .fernletWrappingText()
+                .padding(.horizontal, 4)
 
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass")
-                    .font(.subheadline)
-                    .foregroundStyle(Color.slate)
-                TextField("Search or type \"forget [keyword]\"", text: $memorySearch,
-                          prompt: .fieldPrompt("Search or type \"forget [keyword]\""))
-                    .font(.fernlet(.body))
-                    .autocorrectionDisabled()
-                if !memorySearch.isEmpty {
-                    Button { memorySearch = "" } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(Color.slate)
-                    }
-                    .buttonStyle(.plain)
-                    .fernletIconButton("Clear search")
-                }
-            }
-            .padding(12)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+            // The framed search field (`b2-settings-memory`), the same one Settings' first page has.
+            SettingsSearchField(title: "Search or type \"forget [keyword]\"", text: $memorySearch,
+                                identifier: "settings.memorySearch")
 
             if let keyword = forgetKeyword {
                 forgetShellView(keyword: keyword)
@@ -1026,20 +766,19 @@ struct SettingsSheet: View {
                     // The heading draws it through `MemoryCategoryName`, which names the categories
                     // Fernlet itself writes (a journal feeling, "other") in the reader's language and
                     // leaves any other token as it was stored.
-                    SectionLabel(verbatim: MemoryCategoryName.heading(forGroup: key, addressing: termOfAddress))
-                    ForEach(groups[key] ?? []) { memory in
-                        memoryRow(memory)
+                    FernletFramedSection(header: Text(verbatim: MemoryCategoryName.heading(forGroup: key, addressing: termOfAddress))) {
+                        ForEach(groups[key] ?? []) { memory in
+                            memoryRow(memory)
+                        }
                     }
                 }
             }
         }
         .sheet(item: $editingMemory) { memory in
+            // Full height, never .medium: the character counter, the source date and Delete all sat
+            // below the fold of the half sheet. Paper with the wooden grabber (`b3-memory-editor`).
             MemoryEditorSheet(store: store, memory: memory)
-                // Full height, not .medium: the character counter, the source date and Delete all
-                // sat below the fold of the half sheet.
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheet()
         }
     }
 
@@ -1090,21 +829,32 @@ struct SettingsSheet: View {
                 .frame(minHeight: 44)
             }
             .padding(14)
-            .background(Color.terracotta.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+            .background(framedLook?.warn ?? Color.terracotta.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+            .overlay {
+                // The framed warning (`.notice3.warn`): the look's warn fill in a 2-pt ink frame.
+                if let framedLook {
+                    RoundedRectangle(cornerRadius: 12).strokeBorder(framedLook.ink, lineWidth: FernletFramedLook.frameWidth)
+                }
+            }
         }
     }
 
     private var signalsTab: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Local trends Fernlet is inferring from journals, meals, sleep, and workouts.")
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.body)
+                .foregroundStyle(framedLook?.dim ?? Color.slate)
                 .fernletWrappingText()
+                .padding(.horizontal, 4)
             if store.derivedSignals.isEmpty {
                 FernletCard { EmptyState(text: "More logs will make trends useful.") }
             } else {
                 ForEach(store.derivedSignals) { signal in
-                    SignalDetailRow(signal: signal)
+                    if let framedLook {
+                        SettingsSignalCard(signal: signal, look: framedLook)
+                    } else {
+                        SignalDetailRow(signal: signal)
+                    }
                 }
             }
         }
@@ -1201,59 +951,6 @@ struct SettingsSheet: View {
         }
     }
 
-    /// Trainer-summary contents and the manual clipboard/paste exchange gate. These settings moved
-    /// out of Move › Share so the action screen stays focused on preparing and transferring data.
-    private var sharingSettingsTab: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SectionLabel("Manual plan exchange")
-            manualPlanExchangeCard
-            SectionLabel("Trainer summaries")
-            trainerSummaryOptionsCard
-        }
-    }
-
-    private var manualPlanExchangeCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            hubToggle("Manual plan exchange", isOn: settingsBinding(\.coachExchangeEnabled))
-            Text("Lets you copy a training summary and prompt for an AI assistant, then paste its workout plan back into Fernlet.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
-            Text("Copied text leaves Fernlet when you paste it elsewhere. Pasted plans are not from a verified coach, so Fernlet shows every day for review before adding anything.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
-        }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: FernletMetrics.radiusMd))
-    }
-
-    private var trainerSummaryOptionsCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Also include in trainer summaries")
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.slate)
-            trainerSummaryToggles
-            Text("These choices apply to every summary prepared from Move or Shortcuts.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
-        }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: FernletMetrics.radiusMd))
-    }
-
-    @ViewBuilder
-    private var trainerSummaryToggles: some View {
-        Group {
-            hubToggle("Your goal", isOn: settingsBinding(\.trainerExportIncludesGoal))
-            hubToggle("Hydration", isOn: settingsBinding(\.trainerExportIncludesHydration))
-            hubToggle("Sleep summaries", isOn: settingsBinding(\.trainerExportIncludesSleep))
-            hubToggle("Days you were unwell", isOn: settingsBinding(\.trainerExportIncludesSickness))
-            hubToggle("Wellbeing score", isOn: settingsBinding(\.trainerExportIncludesWellbeing))
-        }
-    }
-
     /// The AI & data sources grouping page (artboard 5a): the on-device AI/web/weather switches,
     /// the body-signals opt-in, and the doors into Core memory and Signals.
     private var aiDataSourcesTab: some View {
@@ -1265,39 +962,19 @@ struct SettingsSheet: View {
     }
 
     /// Doors into the two inspection pages this group owns.
-    @ViewBuilder
     private var memoryAndSignalsLinks: some View {
-        SectionLabel("Memory & signals")
-        VStack(alignment: .leading, spacing: 0) {
-            settingsLinkRow("Core memory", icon: "brain.head.profile", route: .coreMemory)
-            FernletRowDivider()
-            settingsLinkRow("Signals", icon: "waveform.path", route: .signals)
+        FernletFramedSection("What Fernlet keeps") {
+            settingsLinkRow("Core memory", route: .coreMemory)
+            settingsLinkRow("Signals", route: .signals)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 4)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
-    /// A card-hosted navigation row for pushed pages reached from inside a tab.
-    private func settingsLinkRow(_ title: LocalizedStringKey, icon: String, route: SettingsRoute) -> some View {
+    /// A framed link row (`.sr` with its chevron) to a page pushed from inside a tab.
+    private func settingsLinkRow(_ title: LocalizedStringKey, route: SettingsRoute) -> some View {
         NavigationLink(value: route) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.moss)
-                    .frame(width: 28)
-                Text(title)
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.bark)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(Color.slate)
-            }
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
+            FernletRowLabel(title)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(FernletRowButtonStyle())
     }
 
     /// The goal presets, the sick/calories switches, and the footnote naming anything pinned that
@@ -1314,24 +991,18 @@ struct SettingsSheet: View {
         ), weightManagementDeficitPercent: NutritionTargetCalculator.weightManagementDeficitPercent(for: store.settings))
         if let note = goalOverrideFootnote {
             Text(note)
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.note)
+                .foregroundStyle(framedLook?.dim ?? Color.slate)
                 .fernletWrappingText()
+                .padding(.horizontal, 4)
         }
-        VStack(alignment: .leading, spacing: 10) {
+        // 5c (SETT-15): the per-day sick flag lives on the day — the "I'm unwell today" row on
+        // Home's Today card. Settings keeps only this control-free explanation of what gentle
+        // scoring means, written from what `Scoring` actually does (workout weight → 0,
+        // redistributed to sleep/hydration/care; hydration target ×1.2; companion → .sick).
+        FernletFramedSection(header: nil, footer: Text("Feeling unwell? Mark “I'm unwell today” on the Today card, on Home. Scoring goes gentle for that day only: workouts stop counting against you, rest, water and personal care count for a little more, your water target nudges up, and your companion rests. It clears itself tomorrow.")) {
             hubToggle("Show calories", isOn: settingsBinding(\.showCalories))
-            Divider().overlay(Color.bark.opacity(0.08))
-            // 5c (SETT-15): the per-day sick flag lives on the day — the "I'm unwell today" row on
-            // Home's Today card. Settings keeps only this control-free explanation of what gentle
-            // scoring means, written from what `Scoring` actually does (workout weight → 0,
-            // redistributed to sleep/hydration/care; hydration target ×1.2; companion → .sick).
-            Text("Feeling unwell? Mark “I'm unwell today” on the Today card, on Home. Scoring goes gentle for that day only: workouts stop counting against you, rest, water and personal care count for a little more, your water target nudges up, and your companion rests. It clears itself tomorrow.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
         }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
     /// The body profile (HealthKit-synced) and the nutrition targets editor.
@@ -1348,59 +1019,42 @@ struct SettingsSheet: View {
     /// The AI switches: manual off, web nutrition lookup, weather-aware prompts, and the "Today" row and
     /// voice line from `FernletStore.aiStatusPresentation` — today's effective status, or why this iPhone
     /// cannot run the on-device model.
-    @ViewBuilder
     private var aiSection: some View {
-        SectionLabel("AI")
-        VStack(alignment: .leading, spacing: 10) {
+        // Framed rows (`b2-settings-ai`): each switch with its disclosure as the row's second line,
+        // today's status as a value row, and the companion's line under the card.
+        FernletFramedSection(header: Text("AI"),
+                             footer: Text(FernletVoice.message(for: store.aiStatusPresentation.voiceLine, addressing: termOfAddress))) {
             // A positive switch: ON means the helper is available. "Manual off mode" was a double
             // negative — a green switch meant the AI was off — while every other switch in this
             // card reads the normal way round.
-            Toggle("On-device AI helper", isOn: aiEnabledBinding)
-            HStack {
-                Text("Today")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.slate)
-                Spacer()
-                Text(store.aiStatusPresentation.label)
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.bark)
-            }
-            Divider().overlay(Color.bark.opacity(0.08))
-            Toggle("Web nutrition lookup", isOn: webNutritionLookupBinding)
+            hubToggle("On-device AI helper", isOn: aiEnabledBinding)
+            FernletRowLabel("Today", value: Text(store.aiStatusPresentation.label))
+            hubToggle("Web nutrition lookup", detail: Text("When you first use this, Fernlet will ask before sending your typed product search to DuckDuckGo. Once allowed, you can also tap to look up an unknown scanned barcode on Open Food Facts — only the barcode's number is sent. Turn it off here at any time to revoke permission."), isOn: webNutritionLookupBinding)
                 .disabled(store.settings.aiStatus == .off)
-            Text("When you first use this, Fernlet will ask before sending your typed product search to DuckDuckGo. Once allowed, you can also tap to look up an unknown scanned barcode on Open Food Facts — only the barcode's number is sent. Turn it off here at any time to revoke permission.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
-            Divider().overlay(Color.bark.opacity(0.08))
-            Toggle("Weather-aware recovery prompts", isOn: Binding(
-                get: { store.settings.weatherPromptsEnabled },
-                set: { newValue in
-                    if newValue {
-                        Task {
-                            let granted = await WeatherKitService.shared.requestAuthorization()
-                            store.settings.weatherPromptsEnabled = granted
-                            store.scheduleSnapshotSave()
-                        }
-                    } else {
-                        store.settings.weatherPromptsEnabled = false
+            hubToggle("Weather-aware recovery prompts", detail: Text("On heavy, gloomy days Fernlet can offer a gentle recovery nudge. Uses your approximate location for weather only, never stored or shared."), isOn: weatherPromptsBinding)
+            // The Apple Weather credit WeatherKit's terms ask for, where the feature is chosen: its own
+            // row under the weather switch.
+            AppleWeatherNotice()
+        }
+    }
+
+    /// The weather switch: turning it on asks WeatherKit first and keeps whatever it answered.
+    private var weatherPromptsBinding: Binding<Bool> {
+        Binding(
+            get: { store.settings.weatherPromptsEnabled },
+            set: { newValue in
+                if newValue {
+                    Task {
+                        let granted = await WeatherKitService.shared.requestAuthorization()
+                        store.settings.weatherPromptsEnabled = granted
                         store.scheduleSnapshotSave()
                     }
+                } else {
+                    store.settings.weatherPromptsEnabled = false
+                    store.scheduleSnapshotSave()
                 }
-            ))
-            Text("On heavy, gloomy days Fernlet can offer a gentle recovery nudge. Uses your approximate location for weather only, never stored or shared.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
-            // The Apple Weather credit WeatherKit's terms ask for, where the feature is chosen.
-            AppleWeatherNotice()
-            Text(FernletVoice.message(for: store.aiStatusPresentation.voiceLine, addressing: termOfAddress))
-                .font(.fernlet(.bubble))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
-        }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+            }
+        )
     }
 
     private var webNutritionLookupBinding: Binding<Bool> {
@@ -1419,51 +1073,32 @@ struct SettingsSheet: View {
     /// The body-tension opt-in, its two plain-language disclosures, and the Health-needed note.
     @ViewBuilder
     private var bodySignalsSection: some View {
-        SectionLabel("Body signals")
-        VStack(alignment: .leading, spacing: 10) {
-            Toggle("Notice body tension", isOn: stressAwarenessBinding)
-            Text("When this is on, Fernlet gently compares your heart rate variability, resting heart rate, respiration, and sleeping wrist temperature from Apple Health with your own usual range — never anyone else's — and may quietly note when your body seems a bit more tense than usual. Estimated and stored on this device only.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
-            Text("This is a wellbeing reflection, not medical advice. If you're worried about how you feel, please talk to a health professional.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
-            if store.settings.stressAwarenessEnabled && !storagePreferencesStore.preferences.healthKitMasterEnabled {
-                Text("Body signals needs Apple Health. Turn on “Share with Health” under Settings › Health to feed it.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.terracotta)
-                    .fernletWrappingText()
-            }
+        FernletFramedSection(header: Text("Body signals"),
+                             footer: Text("This is a wellbeing reflection, not medical advice. If you're worried about how you feel, please talk to a health professional.")) {
+            hubToggle("Notice body tension", detail: Text("When this is on, Fernlet gently compares your heart rate variability, resting heart rate, respiration, and sleeping wrist temperature from Apple Health with your own usual range — never anyone else's — and may quietly note when your body seems a bit more tense than usual. Estimated and stored on this device only."), isOn: stressAwarenessBinding)
         }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+        if store.settings.stressAwarenessEnabled && !storagePreferencesStore.preferences.healthKitMasterEnabled {
+            FernletNotice("Body signals needs Apple Health. Turn on “Share with Health” under Settings › Health to feed it.", tone: .warn)
+        }
     }
 
     /// The daily check-in reminder. Keeps its own `.task` mirror of the pending notification request
     /// and the reschedule-on-time-change handler.
-    @ViewBuilder
     private var remindersSection: some View {
-        SectionLabel("Reminders")
         VStack(alignment: .leading, spacing: 10) {
-            Toggle("Daily check-in", isOn: dailyCheckInBinding)
-            if dailyCheckInEnabled {
-                DatePicker("Time", selection: $dailyCheckInTime, displayedComponents: .hourAndMinute)
+            FernletFramedSection(header: Text("Reminders"),
+                                 footer: Text("One gentle nudge a day — however the day went, a small note of care still counts. Change or turn it off any time.")) {
+                hubToggle("Daily check-in", isOn: dailyCheckInBinding)
+                if dailyCheckInEnabled {
+                    DatePicker("Time", selection: $dailyCheckInTime, displayedComponents: .hourAndMinute)
+                        .font(FernletFramedFont.rowTitle)
+                        .foregroundStyle(framedLook?.text ?? Color.bark)
+                }
             }
-            Text("One gentle nudge a day — however the day went, a small note of care still counts. Change or turn it off any time.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
             if dailyCheckInAuthDenied {
-                Text("Notifications are off for Fernlet in iOS Settings — allow them there and this toggle will work.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.terracotta)
-                    .fernletWrappingText()
+                FernletNotice("Notifications are off for Fernlet in iOS Settings — allow them there and this toggle will work.", tone: .warn)
             }
         }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
         .task { await loadDailyCheckInState() }
         .onChange(of: dailyCheckInTime) { _, newValue in
             guard didLoadDailyCheckIn, dailyCheckInEnabled else { return }
@@ -1490,23 +1125,31 @@ struct SettingsSheet: View {
         }
     }
 
-    /// Bottle size and the daily bottle target.
-    @ViewBuilder
+    /// Bottle size and the daily bottle target, each a framed row with the framed stepper
+    /// (`b2-settings-goal`). The stepper is what VoiceOver hears (its name is the row's words), so
+    /// the drawn words are hidden from it.
     private var hydrationSection: some View {
-        SectionLabel("Hydration")
-        VStack(alignment: .leading, spacing: 10) {
-            Stepper("Bottle: \(store.settings.bottleOz) oz", value: settingsBinding(\.bottleOz), in: 4...64)
-                .font(.fernlet(.label))
-            Divider().overlay(Color.bark.opacity(0.08))
-            // Grammar agreement on the count: the plain literal fixed "bottles" for every number,
-            // so a target of one read "1 bottles" and translators had no plural to work with.
-            Stepper(value: settingsBinding(\.hydrationTarget), in: 1...30) {
-                Text("Daily target: ^[\(store.settings.hydrationTarget) bottle](inflect: true)")
+        FernletFramedSection("Hydration") {
+            HStack(spacing: 12) {
+                Text("Bottle: \(store.settings.bottleOz) oz")
+                    .font(FernletFramedFont.rowTitle)
+                    .foregroundStyle(framedLook?.text ?? Color.bark)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityHidden(true)
+                FernletStepper("Bottle: \(store.settings.bottleOz) oz", value: settingsBinding(\.bottleOz), in: 4...64, step: 1)
             }
-            .font(.fernlet(.label))
+            HStack(spacing: 12) {
+                // Grammar agreement on the count: the plain literal fixed "bottles" for every number,
+                // so a target of one read "1 bottles" and translators had no plural to work with.
+                Text("Daily target: ^[\(store.settings.hydrationTarget) bottle](inflect: true)")
+                    .font(FernletFramedFont.rowTitle)
+                    .foregroundStyle(framedLook?.text ?? Color.bark)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityHidden(true)
+                FernletStepper("Daily target: ^[\(store.settings.hydrationTarget) bottle](inflect: true)",
+                               value: settingsBinding(\.hydrationTarget), in: 1...30, step: 1)
+            }
         }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
     /// The AI switch, read the way it is drawn: ON means the on-device helper may run.
@@ -1635,7 +1278,7 @@ struct SettingsSheet: View {
     }
 
     private var personalCareSettings: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             SectionLabel("Personal care tasks")
             newCareTaskEditor
             ForEach(PersonalCareTask.groupCases) { group in
@@ -1644,10 +1287,17 @@ struct SettingsSheet: View {
         }
     }
 
-    /// The add-a-task composer: label field (length-capped), group chips, the Add button, and the
-    /// at-capacity note.
+    /// The group the next task joins, as a case over the stored token (`newCareTaskGroup`).
+    private var newCareTaskGroupBinding: Binding<CareGroup> {
+        Binding(get: { CareGroup(rawValue: newCareTaskGroup) ?? .anytime },
+                set: { newCareTaskGroup = $0.token })
+    }
+
+    /// The add-a-task composer (`b2-settings-care`): the label field (length-capped), Morning /
+    /// Anytime / Evening as the framed segmented control, the full-width Add button, and the
+    /// at-capacity note, on one framed card.
     private var newCareTaskEditor: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             TextField("Moisturizer, meds, stretch...", text: $newCareTaskName,
                       prompt: .fieldPrompt("Moisturizer, meds, stretch..."))
                 .sheetTextInput()
@@ -1658,77 +1308,61 @@ struct SettingsSheet: View {
                         newCareTaskName = String(newValue.prefix(Self.maxCareTaskLabelLength))
                     }
                 }
-            FlowLayout(spacing: 8) {
-                // The chip SHOWS `group.label` but STORES `group.token`. Showing and storing the
-                // same string is precisely the bug ``CareGroup`` exists to prevent: the stored value
-                // is the filter predicate and rides the synced settings blob.
-                ForEach(PersonalCareTask.groupCases) { group in
-                    Button { FernletFeedback.system.select(group.token, in: &newCareTaskGroup) } label: {
-                        Text(verbatim: group.label)
-                    }
-                    .buttonStyle(ChipButtonStyle(selected: newCareTaskGroup == group.token))
-                }
-            }
+            // The segment SHOWS `group.label` but STORES `group.token`. Showing and storing the
+            // same string is precisely the bug `CareGroup` exists to prevent: the stored value is
+            // the filter predicate and rides the synced settings blob. The control ticks on a change.
+            FernletSegmentedPicker("Time of day", selection: newCareTaskGroupBinding,
+                                   options: PersonalCareTask.groupCases) { Text(verbatim: $0.label) }
             Button {
                 addPersonalCareTask()
             } label: {
                 Label("Add task", systemImage: "plus")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.plain)
-            .font(.fernlet(.label))
-            // Full-strength ink on a faded fill for the disabled state: fading the label too made
-            // it unreadable, so the user couldn't tell what completing the field would do.
-            .foregroundStyle(isAddCareTaskDisabled ? Color.bark : Color.onMoss)
-            .padding(.vertical, 11)
-            .background(
-                Color.mossFill.opacity(isAddCareTaskDisabled ? 0.55 : 1),
-                in: RoundedRectangle(cornerRadius: 12)
-            )
+            .buttonStyle(ActionPillButtonStyle(.primary))
             .disabled(isAddCareTaskDisabled)
             if store.personalCareTasks.count >= Self.maxCustomCareTasks {
                 Text("That's the most personal care tasks Fernlet keeps (\(Self.maxCustomCareTasks)). Remove one to add another.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.note)
+                    .foregroundStyle(framedLook?.dim ?? Color.slate)
                     .fernletWrappingText()
                     .accessibilityIdentifier("settings.care.limitReached")
             }
         }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+        .settingsCard()
     }
 
-    /// One group's saved tasks, each with its remove button. Renders nothing for an empty group.
+    /// One group's saved tasks as framed rows under the group's label: the task's pixel icon in a
+    /// framed tile, its name, and a framed terracotta minus that asks before removing it. Renders
+    /// nothing for an empty group.
     @ViewBuilder
     private func careTaskGroupList(_ group: CareGroup) -> some View {
         let tasks = store.personalCareTasks.filter { $0.careGroup == group }
         if !tasks.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(verbatim: group.label)
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
+            FernletFramedSection(header: Text(verbatim: group.label)) {
                 ForEach(tasks) { task in
-                    HStack(spacing: 10) {
-                        Label(task.displayLabel, systemImage: task.systemImage)
-                            .font(.fernlet(.label))
-                            .foregroundStyle(Color.bark)
-                        Spacer()
-                        Button { confirmRemoveCareTask(task) } label: {
-                            Image(systemName: "minus.circle")
-                                .font(.body.weight(.semibold))
-                                .foregroundStyle(Color.terracottaInk)
-                                .frame(width: 32, height: 32)
-                        }
-                        .buttonStyle(.plain)
-                        // `displayLabel`, like the row beside it: the stored `label` is the frozen
-                        // English a built-in task was first written with.
-                        .fernletIconButton("Remove \(task.displayLabel)")
-                    }
-                    .padding(12)
-                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                    careTaskRow(task)
                 }
             }
         }
+    }
+
+    /// One saved task's row.
+    private func careTaskRow(_ task: PersonalCareTask) -> some View {
+        HStack(spacing: 12) {
+            FernletIconTile(size: 34) {
+                WorldSpriteView(sprite: CareTaskSprite.sprite(forSystemImage: task.systemImage), scale: 2)
+            }
+            // `displayLabel`: the stored `label` is the frozen English a built-in task was first
+            // written with.
+            FernletRowLabel(title: Text(task.displayLabel))
+            Button { confirmRemoveCareTask(task) } label: {
+                RemoveMinusTile()
+            }
+            .buttonStyle(.plain)
+            .fernletIconButton("Remove \(task.displayLabel)")
+        }
+        .padding(.vertical, 8)
     }
 
     private var debugCard: some View {
@@ -1769,10 +1403,11 @@ struct SettingsSheet: View {
         }
     }
 
-    /// The Friends-tab debug switch and what turning it on actually exposes.
+    /// The Album tab's debug switch (the Friends tab before `b4-mem-name`) and what turning it on
+    /// actually exposes.
     private var proximityDebugSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionLabel("Friends tab")
+            SectionLabel("Album tab")
             Toggle(
                 "Proximity debug tools",
                 isOn: Binding(
@@ -1780,7 +1415,7 @@ struct SettingsSheet: View {
                     set: { store.setShowProximityDebugTools($0) }
                 )
             )
-            Text("Shows the connection inspector button and a Force override on the Friends tab that bypasses distance requirements.")
+            Text("Shows the connection inspector button and a Force override on Album › Friends nearby that bypasses distance requirements.")
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
@@ -1998,6 +1633,7 @@ struct SettingsSheet: View {
     private var phase3GateReadoutLink: some View {
         NavigationLink {
             Phase3GateReadoutView(store: store, scanTask: $phase3ScanTask)
+                .fernletPushedPage("Phase 3 gate readout")
         } label: {
             VStack(alignment: .leading, spacing: 6) {
                 SectionLabel("Phase 3 gate readout (test-only view)")
@@ -2058,12 +1694,9 @@ struct SettingsSheet: View {
             #if DEBUG
             // SETT-28 folded the old Debug hub row into this page: the development inspection
             // surface stays reachable in DEBUG builds only, one level down from Connection log.
-            VStack(alignment: .leading, spacing: 0) {
-                settingsLinkRow("Developer tools", icon: "wrench.and.screwdriver", route: .debug)
+            FernletFramedSection(header: nil) {
+                settingsLinkRow("Developer tools", route: .debug)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 4)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
             #endif
         }
     }
@@ -2091,23 +1724,11 @@ struct SettingsSheet: View {
         Button(role: .destructive) {
             showDeleteEverything = true
         } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "trash")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.terracottaInk)
-                    .frame(width: 28)
-                Text("Delete everything")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.terracottaInk)
-                Spacer()
-            }
-            // `.buttonStyle(.plain)` hit-tests the drawn content only, so without this the row's
-            // trailing `Spacer()` — which is where the centre of the row is — swallowed the tap and
-            // the confirm dialog never opened.
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
+            // The framed danger row (`.sr.danger`): the name in terracotta, semibold, no chevron;
+            // the row style makes the whole row the tap target.
+            FernletRowLabel("Delete everything", destructive: true)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(FernletRowButtonStyle(showsChevron: false))
         .disabled(deleteFlow.isDeleting)
         .accessibilityIdentifier("settings.deleteAll")
     }
@@ -2133,41 +1754,28 @@ struct SettingsSheet: View {
         groupedMemories(for: memories).keys.sorted()
     }
 
+    /// One memory as a framed row (`b2-settings-memory`): its sentence and date, then Edit and Delete
+    /// as 32-pt framed pixel-icon buttons.
     private func memoryRow(_ memory: MemoryNote) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                // `displayText`: an emotion-only journal memory stores its feeling as a token and no
-                // words, so its sentence is built here at render time (MemoryNoteDisplay.swift).
-                Text(memory.displayText)
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.bark)
-                    .fernletWrappingText()
-                Text(memory.sourceDate.formatted(.dateTime.month(.abbreviated).day().year()))
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
-            }
-            Spacer()
+        HStack(alignment: .center, spacing: 8) {
+            // `displayText`: an emotion-only journal memory stores its feeling as a token and no
+            // words, so its sentence is built here at render time (MemoryNoteDisplay.swift).
+            FernletRowLabel(title: Text(memory.displayText),
+                            detail: Text(memory.sourceDate.formatted(.dateTime.month(.abbreviated).day().year())))
+                .padding(.vertical, 10)
             Button { editingMemory = memory } label: {
-                Image(systemName: "pencil")
-                    .foregroundStyle(Color.slate)
-                    .frame(width: 34, height: 34)
-                    .background(Color.bark.opacity(0.05), in: Circle())
+                FernletIconTile(size: 32, isControl: true) { WorldSpriteView(sprite: WorldSprites.pen, scale: 2) }
             }
             .buttonStyle(.plain)
             .fernletIconButton("Edit memory")
             // A memory is saved user data, so removing it is confirmed like every other delete —
             // it used to vanish on one tap with no undo.
             Button { confirmDeleteMemory(memory) } label: {
-                Image(systemName: "xmark")
-                    .foregroundStyle(Color.slate)
-                    .frame(width: 34, height: 34)
-                    .background(Color.bark.opacity(0.05), in: Circle())
+                FernletIconTile(size: 32, isControl: true) { FernletIcon(.close, scale: 2) }
             }
             .buttonStyle(.plain)
             .fernletIconButton("Delete memory")
         }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 }
 
@@ -2197,10 +1805,6 @@ private struct MemoryEditorSheet: View {
     /// Category chips, the memory editor, its counter, the source date, and the delete affordance.
     private var editorScrollContent: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("Core memory")
-                .font(.fernlet(.displayMedium))
-                .foregroundStyle(Color.bark)
-
             // Chips, not free text: the list groups memories by category, and a free
             // TextField let one memory land in a category of its own by a typo.
             SheetField("Category") {
@@ -2233,18 +1837,11 @@ private struct MemoryEditorSheet: View {
                 .foregroundStyle(Color.slate)
                 .frame(maxWidth: .infinity, alignment: .trailing)
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Source date")
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
-                Text(memory.sourceDate.formatted(.dateTime.month(.wide).day().year()))
-                    .font(.fernlet(.stat))
-                    .foregroundStyle(Color.bark)
-            }
-            .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+            // The source date as a key-value row under a dotted rule (`.kv`, `b3-memory-editor`).
+            FernletKeyValueRow("Source date", value: Text(memory.sourceDate.formatted(.dateTime.month(.wide).day().year())))
 
             deleteSection
+                .frame(maxWidth: .infinity)
         }
         .padding(20)
         .padding(.bottom, 10)
@@ -2292,10 +1889,12 @@ private struct MemoryEditorSheet: View {
                 dismiss()
             }
         }
-        .background(Color.parchment)
+        .fernletSheetStyle()
         // The drag handle was the only way out — every sibling entry sheet offers a Cancel, and a
-        // dirty draft now asks before it is thrown away.
-        .fernletDraftGuard(isDirty: category != memory.category || text != memory.text) { dismiss() }
+        // dirty draft now asks before it is thrown away. The guard's header puts the title inside
+        // the sheet, under Cancel (`b1-frame-sheet`).
+        .fernletDraftGuard(isDirty: category != memory.category || text != memory.text,
+                           title: Text("Core memory")) { dismiss() }
     }
 
     /// The categories already in use, plus "other" as the escape hatch, lower-cased for storage and
@@ -2341,6 +1940,8 @@ private struct MemoryEditorSheet: View {
 struct AppLockSettingsView: View {
     @Environment(FernletLockService.self) private var lockService
     @Environment(\.dismiss) private var dismiss
+    /// The World's framed look (`b2-settings-applock`): framed cards and rows on the dotted page.
+    @Environment(\.fernletFramedLook) private var look
 
     @State private var showSetup = false
     @State private var showChangePasscode = false
@@ -2374,8 +1975,9 @@ struct AppLockSettingsView: View {
         resetPresentations(
             cardsColumn
                 .scrollContentBackground(.hidden)
-                .background(Color.parchment)
-                .navigationTitle("App lock")
+                .fernletPageBackground()
+                // The plate carries the title and Back (`b1-frame-push`).
+                .fernletPushedPage("App lock")
                 .sheet(isPresented: $showSetup) {
                     FernletLockSetupView(grantingScope: .appLockSettings)
                         .environment(lockService)
@@ -2407,7 +2009,7 @@ struct AppLockSettingsView: View {
     /// The page itself: status, then either the manage/biometric/duress/danger cards or the setup CTA.
     private var cardsColumn: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 14) {
                 statusCard
 
                 if lockService.isLockConfigured {
@@ -2420,8 +2022,9 @@ struct AppLockSettingsView: View {
                     duressCard
                 }
             }
-            .padding(20)
-            .padding(.bottom, 20)
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 30)
         }
     }
 
@@ -2439,13 +2042,7 @@ struct AppLockSettingsView: View {
                 Button("Cancel", role: .cancel) { }
                 Button("Reset app lock", role: .destructive) { resetAppLock() }
             } message: {
-                // The same words as the gate's confirmation (`lock.reset.confirm.message.v2` in
-                // FernletLockUI): the loss is the whole cycle history saved in Fernlet now, not
-                // "notes" beside a Health copy (period-data design 2026-09-30, §10.5), and the Sealed
-                // backup restores afterwards from Privacy & Data's owner-checked "Restore".
-                Text(String(localized: "settings.appLock.reset.message.v2",
-                            defaultValue: "Your journal, cycle history and intimacy entries saved in Fernlet will be permanently deleted. Anything Fernlet copied to Apple Health stays there. If Sealed backup is on, restore it from Privacy & Data afterwards, before you add new entries.",
-                            comment: "Message in the Reset app lock confirmation in Settings. Keep it identical to the lock screen's own reset confirmation. The journal and intimacy backups restore only into an empty store, so the sentence tells the user to restore before adding new entries."))
+                Text(Self.resetMessage)
             }
             .alert("App lock reset", isPresented: $showResetRebuildFailure) {
                 Button("OK", role: .cancel) { dismiss() }
@@ -2463,6 +2060,21 @@ struct AppLockSettingsView: View {
                 Text("Private will open with a tap instead. Your entries stay encrypted on this iPhone and nothing is deleted. \(biometricName(lockService.biometricType)) unlock, your duress code and any recovery device are removed.",
                      comment: "Message of the confirmation before the app passcode is turned off. The placeholder is Face ID or Touch ID (an Apple product name). Nothing is deleted: the entries stay encrypted on this iPhone, and the Private tab opens with a tap afterwards.")
             }
+    }
+
+    /// The Reset app lock confirmation's message: the same words as the gate's confirmation
+    /// (`lock.reset.confirm.message.v2` in FernletLockUI): the loss is the whole cycle history saved in
+    /// Fernlet now, not "notes" beside a Health copy (period-data design 2026-09-30, §10.5), and the Sealed
+    /// backup restores afterwards from Privacy & Data's owner-checked "Restore". Then, on its own line,
+    /// that Where you've been goes too (World build round 5: the owner allowed a reset to clear it only if
+    /// this screen says so plainly; its log is sealed under the hub key the reset replaces).
+    private static var resetMessage: String {
+        String(localized: "settings.appLock.reset.message.v2",
+               defaultValue: "Your journal, cycle history and intimacy entries saved in Fernlet will be permanently deleted. Anything Fernlet copied to Apple Health stays there. If Sealed backup is on, restore it from Privacy & Data afterwards, before you add new entries.",
+               comment: "Message in the Reset app lock confirmation in Settings. Keep it identical to the lock screen's own reset confirmation. The journal and intimacy backups restore only into an empty store, so the sentence tells the user to restore before adding new entries.")
+            + "\n\n"
+            + String(localized: "settings.appLock.reset.whereYouveBeen", defaultValue: "This also deletes the places you've been.",
+                     comment: "Last line of the Reset app lock confirmation in Settings: the reset also deletes the 30-day timeline of places kept in Private (its Where you've been page), for good. Owner-approved wording, 2026-10-25. Keep it identical to the lock screen's.")
     }
 
     /// Destroys the lock and its keys, dismissing only if the sealed store was rebuilt.
@@ -2486,109 +2098,90 @@ struct AppLockSettingsView: View {
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel("Status")
             HStack(spacing: 12) {
-                Circle()
+                // The status as a framed square (`b2-settings-applock`); its word says the state.
+                Rectangle()
                     .fill(statusColor)
                     .frame(width: 10, height: 10)
+                    .padding(2)
+                    .background(look?.ink ?? Color.clear)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(statusLabel)
-                        .font(.fernlet(.header))
-                        .foregroundStyle(Color.bark)
+                        .font(FernletFramedFont.cardTitle)
+                        .foregroundStyle(look?.text ?? Color.bark)
                     if lockService.isLockConfigured, let kind = lockService.credentialKind {
                         Text(kindLabel(kind))
-                            .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.slate)
+                            .font(FernletFramedFont.rowDetail)
+                            .foregroundStyle(look?.dim ?? Color.slate)
                     } else if !lockService.isLockConfigured {
                         Text("Private opens with a tap.",
                              comment: "Subtitle under 'No passcode' on the App lock settings page: with no app passcode, the Private tab opens with one tap on its Unlock button.")
-                            .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.slate)
+                            .font(FernletFramedFont.rowDetail)
+                            .foregroundStyle(look?.dim ?? Color.slate)
                             .fernletWrappingText()
                     }
                 }
                 Spacer()
             }
         }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+        .settingsCard()
     }
 
+    // Moved here from Privacy & Data, where it sat under an "App lock data" header above the
+    // Delete everything button and described neither. The note under Manage.
     private var actionsCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionLabel("Manage")
-
+        FernletFramedSection(header: Text("Manage"),
+                             footer: Text("Fernlet protects your data with its own passcode, separate from your device passcode. Removing your device passcode won't affect your Fernlet app lock or erase your protected data.")) {
             Button {
                 showChangePasscode = true
             } label: {
-                settingsRow(icon: "key.fill", title: "Change passcode")
+                settingsRow("Change passcode")
             }
-
-            FernletRowDivider()
+            .buttonStyle(FernletRowButtonStyle())
 
             // No chevron: this acts here and now, it doesn't navigate anywhere.
             Button {
                 lockService.lock(reason: .manual)
             } label: {
-                settingsRow(icon: "lock.fill", title: "Lock now", showsChevron: false)
+                settingsRow("Lock now")
             }
-
-            FernletRowDivider()
+            .buttonStyle(FernletRowButtonStyle(showsChevron: false))
 
             // Confirmed first, then the current passcode on the shared verify sheet (design §10.3).
             Button {
                 showTurnOffConfirm = true
             } label: {
-                settingsRow(icon: "lock.open", title: "Turn off passcode")
+                settingsRow("Turn off passcode")
             }
+            .buttonStyle(FernletRowButtonStyle())
             .accessibilityIdentifier("appLock.turnOffPasscode")
-
-            FernletRowDivider()
-
-            // Moved here from Privacy & Data, where it sat under an "App lock data" header above
-            // the Delete everything button and described neither.
-            Text("Fernlet protects your data with its own passcode, separate from your device passcode. Removing your device passcode won't affect your Fernlet app lock or erase your protected data.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
     private var biometricCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             // `verbatim:` on the merits as well as for the type: "Face ID" and "Touch ID" are
             // Apple product names that Apple itself ships untranslated in most locales.
-            SectionLabel(verbatim: biometricName(lockService.biometricType))
-
-            if lockService.biometricType != .none {
-                Toggle(isOn: biometricToggleBinding) {
-                    settingsRow(
-                        icon: biometricSystemImage(lockService.biometricType),
-                        title: "Use \(biometricName(lockService.biometricType))"
-                    )
-                }
-                .toggleStyle(SwitchToggleStyle(tint: Color.moss))
-                // The toggle re-reads `lockService.biometricEnabled`, so a failed disable would
-                // otherwise just snap the switch back with no explanation.
-                if let biometricDisableError {
-                    Text(biometricDisableError)
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.terracotta)
+            FernletFramedSection(header: Text(verbatim: biometricName(lockService.biometricType))) {
+                if lockService.biometricType != .none {
+                    Toggle(isOn: biometricToggleBinding) {
+                        settingsRow("Use \(biometricName(lockService.biometricType))")
+                    }
+                } else {
+                    Text("No biometric authentication available on this device.")
+                        .font(FernletFramedFont.rowTitle)
+                        .foregroundStyle(look?.dim ?? Color.slate)
                         .fernletWrappingText()
-                        .accessibilityIdentifier("applock.biometric.disableError")
+                        .padding(.vertical, 12)
                 }
-            } else {
-                Text("No biometric authentication available on this device.")
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
+            }
+            // The toggle re-reads `lockService.biometricEnabled`, so a failed disable would
+            // otherwise just snap the switch back with no explanation.
+            if let biometricDisableError {
+                FernletNotice(text: Text(biometricDisableError), tone: .warn) { EmptyView() }
+                    .accessibilityIdentifier("applock.biometric.disableError")
             }
         }
-        // Spans the column like Status and Manage above it; without this the card hugged its text.
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
     /// Duress code + recovery device (security-hardening Phase 7).
@@ -2618,78 +2211,69 @@ struct AppLockSettingsView: View {
     /// renders instead, which is also what an un-configured device shows, so hiding it discloses
     /// nothing on its own.
     private var duressCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionLabel("Duress & recovery")
-
+        FernletFramedSection("Duress & recovery") {
             if lockService.isLockConfigured && !lockService.isDuressSessionActive {
                 Button {
                     showDuressSetup = true
                 } label: {
-                    settingsRow(icon: "lock.shield", title: "Duress code")
+                    settingsRow("Duress code")
                 }
+                .buttonStyle(FernletRowButtonStyle())
                 .accessibilityIdentifier("appLock.duressCode")
-
-                FernletRowDivider()
             }
 
             if lockService.hasRecoveryCustodian && !lockService.isDuressSessionActive {
                 Button {
                     showRecoveryReturn = true
                 } label: {
-                    settingsRow(icon: "arrow.clockwise", title: "Recover this phone")
+                    settingsRow("Recover this phone")
                 }
+                .buttonStyle(FernletRowButtonStyle())
                 .accessibilityIdentifier("appLock.recoverThisPhone")
-
-                FernletRowDivider()
             }
 
             Button {
                 showRecoveryCustodian = true
             } label: {
-                settingsRow(icon: "iphone.and.arrow.forward", title: "Be a recovery device")
+                settingsRow("Be a recovery device")
             }
+            .buttonStyle(FernletRowButtonStyle())
             .accessibilityIdentifier("appLock.beRecoveryDevice")
         }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
     private var dangerCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionLabel("Danger zone")
+        FernletFramedSection("Danger zone") {
             Button(role: .destructive) {
                 showResetConfirm = true
             } label: {
-                settingsRow(icon: "trash", title: "Reset app lock", destructive: true)
+                settingsRow("Reset app lock", destructive: true)
             }
+            .buttonStyle(FernletRowButtonStyle(showsChevron: false))
         }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
+    /// No passcode yet: what Private does now, and the full-width framed Set up app lock with the
+    /// pixel lock (`b2-settings-applock`).
     private var setupCTACard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Private opens with a tap while no passcode is set. Add a passcode to be asked for it before Private opens.",
                  comment: "The App lock settings page with no app passcode: what the Private tab does now, and what adding a passcode changes. Must not call the no-passcode state locked, protected or secured.")
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.body)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .fernletWrappingText()
 
-            Button("Set up app lock") { showSetup = true }
-                .buttonStyle(.plain)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.onMoss)
-                .frame(maxWidth: .infinity, minHeight: 44)
-                .padding(.vertical, 14)
-                .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 14))
-                // `.buttonStyle(.plain)` leaves the button's hit region on the LABEL, not on the
-                // padded pill it draws, so the audit measured a sub-44pt target on a control that
-                // looks 72pt tall. This hands the whole pill back.
-                .contentShape(RoundedRectangle(cornerRadius: 14))
+            Button { showSetup = true } label: {
+                Label {
+                    Text("Set up app lock")
+                } icon: {
+                    FernletIcon(.lock, scale: 2, tint: look?.onAccent ?? Color.onMoss)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(ActionPillButtonStyle(.primary))
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+        .settingsCard()
     }
 
     // MARK: Passcode verify sheet
@@ -2713,7 +2297,7 @@ struct AppLockSettingsView: View {
     private var passcodeVerifySheet: some View {
         NavigationStack {
             ZStack {
-                Color.parchment.ignoresSafeArea()
+                (look?.paper ?? Color.parchment).ignoresSafeArea()
                 VStack(alignment: .leading, spacing: 20) {
                     passcodeVerifyPrompt
                         .font(.fernlet(.body))
@@ -2733,17 +2317,11 @@ struct AppLockSettingsView: View {
 
                         Spacer()
 
-                        Button("Confirm") { commitPasscodeVerify() }
-                            .buttonStyle(.plain)
-                            .font(.fernlet(.label))
-                            .foregroundStyle(Color.onMoss)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(
-                                Color.mossFill.opacity(verifyCurrentPasscode.isEmpty ? 0.55 : 1),
-                                in: RoundedRectangle(cornerRadius: 14)
-                            )
-                            .disabled(verifyCurrentPasscode.isEmpty)
+                        Button { commitPasscodeVerify() } label: {
+                            Text("Confirm").frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(ActionPillButtonStyle(.primary))
+                        .disabled(verifyCurrentPasscode.isEmpty)
                     } else {
                         // The lock gate's shape: dots in the upper third, keypad anchored above the
                         // safe area where the thumb is. Stacked from the top it left the bottom
@@ -2755,6 +2333,7 @@ struct AppLockSettingsView: View {
                         Spacer(minLength: 12)
 
                         FernletNumericPad(value: $verifyCurrentPasscode, maxLength: total)
+                            .frame(maxWidth: .infinity)
                             .onChange(of: verifyCurrentPasscode) { _, new in
                                 if new.count == total { commitPasscodeVerify() }
                             }
@@ -2765,21 +2344,16 @@ struct AppLockSettingsView: View {
                 // bottom key row falls off the sheet at the accessibility sizes and in landscape.
                 .fernletLockPadPage()
             }
-            .navigationTitle("Verify passcode")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        showPasscodeVerify = false
-                        verifyTurnsOffPasscode = false
-                        verifyCurrentPasscode = ""
-                        verifyError = nil
-                    }
-                    .foregroundStyle(Color.slate)
-                }
-            }
+            // Cancel top left and the title inside the sheet (`b3-passcode-verify`).
+            .fernletSheetToolbar(title: "Verify passcode", onCancel: {
+                showPasscodeVerify = false
+                verifyTurnsOffPasscode = false
+                verifyCurrentPasscode = ""
+                verifyError = nil
+            })
         }
         .tint(Color.moss)
+        .fernletSheet()
     }
 
     /// Commits whatever the verify sheet is confirming. Turn off passcode calls
@@ -2879,29 +2453,10 @@ struct AppLockSettingsView: View {
         }
     }
 
-    private func settingsRow(
-        icon: String,
-        title: LocalizedStringKey,
-        destructive: Bool = false,
-        showsChevron: Bool = true
-    ) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(destructive ? Color.terracottaInk : Color.moss)
-                .frame(width: 28)
-            Text(title)
-                .font(.fernlet(.label))
-                .foregroundStyle(destructive ? Color.terracottaInk : Color.bark)
-            Spacer()
-            if !destructive && showsChevron {
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(Color.slate)
-            }
-        }
-        .frame(minHeight: 44)
-        .contentShape(Rectangle())
+    /// A row's name (`.sl`), terracotta and semibold when it destroys something (`.sr.danger`). The
+    /// row's button style draws the chevron.
+    private func settingsRow(_ title: LocalizedStringKey, destructive: Bool = false) -> some View {
+        FernletRowLabel(title, destructive: destructive)
     }
 }
 
@@ -2918,6 +2473,8 @@ struct AppLockSettingsView: View {
 private struct FernletLockChangePasscodeView: View {
     @Environment(FernletLockService.self) private var lockService
     @Environment(\.dismiss) private var dismiss
+    /// The World's framed look (`b3-change-passcode`): paper, framed cards, framed pad.
+    @Environment(\.fernletFramedLook) private var look
 
     @State private var currentPasscode = ""
     @State private var newPasscode = ""
@@ -2933,7 +2490,7 @@ private struct FernletLockChangePasscodeView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.parchment.ignoresSafeArea()
+                (look?.paper ?? Color.parchment).ignoresSafeArea()
                 // All three steps host the shared PIN pad, whose tiles grow with Dynamic Type;
                 // without this the bottom key row falls off the sheet at the accessibility sizes
                 // and in landscape, on a flow whose only other exit is Cancel.
@@ -2941,16 +2498,11 @@ private struct FernletLockChangePasscodeView: View {
                     .padding(24)
                     .fernletLockPadPage()
             }
-            .navigationTitle("Change passcode")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                        .foregroundStyle(Color.slate)
-                }
-            }
+            // Cancel top left, the title inside the sheet (`b1-frame-sheet`).
+            .fernletSheetToolbar(title: "Change passcode", onCancel: { dismiss() })
         }
         .tint(Color.moss)
+        .fernletSheet()
         .onAppear { selectedKind = lockService.credentialKind ?? .pin6 }
     }
 
@@ -2991,6 +2543,7 @@ private struct FernletLockChangePasscodeView: View {
                     .frame(maxWidth: .infinity)
                 Spacer(minLength: 12)
                 FernletNumericPad(value: $currentPasscode, maxLength: total)
+                    .frame(maxWidth: .infinity)
                     .onChange(of: currentPasscode) { _, new in
                         if new.count == total { advanceFromVerifyOld() }
                     }
@@ -3050,6 +2603,7 @@ private struct FernletLockChangePasscodeView: View {
                     .frame(maxWidth: .infinity)
                 Spacer(minLength: 12)
                 FernletNumericPad(value: $newPasscode, maxLength: total)
+                    .frame(maxWidth: .infinity)
                     .onChange(of: newPasscode) { _, new in
                         if new.count == total { step = .confirmNew }
                     }
@@ -3062,29 +2616,43 @@ private struct FernletLockChangePasscodeView: View {
     /// it never reached the catalog.
     private func changeKindCard(_ kind: FernletLockCredentialKind, title: LocalizedStringKey) -> some View {
         Button { selectedKind = kind } label: {
-            HStack(spacing: 14) {
-                Image(systemName: kind == selectedKind ? "checkmark.circle.fill" : "circle")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(kind == selectedKind ? Color.moss : Color.slate)
+            if let look {
+                // The framed radio card, as the lock setup draws it (`b3-lock-kind`).
                 Text(title)
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.bark)
-                Spacer()
+                    .font(FernletFramedFont.rowTitleBold)
+                    .foregroundStyle(look.text)
+                    .modifier(LockRadioCardChrome(isSelected: kind == selectedKind, look: look))
+            } else {
+                standardKindRow(kind, title: title)
             }
-            .padding(14)
-            .background(
-                kind == selectedKind ? Color.moss.opacity(0.06) : Color.cream,
-                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(
-                        kind == selectedKind ? Color.moss.opacity(0.4) : Color.bark.opacity(0.08),
-                        lineWidth: 1
-                    )
-            )
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(kind == selectedKind ? [.isSelected] : [])
+    }
+
+    /// Today's lock-type row: a radio circle and the name on cream.
+    private func standardKindRow(_ kind: FernletLockCredentialKind, title: LocalizedStringKey) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: kind == selectedKind ? "checkmark.circle.fill" : "circle")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(kind == selectedKind ? Color.moss : Color.slate)
+            Text(title)
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.bark)
+            Spacer()
+        }
+        .padding(14)
+        .background(
+            kind == selectedKind ? Color.moss.opacity(0.06) : Color.cream,
+            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(
+                    kind == selectedKind ? Color.moss.opacity(0.4) : Color.bark.opacity(0.08),
+                    lineWidth: 1
+                )
+        )
     }
 
     // Confirm new passcode
@@ -3104,6 +2672,7 @@ private struct FernletLockChangePasscodeView: View {
                     .frame(maxWidth: .infinity)
                 Spacer(minLength: 12)
                 FernletNumericPad(value: $confirmPasscode, maxLength: total)
+                    .frame(maxWidth: .infinity)
                     .onChange(of: confirmPasscode) { _, new in
                         if new.count == total { commitChange() }
                     }
@@ -3138,26 +2707,18 @@ private struct FernletLockChangePasscodeView: View {
         }
     }
 
+    /// The framed primary, full width; faded (fill only, never the word) while disabled.
     private func continueButton(disabled: Bool = false, action: @escaping () -> Void) -> some View {
-        Button("Continue", action: action)
-            .buttonStyle(.plain)
-            .font(.fernlet(.label))
-            // Disabled fades the fill only: moss-at-40% under white ink measured 1.8:1, so the
-            // label the user is working towards was unreadable.
-            .foregroundStyle(disabled ? Color.bark : Color.onMoss)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(Color.mossFill.opacity(disabled ? 0.55 : 1), in: RoundedRectangle(cornerRadius: 14))
-            .disabled(disabled)
+        Button(action: action) {
+            Text("Continue").frame(maxWidth: .infinity)
+        }
+        .buttonStyle(ActionPillButtonStyle(.primary))
+        .disabled(disabled)
     }
 
+    /// A step's error as the framed warning notice.
     private func errorBanner(_ msg: String) -> some View {
-        Text(msg)
-            .font(.fernlet(.body))
-            .foregroundStyle(Color.terracotta)
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.terracotta.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+        FernletNotice(text: Text(verbatim: msg), tone: .warn) { EmptyView() }
     }
 
     /// The three sequential screens of the change-passcode flow.
@@ -3216,12 +2777,5 @@ nonisolated enum MemoryCategoryName {
 // MARK: - Shared pin dots row helper (used in SettingsSheet-internal views)
 
 private func pinDotsRow(current: String, total: Int) -> some View {
-    HStack(spacing: 16) {
-        ForEach(0..<total, id: \.self) { index in
-            Circle()
-                .fill(index < current.count ? Color.bark : Color.clear)
-                .frame(width: 14, height: 14)
-                .overlay(Circle().stroke(Color.bark.opacity(0.35), lineWidth: 1.5))
-        }
-    }
+    SettingsPinDots(entered: current.count, total: total)
 }

@@ -23,6 +23,7 @@ struct FriendPhotoTile: View {
     var reloadToken = 0
 
     @State private var loadedImageData: Data?
+    @Environment(\.fernletFramedLook) private var look
 
     /// Tile height, scaled with Dynamic Type (accessibility wall rule A5-GRID-SCALES).
     ///
@@ -54,21 +55,37 @@ struct FriendPhotoTile: View {
             }
 
             if selected {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(Color.moss)
-                    .background(Color.cream, in: Circle())
-                    .padding(6)
+                selectionMark
             }
         }
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(selected ? Color.moss : Color.bark.opacity(0.08), lineWidth: selected ? 2 : 1)
+                .strokeBorder(selected ? (look?.mark ?? Color.moss) : (look?.ink ?? Color.bark.opacity(0.08)),
+                              lineWidth: look == nil ? (selected ? 2 : 1) : (selected ? 4 : FernletFramedLook.frameWidth))
         )
-        // Selection was conveyed by a moss checkmark alone — say it out loud too.
+        // Selection was conveyed by a moss mark alone — say it out loud too.
         .accessibilityAddTraits(selected ? .isSelected : [])
         .task(id: "\(photo.id.uuidString)#\(reloadToken)") {
             guard photo.imageData == nil else { return }
             loadedImageData = loadImageData?()
+        }
+    }
+
+    /// The kept mark: a framed tick on the accent under the World look (b3-photo-review), today's
+    /// moss check without it.
+    @ViewBuilder
+    private var selectionMark: some View {
+        if let look {
+            FernletIcon(.check, scale: 2, tint: look.onAccent)
+                .frame(width: 26, height: 26)
+                .background(look.accent, in: RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth))
+                .padding(6)
+        } else {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(Color.moss)
+                .background(Color.cream, in: Circle())
+                .padding(6)
         }
     }
 }
@@ -155,6 +172,7 @@ public struct FriendPhotoReviewSheet: View {
     /// Read for the snapshot cover. Both hosts are SwiftUI presentations inside the app scene, so
     /// the scene's phase reaches this sheet through the environment.
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.fernletFramedLook) private var look
     /// Adaptive-grid cell minimum, scaled with Dynamic Type (accessibility wall rule
     /// A5-GRID-SCALES). A bare `110` pins the cell while ``FriendPhotoTile``'s contents grow
     /// inside it; this grows the column with them, so the grid reflows to fewer, larger tiles at
@@ -227,8 +245,8 @@ public struct FriendPhotoReviewSheet: View {
             header
 
             Text(verbatim: FernletProximityUICopy.Review.explainerPending)
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.body) : FernletFramedFont.body)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .fernletWrappingText()
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: photoTileMinimum), spacing: 10)], spacing: 10) {
@@ -273,8 +291,8 @@ public struct FriendPhotoReviewSheet: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text(verbatim: FernletProximityUICopy.Review.title)
-                .font(.fernlet(.displayMedium))
-                .foregroundStyle(Color.bark)
+                .font(look == nil ? .fernlet(.displayMedium) : FernletFramedFont.sheetTitle)
+                .foregroundStyle(look?.text ?? Color.bark)
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 8)
             if let notNow {
@@ -324,7 +342,7 @@ public struct FriendPhotoReviewSheet: View {
             }
         }
         .padding(16)
-        .background(Color.parchment)
+        .background(look?.paper ?? Color.parchment)
     }
 
     /// Whether any action is running — this sheet's own, or the host's working state.
@@ -389,7 +407,7 @@ public struct FriendPhotoReviewSheet: View {
                 snapshotCover
             }
         }
-        .background(Color.parchment)
+        .background((look?.paper ?? Color.parchment).ignoresSafeArea())
         // An answer that has started is finished in front of the person: no swipe-away mid-answer
         // (the Develop sheet's host would otherwise lose its working line and its failure alert).
         .interactiveDismissDisabled(isBusy)

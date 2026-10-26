@@ -564,9 +564,17 @@ struct MeshRoutedItemSealGoldenTests {
         // 81 since the period-data round (design 2026-09-30, §5.2) registered
         // `KeyDerivation.cycleRecordV1` (the sealed cycle record's column) and
         // `Hash.sealedBackupWriterTagV1` (the Sealed backup v2 writer tag) — two storage domains no
-        // item seal touches, acknowledged together when both rounds merged. This count is a tripwire on
-        // the registry, not on the item seal: a new row must be acknowledged here, deliberately.
-        #expect(CryptographicDomainSeparationTests.allDomains.count == 81)
+        // item seal touches, acknowledged together when both rounds merged; 83 since the World build's
+        // map store (branch `world-ui` only, 2026-10-23) registered `AEAD.worldMapFogV1` and
+        // `AEAD.worldMapPendingV1`, two at-rest domains no item seal touches; 84 since its saved walk lines
+        // (World app plan step 5b) registered `AEAD.worldMapRouteV1`, another; 85 since its workout-space pins
+        // (step 6a) registered `AEAD.worldMapPinsV1`; 88 since the solo camera's corpus (lane friends-solo,
+        // owner 2026-10-24) registered `AEAD.privateSoloCamera{PhotoImage,PhotoThumbnail,Index}V1`, three
+        // at-rest domains no item seal touches; 91 since step 5c's places (lane 5c, owner 2026-10-24)
+        // registered `AEAD.worldMap{Places,PlacesDevice,PhotoPlaces}V1`, three more at-rest domains no item
+        // seal touches. This count is a tripwire on the registry, not on the
+        // item seal: a new row must be acknowledged here, deliberately.
+        #expect(CryptographicDomainSeparationTests.allDomains.count == 91)
         let rows = CryptographicDomainSeparationTests.allDomains.filter {
             $0.purpose.rawValue == FernletCryptoPurpose.AEAD.meshRoutedItemV1.rawValue
         }

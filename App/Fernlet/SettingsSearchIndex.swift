@@ -40,6 +40,8 @@ nonisolated enum SettingsRoute: Hashable, CaseIterable {
     case personalCare
     case layoutShortcuts
     case soundsHaptics
+    /// Home map (World build step 5c, `b1-settings-map`): location, the fog, routes and places.
+    case homeMap
     case aiDataSources
     case health
     case coreMemory
@@ -55,6 +57,9 @@ nonisolated enum SettingsRoute: Hashable, CaseIterable {
     case appLock
     case sharing
     case nearbyFriends
+    /// Friends & Blocks (`b4-mem-settings-friends`): the friend list and the name you appear as, moved
+    /// here from the Friends tab's header.
+    case friendsBlocks
     case periodSensitive
 }
 
@@ -454,6 +459,80 @@ nonisolated enum SettingsSearchIndex {
             route: .soundsHaptics
         ),
 
+        // Home map (World build step 5c, `b1-settings-map`): location, the fog, routes and places.
+        SettingsSearchEntry(
+            title: "Home map",
+            display: LocalizedStringResource(
+                "settings.search.title.homeMap", defaultValue: "Home map",
+                comment: "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to."),
+            keywords: ["map", "home map", "location", "gps", "places", "pins", "where you've been"],
+            breadcrumb: .homeMap,
+            route: .homeMap
+        ),
+        SettingsSearchEntry(
+            title: "Map the world in the background",
+            display: LocalizedStringResource(
+                "settings.search.title.backgroundMapping", defaultValue: "Map the world in the background",
+                comment: "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to."),
+            keywords: ["background mapping", "always location", "low power", "visits"],
+            breadcrumb: .homeMap,
+            route: .homeMap
+        ),
+        SettingsSearchEntry(
+            title: "Uncover the map as you go",
+            display: LocalizedStringResource(
+                "settings.search.title.uncoverMap", defaultValue: "Uncover the map as you go",
+                comment: "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to."),
+            keywords: ["fog", "uncover", "explore"],
+            breadcrumb: .homeMap,
+            route: .homeMap
+        ),
+        SettingsSearchEntry(
+            title: "Save new routes",
+            display: LocalizedStringResource(
+                "settings.search.title.saveRoutes", defaultValue: "Save new routes",
+                comment: "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to."),
+            keywords: ["routes", "route", "walk lines", "run lines", "trails", "delete routes"],
+            breadcrumb: .homeMap,
+            route: .homeMap
+        ),
+        SettingsSearchEntry(
+            title: "Remember places I stop at",
+            display: LocalizedStringResource(
+                "settings.search.title.rememberPlaces", defaultValue: "Remember places I stop at",
+                comment: "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to."),
+            keywords: ["places", "visits", "where you've been", "stop collecting places", "timeline"],
+            breadcrumb: .homeMap,
+            route: .homeMap
+        ),
+        SettingsSearchEntry(
+            title: "Remember places I eat out",
+            display: LocalizedStringResource(
+                "settings.search.title.rememberEatingOut", defaultValue: "Remember places I eat out",
+                comment: "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to."),
+            keywords: ["restaurants", "restaurant", "eat out", "favourite restaurant", "favorite restaurant", "usual meal"],
+            breadcrumb: .homeMap,
+            route: .homeMap
+        ),
+        SettingsSearchEntry(
+            title: "Homes and hotels",
+            display: LocalizedStringResource(
+                "settings.search.title.homesAndHotels", defaultValue: "Homes and hotels",
+                comment: "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to."),
+            keywords: ["home", "house", "hotel", "check out", "second home"],
+            breadcrumb: .homeMap,
+            route: .homeMap
+        ),
+        SettingsSearchEntry(
+            title: "Delete map history",
+            display: LocalizedStringResource(
+                "settings.search.title.deleteMapHistory", defaultValue: "Delete map history",
+                comment: "Settings search result: the name of a setting a search can find, on the Home map page. Short, sentence case, like the row it leads to."),
+            keywords: ["map history", "forget workout spaces", "clear map"],
+            breadcrumb: .homeMap,
+            route: .homeMap
+        ),
+
         // AI & data sources (the grouping page that took the AI/web/weather/body-signal switches
         // out from under the nutrition heading, SETT-14)
         SettingsSearchEntry(
@@ -771,6 +850,18 @@ nonisolated enum SettingsSearchIndex {
             breadcrumb: .sharingSettings,
             route: .sharing
         ),
+        // The recipe-sharing switches (notes, picture) moved from each share to Settings › Sharing
+        // (owner decision, world-ui; the card is "Recipes you share").
+        SettingsSearchEntry(
+            title: "Recipes you share",
+            display: LocalizedStringResource(
+                "settings.search.title.recipesYouShare", defaultValue: "Recipes you share",
+                comment: "Settings search result: the name of a setting a search can find, on the Sharing settings page (whether shared recipes carry your notes and their picture). Short, sentence case, like the row it leads to."),
+            keywords: ["include notes", "include picture", "recipe notes", "recipe photo", "recipe picture",
+                       "recipe sharing", "shared recipes"],
+            breadcrumb: .sharingSettings,
+            route: .sharing
+        ),
         SettingsSearchEntry(
             title: "Delete everything",
             display: LocalizedStringResource(
@@ -965,6 +1056,27 @@ nonisolated enum SettingsSearchIndex {
             route: .nearbyFriends
         ),
 
+        // Friends & Blocks (World Review Batch 4, b4-mem-settings-friends: the page moved from the
+        // Friends tab's header to Settings' Friends group, with the name you appear as on it)
+        SettingsSearchEntry(
+            title: "Friends & Blocks",
+            display: LocalizedStringResource(
+                "settings.search.title.friendsBlocks", defaultValue: "Friends & Blocks",
+                comment: "Settings search result: the name of a setting a search can find, on the Friends & Blocks page. Short, like the row it leads to."),
+            keywords: ["friends", "friend list", "blocks", "block", "blocked", "unblock", "remove friend", "report"],
+            breadcrumb: .friendsBlocks,
+            route: .friendsBlocks
+        ),
+        SettingsSearchEntry(
+            title: "Change name",
+            display: LocalizedStringResource(
+                "settings.search.title.changeName", defaultValue: "Change name",
+                comment: "Settings search result: the name of a setting a search can find, on the Friends & Blocks page (the name friends nearby see). Short, sentence case, like the row it leads to."),
+            keywords: ["name", "display name", "you appear as", "nickname", "change name", "friends see"],
+            breadcrumb: .friendsBlocks,
+            route: .friendsBlocks
+        ),
+
         // Period & sensitive content (the visibility gates as a first-class hub page, SETT-14)
         SettingsSearchEntry(
             title: "Period tracking",
@@ -981,6 +1093,18 @@ nonisolated enum SettingsSearchIndex {
                 "settings.search.title.intimacyTracking", defaultValue: "Intimacy tracking",
                 comment: "Settings search result: the name of a setting a search can find, on the Period & sensitive content page. Short, sentence case, like the row it leads to."),
             keywords: ["intimacy", "intimate", "visibility", "hide intimacy", "sensitive"],
+            breadcrumb: .periodSensitiveContent,
+            route: .periodSensitive
+        ),
+        // The Advanced period tracking switch (owner decision, world-ui): every symptom, cervical mucus,
+        // ovulation tests, basal temperature and spotting on Log period.
+        SettingsSearchEntry(
+            title: "Advanced period tracking",
+            display: LocalizedStringResource(
+                "settings.search.title.advancedPeriodTracking", defaultValue: "Advanced period tracking",
+                comment: "Settings search result: the name of a setting a search can find, on the Period & sensitive content page. Short, sentence case, like the row it leads to."),
+            keywords: ["advanced", "symptoms", "cervical mucus", "mucus", "ovulation", "ovulation test",
+                       "basal temperature", "bbt", "spotting", "fertility", "period"],
             breadcrumb: .periodSensitiveContent,
             route: .periodSensitive
         ),
@@ -1196,10 +1320,20 @@ nonisolated extension SettingsSearchBreadcrumb {
         display: LocalizedStringResource(
             "settings.search.breadcrumb.appLockDangerZone", defaultValue: "App lock › Danger zone",
             comment: "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it."))
+    static let homeMap = SettingsSearchBreadcrumb(
+        token: "Home map",
+        display: LocalizedStringResource(
+            "settings.search.breadcrumb.homeMap", defaultValue: "Home map",
+            comment: "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it."))
     static let nearbyFriends = SettingsSearchBreadcrumb(
         token: "Nearby friends",
         display: LocalizedStringResource(
             "settings.search.breadcrumb.nearbyFriends", defaultValue: "Nearby friends",
+            comment: "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it."))
+    static let friendsBlocks = SettingsSearchBreadcrumb(
+        token: "Friends & Blocks",
+        display: LocalizedStringResource(
+            "settings.search.breadcrumb.friendsBlocks", defaultValue: "Friends & Blocks",
             comment: "Settings search: the context line under a result, naming where the setting lives. '›' separates a page from the card on it; keep it."))
     static let periodSensitiveContent = SettingsSearchBreadcrumb(
         token: "Period & sensitive content",

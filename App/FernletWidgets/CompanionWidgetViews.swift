@@ -1,40 +1,48 @@
 // CompanionWidgetViews.swift
 // FernletWidgets
 //
-// The companion widget's families (design round 2, 2026-10-21): the small companion card (2b), the
-// medium thought card (2c) and the Lock Screen face (2i). Water moved to its own widget
-// (WaterWidget.swift); the rectangular Lock Screen card was retired (owner, 2026-10-21).
+// The companion widget's families in the World design language (World Review Batch 4, approved
+// 2026-10-24): the small card (`b4-w-companion-small`), the medium card with the pixel speech bubble
+// (`b4-w-companion-medium`), the Lock Screen circle (`b4-w-lock`), the Lock Screen rectangle with the
+// hearts and water (`b4-new-lock-rect`), and the card before Fernlet is first opened
+// (`b4-w-placeholder`). Every family takes `mono` for the one-colour renderings (`b4-w-tinted`).
 
 import SwiftUI
 import WidgetKit
 
-/// The small companion card: the person's companion, its state word and name, and the care bar.
+/// The small companion card: the pixel companion, its name top right, the state word, and Home's
+/// hearts with any gold hearts after them.
 ///
-/// While the companion is asleep it shows "Asleep" and drops the care bar — nothing of the day
-/// (``WidgetCompanionEmotion/hidesTheDay``). A tap opens Home.
+/// While the companion is asleep it shows "Asleep" and the pixel "z", and drops the hearts — nothing
+/// of the day (``WidgetCompanionEmotion/hidesTheDay``). A tap opens Home.
 struct CompanionSmallView: View {
     let entry: FernletCompanionEntry
+    /// One-colour rendering (tinted and clear Home Screens).
+    let mono: Bool
     @Environment(\.colorScheme) private var scheme
-    @Environment(\.widgetRenderingMode) private var renderingMode
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
-        let theme = WidgetTheme.current(scheme)
-        VStack(spacing: 0) {
-            VStack(spacing: 2) {
-                CompanionFigure(look: entry.look, state: entry.currentDayCompanionState,
-                                emotion: entry.currentCompanionEmotion, monochrome: renderingMode != .fullColor)
-                    .frame(width: 76, height: 76)
-                Text(entry.titleWord)
-                    .font(WidgetFont.display(19))
-                    .foregroundStyle(theme.ink)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                if let name = entry.companionName {
-                    Text(verbatim: name)
-                        .font(WidgetFont.label(11))
-                        .foregroundStyle(theme.muted)
-                        .lineLimit(1)
+        let theme = mono ? WidgetTheme.mono : WidgetTheme.current(scheme, contrast: contrast)
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .top, spacing: 4) {
+                    WidgetCompanionSprite(grid: entry.homeScreenGrid(increasedContrast: contrast == .increased), scale: 3,
+                                          ink: mono ? .silhouette(0xFFFFFF) : .color, showsZee: entry.hidesTheDay,
+                                          motif: entry.homeScreenMotif)
+                    Spacer(minLength: 0)
+                    if let name = entry.companionName {
+                        Text(verbatim: name)
+                            .font(WidgetFont.label(12.5))
+                            .foregroundStyle(theme.muted)
+                            .lineLimit(1)
+                    }
                 }
+                Text(entry.titleWord)
+                    .font(WidgetFont.display(20))
+                    .foregroundStyle(theme.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
             }
             // The face, the word and the name are one reading.
             .accessibilityElement(children: .ignore)
@@ -42,63 +50,105 @@ struct CompanionSmallView: View {
             .accessibilityValue(companionMoodValue(entry.currentDayCompanionState, entry.currentCompanionEmotion))
             Spacer(minLength: 4)
             if let score = entry.careScore {
-                WidgetCareBar(score: score, fill: FernletWidgetPalette.mood(entry.currentDayCompanionState), line: theme.line)
+                WidgetHeartRow(score: score, goldHearts: entry.goldHearts, mono: mono)
             }
         }
+        .widgetPaperFrame(theme, padding: EdgeInsets(top: 14, leading: 15, bottom: 15, trailing: 15))
         .widgetURL(FernletWidgetLink.home)
     }
 }
 
-/// The medium thought card: the companion and its care bar beside one of the widget's own lines.
+/// The medium card: the companion and its hearts beside one of the widget's own lines, in the pixel
+/// speech bubble approved for Home, pointing at the companion.
 ///
 /// The line comes from ``WidgetThoughtLines`` — a widget-only set chosen by state and time of day,
 /// never the app's Home thought (which can quote today's journal tag). A tap opens Home.
 struct CompanionThoughtView: View {
     let entry: FernletCompanionEntry
+    let mono: Bool
     @Environment(\.colorScheme) private var scheme
-    @Environment(\.widgetRenderingMode) private var renderingMode
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
-        let theme = WidgetTheme.current(scheme)
+        let theme = mono ? WidgetTheme.mono : WidgetTheme.current(scheme, contrast: contrast)
         HStack(alignment: .center, spacing: 14) {
             VStack(spacing: 8) {
-                Spacer(minLength: 0)
-                CompanionFigure(look: entry.look, state: entry.currentDayCompanionState,
-                                emotion: entry.currentCompanionEmotion, monochrome: renderingMode != .fullColor)
-                    .frame(width: 88, height: 88)
-                    .accessibilityHidden(true)      // the caption beside it says the same thing
+                WidgetCompanionSprite(grid: entry.homeScreenGrid(increasedContrast: contrast == .increased), scale: 4,
+                                      ink: mono ? .silhouette(0xFFFFFF) : .color, showsZee: entry.hidesTheDay,
+                                      motif: entry.homeScreenMotif)
                 if let score = entry.careScore {
-                    WidgetCareBar(score: score, fill: FernletWidgetPalette.mood(entry.currentDayCompanionState),
-                                  line: theme.line, height: 7)
+                    WidgetHeartRow(score: score, goldHearts: entry.goldHearts, mono: mono)
                 }
             }
-            .frame(width: 96)
+            .frame(width: entry.goldHearts > 0 ? 124 : 110)
             VStack(alignment: .leading, spacing: 8) {
-                Text(entry.thought)
-                    .font(WidgetFont.thought(17))
-                    .foregroundStyle(theme.ink)
-                    .lineLimit(3)
-                    .minimumScaleFactor(0.8)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(theme.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(theme.chip, lineWidth: 1.5))
-                Text(entry.caption)
-                    .font(WidgetFont.label(11))
+                WidgetSpeechBubble(text: entry.thought, mono: mono)
+                Text(verbatim: entry.caption)
+                    .font(WidgetFont.label(12.5))
                     .foregroundStyle(theme.muted)
                     .lineLimit(1)
-                    .padding(.leading, 8)
+                    .minimumScaleFactor(0.8)
+                    .padding(.leading, 4)
             }
         }
+        .frame(maxHeight: .infinity)
+        .widgetPaperFrame(theme, padding: EdgeInsets(top: 11, leading: 15, bottom: 11, trailing: 15))
         .widgetURL(FernletWidgetLink.home)
     }
 }
 
-/// The Lock Screen circle: the companion's face alone, in one tint (2i).
+/// The pixel speech bubble (`.tbub`): light paper in a 3-point ink frame with a small shade and a tail
+/// pointing left at the companion. It stays light paper in dark mode, as on the Batch 4 page; in one
+/// colour it becomes an outline.
+struct WidgetSpeechBubble: View {
+    /// The companion's line, already localized.
+    let text: String
+    let mono: Bool
+
+    var body: some View {
+        let frame = mono ? Color.white.opacity(0.5) : WidgetFixedInk.bubbleFrame
+        Text(verbatim: text)
+            .font(WidgetFont.label(15))
+            .foregroundStyle(mono ? Color.white : WidgetFixedInk.bubbleText)
+            .lineLimit(3)
+            .minimumScaleFactor(0.75)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(mono ? Color.white.opacity(0.14) : WidgetFixedInk.bubblePaper, in: RoundedRectangle(cornerRadius: 4))
+            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(frame, lineWidth: 3))
+            .overlay(alignment: .leading) {
+                WidgetBubbleTail()
+                    .fill(frame)
+                    .frame(width: 10, height: 14)
+                    .offset(x: -12)
+                    .accessibilityHidden(true)
+            }
+            .background {
+                if !mono {
+                    RoundedRectangle(cornerRadius: 4).fill(WidgetFixedInk.shade).offset(y: 3)
+                }
+            }
+    }
+}
+
+/// The speech bubble's tail: a small triangle pointing left.
+struct WidgetBubbleTail: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.midY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.closeSubpath()
+        return path
+    }
+}
+
+/// The Lock Screen circle: the pixel companion's silhouette with its face cut out, plus the pixel "z"
+/// while asleep (`b4-w-lock`).
 ///
 /// The state face only — the owner's 2026-09-24 rule — except asleep, which says nothing about the
-/// day (``FernletWidgetEmotionPolicy``). No word, bar or name.
+/// day (``FernletWidgetEmotionPolicy``). No word, hearts or name.
 struct CompanionLockView: View {
     let entry: FernletCompanionEntry
 
@@ -106,8 +156,8 @@ struct CompanionLockView: View {
         let emotion = FernletWidgetEmotionPolicy.lockScreenEmotion(entry.currentCompanionEmotion)
         ZStack {
             AccessoryWidgetBackground()
-            CompanionFigure(look: entry.look, state: entry.currentDayCompanionState, emotion: emotion, monochrome: true)
-                .padding(5)
+            WidgetCompanionSprite(grid: entry.companionGrid, scale: 2, ink: .silhouette(0xFFFFFF), showsZee: entry.hidesTheDay)
+                .offset(y: 2)
         }
         // One Canvas is an unlabelled blank to VoiceOver; the face is this family's only reading.
         .accessibilityElement(children: .ignore)
@@ -117,56 +167,95 @@ struct CompanionLockView: View {
     }
 }
 
-/// "Before first launch": a soft dashed companion and an invitation to open the app.
+/// The Lock Screen rectangle (`b4-new-lock-rect`): the companion's name and state, the six hearts with
+/// any gold hearts (checked, in one colour), and today's water as drops and "2 / 4".
 ///
-/// Shown by every Home Screen family whenever the entry carries no snapshot — the gentle invitation
-/// state rather than an error state.
-struct PlaceholderView: View {
-    @Environment(\.colorScheme) private var scheme
+/// Before the phone is unlocked the name and hearts hide, as the companion circle does; the water
+/// stays (owner, 2026-10-24). A tap opens Home; the water circle beside it still logs a bottle.
+struct CompanionLockRectView: View {
+    let entry: FernletCompanionEntry
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        let theme = WidgetTheme.current(scheme)
-        VStack(spacing: 12) {
-            DashedCompanionOutline(color: theme.line)
-                .frame(width: 56, height: 56)
-                // There is no companion yet, so the dashed blob illustrates the invitation below
-                // rather than reporting anything — an empty element in front of the real message.
-                .accessibilityHidden(true)
-            VStack(spacing: 3) {
-                Text("Open Fernlet")
-                    .font(WidgetFont.label(15))
-                    .foregroundStyle(theme.ink)
-                Text("to meet your companion")
-                    .font(WidgetFont.body(12))
-                    .foregroundStyle(theme.muted)
-                    .multilineTextAlignment(.center)
+        VStack(alignment: .leading, spacing: 3) {
+            Text(verbatim: entry.caption)
+                .font(.footnote.weight(.semibold))
+                .lineLimit(1)
+                .accessibilityLabel(entry.companionLabel)
+                .accessibilityValue(companionMoodValue(entry.currentDayCompanionState,
+                                                       FernletWidgetEmotionPolicy.lockScreenEmotion(entry.currentCompanionEmotion)))
+                .privacySensitive()
+            if let score = entry.careScore {
+                WidgetHeartRow(score: score, goldHearts: entry.goldHearts, mono: true, scale: 2)
+                    .privacySensitive()
             }
+            WidgetLockWaterLine(bottles: entry.bottleCount, target: entry.hydrationTarget,
+                                accessibilitySize: typeSize.isAccessibilitySize)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .foregroundStyle(.white)
+        .dynamicTypeSize(...WidgetPaperFrame.maxTypeSize)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(AccessoryWidgetBackground())
+        .widgetURL(FernletWidgetLink.home)
     }
 }
 
-/// The dashed placeholder blob (a simple always-happy face, drawn as strokes, not cut out).
-///
-/// Only used inside ``PlaceholderView``; it never varies by mood, so the cheaper stroke drawing is
-/// fine here.
-struct DashedCompanionOutline: View {
-    /// The stroke colour — the theme's outline colour.
-    let color: Color
+/// The Lock Screen rectangle's water: drops, then "2 / 4" — one element, "Water, 2 of 4 bottles".
+struct WidgetLockWaterLine: View {
+    let bottles: Int
+    let target: Int
+    let accessibilitySize: Bool
 
     var body: some View {
-        Canvas { context, size in
-            let s = min(size.width, size.height) / 100.0
-            context.scaleBy(x: s, y: s)
-            let shading = GraphicsContext.Shading.color(color)
-            let ring = Path(ellipseIn: CGRect(x: 10, y: 12, width: 80, height: 80))
-            context.stroke(ring, with: shading, style: StrokeStyle(lineWidth: 3.5, lineCap: .round, dash: [5, 7]))
-            context.fill(Path(ellipseIn: CGRect(x: 34, y: 44, width: 8, height: 8)), with: shading)
-            context.fill(Path(ellipseIn: CGRect(x: 58, y: 44, width: 8, height: 8)), with: shading)
-            var smile = Path()
-            smile.move(to: CGPoint(x: 40, y: 62))
-            smile.addQuadCurve(to: CGPoint(x: 60, y: 62), control: CGPoint(x: 50, y: 69))
-            context.stroke(smile, with: shading, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+        let water = WidgetWater.make(bottles: bottles, target: target, accessibilitySize: accessibilitySize)
+        HStack(spacing: 5) {
+            WidgetDropRow(water: water, mono: true, ink: .white, scale: 2, perLine: WidgetWater.maxDrops)
+            if case .drops = water {
+                Text(verbatim: WidgetWater.fraction(bottles, of: target))
+                    .font(.footnote.weight(.bold))
+                    .lineLimit(1)
+            }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("Water"))
+        .accessibilityValue(Text(WaterWords.progress(bottles, of: target)))
+    }
+}
+
+/// "Before first launch": a pale pixel ghost of the companion and an invitation to open the app
+/// (`b4-w-placeholder`). Shown by the small and medium cards of every widget whenever the entry
+/// carries no snapshot — the gentle invitation state rather than an error state.
+struct PlaceholderView: View {
+    let mono: Bool
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    /// The ghost: the plain companion's okay face, as the Batch 4 page draws it.
+    private static let ghost = WidgetCompanionPainter.paint(
+        state: .okay, look: WidgetPixelLook(look: .standard, state: .okay, asleep: false), asleep: false)
+
+    var body: some View {
+        let theme = mono ? WidgetTheme.mono : WidgetTheme.current(scheme, contrast: contrast)
+        VStack(spacing: 6) {
+            // There is no companion yet, so the ghost illustrates the invitation below rather than
+            // reporting anything — hidden, in front of the real message.
+            WidgetCompanionSprite(grid: Self.ghost, scale: typeSize.isAccessibilitySize ? 2 : 3,
+                                  ink: .silhouette(mono ? 0xFFFFFF : WidgetFixedInk.ghost))
+            Text("Open Fernlet")
+                .font(WidgetFont.display(18))
+                .foregroundStyle(theme.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+            Text("to meet your companion")
+                .font(WidgetFont.label(12.5))
+                .foregroundStyle(theme.muted)
+                .multilineTextAlignment(.center)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .widgetPaperFrame(theme)
     }
 }

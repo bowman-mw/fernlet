@@ -112,6 +112,7 @@ struct PrivacyWipeCoverageTests {
         // The session photos' (`meshFeatures.photos`, FernletSocial's); the purge empties the mesh's
         // live roster in the same step.
         "photos.purgeHeldSessionPhotosForDeleteAll",
+        "purgeSoloCameraForDeleteAll",
         "sharedRecipeImportQueue.clear",
         // The un-consumed Messages deep-link request (destination + inbox id). Its own token, and
         // NOT the enclosing `clearMessagesImportInboxes` spelling: that helper is registered in
@@ -174,6 +175,12 @@ struct PrivacyWipeCoverageTests {
         // This device's AI day summaries (2026-10-15): the persisted score history never carries them,
         // so they live in their own device-local file, which the wipe removes.
         "deviceDaySummaryStore.clearAll",
+        // The World map's sealed location history and both its keys (World build, 2026-10-23), and its
+        // two device-only settings.
+        "worldFog.clearAll",
+        "WorldMapPreferences.clearAll",
+        // Advanced period tracking's device-only switch (World build, 2026-10-24).
+        "CyclePreferences.clearAll",
         "worryBoxResetHook",
         "BarcodeServingMemory.clearAll",
         "RecentActivityTypeMemory.clearAll",
@@ -231,6 +238,9 @@ struct PrivacyWipeCoverageTests {
         // The silly stats' companion pacing — which stat was last mentioned, when, and the number
         // it said (some Health-derived), all device-local `UserDefaults`.
         "SillyStatsCompanionPacer.clearPersistentState",
+        // The silly stats' stamp book — which stats have appeared and on what day, device-local
+        // `UserDefaults` like the pacing above (some stamps are Health-derived facts).
+        "SillyStampStore.clearPersistentState",
         // Keychain identity + at-rest keys (the Increment 1 gap fixes)
         "wipeIdentityForDeleteAll",
         // The consequence of the row above, and the reason it is a separate token: rotating the
@@ -1127,7 +1137,7 @@ struct PrivacyWipeCoverageTests {
         "com.fernlet.healthkit-anchors", "com.fernlet.private-media", "com.fernlet.narrative-buffer",
         "com.fernlet.heartdrop", "com.fernlet.identity", "com.fernlet.moderation",
         "com.fernlet.device-binding", "com.fernlet.mesh-session",
-        "com.fernlet.mesh-routed"
+        "com.fernlet.mesh-routed", "com.fernlet.world-map"
     ]
 
     /// `com.fernlet.*` keychain SERVICE literals in `source`, found by anchoring on the binding that

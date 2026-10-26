@@ -67,6 +67,7 @@ struct WorkoutSetupSheet: View {
     /// Whether Fernlet shares workouts with Apple Health — read once at init (it reads keychain-backed
     /// switches); the heart-rate switch needs it to turn on.
     private let healthSharingAllowed: Bool
+    @Environment(\.fernletFramedLook) private var look
 
 
     init(store: FernletStore) {
@@ -152,7 +153,8 @@ struct WorkoutSetupSheet: View {
 
             SheetSaveBar(label: "Save") { commit() }
         }
-        .background(Color.parchment)
+        // World build (`b3-workout-setup` draft 2): the sheet's paper; framed radio cards and rows.
+        .background((look?.paper ?? Color.parchment).ignoresSafeArea())
         // Presented from another sheet, so it inherits none of the app's tint: without this the
         // Stepper's +/- render iOS blue against the parchment palette.
         .tint(Color.moss)
@@ -162,9 +164,7 @@ struct WorkoutSetupSheet: View {
         .fernletDraftGuard(isDirty: isDirty, title: "Workout setup") { dismiss() }
         .sheet(isPresented: $showingLocations) {
             WorkoutLocationSetupView(store: store)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheet()
         }
         // Turning "Heart rate during cardio" on is the one place Fernlet asks Apple Health to let it
         // read heart rate — at the person's own tap, never silently. Health shows its sheet only if
@@ -223,6 +223,7 @@ struct WorkoutSetupSheet: View {
                       comment: "Workout setup: a neutral note beside the split options. The argument is the split's name.")
     }
 
+    @ViewBuilder
     private func splitOption(
         title: Text,
         subtitle: Text?,
@@ -230,6 +231,21 @@ struct WorkoutSetupSheet: View {
         selected: Bool,
         badge: Text?,
         action: @escaping () -> Void
+    ) -> some View {
+        if let look {
+            Button(action: action) {
+                SetupSplitCard(title: title, subtitle: subtitle, tag: tag, badge: badge, selected: selected, look: look)
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(selected ? .isSelected : [])
+        } else {
+            plainSplitOption(title: title, subtitle: subtitle, tag: tag, selected: selected, badge: badge, action: action)
+        }
+    }
+
+    /// Today's radio row.
+    private func plainSplitOption(
+        title: Text, subtitle: Text?, tag: Text?, selected: Bool, badge: Text?, action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             HStack(alignment: .top, spacing: 10) {
@@ -270,7 +286,22 @@ struct WorkoutSetupSheet: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    private var locationsEntry: some View {
+    @ViewBuilder private var locationsEntry: some View {
+        if look != nil {
+            // `b3-workout-setup`: a framed card with the pin in a tile, the space, its gear, a chevron.
+            VStack(alignment: .leading, spacing: 10) {
+                SectionLabel("Locations & equipment").padding(.horizontal, 4)
+                MoveLinkCard(title: Text(store.settings.activeWorkoutLocation.displayedName), sprite: WorldSprites.pin,
+                             detail: Text("\(store.settings.activeWorkoutLocation.ownedEquipment.count) pieces of equipment"),
+                             identifier: "workout.setup.locations") { showingLocations = true }
+            }
+        } else {
+            plainLocationsEntry
+        }
+    }
+
+    /// Today's locations row.
+    private var plainLocationsEntry: some View {
         SheetField("Locations & equipment") {
             Button { showingLocations = true } label: {
                 HStack(spacing: 10) {
@@ -301,11 +332,27 @@ struct WorkoutSetupSheet: View {
 
     private var frequencySection: some View {
         VStack(alignment: .leading, spacing: 18) {
-            SheetField("Days per week") {
-                Stepper(value: $profile.trainingDaysPerWeek, in: 1...6) {
-                    // One key with a plural rule ("1 day a week"), not an English "s" spliced in.
-                    Text("\(profile.trainingDaysPerWeek) days a week")
-                        .foregroundStyle(Color.bark)
+            if look != nil {
+                // `b3-workout-setup`: one framed row, the framed stepper holding "3 days a week".
+                FernletFramedSection {
+                    AdaptiveStack(spacing: 10, horizontalAlignment: .leading) {
+                        Text("Days per week")
+                            .font(MoveFont.rowTitle)
+                            .foregroundStyle(look?.text ?? Color.bark)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        // One key with a plural rule ("1 day a week"), not an English "s" spliced in.
+                        FernletStepper("Days per week", value: $profile.trainingDaysPerWeek, in: 1...6, step: 1,
+                                       display: Text("\(profile.trainingDaysPerWeek) days a week"))
+                    }
+                    .padding(.vertical, 8)
+                }
+            } else {
+                SheetField("Days per week") {
+                    Stepper(value: $profile.trainingDaysPerWeek, in: 1...6) {
+                        // One key with a plural rule ("1 day a week"), not an English "s" spliced in.
+                        Text("\(profile.trainingDaysPerWeek) days a week")
+                            .foregroundStyle(Color.bark)
+                    }
                 }
             }
 
@@ -397,6 +444,57 @@ struct WorkoutSetupSheet: View {
     }
 }
 
+/// One split as a framed radio card (`b3-workout-setup` draft 2): the name (with a gold
+/// "Recommended" tag on the first recommendation), its summary, its breadth and days in the link ink,
+/// and a framed check box; the chosen card takes an accent frame and a filled box with a pixel tick.
+private struct SetupSplitCard: View {
+    let title: Text
+    let subtitle: Text?
+    let tag: Text?
+    let badge: Text?
+    let selected: Bool
+    let look: FernletFramedLook
+
+    /// The tag's gold (`b2-recipe-book`'s "Rough estimate" gold), with dark ink in both modes.
+    private static let gold = Color(.sRGB, red: 242 / 255, green: 210 / 255, blue: 122 / 255, opacity: 1)
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: FernletFramedLook.cardRadius, style: .continuous)
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                FlowLayout(spacing: 6) {
+                    title
+                        .font(MoveFont.rowTitle)
+                        .foregroundStyle(look.text)
+                    if let badge { FernletTag(text: badge, fill: Self.gold) }
+                }
+                if let subtitle {
+                    subtitle.font(FernletFramedFont.body).foregroundStyle(look.dim).fernletWrappingText()
+                }
+                if let tag {
+                    tag.font(MoveFont.rowDetail).foregroundStyle(look.link)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            checkBox
+        }
+        .padding(15)
+        .background(look.paper, in: shape)
+        .overlay(shape.strokeBorder(selected ? look.accent : look.ink, lineWidth: selected ? 3 : FernletFramedLook.frameWidth))
+        .background { shape.fill(look.shadow).offset(y: 3) }
+        .contentShape(shape)
+    }
+
+    /// The framed box: filled with the accent and ticked when chosen.
+    private var checkBox: some View {
+        WorldSpriteView(sprite: WorldSprites.check, scale: 2, tint: look.onAccent)
+            .opacity(selected ? 1 : 0)
+            .frame(width: 26, height: 26)
+            .fernletFramed(look, fill: selected ? look.accent : look.raised, cornerRadius: 6)
+            .accessibilityHidden(true)
+    }
+}
+
 /// The opt-in for true one-rep-max tests at the monthly strength check, for intermediate and
 /// advanced lifters only. Turning it on asks for a confirmation that carries the safety warnings;
 /// turning it off is immediate. Off, the check stays submaximal — which Fernlet treats as the better
@@ -415,6 +513,7 @@ private struct OneRepMaxOptIn: View {
                 Text("True max at monthly strength checks")
                     .foregroundStyle(Color.bark)
             }
+            .toggleStyle(FernletFramedToggleStyle())
             .accessibilityIdentifier("workout.setup.oneRepMax")
             Text("Off, the check is a few lighter sets and one hard set — easier on you, and usually the better guide to your training weights.")
                 .font(.fernlet(.labelSmall))

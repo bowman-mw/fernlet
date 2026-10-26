@@ -206,7 +206,8 @@ struct ExerciseDemonstrationTests {
 
     /// The placeholder is a square the size of the media, with the exercise's drawn name in a text
     /// box. Its type stops at the first accessibility size because the heading above carries the name
-    /// at every size, and both the media and the placeholder take the sheet-sized side.
+    /// at every size, and both the media and the placeholder take the sheet-sized side. Under the World
+    /// look (`b3-howto` draft 2) it is a full-width card no taller than that side.
     @Test func thePlaceholderIsASquareNamingTheExercise() throws {
         let view = try RepoRoot.source("App/Fernlet/ExerciseDemonstrationView.swift")
         let start = try #require(view.range(of: "struct ExerciseDemonstrationPlaceholder"))
@@ -215,6 +216,7 @@ struct ExerciseDemonstrationTests {
         #expect(placeholder.contains(".aspectRatio(1, contentMode: .fit)"))
         #expect(placeholder.contains(".frame(maxWidth: side)"))
         #expect(placeholder.contains(".dynamicTypeSize(...DynamicTypeSize.accessibility1)"))
+        #expect(placeholder.contains(".frame(height: min(side, Self.framedHeight))"))
         let sheet = try RepoRoot.source("App/Fernlet/ExerciseHowToSheet.swift")
         #expect(sheet.contains("side: ExerciseDemonstrationLayout.side(forVisibleHeight: visibleHeight)"))
         #expect(sheet.contains("fileName: fileName, animates: demonstration.animates, exerciseName: exerciseName, side: side)"))

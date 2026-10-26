@@ -44,10 +44,7 @@ enum SillyStatsTallier {
         var dishes: [String: SillySignatureDish] = [:]
         var residueSteps = 0
         for day in inputs.days {
-            addFood(of: day, to: &tally, dishes: &dishes)
-            addWorkouts(of: day, to: &tally, unitlessLoadIsPounds: inputs.unitlessLoadIsPounds)
-            addRest(of: day, to: &tally)
-            addCare(of: day, to: &tally, bottleOunces: inputs.bottleOunces)
+            add(day, to: &tally, dishes: &dishes, inputs: inputs)
             residueSteps += max(day.healthContext?.activity?.steps ?? 0, 0)
         }
         tally.steps = max(inputs.healthSteps ?? 0, residueSteps)
@@ -55,6 +52,52 @@ enum SillyStatsTallier {
         tally.signatureDish = signatureDish(in: dishes)
         tally.daysKnown = daysKnown(days: inputs.days, todayKey: inputs.todayKey)
         return tally
+    }
+
+    /// The day each stat first had enough behind it to show, replaying the diary day by day — what
+    /// dates a stamp the book catches up on (``SillyStampRules``).
+    ///
+    /// Only the diary is replayed. Apple Health's lifetime step total and the pat count carry no
+    /// dates, so a stat that shows only thanks to them is missing from the result (the steps a day
+    /// record kept for itself do count, on their day). The companion's age is dated directly — the
+    /// third day from the first one with anything logged — because a day with nothing logged has no
+    /// record to replay.
+    static func firstRevealDays(_ inputs: Inputs, calendar: Calendar = .current) -> [SillyStatKind: String] {
+        var tally = SillyStatsTally()
+        var dishes: [String: SillySignatureDish] = [:]
+        var found: [SillyStatKind: String] = [:]
+        let days = inputs.days.filter { $0.date <= inputs.todayKey }.sorted { $0.date < $1.date }
+        for day in days where found.count < SillyStatKind.allCases.count {
+            add(day, to: &tally, dishes: &dishes, inputs: inputs)
+            tally.steps += max(day.healthContext?.activity?.steps ?? 0, 0)
+            if found[.signatureDish] == nil { tally.signatureDish = signatureDish(in: dishes) }
+            for kind in SillyStatKind.allCases where found[kind] == nil && SillyStatsEngine.isRevealed(kind, in: tally) {
+                found[kind] = day.date
+            }
+        }
+        found[.gastrotrichLifetimes] = gastrotrichDay(days: inputs.days, todayKey: inputs.todayKey, calendar: calendar)
+        return found
+    }
+
+    /// One day's food, workouts, rest and care, folded into `tally`.
+    private static func add(
+        _ day: FernletDay, to tally: inout SillyStatsTally, dishes: inout [String: SillySignatureDish], inputs: Inputs
+    ) {
+        addFood(of: day, to: &tally, dishes: &dishes)
+        addWorkouts(of: day, to: &tally, unitlessLoadIsPounds: inputs.unitlessLoadIsPounds)
+        addRest(of: day, to: &tally)
+        addCare(of: day, to: &tally, bottleOunces: inputs.bottleOunces)
+    }
+
+    /// The day the companion's age first reached a gastrotrich lifetime, or nil if it has not yet.
+    static func gastrotrichDay(days: [FernletDay], todayKey: String, calendar: Calendar = .current) -> String? {
+        let lifetime = Int(SillyStatsEngine.Constant.gastrotrichDays.rounded(.up))
+        guard lifetime >= 1,
+              let firstKey = days.filter(\.hasLoggedContent).map(\.date).min(),
+              let first = FernletDate.date(fromDayKey: firstKey),
+              let reached = calendar.date(byAdding: .day, value: lifetime - 1, to: calendar.startOfDay(for: first)) else { return nil }
+        let key = FernletDate.dayKey(for: reached)
+        return key <= todayKey ? key : nil
     }
 
     // MARK: - Food

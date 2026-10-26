@@ -73,11 +73,18 @@
 		<string>InstrumentSerif-Italic.ttf</string>
 		<string>DMSans-Regular.ttf</string>
 		<string>DMSans-Medium.ttf</string>
+		<string>DMSans-Bold.ttf</string>
 	</array>
+	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
+	<dict>
+		<key>WorldWalk</key>
+		<string>Precise location draws the line of this walk or run. The line stays on this iPhone.</string>
+	</dict>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
 		<string>fetch</string>
+		<string>location</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict>

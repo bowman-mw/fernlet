@@ -10,11 +10,9 @@
 //  since 2026-08-20 the wipe clears the ledger too (a dated trail of when you journaled is not
 //  a wipe survivor).
 //
-//  Two ways to look at the same numbers, per the approved design:
-//    • warm rows — the everyday screen: a count folded into a warm sentence, so it reads as a
-//      memory, not a metric. Gifts are a soft aside, never a badge to chase.
-//    • the keepsake shelf — a tap-in sub-view of pressed-metal medallions resting on wooden
-//      ledges. A memento box, not a stat grid: only earned kinds appear, and counts stay soft.
+//  Since design `b2-milestones` draft 2 (2026-10-24) the numbers live in the Stamp book
+//  (`StampBookPage`): a framed medal per kind of care on wooden shelves, then the silly stamps and stats.
+//  This file keeps the sheet that hosts it, the row model and the copy.
 //
 
 import SwiftUI
@@ -22,416 +20,24 @@ import FernletDomainModel
 import StoreCore
 import FernletUI
 
-/// The lifetime-milestones screen: warm cumulative counts of care plus the coin gifts each
-/// milestone added.
+/// The Stamp book in a sheet: ``StampBookPage`` under the sheet's paper header, “Stamp book”, with Done.
 ///
-/// A large sheet since the 2026-08-21 redesign (HOME-13: one rule for read-only destinations from
-/// Home — they present as sheets, like Trends and First aid), with its own `NavigationStack` so
-/// the keepsake shelf pushes INSIDE the sheet. Rows come from ``MilestoneRowModel`` over the
-/// store's append-only milestone ledger (plus the device-local worries-let-go count), so numbers
-/// only ever grow — no rates, streaks, or completion percentages, by design. Every gift figure on
-/// the screen — each row's shelf line, the shelf link's count, and the coins footer — derives from
-/// the ONE coin-ledger read in `body` (HOME-20's one-source rule), so no two of them can disagree.
+/// Milestones, the keepsake shelf and Silly stats are one page since design `b2-milestones` draft 2
+/// (approved 2026-10-24). The Today panel pushes the page under its plate; this sheet is the same page
+/// for the routed `.milestones` and `.sillyStats` sheets (the stamp banner opens the latter, at the
+/// stamps). Its own `NavigationStack`, so the page lays out as it does when pushed.
 struct MilestonesView: View {
     var store: FernletStore
+    /// Opens at the silly stamps rather than the top.
+    var startsAtStamps = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        // Read each ledger ONCE per render and derive every surface from the same values
-        // (HOME-20): the milestone counts, the worry total, and the coin rows behind both the
-        // per-row gift lines and the footer.
-        let coinEntries = store.coinLedgerService.entries
-        let gifts = MilestoneRowModel.giftCounts(in: coinEntries)
-        let rows = MilestoneRowModel.rows(
-            counts: store.milestoneCounts,
-            worriesLetGo: store.lifetimeWorriesLetGo,
-            giftCounts: gifts
-        )
-        let coins = CoinEconomy.milestoneAwardCoins(in: coinEntries)
-        return NavigationStack {
-            VStack(spacing: 0) {
-                SheetHeader(
-                    title: "Milestones",
-                    subtitle: "Everything here is cumulative. Nothing resets.",
-                    onDone: { dismiss() }
-                )
-                content(rows: rows, totalGifts: gifts.values.reduce(0, +), totalCoins: coins)
-            }
-            .background(Color.parchment)
-            // The sheet root draws its own SheetHeader; the pushed keepsake shelf keeps its
-            // system navigation bar and back button.
-            .toolbar(.hidden, for: .navigationBar)
+        NavigationStack {
+            StampBookPage(store: store, startsAtStamps: startsAtStamps)
+                .fernletSheetToolbar(title: Text(StampBookTitle.resource), onDone: { dismiss() })
         }
-    }
-
-    // MARK: - Content
-
-    private func content(rows: [MilestoneRowModel], totalGifts: Int, totalCoins: Int) -> some View {
-        let mostlyEmpty = isMostlyEmpty(rows: rows, totalCoins: totalCoins)
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                // The screen-anchor UI tests assert on the intro, so the anchor survives the
-                // sheet conversion exactly where it lived on the push.
-                intro(mostlyEmpty: mostlyEmpty)
-                    .uxScreenAnchor("screen.milestones")
-
-                VStack(spacing: 11) {
-                    ForEach(rows, id: \.kind) { row in
-                        milestoneRow(row)
-                    }
-                }
-
-                if !mostlyEmpty {
-                    shelfLink(rows: rows, totalGifts: totalGifts, totalCoins: totalCoins)
-                }
-
-                sillyStatsLink
-
-                coinsSummary(totalCoins: totalCoins)
-            }
-            .padding(20)
-        }
-    }
-
-    /// True while the shelf is barely filling in — a gentler intro + softer coins note, and zero
-    /// kinds show as a quiet dashed "your first … will land here" row rather than a full sentence.
-    /// Threshold is deliberately loose: "mostly empty" is a feeling, not a metric. No gifts yet
-    /// (nothing has crossed a threshold) and every kind is still in single digits.
-    private func isMostlyEmpty(rows: [MilestoneRowModel], totalCoins: Int) -> Bool {
-        totalCoins == 0 && rows.allSatisfy { $0.count < 10 }
-    }
-
-    // MARK: - Intro
-
-    /// The line under the header. The sheet's subtitle already carries the cumulative promise, so
-    /// this stays one warm line — gentler while the shelf is mostly empty.
-    @ViewBuilder
-    private func intro(mostlyEmpty: Bool) -> some View {
-        if mostlyEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("The shelf is filling in")
-                    .font(.fernlet(.headerMedium))
-                    .foregroundStyle(Color.bark)
-                    .fernletWrappingText()
-                Text("These only ever grow, in their own time. There's nothing to keep up with here.")
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-            }
-        } else {
-            Text("Every bit of care you've logged, added up over all time.")
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
-        }
-    }
-
-    /// The keepsake-shelf row (HOME-20): its gift count comes from the same coin-ledger read as
-    /// the rows and the footer, so the link can never promise a shelf the footer contradicts.
-    private func shelfLink(rows: [MilestoneRowModel], totalGifts: Int, totalCoins: Int) -> some View {
-        NavigationLink {
-            KeepsakeShelfView(rows: rows, totalMilestoneCoins: totalCoins)
-        } label: {
-            HStack(spacing: 8) {
-                // T1-8, F9 final correction (second pass): a `NavigationLink`/`Button` label
-                // auto-combines into one accessibility element, and a side-by-side probe of this
-                // exact shape confirmed the combine ALSO absorbs an unlabelled `Image(systemName:)`
-                // — hidden and unhidden variants both announced identically ("…, 4 gifts"), no
-                // "seal"/"chevron forward" leak either way. So `.accessibilityHidden` here would be
-                // INERT, not merely redundant: this is precisely the flattened-container case T1-8's
-                // own rule says to skip ("only hide glyphs in containers NOT flattened with
-                // .ignore/.combine+label"). No hiding needed on these two glyphs.
-                Image(systemName: "seal")
-                    .font(.footnote.weight(.semibold))
-                Text("Keepsake shelf")
-                    .font(.fernlet(.label))
-                Spacer(minLength: 0)
-                if totalGifts > 0 {
-                    Text(verbatim: MilestonesCopy.giftCount(totalGifts))
-                        .font(.fernlet(.labelSmall))
-                        // T1-3: text ink, not the `goldenrod` accent (2.22:1).
-                        .foregroundStyle(Color.goldenrodInk)
-                }
-                Image(systemName: "chevron.forward")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            .foregroundStyle(Color.bark)
-            .padding(.vertical, 12)
-            .padding(.horizontal, 14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(Color.goldenrod.opacity(0.28), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    /// The way into the silly stats, pushed inside this sheet's stack like the keepsake shelf.
-    private var sillyStatsLink: some View {
-        NavigationLink {
-            SillyStatsList(store: store)
-                .navigationTitle(Text("Silly stats"))
-                .navigationBarTitleDisplayMode(.inline)
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "face.smiling")
-                    .font(.footnote.weight(.semibold))
-                Text("Silly stats")
-                    .font(.fernlet(.label))
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.forward")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            .foregroundStyle(Color.bark)
-            .padding(.vertical, 12)
-            .padding(.horizontal, 14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(Color.bark.opacity(0.14), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("milestones.sillyStats")
-    }
-
-    // MARK: - Rows (7a)
-
-    @ViewBuilder
-    private func milestoneRow(_ row: MilestoneRowModel) -> some View {
-        if row.count == 0 {
-            // A quiet, dashed "your first … will land here" placeholder — never a to-do item.
-            HStack(spacing: 14) {
-                iconTile(row, dimmed: true)
-                Text(row.emptyPrompt)
-                    .font(.fernlet(.bubble))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-                Spacer(minLength: 0)
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.cream.opacity(0.55))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(Color.bark.opacity(0.14), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
-            )
-            .accessibilityElement(children: .combine)
-        } else {
-            HStack(spacing: 14) {
-                iconTile(row, dimmed: false)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(row.headline)
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.bark)
-                        .fernletWrappingText()
-                    if row.giftCount > 0 {
-                        HStack(alignment: .top, spacing: 5) {
-                            Image(systemName: "star.fill")
-                                .font(.system(size: 10))
-                                .foregroundStyle(Color.goldenrod)
-                            // "on the shelf", from the COIN ledger (HOME-20): the row states what
-                            // is actually there, counted from the same award rows the footer sums
-                            // — never a threshold count that can disagree with it after a reset.
-                            // Wraps rather than truncates at accessibility sizes (3f·AX3).
-                            Text(verbatim: MilestonesCopy.giftsOnShelf(row.giftCount))
-                                .font(.fernlet(.labelSmall))
-                                // T1-3: text ink, not the `goldenrod` accent (2.22:1). The star
-                                // glyph beside it stays the decorative accent.
-                                .foregroundStyle(Color.goldenrodInk)
-                                .fernletWrappingText()
-                        }
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .accessibilityElement(children: .combine)
-        }
-    }
-
-    private func iconTile(_ row: MilestoneRowModel, dimmed: Bool) -> some View {
-        Image(systemName: row.icon)
-            .font(.system(size: 20, weight: .regular))
-            .foregroundStyle(row.tint.opacity(dimmed ? 0.5 : 1))
-            .frame(width: 44, height: 44)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(row.tint.opacity(dimmed ? 0.12 : 0.18))
-            )
-    }
-
-    // MARK: - Coins summary
-
-    @ViewBuilder
-    private func coinsSummary(totalCoins totalMilestoneCoins: Int) -> some View {
-        if totalMilestoneCoins > 0 {
-            HStack(spacing: 15) {
-                CoinGlyph(diameter: 46)
-                Text(verbatim: MilestonesCopy.coinsAdded(totalMilestoneCoins))
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.bark)
-                    .fernletWrappingText()
-                Spacer(minLength: 0)
-            }
-            .padding(.vertical, 16)
-            .padding(.horizontal, 18)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(Color.cream)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(Color.goldenrod.opacity(0.3), lineWidth: 1)
-            )
-        } else {
-            // No gifts yet: a reassuring note, never a countdown to chase. Routed through the shared
-            // `EmptyState` (with its optional glyph) so this reads in the same voice as the other 30
-            // empty sections instead of in its own font and spacing.
-            EmptyState(
-                text: "No milestone gifts yet — the first lands with your very first log. No rush.",
-                systemImage: "star"
-            )
-            .padding(.horizontal, 16)
-            .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color.cream.opacity(0.7))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .strokeBorder(Color.goldenrod.opacity(0.22), lineWidth: 1)
-            )
-        }
-    }
-}
-
-// MARK: - Keepsake shelf (7b)
-
-/// The tap-in "shelf" view: each earned kind is a pressed-metal medallion resting on a wooden
-/// ledge, grouped three to a shelf.
-///
-/// Only earned kinds appear — there are deliberately no locked or empty slots to goad a "collect
-/// them all" — and counts stay soft (a small number under the medallion). Receives its rows and
-/// coin total from ``MilestonesView`` so both surfaces always agree.
-private struct KeepsakeShelfView: View {
-    let rows: [MilestoneRowModel]
-    let totalMilestoneCoins: Int
-
-    /// Only kinds with something to show — no empty/locked slots by design.
-    private var earned: [MilestoneRowModel] {
-        rows.filter { $0.count > 0 }
-    }
-
-    /// Chunk into ledges of three so each shelf holds a tidy row of medallions.
-    private var shelves: [[MilestoneRowModel]] {
-        stride(from: 0, to: earned.count, by: 3).map { start in
-            Array(earned[start ..< min(start + 3, earned.count)])
-        }
-    }
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                if earned.isEmpty {
-                    Text("Your keepsake shelf")
-                        .font(.fernlet(.header))
-                        .foregroundStyle(Color.bark)
-                    Text("Nothing pressed onto the shelf just yet. Every bit of care will find a place here, in its own time.")
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-                } else {
-                    Text("Every bit of care, pressed into a keepsake. These only ever grow — nothing resets or expires.")
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-
-                    VStack(spacing: 22) {
-                        ForEach(Array(shelves.enumerated()), id: \.offset) { _, ledge in
-                            shelfLedge(ledge)
-                        }
-                    }
-
-                    if totalMilestoneCoins > 0 {
-                        HStack(spacing: 15) {
-                            CoinGlyph(diameter: 46)
-                            Text(verbatim: MilestonesCopy.coinsAdded(totalMilestoneCoins))
-                                .font(.fernlet(.body))
-                                .foregroundStyle(Color.bark)
-                                .fernletWrappingText()
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.vertical, 16)
-                        .padding(.horizontal, 18)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(
-                            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                .fill(Color.cream)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                .strokeBorder(Color.goldenrod.opacity(0.3), lineWidth: 1)
-                        )
-                        .padding(.top, 4)
-                    }
-                }
-            }
-            .padding(20)
-        }
-        .background(Color.parchment)
-        .navigationTitle("Keepsake shelf")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private func shelfLedge(_ ledge: [MilestoneRowModel]) -> some View {
-        VStack(spacing: 14) {
-            HStack(alignment: .bottom, spacing: 0) {
-                ForEach(ledge, id: \.kind) { row in
-                    medallion(row)
-                        .frame(maxWidth: .infinity)
-                }
-            }
-            // The wooden ledge the medallions rest on.
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [Color.shelfLedgeTop, Color.shelfLedgeBottom],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .frame(height: 8)
-                .shadow(color: Color.bark.opacity(0.14), radius: 4, x: 0, y: 3)
-        }
-    }
-
-    private func medallion(_ row: MilestoneRowModel) -> some View {
-        VStack(spacing: 9) {
-            PressedMedallion(icon: row.icon, tint: row.tint, diameter: 88)
-            VStack(spacing: 1) {
-                Text("\(row.count)")
-                    .font(.fernlet(.stat))
-                    .foregroundStyle(Color.bark)
-                Text(row.shelfLabel)
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
-                    .multilineTextAlignment(.center)
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(row.headline)
+        .fernletSheet()
     }
 }
 
@@ -455,7 +61,8 @@ struct MilestoneRowModel {
     /// Raw lifetime count — drives the shelf medallions, empty-vs-filled row styling, and the
     /// mostly-empty header decision. (The sentence in `headline` already folds this in.)
     let count: Int
-    /// A short lower-case label for under a shelf medallion ("journal", "worries let go").
+    /// A short lower-case caption under a Stamp book medal, agreeing with ``count`` ("1 journal moment",
+    /// "3 worries let go"; the number itself is drawn above it).
     let shelfLabel: String
     /// A gentle "your first … will land here" line for a kind with no count yet.
     let emptyPrompt: String
@@ -504,7 +111,7 @@ struct MilestoneRowModel {
                 headline: headline(kind: kind, count: count),
                 giftCount: kind == .worry ? 0 : (giftCounts[kind] ?? 0),
                 count: count,
-                shelfLabel: MilestonesCopy.shelfLabel(for: kind),
+                shelfLabel: MilestonesCopy.shelfLabel(for: kind, count: count),
                 emptyPrompt: MilestonesCopy.emptyPrompt(for: kind)
             )
         }
@@ -582,21 +189,49 @@ enum MilestonesCopy {
                comment: "Milestones screen and keepsake shelf footer: the coins milestone gifts have added to the user's coin pouch. Needs a plural variation per language.")
     }
 
-    /// The short lower-case label under a shelf medallion.
-    static func shelfLabel(for kind: MilestoneEventKind) -> String {
+    /// The short lower-case label under a Stamp book medal, below its count (design `b2-milestones`,
+    /// draft 2): "well-watered day" under a 1, "well-watered days" under any other count (owner,
+    /// 2026-10-24). The number is drawn above it, and a catalog plural variation must reference its
+    /// number (the compiler refuses one that does not), so the caption is two keys, one and more than
+    /// one, as Xcode advises for a count-agreeing string without its number.
+    static func shelfLabel(for kind: MilestoneEventKind, count: Int) -> String {
+        count == 1 ? singleShelfLabel(for: kind) : shelfLabel(for: kind)
+    }
+
+    /// The medal caption under any count but 1 ("journal moments", "worries let go").
+    private static func shelfLabel(for kind: MilestoneEventKind) -> String {
         switch kind {
-        case .journal: String(localized: "milestones.shelf.journal", defaultValue: "journal",
-                              comment: "Keepsake shelf: lowercase label under the journal medallion, below its count.")
-        case .meal: String(localized: "milestones.shelf.meals", defaultValue: "meals",
-                           comment: "Keepsake shelf: lowercase label under the meals medallion, below its count.")
-        case .workout: String(localized: "milestones.shelf.workouts", defaultValue: "workouts",
-                              comment: "Keepsake shelf: lowercase label under the workouts medallion, below its count.")
-        case .water: String(localized: "milestones.shelf.water", defaultValue: "water",
-                            comment: "Keepsake shelf: lowercase label under the water medallion, below its count of well-watered days.")
-        case .breathing: String(localized: "milestones.shelf.breathing", defaultValue: "breathing",
-                                comment: "Keepsake shelf: lowercase label under the breathing medallion, below its count of breathing breaks.")
-        case .worry: String(localized: "milestones.shelf.worries", defaultValue: "worries let go",
-                            comment: "Keepsake shelf: lowercase label under the worry medallion, below its count of worries let go.")
+        case .journal: String(localized: "stampBook.medal.journal", defaultValue: "journal moments",
+                              comment: "Stamp book: lowercase caption under the journal medal, below its lifetime count when it is not 1. The 1 form is stampBook.medal.journal.one.")
+        case .meal: String(localized: "stampBook.medal.meals", defaultValue: "meals noted",
+                           comment: "Stamp book: lowercase caption under the meals medal, below its lifetime count when it is not 1. The 1 form is stampBook.medal.meals.one.")
+        case .workout: String(localized: "stampBook.medal.workouts", defaultValue: "workouts on purpose",
+                              comment: "Stamp book: lowercase caption under the workouts medal, below its lifetime count when it is not 1. The 1 form is stampBook.medal.workouts.one.")
+        case .water: String(localized: "stampBook.medal.water", defaultValue: "well-watered days",
+                            comment: "Stamp book: lowercase caption under the water medal, below its count of days the water target was met when it is not 1. The 1 form is stampBook.medal.water.one.")
+        case .breathing: String(localized: "stampBook.medal.breathing", defaultValue: "breathing breaks",
+                                comment: "Stamp book: lowercase caption under the breathing medal, below its count of breathing breaks when it is not 1. The 1 form is stampBook.medal.breathing.one.")
+        case .worry: String(localized: "stampBook.medal.worries", defaultValue: "worries let go",
+                            comment: "Stamp book: lowercase caption under the worry medal, below its count of worries let go when it is not 1. The 1 form is stampBook.medal.worries.one.")
+        case .resetBoundary: ""
+        }
+    }
+
+    /// The medal caption under a count of 1 ("journal moment", "worry let go").
+    private static func singleShelfLabel(for kind: MilestoneEventKind) -> String {
+        switch kind {
+        case .journal: String(localized: "stampBook.medal.journal.one", defaultValue: "journal moment",
+                              comment: "Stamp book: lowercase caption under the journal medal when its lifetime count is exactly 1")
+        case .meal: String(localized: "stampBook.medal.meals.one", defaultValue: "meal noted",
+                           comment: "Stamp book: lowercase caption under the meals medal when its lifetime count is exactly 1")
+        case .workout: String(localized: "stampBook.medal.workouts.one", defaultValue: "workout on purpose",
+                              comment: "Stamp book: lowercase caption under the workouts medal when its lifetime count is exactly 1")
+        case .water: String(localized: "stampBook.medal.water.one", defaultValue: "well-watered day",
+                            comment: "Stamp book: lowercase caption under the water medal when its count of days the water target was met is exactly 1")
+        case .breathing: String(localized: "stampBook.medal.breathing.one", defaultValue: "breathing break",
+                                comment: "Stamp book: lowercase caption under the breathing medal when its count of breathing breaks is exactly 1")
+        case .worry: String(localized: "stampBook.medal.worries.one", defaultValue: "worry let go",
+                            comment: "Stamp book: lowercase caption under the worry medal when its count of worries let go is exactly 1")
         case .resetBoundary: ""
         }
     }
@@ -712,15 +347,5 @@ private extension Color {
     static let worryMedal = Color(
         light: Color(red: 0.831, green: 0.659, blue: 0.263),
         dark:  Color(red: 0.741, green: 0.573, blue: 0.220)
-    )
-
-    // Wooden shelf ledge.
-    static let shelfLedgeTop = Color(
-        light: Color(red: 0.847, green: 0.780, blue: 0.651),
-        dark:  Color(red: 0.290, green: 0.243, blue: 0.176)
-    )
-    static let shelfLedgeBottom = Color(
-        light: Color(red: 0.765, green: 0.686, blue: 0.533),
-        dark:  Color(red: 0.220, green: 0.180, blue: 0.125)
     )
 }

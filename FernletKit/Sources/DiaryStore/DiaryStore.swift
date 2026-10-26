@@ -1720,6 +1720,17 @@ public final class DiaryStore {
         }
     }
 
+    /// Writes only a manual recipe's notes, trimmed, and persists: the recipe page's own Notes card
+    /// (World `b3-recipe-notes`), which edits nothing else. A no-op when the recipe id is no longer in
+    /// the book.
+    public func updateRecipeNotes(_ notes: String, forRecipeID recipeID: UUID) {
+        guard let index = recipes.firstIndex(where: { $0.id == recipeID }) else { return }
+        batchSnapshotPersistence {
+            recipes[index].notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            recipes[index].updatedAt = Date()
+        }
+    }
+
     /// Removes a recipe from the book by id and persists.
     public func deleteRecipe(_ recipe: RecipeDefinition) {
         recipes.removeAll { $0.id == recipe.id }

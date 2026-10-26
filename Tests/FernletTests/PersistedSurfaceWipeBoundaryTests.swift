@@ -192,6 +192,20 @@ struct PersistedSurfaceWipeBoundaryTests {
         "ageAssuranceRecord": .cleared(token: "ageAssurance.clear"),
         "fernlet.ai.quota.pair": .cleared(token: "aiCallQuotaStore.reset"),
         "fernlet.weather.requestBudget": .cleared(token: "WeatherKitService.shared.clearRequestHistory"),
+        // The World map's device-only settings (World build, 2026-10-23).
+        "fernlet.worldMap.uncoverAsYouGo": .cleared(token: "WorldMapPreferences.clearAll"),
+        "fernlet.worldMap.alwaysLowPower": .cleared(token: "WorldMapPreferences.clearAll"),
+        "fernlet.worldMap.saveNewRoutes": .cleared(token: "WorldMapPreferences.clearAll"),
+        "fernlet.worldMap.rememberSpaces": .cleared(token: "WorldMapPreferences.clearAll"),
+        // Step 5c (2026-10-24): the map intro's answer (`b1-loc-intro`) and the one-time companion hint (`ref-hint`).
+        "fernlet.worldMap.locationIntroAnswered": .cleared(token: "WorldMapPreferences.clearAll"),
+        "fernlet.worldMap.companionHintShown": .cleared(token: "WorldMapPreferences.clearAll"),
+        // Round 5 (2026-10-24): Home map's "Remember places I stop at".
+        "fernlet.worldMap.rememberPlaces": .cleared(token: "WorldMapPreferences.clearAll"),
+        // Round 6 (2026-10-25): Home map's "Remember places I eat out".
+        "fernlet.worldMap.rememberEatingOut": .cleared(token: "WorldMapPreferences.clearAll"),
+        // World build (2026-10-24): Advanced period tracking's switch (`b3-period-settings`).
+        "fernlet.cycle.advancedTracking": .cleared(token: "CyclePreferences.clearAll"),
         "fernlet.barcodeLastServings.v1": .cleared(token: "BarcodeServingMemory.clearAll"),
         // The companion petting state, all four keys. `clearPersistentState()` existed long before
         // anything on a shipping path called it — see the header.
@@ -207,6 +221,10 @@ struct PersistedSurfaceWipeBoundaryTests {
         "fernlet.sillyStats.lastMentionKind": .cleared(token: "SillyStatsCompanionPacer.clearPersistentState"),
         "fernlet.sillyStats.nextMentionDay": .cleared(token: "SillyStatsCompanionPacer.clearPersistentState"),
         "fernlet.sillyStats.lastMentionValues": .cleared(token: "SillyStatsCompanionPacer.clearPersistentState"),
+        // The silly stats' stamp book (2026-10-22): which stats have appeared and on what day — a
+        // dated trail of the diary, partly Health-derived, so device-local — and the book's first day.
+        "fernlet.sillyStats.stamps": .cleared(token: "SillyStampStore.clearPersistentState"),
+        "fernlet.sillyStats.stampBookStartDay": .cleared(token: "SillyStampStore.clearPersistentState"),
         // The plaintext half of the Health capability ledger. The live record is a keychain row now;
         // this defaults key is the legacy copy the ledger drains, and `clear` removes it directly.
         "fernlet.healthkit.requested-capabilities": .cleared(token: "HealthCapabilityRequestLedger.clear"),
@@ -414,6 +432,13 @@ struct PersistedSurfaceWipeBoundaryTests {
         "fernletAppearanceMode": .kept(
             reason: "Appearance preference (system / light / dark). A setting describing the app's chrome, not the user's days; clearing it only makes a freshly-wiped app look unfamiliar for no privacy gain."
         ),
+        // World build (2026-10-24): App colors' Wood and Accent (design `b2-colors`, `WorldAppColors`).
+        "fernlet.world.appColors.wood": .kept(
+            reason: "App colors' Wood: which wood the title plates, the item bar and the grabbers are drawn in. Appearance preference beside the custom backgrounds it shares a page with; app chrome, no content and no timestamps."
+        ),
+        "fernlet.world.appColors.accent": .kept(
+            reason: "App colors' Accent: which colour primary buttons, switches and selected chips wear. Appearance preference beside the custom backgrounds it shares a page with; app chrome, no content and no timestamps."
+        ),
         "fernletDarkModeEnabled": .kept(
             reason: "The legacy dark-mode appearance flag, read for installs predating the three-way appearance mode. Same class as the mode beside it: app chrome, no content, no timestamps."
         ),
@@ -448,14 +473,14 @@ struct PersistedSurfaceWipeBoundaryTests {
         "unresolved:FernletThemeDefaults.customLightBackgroundKey@App/Fernlet/ContentView.swift": .kept(
             reason: "@AppStorage(FernletThemeDefaults.customLightBackgroundKey) — the custom light background `fernletCustomLightBackgroundHex`, kept as app chrome. The constant lives in FernletKit's FernletTheme.swift."
         ),
-        "unresolved:FernletThemeDefaults.customLightBackgroundKey@App/Fernlet/SettingsSheet.swift": .kept(
-            reason: "@AppStorage(FernletThemeDefaults.customLightBackgroundKey) — the custom light background `fernletCustomLightBackgroundHex`, kept as app chrome. The constant lives in FernletKit's FernletTheme.swift."
-        ),
         "unresolved:FernletThemeDefaults.customDarkBackgroundKey@App/Fernlet/ContentView.swift": .kept(
             reason: "@AppStorage(FernletThemeDefaults.customDarkBackgroundKey) — the custom dark background `fernletCustomDarkBackgroundHex`, kept as app chrome. The constant lives in FernletKit's FernletTheme.swift."
         ),
-        "unresolved:FernletThemeDefaults.customDarkBackgroundKey@App/Fernlet/SettingsSheet.swift": .kept(
-            reason: "@AppStorage(FernletThemeDefaults.customDarkBackgroundKey) — the custom dark background `fernletCustomDarkBackgroundHex`, kept as app chrome. The constant lives in FernletKit's FernletTheme.swift."
+        "unresolved:FernletThemeDefaults.customLightBackgroundKey@App/Fernlet/World/Customize/AppColorsPage.swift": .kept(
+            reason: "@AppStorage(FernletThemeDefaults.customLightBackgroundKey) — App colors' Paper row (design `b2-colors`) writes the custom light background `fernletCustomLightBackgroundHex` (Settings' Appearance pickers moved here), and Appearance's App colors row reads it for its swatch; kept as app chrome. The constant lives in FernletKit's FernletTheme.swift."
+        ),
+        "unresolved:FernletThemeDefaults.customDarkBackgroundKey@App/Fernlet/World/Customize/AppColorsPage.swift": .kept(
+            reason: "@AppStorage(FernletThemeDefaults.customDarkBackgroundKey) — App colors' Paper row (design `b2-colors`) writes the custom dark background `fernletCustomDarkBackgroundHex` (Settings' Appearance pickers moved here), and Appearance's App colors row reads it for its swatch; kept as app chrome. The constant lives in FernletKit's FernletTheme.swift."
         ),
         "unresolved:CompanionEmotionPreferences.appetiteCuesKey@App/Fernlet/HomeView.swift": .kept(
             reason: "@AppStorage(CompanionEmotionPreferences.appetiteCuesKey) in Home's live companion — `fernlet.companionFeelings.appetiteCues`, the hunger-and-thirst cue switch, kept as a preference. The constant lives in CompanionEmotionPreferences.swift, so the key resolves in neither direction from here."
@@ -523,9 +548,9 @@ struct PersistedSurfaceWipeBoundaryTests {
         "unresolved:FernletHapticsLevel.storageKey@App/Fernlet/BreathingExerciseView.swift": 1,
         "unresolved:FernletHapticsLevel.storageKey@App/Fernlet/SoundsHapticsSettingsView.swift": 1,
         "unresolved:FernletThemeDefaults.customDarkBackgroundKey@App/Fernlet/ContentView.swift": 1,
-        "unresolved:FernletThemeDefaults.customDarkBackgroundKey@App/Fernlet/SettingsSheet.swift": 1,
+        "unresolved:FernletThemeDefaults.customDarkBackgroundKey@App/Fernlet/World/Customize/AppColorsPage.swift": 2,
         "unresolved:FernletThemeDefaults.customLightBackgroundKey@App/Fernlet/ContentView.swift": 1,
-        "unresolved:FernletThemeDefaults.customLightBackgroundKey@App/Fernlet/SettingsSheet.swift": 1,
+        "unresolved:FernletThemeDefaults.customLightBackgroundKey@App/Fernlet/World/Customize/AppColorsPage.swift": 2,
         "unresolved:OnboardingDefaults.hasCompletedOnboardingKey@App/Fernlet/BackupExclusionLaunchGate.swift": 1,
         "unresolved:OnboardingDefaults.hasCompletedOnboardingKey@App/Fernlet/FernletApp.swift": 1,
         "unresolved:key@App/Fernlet/PetInteractionGovernor.swift": 2,

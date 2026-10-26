@@ -437,6 +437,47 @@ public nonisolated enum FernletCryptoPurpose {
         /// times, plus the answered tombstones that refuse a re-delivery. The durable truth the
         /// review is rebuilt from after a process kill.
         public static let privatePendingSessionPhotoIndexV1 = CryptographicPurpose("fernlet.private-media.pending-session-photo.index.aead.v1")
+        /// **World build only (branch `world-ui`).** The World Home's lifted fog cells, sealed under the
+        /// `WorldMapStore` vault's when-unlocked device key (`WorldMapVault`): a coarse record of where
+        /// someone has been, kept on this iPhone only. Its own domain, so a fog file can never open as
+        /// any other map file, or as anything else sealed in the app.
+        public static let worldMapFogV1 = CryptographicPurpose("fernlet.world-map.fog.aead.v1")
+        /// **World build only.** The World map's locked-phone buffer: cells lifted while the phone is
+        /// locked (a walk with the screen off, Always mode's visits), sealed under the vault's
+        /// after-first-unlock buffer key and drained into the fog store on the next unlock. Separate
+        /// from ``worldMapFogV1`` so a buffer file moved into the store's name cannot open as the store.
+        public static let worldMapPendingV1 = CryptographicPurpose("fernlet.world-map.pending.aead.v1")
+        /// **World build only.** One saved walk line (`WorldRouteStore`), sealed under the vault's
+        /// when-unlocked store key with its workout id as further authenticated data, so a line can
+        /// open only as its own workout's line, never as the fog or another walk.
+        public static let worldMapRouteV1 = CryptographicPurpose("fernlet.world-map.route.aead.v1")
+        /// **World build only.** Where the person's workout spaces are (`SpacePinStore`), sealed under the
+        /// vault's when-unlocked store key: one point per space, keyed by the space's id, never in the
+        /// synced settings.
+        public static let worldMapPinsV1 = CryptographicPurpose("fernlet.world-map.pins.aead.v1")
+        /// **World build only.** "Where you've been" in Private (`PlaceLogStore`): the rolling 30-day
+        /// timeline of stops and Places you return to (a visit count, never dates), sealed with the
+        /// Private tab's hub key rather than a vault key, so it opens only while Private is open, and a
+        /// decoy, which never holds that key, sees none of it.
+        public static let worldMapPlacesV1 = CryptographicPurpose("fernlet.world-map.places.aead.v1")
+        /// **World build only.** The places log's device side (`PlaceLogStore`): stops captured while
+        /// Private is closed, waiting to be folded under the hub key, and the allowed places' points and references that
+        /// background visits are matched against, under the vault's after-first-unlock buffer key.
+        public static let worldMapPlacesDeviceV1 = CryptographicPurpose("fernlet.world-map.places-device.aead.v1")
+        /// **World build only.** Where each solo camera photo was taken (`PhotoPlaceStore`): a point per
+        /// photo id, kept only for a photo taken at an everyday place, under the vault's store key.
+        public static let worldMapPhotoPlacesV1 = CryptographicPurpose("fernlet.world-map.photo-places.aead.v1")
+        /// **World build only.** A photo taken with the disposable camera on your own
+        /// (`SoloCameraPhotoStore`, owner 2026-10-24: kept in the Friends area, ten a day, shown after
+        /// the companion sleeps), sealed under the device-bound solo-camera media key. Its own domain,
+        /// so a solo photo can never open as a session photo, a wall photo or an own photo.
+        public static let privateSoloCameraPhotoImageV1 = CryptographicPurpose("fernlet.private-media.solo-camera-photo.image.aead.v1")
+        /// **World build only.** A solo photo's thumbnail, same corpus and key as
+        /// ``privateSoloCameraPhotoImageV1``; separate so a thumbnail cannot stand in for the photo.
+        public static let privateSoloCameraPhotoThumbnailV1 = CryptographicPurpose("fernlet.private-media.solo-camera-photo.thumbnail.aead.v1")
+        /// **World build only.** The solo camera's sealed index (`SoloCameraIndex.sealed`): each photo's
+        /// id, when it was taken and when it shows, plus the day's film count.
+        public static let privateSoloCameraIndexV1 = CryptographicPurpose("fernlet.private-media.solo-camera-photo.index.aead.v1")
         public static let mealPhotoV2 = CryptographicPurpose("fernlet.private-media.meal-photo.aead.v2")
         public static let recipePhotoV2 = CryptographicPurpose("fernlet.private-media.recipe-photo.aead.v2")
         public static let progressPhotoV2 = CryptographicPurpose("fernlet.private-media.progress-photo.aead.v2")

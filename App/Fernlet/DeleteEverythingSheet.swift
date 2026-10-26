@@ -55,6 +55,8 @@ struct DeleteEverythingSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// The World's framed look (`b3-delete-everything`): paper, framed lists with pixel icons.
+    @Environment(\.fernletFramedLook) private var look
     @State private var typedConfirmation = ""
     /// Whether this sheet has already felt its arming (``armingEvent(isArmed:alreadyFelt:)``).
     @State private var hasFeltArming = false
@@ -87,8 +89,10 @@ struct DeleteEverythingSheet: View {
             }
             actionBar
         }
-        .background(Color.parchment)
-        .presentationDragIndicator(.visible)
+        // Paper with the wooden grabber and the ink top edge (`b3-delete-everything`); the header's
+        // Cancel and title sit inside the sheet.
+        .fernletSheetStyle()
+        .fernletSheet()
         .onChange(of: isArmed) { _, armed in
             guard let event = Self.armingEvent(isArmed: armed, alreadyFelt: hasFeltArming) else { return }
             hasFeltArming = true
@@ -188,16 +192,19 @@ struct DeleteEverythingSheet: View {
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel("This deletes")
                 .accessibilityIdentifier("deleteAll.deletesList")
-            ForEach(Array(deleteBullets.enumerated()), id: \.offset) { _, bullet in
-                bulletRow(glyph: bullet.glyph, text: bullet.text, dropped: bullet.dropped)
-                    .modifier(CollapsedClaimContent(claims: deleteClaims, active: isCollapsed))
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(Array(deleteBullets.enumerated()), id: \.offset) { _, bullet in
+                    bulletRow(glyph: bullet.glyph, text: bullet.text, dropped: bullet.dropped)
+                        .modifier(CollapsedClaimContent(claims: deleteClaims, active: isCollapsed))
+                }
+                // NOT "none of it can be recovered": local data rides iOS device backups by default,
+                // so an older encrypted backup can still restore it — Fernlet can't reach into that.
+                Text("Fernlet can't undo this.")
+                    .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.rowTitleBold)
+                    .foregroundStyle(look?.text ?? Color.slate)
+                    .fernletWrappingText()
             }
-            // NOT "none of it can be recovered": local data rides iOS device backups by default,
-            // so an older encrypted backup can still restore it — Fernlet can't reach into that.
-            Text("Fernlet can't undo this.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
+            .settingsCard()
             if hasSealedBackup {
                 // A Sealed backup slot is account-wide, one iPhone's at a time (journal and intimacy
                 // Sealed backup v2 design 2026-09-30, §12 item 2, Q-B1): the wipe deletes each enabled
@@ -257,10 +264,13 @@ struct DeleteEverythingSheet: View {
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel("Kept on purpose")
                 .accessibilityIdentifier("deleteAll.keptList")
-            ForEach(Array(keptBullets.enumerated()), id: \.offset) { _, bullet in
-                bulletRow(glyph: bullet.glyph, text: bullet.text, dropped: bullet.dropped)
-                    .modifier(CollapsedClaimContent(claims: keptClaims, active: isCollapsed))
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(Array(keptBullets.enumerated()), id: \.offset) { _, bullet in
+                    bulletRow(glyph: bullet.glyph, text: bullet.text, dropped: bullet.dropped)
+                        .modifier(CollapsedClaimContent(claims: keptClaims, active: isCollapsed))
+                }
             }
+            .settingsCard()
         }
     }
 
@@ -305,22 +315,45 @@ struct DeleteEverythingSheet: View {
     ) -> some View {
         HStack(alignment: .top, spacing: 10) {
             if !dynamicTypeSize.isAccessibilitySize {
-                // T1-8: not `.combine`d with the text beside it, so without this the SF Symbol's
-                // own name would be announced ahead of the claim it merely illustrates.
-                Image(systemName: glyph)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(Color.slate)
-                    .frame(width: 22)
-                    .padding(.top, 2)
-                    .accessibilityHidden(true)
+                // T1-8: decorative — not `.combine`d with the text beside it, so it is hidden, or
+                // its name would be announced ahead of the claim it merely illustrates. The claim's
+                // pixel icon under the framed look (`b3-delete-everything`).
+                Group {
+                    if look != nil {
+                        WorldSpriteView(sprite: Self.sprite(forGlyph: glyph), scale: 2)
+                    } else {
+                        Image(systemName: glyph)
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(Color.slate)
+                    }
+                }
+                .frame(width: 28)
+                .padding(.top, 2)
+                .accessibilityHidden(true)
             }
+            // The words take the rest of the row (a spacer beside them halved their width).
             Text(text)
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
+                .font(look == nil ? .fernlet(.body) : FernletFramedFont.rowValue)
+                .foregroundStyle(look?.text ?? Color.bark)
                 .fernletWrappingText()
-            Spacer(minLength: 0)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityCustomContent(AccessibilityCustomContentKey("Details"), dropped.map { Text($0) })
+    }
+
+    /// The pixel icon for a claim's glyph: the World sprite nearest the SF Symbol it was drawn with.
+    static func sprite(forGlyph glyph: String) -> WorldSprite {
+        switch glyph {
+        case "fork.knife": WorldSprites.onigiri
+        case "book.closed": WorldSprites.diary
+        case "photo", "photo.on.rectangle.angled": WorldSprites.photo
+        case "pawprint": WorldSprites.face
+        case "person.2": WorldSprites.heartSm
+        case "icloud": WorldSprites.box
+        case "hand.raised": WorldSprites.flag
+        case "lock": WorldSprites.lock
+        default: WorldSprites.check
+        }
     }
 
     // MARK: - Accessibility re-exposure (#3)
@@ -418,8 +451,9 @@ struct DeleteEverythingSheet: View {
                 }
             }
         }
-        .padding(20)
-        .background(Color.parchment)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .fernletSheetStyle()
     }
 
     /// Solid terracotta ONLY once armed — this confirm surface is the one place the destructive
@@ -428,15 +462,7 @@ struct DeleteEverythingSheet: View {
         Button {
             confirm(includeHealth: includeHealth)
         } label: {
-            Text(title)
-                .font(.fernlet(.label))
-                .foregroundStyle(isArmed ? Color.onTerracotta : Color.bark)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(
-                    Color.terracotta.opacity(isArmed ? 1 : 0.55),
-                    in: RoundedRectangle(cornerRadius: 14)
-                )
+            ArmedDeleteLabel(title: title, isArmed: isArmed)
         }
         .buttonStyle(.plain)
         .disabled(!isArmed)
@@ -444,12 +470,11 @@ struct DeleteEverythingSheet: View {
     }
 
     private var cancelButton: some View {
-        Button("Cancel") { dismiss() }
-            .buttonStyle(.plain)
-            .font(.fernlet(.label))
-            .foregroundStyle(Color.slate)
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .accessibilityIdentifier("deleteAll.cancel")
+        Button { dismiss() } label: {
+            Text("Cancel").frame(maxWidth: .infinity)
+        }
+        .buttonStyle(ActionPillButtonStyle(.secondary))
+        .accessibilityIdentifier("deleteAll.cancel")
     }
 
     /// Logs the same audit tokens the alert path's `commitDestructive` logged, dismisses, and

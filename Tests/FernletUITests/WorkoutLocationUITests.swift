@@ -177,12 +177,18 @@ final class WorkoutLocationUITests: XCTestCase {
 
     /// Walks Move → the location setup sheet. Driven by a11y id, never by tapping blind: the Space
     /// segment's LABEL is the location's name, which this suite renames.
+    ///
+    /// In the World build Move is a full-screen panel and the item bar shows over the map only, so
+    /// once the sheet is dismissed the Move panel is still up and there is no "Move" button to tap:
+    /// a reopen goes straight to the Space entry point.
     private func openLocationSheet(in app: XCUIApplication) throws -> XCUIElement {
-        let move = app.buttons["Move"].firstMatch
-        XCTAssertTrue(move.waitForExistence(timeout: 15), "no Move tab")
-        move.tap()
-
         let space = app.descendants(matching: .any)["move.space"].firstMatch
+        if !space.exists {
+            let move = app.buttons["Move"].firstMatch
+            XCTAssertTrue(move.waitForExistence(timeout: 15), "no Move tab")
+            move.tap()
+        }
+
         XCTAssertTrue(space.waitForExistence(timeout: 10), "no Space entry point on Move")
         space.tap()
 

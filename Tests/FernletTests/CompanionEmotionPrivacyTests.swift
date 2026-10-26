@@ -36,12 +36,35 @@ struct CompanionEmotionPrivacyTests {
         "App/Fernlet/WidgetBridge.swift",
         "App/FernletWidgets/FernletWidgetsBundle.swift",
         "App/FernletWidgets/WidgetSharedModels.swift",
-        // 2026-10-21 widget redesign: the simplified companion draws the feeling's face, the views
-        // pass the entry's feeling to it, and the thought card picks its line by the bedtime feelings.
-        // All three only READ the widget's own `WidgetCompanionEmotion`; none persists or sends it.
-        "App/FernletWidgets/WidgetCompanionFigure.swift",
+        // 2026-10-21 widget redesign: the views read the entry's feeling for its spoken value, and the
+        // thought card picks its line by the bedtime feelings. Both only READ the widget's own
+        // `WidgetCompanionEmotion`; neither persists or sends it. (World Review Batch 4, 2026-10-24:
+        // the vector figure that drew the feeling's face is gone; the pixel companion draws the state
+        // face and asleep only, as Home's map does, so it never names the feeling.)
         "App/FernletWidgets/CompanionWidgetViews.swift",
-        "App/FernletWidgets/WidgetThoughtLines.swift"
+        "App/FernletWidgets/WidgetThoughtLines.swift",
+        // Round 6b: the map widget's Sprout reads the entry's feeling for its spoken value, as the small and
+        // medium cards do; the feeling faces (owner's Q37) read the widget's own `WidgetCompanionEmotion` to
+        // pick a face for the Home Screen. Neither persists nor sends it, and the Lock Screen still draws the
+        // state face only.
+        "App/FernletWidgets/MapWidgetViews.swift",
+        "App/FernletWidgets/WidgetFeelingFaces.swift",
+        // World build step 3: the map's companion reads the feeling, as Home's does, for its sleeping
+        // pose and its VoiceOver value. It neither persists nor sends it.
+        "App/Fernlet/World/Home/WorldMapCompanion.swift",
+        // World Review refinement `ref-comp-close` (lane refine): the companion up close reads the
+        // feeling exactly as the map's companion does, for its asleep pose, its status line and its
+        // VoiceOver value. It neither persists nor sends it.
+        "App/Fernlet/World/Companion/WorldCompanionCloseUp.swift",
+        // Round 6 lane companion (phone test W-06a): the one helper every World picture of the companion
+        // reads (the map, the close-up, the Today card, Customize, the Creation Studio) takes the feeling
+        // for its asleep and winding-down pose, so they cannot drift apart. It neither persists nor
+        // sends it; the pictures keep only the yes or no of the pose.
+        "App/Fernlet/World/Companion/WorldCompanionNow.swift",
+        // World build, the camera on your own (lane friends-solo): reads only the companion's sleep
+        // window (`CompanionEmotionPreferences.sleepWindow()`) to time when a solo photo shows. It never
+        // reads, persists or sends the emotion itself.
+        "App/Fernlet/World/Friends/SoloCameraRoll.swift"
     ]
 
     /// The shipping roots scanned — every target the app ships.

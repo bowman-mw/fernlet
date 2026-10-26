@@ -26,6 +26,7 @@ enum UITestPrivateHubSeed {
         } catch {
             FernletAuditLog.log("uitest.lockReset.failed", context: ["error": "\(type(of: error))"])
         }
+        if UITestSupport.seedsTestPIN { seedTestPIN(lockService: lockService) }
         guard UITestSupport.seedsUnopenableEntry else { return }
         let throwawayKey = SymmetricKey(size: .bits256)
         let narrative = MenstrualNarrative(
@@ -37,6 +38,23 @@ enum UITestPrivateHubSeed {
             try MenstrualNarrativeRepository().insert(narrative, contentKey: throwawayKey)
         } catch {
             FernletAuditLog.log("uitest.unopenableSeed.failed", context: ["error": "\(type(of: error))"])
+        }
+    }
+
+    /// The throwaway PIN `FERNLET_UI_TEST_SEED_PIN` configures on the test simulator: test data only,
+    /// never a real person's passcode, and gone with the next `FERNLET_UI_TEST_RESET_APP_LOCK` launch.
+    static let testPIN = "246810"
+
+    /// Configures ``testPIN`` for the Private hub and locks it again, so a relaunch shows the pad.
+    @MainActor
+    private static func seedTestPIN(lockService: FernletLockService) {
+        Task { @MainActor in
+            do {
+                try await lockService.configure(credential: .pin6(testPIN), grantingScope: .privateHub)
+                lockService.lock(reason: .manual)
+            } catch {
+                FernletAuditLog.log("uitest.pinSeed.failed", context: ["error": "\(type(of: error))"])
+            }
         }
     }
 }

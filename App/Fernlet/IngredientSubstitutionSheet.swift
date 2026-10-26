@@ -53,6 +53,10 @@ struct IngredientSubstitutionSheet: View {
         return Text("Replace \(name) in \(recipe.name).")
     }
 
+    /// World build (`b3-ingredient-swap`, approved 2026-10-24): the sheet frame with Cancel top left and
+    /// the title inside the sheet, "Replace … in …", the Suggestions card, then Search foods; rows carry
+    /// a framed source tag and a framed +. The preview keeps Was / Now, the whole recipe before → after
+    /// and Save as new recipe.
     var body: some View {
         NavigationStack {
             Group {
@@ -62,15 +66,9 @@ struct IngredientSubstitutionSheet: View {
                     pickerBody
                 }
             }
-            .background(Color.parchment)
-            .navigationTitle(pending == nil ? "Swap ingredient" : "Preview")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                        .accessibilityIdentifier("substitution.cancel")
-                }
-            }
+            .background(WorldPalette.paper)
+            .fernletSheetToolbar(title: pending == nil ? Text("Swap ingredient") : Text("Preview"),
+                                 onCancel: { dismiss() })
             // The search field's keyboard "Done", on the stack's root page: one declared on the
             // stack itself would reach no page in it.
             .keyboardDoneToolbar()
@@ -133,57 +131,64 @@ struct IngredientSubstitutionSheet: View {
 
     private var pickerBody: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 14) {
                 replaceSentence
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.body)
+                    .foregroundStyle(WorldPalette.dim)
                     .fernletWrappingText()
 
                 if isLoadingAI {
                     HStack(spacing: 8) {
-                        // The sentence beside it is the label; an unlabelled spinner would be a
-                        // second, empty stop on the way to it.
-                        ProgressView()
-                            .accessibilityHidden(true)
+                        // The sentence beside it is the label; the clock is decoration.
+                        WorldSpriteView(sprite: WorldSprites.clock, scale: 2)
                         Text("Thinking of swaps…")
-                            .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
+                            .font(FernletFramedFont.note)
+                            .foregroundStyle(WorldPalette.dim)
                     }
                 } else if !aiSuggestions.isEmpty {
                     FernletCard {
-                        VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 6) {
                             SectionLabel("Suggestions")
-                            ForEach(Array(aiSuggestions.enumerated()), id: \.element.id) { index, suggestion in
-                                if index > 0 { FernletRowDivider() }
+                            ForEach(aiSuggestions) { suggestion in
+                                FernletDottedRule()
                                 substituteRow(suggestion.foodItem, reason: suggestion.reason, searchList: nil)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
+                searchCard
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 6)
+            .padding(.bottom, 24)
+        }
+    }
 
-                FernletCard {
-                    VStack(alignment: .leading, spacing: 10) {
-                        SectionLabel("Search foods")
-                        TextField("Search for a replacement", text: $searchText, prompt: .fieldPrompt("Search for a replacement"))
-                            .sheetTextInput()
-                            .accessibilityIdentifier("substitution.search")
-                        if visibleSearchResults.isEmpty {
-                            Text("Type to find a replacement food.")
-                                .font(.fernlet(.bodySmall))
-                                .foregroundStyle(Color.slate)
-                        } else {
-                            let shown = visibleSearchResults
-                            ForEach(Array(shown.enumerated()), id: \.element.id) { index, foodItem in
-                                if index > 0 { FernletRowDivider() }
-                                substituteRow(foodItem, reason: nil, searchList: shown)
-                            }
-                        }
+    /// Search foods: the field with its pixel magnifier, then the matches, each on a dotted rule.
+    private var searchCard: some View {
+        FernletCard {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel("Search foods")
+                HStack(spacing: 9) {
+                    FernletIcon(.search, scale: 2)
+                    TextField("Search for a replacement", text: $searchText, prompt: .fieldPrompt("Search for a replacement"))
+                        .accessibilityIdentifier("substitution.search")
+                }
+                .sheetTextInput()
+                if visibleSearchResults.isEmpty {
+                    Text("Type to find a replacement food.")
+                        .font(FernletFramedFont.note)
+                        .foregroundStyle(WorldPalette.dim)
+                } else {
+                    let shown = visibleSearchResults
+                    ForEach(shown) { foodItem in
+                        FernletDottedRule()
+                        substituteRow(foodItem, reason: nil, searchList: shown)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -210,31 +215,30 @@ struct IngredientSubstitutionSheet: View {
         Button {
             selectSubstitute(foodItem, searchList: searchList)
         } label: {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(foodItem.name)
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.bark)
+                        .font(FernletFramedFont.rowTitleBold)
+                        .foregroundStyle(WorldPalette.bark)
                         .fernletWrappingText()
-                    Text(foodItem.dataSourceLabel)
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 1)
-                        .background(Color.parchment, in: Capsule())
+                    HStack(spacing: 6) {
+                        FernletTag(text: Text(verbatim: foodItem.dataSourceLabel))
+                        Text("\(String(format: "%g", foodItem.servingSize)) \(foodItem.servingUnit) · P\(foodItem.macros.protein)g C\(foodItem.macros.carbs)g F\(foodItem.macros.fat)g")
+                            .font(FernletFramedFont.rowDetail)
+                            .foregroundStyle(WorldPalette.dim)
+                            .fernletWrappingText()
+                    }
+                    if let reason, !reason.isEmpty {
+                        Text(reason)
+                            .font(FernletFramedFont.rowDetail)
+                            .foregroundStyle(WorldPalette.dim)
+                            .fernletWrappingText()
+                    }
                 }
-                Text("\(String(format: "%g", foodItem.servingSize)) \(foodItem.servingUnit) · P\(foodItem.macros.protein)g C\(foodItem.macros.carbs)g F\(foodItem.macros.fat)g")
-                    .font(.fernlet(.stat))
-                    .foregroundStyle(Color.slate)
-                if let reason, !reason.isEmpty {
-                    Text(reason)
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                RecipeSpriteTile(sprite: WorldSprites.plus, size: 32)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 4)
+            .padding(.vertical, 6)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -273,23 +277,21 @@ struct IngredientSubstitutionSheet: View {
                     store.rememberFoodSearchCorrections(pending.searchPick.map { [$0] } ?? [])
                     dismiss()
                 } label: {
-                    Label("Save as new recipe", systemImage: "plus.circle")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.onMoss)
-                        .frame(maxWidth: .infinity)
-                        .padding(14)
-                        .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+                    Text("Save as new recipe").frame(maxWidth: .infinity)
                 }
+                .buttonStyle(ActionPillButtonStyle(.primary))
                 .accessibilityIdentifier("substitution.save")
 
                 Button("Choose a different swap") { self.pending = nil }
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.moss)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
+                    .buttonStyle(.plain)
+                    .font(FernletFramedFont.sheetControl)
+                    .foregroundStyle(WorldPalette.mossInk)
+                    .frame(maxWidth: .infinity, minHeight: 44)
                     .accessibilityIdentifier("substitution.back")
             }
-            .padding(20)
+            .padding(.horizontal, 18)
+            .padding(.top, 6)
+            .padding(.bottom, 24)
         }
     }
 
@@ -297,12 +299,12 @@ struct IngredientSubstitutionSheet: View {
     private func changeLine(label: LocalizedStringKey, text: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Text(label)
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
-                .frame(width: 40, alignment: .leading)
+                .font(FernletFramedFont.rowDetailBold)
+                .foregroundStyle(WorldPalette.dim)
+                .frame(minWidth: 40, alignment: .leading)
             Text(text)
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
+                .font(FernletFramedFont.body)
+                .foregroundStyle(WorldPalette.bark)
                 .fernletWrappingText()
         }
     }
@@ -310,13 +312,13 @@ struct IngredientSubstitutionSheet: View {
     private func macroCompareRow(before: MacroTotals, after: MacroTotals) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("P \(before.protein)g → \(after.protein)g · C \(before.carbs)g → \(after.carbs)g · F \(before.fat)g → \(after.fat)g")
-                .font(.fernlet(.stat))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.body)
+                .foregroundStyle(WorldPalette.bark)
                 .fernletWrappingText()
             if store.settings.showCalories {
                 Text("\(before.calories) → \(after.calories) cal")
-                    .font(.fernlet(.stat))
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.rowDetail)
+                    .foregroundStyle(WorldPalette.dim)
             }
         }
     }

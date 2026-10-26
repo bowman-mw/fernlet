@@ -1474,8 +1474,14 @@ struct LocalizationBoundaryTests {
             ("App/Fernlet/FoodView.swift", "Text(verbatim: StoredFoodNote.displayedMealNote(meal.note))", 1, "MealRow's note line"),
             ("App/Fernlet/FoodView.swift", "meal.note == StoredFoodNote.seededDemoMeal", 1, "MealRow's demo match, on the frozen note"),
             ("App/Fernlet/FoodView.swift", "let prefix = StoredFoodNote.matchedFromFoodSelectionPrefix", 1, "MealRow's legacy breakdown"),
-            ("App/Fernlet/FoodView.swift", "Text(verbatim: StoredFoodNote.displayedRecipeNotes(recipe.notes))", 3,
-             "the saved-recipe row, the recipe row and the recipe page's Notes card"),
+            ("App/Fernlet/FoodView.swift", "Text(verbatim: StoredFoodNote.displayedRecipeNotes(recipe.notes))", 2,
+             "the Food page's saved-recipe row and recipe row"),
+            ("App/Fernlet/World/Recipes/RecipeBookCards.swift", "Text(verbatim: StoredFoodNote.displayedRecipeNotes(recipe.notes))", 1,
+             "the recipe book's card (World b2-recipe-book)"),
+            ("App/Fernlet/FoodView.swift", "RecipeNotesCard(notes: StoredFoodNote.displayedRecipeNotes(recipe.notes)", 1,
+             "the recipe page's Notes card (World b3-recipe-notes), edited in place"),
+            ("App/Fernlet/FoodView.swift", "StoredFoodNote.savedRecipeNotes(editing: typed, stored: recipe.notes)", 1,
+             "...and the notes it saves"),
             ("App/Fernlet/FoodView.swift", "let drawnNotes = StoredFoodNote.displayedRecipeNotes(recipe.notes)", 1, "the recipe editor's notes field"),
             ("App/Fernlet/FoodView.swift", "StoredFoodNote.savedRecipeNotes(editing: notes, stored: editingRecipe.notes)", 1,
              "...and the notes it saves"),
@@ -1528,7 +1534,6 @@ struct LocalizationBoundaryTests {
         "food.ingredientRow.summary", "food.ingredientRow.summary.calories", "food.ingredientRow.summary.unconverted",
         "recipeImport.notice.alreadyImported", "recipeImport.notice.fetching", "recipeImport.notice.added",
         "mealComposer.notice.productSaved", "mealComposer.notice.photoNotSaved", "mealComposer.notice.photoNotRecognized",
-        "mealComposer.capture.noBarcode", "mealComposer.capture.labelUnreadable",
         "productImport.notice.lookupOff", "productImport.notice.lookupOffWithAI",
         "recipeDetail.reimport.refreshing", "recipeDetail.reimport.refreshing.noHost", "recipeDetail.reimport.refreshed",
         "recipeDetail.reimport.refreshed.noHost", "recipeDetail.reimport.deleted", "recipeDetail.photo.notSaved",
@@ -1537,7 +1542,7 @@ struct LocalizationBoundaryTests {
         "barcode.notice.cameraOff", "barcode.notice.noBarcodeInPhoto", "barcode.rememberFood.saveFailed",
         "grocery.shareText.title",
         // Behind the forked members and the split sentences.
-        "Find product page", "Source URL", "Vitamins & minerals", "Saturated fat", "Look up the barcode",
+        "Find product page", "Source URL", "Vitamins & minerals", "Saturated fat",
         "photo recognition is off in Settings — barcode and label still work", "On your other device",
         "This photo lives on the device you took it on. Its details are here; the picture stays where it was snapped.",
         "Start cooking", "Step %lld of %lld", "Was", "cal", "Double-check the items below before logging.",
@@ -3112,9 +3117,10 @@ struct LocalizationBoundaryTests {
         ForkedMember(path: "App/Fernlet/CreationStudioView.swift",
                      declaration: "private static func paletteName(at index: Int) -> Text {",
                      role: "the design canvas's 16 spoken colour names"),
-        ForkedMember(path: "App/Fernlet/BarcodeScanView.swift",
-                     declaration: "var caption: LocalizedStringKey",
-                     role: "the scan-frame caption, drawn AND spoken"),
+        // World build (lane food-log): the scan frame's caption moved to the shared scan window.
+        ForkedMember(path: "App/Fernlet/World/Food/FoodCaptureCamera.swift",
+                     declaration: "let caption: LocalizedStringKey",
+                     role: "the scan window's caption, drawn AND spoken"),
         ForkedMember(path: "App/Fernlet/HomeView.swift",
                      declaration: "private func firstAidChip(_ icon: String, _ label: LocalizedStringKey, tool: FirstAidTool) -> some View {",
                      role: "the First Aid chip's name and hint"),
@@ -3153,12 +3159,12 @@ struct LocalizationBoundaryTests {
         ForkedMember(path: "App/Fernlet/FoodView.swift", declaration: "var value: LocalizedStringKey",
                      role: "NutritionPill's value (its title is forked beside it)"),
         ForkedMember(path: "App/Fernlet/FoodView.swift",
-                     declaration: "private func actionButton(label: LocalizedStringKey, systemImage: String, action: @escaping () -> Void) -> some View {",
+                     declaration: "private func actionButton(label: LocalizedStringKey, action: @escaping () -> Void) -> some View {",
                      role: "the Import product screen's Find product page button"),
         ForkedMember(path: "App/Fernlet/FoodView.swift", declaration: "private func detail(label: LocalizedStringKey, value: String) -> some View {",
                      role: "the product review's Product / Website / Source URL captions"),
-        ForkedMember(path: "App/Fernlet/FoodView.swift", declaration: "private func secondaryActionLabel(_ title: LocalizedStringKey, icon: String) -> some View {",
-                     role: "the recipe page's Edit and Share buttons"),
+        ForkedMember(path: "App/Fernlet/World/Recipes/RecipePageSections.swift", declaration: "private func label(_ title: Text, sprite: WorldSprite?) -> some View {",
+                     role: "the recipe page's Share and Edit buttons (World b2-recipe-detail)"),
         ForkedMember(path: "App/Fernlet/FoodView.swift", declaration: "private var reviewMessage: LocalizedStringKey {",
                      role: "the pre-log review sheet's line under its title"),
         ForkedMember(path: "App/Fernlet/FoodView.swift", declaration: "private var displayNote: Text {",
@@ -3172,20 +3178,20 @@ struct LocalizationBoundaryTests {
         ForkedMember(path: "App/Fernlet/NutritionLabelCameraSheet.swift", declaration: "let label: LocalizedStringKey",
                      role: "the twenty-three label-detail and vitamin rows' names"),
         ForkedMember(path: "App/Fernlet/FoodCaptureRouter.swift",
-                     declaration: "private func chooserRow( title: LocalizedStringKey, subtitle: LocalizedStringKey,",
-                     role: "the capture chooser's three targets and the AI-off explanation"),
+                     declaration: "private func chooserRow(title: LocalizedStringKey, subtitle: LocalizedStringKey,",
+                     role: "the fallback chooser's two rows and the AI-off explanation"),
         ForkedMember(path: "App/Fernlet/MealPhotoPolaroid.swift", declaration: "let text: LocalizedStringKey",
                      role: "the polaroid's on-your-other-device / couldn't-open placeholder line"),
         ForkedMember(path: "App/Fernlet/MealPhotoPolaroid.swift", declaration: "let detail: LocalizedStringKey",
                      role: "the meal photo detail's unavailable card"),
         ForkedMember(path: "App/Fernlet/CookingMode.swift", declaration: "private func primaryButtonLabel(_ title: Text) -> some View {",
                      role: "cooking mode's Start cooking / I'm ready / Log this meal"),
-        ForkedMember(path: "App/Fernlet/CookingMode.swift", declaration: "private func secondaryLabel(_ title: LocalizedStringKey, icon: String) -> some View {",
+        ForkedMember(path: "App/Fernlet/CookingMode.swift", declaration: "private func secondaryLabel(_ title: LocalizedStringKey) -> some View {",
                      role: "cooking mode's Back"),
         ForkedMember(path: "App/Fernlet/CookingMode.swift", declaration: "private var stageTitle: Text {",
                      role: "cooking mode's Step N of M header"),
-        ForkedMember(path: "App/Fernlet/BarcodeScanView.swift", declaration: "var label: LocalizedStringKey",
-                     role: "the barcode screen's macro ring names, drawn and spoken"),
+        ForkedMember(path: "App/Fernlet/BarcodeScanView.swift", declaration: "private var name: LocalizedStringKey {",
+                     role: "Remember product's macro tile names, drawn and spoken"),
         ForkedMember(path: "App/Fernlet/IngredientSubstitutionSheet.swift",
                      declaration: "private func changeLine(label: LocalizedStringKey, text: String) -> some View {",
                      role: "the swap preview's Was / Now captions"),
@@ -3203,9 +3209,9 @@ struct LocalizationBoundaryTests {
         ForkedMember(path: "App/Fernlet/DestructiveConfirmation.swift",
                      declaration: "let label: LocalizedStringKey",
                      role: "the second destructive outcome's button"),
-        ForkedMember(path: "App/Fernlet/HomeView.swift",
-                     declaration: "slot: LocalizedStringKey,",
-                     role: "the wardrobe selector row's uppercase slot caption"),
+        ForkedMember(path: "App/Fernlet/CompanionCustomizationSheet.swift",
+                     declaration: "colorTitle: LocalizedStringKey,",
+                     role: "a slot page's colour caption (the slot rows' captions are `Text(\"Body\")` literals since `b2-customize`)"),
         // Spanish round step 2, Home lane (2026-10-20): the same T2-1 class on Home and the calm
         // tools — `String` members drawn with `Text(x)`, so none of their literals reached a catalog.
         ForkedMember(path: "App/Fernlet/HomeView.swift",
@@ -3299,15 +3305,17 @@ struct LocalizationBoundaryTests {
         ForkedMember(path: "App/Fernlet/FriendListView.swift",
                      declaration: "private var heartStatusText: Text? {",
                      role: "the Friends list's presence heart status line"),
-        ForkedMember(path: "App/Fernlet/DisposableCameraView.swift",
+        ForkedMember(path: "App/Fernlet/World/Friends/SessionInfoSheet.swift",
                      declaration: "private var presenceHeartStatusText: Text? {",
                      role: "the in-person camera's presence heart status line"),
         ForkedMember(path: "App/Fernlet/DisposableCameraView.swift",
                      declaration: "private func shutterCaption(canShoot: Bool) -> LocalizedStringKey {",
                      role: "the caption under the camera's shutter"),
-        ForkedMember(path: "App/Fernlet/ConnectView.swift",
-                     declaration: "private func headerButtonLabel(_ title: LocalizedStringKey) -> some View {",
-                     role: "the Friends header's Activities and Friends pills"),
+        // World build (Friends lane, 2026-10-24): the header pills are literal `Text` keys in
+        // `FriendsHeaderButtons` now; the panel's one handed-down display string is the search prompt.
+        ForkedMember(path: "App/Fernlet/World/Friends/FriendsPanelPieces.swift",
+                     declaration: "let prompt: LocalizedStringKey",
+                     role: "the Friends album's and Friends & Blocks' search prompt"),
         ForkedMember(path: "App/Fernlet/Proximity/UI/ProximityRecipeShareReviewSheet.swift",
                      declaration: "private var recipeKindLabel: LocalizedStringKey {",
                      role: "the shared-recipe review's Fernlet recipe / Saved web recipe label"),
@@ -3339,9 +3347,10 @@ struct LocalizationBoundaryTests {
                      role: "the Ask an AI card's two bullets"),
         // Spanish round, settings lane (2026-10-20): `String` helpers on the Settings pages whose
         // literal callers never reached the catalog.
-        ForkedMember(path: "App/Fernlet/SettingsSheet.swift",
-                     declaration: "private func themeColorRow(title: LocalizedStringKey, color: Binding<Color>, hex: String, defaultHex: String, isDarkRow: Bool, reset: @escaping () -> Void) -> some View {",
-                     role: "Appearance's background rows: the colour picker's name and the row's Reset Voice Control label"),
+        // The background rows moved from Appearance to App colors' Paper card (World build, `b2-colors`).
+        ForkedMember(path: "App/Fernlet/World/Customize/AppColorsPage.swift",
+                     declaration: "let title: LocalizedStringKey",
+                     role: "App colors' Paper rows (formerly Appearance's background rows): the row's name and its Reset Voice Control label"),
         ForkedMember(path: "App/Fernlet/SettingsSheet.swift",
                      declaration: "private var connectionInspectorModeDescription: LocalizedStringKey {",
                      role: "the Connection Inspector mode picker's explanation line"),
@@ -3582,8 +3591,8 @@ struct LocalizationBoundaryTests {
     static let settingsLaneForkKeys: [HarvestedKey] = {
         let app = "App/Fernlet/Localizable.xcstrings"
         let appKeys: [(key: String, source: String)] = [
-            ("Light mode", "SettingsSheet.themeColorRow, forked String → LocalizedStringKey"),
-            ("Dark mode", "SettingsSheet.themeColorRow, forked String → LocalizedStringKey"),
+            ("Light mode", "AppColorsPage's AppPaperRow (was SettingsSheet.themeColorRow), forked String → LocalizedStringKey"),
+            ("Dark mode", "AppColorsPage's AppPaperRow (was SettingsSheet.themeColorRow), forked String → LocalizedStringKey"),
             ("No overlay and no saved history.", "SettingsSheet.connectionInspectorModeDescription"),
             ("Records session history without showing the live overlay.", "SettingsSheet.connectionInspectorModeDescription"),
             ("Records session history and shows the live inspector when you open it manually.",
@@ -3927,6 +3936,25 @@ struct LocalizationBoundaryTests {
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
                      key: "privacy.ownPhotos.verifiedUnreadable",
                      source: "Privacy & Data's encrypted photo backup verification line"),
+        // World Review Batch 4, lane ext (2026-10-24): Shortcuts' Add this workout plan? card, which
+        // read "1 collisions" and "1 … warnings". Its recipe twin reuses the Messages card's counts.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "shortcuts.plan.collisions",
+                     source: "Shortcuts' workout plan confirmation: days that already hold workouts"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "shortcuts.plan.safetyWarnings",
+                     source: "Shortcuts' workout plan confirmation: the warning line"),
+        // World Review Batch 4, lane album (2026-10-24): Friends nearby's open-hangout line. Its
+        // friend twin, `friendsNearby.note.hangout`, carries the name first and plurals the count
+        // through a substitution, which this one-count check does not read (WorldAlbumTests pins it).
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "friendsNearby.note.theirHangout",
+                     source: "Friends nearby: someone new in a hangout with others ('1 other person')"),
+        // World step 5c (2026-10-24): Where you've been's counts and the saved run route's card,
+        // which would read "1 visits", "1 stops" and "run this route 1 times".
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "privatePlaces.visits",
+                     source: "Private, Places: a place's visit count ('1 visit')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "privatePlaces.stops",
+                     source: "Private, Places: a day's stop count on the delete list ('1 stop')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "worldQuickStart.note.ranFromHere",
+                     source: "World Home quick-start card at a saved run route ('run this route once')"),
     ]
 
     /// Every count-bearing key carries real plural variations.
@@ -3965,8 +3993,7 @@ struct LocalizationBoundaryTests {
     /// absent key passes and a PRESENT key without an English `one`/`other` block is red, so that
     /// sync cannot land without the hand-authored block. The catalog commit that authors the block
     /// moves the row into ``pluralRuledKeys``, where absence is red too.
-    static let pluralRuledKeysAwaitingTheirCatalog: [HarvestedKey] = [
-    ]
+    static let pluralRuledKeysAwaitingTheirCatalog: [HarvestedKey] = []
 
     /// Whether a catalog's `strings` table carries `key` with an English `one` AND `other` plural form.
     ///
@@ -4177,13 +4204,13 @@ struct LocalizationBoundaryTests {
                      declaration: "private func periodToggle(_ title: LocalizedStringKey, isOn: Binding<Bool>) -> some View {",
                      role: "the period log sheet's 'First day of cycle' and 'Intermenstrual bleeding' switches"),
         ForkedMember(path: "App/Fernlet/OnboardingWelcomeView.swift",
-                     declaration: "private func privacyRow(_ systemImage: String, title: LocalizedStringKey, body: LocalizedStringKey) -> some View {",
+                     declaration: "private func privacyRow(_ sprite: WorldSprite, title: LocalizedStringKey, body: LocalizedStringKey) -> some View {",
                      role: "the welcome screen's three privacy pillars"),
         ForkedMember(path: "App/Fernlet/OnboardingPermissionsView.swift",
-                     declaration: "private func permissionRow(_ systemImage: String, title: LocalizedStringKey, body: LocalizedStringKey) -> some View {",
+                     declaration: "private func permissionRow(_ sprite: WorldSprite, title: LocalizedStringKey, body: LocalizedStringKey) -> some View {",
                      role: "the permissions step's Health, Camera and Coarse location cards"),
         ForkedMember(path: "App/Fernlet/OnboardingStorageChoiceView.swift",
-                     declaration: "private func storageCard(choice: OnboardingStorageChoice, title: LocalizedStringKey, copy: Text, systemImage: String) -> some View {",
+                     declaration: "private func storageCard(choice: OnboardingStorageChoice, title: LocalizedStringKey, copy: Text, sprite: WorldSprite, tileFill: Color?) -> some View {",
                      role: "the storage step's two cards and their explanations"),
         ForkedMember(path: "App/Fernlet/OnboardingView.swift",
                      declaration: "init(_ label: LocalizedStringKey, @ViewBuilder content: () -> Content) {",
@@ -5343,23 +5370,27 @@ struct LocalizationBoundaryTests {
     /// Keep this list honest rather than short: it is the target's complete token inventory, and
     /// each entry is the argument for why translating it would BREAK something.
     static let uikitTargetTokens: [UIKitTargetToken] = [
+        // World Review Batch 4 (2026-10-24): the SF Symbols (`fork.knife`, `dumbbell.fill`,
+        // `figure.strengthtraining.traditional`) left with the pixel redesign — the sprites' rows are
+        // digits and dots, so they carry no letters — and the bundled faces' names arrived.
         UIKitTargetToken(
-            path: "App/FernletMessagesExtension/FernletMessagesViewController.swift",
-            literal: "fork.knife",
+            path: "App/FernletMessagesExtension/FernletMessagesCard.swift",
+            literal: "Fraunces-72ptSemiBoldNonWonky",
             reason: """
-                SF Symbol name, resolved by `UIImage(systemName:)` against Apple's fixed catalogue. \
-                Translating it returns nil and the card loses its glyph.
+                PostScript name of the bundled Fraunces face, resolved by `UIFont(name:size:)` against \
+                the fonts the appex registers through `UIAppFonts`. Translated, the lookup returns nil \
+                and every title falls back to the system face.
                 """
         ),
         UIKitTargetToken(
-            path: "App/FernletMessagesExtension/FernletMessagesViewController.swift",
-            literal: "dumbbell.fill",
-            reason: "SF Symbol name — see the `fork.knife` entry."
+            path: "App/FernletMessagesExtension/FernletMessagesCard.swift",
+            literal: "DMSans-14pt",
+            reason: "PostScript name of the bundled DM Sans Regular face — see the Fraunces entry."
         ),
         UIKitTargetToken(
             path: "App/FernletMessagesExtension/FernletMessagesCard.swift",
-            literal: "fork.knife",
-            reason: "SF Symbol name drawn into the recipe card's artwork — see the first `fork.knife` entry."
+            literal: "DMSans-14ptMedium",
+            reason: "PostScript name of the bundled DM Sans Medium face — see the Fraunces entry."
         ),
         UIKitTargetToken(
             path: "App/FernletMessagesExtension/FernletMessagesCardCopy.swift",
@@ -5374,11 +5405,6 @@ struct LocalizationBoundaryTests {
             path: "App/FernletMessagesExtension/FernletMessagesCardCopy.swift",
             literal: "appex",
             reason: "The path extension of an app extension's bundle, compared with `URL.pathExtension`."
-        ),
-        UIKitTargetToken(
-            path: "App/FernletMessagesExtension/FernletMessagesViewController.swift",
-            literal: "figure.strengthtraining.traditional",
-            reason: "SF Symbol name — see the `fork.knife` entry."
         ),
         UIKitTargetToken(
             path: "App/FernletMessagesExtension/MessageTransportProbe.swift",

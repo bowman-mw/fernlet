@@ -308,6 +308,9 @@ nonisolated enum PendingIntentSheet {
         case water
         /// Home, with no sheet — a tap on the companion widget.
         case home
+        /// The Today panel with the Stamp book pushed at its stamps — a tap on the stamp widget, landing
+        /// as the stamp banner's tap does.
+        case stamps
         case trainerPrepareSummary
         case trainerCopySummaryAndPrompt
         case trainerPastePlan

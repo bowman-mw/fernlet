@@ -16,8 +16,18 @@ struct AppPermissionDeclarationsTests {
     private static let approvedTexts: [String: String] = [
         "NSLocalNetworkUsageDescription": "Fernlet connects directly with nearby friends to share recipes and, during a session you start, photos, short-lived messages and hearts. A session may continue in the background.",
         "NSNearbyInteractionUsageDescription": "Fernlet uses Ultra Wideband to measure the distance to a nearby friend while you connect.",
-        "NSCameraUsageDescription": "Fernlet uses your camera to scan barcodes and nutrition labels, photograph meals, take progress photos, and take photos during sessions with friends."
+        "NSCameraUsageDescription": "Fernlet uses your camera to scan barcodes and nutrition labels, photograph meals, take progress photos, and take photos during sessions with friends.",
+        // The World map's location (owner, 2026-10-24; World build step 5c): `b1-loc-prompt`'s purpose
+        // line and the background-mapping text, both approved.
+        "NSLocationWhenInUseUsageDescription": "Your companion lives on a map of where you are. The map uncovers as you go, and the history stays on this iPhone.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "With background mapping on, Fernlet uncovers the map from the places you visit during the day, using little battery. It stays on this iPhone."
     ]
+
+    /// The walk's temporary full-accuracy purpose (owner-approved 2026-10-24; "or run" added with the
+    /// owner's round-5 answer, since runs record their line too), under the frozen purpose key
+    /// `WorldLocationSource.walkAccuracyPurposeKey` asks with.
+    private static let walkPurposeKey = "WorldWalk"
+    private static let walkPurposeText = "Precise location draws the line of this walk or run. The line stays on this iPhone."
 
     /// Photo-library READ APIs. The app reads the library only through the system pickers
     /// (`PhotosPicker`, `UIImagePickerController`), which need no permission, so it declares no
@@ -84,10 +94,38 @@ struct AppPermissionDeclarationsTests {
         #expect(code.values.contains { $0.contains("requestAuthorization(for: .addOnly)") })
     }
 
-    @Test func locationDefaultsToReducedAccuracy() throws {
+    /// The World build's location (step 5c; owner's answer of 2026-10-23: the prompt starts on Precise).
+    /// `NSLocationDefaultAccuracyReduced` is gone, so iOS's prompt opens with Precise on; weather still
+    /// asks for reduced accuracy in its own code, so it never reads more than the area.
+    @Test func locationStartsOnPreciseAndWeatherStaysReduced() throws {
         for configuration in try Self.appTargetInfoPlistKeys() {
-            #expect(configuration["NSLocationDefaultAccuracyReduced"] == "YES")
+            #expect(configuration["NSLocationDefaultAccuracyReduced"] == nil)
         }
+        #expect(try Self.appInfoPlist()["NSLocationDefaultAccuracyReduced"] == nil)
+        let weather = try RepoRoot.source("FernletKit/Sources/AppServices/WeatherKitService.swift")
+        #expect(weather.contains("desiredAccuracy = kCLLocationAccuracyReduced"))
+    }
+
+    /// The walk's precise-location purpose sits in Info.plist (a dictionary cannot be a build setting)
+    /// and in the catalog under its purpose key, word for word, and the source asks under that key.
+    @Test func theWalkPurposeIsDeclaredAndLocalized() throws {
+        let purposes = try #require(try Self.appInfoPlist()["NSLocationTemporaryUsageDescriptionDictionary"] as? [String: String])
+        #expect(purposes == [Self.walkPurposeKey: Self.walkPurposeText])
+        #expect(try Self.catalogEnglishValues()[Self.walkPurposeKey] == Self.walkPurposeText)
+        let source = try RepoRoot.source("App/Fernlet/World/WorldLocationSource.swift")
+        #expect(source.contains("walkAccuracyPurposeKey = \"\(Self.walkPurposeKey)\""))
+    }
+
+    /// The `location` background mode is used only while a walk or run the person started records: the
+    /// one `CLBackgroundActivitySession` and the one `allowsBackgroundLocationUpdates = true` live in the
+    /// World location source, and nowhere else in shipping code.
+    @Test func backgroundLocationIsHeldOnlyForAWalk() throws {
+        let modes = try Self.appInfoPlist()["UIBackgroundModes"] as? [String] ?? []
+        #expect(modes.contains("location"))
+        let holders = try Self.shippingCode().filter { _, text in
+            text.contains("CLBackgroundActivitySession(") || text.contains("allowsBackgroundLocationUpdates = true")
+        }
+        #expect(Set(holders.keys) == ["App/Fernlet/World/WorldLocationSource.swift"])
     }
 
     // MARK: - Entitlements and the settings link

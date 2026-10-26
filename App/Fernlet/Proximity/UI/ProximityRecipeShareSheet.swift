@@ -28,13 +28,13 @@ struct ProximityRecipeShareDraft: Identifiable, Equatable {
 /// — every other row disables while one is engaged), a searching pulse that gives way to a
 /// "no nearby Fernlets" hint after ~6 s, the connect/send/sent status line, and — with the
 /// proximity debug tools on, never in Release — a collapsible diagnostics card. Recipients are
-/// named through `PeerNameDisplay`, never by fingerprint. An "Include notes" toggle, above both
-/// cards since 2026-09-30, covers every way the sheet shares — nearby, Messages and text: it strips
-/// the payload's share notes before a nearby send and is passed to ``RecipeShareElsewhereCard``. An
-/// "Include picture" toggle (default ON, shown only when the draft carries one) strips the attached
-/// recipe photo from the nearby send — the picture can be the sender's own kitchen shot, so it gets
-/// the same per-share control as their notes. It stays in the nearby card because it is the only
-/// route that carries a picture: a Messages card uses Fernlet's own artwork, and text has none.
+/// named through `PeerNameDisplay`, never by fingerprint. "Include notes" covers every way the sheet
+/// shares — nearby, Messages and text: off, it strips the payload's share notes before a nearby send
+/// and is passed to ``RecipeShareElsewhereCard``. "Include picture" strips the attached recipe photo
+/// from the nearby send, the only route that carries a picture. Both were switches on this sheet; since
+/// the World build (`b3-recipe-share` draft 2, owner 2026-10-24) they are Settings › Sharing's
+/// ``FernletSettings/recipeShareIncludesNotes`` and ``FernletSettings/recipeShareIncludesPicture``, on by
+/// default as the switches were, and the sheet says so under its cards.
 /// On disappear it also restarts passive listening behind the same opt-in + active-scene + lock
 /// gates ContentView enforces — the go-dark-after-share fix, since `stop()` would otherwise leave
 /// the device undiscoverable for inbound recipes until the next scene/tab/lock event.
@@ -63,11 +63,6 @@ struct ProximityRecipeShareSheet: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(FernletLockService.self) private var lockService
-    @State private var includeNotes = true
-    /// Whether the recipe's attached picture rides the share. Default ON (owner decision: the
-    /// image rides the share); the toggle exists because the picture can be the sender's own
-    /// personal photo, deserving the same per-share consent as their notes.
-    @State private var includePhoto = true
     @State private var hasFinishedInitialSearch = false
     @State private var searchDelayTask: Task<Void, Never>?
     /// Which share's outcome this sheet is waiting for, and the confirmation on screen.
@@ -93,7 +88,7 @@ struct ProximityRecipeShareSheet: View {
                         .transition(reduceMotion ? .identity : .opacity)
                 }
             }
-            .background(Color.parchment)
+            .background(WorldPalette.paper)
             .onAppear { handleAppear() }
             .onDisappear { handleDisappear() }
             .onChange(of: manager.lastShareOutcome) { _, outcome in receive(outcome) }
@@ -116,31 +111,19 @@ struct ProximityRecipeShareSheet: View {
     /// The picker: the recipe, the "Include notes" switch, the nearby card, the status line,
     /// diagnostics and the "Share outside Fernlet" card (Messages and text). Carries the toolbar Done,
     /// so there is only one Done while the panel shows.
+    /// World build (`b3-recipe-share` draft 2, approved 2026-10-24): the sheet frame with Done top
+    /// right and the recipe's name inside, the nearby card, the "Share outside Fernlet" card, and a
+    /// line saying notes and the picture follow Settings › Sharing (the owner's note moved both
+    /// switches there; ``FernletSettings/recipeShareIncludesNotes``).
     private var pickerContent: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                ScreenHeader(
-                    // The user's own recipe name — `verbatim:` so it is never treated as
-                    // a catalog key.
-                    title: Text(verbatim: draft.title),
-                    subtitle: Text("Share with a nearby Fernlet."),
-                    subtitleFirst: false,
-                    // The title is the user's own recipe name: three lines rather than the
-                    // default two, so "Grandma's slow-cooked white bean…" keeps its name at
-                    // accessibility sizes instead of being cut mid-word.
-                    titleLineLimit: 3
-                )
-
-                if draft.payload.hasShareNotes {
-                    notesToggleCard
-                }
-
+            VStack(alignment: .leading, spacing: 14) {
                 recipientCard
 
                 if let statusText {
                     statusText
-                        .font(.fernlet(.bubble))
-                        .foregroundStyle(Color.slate)
+                        .font(FernletFramedFont.note)
+                        .foregroundStyle(WorldPalette.dim)
                         .fernletWrappingText()
                 }
 
@@ -151,58 +134,46 @@ struct ProximityRecipeShareSheet: View {
                 }
 
                 RecipeShareElsewhereCard(recipe: draft.recipe, includesNotes: includeNotes, store: store)
+
+                Text("Notes and the picture go along as set in Settings › Sharing.")
+                    .font(FernletFramedFont.body)
+                    .foregroundStyle(WorldPalette.dim)
+                    .fernletWrappingText()
             }
-            .padding(20)
-            .padding(.bottom, 10)
+            .padding(.horizontal, 18)
+            .padding(.top, 6)
+            .padding(.bottom, 24)
         }
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Done") { dismiss() }
-            }
-        }
+        // The user's own recipe name — `Text(verbatim:)` so it is never treated as a catalog key.
+        .fernletSheetToolbar(title: Text(verbatim: draft.title), subtitle: Text("Share with a nearby Fernlet."),
+                             onDone: { dismiss() })
     }
 
-    /// Per-share consent for the sender's notes (and, for a recipe they made, their steps), above
-    /// both cards because it covers every route the sheet shares by.
-    private var notesToggleCard: some View {
-        FernletCard {
-            Toggle(isOn: $includeNotes) {
-                Text("Include notes")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.bark)
-            }
-            .toggleStyle(.switch)
-            .tint(Color.moss)
-        }
-    }
+    /// Whether the sender's notes (and, for a recipe they made, their steps) ride every route the
+    /// sheet shares by: Settings › Sharing's choice, on by default.
+    private var includeNotes: Bool { store.settings.recipeShareIncludesNotes }
 
-    /// The nearby card: the per-share picture toggle and the recipient list (or the searching /
-    /// no-nearby state).
+    /// Whether the nearby send carries the recipe's picture: Settings › Sharing's choice. The picture
+    /// can be the sender's own kitchen shot, so it has its own switch beside the notes'.
+    private var includePhoto: Bool { store.settings.recipeShareIncludesPicture }
+
+    /// The nearby card (`b3-recipe-share`): the pixel waves and "Fernlet nearby", then the recipients
+    /// (or the searching / no-nearby state).
     private var recipientCard: some View {
         FernletCard {
-            VStack(alignment: .leading, spacing: 12) {
-                Label("Fernlet nearby", systemImage: "dot.radiowaves.left.and.right")
-                    .font(.fernlet(.header))
-                    .foregroundStyle(Color.bark)
-
-                pictureToggle
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    WorldSpriteView(sprite: WorldSprites.waves, scale: 2)
+                    Text("Fernlet nearby")
+                        .font(FernletFramedFont.rowTitleBold)
+                        .foregroundStyle(WorldPalette.bark)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
 
                 recipientList
             }
-        }
-    }
-
-    /// Per-share consent for the nearby send's one optional part beyond the notes: the picture.
-    @ViewBuilder
-    private var pictureToggle: some View {
-        if draft.payload.imageJPEGData != nil {
-            Toggle(isOn: $includePhoto) {
-                Text("Include picture")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.bark)
-            }
-            .toggleStyle(.switch)
-            .tint(Color.moss)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -224,7 +195,7 @@ struct ProximityRecipeShareSheet: View {
                     // outbound-cap refusal anyway.
                     let isLockedOut = manager.engagedRecipientID != nil
                         && manager.engagedRecipientID != recipient.id
-                    if index > 0 { FernletRowDivider() }
+                    FernletDottedRule()
                     recipientRow(recipient, isLockedOut: isLockedOut)
                 }
             }
@@ -237,27 +208,21 @@ struct ProximityRecipeShareSheet: View {
             send(to: recipient)
         } label: {
             HStack(spacing: 12) {
-                // T1-8: both glyphs are decorative next to text that already names the
-                // recipient/action — without this the button's announcement leaks their raw SF
-                // Symbol names ("person crop circle badge checkmark", "paperplane fill").
-                Image(systemName: "person.crop.circle.badge.checkmark")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(Color.moss)
-                    .frame(width: 34, height: 34)
-                    .accessibilityHidden(true)
+                // T1-8: both pixel sprites are decorative next to text that already names the
+                // recipient/action (WorldSpriteView hides itself from VoiceOver).
+                WorldSpriteView(sprite: WorldSprites.face, scale: 2)
                 // The name only (2026-09-29): the hex subtitle was an identifier, and its
-                // pre-handshake "Verifying…" claimed work nobody had started.
+                // pre-handshake "Verifying…" claimed work nobody had started. First names only in
+                // the World build ("Friends nearby: first name only, never a distance").
                 Text(verbatim: PeerNameDisplay.shown(recipient.displayName, fingerprint: recipient.fingerprint, in: .fernlet))
-                    .font(.fernlet(.headerMedium))
-                    .foregroundStyle(Color.bark)
+                    .font(FernletFramedFont.rowTitleBold)
+                    .foregroundStyle(WorldPalette.bark)
                     .lineLimit(1)
                 Spacer()
-                Image(systemName: "paperplane.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.moss)
-                    .accessibilityHidden(true)
+                RecipeSpriteTile(sprite: WorldSprites.plane, size: 36)
             }
-            .padding(.vertical, 10)
+            .frame(minHeight: 54)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(isLockedOut)
@@ -384,11 +349,11 @@ struct ProximityRecipeShareSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             SearchingPulse(tint: Color.moss, size: 56, systemImage: "dot.radiowaves.left.and.right")
             Text("Looking for nearby people...")
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
+                .font(FernletFramedFont.body)
+                .foregroundStyle(WorldPalette.bark)
             Text("Open Fernlet on the other device and keep it nearby.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.note)
+                .foregroundStyle(WorldPalette.dim)
                 .fernletWrappingText()
         }
         .padding(.vertical, 4)
@@ -396,12 +361,12 @@ struct ProximityRecipeShareSheet: View {
 
     private var noNearbyView: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("No nearby Fernlets found", systemImage: "person.crop.circle.badge.questionmark")
-                .font(.fernlet(.headerMedium))
-                .foregroundStyle(Color.bark)
+            Text("No nearby Fernlets found")
+                .font(FernletFramedFont.rowTitleBold)
+                .foregroundStyle(WorldPalette.bark)
             Text("Ask the other person to open Fernlet on Home, Food, or Move while unlocked.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.note)
+                .foregroundStyle(WorldPalette.dim)
                 .fernletWrappingText()
             Button {
                 hasFinishedInitialSearch = false
@@ -409,11 +374,12 @@ struct ProximityRecipeShareSheet: View {
                 manager.start()
                 scheduleNoNearbyState()
             } label: {
-                Label("Search again", systemImage: "arrow.clockwise")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.moss)
+                HStack(spacing: 7) {
+                    FernletIcon(.search, scale: 2)
+                    Text("Search again")
+                }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
         }
         .padding(.vertical, 4)
     }

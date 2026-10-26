@@ -10,14 +10,19 @@
 //        appends; drained by `FernletStore.processPendingWidgetActions()` at the same two
 //        ContentView points as the shared-recipe import queue.
 //
+// The map widget's picture (`FernletWidgets/WidgetMap.plist`, round 6b) is a third file with its own
+// writer and rules — complete protection, never in a backup, deleted with the map history and in a
+// decoy — in World/Widget/WorldWidgetMapFile.swift. This snapshot itself still never carries a place.
+//
 // The widget-extension twins of these types live in FernletWidgets/WidgetSharedModels.swift as a
 // DELIBERATE standalone duplication (S3 wall: the widget must not link the FernletKit umbrella,
 // which carries the sealed Private* stores). Keep both sides byte-identical: iso8601 dates,
 // sorted keys, same field names.
 //
-// PRIVACY: the snapshot carries the wellness score, water count, macro grams, and the companion's
-// state and emotion tokens ONLY — never journal text, cycle data, stress readings, or intimacy data
-// (those are sealed by design). The emotion timeline can reflect the day's journal mood TAG, the meal
+// PRIVACY: the snapshot carries the wellness score, water count, macro grams, the companion's
+// state and emotion tokens, when a friend's gold hearts fade, and the stamp book's tokens and days
+// ONLY — never journal text, cycle data, stress readings, intimacy data or a place (those are sealed
+// or device-held by design). The emotion timeline can reflect the day's journal mood TAG, the meal
 // and water logging gaps, the bedtime window, and a friend's heart; the body-signal emotions never
 // enter it (`CompanionEmotion.isWidgetPublishable`).
 
@@ -27,8 +32,9 @@ import FernletFoundation
 
 /// The benign outbound snapshot mirrored to the app-group container for the widget.
 ///
-/// Carries only the wellness score, companion state and emotion timeline, water count, and macro
-/// grams — never journal text, cycle, stress or intimacy data (sealed by design). Must stay
+/// Carries only the wellness score, companion state and emotion timeline, water count, macro grams,
+/// when a friend's gold hearts fade and the stamp book's tokens and days — never journal text, cycle,
+/// stress or intimacy data (sealed by design), and never a place. Must stay
 /// byte-identical to the widget-side twin in `FernletWidgets/WidgetSharedModels.swift` (deliberate
 /// duplication; the widget cannot link the FernletKit umbrella).
 struct WidgetSnapshot: Codable, Equatable {
@@ -59,6 +65,48 @@ struct WidgetSnapshot: Codable, Equatable {
         var bodyColorHex: String?
         var accessoryRaw: String
         var accessoryColorHex: String?
+        /// The scarf's colour when the companion wears one, else nil — the pixel companion draws it as
+        /// the map's does. ADDITIVE (2026-10-24) and optional.
+        var scarfColorHex: String? = nil
+        /// The sleep cap's colour when the companion wears it, else nil (phone test W-02). ADDITIVE
+        /// (2026-10-25) and optional, like every key below.
+        var capColorHex: String? = nil
+        /// The side item's FROZEN `CompanionSideItem` token; nil holds nothing.
+        var sideItemRaw: String? = nil
+        /// The side item's resolved colour, or nil for the design's bark.
+        var sideItemColorHex: String? = nil
+        /// The Creation Studio pieces worn, already in their place and size on the 24 × 24 item frame
+        /// (W-07): never in a decoy session.
+        var items: [ItemArt]? = nil
+
+        /// One worn piece, as the painter draws it: its top-left cell in the companion's body
+        /// coordinates, its size, its palette (`#RRGGBB`) and its row-major palette indices (−1 clear).
+        /// A drawing the person made for their companion, nothing more. Byte-identical to the widget's
+        /// `WidgetCompanionLook.ItemArt`.
+        struct ItemArt: Codable, Equatable {
+            var x: Int
+            var y: Int
+            var width: Int
+            var height: Int
+            var palette: [String]
+            var pixels: [Int]
+            /// Whether it sits on the head (a hat), so the sprout and the flower step aside.
+            var coversHead: Bool
+
+            /// The most colours a published piece keeps (the Studio's palette has sixteen); the widget
+            /// reads no more than this either.
+            static let maxPalette = 64
+        }
+    }
+
+    /// One stamp from the device-local stamp book, as the stamp widget shows it (World build,
+    /// `b4-new-stamp`): the stat's FROZEN `SillyStatKind` token, the day it was earned and when it was
+    /// recorded. No name, no number, no Health figure — the widget resolves the name from the token in
+    /// its own catalog. Byte-identical to the widget-side twin.
+    struct StampMoment: Codable, Equatable {
+        var kindRaw: String
+        var dayKey: String
+        var earnedAt: Date
     }
 
     var companionStateRaw: String
@@ -85,6 +133,19 @@ struct WidgetSnapshot: Codable, Equatable {
     /// The person's companion look (``CompanionLook``); nil draws the plain companion. ADDITIVE
     /// (2026-10-21) and optional.
     var companionLook: CompanionLook? = nil
+    /// When each of a friend's gold hearts showing now fades, earliest first: at most two, each 12
+    /// hours after it was given in person (`GoldHeartRules`). The widget draws a gold heart while its
+    /// end is still ahead, and adds a timeline entry at each end so it fades on time with the app
+    /// closed. ADDITIVE (2026-10-24) and optional; empty while a decoy is open.
+    var goldHeartEnds: [Date]? = nil
+    /// The stamp book, oldest first (``StampMoment``), for the stamp widget. ADDITIVE (2026-10-24) and
+    /// optional; empty while a decoy is open. The book itself stays device-local (`SillyStampStore`):
+    /// the app-group file is on this device too, and "Delete everything" deletes it.
+    var stamps: [StampMoment]? = nil
+    /// The day's protein, carbs and fat targets in grams, for the map widget's bars (`b4-new-map`, round
+    /// 6b), as Home's status plate draws `macroSummary` against them. ADDITIVE (2026-10-25) and optional:
+    /// without them the bars read empty, never full.
+    var macroTargets: MacroSummary? = nil
 }
 
 // MARK: - Content vs. metadata
@@ -139,6 +200,9 @@ extension WidgetSnapshot {
     /// | `companionEmotionTimeline` | content | the faces the widget draws through the day; time-stable (built from local midnight on whole seconds), so an unchanged day compares equal |
     /// | `companionName` | content | written on the small and thought cards |
     /// | `companionLook` | content | the body, colour and topper every family draws |
+    /// | `goldHeartEnds` | content | the gold hearts after the six; a new heart is a real change |
+    /// | `stamps` | content | the stamp widget's book; a new stamp is a real change |
+    /// | `macroTargets` | content | the map widget's protein, carbs and fat bars are drawn against them |
     /// | `computedAt` | **metadata** | stamped at construction, rendered by nothing |
     ///
     /// `WidgetSnapshotContentEqualityTests` pins that table — the field COUNT through `Mirror`, the
@@ -163,6 +227,9 @@ extension WidgetSnapshot {
             && companionEmotionTimeline == other.companionEmotionTimeline
             && companionName == other.companionName
             && companionLook == other.companionLook
+            && goldHeartEnds == other.goldHeartEnds
+            && stamps == other.stamps
+            && macroTargets == other.macroTargets
     }
 }
 
@@ -493,6 +560,10 @@ final class WidgetSnapshotMirror {
     static let waterWidgetKind = "FernletWater"
     /// The water control's kind — twin of `FernletWidgetKind.waterControl`.
     static let waterControlKind = "FernletWaterControl"
+    /// The stamp widget's kind — twin of `FernletWidgetKind.stamp`.
+    static let stampWidgetKind = "FernletStamp"
+    /// The map widget's kind — twin of `FernletWidgetKind.map` (`WorldWidgetMap.kind`).
+    static let mapWidgetKind = WorldWidgetMap.kind
 
     private let fileStore: WidgetSnapshotFileStore
     private let reloadTimelines: () -> Void
@@ -502,12 +573,15 @@ final class WidgetSnapshotMirror {
         self.reloadTimelines = reloadTimelines ?? { Self.reloadEverySurface() }
     }
 
-    /// Reloads every surface that renders the snapshot: both widgets and the Control Center control.
+    /// Reloads every surface that renders the snapshot: the four widgets and the Control Center control.
     /// One function so a new surface is added in one place, and the Siri water intent reloads the same
-    /// set the mirror does.
+    /// set the mirror does. The map widget reloads only while the phone is unlocked (`WorldWidgetMap.reload`):
+    /// its picture is locked away with the phone, so a reload then would draw it without its map.
     static func reloadEverySurface() {
         WidgetCenter.shared.reloadTimelines(ofKind: widgetKind)
         WidgetCenter.shared.reloadTimelines(ofKind: waterWidgetKind)
+        WidgetCenter.shared.reloadTimelines(ofKind: stampWidgetKind)
+        WorldWidgetMap.reload()
         ControlCenter.shared.reloadControls(ofKind: waterControlKind)
     }
 

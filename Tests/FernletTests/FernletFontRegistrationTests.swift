@@ -23,6 +23,7 @@ struct FernletFontRegistrationTests {
         "InstrumentSerif-Italic.ttf":  ("InstrumentSerif-OFL", "The Instrument Serif Project Authors"),
         "DMSans-Regular.ttf":          ("DMSans-OFL", "The DM Sans Project Authors"),
         "DMSans-Medium.ttf":           ("DMSans-OFL", "The DM Sans Project Authors"),
+        "DMSans-Bold.ttf":             ("DMSans-OFL", "The DM Sans Project Authors"),
     ]
 
     /// OFL 1.1 condition 2 lets the fonts ship inside the app only if each copy carries the copyright
@@ -51,6 +52,15 @@ struct FernletFontRegistrationTests {
         }
     }
 
+    /// The widget extension registers its own copy of DM Sans Bold (owner, 2026-10-24, question 18):
+    /// an extension cannot read the app's fonts, and the widgets and Live Activities name the face.
+    @Test func theWidgetExtensionRegistersItsOwnBoldFace() throws {
+        let plist = try RepoRoot.source("App/FernletWidgets/Info.plist")
+        #expect(plist.contains("<string>DMSans-Bold.ttf</string>"), "the widget extension does not register DM Sans Bold")
+        #expect(FileManager.default.fileExists(atPath: RepoRoot.url("App/FernletWidgets/Fonts/DMSans-Bold.ttf").path),
+                "the widget extension lost its copy of DM Sans Bold")
+    }
+
     @Test func everyTypeRoleProducesAFont() {
         // `FernletTextRole` is `CaseIterable`, so a new case is automatically covered here — no
         // hand-maintained list to drift. Instead of a tautological `count ==` assertion, prove each
@@ -72,11 +82,11 @@ struct FernletFontRegistrationTests {
         switch role {
         case .display:       return FernletFontName.frauncesSemiBold
         case .displayMedium: return FernletFontName.frauncesSemiBold
-        case .header:        return FernletFontName.dmSerifDisplay
-        case .headerMedium:  return FernletFontName.dmSerifDisplay
-        case .body:          return FernletFontName.instrumentSerif
-        case .bodySmall:     return FernletFontName.instrumentSerif
-        case .bubble:        return FernletFontName.instrumentSerifItalic
+        case .header:        return FernletFontName.frauncesSemiBold
+        case .headerMedium:  return FernletFontName.frauncesSemiBold
+        case .body:          return FernletFontName.dmSans
+        case .bodySmall:     return FernletFontName.dmSans
+        case .bubble:        return FernletFontName.dmSans
         case .label:         return FernletFontName.dmSansMedium
         case .labelSmall:    return FernletFontName.dmSans
         case .stat:          return FernletFontName.dmSansMedium

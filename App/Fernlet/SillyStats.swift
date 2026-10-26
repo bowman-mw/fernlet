@@ -20,10 +20,11 @@ import Foundation
 /// The nineteen silly stats, in page order.
 ///
 /// `rawValue` is a frozen token: ``SillyStatsCompanionPacer`` persists the last-mentioned kind and
-/// each kind's last-mentioned value under it in device-local `UserDefaults`, so renaming a case would
-/// make the companion forget what it last said (pinned by `SillyStatsTests.frozenKindTokens`).
-/// Display copy lives in ``SillyStatsCopy``.
-enum SillyStatKind: String, CaseIterable, Sendable {
+/// each kind's last-mentioned value under it in device-local `UserDefaults`, and every stamp in the
+/// stamp book is keyed by it (``SillyStampEntry``), so renaming a case would make the companion
+/// forget what it last said and strand the stat's stamp (pinned by `SillyStatsTests.frozenKindTokens`).
+/// Display copy lives in ``SillyStatsCopy`` and ``SillyStampCopy``.
+enum SillyStatKind: String, CaseIterable, Codable, Sendable {
     case cookiesPerDay
     case bananasForScale
     case eggonomics

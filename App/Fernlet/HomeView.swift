@@ -16,6 +16,30 @@ import FernletDomainModel
 import FernletUI
 #endif
 
+/// What a `HomeView` draws (World build, branch `world-ui`).
+///
+/// The World Home moves Home's cards off the map into panels; drawing them with this same view keeps
+/// every card's data and behaviour identical (design page "Same data, new look").
+nonisolated enum HomePresentation: Equatable, Sendable {
+    /// The whole Home page: header, photo wall and every card in the person's Home order.
+    case page
+    /// The World Today panel (design `b1-today`, draft 2, in the one design language): the companion
+    /// card on top, the gold hearts card while one lasts, then every card in the person's Home order
+    /// except the companion (it lives on the map) and Quick log (the Log panel), then Arrange Today.
+    case today
+    /// Only the Quick log and mood cards: the item bar's Log panel.
+    case quickLog
+
+    /// The cards to draw, from the person's Home order.
+    func widgets(from order: [HomeWidget]) -> [HomeWidget] {
+        switch self {
+        case .page: order
+        case .today: TodayLayout.shown(order)
+        case .quickLog: [.quickLog]
+        }
+    }
+}
+
 /// The Home tab: the companion hero and the user-configurable dashboard feed.
 ///
 /// Renders the header, the photowall strip (friend polaroids + the companion's thought bubble),
@@ -54,11 +78,22 @@ struct HomeView: View {
     /// The meal-logged toast, for the ambient cards' one-tap meal chips (forgotten favorites and the
     /// nutrient nudge's "add it"), which log in place and are confirmed like every other meal log.
     var onMealsLogged: MealLogReporter = .none
+    /// What this Home draws (World build): the whole page, or only the Quick log and mood cards for
+    /// the item bar's Log panel. The same cards either way, so the panels show exactly Home's data.
+    var presentation: HomePresentation = .page
+    /// The stamp banner's or the stamp widget's ask for the Stamp book (World Today panel): this Home
+    /// pushes it at its stamps and clears the ask (``StampBookPushHost``).
+    var stampBookRequest: Binding<Bool> = .constant(false)
     @State private var hasRecentPeriodEvent = false
     @State private var didLoadRecentPeriodActivity = false
     @State private var isCompanionThoughtVisible = true
     @State private var companionTapThought: String?
     @State private var isCompanionSheetPresented = false
+    /// Arrange Today, open over the Today panel (World build).
+    @State private var isArrangingToday = false
+    /// World Today panel: Trends (`b2-trends`) and Body signals (`b2-stress`) push under the plate.
+    @State private var isShowingTrends = false
+    @State private var isShowingBodySignals = false
     @State private var companionPetCount = 0
     @State private var companionTapCount = 0
     @State private var isCompanionJumping = false
@@ -99,49 +134,47 @@ struct HomeView: View {
     /// couple of points at each end exactly as they did before.
     @ScaledMetric(relativeTo: .body) private var photowallHeight: CGFloat = 126
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// The Stamp book, pushed from the Milestones or Silly stats card, or on ``stampBookRequest``.
+    @State private var isStampBookOpen = false
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 16) {
-                    homeHeader
-                    // 3a·AX3: the photowall and thought bubble give way entirely at accessibility
-                    // sizes — the strip is decorative (hit-testing already disabled), and the grid
-                    // starting above the tab bar is the promise that matters.
-                    if !dynamicTypeSize.isAccessibilitySize {
-                        photowallStrip
-                    }
-                    ForEach(store.settings.homeWidgets) { widget in
-                        homeWidget(widget)
-                    }
-                }
-                .padding(20)
-                .fernletTabBarBottomClearance()
+                cardStack
+                    .padding(20)
+                    .fernletTabBarBottomClearance()
             }
             .fernletTabBarCompaction($isTabBarCompact, resetToken: $tabResetToken)
-            .background(Color.parchment)
+            // Milestones and Silly stats open one page, the Stamp book (design `b2-milestones`, draft 2).
+            .modifier(StampBookPushHost(isOpen: $isStampBookOpen, request: stampBookRequest, store: store))
+            // A Recent bites polaroid pushes its photo under the plate ("‹ Today", `b2-meal-photo`).
+            .navigationDestination(item: $selectedBite) { bite in recentBiteDetail(bite) }
+            // Customize is a page inside the Today panel (design `b2-customize`): Customize → a slot,
+            // Wardrobe, Creation Studio → Save item all push under the plate. The map's hold still opens
+            // it as a sheet (`CompanionCustomizationSheet`).
+            .navigationDestination(isPresented: $isCompanionSheetPresented) {
+                CompanionCustomizationPage(store: store, petCount: $companionPetCount,
+                                           isStudioDraftDirty: .constant(false))
+                    .fernletPushedPage(CompanionCustomizationPage.title)
+            }
+            // In a World panel, the panel's dotted page (the stack paints its own background otherwise).
+            .background {
+                if presentation == .page { Color.parchment } else { WorldPageBackground().ignoresSafeArea() }
+            }
             .navigationTitle("")
+            .modifier(todayPushedPages)
         }
-        .sheet(isPresented: $isCompanionSheetPresented) {
-            CompanionCustomizationSheet(
-                store: store,
-                petCount: $companionPetCount
-            )
-            // One detent, and it is the full one. This sheet hosts a four-level stack — Customize →
-            // slot picker → Wardrobe → Creation Studio → Save item — and the last two pin a bottom
-            // action bar ("Next", "Save to closet") to the sheet's edge. At the half detent there is
-            // no room left above that bar: the studio's canvas and the save step's shop toggle fall
-            // below the fold, directly behind it, so a tap aimed at the toggle lands on Save — which
-            // saves the item unlisted and, because the studio exits by dismissing, tears the whole
-            // sheet down to Home. Nothing is lost by dropping the half detent: every screen in here
-            // draws the companion itself, which is all the half sheet was showing behind it.
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-            .presentationCornerRadius(20)
+        // Today's cards in the one design language; the sheets below keep their own look.
+        .fullScreenCover(isPresented: $isArrangingToday) {
+            WorldPanelFrame(panel: .today, title: String(localized: "worldToday.arrange.title", defaultValue: "Arrange Today",
+                                                         comment: "World Today panel: the title of the card layout editor"),
+                            closesWithDone: true, onClose: { isArrangingToday = false }) {
+                WorldTodayEditor(store: store)
+            }
         }
         .task {
             #if DEBUG
             // Test hook: open customization directly (the real entry is a long-press XCUITest can't send).
-            if UITestSupport.shouldOpenCustomize { isCompanionSheetPresented = true }
+            applyUITestLaunchHooks()
             #endif
             // Restore the settled pose if the app returned during an active cooldown window.
             isCompanionSettled = petGovernor.isSettled
@@ -179,6 +212,88 @@ struct HomeView: View {
         .onChange(of: store.isPeriodTrackingVisible) { _, _ in
             scheduleRecentPeriodActivityRefresh()
         }
+    }
+
+    #if DEBUG
+    /// DEBUG launch hooks (`UITestSupport`): open Customize directly (the real entry is a long-press
+    /// XCUITest can't send), or push Trends / Body signals in the World Today panel for screenshots.
+    private func applyUITestLaunchHooks() {
+        if UITestSupport.shouldOpenCustomize { isCompanionSheetPresented = true }
+        if presentation == .today, let page = UITestSupport.initialTodayPage {
+            isShowingTrends = page == "trends"
+            isShowingBodySignals = page == "bodySignals"
+        }
+    }
+    #endif
+
+    /// A Recent bites photo, pushed in the panel's stack (`b2-meal-photo`: the plate's Back returns).
+    @ViewBuilder
+    private func recentBiteDetail(_ bite: RecentBite) -> some View {
+        #if canImport(UIKit)
+        MealPhotoDetailView(
+            name: bite.name,
+            loggedAt: bite.loggedAt,
+            loadData: { store.mealPhotoData(for: bite.photoID) },
+            hasSealedData: { store.mealPhotoHasSealedFile(for: bite.photoID) },
+            isPushed: true
+        )
+        #endif
+    }
+
+    /// The World Today panel's pushed pages: Trends and Body signals (``WorldTodayPushedPages``).
+    private var todayPushedPages: WorldTodayPushedPages {
+        WorldTodayPushedPages(isShowingTrends: $isShowingTrends, isShowingBodySignals: $isShowingBodySignals,
+                              signals: store.derivedSignals, assessment: stressService?.assessment,
+                              activeSheet: $activeSheet)
+    }
+
+    /// Every section this Home draws, top to bottom.
+    private var cardStack: some View {
+        VStack(spacing: 16) {
+            if presentation == .page {
+                homeHeader
+                // 3a·AX3: the photowall and thought bubble give way entirely at accessibility
+                // sizes — the strip is decorative (hit-testing already disabled), and the grid
+                // starting above the tab bar is the promise that matters.
+                if !dynamicTypeSize.isAccessibilitySize {
+                    photowallStrip
+                }
+            }
+            if presentation == .today { todayHead }
+            ForEach(presentation.widgets(from: store.settings.homeWidgets)) { widget in
+                homeWidget(widget)
+            }
+            if presentation == .today { arrangeTodayButton }
+        }
+    }
+
+    /// The Today panel's top: the companion card, then the gold hearts card while one lasts.
+    @ViewBuilder
+    private var todayHead: some View {
+        TodayCompanionCard(store: store, isActive: isActive) { isCompanionSheetPresented = true }
+        if store.goldHeartCount() > 0, let until = store.goldHeartsEnd() {
+            TodayGoldHeartsCard(status: WorldStatus.current(store: store, date: Date()), until: until)
+        }
+    }
+
+    /// The one design language (`b1-language`), set at the app's root for every screen.
+    @Environment(\.fernletFramedLook) private var framedLook
+
+    /// Arrange Today, at the bottom of the Today panel: the layout editor (design `b1-today-editor`).
+    private var arrangeTodayButton: some View {
+        Button { isArrangingToday = true } label: {
+            HStack(spacing: 8) {
+                WorldSpriteView(sprite: WorldSprites.grip, scale: 2, tint: WorldPalette.mossInk)
+                Text("Arrange Today")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(WorldPalette.mossInk)
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("world.today.arrange")
     }
 
     // MARK: - Milestones entry card
@@ -231,10 +346,9 @@ struct HomeView: View {
         let coins = CoinEconomy.milestoneAwardCoins(in: store.coinLedgerService.entries)
         let kept = keptKeepsakes(counts: counts, worries: worries)
         let summary = Self.milestonesSummary(keptKinds: kept.count, coins: coins)
-        // A large sheet, not a push (HOME-13): one rule for read-only destinations from Home —
-        // they present as sheets, matching Trends, First aid and the gear.
+        // World build (design `b2-milestones`, draft 2): the Stamp book, pushed under the Today plate.
         return Button {
-            activeSheet = .milestones
+            isStampBookOpen = true
         } label: {
             FernletCard {
                 VStack(alignment: .leading, spacing: 12) {
@@ -362,7 +476,7 @@ struct HomeView: View {
         case .mealPhotos:
             mealPhotosStrip
         case .sillyStats:
-            SillyStatsHomeCard(stats: store.sillyStats) { activeSheet = .sillyStats }
+            SillyStatsHomeCard(stats: store.sillyStats) { isStampBookOpen = true }
         case .logFood, .recipeBook, .newRecipe, .workout, .journal, .sleep, .water, .trends:
             HomeActionWidget(widget: widget) {
                 handleHomeWidget(widget)
@@ -669,7 +783,8 @@ struct HomeView: View {
     /// (setting the top-level `activeSheet` so the sheet's dismiss-then-First-Aid chain keeps working).
     private var bodySignalsLink: some View {
         companionChip(systemImage: "waveform.path.ecg", title: Text("Body signals")) {
-            activeSheet = .stressExplainer
+            // World Today panel (b2-stress): a page pushed under the plate; elsewhere today's sheet.
+            if presentation == .today { isShowingBodySignals = true } else { activeSheet = .stressExplainer }
         }
         .accessibilityIdentifier("home.stressLine")
         .accessibilityLabel("Body signals — how Fernlet reads this")
@@ -698,11 +813,7 @@ struct HomeView: View {
                 activeSheet = .firstAid(nil)
             } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: "heart.circle")
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(Color.moss)
-                        .frame(width: 34, height: 34)
-                        .background(Color.moss.opacity(0.14), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    firstAidIcon
                     VStack(alignment: .leading, spacing: 3) {
                         Text("First aid")
                             .font(.fernlet(.headerMedium))
@@ -715,9 +826,7 @@ struct HomeView: View {
                             .fernletWrappingText()
                     }
                     Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(Color.moss)
+                    firstAidChevron
                 }
                 .contentShape(Rectangle())
             }
@@ -735,16 +844,24 @@ struct HomeView: View {
                 firstAidChip("archivebox", "Worry box", tool: .worryBox)
             }
         }
+        // A hand-drawn section: its icon square sits bare inside it (the frame rule).
+        .environment(\.fernletInFramedSection, framedLook != nil)
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.moss.opacity(0.10))
+            RoundedRectangle(cornerRadius: framedLook == nil ? 16 : FernletFramedLook.cardRadius, style: .continuous)
+                .fill(framedLook?.sage ?? Color.moss.opacity(0.10))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.moss.opacity(0.22), lineWidth: 1)
+            RoundedRectangle(cornerRadius: framedLook == nil ? 16 : FernletFramedLook.cardRadius, style: .continuous)
+                .strokeBorder(framedLook?.ink ?? Color.moss.opacity(0.22), lineWidth: framedLook == nil ? 1 : FernletFramedLook.frameWidth)
         )
+        .background {
+            if let framedLook {
+                RoundedRectangle(cornerRadius: FernletFramedLook.cardRadius, style: .continuous)
+                    .fill(framedLook.shadow).offset(y: 3)
+            }
+        }
         // Padding included: this is what makes the card's margin and the header-to-chips gap open
         // First aid again. Declared on the padded container, so the chips' and the header's own
         // button frames win their taps first.
@@ -752,20 +869,55 @@ struct HomeView: View {
         .onTapGesture { activeSheet = .firstAid(nil) }
     }
 
+    /// The First Aid card's icon: the pixel first-aid tile in the framed look, the moss symbol otherwise.
+    @ViewBuilder
+    private var firstAidIcon: some View {
+        if let framedLook {
+            WorldIconTile(sprite: WorldSprites.aid, look: framedLook)
+        } else {
+            Image(systemName: "heart.circle")
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(Color.moss)
+                .frame(width: 34, height: 34)
+                .background(Color.moss.opacity(0.14), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        }
+    }
+
+    /// The First Aid card's chevron: pixel in the framed look.
+    @ViewBuilder
+    private var firstAidChevron: some View {
+        if let framedLook {
+            WorldChevron(look: framedLook)
+        } else {
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(Color.moss)
+        }
+    }
+
     /// One chip inside the First Aid card — its own button straight to `tool`.
     private func firstAidChip(_ icon: String, _ label: LocalizedStringKey, tool: FirstAidTool) -> some View {
         Button {
             activeSheet = .firstAid(tool)
         } label: {
-            HStack(spacing: 5) {
-                Image(systemName: icon).font(.system(size: 11, weight: .semibold))
+            let chip = HStack(spacing: 5) {
+                if let framedLook, let pixel = WorldCardIcons.icon(forSymbol: icon) {
+                    WorldSpriteView(sprite: pixel.sprite, scale: 2, tint: pixel.tinted ? framedLook.text : nil)
+                } else {
+                    Image(systemName: icon).font(.system(size: 11, weight: .semibold))
+                }
                 Text(label).font(.fernlet(.labelSmall))
             }
-            .foregroundStyle(Color.moss)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(Color.cream, in: Capsule())
-            .overlay(Capsule().stroke(Color.moss.opacity(0.18), lineWidth: 1))
+            if let framedLook {
+                chip.foregroundStyle(framedLook.text).fernletFramed(framedLook)
+            } else {
+                chip
+                    .foregroundStyle(Color.moss)
+                    .background(Color.cream, in: Capsule())
+                    .overlay(Capsule().stroke(Color.moss.opacity(0.18), lineWidth: 1))
+            }
         }
         .buttonStyle(.plain)
         .fernletTapTarget(minWidth: 0)
@@ -855,16 +1007,6 @@ struct HomeView: View {
                 }
             }
         }
-        #if canImport(UIKit)
-        .sheet(item: $selectedBite) { bite in
-            MealPhotoDetailView(
-                name: bite.name,
-                loggedAt: bite.loggedAt,
-                loadData: { store.mealPhotoData(for: bite.photoID) },
-                hasSealedData: { store.mealPhotoHasSealedFile(for: bite.photoID) }
-            )
-        }
-        #endif
         // Keyed on today's day key so the six prior-day fetches run once now and once per midnight
         // rollover — never on every body pass. Today's bites remain live from `store.day`.
         .task(id: FernletDate.dayKey(for: Date())) {
@@ -877,7 +1019,12 @@ struct HomeView: View {
     /// emotion engine keeps the frazzled and calm faces to thriving and okay days, as the old tint
     /// flags did.
     private var companionBodySignal: CompanionBodySignal? {
-        guard store.settings.stressAwarenessEnabled, let state = stressService?.assessment?.state else { return nil }
+        Self.companionBodySignal(enabled: store.settings.stressAwarenessEnabled, assessment: stressService?.assessment)
+    }
+
+    /// The body-signal reading as the companion's emotion input, for Home and the World map alike.
+    static func companionBodySignal(enabled: Bool, assessment: StressAssessment?) -> CompanionBodySignal? {
+        guard enabled, let state = assessment?.state else { return nil }
         switch state {
         case .tense, .needsCare: return .tense
         case .calm: return .calm
@@ -894,31 +1041,9 @@ struct HomeView: View {
         return periodStore?.prediction
     }
 
+    /// The companion's own line, shared with the World map's bubble (`companionAmbientThought`).
     private var ambientThought: String {
-        // One whole sentence per mood (`HomeCopy`), never the mood chip's label lowercased into an
-        // English sentence: a translation has to agree the word with the sentence around it.
-        if let last = store.day.journals.last {
-            return HomeCopy.journalMoodThought(last.tag, addressing: termOfAddress)
-        }
-        // Every two or three days the companion brings up a silly stat. The pacer already kept it
-        // off rest, sick and needs-gentleness days, so it never talks over those lines.
-        if let line = store.sillyStats.companionLine {
-            return line
-        }
-        // BEFORE the companion thought, not after it. `companionThought` falls back to a
-        // deterministic line ("A few ordinary care notes are already here") that is never nil, so on
-        // a fresh install the bubble claimed notes existed while the intent card below said nothing
-        // was logged — and this empty-day line was unreachable.
-        if hasNoUserLogsToday {
-            return HomeCopy.emptyDayThought
-        }
-        if let thought = store.companionThought {
-            return thought
-        }
-        if let thought = signalThought {
-            return thought
-        }
-        return HomeCopy.ordinaryDayThought
+        store.companionAmbientThought(addressing: termOfAddress)
     }
 
     /// The rotating tap thoughts, in their fixed order. Computed, because each line is a catalog
@@ -936,6 +1061,8 @@ struct HomeView: View {
         playfulUntil = Date().addingTimeInterval(Self.playfulBeat)
         let response = petGovernor.registerPet()
         if let cue = Self.petFeedbackEvent(for: response) { FernletFeedback.system.play(cue) }
+        // The first pat ever begins Pats Given, and so earns its stamp.
+        store.sillyStats.scheduleRetally(store: store)
         switch response {
         case .bounce:
             performPetBounce(settling: false)
@@ -1145,13 +1272,42 @@ struct HomeView: View {
                     Spacer()
                     todayGoalLine
                 }
-                HealthBar(state: store.companionState, value: store.score, heartGlow: store.heartGlow)
+                if presentation == .today {
+                    todayHearts
+                } else {
+                    HealthBar(state: store.companionState, value: store.score, heartGlow: store.heartGlow)
+                }
                 unwellRow
             }
             // FLOW-18: the Today card's inner padding halved (16 → 8), countered at the call site
-            // so the shared `FernletCard` keeps its 16pt everywhere else.
-            .padding(-FernletMetrics.spaceSm)
+            // so the shared `FernletCard` keeps its 16pt everywhere else. The framed look keeps its
+            // own 14/15 pt: halving it put the title against the frame.
+            .padding(framedLook == nil ? -FernletMetrics.spaceSm : 0)
         }
+    }
+
+    /// The Today panel's care score (design language): Home's date line, then the status plate's
+    /// hearts and the score, spoken as the plate speaks it.
+    private var todayHearts: some View {
+        let status = WorldStatus.current(store: store, date: Date())
+        let large = dynamicTypeSize.isAccessibilitySize
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(verbatim: FernletDate.niceDate())
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(WorldPalette.dim)
+            // The score sits beside the hearts, or under them at accessibility sizes.
+            let layout = large ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6)) : AnyLayout(HStackLayout(spacing: 8))
+            layout {
+                WorldHeartRow(status: status, count: large ? 4 : 6, scale: WorldTheme.pixel.scale(accessibilitySize: large))
+                Text(verbatim: String(localized: "worldToday.careScore", defaultValue: "Care score \(status.carePercent)%",
+                                      comment: "World Today panel, Today card: the care score beside its hearts"))
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(WorldPalette.dim)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: WorldStatusPlate.spokenCare(status)))
+        .accessibilityIdentifier("world.today.hearts")
     }
 
     /// The trailing goal line on the Today card. The weekday is already in the page header, and
@@ -1169,7 +1325,8 @@ struct HomeView: View {
             }
         }
         .font(.fernlet(.labelSmall))
-        .foregroundStyle(Color.slate)
+        // World build: the design language's secondary ink on paper (b1-today), not the slate blue.
+        .foregroundStyle(framedLook?.dim ?? Color.slate)
         .multilineTextAlignment(.trailing)
         .fixedSize(horizontal: false, vertical: true)
         // T2-2: dropping the prefix is a layout decision, but spoken alone the goal name is the very
@@ -1194,9 +1351,13 @@ struct HomeView: View {
         } label: {
             HStack(spacing: 10) {
                 if !dynamicTypeSize.isAccessibilitySize {
-                    Image(systemName: isUnwell ? "bandage.fill" : "bandage")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.dustyRose)
+                    if framedLook != nil {
+                        WorldSpriteView(sprite: WorldSprites.bandage, scale: 2)
+                    } else {
+                        Image(systemName: isUnwell ? "bandage.fill" : "bandage")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Color.dustyRose)
+                    }
                 }
                 VStack(alignment: .leading, spacing: 1) {
                     Text("I'm unwell today")
@@ -1212,18 +1373,21 @@ struct HomeView: View {
                 }
                 Spacer(minLength: 8)
                 if isUnwell {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Color.dustyRose)
+                    if let framedLook {
+                        WorldSpriteView(sprite: WorldSprites.check, scale: 2, tint: framedLook.text)
+                    } else {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Color.dustyRose)
+                    }
                 }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .background(
-                Color.dustyRose.opacity(isUnwell ? 0.18 : 0.10),
-                in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-            )
+            // The frame rule (`ref-frames-today`): a note inside the Today card keeps its rose tint, no frame.
+            .fernletFrameRulePiece(.note, fill: framedLook?.rose ?? Color.dustyRose.opacity(isUnwell ? 0.18 : 0.10),
+                                   cornerRadius: 12)
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -1276,17 +1440,8 @@ struct HomeView: View {
 
     private var shouldShowTodayIntentPrompt: Bool {
         Calendar.current.component(.hour, from: Date()) >= 14
-            && hasNoUserLogsToday
+            && store.hasNoUserLogsToday
             && !store.isTodayIntentDismissed
-    }
-
-    private var hasNoUserLogsToday: Bool {
-        store.day.meals.isEmpty &&
-        store.day.workouts.isEmpty &&
-        store.day.journals.isEmpty &&
-        store.day.sleep == nil &&
-        store.day.bottleCount == 0 &&
-        store.day.hygiene.isEmpty
     }
 
     /// The quick-log widget: the tile card plus the mood card. Two self-named cards since the
@@ -1294,8 +1449,25 @@ struct HomeView: View {
     /// only one of its kind on Home and is retired.
     private var quickLog: some View {
         VStack(spacing: 16) {
-            quickLogCard
-            moodCard
+            if presentation == .quickLog && framedLook != nil {
+                // World Log panel (b2-log): the six framed tiles straight on the page, How today
+                // felt as one card, and where to change the tiles.
+                quickLogGrid
+                moodCard
+                WorldLogTilesFootnote()
+            } else {
+                quickLogCard
+                moodCard
+            }
+        }
+    }
+
+    /// The quick-log tiles on their own (the World Log panel draws them without the card).
+    private var quickLogGrid: some View {
+        EqualColumnGrid(columns: quickLogColumnCount, horizontalSpacing: 12, verticalSpacing: 14) {
+            ForEach(FernletShortcut.visibleQuickLog(store.settings.quickLogItems, visibility: store.sensitiveSurfaceVisibility)) { item in
+                quickLogTile(item)
+            }
         }
     }
 
@@ -1349,7 +1521,8 @@ struct HomeView: View {
             accessibilityState: stateText(for: item, short: false),
             spokenSynonym: spokenSynonym(for: item),
             systemImage: item.systemImage,
-            active: isActive(item)
+            active: isActive(item),
+            worldIcon: item.worldLogIcon
         ) {
             handleQuickLog(item)
         }
@@ -1366,15 +1539,22 @@ struct HomeView: View {
                     // nothing at all. Compared, not assumed: the store clamps at its cap.
                     FernletFeedback.system.play(Self.waterQuickAddEvent(before: before, after: store.day.bottleCount))
                 } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundStyle(Color.moss)
-                        .background(Color.parchment, in: Circle())
-                        // The glyph keeps its drawn size; the 44pt frame around it is the target.
-                        // At ~27pt this was the app's fastest daily log sitting under the minimum,
-                        // right beside a larger button that does something else (opens the sheet).
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
+                    Group {
+                        if framedLook != nil {
+                            // World (b2-log): a small framed moss square with the pixel plus.
+                            WorldWaterQuickAddFace()
+                        } else {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 20))
+                                .foregroundStyle(Color.moss)
+                                .background(Color.parchment, in: Circle())
+                        }
+                    }
+                    // The glyph keeps its drawn size; the 44pt frame around it is the target.
+                    // At ~27pt this was the app's fastest daily log sitting under the minimum,
+                    // right beside a larger button that does something else (opens the sheet).
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Add a bottle of water")
@@ -1535,7 +1715,8 @@ struct HomeView: View {
         case .hygiene:
             activeSheet = .hygiene
         case .trends:
-            activeSheet = .trends
+            // World Today panel (b2-trends): a page pushed under the plate; elsewhere today's sheet.
+            if presentation == .today { isShowingTrends = true } else { activeSheet = .trends }
         case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient, .milestones, .firstAid, .mealPhotos, .sillyStats:
             break
         }
@@ -1615,760 +1796,6 @@ struct HomeView: View {
     }
 }
 
-/// The companion customization sheet (reached by the Customize chip under the hero companion, or
-/// the legacy long-press): the template ``SheetHeader`` with the coin balance leading, a live
-/// companion preview beside named Wardrobe / Creation Studio rows, and one selector row per slot
-/// (body / accessory / clothing / side item).
-///
-/// Each slot row pushes a picker that combines the built-in item grid + recolor controls with the
-/// user's own Wardrobe-designed items for the covered `ItemSlot`s; all writes go through
-/// `FernletStore.setCompanionAppearance` / the equip APIs, so the preview and the Home hero stay
-/// in lockstep. Wardrobe and Studio stay reachable ONLY through this stack's push wiring
-/// (binding-driven with `onExit`) so an environment dismiss can never tear the sheet down.
-private struct CompanionCustomizationSheet: View {
-    var store: FernletStore
-    @Binding var petCount: Int
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    /// Raised by a ``CreationStudioView`` pushed anywhere on this stack while it holds unsaved paint.
-    /// The studio is a PUSH inside this sheet, so without this a swipe-down from the studio threw the
-    /// drawing away with no prompt.
-    @State private var isStudioDraftDirty = false
-    /// Drives the root-level push into a NEW item's studio (HOME-30). A binding-driven push with
-    /// `onExit`, mirroring ``WardrobeView``'s wiring, because the studio must be popped by its
-    /// host — its environment `dismiss` from the confirmation step tears the whole sheet down
-    /// (see ``CreationStudioView/leaveStudio()``).
-    @State private var isDesigningFromRoot = false
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // The template chrome (XCUT-14/XCUT-15): left-aligned Fraunces title with Done as
-                // the trailing text button, replacing the centred system title + toolbar Done. The
-                // coin balance leads — a balance is information, not an action, so it never takes
-                // the slot that dismisses the sheet.
-                SheetHeader(
-                    title: Text("Customize"),
-                    subtitle: Text("Tap a slot to change it."),
-                    onDone: { dismiss() }
-                ) {
-                    coinAccessory
-                }
-                ScrollView {
-                    VStack(spacing: 9) {
-                        companionAndLibraryRows
-                        bodyRow
-                        accessoryRow
-                        clothingRow
-                        sideItemRow
-                        unlockedFooter
-                    }
-                    .padding(20)
-                }
-            }
-            .background(Color.parchment)
-            .tint(Color.moss)
-            // The root draws its own SheetHeader; pushed screens (slot pickers, Wardrobe, Studio)
-            // keep their system navigation bars and back buttons.
-            .toolbar(.hidden, for: .navigationBar)
-            .navigationDestination(isPresented: $isDesigningFromRoot) {
-                CreationStudioView(store: store,
-                                   draftIsDirty: $isStudioDraftDirty,
-                                   onExit: { isDesigningFromRoot = false })
-            }
-        }
-        .interactiveDismissDisabled(isStudioDraftDirty)
-    }
-
-    /// The leading header slot: the wallet, moved here from the Wardrobe's toolbar (HOME-22 /
-    /// XCUT-14). 3e·AX3: the balance keeps its slot but drops the coin glyph.
-    @ViewBuilder
-    private var coinAccessory: some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            Text(verbatim: "\(store.coinBalance)")
-                .font(.fernlet(.stat))
-                .foregroundStyle(Color.bark)
-                // The pill's own spoken balance (`FernletUICopy`, plural-ruled), so the numeral form
-                // and the pill it replaces say the same words.
-                .accessibilityLabel(Text(verbatim: FernletUICopy.coinBalance(store.coinBalance)))
-                .accessibilityIdentifier("customize.coinBalance")
-        } else {
-            CoinBalancePill(balance: store.coinBalance)
-                .accessibilityIdentifier("customize.coinBalance")
-        }
-    }
-
-    /// The companion preview beside the Wardrobe / Creation Studio rows (HOME-30: both become
-    /// named rows at the sheet root, one chevron each). 3e·AX3: the companion stops sharing the
-    /// row and sits above them, centred.
-    @ViewBuilder
-    private var companionAndLibraryRows: some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            VStack(spacing: 9) {
-                companionPreview.frame(maxWidth: .infinity)
-                wardrobeRow
-                studioRow
-            }
-        } else {
-            HStack(alignment: .center, spacing: 12) {
-                companionPreview
-                VStack(spacing: 9) {
-                    wardrobeRow
-                    studioRow
-                }
-            }
-        }
-    }
-
-    /// The live 84pt companion preview; every write below refreshes it via the store.
-    private var companionPreview: some View {
-        CompanionView(
-            state: store.companionState,
-            appearance: store.settings.companionAppearance,
-            size: 84,
-            interactionLevel: petCount,
-            equippedItems: store.equippedCustomItems
-        )
-        .frame(width: 84, height: 84)
-        // Decorative: a live preview of the edits being made below, not a control.
-        .accessibilityHidden(true)
-    }
-
-    /// The named Wardrobe row: the closet with its item count, one chevron. Carries the
-    /// `companion.wardrobe` test token — this is the primary Wardrobe entry now.
-    private var wardrobeRow: some View {
-        NavigationLink {
-            WardrobeView(store: store, studioDraftIsDirty: $isStudioDraftDirty)
-        } label: {
-            libraryRowLabel(
-                systemImage: "tshirt.fill",
-                title: Text("Wardrobe"),
-                detail: wardrobeCountText
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("companion.wardrobe")
-    }
-
-    private var wardrobeCountText: Text? {
-        let count = store.customItems.count
-        guard count > 0 else { return nil }
-        return Text(verbatim: HomeCopy.wardrobeItemCount(count))
-    }
-
-    /// The named Creation Studio row — a straight door to designing a new item.
-    private var studioRow: some View {
-        Button {
-            isDesigningFromRoot = true
-        } label: {
-            libraryRowLabel(
-                systemImage: "paintbrush.pointed.fill",
-                title: Text("Creation Studio"),
-                detail: nil
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("companion.studio")
-    }
-
-    /// Shared chrome for the Wardrobe / Studio rows: icon tile, title, optional count, one chevron.
-    private func libraryRowLabel(systemImage: String, title: Text, detail: Text?) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.system(size: 15))
-                .foregroundStyle(Color.moss)
-                .frame(width: 30, height: 30)
-                .background(Color.moss.opacity(0.14), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-            title
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.bark)
-            Spacer(minLength: 8)
-            if let detail {
-                detail
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
-            }
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(Color.slate)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.cream)
-        )
-    }
-
-    /// The reassurance line closing the sheet root.
-    private var unlockedFooter: some View {
-        Text("Everything you've unlocked stays unlocked.")
-            .font(.fernlet(.bodySmall))
-            .italic()
-            .foregroundStyle(Color.slate)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.top, 8)
-    }
-
-    // MARK: Selector rows — one per slot, each showing what's equipped and pushing its picker.
-
-    private var bodyRow: some View {
-        let appearance = store.settings.companionAppearance
-        return NavigationLink {
-            slotPicker(
-                title: "Body",
-                items: CompanionBodyStyle.allCases,
-                selection: appearanceBinding(\.bodyStyle),
-                colorTitle: "Body color",
-                colorSelection: colorPresetBinding(\.bodyColor, customHex: \.bodyCustomColorHex),
-                customColorHex: appearanceBinding(\.bodyCustomColorHex),
-                customColor: customColorBinding(\.bodyColor, customHex: \.bodyCustomColorHex),
-                isBuiltInEquipped: true,
-                customSlots: []
-            ) { style in
-                Label(style.label, systemImage: bodyStyleIcon(style))
-            }
-        } label: {
-            slotRowLabel(
-                slot: "Body",
-                value: appearance.bodyStyle.label,
-                isEmpty: false
-            ) {
-                Circle()
-                    .fill(appearance.bodyColor.color(for: store.companionState))
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var accessoryRow: some View {
-        let appearance = store.settings.companionAppearance
-        return NavigationLink {
-            slotPicker(
-                title: "Accessory",
-                items: CompanionAccessory.allCases,
-                selection: appearanceBinding(\.accessory),
-                colorTitle: "Accessory color",
-                colorSelection: colorPresetBinding(\.accessoryColor, customHex: \.accessoryCustomColorHex),
-                customColorHex: appearanceBinding(\.accessoryCustomColorHex),
-                customColor: customColorBinding(\.accessoryColor, customHex: \.accessoryCustomColorHex),
-                isBuiltInEquipped: appearance.accessory != .none,
-                customSlots: [.hat, .face]
-            ) { accessory in
-                Label(accessory.label, systemImage: accessoryIcon(accessory))
-            }
-        } label: {
-            slotRowLabel(
-                slot: "Accessory",
-                value: rowValue(builtInLabel: appearance.accessory.label, builtInEmpty: appearance.accessory == .none, customSlots: [.hat, .face]),
-                isEmpty: appearance.accessory == .none && equippedCustomItem(in: [.hat, .face]) == nil
-            ) {
-                slotIcon(accessoryIcon(appearance.accessory))
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var clothingRow: some View {
-        let appearance = store.settings.companionAppearance
-        return NavigationLink {
-            slotPicker(
-                title: "Clothing",
-                items: CompanionClothing.allCases,
-                selection: appearanceBinding(\.clothing),
-                colorTitle: "Clothing color",
-                colorSelection: colorPresetBinding(\.clothingColor, customHex: \.clothingCustomColorHex),
-                customColorHex: appearanceBinding(\.clothingCustomColorHex),
-                customColor: customColorBinding(\.clothingColor, customHex: \.clothingCustomColorHex),
-                isBuiltInEquipped: appearance.clothing != .none,
-                customSlots: [.body]
-            ) { clothing in
-                Label(clothing.label, systemImage: clothingIcon(clothing))
-            }
-        } label: {
-            slotRowLabel(
-                slot: "Clothing",
-                value: rowValue(builtInLabel: appearance.clothing.label, builtInEmpty: appearance.clothing == .none, customSlots: [.body]),
-                isEmpty: appearance.clothing == .none && equippedCustomItem(in: [.body]) == nil
-            ) {
-                slotIcon(clothingIcon(appearance.clothing))
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var sideItemRow: some View {
-        let appearance = store.settings.companionAppearance
-        return NavigationLink {
-            slotPicker(
-                title: "Side item",
-                items: CompanionSideItem.allCases,
-                selection: appearanceBinding(\.sideItem),
-                colorTitle: "Item color",
-                colorSelection: colorPresetBinding(\.sideItemColor, customHex: \.sideItemCustomColorHex),
-                customColorHex: appearanceBinding(\.sideItemCustomColorHex),
-                customColor: customColorBinding(\.sideItemColor, customHex: \.sideItemCustomColorHex),
-                isBuiltInEquipped: appearance.sideItem != .none,
-                customSlots: [.heldItem]
-            ) { item in
-                Label(item.label, systemImage: item.systemImage)
-            }
-        } label: {
-            slotRowLabel(
-                slot: "Side item",
-                value: rowValue(builtInLabel: appearance.sideItem.label, builtInEmpty: appearance.sideItem == .none, customSlots: [.heldItem]),
-                isEmpty: appearance.sideItem == .none && equippedCustomItem(in: [.heldItem]) == nil
-            ) {
-                slotIcon(appearance.sideItem.systemImage)
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    /// The value shown on a slot row: the built-in label when a built-in is on; otherwise the name of
-    /// an equipped custom item folded into this slot; otherwise the built-in's "None" label.
-    private func rowValue(builtInLabel: String, builtInEmpty: Bool, customSlots: [ItemSlot]) -> String {
-        if !builtInEmpty { return builtInLabel }
-        if let item = equippedCustomItem(in: customSlots) {
-            return item.name.isEmpty ? item.slot.label : item.name
-        }
-        return builtInLabel
-    }
-
-    /// The first equipped custom item whose slot is folded into this row, if any.
-    private func equippedCustomItem(in slots: [ItemSlot]) -> CustomizationItem? {
-        store.equippedCustomItems.first { slots.contains($0.slot) }
-    }
-
-    /// The shared selector-row chrome: a small icon/swatch, an uppercase slot label, the current
-    /// value right-aligned, and a chevron. `isEmpty` renders the value as a soft italic nudge.
-    /// - Parameter slot: `LocalizedStringKey`, not `String` (review A4 follow-up F5). All four call
-    ///   sites pass a literal, and a `String` parameter bound `Text`'s verbatim overload — so the
-    ///   four slot names were never harvested and the `.textCase(.uppercase)` below had no catalog
-    ///   lookup to run after. One word of type is the whole fix.
-    private func slotRowLabel<Icon: View>(
-        slot: LocalizedStringKey,
-        value: String,
-        isEmpty: Bool,
-        @ViewBuilder icon: () -> Icon
-    ) -> some View {
-        HStack(spacing: 12) {
-            icon()
-                .frame(width: 30, height: 30)
-                .background(
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .fill(Color.bark.opacity(0.06))
-                )
-
-            // `.textCase`, not `String.uppercased()`: the transform has to run after any catalog
-            // lookup so it uppercases the translation, not the English key (T2-1).
-            Text(slot)
-                .textCase(.uppercase)
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
-                .frame(width: 66, alignment: .leading)
-
-            Spacer(minLength: 8)
-
-            Text(value)
-                .font(.fernlet(.body))
-                .italic(isEmpty)
-                .foregroundStyle(isEmpty ? Color.slate : Color.bark)
-                .multilineTextAlignment(.trailing)
-                .lineLimit(1)
-
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(Color.slate)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.cream)
-        )
-        .accessibilityElement(children: .combine)
-        // `Text(slot)`, not `slot`: a `LocalizedStringKey` cannot be interpolated INTO another
-        // `LocalizedStringKey` (the compiler deprecates it — it would fall back to a debug
-        // description), but a `Text` can, and it carries the caption's own lookup with it.
-        .accessibilityLabel("\(Text(slot)): \(value)")
-    }
-
-    /// A slot swatch built from an SF Symbol, tinted to read as a quiet placeholder.
-    private func slotIcon(_ systemImage: String) -> some View {
-        Image(systemName: systemImage)
-            .font(.system(size: 15, weight: .light))
-            .foregroundStyle(Color.slate)
-    }
-
-    /// A full-screen picker for one slot: a live companion preview, the built-in item grid + recolor
-    /// controls, and — folded into the same picker — the user's custom items for the slot(s) this row
-    /// covers. Built-ins keep the swatch/ColorPicker recolor; custom items carry their own painted
-    /// colors and so get no color control. Reuses the existing customization card verbatim so all
-    /// built-in pick / recolor / custom-color behavior is preserved.
-    private func slotPicker<Item: Identifiable & Hashable, LabelContent: View>(
-        title: LocalizedStringKey,
-        items: [Item],
-        selection: Binding<Item>,
-        colorTitle: LocalizedStringKey,
-        colorSelection: Binding<CompanionAssetColor>,
-        customColorHex: Binding<String?>,
-        customColor: Binding<Color>,
-        isBuiltInEquipped: Bool,
-        customSlots: [ItemSlot],
-        @ViewBuilder label: @escaping (Item) -> LabelContent
-    ) -> some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                pickerPreview
-
-                CompanionCustomizationCard(
-                    title: title,
-                    items: items,
-                    selection: selection,
-                    colorTitle: colorTitle,
-                    colorSelection: colorSelection,
-                    customColorHex: customColorHex,
-                    customColor: customColor,
-                    state: store.companionState,
-                    // Recolor is a built-in-only control: hidden when no built-in is equipped in
-                    // this slot (custom items paint their own colors).
-                    showsColor: isBuiltInEquipped,
-                    label: label
-                )
-
-                customItemsSection(for: customSlots)
-            }
-            .padding(20)
-        }
-        .background(Color.parchment)
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    /// A live companion preview shown atop each slot picker, so recolor + equip changes are visible
-    /// without leaving the picker.
-    private var pickerPreview: some View {
-        CompanionView(
-            state: store.companionState,
-            appearance: store.settings.companionAppearance,
-            size: 96,
-            interactionLevel: petCount,
-            equippedItems: store.equippedCustomItems
-        )
-        .frame(width: 96, height: 96)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 6)
-        // Decorative: a live preview above the slot picker; the picker carries the semantics.
-        .accessibilityHidden(true)
-    }
-
-    /// The custom-item section folded into a slot picker: the user's own items for the covered
-    /// slot(s), each tappable to equip/unequip, plus the standing route into the Wardrobe (which
-    /// still owns designing, editing, and recoloring custom items).
-    @ViewBuilder
-    private func customItemsSection(for slots: [ItemSlot]) -> some View {
-        let items = store.customItems.filter { slots.contains($0.slot) }
-        if slots.isEmpty {
-            EmptyView()
-        } else {
-            FernletCard {
-            VStack(alignment: .leading, spacing: 12) {
-                SectionLabel("Your items")
-
-                if items.isEmpty {
-                    Text("Design one in the Wardrobe to fold it in here.")
-                        .font(.fernlet(.body))
-                        .italic()
-                        .foregroundStyle(Color.slate)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    ForEach(items) { item in
-                        customItemButton(item)
-                    }
-                }
-
-                // The `companion.wardrobe` test token migrated to the sheet root's Wardrobe row
-                // (HOME-30) — this contextual link stays, without the identifier, so a slot picker
-                // still routes into designing.
-                NavigationLink {
-                    WardrobeView(store: store, studioDraftIsDirty: $isStudioDraftDirty)
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "tshirt.fill")
-                            .font(.system(size: 15))
-                            .foregroundStyle(Color.moss)
-                            .frame(width: 34, height: 34)
-                            .background(Color.moss.opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text("Design & recolor in Wardrobe")
-                                .font(.fernlet(.label))
-                                .foregroundStyle(Color.moss)
-                            Text("Open the closet")
-                                .font(.fernlet(.bodySmall))
-                                .italic()
-                                .foregroundStyle(Color.slate)
-                        }
-                        Spacer(minLength: 8)
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(Color.moss)
-                    }
-                }
-                .buttonStyle(.plain)
-            }
-            }
-        }
-    }
-
-    /// One custom-item row inside a slot picker. Tap to equip; tap the equipped item to unequip.
-    private func customItemButton(_ item: CustomizationItem) -> some View {
-        let isEquipped = store.equippedCustomItems.contains { $0.id == item.id }
-        return Button {
-            // A choice in the customize sheet: the tick says it took; the preview and the
-            // "Equipped" pill show it.
-            FernletFeedback.system.play(.tick)
-            if isEquipped {
-                store.unequipCustomSlot(item.slot)
-            } else {
-                store.equipCustomItem(id: item.id, slot: item.slot)
-            }
-        } label: {
-            HStack(spacing: 12) {
-                CustomItemThumbnail(texture: item.texture, size: 40)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(item.name.isEmpty ? item.slot.label : item.name)
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.bark)
-                    Text(item.slot.label)
-                        .font(.fernlet(.bodySmall))
-                        .italic()
-                        .foregroundStyle(Color.slate)
-                }
-                Spacer(minLength: 8)
-                if isEquipped {
-                    Text("Equipped")
-                        .font(.fernlet(.labelSmall))
-                        // T1-3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
-                        .foregroundStyle(Color.mossInk)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Color.moss.opacity(0.12), in: Capsule())
-                }
-            }
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isEquipped ? Color.moss.opacity(0.10) : Color.bark.opacity(0.04))
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(customItemSpokenName(item, isEquipped: isEquipped))
-    }
-
-    /// What VoiceOver says for a custom-item row: its name and whether it is worn. Two whole keys,
-    /// not one "%@, %@" with an English state word spliced into its second slot (that word never
-    /// reached the catalog). The name is the user's own, or the slot's label when they left it blank.
-    private func customItemSpokenName(_ item: CustomizationItem, isEquipped: Bool) -> Text {
-        let name = item.name.isEmpty ? item.slot.label : item.name
-        return isEquipped
-            ? Text("\(name), equipped", comment: "Customize sheet, VoiceOver: one of the user's own companion items, currently worn. The placeholder is the item's name.")
-            : Text("\(name), not equipped", comment: "Customize sheet, VoiceOver: one of the user's own companion items, not worn right now. The placeholder is the item's name.")
-    }
-
-    private func appearanceBinding<Value>(_ keyPath: WritableKeyPath<CompanionAppearance, Value>) -> Binding<Value> {
-        Binding(
-            get: { store.settings.companionAppearance[keyPath: keyPath] },
-            set: { newValue in
-                var appearance = store.settings.companionAppearance
-                appearance[keyPath: keyPath] = newValue
-                store.setCompanionAppearance(appearance)
-            }
-        )
-    }
-
-    private func colorPresetBinding(
-        _ presetKeyPath: WritableKeyPath<CompanionAppearance, CompanionAssetColor>,
-        customHex customKeyPath: WritableKeyPath<CompanionAppearance, String?>
-    ) -> Binding<CompanionAssetColor> {
-        Binding(
-            get: { store.settings.companionAppearance[keyPath: presetKeyPath] },
-            set: { newValue in
-                var appearance = store.settings.companionAppearance
-                appearance[keyPath: presetKeyPath] = newValue
-                appearance[keyPath: customKeyPath] = nil
-                store.setCompanionAppearance(appearance)
-            }
-        )
-    }
-
-    private func customColorBinding(
-        _ presetKeyPath: WritableKeyPath<CompanionAppearance, CompanionAssetColor>,
-        customHex customKeyPath: WritableKeyPath<CompanionAppearance, String?>
-    ) -> Binding<Color> {
-        Binding(
-            get: {
-                let appearance = store.settings.companionAppearance
-                if let hex = appearance[keyPath: customKeyPath], let color = Color(fernletHex: hex) {
-                    return color
-                }
-                return appearance[keyPath: presetKeyPath].color(for: store.companionState)
-            },
-            set: { newValue in
-                var appearance = store.settings.companionAppearance
-                appearance[keyPath: customKeyPath] = newValue.fernletHexString
-                store.setCompanionAppearance(appearance)
-            }
-        )
-    }
-
-    /// One glyph per body shape. All four used to draw the same "seal", so the icons carried no
-    /// information at all and the live preview above was the only cue to what a row would do.
-    private func bodyStyleIcon(_ style: CompanionBodyStyle) -> String {
-        switch style {
-        case .circle: "circle"
-        case .softBlob: "oval"
-        case .pear: "drop"
-        case .puddle: "capsule"
-        }
-    }
-
-    private func accessoryIcon(_ accessory: CompanionAccessory) -> String {
-        switch accessory {
-        case .none: "circle.slash"
-        case .sprout: "leaf"
-        case .flower: "camera.macro"
-        case .glasses: "eyeglasses"
-        }
-    }
-
-    private func clothingIcon(_ clothing: CompanionClothing) -> String {
-        switch clothing {
-        case .none: "circle.slash"
-        case .scarf: "wind"
-        case .sleepCap: "moon"
-        }
-    }
-
-}
-
-private extension Color {
-    init?(fernletHex: String) {
-        guard let uiColor = UIColor(hex: fernletHex) else { return nil }
-        self.init(uiColor)
-    }
-
-    var fernletHexString: String? {
-        #if canImport(UIKit)
-        UIColor(self).hexString
-        #else
-        nil
-        #endif
-    }
-}
-
-/// The reusable built-in item grid + color controls inside a slot picker: a 2-column grid of
-/// selectable items and (optionally) the preset swatches + custom `ColorPicker`.
-///
-/// Generic over the slot's item type so one card serves body styles, accessories, clothing, and
-/// side items; selection and color flow back through the bindings
-/// `CompanionCustomizationSheet` builds onto the store.
-private struct CompanionCustomizationCard<Item: Identifiable & Hashable, LabelContent: View>: View {
-    /// Authored copy ("Body", "Clothing", …), so `LocalizedStringKey`: every caller passes a
-    /// literal, and only that type extracts into the string catalog.
-    var title: LocalizedStringKey
-    var items: [Item]
-    @Binding var selection: Item
-    var colorTitle: LocalizedStringKey
-    @Binding var colorSelection: CompanionAssetColor
-    @Binding var customColorHex: String?
-    @Binding var customColor: Color
-    var state: CompanionState
-    /// Whether the built-in recolor control is shown. Off when no built-in is equipped in this slot —
-    /// custom items carry their own painted colors and get no color control.
-    var showsColor: Bool = true
-    @ViewBuilder var label: (Item) -> LabelContent
-
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 2)
-    private let colorColumns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 3)
-
-    var body: some View {
-        FernletCard {
-            VStack(alignment: .leading, spacing: 14) {
-                SectionLabel(title)
-                LazyVGrid(columns: columns, spacing: 8) {
-                    ForEach(items) { item in
-                        let isSelected = selection.id == item.id
-                        Button {
-                            // Re-tapping the current pick changes nothing, so it says nothing.
-                            if !isSelected { FernletFeedback.system.play(.tick) }
-                            selection = item
-                        } label: {
-                            label(item)
-                                .font(.fernlet(.label))
-                                // The contrast-safe fill/ink pair, not cream on plain `moss`.
-                                .foregroundStyle(isSelected ? Color.onMoss : Color.bark)
-                                .frame(maxWidth: .infinity, minHeight: 42)
-                                .background(
-                                    isSelected ? Color.mossFill : Color.bark.opacity(0.06),
-                                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                )
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-                    }
-                }
-
-                if showsColor {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            SectionLabel(colorTitle)
-                            Spacer()
-                            ColorPicker("Custom color", selection: $customColor, supportsOpacity: false)
-                                .labelsHidden()
-                        }
-
-                        LazyVGrid(columns: colorColumns, spacing: 6) {
-                            ForEach(CompanionAssetColor.allCases) { color in
-                                colorButton(for: color)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func colorButton(for color: CompanionAssetColor) -> some View {
-        let isSelected = customColorHex == nil && colorSelection == color
-        Button {
-            if !isSelected { FernletFeedback.system.play(.tick) }
-            colorSelection = color
-        } label: {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(color.color(for: state))
-                    .frame(width: 11, height: 11)
-                Text(color.label)
-                    .font(.fernlet(.label))
-                    .lineLimit(1)
-            }
-            .foregroundStyle(isSelected ? Color.onMoss : Color.bark)
-            .frame(maxWidth: .infinity, minHeight: 34)
-            .background(
-                isSelected ? Color.mossFill : Color.bark.opacity(0.05),
-                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(color.label)
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-    }
-}
-
 /// One derived signal expanded for the Trends modal: icon, title, value, explanation, a
 /// ``SignalTrendMeter``, the source-field chips, and any nutrient-gap rows.
 ///
@@ -2378,8 +1805,19 @@ struct SignalDetailRow: View {
     /// The user's term of address, which the readiness values agree with.
     @Environment(\.fernletTermOfAddress) private var termOfAddress
     var signal: DerivedSignalRecord
+    /// The World look (`b2-trends`): the framed card with a pixel icon (``WorldSignalCard``).
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
+        if let look {
+            WorldSignalCard(signal: signal, look: look)
+        } else {
+            standardBody
+        }
+    }
+
+    /// Today's card: the symbol, the title, value and explanation, the meter, the inputs and gaps.
+    private var standardBody: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
                 // Decorative — `SignalPresentation.title(for:)` below names the signal. Unhidden it
@@ -2839,8 +2277,19 @@ enum SignalPresentation {
 struct TrendsModal: View {
     @Environment(\.dismiss) private var dismiss
     var signals: [DerivedSignalRecord]
+    /// World (`b2-trends`): pushed under the Today panel's plate instead of presented as a sheet.
+    var isPushed = false
 
     var body: some View {
+        if isPushed {
+            WorldTrendsPage(signals: signals)
+        } else {
+            sheetBody
+        }
+    }
+
+    /// Today's sheet: the pinned header with Done, then the signal cards.
+    private var sheetBody: some View {
         VStack(spacing: 0) {
             SheetHeader(
                 title: "Trends",
@@ -2976,29 +2425,45 @@ struct HealthBar: View {
 struct HomeActionWidget: View {
     var widget: HomeWidget
     var action: () -> Void
+    /// The World Today panel's framed look, when it is set (pixel icon tile and chevron).
+    @Environment(\.fernletFramedLook) private var look
+
+    /// The card's icon: a pixel tile in the framed look, the moss symbol otherwise.
+    @ViewBuilder
+    private var icon: some View {
+        if let look, let pixel = WorldCardIcons.icon(for: widget) {
+            WorldIconTile(sprite: pixel.sprite, tinted: pixel.tinted, look: look)
+        } else {
+            Image(systemName: widget.systemImage)
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(Color.moss)
+                .frame(width: 36, height: 36)
+                .background(Color.moss.opacity(0.12), in: Circle())
+        }
+    }
 
     var body: some View {
         Button(action: action) {
             FernletCard {
                 HStack(spacing: 12) {
-                    Image(systemName: widget.systemImage)
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(Color.moss)
-                        .frame(width: 36, height: 36)
-                        .background(Color.moss.opacity(0.12), in: Circle())
+                    icon
                     VStack(alignment: .leading, spacing: 3) {
                         Text(widget.title)
                             .font(.fernlet(.headerMedium))
-                            .foregroundStyle(Color.bark)
+                            .foregroundStyle(look?.text ?? Color.bark)
                         actionSubtitle
                             .font(.fernlet(.bodySmall))
-                            .foregroundStyle(Color.slate)
+                            .foregroundStyle(look == nil ? Color.slate : WorldPalette.dim)
                             .fernletWrappingText()
                     }
                     Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(Color.slate)
+                    if let look {
+                        WorldChevron(look: look)
+                    } else {
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(Color.slate)
+                    }
                 }
             }
         }
@@ -3045,10 +2510,32 @@ struct QuickLogButton: View {
     var spokenSynonym: Text? = nil
     var systemImage: String
     var active: Bool
+    /// The tile's pixel icon in the World look (the Log panel, `b2-log`); nil keeps the symbol.
+    var worldIcon: WorldLogIcon? = nil
     var action: () -> Void
+    /// The World look: a framed paper tile with the pixel icon (``WorldQuickLogTileFace``).
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
         Button(action: action) {
+            if let look, let worldIcon {
+                WorldQuickLogTileFace(icon: worldIcon, noun: noun, state: state, look: look)
+            } else {
+                standardFace
+            }
+        }
+        .buttonStyle(.plain)
+        // No `children: .ignore`: on a `Button` it mints a second, traitless element beside the
+        // real one, so all six quick-log tiles would read "Meals, 3 logged" without ever saying
+        // "button". `accessibilityLabelText` already replaces the noun/state the Button collapsed.
+        .accessibilityLabel(accessibilityLabelText)
+        // Voice Control: the label carries the live state ("Meals, 3 logged"), so the name a user
+        // would have to say changes with every log. The drawn noun is the name that never moves.
+        .accessibilityInputLabels(spokenNames)
+    }
+
+    /// Today's tile: the symbol, the noun and the state, moss-washed when today has an entry.
+    private var standardFace: some View {
             VStack(spacing: 3) {
                 Image(systemName: systemImage)
                     .font(.title3)
@@ -3076,15 +2563,6 @@ struct QuickLogButton: View {
             .frame(maxWidth: .infinity, minHeight: 56)
             .foregroundStyle(active ? Color.moss : Color.slate)
             .background(active ? Color.moss.opacity(0.08) : Color.clear, in: RoundedRectangle(cornerRadius: 12))
-        }
-        .buttonStyle(.plain)
-        // No `children: .ignore`: on a `Button` it mints a second, traitless element beside the
-        // real one, so all six quick-log tiles would read "Meals, 3 logged" without ever saying
-        // "button". `accessibilityLabelText` already replaces the noun/state the Button collapsed.
-        .accessibilityLabel(accessibilityLabelText)
-        // Voice Control: the label carries the live state ("Meals, 3 logged"), so the name a user
-        // would have to say changes with every log. The drawn noun is the name that never moves.
-        .accessibilityInputLabels(spokenNames)
     }
 
     /// The tile's Voice Control names: the drawn noun first, then the synonym when there is one.
@@ -3121,21 +2599,36 @@ struct MacroCard: View {
     /// names the value as a target rather than implying it was eaten.
     var fiberIntake: Double? = nil
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// World build: in the design language the three macros are framed bars, the status plate's bars
+    /// made larger, in place of the rings (b1-language, b1-frame-root, b1-today).
+    @Environment(\.fernletFramedLook) private var look
+    private var framedBars: Bool { look != nil }
 
     var body: some View {
         FernletCard {
             VStack(alignment: .leading, spacing: 14) {
                 SectionLabel(title)
-                macroFigures
+                if framedBars {
+                    MacroBars(totals: totals, targets: targets)
+                } else {
+                    macroFigures
+                }
                 HStack {
                     if showCalories {
                         Label("\(totals.calories) / \(targets.calories) cal", systemImage: "flame")
                         Spacer()
                     }
-                    Label(fiberFooter, systemImage: "leaf")
+                    if framedBars {
+                        HStack(spacing: 8) {
+                            WorldSpriteView(sprite: WorldSprites.leaf, scale: 2)
+                            Text(verbatim: fiberFooter)
+                        }
+                    } else {
+                        Label(fiberFooter, systemImage: "leaf")
+                    }
                 }
                 .font(.fernlet(.stat))
-                .foregroundStyle(Color.slate)
+                .foregroundStyle(look?.dim ?? Color.slate)
             }
         }
     }
@@ -3193,6 +2686,74 @@ struct MacroCard: View {
         let grams = Int(min(max(intake, 0), maxDisplayableFiber).rounded())
         return String(localized: "macros.fiber.intake", defaultValue: "Fiber \(grams)g of \(target)g",
                       comment: "Macros card footer: fiber eaten today out of the daily target, in grams, e.g. 'Fiber 18g of 30g'. The first number is what was eaten.")
+    }
+}
+
+/// The three macros as framed bars (World Today panel, design language): the name, a bar in the one
+/// set of data colours in a 2-pt ink frame, and "76 of 93 g". Each row is one VoiceOver element that
+/// says the same sentence as Home's ring ("Protein, 76 of 93 grams").
+struct MacroBars: View {
+    var totals: MacroTotals
+    var targets: NutritionTargets
+    /// At accessibility sizes a row stacks (the name and amount over a full-width bar): side by side,
+    /// an 82-pt name column broke "Protein" and "Carbs" mid-word.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            row(String(localized: "macros.protein", defaultValue: "Protein",
+                       comment: "Macro ring label under the protein figure (Home, Food and a journal day)."),
+                current: totals.protein, goal: targets.protein, colour: WorldPalette.protein)
+            row(String(localized: "macros.carbs", defaultValue: "Carbs",
+                       comment: "Macro ring label under the carbohydrate figure (Home, Food and a journal day)."),
+                current: totals.carbs, goal: targets.carbs, colour: WorldPalette.carbs)
+            row(String(localized: "macros.fat", defaultValue: "Fat",
+                       comment: "Macro ring label under the fat figure (Home, Food and a journal day)."),
+                current: totals.fat, goal: targets.fat, colour: WorldPalette.fat)
+        }
+    }
+
+    /// One macro: name, framed bar, amount.
+    private func row(_ name: String, current: Int, goal: Int, colour: Color) -> some View {
+        let fraction = goal > 0 ? min(1, max(0, Double(current) / Double(goal))) : 0
+        let amount = String(localized: "macros.bar.amount", defaultValue: "\(current) of \(goal) g",
+                            comment: "World Today panel, macro bars: grams eaten of the day's target, after the bar")
+        let spoken = String(localized: "macros.bar.a11y", defaultValue: "\(name), \(current) of \(goal) grams",
+                            comment: "World Today panel, macro bars, VoiceOver: one macro's name, then grams eaten of the target")
+        let nameText = Text(verbatim: name).font(.fernlet(.body)).foregroundStyle(WorldPalette.bark)
+        let amountText = Text(verbatim: amount).font(.fernlet(.bodySmall).monospacedDigit())
+            .foregroundStyle(WorldPalette.dim)
+        return Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 6) {
+                    nameText
+                    amountText
+                    bar(fraction: fraction, colour: colour)
+                }
+            } else {
+                HStack(spacing: 10) {
+                    nameText.frame(minWidth: 82, alignment: .leading)
+                    bar(fraction: fraction, colour: colour)
+                    amountText
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: spoken))
+    }
+
+    /// The framed bar, filled to `fraction` in the macro's colour.
+    private func bar(fraction: Double, colour: Color) -> some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                WorldPalette.paperShade
+                colour.frame(width: proxy.size.width * fraction)
+            }
+        }
+        .frame(height: 10)
+        .padding(2)
+        .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(WorldPalette.ink, lineWidth: 2))
+        .clipShape(RoundedRectangle(cornerRadius: 4))
     }
 }
 
@@ -3423,6 +2984,8 @@ struct FernletScrollSection<Content: View>: View {
     /// whether the caller's string was authored copy or a runtime value.
     private let header: SectionLabel?
     @ViewBuilder var content: Content
+    /// The World look: the rows sit in a framed card instead of today's cream one.
+    @Environment(\.fernletFramedLook) private var framedLook
 
     /// The localizing initializer — for a heading written here as a literal, which is every
     /// caller but one.
@@ -3454,14 +3017,22 @@ struct FernletScrollSection<Content: View>: View {
                 header
                     .padding(.horizontal, 4)
             }
-            VStack(alignment: .leading, spacing: 0) {
-                content
+            if framedLook != nil {
+                // World: the section's rows in the one framed card (design language `b1-language`).
+                FernletCard {
+                    VStack(alignment: .leading, spacing: 0) { content }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    content
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .shadow(color: .bark.opacity(0.06), radius: 10, x: 0, y: 4)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .shadow(color: .bark.opacity(0.06), radius: 10, x: 0, y: 4)
         }
     }
 }
@@ -3471,10 +3042,18 @@ struct FernletScrollSection<Content: View>: View {
 /// A `Divider` tinted to the bark palette with the standard vertical padding, so row lists stay
 /// visually consistent across screens.
 struct FernletRowDivider: View {
+    /// The World look draws the kit's dotted rule between rows instead of a hairline.
+    @Environment(\.fernletFramedLook) private var framedLook
+
     var body: some View {
-        Divider()
-            .overlay(Color.bark.opacity(0.08))
-            .padding(.vertical, 8)
+        if framedLook != nil {
+            FernletDottedRule()
+                .padding(.vertical, 8)
+        } else {
+            Divider()
+                .overlay(Color.bark.opacity(0.08))
+                .padding(.vertical, 8)
+        }
     }
 }
 

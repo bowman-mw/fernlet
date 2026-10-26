@@ -7,6 +7,14 @@ import FernletDomainModel
 import AppServices
 import FernletUI
 
+/// A label already read, for ``NutritionLabelCameraSheet`` to open with: the photo, the reading, and
+/// the two columns when the label had two.
+struct NutritionLabelSheetSeed {
+    var image: UIImage
+    var result: NutritionLabelResult
+    var dualColumn: DualColumnScanResult? = nil
+}
+
 /// The nutrition-label OCR screen: photograph (or pick) a nutrition-facts label, run
 /// `NutritionLabelScanner` over it, review the detected values, and hand the chosen
 /// `NutritionLabelResult` back through `onResult`.
@@ -21,6 +29,12 @@ struct NutritionLabelCameraSheet: View {
     /// Macros-first: the detected Calories row renders only behind the explicit opt-in (the value
     /// is still parsed and passed through `onResult` untouched — only the display is gated).
     var showCalories: Bool = false
+    /// The page Back returns to ("Remember"), already resolved; nil says "Back".
+    var backTitle: String? = nil
+    /// A label already read, to open with (the DEBUG screenshot gallery; nothing in shipping code
+    /// passes one).
+    var seed: NutritionLabelSheetSeed? = nil
+    @Environment(\.fernletFramedLook) private var look
     var onResult: (NutritionLabelResult) -> Void
 
     @State private var showingCamera = false
@@ -39,10 +53,10 @@ struct NutritionLabelCameraSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 16) {
                     Text("Take a photo of a nutrition facts label and Fernlet will fill in the values it can read.")
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.slate)
+                        .font(look == nil ? .fernlet(.body) : FernletFramedFont.body)
+                        .foregroundStyle(look?.dim ?? Color.slate)
                         .fernletWrappingText()
 
                     sourceButtons
@@ -59,7 +73,8 @@ struct NutritionLabelCameraSheet: View {
 
                     errorLine
                 }
-                .padding(20)
+                .padding(.horizontal, 18)
+                .padding(.top, 4)
                 .padding(.bottom, 10)
             }
 
@@ -70,64 +85,70 @@ struct NutritionLabelCameraSheet: View {
                 }
             }
         }
-        .background(Color.parchment)
-        .navigationTitle("Scan label")
-        .navigationBarTitleDisplayMode(.inline)
+        .foodSheetBackground()
+        // b3-label-scan: a page pushed inside the sheet, its Back naming where it came from.
+        .foodSheetPushedPage("Scan label", back: backTitle)
         .photoCapturePlumbing(
             showingCamera: $showingCamera,
             selection: $selectedPhotoItem,
             flashMode: isFlashOn ? .on : .off,
             onCameraImage: handlePickedImage
         )
+        .onAppear(perform: applySeed)
         .onDisappear { scanTask?.cancel() }
     }
 
-    /// Camera / library / flash — the three ways a label image gets here.
+    /// Opens with the seed's photo and reading, once (a later appear keeps what was scanned since).
+    private func applySeed() {
+        guard let seed, selectedImage == nil else { return }
+        selectedImage = seed.image
+        dualColumnResult = seed.dualColumn
+        scanResult = seed.dualColumn?.col1 ?? seed.result
+    }
+
+    /// Camera / library / flash — the three ways a label image gets here: the moss Camera, the framed
+    /// Library, and the framed flash tile.
     private var sourceButtons: some View {
-        HStack(spacing: 12) {
-            Button {
-                showingCamera = true
-            } label: {
-                Label("Camera", systemImage: "camera.fill")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.onMoss)
-                    .frame(maxWidth: .infinity)
-                    .padding(14)
-                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+        HStack(spacing: 10) {
+            Button { showingCamera = true } label: {
+                HStack(spacing: 8) {
+                    WorldSpriteView(sprite: FoodSprites.camera, scale: 2)
+                    Text("Camera")
+                }
+                .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(ActionPillButtonStyle(.primary))
             .disabled(!UIImagePickerController.isSourceTypeAvailable(.camera))
 
             PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                Label("Library", systemImage: "photo.on.rectangle")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.bark)
-                    .frame(maxWidth: .infinity)
-                    .padding(14)
-                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                HStack(spacing: 8) {
+                    WorldSpriteView(sprite: FoodSprites.library, scale: 2)
+                    Text("Library")
+                }
+                .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(ActionPillButtonStyle(.secondary))
 
-            Button {
-                isFlashOn.toggle()
-            } label: {
-                Image(systemName: isFlashOn ? "bolt.fill" : "bolt.slash.fill")
-                    .font(.headline)
-                    // On = ink for the moss fill; off = bark on the cream one.
-                    .foregroundStyle(isFlashOn ? Color.onMoss : Color.bark)
-                    .frame(width: 48, height: 48)
-                    .background(isFlashOn ? Color.moss : Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            .disabled(hasCameraFlash == false)
-            // Names the action and its state — VoiceOver read "bolt.slash.fill" before.
-            .accessibilityLabel(isFlashOn ? "Turn the flash off" : "Turn the flash on")
+            flashButton
         }
     }
 
-    /// The picked image with its scanning spinner and (on a weak read) the framing/glare tips.
+    /// The flash: a framed tile with the pixel bolt, filled with the accent while on.
+    private var flashButton: some View {
+        Button { isFlashOn.toggle() } label: {
+            FernletIconTile(size: 48, fill: isFlashOn ? (look?.accent ?? Color.moss) : nil, isControl: true) {
+                WorldSpriteView(sprite: FoodSprites.bolt, scale: 3, tint: isFlashOn ? (look?.onAccent ?? Color.onMoss) : nil)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(hasCameraFlash == false)
+        .opacity(hasCameraFlash ? 1 : 0.5)
+        .accessibilityLabel(isFlashOn ? "Turn the flash off" : "Turn the flash on")
+    }
+
+    /// The picked photo in an ink frame, the "Reading label..." line while it reads, and the tips
+    /// when the reading was thin.
     @ViewBuilder
     private var imagePreview: some View {
         if let selectedImage {
@@ -136,12 +157,9 @@ struct NutritionLabelCameraSheet: View {
                     .resizable()
                     .scaledToFit()
                     .frame(maxHeight: 260)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(look?.ink ?? Color.bark.opacity(0.10), lineWidth: 2))
                     .frame(maxWidth: .infinity)
-                    // T2-10: this is the photo the user checks their framing against before
-                    // re-shooting a weak read. Inverted, black-on-white label text becomes
-                    // white-on-black and the glare/blur cues the tips talk about disappear.
                     .accessibilityIgnoresInvertColors()
 
                 if isScanning {
@@ -149,8 +167,8 @@ struct NutritionLabelCameraSheet: View {
                         ProgressView()
                             .accessibilityHidden(true)
                         Text("Reading label...")
-                            .font(.fernlet(.bubble))
-                            .foregroundStyle(Color.slate)
+                            .font(look == nil ? .fernlet(.bubble) : FernletFramedFont.note)
+                            .foregroundStyle(look?.dim ?? Color.slate)
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
                 }
@@ -162,71 +180,41 @@ struct NutritionLabelCameraSheet: View {
         }
     }
 
-    /// The per-serving / per-container column picker shown for a two-column label.
+    /// The two columns of a two-column label (per serving, as prepared, …) as one framed segmented
+    /// control under its label.
     private func dualColumnPicker(_ dual: DualColumnScanResult) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("TWO-COLUMN LABEL DETECTED")
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
-                .tracking(0.8)
-
-            HStack(spacing: 0) {
-                ForEach([0, 1], id: \.self) { index in
-                    let label = index == 0 ? dual.col1Header : dual.col2Header
-                    let isSelected = selectedDualColumn == index
-                    Button {
-                        // B6: switching columns is a choice made, felt as a tick; re-tapping the
-                        // column already chosen changes nothing and plays nothing.
-                        FernletFeedback.system.select(index, in: &selectedDualColumn)
-                        scanResult = index == 0 ? dual.col1 : dual.col2
-                    } label: {
-                        Text(label)
-                            .font(.fernlet(.label))
-                            .foregroundStyle(isSelected ? Color.bark : Color.slate)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                            .background(isSelected ? Color.cream : Color.clear)
-                    }
-                    .buttonStyle(.plain)
-                    // T1-5: the worst hand-rolled selection row in the app — fill color only, no
-                    // glyph, on the control that decides whether logged macros are per-serving or
-                    // per-container.
-                    .accessibilityAddTraits(isSelected ? .isSelected : [])
-                }
+            SectionLabel("TWO-COLUMN LABEL DETECTED")
+            FernletSegmentedPicker("TWO-COLUMN LABEL DETECTED", selection: dualColumnSelection(dual), options: [0, 1]) { index in
+                Text(verbatim: index == 0 ? dual.col1Header : dual.col2Header)
             }
-            .background(Color.bark.opacity(0.07), in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.bark.opacity(0.10), lineWidth: 1))
         }
     }
 
-    /// The "DETECTED VALUES" card wrapping the three value groups.
-    private func detectedValuesCard(_ result: NutritionLabelResult) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("DETECTED VALUES")
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
-                .tracking(0.8)
+    /// The chosen column, switching the values the sheet will use with it.
+    private func dualColumnSelection(_ dual: DualColumnScanResult) -> Binding<Int> {
+        Binding(get: { selectedDualColumn }, set: { index in
+            selectedDualColumn = index
+            scanResult = index == 0 ? dual.col1 : dual.col2
+        })
+    }
 
+    /// The values read, in today's groups, on one framed card.
+    private func detectedValuesCard(_ result: NutritionLabelResult) -> some View {
+        FernletCard {
             VStack(alignment: .leading, spacing: 6) {
+                SectionLabel("DETECTED VALUES")
                 detectedValues(for: result)
             }
-            .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
         }
     }
 
-    /// The calm inline scan-failure line.
     @ViewBuilder
     private var errorLine: some View {
         if let scanError {
-            Text(scanError)
-                .font(.fernlet(.bubble))
-                .foregroundStyle(Color.terracotta)
-                .fernletWrappingText()
+            FernletNotice(text: Text(scanError), tone: .warn) { EmptyView() }
         }
     }
-
     private var hasCameraFlash: Bool {
         UIImagePickerController.isSourceTypeAvailable(.camera) &&
         UIImagePickerController.isFlashAvailable(for: .rear)
@@ -254,8 +242,8 @@ struct NutritionLabelCameraSheet: View {
             Text("Move closer so the label fills the frame.")
             Text("Use the flashlight in dim lighting.")
         }
-        .font(.fernlet(.bubble))
-        .foregroundStyle(Color.slate)
+        .font(look == nil ? .fernlet(.bubble) : FernletFramedFont.note)
+        .foregroundStyle(look?.dim ?? Color.slate)
         .fernletWrappingText()
     }
 
@@ -361,26 +349,20 @@ struct NutritionLabelCameraSheet: View {
     }
 
     private func detectedGroup<Content: View>(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 0) {
             Text(title)
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
+                .font(FoodFont.noteStrong)
+                .foregroundStyle(look?.dim ?? Color.slate)
+                .padding(.bottom, 4)
             content()
         }
         .padding(.vertical, 4)
     }
 
     /// One detected value: its localized name, and the value as read (numbers and unit symbols).
+    /// A key-value row with a dotted rule above it (`.kv`), the value in bold.
     private func detectedRow(_ label: LocalizedStringKey, _ value: String) -> some View {
-        HStack {
-            Text(label)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.bark)
-            Spacer()
-            Text(value)
-                .font(.fernlet(.stat))
-                .foregroundStyle(Color.moss)
-        }
+        FernletKeyValueRow(label, value: Text(verbatim: value))
     }
 
     private func hasMacroValues(in result: NutritionLabelResult) -> Bool {

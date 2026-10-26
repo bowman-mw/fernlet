@@ -136,22 +136,21 @@ struct OpenFoodFactsLookupCard: View {
     /// The user's term of address (the app root sets it from the body profile), which the two
     /// failure lines' "name it yourself" agrees with.
     @Environment(\.fernletTermOfAddress) private var termOfAddress
+    /// Whether the ⓘ's explanation shows under the button (b3-remember draft 2).
+    @State private var showsAbout = false
+    @Environment(\.fernletFramedLook) private var look
 
     /// Most lookups one visit to the screen may start (the first try plus two manual retries) —
     /// well inside Open Food Facts' 15-reads-per-minute limit.
     static let maxAttemptsPerVisit = 3
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Look it up online", systemImage: "globe")
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.bark)
+        // b3-remember draft 2 ("very busy screen"): no card. Open Food Facts is one framed button with
+        // its explanation behind a pixel ⓘ; every other state shows as a short line after the tap.
+        VStack(alignment: .leading, spacing: 8) {
             content
         }
-        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.bark.opacity(0.10), lineWidth: 1))
         .alert("Look products up online?", isPresented: $showingConsent) {
             Button("Not now", role: .cancel) { store.declineWebNutritionLookupConsent() }
             Button("Allow online lookup") {
@@ -183,8 +182,8 @@ struct OpenFoodFactsLookupCard: View {
                 ProgressView().accessibilityHidden(true)
                 Text("Checking Open Food Facts…")
             }
-            .font(.fernlet(.bodySmall))
-            .foregroundStyle(Color.slate)
+            .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.note)
+            .foregroundStyle(look?.dim ?? Color.slate)
         case .found(let hasNutrition):
             foundContent(hasNutrition: hasNutrition)
         case .notFound:
@@ -200,8 +199,13 @@ struct OpenFoodFactsLookupCard: View {
     @ViewBuilder private var idleContent: some View {
         switch OpenFoodFactsLookupAccess.access(for: store.settings) {
         case .permitted, .askFirst:
-            message("Fernlet can check Open Food Facts, a free, open food database. Only this barcode's number is sent — nothing about you.")
-            lookUpButton(title: "Check Open Food Facts")
+            HStack(spacing: 10) {
+                lookUpButton(title: "Look it up on Open Food Facts")
+                aboutButton
+            }
+            if showsAbout {
+                message("Fernlet can check Open Food Facts, a free, open food database. Only this barcode's number is sent — nothing about you.")
+            }
         case .offBecauseAIOff:
             message("Looking barcodes up online needs AI features and Web nutrition lookup turned on in Settings.")
         case .off:
@@ -218,8 +222,8 @@ struct OpenFoodFactsLookupCard: View {
         }
         // The ODbL attribution, already localized in the domain model's catalog.
         Text(verbatim: FoodItemSource.openFoodFactsAttribution)
-            .font(.fernlet(.labelSmall))
-            .foregroundStyle(Color.slate)
+            .font(look == nil ? .fernlet(.labelSmall) : FernletFramedFont.rowDetail)
+            .foregroundStyle(look?.dim ?? Color.slate)
             .accessibilityIdentifier("openFoodFactsAttribution")
     }
 
@@ -244,23 +248,36 @@ struct OpenFoodFactsLookupCard: View {
     /// agrees with the user (*tú mismo*, *tú misma*), so they arrive through `AddressedCopy`.
     private func message(_ text: Text) -> some View {
         text
-            .font(.fernlet(.bodySmall))
-            .foregroundStyle(Color.slate)
+            .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.note)
+            .foregroundStyle(look?.dim ?? Color.slate)
             .fernletWrappingText()
     }
 
-    /// The single tap that starts (or asks permission for) one lookup.
+    /// The single tap that starts (or asks permission for) one lookup: one framed button, the pixel
+    /// globe and the words.
     private func lookUpButton(title: LocalizedStringKey) -> some View {
         Button(action: lookUpTapped) {
-            Text(title)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.onMoss)
-                .frame(maxWidth: .infinity)
-                .padding(12)
-                .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
+            HStack(spacing: 8) {
+                WorldSpriteView(sprite: FoodSprites.globe, scale: 2)
+                Text(title)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
+        .accessibilityIdentifier("openFoodFactsLookupButton")
+    }
+
+    /// The pixel ⓘ beside the button: shows or hides what the lookup sends.
+    private var aboutButton: some View {
+        Button { withAnimation(FernletMotion.ui) { showsAbout.toggle() } } label: {
+            FernletIconTile(size: 44) { WorldSpriteView(sprite: FoodSprites.info, scale: 3) }
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("openFoodFactsLookupButton")
+        .accessibilityLabel("About Open Food Facts")
+        .accessibilityAddTraits(showsAbout ? .isSelected : [])
     }
 
     /// Routes a tap through the consent state: look up, ask first, or (defensively — the button is

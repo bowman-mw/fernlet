@@ -64,16 +64,11 @@ struct CoachPlanReviewView: View {
                         .accessibilityLabel("Preparing the plan review")
                 }
             }
-            .background(Color.parchment)
-            .navigationTitle("Review plan")
-            .navigationBarTitleDisplayMode(.inline)
+            .background((look?.paper ?? Color.parchment).ignoresSafeArea())
+            // World build (`b3-coach-review`): Cancel top left and the title in the sheet.
+            .fernletSheetToolbar(title: "Review plan", onCancel: { dismiss() })
             .onAppear { refreshReview() }
             .onChange(of: startDayKey) { _, _ in refreshReview() }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-            }
             .alert("Couldn't add this plan", isPresented: $applyFailed) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -109,26 +104,41 @@ struct CoachPlanReviewView: View {
                 if plan.title.isEmpty { Text("Workout plan") } else { Text(verbatim: plan.title) }
             }
                 .font(.fernlet(.header))
-                .foregroundStyle(Color.bark)
+                .foregroundStyle(textInk)
             Text(Self.subtitle(for: plan, review: review))
                 .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
+                .foregroundStyle(dimInk)
             if let notes = plan.notes, !notes.isEmpty {
                 Text(notes)
                     .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
+                    .foregroundStyle(dimInk)
                     .fixedSize(horizontal: false, vertical: true)
             }
             // No trust badge and no verified-sender line: this plan was pasted, so Fernlet knows
             // nothing about who wrote it. Saying so is more honest than showing a name as if it
-            // had been checked.
-            Text("Pasted in by you — Fernlet can't check who wrote this, so read it before you accept.")
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 2)
+            // had been checked. World build: a framed terracotta notice (`b3-coach-review`).
+            if look != nil {
+                FernletNotice("Pasted in by you — Fernlet can't check who wrote this, so read it before you accept.",
+                              tone: .warn) {
+                    WorldSpriteView(sprite: WorldSprites.flag, scale: 2)
+                }
+                .padding(.top, 4)
+            } else {
+                Text("Pasted in by you — Fernlet can't check who wrote this, so read it before you accept.")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(dimInk)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
+            }
         }
     }
+
+    /// World build (`b3-coach-review`): the sheet's paper, framed cards and the warning notice.
+    @Environment(\.fernletFramedLook) private var look
+    /// The quiet ink: the look's dim under the World look (`b3-coach-review`), today's slate without it.
+    private var dimInk: Color { look?.dim ?? Color.slate }
+    /// The text ink: the look's text under the World look, today's bark without it.
+    private var textInk: Color { look?.text ?? Color.bark }
 
     /// The one-line description under the title.
     ///
@@ -173,7 +183,7 @@ struct CoachPlanReviewView: View {
             }
             Text("Ask for a corrected plan and paste it again.")
                 .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
+                .foregroundStyle(dimInk)
         }
     }
 
@@ -186,7 +196,7 @@ struct CoachPlanReviewView: View {
                 .tint(Color.moss)
             Text("Day 1 lands here; the rest follow day by day.")
                 .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
+                .foregroundStyle(dimInk)
         }
         .accessibilityIdentifier("coachPlan.start")
     }
@@ -202,7 +212,7 @@ struct CoachPlanReviewView: View {
             cardTitle("Changes to workouts you'd planned")
             Text(Self.changesSummary(review.resolvedEdits))
                 .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .foregroundStyle(dimInk)
                 .fixedSize(horizontal: false, vertical: true)
 
             ForEach(review.resolvedEdits) { resolved in
@@ -229,7 +239,7 @@ struct CoachPlanReviewView: View {
             HStack(spacing: 6) {
                 Text(Self.dateLabel(resolved.dayKey))
                     .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
+                    .foregroundStyle(dimInk)
                 Text(Self.actionLabel(resolved.action))
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(resolved.action == .delete ? Color.terracotta : Color.moss)
@@ -248,14 +258,14 @@ struct CoachPlanReviewView: View {
                                  struck: false, tint: Color.slate)
                 Image(systemName: "arrow.down")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Color.slate)
+                    .foregroundStyle(dimInk)
                 beforeAfterBlock(title: after?.displayedName ?? resolved.before.displayedName,
                                  lines: after?.displayedExerciseLines ?? [], struck: false, tint: Color.bark)
             } else {
                 // Nothing moved in the prescription — name the workout once and list what did change.
                 Text(resolved.before.displayedName)
                     .font(.fernlet(.label))
-                    .foregroundStyle(Color.bark)
+                    .foregroundStyle(textInk)
                 if renamed, let after {
                     changeLine("Renamed to \"\(after.displayedName)\"")
                 }
@@ -280,7 +290,7 @@ struct CoachPlanReviewView: View {
     private func changeLine(_ text: LocalizedStringKey) -> some View {
         Text(text)
             .font(.fernlet(.bodySmall))
-            .foregroundStyle(Color.bark)
+            .foregroundStyle(textInk)
             .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -363,7 +373,7 @@ struct CoachPlanReviewView: View {
             cardTitle("You already have workouts planned")
             Text(Self.collisionBody(dayCount: review.collidingDayKeys.count))
                 .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .foregroundStyle(dimInk)
                 .fixedSize(horizontal: false, vertical: true)
             Picker("What to do", selection: $collisionPolicy) {
                 Text("Keep both").tag(CoachPlanCollisionPolicy.keepBoth)
@@ -379,7 +389,7 @@ struct CoachPlanReviewView: View {
             cardTitle("Check these against your limits")
             Text("These don't match what you told Fernlet you avoid or have. Turn one off to leave it out.")
                 .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .foregroundStyle(dimInk)
                 .fixedSize(horizontal: false, vertical: true)
             // Grouped by exercise: the same lift flagged on days 1, 8, and 15 is one decision, not
             // three, and striking it strikes it everywhere.
@@ -393,17 +403,18 @@ struct CoachPlanReviewView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(group.name)
                             .font(.fernlet(.body))
-                            .foregroundStyle(Color.bark)
+                            .foregroundStyle(textInk)
                         Text(group.reason)
                             .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.terracotta)
                             .fixedSize(horizontal: false, vertical: true)
                         Text(group.dayLabel)
                             .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.slate)
+                            .foregroundStyle(dimInk)
                     }
                 }
                 .tint(Color.moss)
+                .toggleStyle(FernletFramedToggleStyle())
             }
         }
     }
@@ -413,7 +424,7 @@ struct CoachPlanReviewView: View {
             cardTitle("New exercises")
             Text(Self.newExercisesBody(count: review.newExercises.count))
                 .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .foregroundStyle(dimInk)
                 .fixedSize(horizontal: false, vertical: true)
             ForEach(review.newExercises, id: \.name) { target in
                 bullet("\(target.name) — \(target.muscles.prefix(3).joined(separator: ", ")) · \(target.equipment.displayName)")
@@ -446,6 +457,8 @@ struct CoachPlanReviewView: View {
             .formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()) ?? ""
 
         VStack(alignment: .leading, spacing: 6) {
+            // World build (`b3-coach-review`): a dotted rule above each day; today's hairline below it.
+            if look != nil { FernletDottedRule() }
             Button {
                 if expandedDays.contains(day.dayIndex) {
                     expandedDays.remove(day.dayIndex)
@@ -456,50 +469,58 @@ struct CoachPlanReviewView: View {
                 HStack(spacing: 8) {
                     VStack(alignment: .leading, spacing: 1) {
                         Self.dayTitle(day)
-                            .font(.fernlet(.label))
-                            .foregroundStyle(Color.bark)
+                            .font(look == nil ? .fernlet(.label) : MoveFont.rowTitle)
+                            .foregroundStyle(textInk)
                         Text(dateLabel)
                             .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.slate)
+                            .foregroundStyle(dimInk)
                     }
                     Spacer(minLength: 0)
                     if !day.isRestDay && !day.sessions.isEmpty {
-                        Image(systemName: expandedDays.contains(day.dayIndex) ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(Color.slate)
+                        if look != nil {
+                            FernletIcon(expandedDays.contains(day.dayIndex) ? .chevronDown : .chevron)
+                        } else {
+                            Image(systemName: expandedDays.contains(day.dayIndex) ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(dimInk)
+                        }
                     }
                 }
             }
             .buttonStyle(.plain)
             .disabled(day.isRestDay || day.sessions.isEmpty)
 
-            if expandedDays.contains(day.dayIndex) {
-                ForEach(Array(day.sessions.enumerated()), id: \.offset) { _, session in
-                    VStack(alignment: .leading, spacing: 3) {
-                        if !session.title.isEmpty {
-                            Text(session.title)
-                                .font(.fernlet(.labelSmall))
-                                .foregroundStyle(Color.slate)
-                        }
-                        ForEach(Array(session.exercises.enumerated()), id: \.offset) { _, exercise in
-                            let struck = struckKeys.contains(CoachPlan.normalizedName(exercise.name))
-                            Text(exercise.line)
-                                .font(.fernlet(.bodySmall))
-                                .foregroundStyle(struck ? Color.slate : Color.bark)
-                                .strikethrough(struck)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        if let conditioning = session.conditioning, !conditioning.isEmpty {
-                            Text(conditioning)
-                                .font(.fernlet(.bodySmall))
-                                .foregroundStyle(Color.bark)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    .padding(.leading, 10)
+            if expandedDays.contains(day.dayIndex) { daySessions(day) }
+            if look == nil { FernletRowDivider() }
+        }
+    }
+
+    /// A day's sessions when its row is open: each session's title, its exercise lines (struck ones
+    /// crossed out) and its conditioning note.
+    private func daySessions(_ day: CoachPlanDay) -> some View {
+        ForEach(Array(day.sessions.enumerated()), id: \.offset) { _, session in
+            VStack(alignment: .leading, spacing: 3) {
+                if !session.title.isEmpty {
+                    Text(session.title)
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(dimInk)
+                }
+                ForEach(Array(session.exercises.enumerated()), id: \.offset) { _, exercise in
+                    let struck = struckKeys.contains(CoachPlan.normalizedName(exercise.name))
+                    Text(exercise.line)
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(struck ? dimInk : textInk)
+                        .strikethrough(struck)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let conditioning = session.conditioning, !conditioning.isEmpty {
+                    Text(conditioning)
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(textInk)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            FernletRowDivider()
+            .padding(.leading, 10)
         }
     }
 
@@ -515,21 +536,16 @@ struct CoachPlanReviewView: View {
                     applyFailed = true
                 }
             } label: {
-                Text("Add to my plan")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.parchment)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 13)
-                    .background(review.isImportable ? Color.moss : Color.slate.opacity(0.4),
-                                in: RoundedRectangle(cornerRadius: FernletMetrics.radiusSm))
+                Text("Add to my plan").frame(maxWidth: .infinity)
             }
-            .buttonStyle(.plain)
+            // The framed primary under the World look (faded while the plan can't be added).
+            .buttonStyle(ActionPillButtonStyle(.primary))
             .disabled(!review.isImportable)
             .accessibilityIdentifier("coachPlan.accept")
 
             Text("Nothing is added until you tap this. You can edit or delete any day afterwards.")
                 .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
+                .foregroundStyle(dimInk)
                 .multilineTextAlignment(.center)
         }
     }
@@ -589,14 +605,18 @@ struct CoachPlanReviewView: View {
         VStack(alignment: .leading, spacing: 10) { content() }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: FernletMetrics.radiusMd))
-            .overlay(RoundedRectangle(cornerRadius: FernletMetrics.radiusMd).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+            .modifier(MoveInsetCardFrame(cornerRadius: look == nil ? FernletMetrics.radiusMd : FernletFramedLook.cardRadius))
     }
 
     /// A card's caption. `LocalizedStringKey`: every caller passes a literal, which a `String`
-    /// parameter would have kept out of the catalog.
+    /// parameter would have kept out of the catalog. World build: the section label's look.
+    @ViewBuilder
     private func cardTitle(_ text: LocalizedStringKey) -> some View {
-        Text(text).font(.fernlet(.label)).foregroundStyle(Color.slate)
+        if look != nil {
+            SectionLabel(text)
+        } else {
+            Text(text).font(.fernlet(.label)).foregroundStyle(dimInk)
+        }
     }
 
     /// One bulleted line of runtime text (an issue's already-localized detail, a new exercise's
@@ -604,7 +624,7 @@ struct CoachPlanReviewView: View {
     private func bullet(_ text: String, tint: Color = Color.moss) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "circle.fill").font(.system(size: 5)).foregroundStyle(tint).padding(.top, 7)
-            Text(text).font(.fernlet(.bodySmall)).foregroundStyle(Color.bark)
+            Text(text).font(.fernlet(.bodySmall)).foregroundStyle(textInk)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }

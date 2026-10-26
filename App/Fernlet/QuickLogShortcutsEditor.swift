@@ -27,10 +27,24 @@ import FernletUI
 ///
 /// Dynamic Type (5g·AX3): the system drag handles hold their size while rows grow, and the inline
 /// palette's `FlowLayout` naturally stacks one chip per row.
+///
+/// Under the World's framed look (`b2-settings-quicklog`) the list leaves edit mode: the system grip
+/// drew on the card's right frame, so each row draws the ink ``ReorderGrip`` inside the card. The grip
+/// is grabbed at once and dragged (owner, 2026-10-24, question 16; ``QuickLogGripDrag``), and a row
+/// can still be held and dragged (List's own `onMove`). Every row also carries "Move up" and "Move
+/// down" actions, so VoiceOver and Voice Control can reorder without dragging.
 struct QuickLogShortcutsEditor: View {
     @Bindable var store: FernletStore
     /// The slot whose inline palette is open, by position. Nil when no slot is being chosen.
     @State private var editingSlot: Int?
+    /// The grip drag in progress, if any (question 16: the handle is grabbed at once).
+    @State private var gripDrag: QuickLogGripDrag?
+    /// The finger's travel down since the grip went down, for the held row's lift.
+    @State private var gripTranslation: CGFloat = 0
+    /// The order when the grip drag began: the drag plays its one cue at the end if it changed.
+    @State private var orderBeforeGripDrag: [FernletShortcut] = []
+    /// One closed row's height, measured: how far the finger travels to move a row one place.
+    @State private var rowHeight: CGFloat = 54
 
     /// The layout being edited: the STORED array, deliberately NOT visibility-filtered (see the
     /// type doc — filtering the saved array destroys the hidden user's layout irreversibly).
@@ -38,32 +52,49 @@ struct QuickLogShortcutsEditor: View {
         FernletShortcut.normalizedQuickLog(store.settings.quickLogItems)
     }
 
+    /// The World's framed look: the six slots are one framed card of rows (`b2-settings-quicklog`).
+    @Environment(\.fernletFramedLook) private var look
+
     var body: some View {
         List {
-            Section {
-                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                    slotRow(index: index, item: item)
-                }
-                .onMove(perform: moveItems)
-                .listRowBackground(Color.cream)
-            } header: {
-                Text("Drag to reorder. Tap one to swap it.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .textCase(nil)
-            } footer: {
-                Text("Six tiles, in this order, on Home.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
+            // The two notes are rows on the page, not the list's header and footer: a plain list
+            // draws its sticky footer on a white bar over the dotted page.
+            note("Drag to reorder. Tap one to swap it.")
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                slotRow(index: index, item: item)
+                    .offset(y: gripDrag?.index == index ? gripDrag?.lift(at: gripTranslation, rowHeight: rowHeight) ?? 0 : 0)
+                    .zIndex(gripDrag?.index == index ? 1 : 0)
+                    .fernletFramedListRow(isFirst: index == 0, isLast: index == items.count - 1)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                        if editingSlot == nil, gripDrag == nil { rowHeight = height }
+                    }
             }
+            .onMove(perform: moveItems)
+            .listRowBackground(look == nil ? Color.cream : nil)
+            note("Six tiles, in this order, in Log.")
         }
-        // Always reorderable: edit mode is what makes `onMove` handles render, and this page has
-        // no other editing state for the button to toggle.
-        .environment(\.editMode, .constant(.active))
+        // A plain list under the look, so the rows draw the framed card themselves.
+        .modifier(QuickLogListStyle(framed: look != nil))
+        // Without the look, always in edit mode: that is what makes `onMove` handles render, and this
+        // page has no other editing state for a button to toggle. Under the look the rows draw their
+        // own grip and List's press-and-drag reorders them.
+        .environment(\.editMode, .constant(look == nil ? .active : .inactive))
         .scrollContentBackground(.hidden)
-        .background(Color.parchment)
-        .navigationTitle("Quick-log shortcuts")
-        .navigationBarTitleDisplayMode(.inline)
+        .fernletPageBackground()
+        .fernletPushedPage("Quick-log shortcuts")
+    }
+
+    /// A note on the page between the list's rows: the page's own background, no separator, never
+    /// movable.
+    private func note(_ text: LocalizedStringKey) -> some View {
+        Text(text)
+            .font(FernletFramedFont.note)
+            .foregroundStyle(look?.dim ?? Color.slate)
+            .fernletWrappingText()
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 8, leading: 22, bottom: 8, trailing: 22))
+            .moveDisabled(true)
     }
 
     /// One slot: the current pick, and — while this slot is being chosen — its inline palette.
@@ -76,18 +107,28 @@ struct QuickLogShortcutsEditor: View {
             HStack(spacing: 10) {
                 Label {
                     Text(verbatim: item.title)
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.bark)
+                        .font(FernletFramedFont.rowTitle)
+                        .foregroundStyle(look?.text ?? Color.bark)
                 } icon: {
-                    Image(systemName: item.systemImage)
-                        .foregroundStyle(Color.moss)
+                    // The tile's pixel icon (`b2-settings-quicklog`); today's symbol without the look.
+                    if look != nil {
+                        WorldSpriteView(sprite: SettingsShortcutSprite.sprite(for: item), scale: 2)
+                            .frame(width: 36)
+                    } else {
+                        Image(systemName: item.systemImage)
+                            .foregroundStyle(Color.moss)
+                    }
                 }
                 .fernletWrappingText()
                 Spacer(minLength: 4)
                 if editingSlot == index {
                     Text("Choosing")
                         .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
+                        .foregroundStyle(look?.dim ?? Color.slate)
+                }
+                if look != nil {
+                    ReorderGrip()
+                        .highPriorityGesture(gripGesture(startingAt: index))
                 }
             }
             .frame(minHeight: 44)
@@ -97,6 +138,8 @@ struct QuickLogShortcutsEditor: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
+            .accessibilityAction(named: Text("Move up")) { step(index, by: -1) }
+            .accessibilityAction(named: Text("Move down")) { step(index, by: 1) }
             .accessibilityIdentifier("settings.quickLog.slot.\(index)")
             if editingSlot == index {
                 palette(for: index, current: item)
@@ -144,6 +187,48 @@ struct QuickLogShortcutsEditor: View {
         editingSlot = nil
     }
 
+    /// One tile one place up or down (the row's "Move up" / "Move down"), with the layout cue the
+    /// palette's swap plays (report B13). Nothing at either end.
+    private func step(_ index: Int, by offset: Int) {
+        let updated = QuickLogOrder.stepping(items, at: index, by: offset)
+        guard updated != items else { return }
+        FernletFeedback.system.play(.moved)
+        store.setQuickLogItems(updated)
+        editingSlot = nil
+    }
+
+    /// The grip's drag: it starts on touch down (no press-and-hold first) and moves the row one place
+    /// each time the finger passes half a row beyond it, through the STORED array as every move does.
+    private func gripGesture(startingAt index: Int) -> some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .global)
+            .onChanged { value in gripMoved(startingAt: index, translation: value.translation.height) }
+            .onEnded { _ in gripReleased() }
+    }
+
+    /// One step of the grip drag: begins it on the first event, then moves the held row when asked.
+    private func gripMoved(startingAt index: Int, translation: CGFloat) {
+        var drag = gripDrag ?? QuickLogGripDrag(index: index)
+        if gripDrag == nil {
+            orderBeforeGripDrag = items
+            editingSlot = nil
+        }
+        gripTranslation = translation
+        let offset = drag.step(at: translation, rowHeight: rowHeight)
+        let updated = QuickLogOrder.stepping(items, at: drag.index, by: offset)
+        if offset != 0, updated != items {
+            store.setQuickLogItems(updated)
+            drag = drag.moved(by: offset, rowHeight: rowHeight)
+        }
+        gripDrag = drag
+    }
+
+    /// The grip let go: the layout cue once, when the order changed (report B13).
+    private func gripReleased() {
+        if gripDrag != nil, items != orderBeforeGripDrag { FernletFeedback.system.play(.moved) }
+        gripDrag = nil
+        gripTranslation = 0
+    }
+
     /// Applies a drag reorder to the STORED array.
     ///
     /// No Fernlet cue here (report B13, "check the system's `.onMove` feel first"): the drag is the
@@ -155,5 +240,19 @@ struct QuickLogShortcutsEditor: View {
         updated.move(fromOffsets: source, toOffset: destination)
         store.setQuickLogItems(updated)
         editingSlot = nil
+    }
+}
+
+/// The quick-log list's style: plain under the framed look (its rows draw the framed card through
+/// `fernletFramedListRow`), today's inset grouped list without it.
+private struct QuickLogListStyle: ViewModifier {
+    let framed: Bool
+
+    func body(content: Content) -> some View {
+        if framed {
+            content.listStyle(.plain)
+        } else {
+            content.listStyle(.insetGrouped)
+        }
     }
 }

@@ -26,22 +26,27 @@ private struct SignedOutAccountProvider: CloudKitAccountStatusProviding {
     func accountStatus() async throws -> CKAccountStatus { .noAccount }
 }
 
+/// A phone that is offline: the account check itself fails with CloudKit's `networkUnavailable`.
+private struct OfflineAccountProvider: CloudKitAccountStatusProviding {
+    func accountStatus() async throws -> CKAccountStatus { throw CKError(.networkUnavailable) }
+}
+
 /// Collects `sealedBackup.` audit events for one test — a lock-guarded reference box, installed on
 /// entry and removed by token, in `CompanionRefreshAuditCapture`'s shape.
 private final class SealedBackupAuditCapture {
     /// Guards ``storedEvents``; handlers run on whatever executor logged.
     private let lock = NSLock()
-    /// Every matching event seen, in order.
-    private var storedEvents: [String] = []
+    /// Every matching event seen, in order, with its context.
+    private var storedLogs: [(event: String, context: [String: String])] = []
     /// The registry token, until it is removed.
     private var token: UUID?
 
     /// Starts capturing.
     func install() {
-        token = FernletAuditLog.addCaptureHandler { [weak self] event, _ in
+        token = FernletAuditLog.addCaptureHandler { [weak self] event, context in
             guard let self, event.hasPrefix("sealedBackup.") else { return }
             self.lock.lock()
-            self.storedEvents.append(event)
+            self.storedLogs.append((event, context))
             self.lock.unlock()
         }
     }
@@ -57,7 +62,13 @@ private final class SealedBackupAuditCapture {
     /// Every event captured, in order.
     var events: [String] {
         lock.lock(); defer { lock.unlock() }
-        return storedEvents
+        return storedLogs.map(\.event)
+    }
+
+    /// The context of the first capture of `event`, if any.
+    func context(of event: String) -> [String: String]? {
+        lock.lock(); defer { lock.unlock() }
+        return storedLogs.first { $0.event == event }?.context
     }
 }
 
@@ -231,6 +242,30 @@ struct SensitiveNotesRetirementTests {
         #expect(recordNames(cloud) == ["sealed-backup.sensitiveNotes"])
         #expect(host.retiredBackupsDeleted.isEmpty)
         #expect(audit.events.contains("sealedBackup.retiredPayloadDeleteFailed"))
+    }
+
+    /// W-16: an offline delete names its sanitized reason — `CKError.networkUnavailable`'s code and
+    /// the error's type — and nothing else: no description, no record name.
+    @Test func aFailedSweepLogsTheCloudKitCode() async throws {
+        let cloud = try makeCloud()
+        defer { cloud.tearDown() }
+        try await seedBackup(.sensitiveNotes, in: cloud)
+        let audit = SealedBackupAuditCapture()
+        audit.install()
+        defer { audit.uninstall() }
+        let host = FakeSealedBackupHost()
+        let coordinator = makeCoordinator(host: host, cloud: cloud, accountProvider: OfflineAccountProvider())
+
+        await coordinator.retireSensitiveNotesBackupIfNeeded(backupMayExist: true)
+
+        let context = try #require(audit.context(of: "sealedBackup.retiredPayloadDeleteFailed"))
+        #expect(Set(context.keys) == ["payload", "errorType", "ckErrorCode"], "only the sanitized keys are logged")
+        #expect(context["payload"] == "sensitiveNotes")
+        #expect(context["ckErrorCode"] == "\(CKError.Code.networkUnavailable.rawValue)")
+        // A CKError crosses `async throws` bridged, so its runtime type name is `NSError`, as CloudKit's
+        // own errors are: the code is what tells the failures apart.
+        #expect(context["errorType"]?.isEmpty == false)
+        #expect(host.retiredBackupsDeleted.isEmpty)
     }
 
     // MARK: - No restore

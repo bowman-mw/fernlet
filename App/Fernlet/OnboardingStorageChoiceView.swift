@@ -47,11 +47,12 @@ struct OnboardingStorageChoiceView: View {
                             .accessibilityHidden(true)
                         Text("Checking iCloud for Fernlet data")
                             .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.slate)
+                            .foregroundStyle(WorldPalette.dim)
                     }
                     .padding(14)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .background(WorldPalette.paper, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(WorldPalette.ink, lineWidth: 2))
                     .accessibilityIdentifier("onboarding.storage.detecting")
                 } else {
                     VStack(spacing: 12) {
@@ -59,7 +60,8 @@ struct OnboardingStorageChoiceView: View {
                             choice: .icloud,
                             title: existingDataSummary?.hasData == true ? "Restore from iCloud" : "Sync to iCloud",
                             copy: iCloudCopy,
-                            systemImage: "icloud.fill"
+                            sprite: WorldSprites.cloud,
+                            tileFill: WorldPalette.rgb(0xA9C6DA)
                         )
                         .accessibilityIdentifier("onboarding.storage.icloud")
 
@@ -67,7 +69,8 @@ struct OnboardingStorageChoiceView: View {
                             choice: .localOnly,
                             title: "Just on this device",
                             copy: localOnlyCopy,
-                            systemImage: "iphone"
+                            sprite: WorldSprites.diary,
+                            tileFill: nil
                         )
                         .accessibilityIdentifier("onboarding.storage.local")
 
@@ -112,12 +115,13 @@ struct OnboardingStorageChoiceView: View {
                 .foregroundStyle(Color.sun)
             Text("Heads up: this iCloud account already has Fernlet data. Choosing “Just on this device” won’t bring it in, and anything you log here won’t reach your other devices.")
                 .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.bark)
+                .foregroundStyle(WorldPalette.bark)
                 .fernletWrappingText()
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.sun.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(WorldPalette.warn, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(WorldPalette.ink, lineWidth: 2))
         .accessibilityIdentifier("onboarding.storage.localWarning")
     }
 
@@ -128,7 +132,7 @@ struct OnboardingStorageChoiceView: View {
     private var sealedBackupFoundNote: some View {
         Text("This iCloud account also holds an encrypted backup of your journal, cycle, intimate logs or photos. To restore it to this iPhone, turn on its backup in Settings › Privacy & Data after setup.")
             .font(.fernlet(.bodySmall))
-            .foregroundStyle(Color.bark)
+            .foregroundStyle(WorldPalette.bark)
             .fernletWrappingText()
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityIdentifier("onboarding.storage.sealedBackupFound")
@@ -140,7 +144,7 @@ struct OnboardingStorageChoiceView: View {
     private var detectionFailedNote: some View {
         Text("Couldn't check this iCloud account for existing Fernlet data — if you used Fernlet before, choose Sync to iCloud to restore it.")
             .font(.fernlet(.bodySmall))
-            .foregroundStyle(Color.slate)
+            .foregroundStyle(WorldPalette.dim)
             .fernletWrappingText()
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityIdentifier("onboarding.storage.detectFailed")
@@ -157,53 +161,23 @@ struct OnboardingStorageChoiceView: View {
     /// One storage choice. `title` is a `LocalizedStringKey` and `copy` a `Text`: both were `String`,
     /// so "Restore from iCloud", "Just on this device" and every explanation under them rendered in
     /// English in every language.
-    private func storageCard(choice: OnboardingStorageChoice, title: LocalizedStringKey, copy: Text, systemImage: String) -> some View {
+    private func storageCard(choice: OnboardingStorageChoice, title: LocalizedStringKey, copy: Text, sprite: WorldSprite, tileFill: Color?) -> some View {
         Button {
-            // B6: a real change of card ticks; the write below still runs on every tap.
             FernletFeedback.system.select(choice, in: &selectedStorage)
             storagePreferencesStore.update { preferences in
                 preferences.iCloudSyncEnabled = choice == .icloud
-                // "Just on this device" while this iCloud account already holds Fernlet data leaves
-                // that copy in the cloud with sync off — record it, or `hasAnyCloudCopy` reads false
-                // and the delete dialog never claims (nor "delete everything" ever reaches) the
-                // stranded copy. Recomputed on every tap, so switching back to iCloud clears it (a
-                // live sync copy is tracked by `iCloudSyncEnabled` itself).
                 preferences.cloudCopyKept = choice == .localOnly && existingDataSummary?.hasData == true
             }
             FernletAuditLog.log("onboarding.storage.chosen", context: [
                 "choice": choice == .icloud ? "icloud" : "localOnly"
             ])
         } label: {
-            HStack(alignment: .top, spacing: 14) {
-                Image(systemName: selectedStorage == choice ? "checkmark.circle.fill" : systemImage)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(selectedStorage == choice ? Color.moss : Color.slate)
-                    .frame(width: 32, height: 32)
-                    .background(Color.moss.opacity(selectedStorage == choice ? 0.12 : 0.06), in: Circle())
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(title)
-                        .font(.fernlet(.header))
-                        .foregroundStyle(Color.bark)
-                    copy
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-                }
-                Spacer(minLength: 8)
-            }
-            .padding(16)
-            .background(selectedStorage == choice ? Color.moss.opacity(0.07) : Color.cream, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(selectedStorage == choice ? Color.moss.opacity(0.42) : Color.bark.opacity(0.08), lineWidth: 1)
-            )
+            // Design `b2-onb-3`: a framed card per place; the chosen one wears the moss ring.
+            OnboardingCard(sprite: sprite, title: Text(title), detail: copy, isSelected: selectedStorage == choice,
+                           tileFill: tileFill)
         }
         .buttonStyle(.plain)
-        // Voice Control: the card is named by its title and its whole explanation; the title alone
-        // is the name a user says — the same localized key the card draws.
         .accessibilityInputLabels([Text(title)])
-        // T1-5: a hand-rolled selection card — the glyph swap and tint are otherwise the only
-        // signal, on the choice that decides where the user's data lives.
         .accessibilityAddTraits(selectedStorage == choice ? .isSelected : [])
     }
 

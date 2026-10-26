@@ -473,7 +473,12 @@ extension AdaptiveInkBoundaryTests {
 
     /// Floor on solid-moss-fill chains found (58 at the time of writing). Without it, "no
     /// violations" and "the chain finder stopped finding chains" are the same green.
-    static let minimumMossFillChains = 25
+    ///
+    /// The World build restyles screens onto `WorldPalette` (`mossInk`, `moss`), which this rule does
+    /// not read, so the count falls as screens move: 24 at World round 6, when Your spaces' check
+    /// square left `Color.moss` (2026-10-25). The floor stays far enough above zero to catch a finder
+    /// that stops finding chains, which is its only job.
+    static let minimumMossFillChains = 20
 
     /// Every maximal run of consecutive code lines that begin with `.` — one SwiftUI modifier chain.
     ///

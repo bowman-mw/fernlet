@@ -1,6 +1,42 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "ui.action.back" : {
+      "comment" : "Button at the top left of a page inside a panel. Returns to the page before it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Back"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Atrás"
+          }
+        }
+      }
+    },
+    "ui.action.backTo" : {
+      "comment" : "VoiceOver name of the Back button at the top left of a page inside a panel. The argument is the name of the page it returns to, e.g. 'Back to Settings'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Back to %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Volver a %@"
+          }
+        }
+      }
+    },
     "ui.action.cancel" : {
       "comment" : "Button. Leaves the current sheet or dialog without saving anything.",
       "extractionState" : "extracted_with_value",
@@ -15,6 +51,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Cancelar"
+          }
+        }
+      }
+    },
+    "ui.action.close" : {
+      "comment" : "Accessibility name of the ✕ at the top right of a full-screen flow (a workout, cooking mode, the camera). Leaves the flow.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Close"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cerrar"
           }
         }
       }

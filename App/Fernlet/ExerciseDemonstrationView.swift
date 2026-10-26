@@ -346,28 +346,37 @@ struct ExerciseDemonstrationPlaceholder: View {
     /// The tile's side, from ``ExerciseDemonstrationLayout/side(forVisibleHeight:)``.
     let side: CGFloat
 
+    /// World build (`b3-howto`): a framed tile, the equipment glyph in ink, the name in a framed box.
+    @Environment(\.fernletFramedLook) private var look
+
     var body: some View {
         ZStack {
-            Color.cream
+            look?.raised ?? Color.cream
             VStack(spacing: 14) {
                 EquipmentGlyph(item: Self.glyph(for: target), size: ExerciseDemonstrationLayout.glyphSize)
-                    .foregroundStyle(Color.softTaupe)
+                    .foregroundStyle(look?.text ?? Color.softTaupe)
                 Text(verbatim: ExerciseHowToCatalog.displayName(for: exerciseName))
-                    .font(.fernlet(.headerMedium))
-                    .foregroundStyle(Color.bark)
+                    .font(look == nil ? .fernlet(.headerMedium) : MoveFont.rowTitle)
+                    .foregroundStyle(look?.text ?? Color.bark)
                     .multilineTextAlignment(.center)
                     .lineLimit(3)
                     .minimumScaleFactor(0.6)
                     .dynamicTypeSize(...DynamicTypeSize.accessibility1)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(Color.parchment, in: RoundedRectangle(cornerRadius: 10))
-                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.softTaupe, lineWidth: 1))
+                    .background(look?.paper ?? Color.parchment, in: RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(look?.ink ?? Color.softTaupe, lineWidth: look == nil ? 1 : FernletFramedLook.frameWidth))
             }
             .padding(20)
         }
-        .aspectRatio(1, contentMode: .fit)
-        .frame(maxWidth: side)
+        .modifier(ExerciseDemonstrationPlaceholderShape(isFramed: look != nil, side: side))
+        .overlay {
+            if let look {
+                RoundedRectangle(cornerRadius: ExerciseDemonstrationLayout.cornerRadius)
+                    .strokeBorder(look.ink, lineWidth: 3)
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: ExerciseDemonstrationLayout.cornerRadius))
         .frame(maxWidth: .infinity)
         .accessibilityHidden(true)
@@ -388,6 +397,28 @@ struct ExerciseDemonstrationPlaceholder: View {
         case .machine: return target.requiredGear.first ?? .chestPress
         case .cardio: return target.requiredGear.first ?? .treadmill
         case .bodyweight, .none: return target.requiredGear.first ?? .yogaMat
+        }
+    }
+}
+
+/// The placeholder tile's shape: today's square the size of a real demonstration, or under the World look
+/// (`b3-howto` draft 2) a full-width card no taller than the kit's, so the steps and the run's footer
+/// stay in view. A real demonstration keeps its square either way.
+private struct ExerciseDemonstrationPlaceholderShape: ViewModifier {
+    let isFramed: Bool
+    let side: CGFloat
+    /// The kit's card height in points.
+    private static let framedHeight: CGFloat = 168
+
+    func body(content: Content) -> some View {
+        if isFramed {
+            content
+                .frame(maxWidth: .infinity)
+                .frame(height: min(side, Self.framedHeight))
+        } else {
+            content
+                .aspectRatio(1, contentMode: .fit)
+                .frame(maxWidth: side)
         }
     }
 }

@@ -22,6 +22,7 @@ import PrivateMediaStore
 import PrivateStoreCore
 import PeriodContextBridge
 import StoreCore
+import WorldMapStore
 import DiaryStore
 import HealthKitGateway
 import AppServices
@@ -237,6 +238,17 @@ final class FernletStore {
             // fail-closed on the engaging edge — the page's own refusal is the second half.
             if duressSessionActive { clearPhase3Evidence() }
             #endif
+            // The World map's fog follows the decoy on the same flag: history hidden, nothing written.
+            worldFog.setDecoy(duressSessionActive)
+            // "Where you've been" captures nothing in a decoy (and Private's Places page shows nothing).
+            worldPlaces.setDecoy(duressSessionActive)
+            // The solo camera's decoy keeps its shots in memory and drops them when the decoy ends.
+            soloCamera.setDecoy(duressSessionActive)
+            // A walk recording when the decoy opens or closes is dropped: neither side keeps the other's.
+            if worldWalk.isRecording {
+                worldWalk.cancel()
+                worldLocation.stopWalk()
+            }
         }
     }
     /// One-shot request to show the "Turn on Nearby Friends?" prompt (set when the user keeps
@@ -738,6 +750,68 @@ final class FernletStore {
     /// initializer (tests, previews) defaults to a fresh in-memory store, and the launch path
     /// (`FernletStore.load`) passes `FileDeviceDaySummaryStore.production`.
     @ObservationIgnored let deviceDaySummaryStore: any DeviceDaySummaryStoring
+    /// The World map's sealed, device-only location history (World build; `WorldMapVault`). The test
+    /// initializer defaults to an ephemeral vault (a temporary folder, in-memory keys); the launch path
+    /// uses the production one. Reached for the wipe through ``worldFog`` (`resetAll`).
+    @ObservationIgnored let worldMapVault: WorldMapVault
+    /// The World map's fog: whether readings lift it, the lifted cells, and the decoy rule
+    /// (`WorldFogKeeper`). Lazy, so a store that never shows the map never reads the vault. Its map-widget
+    /// picture (round 6b) is this store's `appGroupDirectory`'s, so a test store's wipes stay in its folder.
+    @ObservationIgnored private(set) lazy var worldFog: WorldFogKeeper = {
+        let keeper = WorldFogKeeper(vault: worldMapVault)
+        keeper.widgetMap = WorldWidgetMapFile(directory: appGroupDirectory)
+        return keeper
+    }()
+    /// The World map's location (`WorldLocationSource`), following the permission the person gave.
+    /// Lazy, so nothing asks CoreLocation for anything until the launch screen lifts (the map's location runs
+    /// while Fernlet is open, W-09 (i)), or, with background mapping on, until the store loads
+    /// (`armWorldBackgroundMappingAtLaunch()`, W-09 B1); every reading goes to
+    /// ``worldFog``, which decides whether it lifts the fog.
+    @ObservationIgnored private(set) lazy var worldLocation: WorldLocationSource = {
+        let source = WorldLocationSource()
+        source.onFix = { [weak self] fix in
+            self?.liftWorldFog(fix)
+            self?.worldWalk.record(fix)
+            self?.noteWorldPlace(from: fix)
+        }
+        source.onVisit = { [weak self] visit in
+            self?.worldPlaces.handleVisit(visit)
+        }
+        return source
+    }()
+    /// "Where you've been"'s capture (`WorldPlacesKeeper`; `FernletStore+WorldPlaces`): the stops the map
+    /// notes, waiting in the same vault as the fog until Private folds them under its hub key. Lazy, like
+    /// the fog, and it follows the decoy.
+    @ObservationIgnored private(set) lazy var worldPlaces: WorldPlacesKeeper = {
+        let keeper = WorldPlacesKeeper(vault: worldMapVault, lookup: worldPlaceLookup)
+        // A stop's look-up, asked again once the person has stayed (W-13), runs only under the same gate as
+        // a reading's: the map's own location, the app in front, no decoy.
+        keeper.mayRecheck = { [weak self] in self?.worldPlaceNotingAllowed ?? false }
+        return keeper
+    }()
+    /// Where each solo camera photo was taken (`PhotoPlaceStore`; `FernletStore+WorldPlaces`), in the same
+    /// vault and cleared with it.
+    @ObservationIgnored private(set) lazy var worldPhotoPlaces = PhotoPlaceStore(vault: worldMapVault)
+    /// The place lookup visits and photos' places are decided through, and kept places' names asked for again
+    /// by reference: Apple's map on the launch path, a lookup with no answer in a test-built store (nothing
+    /// named, no photo place kept).
+    @ObservationIgnored let worldPlaceLookup: any WorldPlaceLooking
+    /// The World map's saved walk lines (`WorldRouteStore`), sealed in the same vault as the fog and
+    /// cleared with it. Lazy, like the fog.
+    @ObservationIgnored private(set) lazy var worldRoutes = WorldRouteStore(vault: worldMapVault)
+    /// The walk recording now, if any (`WorldWalkRecorder`; `FernletStore+WorldWalk`).
+    @ObservationIgnored let worldWalk = WorldWalkRecorder()
+    /// Where the person's workout spaces are (`SpacePinStore`; `FernletStore+WorldPins`), in the same
+    /// vault as the fog and cleared with it.
+    @ObservationIgnored private(set) lazy var worldSpacePins = SpacePinStore(vault: worldMapVault)
+    /// The disposable camera's roll on your own (`SoloCameraRoll`; `FernletStore+SoloCamera`): today's
+    /// film, the sealed device-only solo corpus, and a decoy's shots in memory. Follows the decoy above.
+    @ObservationIgnored private(set) lazy var soloCamera: SoloCameraRoll = {
+        let roll = SoloCameraRoll(store: SoloCameraPhotoStore(directory: soloCameraDirectory), isDecoy: duressSessionActive)
+        // Deleting a solo photo deletes where it was taken (World build step 5c).
+        roll.onDeleted = { [weak self] id in self?.forgetSoloPhotoPlaces([id]) }
+        return roll
+    }()
     /// Recipe ids whose web-image download is currently in flight. Guards the entry to
     /// ``fetchRecipeWebImageIfNeeded(for:)`` so the paste-import fire-and-forget task and the
     /// detail's first-open task — both of which can hold the same not-yet-attempted recipe copy —
@@ -878,7 +952,7 @@ final class FernletStore {
     /// Every repository/service/defaults parameter is an injection seam; nil means production
     /// default. Prefer `FernletStore.load` at app launch — it does the slow work off the first
     /// frame.
-    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, appGroupDirectory: URL? = nil, messagesCatalogDirectory: URL? = nil, sharedRecipeImportQueueFileURL: URL? = nil, photoDocumentsDirectory: URL? = nil, proximitySupportDirectory: URL? = nil, heartDropKeychainService: String? = nil, aiQuotaDefaults: UserDefaults = .standard, foodSearchCorrectionDefaults: UserDefaults = .standard, deviceHealthResidueStore: (any DeviceHealthResidueStoring)? = nil, deviceDaySummaryStore: (any DeviceDaySummaryStoring)? = nil) {
+    init(date: Date = .now, repository: FernletRepository? = nil, savedRecipeRepository: SavedRecipeRepository? = nil, customItemRepository: (any CustomItemRepositoring)? = nil, coinLedgerRepository: (any CoinLedgerRepositoring)? = nil, milestoneLedgerRepository: (any MilestoneLedgerRepositoring)? = nil, healthKitService: (any HealthKitServicing)? = nil, journalNarrativeRepository: (any JournalNarrativeStoring)? = nil, foodCatalog: FoodCatalog = .bundled(), sensitiveVisibilityDefaults: UserDefaults = .standard, aiAuditLogStore: AIAuditLogPersisting? = nil, appGroupDirectory: URL? = nil, messagesCatalogDirectory: URL? = nil, sharedRecipeImportQueueFileURL: URL? = nil, photoDocumentsDirectory: URL? = nil, proximitySupportDirectory: URL? = nil, heartDropKeychainService: String? = nil, aiQuotaDefaults: UserDefaults = .standard, foodSearchCorrectionDefaults: UserDefaults = .standard, deviceHealthResidueStore: (any DeviceHealthResidueStoring)? = nil, deviceDaySummaryStore: (any DeviceDaySummaryStoring)? = nil, worldMapVault: WorldMapVault? = nil, worldPlaceLookup: (any WorldPlaceLooking)? = nil) {
         // Assigned FIRST: the own-photo corpora, the escrow coordinator and the launch key migration
         // all read it, and the migration kicks off at the end of this initializer.
         self.photoDocumentsDirectory = photoDocumentsDirectory ?? Self.defaultPhotoDocumentsDirectory
@@ -886,6 +960,8 @@ final class FernletStore {
         // tests' and previews' path; the launch path hands in the production file.
         self.deviceHealthResidueStore = deviceHealthResidueStore ?? InMemoryDeviceHealthResidueStore()
         self.deviceDaySummaryStore = deviceDaySummaryStore ?? InMemoryDeviceDaySummaryStore()
+        self.worldMapVault = worldMapVault ?? WorldMapVault.ephemeral()
+        self.worldPlaceLookup = worldPlaceLookup ?? FixedPlaceLookup(answer: nil)
         self.proximitySupportRoot = proximitySupportDirectory ?? FernletProximityStorage.productionDirectory
         self.heartDropKeychainService = heartDropKeychainService ?? HeartDropStorageScope.production.keychainService
         self.appGroupDirectory = appGroupDirectory
@@ -1042,6 +1118,8 @@ final class FernletStore {
         // `FernletStore.load` passes the production files unless a test hands them in.
         self.deviceHealthResidueStore = deviceHealthResidueStore
         self.deviceDaySummaryStore = deviceDaySummaryStore
+        self.worldMapVault = WorldMapVault.production()
+        self.worldPlaceLookup = ApplePlaceLookup()
         self.proximitySupportRoot = FernletProximityStorage.productionDirectory
         self.heartDropKeychainService = HeartDropStorageScope.production.keychainService
         // nil / `.standard` = the REAL app-group container and the real defaults. Never a unique
@@ -3310,6 +3388,9 @@ final class FernletStore {
             diary.planWorkout(Self.reconstructPlannedWorkout(from: workout, plannedID: plannedID), date: date)
         }
 
+        // A World walk's saved line goes with its workout (World build; nothing to do for any other row).
+        worldRoutes.delete(for: id)
+
         // Tombstone synchronously (survives relaunch; the observer anchor persists immediately while the
         // snapshot save is debounced), then delete the app-authored Health sample by `fernlet.workoutID`.
         // Fired even for a not-yet-stamped row: if a save is still in flight the delete no-ops now and the
@@ -3932,6 +4013,9 @@ final class FernletStore {
         // The reset purged every sealed row; a pending legacy-import half would re-import Fernlet's
         // own Apple Health copies at the next Private open (§8.4, §9.21).
         cycleLegacyImportLedger.markBothHalvesDone()
+        // World build round 6: Where you've been's device side, the homes and hotel and the places to eat go
+        // at once, as the reset screens say ("This also deletes the places you've been.").
+        deleteWorldPlacesForLockReset()
         FernletAuditLog.log("sealedBackup.restoreHeldForOwner", context: ["site": "appLockReset"])
     }
 
@@ -4589,6 +4673,8 @@ final class FernletStore {
 
     func deleteWorkoutLocation(_ id: UUID) {
         diary.deleteWorkoutLocation(id)
+        // World build: the space's place on the map goes with it.
+        forgetWorkoutSpacePin(id)
     }
 
     func setActiveWorkoutLocation(_ id: UUID) {
@@ -5018,6 +5104,8 @@ final class FernletStore {
         // The session's start, for the logged duration: the run carries it, so it survives a relaunch.
         state.startedAt = state.setStartedAt
         guidedRunState = state
+        // World build: a space's first guided workout pins where it is, if the person said yes.
+        pinWorkoutSpaceAtGuidedStart()
         // Spoken cues name the first step once, here at Start (never on a resume).
         guidedRunCues.started(state)
         mirrorGuidedRunState(state)
@@ -6746,6 +6834,12 @@ final class FernletStore {
         if !meshFeatures.photos.purgeHeldSessionPhotosForDeleteAll() {
             outcome.incompleteStores.append("session photos you hadn't chosen yet")
         }
+        // 4e. Photos from the disposable camera used on your own (World build): the sealed,
+        // device-only solo corpus and its film count, keyless. Its key row survives like the
+        // pending row (an emptied store's key protects nothing).
+        if !purgeSoloCameraForDeleteAll() {
+            outcome.incompleteStores.append("photos from the camera on your own")
+        }
     }
 
     /// Wipe legs 5-7b: the share-extension inbox, the plaintext export dump, and the session-scoped
@@ -6853,6 +6947,10 @@ final class FernletStore {
         // when, and the number it said — some of them Health-derived. Plain `UserDefaults` removals,
         // like the petting state above; the in-memory tally goes with them.
         SillyStatsCompanionPacer.clearPersistentState()
+        // The stamp book (`fernlet.sillyStats.stamps`, `…stampBookStartDay`): which stats have
+        // appeared and on what day — a dated trail of the diary this wipe destroys, and partly
+        // Health-derived, so device-local. Cleared like the milestone ledger; plain removals.
+        SillyStampStore.clearPersistentState()
         sillyStats.clear()
 
         // The device-local AI audit log (Ladder §7.2) — a per-device ledger of AI-call metadata, never
@@ -7067,6 +7165,15 @@ final class FernletStore {
         if !deviceDaySummaryStore.clearAll() {
             incompleteStores.append("your day summaries")
         }
+        // The World map's sealed location history (fog cells, its locked-phone buffer, the saved walk
+        // lines, the workout-space pins, Where you've been's log and device side, and the solo photos'
+        // places, one folder) and both of its device keys, plus its device-only settings. World build only.
+        if !worldFog.clearAll() { incompleteStores.append("your map history") }
+        worldPlaces.forget()
+        WorldMapPreferences.clearAll()
+        // Advanced period tracking's device-only switch (World build, `b3-period-settings`): how the
+        // person tracks their cycle, so it goes with everything else.
+        CyclePreferences.clearAll()
         // Worry Box notes are the app's most sensitive free-text data and a no-lock user has no
         // other bulk-wipe path — purge the sealed rows + the device-local let-go count. `!= true`
         // like the funnel's sealed hooks: a nil (unwired) hook or a failed row delete must surface,
@@ -7185,6 +7292,9 @@ final class FernletStore {
     private func handleAfterSnapshotSave(didPersist: Bool) {
         rebuildDerivedSignals()
         reconcileMilestones(days: [todayKey: day])
+        // A silly stat that just appeared earns its stamp now, not at the next launch (debounced,
+        // and inert once every stat has its stamp).
+        sillyStats.scheduleRetally(store: self)
         guard didPersist else { return }
         // Mirror the benign widget snapshot on the same flush path every mutation funnels through
         // (SnapshotSaveCoordinator.schedule()/flushPending() → performSnapshotSave → here).
@@ -7317,7 +7427,11 @@ final class FernletStore {
     }
 
     /// The benign snapshot the widget would render right now. PRIVACY: score/water/macros plus the
-    /// companion's state and its widget-safe emotion timeline only.
+    /// companion's state, name and look (the worn Creation Studio pieces included, none in a decoy;
+    /// `FernletStore+CompanionLook.swift`), its widget-safe emotion timeline, when a friend's gold hearts
+    /// fade and the stamp book's tokens and days only (both empty in a decoy;
+    /// `FernletStore+WidgetExtras.swift`), and the day's protein, carbs and fat targets the map widget's
+    /// bars are drawn against (`FernletStore+WidgetMap.swift`).
     ///
     /// Lifted out of `publishWidgetSnapshot()` unchanged — same fields, same order, same `Date()`
     /// stamp — so the background refresh can DIFF a snapshot before deciding whether publishing it
@@ -7328,9 +7442,11 @@ final class FernletStore {
     /// - Returns: The snapshot.
     func currentWidgetSnapshot() -> WidgetSnapshot {
         let macros = macroTotals
+        // The live pair: gold hearts lift what the widget shows, as they lift the World Home
+        // (`FernletStore+GoldHearts.swift`); the saved day score never sees the boost.
         return WidgetSnapshot(
-            companionStateRaw: companionState.rawValue,
-            score: score,
+            companionStateRaw: liveCompanionState.rawValue,
+            score: liveCareScore,
             bottleCount: day.bottleCount,
             hydrationTarget: settings.hydrationTarget,
             macroSummary: WidgetSnapshot.MacroSummary(
@@ -7342,7 +7458,10 @@ final class FernletStore {
             computedAt: Date(),
             companionEmotionTimeline: widgetEmotionTimeline(),
             companionName: widgetCompanionName,
-            companionLook: WidgetSnapshot.CompanionLook(appearance: settings.companionAppearance)
+            companionLook: widgetCompanionLook,
+            goldHeartEnds: widgetGoldHeartEnds(),
+            stamps: widgetStamps(),
+            macroTargets: widgetMacroTargets()
         )
     }
 

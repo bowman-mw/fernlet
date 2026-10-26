@@ -66,19 +66,21 @@ struct SafetyReportingView: View {
 
                 contactSection
             }
-            .padding(20)
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 30)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(Color.parchment)
-        .navigationTitle("Safety & reporting")
-        .navigationBarTitleDisplayMode(.inline)
+        .fernletPageBackground()
+        // A page in the Settings panel, like the rest of Settings (`b3-safety`).
+        .fernletPushedPage("Safety & reporting")
     }
 
     /// The developer contact route — a tappable mail link rather than a sentence describing one.
     private var contactSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Contact")
-                .font(.fernlet(.headerMedium))
+                .font(FernletFramedFont.rowTitleBold)
                 .foregroundStyle(Color.bark)
                 // This page is where help lives; its section titles are how the Headings rotor
                 // finds the developer's address without reading every paragraph above it.
@@ -105,21 +107,24 @@ struct SafetyReportingView: View {
                 .accessibilityInputLabels([Text("Email"), Text("Email the developer"), Text("Contact")])
             }
         }
+        .settingsCard()
     }
 
     /// One titled paragraph. `LocalizedStringKey`, not `String`: a `String` parameter would hand
     /// `Text` the verbatim overload and opt every paragraph out of the catalog.
     private func section(_ title: LocalizedStringKey, _ body: LocalizedStringKey) -> some View {
+        // One framed card per titled paragraph (`b3-safety`).
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.fernlet(.headerMedium))
+                .font(FernletFramedFont.rowTitleBold)
                 .foregroundStyle(Color.bark)
                 .accessibilityAddTraits(.isHeader)
             Text(body)
-                .font(.fernlet(.body))
+                .font(FernletFramedFont.body)
                 .foregroundStyle(Color.bark)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        .settingsCard()
     }
 }
 

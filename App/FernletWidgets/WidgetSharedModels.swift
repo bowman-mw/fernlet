@@ -16,6 +16,8 @@
 //   - `WidgetSnapshot`             mirrors Fernlet/WidgetBridge.swift `WidgetSnapshot`
 //   - `WidgetCompanionLook`        mirrors Fernlet/WidgetBridge.swift `WidgetSnapshot.CompanionLook`
 //   - `PendingWidgetAction`        mirrors Fernlet/WidgetBridge.swift `PendingWidgetAction`
+//   - `WidgetMapPicture`           mirrors Fernlet/World/Widget/WorldWidgetMapFile.swift `WorldWidgetMapPicture`
+//                                  (declared in WidgetMapPicture.swift, with its reader)
 //   - `WidgetDayKey`               mirrors FernletFoundation.FernletDate.dayKey ("yyyy-MM-dd", en_US_POSIX)
 //   - JSON codecs                  mirror the app-group queue convention (iso8601 dates, sorted keys)
 //
@@ -168,8 +170,8 @@ enum WidgetEmotionTimeline {
     }
 }
 
-/// The person's companion look, as the widget draws it: the app's `CompanionAppearance` reduced to
-/// the four values a widget-sized companion can show.
+/// The person's companion look, as the widget draws it: the app's `CompanionAppearance` as tokens and
+/// resolved colours, and the Creation Studio pieces worn, already in their place.
 ///
 /// Byte-identical twin of the app-side `WidgetSnapshot.CompanionLook` (App/Fernlet/WidgetBridge.swift):
 /// the JSON keys are the contract. The two raw strings are the app's FROZEN `CompanionBodyStyle` and
@@ -185,6 +187,32 @@ struct WidgetCompanionLook: Codable, Equatable {
     var accessoryRaw: String
     /// The topper's fixed colour, or nil to wear the state's colour.
     var accessoryColorHex: String?
+    /// The scarf's colour when the companion wears one, else nil. ADDITIVE (2026-10-24): the pixel
+    /// companion draws the scarf as the map's does, so a file an older app wrote simply has none.
+    var scarfColorHex: String? = nil
+    /// The sleep cap's colour when the companion wears it, else nil. ADDITIVE (2026-10-25), like every
+    /// key below: the built-in wardrobe in pixels (phone test W-02).
+    var capColorHex: String? = nil
+    /// The app's FROZEN `CompanionSideItem` token; nil holds nothing.
+    var sideItemRaw: String? = nil
+    /// The side item's colour, or nil for the design's bark.
+    var sideItemColorHex: String? = nil
+    /// The Creation Studio pieces worn, in their place and size on the 24 × 24 item frame (W-07).
+    var items: [ItemArt]? = nil
+
+    /// One worn piece: its top-left cell in the companion's body coordinates, its size, its palette
+    /// (`#RRGGBB`) and its row-major palette indices (−1 clear). Byte-identical twin of the app's
+    /// `WidgetSnapshot.CompanionLook.ItemArt`; ``WidgetPixelLook/item(_:)`` drops a malformed one.
+    struct ItemArt: Codable, Equatable {
+        var x: Int
+        var y: Int
+        var width: Int
+        var height: Int
+        var palette: [String]
+        var pixels: [Int]
+        /// Whether it sits on the head (a hat), so the sprout and the flower step aside.
+        var coversHead: Bool
+    }
 
     /// The plain companion: a round body in the state's colour with a fern sprout — the app's
     /// `CompanionAppearance.standard`, used before the app has published a look.
@@ -195,8 +223,8 @@ struct WidgetCompanionLook: Codable, Equatable {
 /// The benign outbound snapshot the app mirrors into the app-group container.
 ///
 /// PRIVACY: wellness score + water + macro grams + the companion's state and emotion tokens, name and
-/// look ONLY —
-/// never journal text, cycle, stress, or intimacy data. The emotion timeline can reflect the day's
+/// look, when a friend's gold hearts fade, and the stamp book's tokens and days ONLY —
+/// never journal text, cycle, stress, or intimacy data, and never a place. The emotion timeline can reflect the day's
 /// journal mood TAG, the meal and water logging gaps and the bedtime window; the body-signal emotions
 /// never enter it. Written by the app's `WidgetSnapshotMirror` on every snapshot save and read back by
 /// ``WidgetSnapshotStore`` on each timeline build; `dateKey` is what ``WidgetDayGate`` checks so a
@@ -220,6 +248,18 @@ struct WidgetSnapshot: Codable, Equatable {
         var emotionRaw: String?
     }
 
+    /// One stamp from the person's stamp book, as the stamp widget shows it. Byte-identical to the
+    /// app-side twin. `kindRaw` is the app's FROZEN `SillyStatKind` token — never shown, never
+    /// translated; an unknown token (a stat a newer app added) is skipped, never drawn.
+    struct StampMoment: Codable, Equatable {
+        /// The stat's frozen token ("bathtubIndex").
+        var kindRaw: String
+        /// The day the stamp was earned (`yyyy-MM-dd`).
+        var dayKey: String
+        /// When the app recorded it — the "Earned 9:12" of a stamp earned today.
+        var earnedAt: Date
+    }
+
     var companionStateRaw: String
     var score: Double
     var bottleCount: Int
@@ -235,6 +275,16 @@ struct WidgetSnapshot: Codable, Equatable {
     var companionName: String? = nil
     /// The person's companion look; nil draws ``WidgetCompanionLook/standard``. ADDITIVE (2026-10-21).
     var companionLook: WidgetCompanionLook? = nil
+    /// When each of a friend's gold hearts showing at publish time fades, earliest first — at most
+    /// two (the app's `GoldHeartRules`: given in person, 12 hours each). ADDITIVE (2026-10-24) and
+    /// optional; the widget draws a gold heart only while its end is still ahead of the entry's date.
+    var goldHeartEnds: [Date]? = nil
+    /// The stamp book, oldest first, for the stamp widget. ADDITIVE (2026-10-24) and optional; nil or
+    /// empty before the first stamp, and empty while a decoy is open.
+    var stamps: [StampMoment]? = nil
+    /// The day's protein, carbs and fat targets in grams, for the map widget's bars. ADDITIVE (2026-10-25)
+    /// and optional: without them the bars read empty, never full.
+    var macroTargets: MacroSummary? = nil
 
     var companionState: WidgetCompanionState? { WidgetCompanionState(rawValue: companionStateRaw) }
 

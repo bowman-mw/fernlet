@@ -34,6 +34,12 @@ struct WardrobeView: View {
     /// itself from the confirmation step above it, and takes the whole customization sheet down
     /// with it when it tries.
     @State private var editingItemID: UUID?
+    /// Drives the push into Your shop (`b2-shop-editor`, which opens from Friend shops and from here).
+    /// A plain button + `navigationDestination`, like the studio's, so the `List` adds no second chevron.
+    @State private var isShowingShop = false
+
+    /// "Wardrobe", the page's title on the plate.
+    static let title = LocalizedStringResource("Wardrobe", comment: "Wardrobe page title: the companion's closet of designed items")
 
     var body: some View {
         List {
@@ -45,10 +51,9 @@ struct WardrobeView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(Color.parchment)
-        .tint(Color.moss)
-        .navigationTitle("Wardrobe")
-        .navigationBarTitleDisplayMode(.inline)
+        .fernletPageBackground()
+        // Under the Today panel's plate: ‹ Customize, Wardrobe, ✕ (design `b2-wardrobe`).
+        .fernletPushedPage(Self.title)
         // The coin balance moved to the customization sheet's leading header slot (3e /
         // XCUT-14): the wallet now greets the user one screen EARLIER on the same stack, so
         // the closet no longer needs its own copy in the toolbar.
@@ -61,6 +66,10 @@ struct WardrobeView: View {
         }
         .navigationDestination(item: $editingItemID) { id in
             editor(forItemID: id)
+        }
+        .navigationDestination(isPresented: $isShowingShop) {
+            YourShopView(store: store)
+                .fernletPushedPage("Your shop")
         }
     }
 
@@ -94,21 +103,33 @@ struct WardrobeView: View {
         }
     }
 
+    /// Your shop (`b2-shop-editor`: the approved editor opens "from Friend shops and from the
+    /// Wardrobe"), then the one-line shop summary, shown only when there is a shop to summarize.
+    private var shopStatusSection: some View {
+        Section {
+            Button { isShowingShop = true } label: {
+                CustomizeLinkCard(sprite: FriendsSprites.shop, title: Text("Your shop"),
+                                  detail: Text("What friends nearby can buy from you"))
+            }
+            .buttonStyle(.plain)
+            .plainClosetRow(insets: EdgeInsets(top: 5, leading: 20, bottom: 5, trailing: 20))
+            shopStatusLine
+        }
+    }
+
     /// The one-line shop summary, shown only when there is a shop to summarize.
     @ViewBuilder
-    private var shopStatusSection: some View {
+    private var shopStatusLine: some View {
         if !store.listedShopItems.isEmpty || store.shopUpdatedToday {
-            Section {
-                HStack(spacing: 6) {
-                    Image(systemName: "bag")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Color.moss)
-                    Text(shopStatusText)
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
-                }
-                .plainClosetRow(insets: EdgeInsets(top: 2, leading: 24, bottom: 6, trailing: 24))
+            HStack(spacing: 6) {
+                Image(systemName: "bag")
+                    .font(.system(size: 13))
+                    .foregroundStyle(WorldPalette.mossInk)
+                Text(shopStatusText)
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(WorldPalette.dim)
             }
+            .plainClosetRow(insets: EdgeInsets(top: 2, leading: 24, bottom: 6, trailing: 24))
         }
     }
 
@@ -136,7 +157,7 @@ struct WardrobeView: View {
                 } header: {
                     Text(slot.label)
                         .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
+                        .foregroundStyle(WorldPalette.dim)
                         .textCase(nil)
                 }
             }
@@ -164,43 +185,10 @@ struct WardrobeView: View {
 
     // MARK: - Rows
 
-    /// The "Design a new item" affordance — a cream card with a moss-tinted icon tile.
+    /// The "Design a new item" card (design `b2-wardrobe`): a framed plus tile, the title, the Studio line.
     private var designNewItemRow: some View {
-        HStack(spacing: 12) {
-            iconTile
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Design a new item")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.bark)
-                Text("Open the Creation Studio")
-                    .font(.fernlet(.bodySmall))
-                    .italic()
-                    .foregroundStyle(Color.slate)
-            }
-
-            Spacer(minLength: 8)
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Color.slate)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .fernletSmallShadow()
-    }
-
-    private var iconTile: some View {
-        RoundedRectangle(cornerRadius: 11, style: .continuous)
-            .fill(Color.moss.opacity(0.14))
-            .frame(width: 38, height: 38)
-            .overlay {
-                Image(systemName: "plus")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Color.moss)
-            }
+        CustomizeLinkCard(sprite: WorldSprites.plus, title: Text("Design a new item"),
+                          detail: Text("Open the Creation Studio"))
     }
 
     /// `LocalizedStringKey`, not `String` (review A4 follow-up F5). As a `String` the caption bound
@@ -208,11 +196,7 @@ struct WardrobeView: View {
     /// lookup to run after — the modifier was inert and the string absent from every catalog. With
     /// the key type the transform does what its comment claims: it uppercases the TRANSLATION.
     private func sectionLabel(_ text: LocalizedStringKey) -> some View {
-        Text(text)
-            .textCase(.uppercase)
-            .font(.fernlet(.labelSmall))
-            .foregroundStyle(Color.slate)
-            .tracking(0.8)
+        SectionLabel(text)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -224,13 +208,14 @@ struct WardrobeView: View {
         // inside a `List` the link hangs the system disclosure chevron outside the cream card. The
         // card draws its own instead.
         Button { editingItemID = item.id } label: {
+            FernletCard {
             HStack(spacing: 12) {
                 CustomItemThumbnail(texture: item.texture, size: 44)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.name.isEmpty ? item.slot.label : item.name)
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.bark)
+                        .font(FernletFramedFont.rowTitleBold)
+                        .foregroundStyle(WorldPalette.bark)
                     provenance(for: item)
                 }
 
@@ -240,15 +225,9 @@ struct WardrobeView: View {
                     equippedPill
                 }
 
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Color.slate)
+                FernletIcon(.chevron, scale: 2)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .fernletSmallShadow()
+            }
         }
         .buttonStyle(.plain)
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
@@ -312,72 +291,54 @@ struct WardrobeView: View {
                         .font(.system(size: 11))
                         .foregroundStyle(Color.moss)
                     Text("In your shop · \(item.price) coins")
-                        .font(.fernlet(.bodySmall))
-                        .italic()
+                        .font(FernletFramedFont.rowDetail)
                         // F3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
-                        .foregroundStyle(Color.mossInk)
+                        .foregroundStyle(WorldPalette.mossInk)
                 }
             } else {
                 Text("designed by you")
-                    .font(.fernlet(.bodySmall))
-                    .italic()
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.rowDetail)
+                    .foregroundStyle(WorldPalette.dim)
             }
         } else {
             Text("Designed by \(store.designerDisplayName(for: item))")
-                .font(.fernlet(.bodySmall))
-                .italic()
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.rowDetail)
+                .foregroundStyle(WorldPalette.dim)
         }
     }
 
     private var equippedPill: some View {
-        Text("Equipped")
-            .font(.fernlet(.labelSmall))
-            // T1-3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
-            .foregroundStyle(Color.mossInk)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Color.moss.opacity(0.12), in: Capsule())
-            .accessibilityLabel("Equipped")
+        FernletTag("Equipped")
     }
 
     // MARK: - Empty state
 
+    /// The empty closet (design `b2-wardrobe`): the pixel face, the title, the invitation and the button,
+    /// in a framed card.
     private var emptyCloset: some View {
-        VStack(spacing: 0) {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.moss.opacity(0.16))
-                .frame(width: 56, height: 56)
-                .overlay {
-                    Image(systemName: "tshirt")
-                        .font(.system(size: 24, weight: .light))
-                        .foregroundStyle(Color.moss)
-                }
-                .padding(.bottom, 16)
-
-            Text("Your closet is empty")
-                .font(.fernlet(.headerMedium))
-                .foregroundStyle(Color.bark)
-                .padding(.bottom, 6)
-
-            Text("Make the first little thing for your companion to wear. New creations appear on your companion right away.")
-                .font(.fernlet(.body))
-                .italic()
-                .foregroundStyle(Color.slate)
-                .multilineTextAlignment(.center)
-
-            // A plain Button, not a NavigationLink: inside a `List` the link hung a stray system
-            // chevron off the right of this pill. `ActionPillButtonStyle` also supplies the
-            // contrast-safe moss fill + ink pair (white on plain `moss` measured 4.29:1).
-            Button("Design your first item") { isDesigningNewItem = true }
-                .buttonStyle(ActionPillButtonStyle(.primary))
-                .padding(.top, 18)
+        FernletCard {
+            VStack(spacing: 10) {
+                WorldSpriteView(sprite: WorldSprites.face, scale: 4)
+                    .padding(.top, 8)
+                Text("Your closet is empty")
+                    .font(.fernlet(.headerMedium))
+                    .foregroundStyle(WorldPalette.bark)
+                    .multilineTextAlignment(.center)
+                // The end of this line was held back until the map drew custom pieces (owner Q6); it
+                // shows since round 6 lane 2 ("wardrobe drawings on the map").
+                Text("Make the first little thing for your companion to wear. New creations appear on your companion right away, and on the map as pixel art.")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(WorldPalette.dim)
+                    .multilineTextAlignment(.center)
+                    .fernletWrappingText()
+                // A plain Button, not a NavigationLink: inside a `List` the link hung a stray system
+                // chevron off the right of this pill.
+                Button("Design your first item") { isDesigningNewItem = true }
+                    .buttonStyle(ActionPillButtonStyle(.primary))
+                    .padding(.vertical, 8)
+            }
+            .frame(maxWidth: .infinity)
         }
-        .padding(.horizontal, 26)
-        .padding(.vertical, 32)
-        .frame(maxWidth: .infinity)
-        .background(Color.cream.opacity(0.6), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
     /// Unlisting is always allowed. Listing goes through the store gate (cap + name moderation); the price

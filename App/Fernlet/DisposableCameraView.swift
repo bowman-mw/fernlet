@@ -562,28 +562,41 @@ enum DisposableCameraOrientation {
 
 // MARK: - Disposable camera view
 
-/// The in-session "disposable camera": the full-screen hardware-styled capture surface shown by
-/// ``FriendsView`` while a friends mesh session is live.
+/// The "disposable camera" (`b3-camera-session` draft 2): a full-screen focused flow over a dark
+/// scene — the session's name top left and the framed ✕ top right, the framed viewfinder window with
+/// cream corner marks and a green light, then Develop & finish, the shutter, and the gold film badge
+/// with the wind control.
 ///
-/// Owns a ``CameraCaptureController`` as `@State` and renders the wind-to-arm thumbwheel, the
-/// island-morphing viewfinder (geometry from ``IslandViewfinderMetrics``), the shutter with a
-/// shared per-session film counter (`MeshSessionPhotos.filmRemaining`), and the session-info
-/// sheet (rename, open/closed access, roster with removal seconding / blocking, in-session
-/// hearts). It also hosts the session-scoped chat entry (13+ gated via `features.chat.isChatAllowed`),
-/// the admission-prompt sheet for join requests, and the develop flow: "Develop" stops the
-/// capture session and either leaves immediately (no photos — the keep-as-friend prompt is then
-/// FriendsView's job via the pending review batch) or presents `FriendPhotoReviewSheet` with
-/// friend candidates computed at presentation time against the live trust vault — over the photo ids
-/// snapshotted at Develop, rendered and answered wherever the session photos hold them, so an ending that
-/// moves the roll under the open review (door 3's give-up) cannot empty it. It reports whether any
-/// sheet or alert of its own is up (`presentsOwnSheet`), so FriendsView never requests its
-/// keep-as-friends prompt over one, and — session photos U3 — whether its Develop review is up
-/// (``SessionPhotoReviewCoordinator/cameraDevelopReviewUp``, cleared three ways so it cannot latch),
-/// so the app-wide session-end review never draws over it; its answer raises the coordinator's
-/// answer-in-flight leg around the finish-and-leave, and its capture session stops while that
-/// overlay is up (a hidden live camera is a privacy defect). Orientation
-/// flips through ``DisposableCameraOrientation``'s hysteresis so mid-rotation near-square frames
-/// never thrash the layout.
+/// **Where it opens (World build, owner 2026-10-24).** The Friends album never swaps for it any more:
+/// the Friends panel's session row has a Camera button, and Home's blue button offers it in a session
+/// (lane HOME presents it with this same initialiser). It closes with its ✕ (`onClose`, or the
+/// environment's dismiss for a full-screen cover), and closes itself when the session it shoots for
+/// ends. Session info, Messages and Leave moved to Home's session button, so the camera has no info
+/// or messages buttons; the session's prompts still ride it (``SessionPromptsModifier``) while it is
+/// the surface on screen.
+///
+/// **On your own** (no session; `b3-camera-solo` draft 2, owner 2026-10-24) it is the same camera
+/// without Develop & finish, titled "Just you" (or "Just you · <place>" when the presenter names one):
+/// ten photos a local day ("7 of 10 / left today"), each sealed the moment it is taken into the
+/// Friends area's device-only solo corpus (``SoloCameraRoll`` over `SoloCameraPhotoStore`) and held
+/// until the companion goes to sleep, which the line at the bottom says. No review, no Develop. At 0
+/// the shutter reads "No film left"; a decoy session's shots live in memory only.
+///
+/// Owns a ``CameraCaptureController`` as `@State` and renders the wind-to-arm control, the shutter
+/// with a shared per-session film counter (`MeshSessionPhotos.filmRemaining`), and the develop flow:
+/// "Develop" stops the capture session and either leaves immediately (no photos — the keep-as-friend
+/// prompt is then FriendsView's job via the pending review batch) or presents
+/// `FriendPhotoReviewSheet` with friend candidates computed at presentation time against the live
+/// trust vault — over the photo ids snapshotted at Develop, rendered and answered wherever the session
+/// photos hold them, so an ending that moves the roll under the open review (door 3's give-up) cannot
+/// empty it. It reports whether any sheet or alert of its own is up (`presentsOwnSheet`), so
+/// FriendsView never requests its keep-as-friends prompt over one, and — session photos U3 — whether
+/// its Develop review is up (``SessionPhotoReviewCoordinator/cameraDevelopReviewUp``, cleared three
+/// ways so it cannot latch), so the app-wide session-end review never draws over it; its answer raises
+/// the coordinator's answer-in-flight leg around the finish-and-leave, and its capture session stops
+/// while that overlay is up (a hidden live camera is a privacy defect). Orientation flips through
+/// ``DisposableCameraOrientation``'s hysteresis so mid-rotation near-square frames never thrash the
+/// layout.
 struct DisposableCameraView: View {
     var store: FernletStore
     /// Reported up to ``FriendsView``: whether this view has a sheet or alert of its own up right
@@ -593,11 +606,15 @@ struct DisposableCameraView: View {
     /// false (2026-09-30 fix round, findings C-F1/C-F2). Defaults to a constant for a caller that
     /// does not need to know.
     var presentsOwnSheet: Binding<Bool> = .constant(false)
+    /// Closes the camera; nil uses the environment's dismiss (a full-screen cover's presenter).
+    var onClose: (() -> Void)? = nil
+    /// On your own, the place the camera opened at ("Just you · Oak Park"): Home's blue button knows
+    /// the hike, the run, the workout space or the restaurant. Nil shows "Just you". Shown only; never
+    /// stored with a photo.
+    var placeName: String? = nil
 
     @State private var camera = CameraCaptureController()
     @State private var flashOpacity: Double = 0
-    @State private var showInfo = false
-    @State private var showChat = false
     @State private var reviewPresented = false
     /// The photo ids the open Develop review offers, snapshotted at ``beginDevelop()``. The review
     /// renders and answers these ids wherever the manager holds them now (2026-09-30 fix round,
@@ -622,37 +639,38 @@ struct DisposableCameraView: View {
     // Orientation is @State (not a raw per-frame `size.width > size.height`) so a transient
     // near-square frame mid-rotation can't flip the layout twice — see `Self.resolveLandscape`.
     @State private var isLandscape = false
-    @State private var renamingMesh = false
-    @State private var newMeshName = ""
     @State private var leaveSessionConfirm = false
-    /// The session member a "Block …?" confirmation is about — the in-session menu used to block
-    /// instantly while the roster's Block asked first.
-    @State private var participantToBlock: MeshSessionParticipant?
     /// The sender of a Develop review photo the people-report flow is open for (App Review guideline
     /// 1.2, 2026-10-15).
     @State private var photoReportSubject: PeerReportSubject?
-    /// At most one in-flight session-message notification post (R3: the trigger is peer-driven).
-    @State private var messageNotificationTask: Task<Void, Never>?
-    @Environment(\.scenePhase) private var scenePhase
+    /// Whether this camera opened over a session: it closes itself when that session ends.
+    @State private var opensInSession = false
+    /// The roll a shot alone goes into (``SoloCameraRoll``), taken from the store when the camera
+    /// opens with no session; nil in a session.
+    @State private var soloRoll: SoloCameraRoll?
+    /// A shot alone that could not be kept: its alert is up.
+    @State private var soloShotFailed = false
     /// F10: this file is the repo's own cited exemplar for the `TimelineView(.animation(paused:))`
     /// idiom — it should exemplify Reduce Motion too, not just the isArmed gating it already had.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dismiss) private var dismiss
 
-    /// The cap on a session name typed here — it rides the mesh descriptor to every peer.
-    private static let maxMeshNameLength = 40
-
-    // Housing / LED palette. The camera surface is a standalone "hardware housing" scene rather
-    // than a parchment card, so a couple of colors are literal rather than design-system tokens:
-    // the near-black shell (#050403) and the vivid hardware-LED green (#5EE06A) have no token.
+    // The camera surface is a standalone "hardware" scene rather than a parchment page, so its
+    // colours are its own and the same in light and dark: the near-black housing (#050403), the
+    // scene behind it (#201C17), the frame's brown (#4A2E1C), the cream of the marks and words
+    // (#FFF1CF, 15:1 on the scene), the hardware-LED green (#5EE06A) and the film badge's gold.
     private static let housingBlack = Color(red: 0.020, green: 0.016, blue: 0.012)
+    private static let sceneDark = WorldPalette.rgb(0x201C17)
+    private static let frameBrown = WorldPalette.rgb(0x4A2E1C)
+    private static let cream = WorldPalette.gameCream
     private static let ledGreen = Color(red: 0.369, green: 0.878, blue: 0.416)
+    private static let filmGold = WorldPalette.rgb(0xF2D58A)
     // Warm shutter-button cream (#FBF7EE), the film-camera release color from the mockup.
     private static let shutterCream = Color(red: 0.984, green: 0.969, blue: 0.933)
 
     private var manager: MeshNetworkManager { store.meshNetworkManager }
-    /// Fernlet's mesh features over ``manager``: the friend vouch list's labels, the session chat, the
-    /// in-session hearts and the session photos (the film, the live roll, the capture and the Develop
-    /// review's answers) live there.
+    /// Fernlet's mesh features over ``manager``: the session photos (the film, the live roll, the
+    /// capture and the Develop review's answers) live there.
     private var features: FernletMeshFeatures { store.meshFeatures }
     /// The app-level session-end review (session photos U3): told when the Develop review is up, and
     /// around this view's answer.
@@ -674,7 +692,7 @@ struct DisposableCameraView: View {
         GeometryReader { geometry in
             cameraSurface(geometry: geometry)
         }
-        .onAppear { if !reviewCoordinator.isShowing { camera.startSession() } }
+        .onAppear(perform: handleAppear)
         .onDisappear {
             camera.stopSession()
             // Leaving the hierarchy takes every sheet of this view with it — the Develop review
@@ -689,42 +707,69 @@ struct DisposableCameraView: View {
         // The session-end overlay over this surface (door 3's held mesh, before its leave lands):
         // no live capture under it, and no restart after it unless the session is live again.
         .onChange(of: reviewCoordinator.isShowing) { _, showing in handleOverlayChange(showing: showing) }
+        // The session this camera shot for is over (End session anywhere, or the last peer gone for
+        // good): there is nothing left to shoot for, as when the old album swap took it away.
+        .onChange(of: manager.isInSession) { _, inSession in if opensInSession && !inSession { close() } }
         .onChange(of: manager.pendingRemovalProposals) { _, _ in
             presentNextRemovalProposalIfNeeded()
         }
-        // TF b19 item 6: a rising unread count means an inbound message arrived while the chat sheet
-        // was closed (the store only increments unread when it isn't being viewed). Signal it — a soft,
-        // rate-limited haptic while the app is active, a best-effort local notification while it isn't.
-        .onChange(of: features.chat.sessionMessages.unreadCount) { oldValue, newValue in
-            guard newValue > oldValue else { return }
-            handleUnreadMessageArrival()
-        }
+        .onChange(of: store.duressSessionActive) { _, decoy in soloRoll?.setDecoy(decoy) }
         .sheet(isPresented: $reviewPresented, onDismiss: resumeCameraAfterCancelledReview) { reviewSheet }
-        .sheet(isPresented: $showInfo) { infoSheet }
-        .sheet(isPresented: $showChat) {
-            SessionChatPanel(
-                chat: features.chat,
-                onReport: { store.reportSessionPeer($0, reason: $1) },
-                onDone: { showChat = false }
-            )
+        .alert("Couldn't keep that photo. Try again.", isPresented: $soloShotFailed) {
+            Button("OK", role: .cancel) {}
         }
+        // The session's prompts only in a session: alone, a stale mesh notice is not this camera's.
         .modifier(SessionPromptsModifier(
             manager: manager,
+            isActive: manager.isInSession,
             activeRemovalProposal: $activeRemovalProposal,
             leaveSessionConfirm: $leaveSessionConfirm,
-            showInfo: $showInfo,
-            beginDevelop: beginDevelop
+            onConfirmEnd: beginDevelop
         ))
+        .accessibilityAction(.escape) { close() }
     }
 
-    /// Whether any sheet or alert this view hangs is up: its Develop review, info and chat sheets
-    /// (the info sheet carries the rename sheet and the block confirmation), the end-session and
+    /// Leaves the camera: the presenter's close, or the cover's dismiss.
+    private func close() {
+        if let onClose { onClose() } else { dismiss() }
+    }
+
+    /// Opening: notes whether this camera shoots for a session, takes the solo roll when it does
+    /// not, and starts the capture session unless the session-end review is up.
+    private func handleAppear() {
+        opensInSession = manager.isInSession
+        if !opensInSession {
+            let roll = store.soloCameraRoll()
+            roll.refresh()
+            soloRoll = roll
+        }
+        if !reviewCoordinator.isShowing { camera.startSession() }
+    }
+
+    /// Whether any sheet or alert this view hangs is up: its Develop review, the end-session and
     /// removal-seconding alerts, and the manager-driven admission sheet and session alert — the
     /// same conditions their presenters read. What ``presentsOwnSheet`` reports.
     private var ownPresentationIsUp: Bool {
-        reviewPresented || showInfo || showChat || leaveSessionConfirm || activeRemovalProposal != nil
+        reviewPresented || leaveSessionConfirm || activeRemovalProposal != nil || soloShotFailed
             || (!manager.pendingAdmissionRequests.isEmpty && manager.currentMesh != nil)
             || manager.meshError != nil || manager.routedShareRefusal != nil
+    }
+
+    /// Whether a shot can be kept here: in a session the session's photos hold it; on your own the
+    /// solo roll does, once its sealed corpus can be read (until then the camera alone says "Camera
+    /// off").
+    private var canShootHere: Bool {
+        manager.isInSession || soloRoll?.shotsLeft(at: Date()) != nil
+    }
+
+    /// Whether this camera is shooting on your own (no session): the solo film, no Develop.
+    private var isSolo: Bool { !manager.isInSession }
+
+    /// Film left for the shutter: the session's shared film, or today's solo film (none while the
+    /// solo corpus cannot be read).
+    private var filmRemaining: Int {
+        guard isSolo else { return features.photos.filmRemaining }
+        return soloRoll?.shotsLeft(at: Date()) ?? 0
     }
 
     /// The Develop review's photos: the snapshotted ids still awaiting an answer, wherever the
@@ -733,23 +778,21 @@ struct DisposableCameraView: View {
         features.photos.photosAwaitingAnswer(among: developReviewIDs)
     }
 
-    /// The full-screen camera "hardware" scene for the current geometry.
+    /// The full-screen camera scene for the current geometry.
     ///
     /// The scene lives in a full-screen (safe-area-ignoring) layer so one preview node can span both
-    /// orientations and, on island devices, the housing can reach up to the true screen top to wrap
-    /// the island. A single `CameraPreviewView` inside `cameraStage` keeps stable structural
+    /// orientations. A single `CameraPreviewView` inside `cameraStage` keeps stable structural
     /// identity across rotation, so the live `AVCaptureSession` is never detached/reattached (the
     /// old freeze/black flash).
     ///
     /// Modifier order is load-bearing: `ignoresSafeArea()` must wrap the `overlay`, not the color
     /// alone. `ignoresSafeArea()` extends only the view it modifies, so an overlay attached *after*
     /// it is laid out in the un-extended safe-area frame and every `.position` inside the stage
-    /// measures from the safe-area top — the housing, LED, glass, and prompt then land one top
-    /// inset (~60pt) below the island. With the overlay inside, the stage's bounds are the whole
-    /// screen and `IslandViewfinderMetrics`' screen-absolute y-values mean what they say.
+    /// measures from the safe-area top. With the overlay inside, the stage's bounds are the whole
+    /// screen and its positions mean what they say.
     private func cameraSurface(geometry: GeometryProxy) -> some View {
         ZStack {
-            Color(red: 0.13, green: 0.10, blue: 0.08)
+            Self.sceneDark
                 .overlay { cameraStage(geometry: geometry) }
                 .ignoresSafeArea()
 
@@ -775,127 +818,169 @@ struct DisposableCameraView: View {
         }
     }
 
-    /// The two top-corner controls (info + in-session chat), extracted into a single overlay so the
-    /// main body ZStack stays inside the Swift type-checker's budget.
+    /// The top row: the session's name and who is in it, top left, and the framed ✕ top right (the
+    /// button rule: ✕ always top right).
     private var topControls: some View {
-        ZStack {
-            infoButton
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            // The 13+ age gate. Reads the same value the transport enforces (`chatAllowedProvider`), so
-            // the affordance can't survive a gate the send/receive seams are already refusing. Settings
-            // carries the explanation and the way to unlock it — a camera overlay is the wrong place to
-            // tell someone they're too young.
-            if features.chat.isChatAllowed {
-                chatButton
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-            }
+        HStack(alignment: .center, spacing: 12) {
+            titleText
+                .font(FernletFramedFont.button)
+                .foregroundStyle(Self.cream)
+                .lineLimit(2)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 8)
+            FernletCloseButton(action: close)
         }
-        .padding(20)
+        .padding(.horizontal, 18)
+        .padding(.top, 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    private var infoButton: some View {
-        Button { showInfo = true } label: {
-            Image(systemName: "info.circle")
-                .font(.system(size: 18))
-                .foregroundStyle(Color.white.opacity(0.5))
+    /// "Picnic · with Sam and Rae" in a session; "Just you" (or "Just you · Oak Park") on your own.
+    private var titleText: Text {
+        guard manager.isInSession else {
+            guard let placeName, !placeName.isEmpty else { return Text("Just you") }
+            return Text("Just you · \(placeName)")
         }
-        .accessibilityIdentifier("camera.info")
-        .fernletIconButton("Session info")
-    }
-
-    /// In-session chat entry point (Phase 5). Messages are live-session only and vanish at session end.
-    /// TF b19 item 6: a dot badge appears while there are unread inbound messages (cleared when the
-    /// panel opens).
-    private var chatButton: some View {
-        let hasUnread = features.chat.sessionMessages.hasUnread
-        return Button { showChat = true } label: {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 18))
-                .foregroundStyle(Color.white.opacity(hasUnread ? 0.85 : 0.5))
-                .overlay(alignment: .topTrailing) {
-                    if hasUnread {
-                        Circle()
-                            .fill(Color.terracotta)
-                            .frame(width: 9, height: 9)
-                            .overlay(Circle().stroke(Self.housingBlack, lineWidth: 1.5))
-                            .offset(x: 5, y: -4)
-                            .accessibilityHidden(true)
-                    }
-                }
+        let names = manager.sessionParticipants.filter { !$0.isLocal }.map {
+            PeerNameDisplay.firstName($0.displayName, fingerprint: $0.fingerprint, placeholder: .met, in: .fernlet)
         }
-        .fernletTapTarget()
-        .accessibilityLabel(hasUnread ? "Session messages, new message" : "Session messages")
-        .accessibilityIdentifier("camera.chat")
+        let meshName = manager.currentMesh?.name ?? ""
+        guard !names.isEmpty else { return meshName.isEmpty ? Text("Session") : Text(verbatim: meshName) }
+        let together = FriendsSessionNames.sentence(names)
+        guard !meshName.isEmpty else { return Text("With \(together)") }
+        return Text("\(meshName) · with \(together)")
     }
 
     private var portraitControls: some View {
-        HStack(alignment: .bottom) {
-            developButton
-                .frame(width: 72)
-            Spacer()
-            shutterButton
-            Spacer()
-            HStack(spacing: 8) {
-                filmCounterBadge
-                windIndicator(isLandscape: false)
+        VStack(spacing: 18) {
+            HStack(alignment: .bottom) {
+                Group {
+                    if manager.isInSession { developButton } else { Color.clear.frame(height: 1) }
+                }
+                .frame(width: 112)
+                Spacer(minLength: 0)
+                shutterButton
+                Spacer(minLength: 0)
+                filmColumn(isLandscape: false)
+                    .frame(width: 112)
             }
+            if isSolo { soloFooter }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .padding(.horizontal, 24)
-        .padding(.bottom, 28)
+        .padding(.horizontal, 12)
+        .padding(.bottom, isSolo ? 12 : 24)
+    }
+
+    /// The room the solo line takes under the controls, kept clear of the viewfinder.
+    private static let soloFooterReserve: CGFloat = 44
+
+    /// On your own, when the photos show (`b3-camera-solo`): after the companion goes to sleep, tonight,
+    /// or tomorrow night once it is already asleep (form answer 44). Read again each minute, so the line
+    /// turns as bedtime passes with the camera open.
+    private var soloFooter: some View {
+        TimelineView(.everyMinute) { context in
+            soloFooterLine(at: context.date)
+        }
+    }
+
+    /// The solo line at `date`.
+    private func soloFooterLine(at date: Date) -> some View {
+        let tomorrow = SoloCameraRules.waitsForTomorrowNight(at: date, calendar: .current)
+        let line = tomorrow
+            ? Text("Your photos appear tomorrow night, after \(companionName) goes to sleep.")
+            : Text("Your photos appear tonight, after \(companionName) goes to sleep.")
+        return line
+            .font(FernletFramedFont.note)
+            .foregroundStyle(Self.cream.opacity(0.88))
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: 460)
+            .padding(.horizontal, 12)
+            .accessibilityIdentifier("camera.soloFooter")
+    }
+
+    /// The companion's own name, or Fernlet (as the Today card says it).
+    private var companionName: String {
+        let chosen = store.settings.companionName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return chosen.isEmpty ? "Fernlet" : chosen
     }
 
     private var landscapeControls: some View {
-        // The film + wind cluster used to sit at `.topTrailing`, painting over the chat button in the
-        // same corner (topControls is drawn first, so the cluster stole its taps). It now rides a
-        // leading rail, vertically centered — the top corners belong to info (leading) and chat
-        // (trailing) alone, and the cluster clears the centered preview and the trailing shutter.
+        // The film + wind cluster rides a leading rail, vertically centred; the shutter the trailing
+        // rail; Develop the bottom-leading corner. The top corners belong to the title and the ✕.
         ZStack {
-            VStack(spacing: 14) {
-                filmCounterBadge
-                windIndicator(isLandscape: true)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-            .padding(.leading, 20)
+            filmColumn(isLandscape: true)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                .padding(.leading, 20)
 
             shutterButton
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
                 .padding(.trailing, 22)
 
-            developButton
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                .padding(22)
+            if manager.isInSession {
+                developButton
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    .padding(22)
+            } else {
+                // Alone, the line sits under the viewfinder, in the room its frame leaves for it.
+                soloFooter
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, 6)
+            }
+        }
+    }
+
+    /// The gold film badge over the wind control and its caption ("Ready" once wound). Alone, "left
+    /// today" sits under the badge (`b3-camera-solo`).
+    private func filmColumn(isLandscape: Bool) -> some View {
+        VStack(spacing: 8) {
+            filmCounterBadge
+            if isSolo {
+                // The badge's label already says it for VoiceOver.
+                Text("left today")
+                    .font(FernletFramedFont.buttonSmall)
+                    .foregroundStyle(Self.ledGreen)
+                    .accessibilityHidden(true)
+            }
+            windIndicator(isLandscape: isLandscape)
         }
     }
 
     private var filmCounterBadge: some View {
-        HStack(spacing: 5) {
-            Image(systemName: "film")
-                .font(.system(size: 11, weight: .semibold))
-            Text("\(features.photos.filmRemaining)")
-                .font(.fernlet(.stat))
+        let shape = RoundedRectangle(cornerRadius: 9, style: .continuous)
+        return HStack(spacing: 6) {
+            WorldSpriteView(sprite: FriendsSprites.film, scale: 2, tint: Self.frameBrown)
+            filmCountText
+                .font(FernletFramedFont.button)
+                .monospacedDigit()
+                .foregroundStyle(Self.frameBrown)
             // The always-visible half of the kept-photo notice: a glyph, with the sentence itself
-            // in the info sheet and in this badge's accessibility label.
-            if features.photos.photosKeptOnThisPhone > 0 {
+            // in the badge's accessibility label. A session's notice only.
+            if !isSolo && features.photos.photosKeptOnThisPhone > 0 {
                 Image(systemName: "iphone")
                     .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Self.frameBrown)
             }
         }
-        .foregroundStyle(features.photos.filmRemaining > 0 ? Color.goldenrod : Color.terracotta)
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(Color.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 7))
-        .overlay(
-            RoundedRectangle(cornerRadius: 7)
-                .stroke(Color.white.opacity(0.15), lineWidth: 1)
-        )
+        .frame(minHeight: 40)
+        .background(filmRemaining > 0 ? Self.filmGold : Self.filmGold.opacity(0.55), in: shape)
+        .overlay(shape.strokeBorder(Self.frameBrown, lineWidth: 2))
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(filmCounterAccessibilityLabel)
         .accessibilityIdentifier("camera.filmCounter")
     }
 
+    /// The badge's count: the session's shots left, or "7 of 10" of today's film alone.
+    private var filmCountText: Text {
+        guard isSolo else { return Text("\(features.photos.filmRemaining)") }
+        return Text("\(filmRemaining) of \(SoloCameraRules.photosPerDay)")
+    }
+
     /// The badge's label, with the kept-photo sentence appended when there is one — `Text`
-    /// interpolating `Text`, so both halves are harvested (review T2-1).
+    /// interpolating `Text`, so both halves are harvested (review T2-1). Alone, today's film.
     private var filmCounterAccessibilityLabel: Text {
+        if isSolo { return Text("\(filmRemaining) of \(SoloCameraRules.photosPerDay) photos left today") }
         guard let kept = RoutedShareRefusalCopy.photoKeptNotice(count: features.photos.photosKeptOnThisPhone) else {
             return Text("Film remaining: \(features.photos.filmRemaining)")
         }
@@ -904,54 +989,61 @@ struct DisposableCameraView: View {
 
     // MARK: - Viewfinder
 
-    /// The glass rect (in the full-screen overlay's coordinate space) for the live-preview window,
-    /// plus its corner radius and fade. Computed as a plain value for the current orientation +
-    /// openness so a single, structurally-stable `CameraPreviewView` can be repositioned across
-    /// rotation rather than recreated.
-    private struct GlassRect {
-        var rect: CGRect
-        var cornerRadius: CGFloat
-        var previewOpacity: Double
+    /// Where the framed viewfinder window sits (`b3-camera-session` draft 2), in the full-screen
+    /// layer's coordinates (origin = the true top-left): under the title row in portrait, 24 pt in from
+    /// each side, about 4:5 and never into the controls; centred and 4:3 in landscape, clear of the
+    /// side rails. A pure function of the size and insets, so one preview node is repositioned across
+    /// rotation rather than recreated (the old freeze / black flash).
+    ///
+    /// - Parameters:
+    ///   - size: The safe-area size the camera lays out in.
+    ///   - safeArea: The safe-area insets.
+    ///   - landscape: Whether the camera is in its landscape layout.
+    ///   - bottomReserve: Room kept clear under the window for a line of text (the solo camera's
+    ///     "Your photos appear tonight…"); 0 for the session camera.
+    /// - Returns: The window's rectangle.
+    static func viewfinderRect(in size: CGSize, safeArea: EdgeInsets, landscape: Bool,
+                               bottomReserve: CGFloat = 0) -> CGRect {
+        let reserve = max(0, bottomReserve)
+        guard landscape else {
+            let width = max(0, size.width - 48)
+            let maxHeight = max(0, size.height - 64 - 200 - reserve)
+            let height = min(width * 1.21, maxHeight)
+            return CGRect(x: safeArea.leading + 24, y: safeArea.top + 64, width: width, height: height)
+        }
+        let height = max(0, size.height - 24 - reserve)
+        let width = min(height * 4 / 3, max(0, size.width - 260))
+        let fitted = min(height, width * 3 / 4)
+        return CGRect(x: safeArea.leading + (size.width - width) / 2,
+                      y: safeArea.top + (size.height - reserve - fitted) / 2,
+                      width: width, height: fitted)
     }
 
-    /// The whole "camera hardware" scene: the black housing (portrait only, wrapping the island),
-    /// ONE preview node, and the framing chrome. `openness` (armed → 1, else windProgress) drives
-    /// the open↔closed morph in BOTH orientations, so `disarm()` after a shot retracts the
-    /// viewfinder in landscape exactly as it does in the portrait island path.
+    /// The camera scene: the framed window with the live preview fading in as the film winds, the
+    /// cream corner marks and the green light, and the permission prompt inside it when needed.
     private func cameraStage(geometry: GeometryProxy) -> some View {
         let openness = camera.isArmed ? 1.0 : camera.windProgress
-        let metrics = IslandViewfinderMetrics(
-            topInset: geometry.safeAreaInsets.top,
-            screenWidth: geometry.size.width
-        )
-        let glass = glassRect(geometry: geometry, metrics: metrics, openness: openness)
-        let showsPermissionPrompt = camera.needsCameraPermissionPrompt
-            && (isLandscape || openness > 0.85)
-
+        let window = Self.viewfinderRect(in: geometry.size, safeArea: geometry.safeAreaInsets, landscape: isLandscape,
+                                         bottomReserve: isSolo ? Self.soloFooterReserve : 0)
+        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+        let showsPermissionPrompt = camera.needsCameraPermissionPrompt && (isLandscape || openness > 0.85)
         return ZStack {
             // Decorative hardware — flattened for VoiceOver, kept out of hit testing (the wind
-            // gesture lives on the thumbwheel). The child order here is fixed regardless of
-            // orientation: the housing shell is one optional slot, the preview always index 1, and
-            // the framing chrome one Group slot — so the `CameraPreviewView` UIView (and its live
-            // capture-session attachment) survives every rotation.
+            // gesture lives on the wind control). The child order is fixed regardless of
+            // orientation, so the `CameraPreviewView` UIView (and its live capture-session
+            // attachment) survives every rotation.
             ZStack {
-                if !isLandscape {
-                    islandHousingShell(metrics: metrics, openness: openness)
-                }
-
+                shape.fill(Self.housingBlack)
+                    .frame(width: window.width, height: window.height)
+                    .position(x: window.midX, y: window.midY)
                 CameraPreviewView(session: camera.session)
-                    .frame(width: glass.rect.width, height: glass.rect.height)
-                    .clipShape(RoundedRectangle(cornerRadius: glass.cornerRadius, style: .continuous))
-                    .opacity(glass.previewOpacity)
-                    .position(x: glass.rect.midX, y: glass.rect.midY)
-
-                Group {
-                    if isLandscape {
-                        landscapeFraming(glass: glass)
-                    } else {
-                        islandFraming(metrics: metrics, glass: glass, openness: openness)
-                    }
-                }
+                    .frame(width: window.width, height: window.height)
+                    .clipShape(shape)
+                    .opacity(openness)
+                    .position(x: window.midX, y: window.midY)
+                viewfinderChrome
+                    .frame(width: window.width, height: window.height)
+                    .position(x: window.midX, y: window.midY)
             }
             .allowsHitTesting(false)
             .accessibilityElement()
@@ -962,162 +1054,65 @@ struct DisposableCameraView: View {
             // Open Settings button stays tappable and VoiceOver-reachable.
             if showsPermissionPrompt {
                 cameraPermissionPrompt
-                    .frame(width: glass.rect.width, height: glass.rect.height)
-                    .clipShape(RoundedRectangle(cornerRadius: glass.cornerRadius, style: .continuous))
-                    .position(x: glass.rect.midX, y: glass.rect.midY)
+                    .frame(width: window.width, height: window.height)
+                    .clipShape(shape)
+                    .position(x: window.midX, y: window.midY)
             }
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.82), value: openness)
+        .animation(.easeOut(duration: 0.25), value: openness)
     }
 
-    /// Preview-glass geometry for the current orientation, in the full-screen overlay coordinate
-    /// space (origin = true top-left).
-    private func glassRect(
-        geometry: GeometryProxy,
-        metrics: IslandViewfinderMetrics,
-        openness: Double
-    ) -> GlassRect {
-        if isLandscape {
-            // Fit a 4:3 window inside the safe area (minus chrome padding), then shrink + fade it
-            // toward a compact element as the camera unwinds so it retracts after a shot and the
-            // user re-arms with the same wind affordance as portrait.
-            let sa = geometry.safeAreaInsets
-            let padH: CGFloat = 26, padV: CGFloat = 18
-            let availW = max(0, geometry.size.width - padH * 2)
-            let availH = max(0, geometry.size.height - padV * 2)
-            var w = availW
-            var h = availW * 3 / 4
-            if h > availH { h = availH; w = availH * 4 / 3 }
-            let scale = 0.4 + 0.6 * CGFloat(min(max(openness, 0), 1))
-            w *= scale
-            h *= scale
-            let centerX = sa.leading + geometry.size.width / 2
-            let centerY = sa.top + geometry.size.height / 2
-            return GlassRect(
-                rect: CGRect(x: centerX - w / 2, y: centerY - h / 2, width: w, height: h),
-                cornerRadius: 12,
-                previewOpacity: metrics.previewOpacity(openness: openness)
-            )
-        } else {
-            let g = metrics.glassFrame(openness: openness)
-            return GlassRect(
-                rect: CGRect(
-                    x: metrics.centerX - g.size.width / 2,
-                    y: g.centerY - g.size.height / 2,
-                    width: g.size.width,
-                    height: g.size.height
-                ),
-                cornerRadius: g.cornerRadius,
-                previewOpacity: metrics.previewOpacity(openness: openness)
-            )
+    /// The window's frame: a 4-pt brown frame, cream pixel corner marks, and the green light top
+    /// right, which breathes once the film is wound (still under Reduce Motion).
+    private var viewfinderChrome: some View {
+        ZStack(alignment: .topTrailing) {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Self.frameBrown, lineWidth: 5)
+            cornerBrackets(color: Self.cream, length: 22, thickness: 4, margin: 24)
+                .opacity(camera.isArmed ? 1 : 0.55)
+            cameraLED
+                .padding(14)
         }
     }
 
-    /// The near-black housing shell behind the portrait preview. On island devices its top reaches
-    /// the screen edge so the island pill rides inside its top band (item 8); on notch / flat it is
-    /// the detached floating card.
-    private func islandHousingShell(metrics: IslandViewfinderMetrics, openness: Double) -> some View {
-        let housing = metrics.frame(openness: openness)
-        return RoundedRectangle(cornerRadius: housing.cornerRadius, style: .continuous)
-            .fill(Self.housingBlack)
-            .shadow(color: Color.black.opacity(0.55), radius: 16, y: 12)
-            .frame(width: housing.size.width, height: housing.size.height)
-            .position(x: metrics.centerX, y: housing.centerY)
-    }
-
-    /// Portrait framing chrome: reticle brackets over the glass, plus the status LED in the shell's
-    /// top gap on a phone with no Dynamic Island (``IslandViewfinderMetrics/showsStatusLED``).
-    private func islandFraming(
-        metrics: IslandViewfinderMetrics,
-        glass: GlassRect,
-        openness: Double
-    ) -> some View {
-        ZStack {
-            islandViewfinderReticle
-                .frame(width: glass.rect.width, height: glass.rect.height)
-                .opacity(glass.previewOpacity)
-                .position(x: glass.rect.midX, y: glass.rect.midY)
-
-            if let ledCenterY = metrics.ledCenterY(openness: openness) {
-                islandCameraLED(openness: openness)
-                    .position(x: metrics.centerX, y: ledCenterY)
-            }
-        }
-    }
-
-    /// Landscape framing chrome: corner brackets + a subtle rounded border that stays visible while
-    /// the viewfinder is retracted, so the shrunken glass reads as the wind/re-arm target.
-    private func landscapeFraming(glass: GlassRect) -> some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: glass.cornerRadius, style: .continuous)
-                .stroke(Color.white.opacity(0.12 + 0.13 * glass.previewOpacity), lineWidth: 1)
-                .frame(width: glass.rect.width, height: glass.rect.height)
-                .position(x: glass.rect.midX, y: glass.rect.midY)
-
-            viewfinderBrackets
-                .frame(width: glass.rect.width, height: glass.rect.height)
-                .opacity(glass.previewOpacity)
-                .position(x: glass.rect.midX, y: glass.rect.midY)
-        }
-    }
-
-    /// The classic "camera on" green LED (#5EE06A) that rides at the top of the housing, breathing
-    /// with a slow pulse once the viewfinder is open. Drawn only where
-    /// ``IslandViewfinderMetrics/showsStatusLED`` — never under a Dynamic Island, whose own green
-    /// camera indicator it would duplicate.
-    private func islandCameraLED(openness: Double) -> some View {
-        // Base visibility fades the LED in with the housing; once armed it breathes 0.8↔1.0. The
-        // breathe is clock-driven (TimelineView) rather than a repeatForever animation: disarming
-        // after a shot retargets the LED's opacity, which would kill a repeating animation for
-        // good, and the pulse must survive every disarm/re-arm cycle.
-        let visible = camera.isArmed ? 1.0 : Double(openness)
-        return TimelineView(.animation(paused: !camera.isArmed || reduceMotion)) { context in
-            // 0.8 ↔ 1.0 cosine breathe with a 3.8s round trip (the old autoreversing 1.9s ease).
+    /// The classic "camera on" green light, a framed pixel square; once armed it breathes 0.8↔1.0.
+    /// The breathe is clock-driven (TimelineView) rather than a repeatForever animation: disarming
+    /// after a shot retargets the light's opacity, which would kill a repeating animation for good,
+    /// and the pulse must survive every disarm/re-arm cycle.
+    private var cameraLED: some View {
+        TimelineView(.animation(paused: !camera.isArmed || reduceMotion)) { context in
+            // 0.8 ↔ 1.0 cosine breathe with a 3.8s round trip.
             let phase = context.date.timeIntervalSinceReferenceDate / 3.8 * 2 * .pi
-            let breathe = camera.isArmed ? 0.9 - 0.1 * cos(phase) : 0.82
-            Circle()
+            let breathe = camera.isArmed ? 0.9 - 0.1 * cos(phase) : 0.45
+            Rectangle()
                 .fill(Self.ledGreen)
-                .frame(width: 7, height: 7)
-                .shadow(color: Self.ledGreen.opacity(0.75), radius: 5)
-                .opacity(visible * breathe)
+                .frame(width: 12, height: 12)
+                .overlay(Rectangle().strokeBorder(Self.housingBlack, lineWidth: 2))
+                .opacity(breathe)
         }
-    }
-
-    /// White reticle corner brackets framing the live preview, matching the mockup's armed frame.
-    private var islandViewfinderReticle: some View {
-        cornerBrackets(color: Color.white.opacity(0.7), length: 16, thickness: 2, margin: 8)
-            .allowsHitTesting(false)
     }
 
     private var cameraPermissionPrompt: some View {
         VStack(spacing: 14) {
-            Image(systemName: "camera.fill")
-                .font(.system(size: 28, weight: .regular))
-                .foregroundStyle(Color.dustyRose)
-                .frame(width: 60, height: 60)
-                .background(Color.dustyRose.opacity(0.14), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .padding(.bottom, 4)
             Text("Camera access is off")
-                .font(.fernlet(.header))
-                .foregroundStyle(.white)
+                .font(FernletFramedFont.cardTitle)
+                .foregroundStyle(Self.cream)
             Text("Fernlet needs the camera to take photos with friends. You can turn it on any time.")
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.white.opacity(0.65))
+                .font(FernletFramedFont.body)
+                .foregroundStyle(Self.cream.opacity(0.8))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-            Button("Open Settings") {
+            Button {
                 openAppSettings()
+            } label: {
+                Text("Open Settings").frame(maxWidth: .infinity)
             }
-            .font(.fernlet(.label))
-            .foregroundStyle(Color.midnight)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(Color.stateThriving.opacity(0.9), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .buttonStyle(ActionPillButtonStyle(.primary))
             .padding(.top, 6)
         }
         .padding(.horizontal, 26)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Self.housingBlack.opacity(0.9), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(Self.housingBlack.opacity(0.92))
         .accessibilityIdentifier("camera.permissionPrompt")
     }
 
@@ -1126,12 +1121,7 @@ struct DisposableCameraView: View {
         UIApplication.shared.open(url)
     }
 
-    private var viewfinderBrackets: some View {
-        cornerBrackets(color: Color.white.opacity(0.45), length: 18, thickness: 2, margin: 0)
-    }
-
-    /// Four corner brackets inset `margin` from each edge — the island reticle and the landscape
-    /// viewfinder frame differ only in size, inset, and brightness.
+    /// Four corner brackets inset `margin` from each edge: the viewfinder's cream corner marks.
     private func cornerBrackets(color c: Color, length len: CGFloat, thickness t: CGFloat, margin m: CGFloat) -> some View {
         GeometryReader { geo in
             let w = geo.size.width, h = geo.size.height
@@ -1156,80 +1146,99 @@ struct DisposableCameraView: View {
         Rectangle().fill(color).frame(width: w, height: h)
     }
 
+    /// Develop & finish: a framed paper tile with the two-prints mark, its words under it in cream.
     private var developButton: some View {
-        Button {
+        let shape = RoundedRectangle(cornerRadius: 9, style: .continuous)
+        return Button {
             // With photos there is a review sheet to back out of. With none, "Develop" used to end
             // the live session on the spot — chat transcript gone, camera gone — off a photo verb.
-            // Ask with the same "End session?" alert the info sheet raises.
+            // Ask with the same "End session?" the session button asks.
             if features.photos.sessionPhotos.isEmpty {
                 leaveSessionConfirm = true
             } else {
                 beginDevelop()
             }
         } label: {
-            VStack(spacing: 5) {
-                Image(systemName: "photo.on.rectangle.angled")
-                    .font(.system(size: 22))
-                    .foregroundStyle(Color.white.opacity(0.65))
+            VStack(spacing: 6) {
+                WorldSpriteView(sprite: FriendsSprites.prints, scale: 3, tint: Self.frameBrown)
+                    .frame(width: 52, height: 52)
+                    .background(Self.cream, in: shape)
+                    .overlay(shape.strokeBorder(Self.frameBrown, lineWidth: 2))
                 // Named for what it actually does: developing the film also ends the outing.
                 Text("Develop & finish")
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.white.opacity(0.5))
+                    .font(FernletFramedFont.buttonSmall)
+                    .foregroundStyle(Self.cream)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .buttonStyle(.plain)
         .accessibilityIdentifier("camera.develop")
     }
 
     private var shutterButton: some View {
-        let canShoot = camera.isArmed && features.photos.filmRemaining > 0 && camera.canCapturePhoto
+        let canShoot = camera.isArmed && filmRemaining > 0 && camera.canCapturePhoto && canShootHere
         return Button {
             guard canShoot else { return }
             Task { await takePhoto() }
         } label: {
-            VStack(spacing: 7) {
+            VStack(spacing: 8) {
                 ZStack {
-                    // Bright, glowing ring when ready; muted ring when locked.
+                    // A cream ring and release when ready; muted when locked.
                     Circle()
-                        .stroke(Color.white.opacity(canShoot ? 0.85 : 0.16), lineWidth: 3)
-                        .frame(width: 82, height: 82)
-                        .shadow(color: Color.white.opacity(canShoot ? 0.25 : 0), radius: 10)
+                        .stroke(Self.cream.opacity(canShoot ? 1 : 0.25), lineWidth: 5)
+                        .frame(width: 84, height: 84)
                     Circle()
-                        .fill(canShoot ? Self.shutterCream : Color.white.opacity(0.14))
-                        .frame(width: 70, height: 70)
-                    if !camera.isArmed && features.photos.filmRemaining > 0 {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(Color.white.opacity(0.5))
-                    } else if features.photos.filmRemaining == 0 {
-                        Image(systemName: "film.slash")
-                            .font(.system(size: 18))
-                            .foregroundStyle(Color.terracotta.opacity(0.9))
-                    } else if !camera.canCapturePhoto {
-                        Image(systemName: "camera.slash")
-                            .font(.system(size: 18))
-                            .foregroundStyle(Color.white.opacity(0.5))
-                    }
+                        .fill(canShoot ? Self.shutterCream : Self.cream.opacity(0.14))
+                        .overlay(Circle().strokeBorder(Self.frameBrown, lineWidth: 3))
+                        .frame(width: 66, height: 66)
+                    shutterGlyph
                 }
-                // Captions replace the mockup's cryptic glyphs: name each shutter state in words.
+                // Captions replace cryptic glyphs: name each shutter state in words.
                 Text(shutterCaption(canShoot: canShoot))
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(canShoot ? Color.stateThriving : Color.white.opacity(0.4))
+                    .font(FernletFramedFont.buttonSmall)
+                    .foregroundStyle(canShoot ? Self.cream : Self.cream.opacity(0.7))
             }
         }
+        .buttonStyle(.plain)
         .disabled(!canShoot)
-        .scaleEffect(canShoot ? 1.0 : 0.9)
+        .scaleEffect(canShoot ? 1.0 : 0.94)
         .animation(.spring(response: 0.2, dampingFraction: 0.7), value: canShoot)
         .accessibilityLabel(shutterAccessibilityLabel(canShoot: canShoot))
         .accessibilityIdentifier("camera.shutter")
     }
 
+    /// The glyph inside a shutter that cannot fire: a camera that cannot keep a shot here, the film
+    /// to wind, the film used up, or the camera off.
+    @ViewBuilder
+    private var shutterGlyph: some View {
+        if !canShootHere {
+            Image(systemName: "camera.slash")
+                .font(.system(size: 18))
+                .foregroundStyle(Self.cream.opacity(0.6))
+        } else if !camera.isArmed && filmRemaining > 0 {
+            Image(systemName: "arrow.clockwise")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(Self.cream.opacity(0.6))
+        } else if filmRemaining == 0 {
+            Image(systemName: "film.slash")
+                .font(.system(size: 18))
+                .foregroundStyle(Color.terracotta)
+        } else if !camera.canCapturePhoto {
+            Image(systemName: "camera.slash")
+                .font(.system(size: 18))
+                .foregroundStyle(Self.cream.opacity(0.6))
+        }
+    }
+
     /// A short caption under the shutter, so its ring state reads without decoding a glyph. A key,
     /// not a `String`: `Text(String)` is the verbatim overload, which kept all four out of the catalog.
+    /// A camera that cannot keep a shot here (the solo corpus unreadable right now) says so before
+    /// the film does.
     private func shutterCaption(canShoot: Bool) -> LocalizedStringKey {
         if canShoot { return "Tap to shoot" }
-        if features.photos.filmRemaining == 0 { return "No film left" }
+        if !canShootHere { return "Camera off" }
+        if filmRemaining == 0 { return "No film left" }
         if !camera.canCapturePhoto { return "Camera off" }
         return "Wind to arm"
     }
@@ -1238,28 +1247,29 @@ struct DisposableCameraView: View {
     /// through the verbatim overload, so none of these four states was ever harvested.
     private func shutterAccessibilityLabel(canShoot: Bool) -> Text {
         if canShoot { return Text("Take photo") }
-        if features.photos.filmRemaining == 0 { return Text("No film remaining") }
+        if !canShootHere { return Text("Camera unavailable") }
+        if filmRemaining == 0 { return Text("No film remaining") }
         if !camera.canCapturePhoto { return Text("Camera unavailable") }
         return Text("Wind camera first")
     }
 
     private func windIndicator(isLandscape: Bool) -> some View {
-        // A larger, legible ridged thumbwheel (mockup 5d "after") with its ridges scrolling as the
-        // wheel turns and a slim progress track underneath. Green ridges/accents once winding starts.
+        // A ridged thumbwheel with its ridges scrolling as the wheel turns and a slim progress track
+        // under it; "Ready" in green once wound (b3-camera-session's caption under the film badge).
         let winding = !camera.isArmed && camera.windProgress > 0
         return VStack(spacing: 6) {
             windThumbwheel(active: winding)
-            Text(camera.isArmed ? "Ready" : isLandscape ? "Swipe →" : "Slide ↓")
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(camera.isArmed ? Color.stateThriving : Color.white.opacity(0.42))
             windProgressTrack(active: winding)
+            Text(camera.isArmed ? "Ready" : isLandscape ? "Swipe →" : "Slide ↓")
+                .font(FernletFramedFont.buttonSmall)
+                .foregroundStyle(camera.isArmed ? Self.ledGreen : Self.cream.opacity(0.7))
         }
-        .frame(width: 64)
+        .frame(width: 72)
         .contentShape(Rectangle())
         .gesture(windGesture(isLandscape: isLandscape))
         // Winding is the gate on the shutter, and it was drag-only: VoiceOver and Switch Control
         // users could never arm the camera, so the shutter read "Wind camera first" forever. The
-        // wheel is now one element with a value, a default activation (double tap), and a named
+        // wheel is one element with a value, a default activation (double tap), and a named
         // action — no dragging required to take a photo.
         .accessibilityElement(children: .ignore)
         .accessibilityAddTraits(.isButton)
@@ -1272,53 +1282,42 @@ struct DisposableCameraView: View {
 
     private func windThumbwheel(active: Bool) -> some View {
         // The ridge texture repeats every two ridges (the active tint alternates), so the stack
-        // over-fills the 44pt window by one two-ridge loop and slides down through it across a
-        // full wind: the wheel reads as continuously turning — no blank band opens up, and the
-        // arm-time windProgress reset to 0 lands on an identical frame.
+        // over-fills the window by one two-ridge loop and slides down through it across a full
+        // wind: the wheel reads as continuously turning — no blank band opens up, and the arm-time
+        // windProgress reset to 0 lands on an identical frame.
         let ridgeCount = 9
-        let rowHeight: CGFloat = 44
+        let rowHeight: CGFloat = 40
         let loopPeriod: CGFloat = (2.5 + 5) * 2  // (ridge height + spacing) × 2 ridges
         let scroll = camera.windProgress * loopPeriod - loopPeriod
-        return RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .fill(
-                LinearGradient(
-                    colors: [Color(red: 0.20, green: 0.17, blue: 0.14), Color(red: 0.09, green: 0.075, blue: 0.06)],
-                    startPoint: .leading, endPoint: .trailing
-                )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
-            )
+        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+        return shape
+            .fill(Self.housingBlack)
             .overlay {
                 VStack(spacing: 5) {
                     ForEach(0..<ridgeCount, id: \.self) { i in
-                        Capsule()
-                            .fill(
-                                active && i.isMultiple(of: 2)
-                                    ? Color.stateThriving.opacity(0.55)
-                                    : Color.white.opacity(0.16)
-                            )
+                        Rectangle()
+                            .fill(active && i.isMultiple(of: 2) ? Self.ledGreen.opacity(0.7) : Self.cream.opacity(0.35))
                             .frame(height: 2.5)
                     }
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 10)
                 .offset(y: CGFloat(scroll))
                 .frame(height: rowHeight, alignment: .top)
                 .clipped()
             }
-            .frame(width: 40, height: rowHeight)
+            .overlay(shape.strokeBorder(Self.frameBrown, lineWidth: 2))
+            .frame(width: 56, height: rowHeight)
     }
 
     @ViewBuilder
     private func windProgressTrack(active: Bool) -> some View {
-        Capsule()
-            .fill(Color.white.opacity(0.12))
-            .frame(height: 5)
+        Rectangle()
+            .fill(Self.cream.opacity(0.18))
+            .frame(width: 56, height: 5)
             .overlay(alignment: .leading) {
                 GeometryReader { geo in
-                    Capsule()
-                        .fill(Color.stateThriving)
+                    Rectangle()
+                        .fill(Self.ledGreen)
                         .frame(width: geo.size.width * (camera.isArmed ? 1 : camera.windProgress))
                 }
             }
@@ -1360,8 +1359,10 @@ struct DisposableCameraView: View {
     // MARK: - Photo capture
 
     private func takePhoto() async {
-        guard camera.isArmed, features.photos.filmRemaining > 0, camera.canCapturePhoto else { return }
-        camera.disarm()  // openness → 0: the viewfinder retracts into the island.
+        guard camera.isArmed, filmRemaining > 0, camera.canCapturePhoto, canShootHere else { return }
+        // Where this shot goes is decided at the tap: the session's film, or today's solo film.
+        let solo = isSolo
+        camera.disarm()  // openness → 0: the viewfinder fades until the film is wound again.
         flashShutter()
         do {
             let data = try await camera.capturePhoto()
@@ -1369,11 +1370,42 @@ struct DisposableCameraView: View {
             // can disturb the camera while it is capturing, and the white flash above already
             // answered the tap. Owed a device check: that this never blurs a shot.
             FernletFeedback.system.play(.shutter)
+            guard !solo else {
+                keepSoloShot(data)
+                return
+            }
             features.photos.addPhoto(data)
         } catch {
-            manager.meshError = error.localizedDescription
-            // The session alert shows the error; this is its haptic. Only here, not on every
-            // `meshError`: most of those are the mesh's own news, which plays nothing.
+            if solo {
+                soloShotFailed = true
+            } else {
+                manager.meshError = error.localizedDescription
+            }
+            // The alert shows the error; this is its haptic. Only here, not on every `meshError`:
+            // most of those are the mesh's own news, which plays nothing.
+            FernletFeedback.system.play(.failed)
+        }
+    }
+
+    /// A shot alone: sealed at once into the solo roll and held until the companion's sleep (in a
+    /// decoy, memory only). A shot that could not be kept says so and uses no film.
+    private func keepSoloShot(_ data: Data) {
+        guard let soloRoll else {
+            soloShotFailed = true
+            return
+        }
+        switch soloRoll.takePhoto(data) {
+        case .kept:
+            // Where it was taken, only at an everyday place (World build step 5c and round 5; never a friend's photo).
+            if let id = soloRoll.lastKeptID {
+                let fix = store.worldLocation.latest
+                Task { await store.keepSoloPhotoPlace(for: id, fix: fix) }
+            }
+        case .noFilmLeft:
+            // A used-up film shows on the badge and the shutter; nothing else to say.
+            return
+        case .notKept:
+            soloShotFailed = true
             FernletFeedback.system.play(.failed)
         }
     }
@@ -1435,10 +1467,16 @@ struct DisposableCameraView: View {
     }
 
     /// Stops the capture session while the app-wide session-end review is up, and restarts it when
-    /// the review goes only if this session is live and the Develop review is not up.
+    /// the review goes only if this session is live (or the camera shoots on its own) and the
+    /// Develop review is not up.
     private func handleOverlayChange(showing: Bool) {
         guard !showing else {
             camera.stopSession()
+            return
+        }
+        // Alone there is no session to be live: the camera restarts as soon as the review goes.
+        if isSolo, !reviewPresented {
+            camera.startSession()
             return
         }
         guard manager.isSessionLive, !reviewPresented else { return }
@@ -1490,6 +1528,7 @@ struct DisposableCameraView: View {
             saveFailureAcknowledgement.acknowledge()
             reviewCoordinator.cameraDevelopReviewUp = false
         }
+        .fernletSheet()
     }
 
     /// FRND-12's primary review action: keeps the ticked photos (the unticked shown ones are
@@ -1600,715 +1639,14 @@ struct DisposableCameraView: View {
         }
     }
 
-    // MARK: - Info sheet
+    // MARK: - Session prompts
 
-    @ViewBuilder
-    private var infoSheet: some View {
-        ZStack {
-            Color.parchment
-                .ignoresSafeArea()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    sessionHeader
-                    sessionStats
-                    accessPicker
-
-                    Text("People")
-                        .font(.fernlet(.header))
-                        .foregroundStyle(Color.bark)
-
-                    participantList
-                    heartStatusRow
-                    presenceNudge
-                    debugInspectorButton
-                    removalRequestsSection
-                    endSessionButton
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(24)
-            }
-        }
-        .sheet(isPresented: $renamingMesh) {
-            renameMeshSheet
-        }
-        .alert(
-            participantToBlock.map { "Block \(shownName($0))?" } ?? "Block this person?",
-            isPresented: $participantToBlock.isPresent(),
-            presenting: participantToBlock
-        ) { participant in
-            Button("Block", role: .destructive) {
-                manager.block(participant)
-                participantToBlock = nil
-            }
-            Button("Cancel", role: .cancel) { participantToBlock = nil }
-        } message: { participant in
-            Text("Blocking \(shownName(participant)) will hide their content from you and yours from them, and drop them from this session.")
-        }
-    }
-
-    /// The sheet's title row: the (renameable) mesh name and the Done button.
-    private var sessionHeader: some View {
-        HStack {
-            if let mesh = manager.currentMesh {
-                Button {
-                    newMeshName = mesh.name
-                    renamingMesh = true
-                } label: {
-                    HStack(spacing: 7) {
-                        Text(mesh.name)
-                            .font(.fernlet(.display))
-                        Image(systemName: "pencil")
-                            .font(.body)
-                    }
-                    .foregroundStyle(Color.bark)
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("sessionInfo.rename")
-            } else {
-                Text("Session")
-                    .font(.fernlet(.display))
-                    .foregroundStyle(Color.bark)
-            }
-            Spacer()
-            Button("Done") { showInfo = false }
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.bark)
-                .buttonStyle(.plain)
-        }
-    }
-
-    /// Participant count and remaining film.
-    private var sessionStats: some View {
-        // Real plurals — "2 person(s) connected" is a placeholder that shipped. Each is ONE
-        // count-bearing key whose English "1 person" / "1 shot" form is the catalog's `one` plural
-        // variation, not an `== 1` branch between two English sentences.
-        let people = manager.sessionParticipants.count
-        let shots = features.photos.filmRemaining
-        return VStack(alignment: .leading, spacing: 22) {
-            Text("\(people) people connected")
-                .font(.fernlet(.bubble))
-                .foregroundStyle(Color.slate)
-
-            HStack(spacing: 6) {
-                Image(systemName: "film")
-                    .foregroundStyle(Color.slate)
-                Text("\(shots) shots left")
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.slate)
-            }
-
-            // P8 item 0 (c): photos that reached nobody are said once, as a count — through the
-            // copy table, never composed here — and never as an alert per shot.
-            if let kept = RoutedShareRefusalCopy.photoKeptNotice(count: features.photos.photosKeptOnThisPhone) {
-                Text(kept)
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.terracotta)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("camera.photosKeptNotice")
-            }
-        }
-    }
-
-    /// Open vs closed session access.
-    private var accessPicker: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Session access")
-                .font(.fernlet(.header))
-                .foregroundStyle(Color.bark)
-
-            Picker("Session access", selection: Binding(
-                get: { manager.isSessionOpen ? MeshMode.open : MeshMode.closed },
-                set: { manager.setSessionOpen($0 == .open) }
-            )) {
-                Text("Open").tag(MeshMode.open)
-                Text("Closed").tag(MeshMode.closed)
-            }
-            .pickerStyle(.segmented)
-            .accessibilityIdentifier("sessionInfo.mode")
-        }
-    }
-
-    /// The session roster, one row per participant.
-    private var participantList: some View {
-        VStack(spacing: 0) {
-            ForEach(manager.sessionParticipants) { participant in
-                participantRow(participant)
-                if participant.id != manager.sessionParticipants.last?.id {
-                    FernletRowDivider()
-                }
-            }
-        }
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-    }
-
-    /// One roster row: name, vouch label, the heart button for trusted friends, and the row menu.
-    private func participantRow(_ participant: MeshSessionParticipant) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: participant.isLocal ? "person.crop.circle.fill" : "person.crop.circle")
-                .foregroundStyle(Color.moss)
-            Text(verbatim: shownName(participant))
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
-            if !participant.isLocal, let vouchLabel = features.vouchList.vouchLabel(for: participant.fingerprint) {
-                Text(vouchLabel)
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
-            }
-            if participant.isLocal {
-                Text("You")
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
-            }
-            Spacer()
-            if !participant.isLocal {
-                if let friend = trustedFriend(for: participant) {
-                    sessionHeartButton(for: friend)
-                }
-                participantMenu(participant)
-            }
-        }
-        .padding(.vertical, 13)
-        .padding(.horizontal, 14)
-    }
-
-    /// What a person reads for a session participant (2026-09-29): the local user's own name as
-    /// is, and for everyone else their chosen name or "Someone nearby", never an identifier. A
-    /// committed peer not yet in the mesh descriptor is projected from its slot, whose only name
-    /// before disclosure is the QUIC transport's instance name (`fernlet-mesh-…`), truncated.
-    ///
-    /// Display only: `MeshNetworkManager.proposeRemoval(of:)` and `block(_:)` still receive the
-    /// participant itself.
-    ///
-    /// - Parameter participant: One row of `manager.sessionParticipants`.
-    /// - Returns: The text to render.
-    private func shownName(_ participant: MeshSessionParticipant) -> String {
-        guard !participant.isLocal else { return participant.displayName }
-        return PeerNameDisplay.shown(participant.displayName, fingerprint: participant.fingerprint, in: .fernlet)
-    }
-
-    /// The per-participant overflow menu: propose a removal, or block outright.
-    private func participantMenu(_ participant: MeshSessionParticipant) -> some View {
-        Menu {
-            Button {
-                manager.proposeRemoval(of: participant)
-            } label: {
-                Label("Ask to remove", systemImage: "person.badge.minus")
-            }
-            Button(role: .destructive) {
-                // Same action, same person, same safety net as Friends & Blocks: blocking here also
-                // drops them from the shared photo and chat flow, so it asks first.
-                participantToBlock = participant
-            } label: {
-                Label("Block", systemImage: "hand.raised")
-            }
-        } label: {
-            Image(systemName: "ellipsis.circle")
-                .foregroundStyle(Color.slate)
-        }
-        .fernletTapTarget()
-        .accessibilityLabel("Options for \(shownName(participant))")
-    }
-
-    /// TF b19 item 5 tier 1: surface heart send state inline (no longer silent).
-    ///
-    /// **Two sources, one row** (P6 item 6). The mesh path publishes a frozen token the app forks
-    /// into a `LocalizedStringKey` (`SessionHeartStatusCopy`); the presence fallback publishes a
-    /// `String` its manager already resolved, which ``presenceHeartStatusText`` draws verbatim
-    /// (never `LocalizedStringKey(runtimeString)`). The mesh line wins when present: only one send
-    /// runs at a time, and the mesh mint is synchronous.
-    @ViewBuilder
-    private var heartStatusRow: some View {
-        if let status = sessionHeartStatusKey {
-            heartStatusText(Text(status))
-        } else if let status = presenceHeartStatusText {
-            heartStatusText(status)
-        }
-    }
-
-    /// The one set of modifiers both status sources share.
-    private func heartStatusText(_ text: Text) -> some View {
-        text
-            .font(.fernlet(.bodySmall))
-            .foregroundStyle(Color.moss)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .fernletWrappingText()
-            .accessibilityIdentifier("sessionInfo.heartStatus")
-    }
-
-    /// TF b19 item 5 tier 1: actionable prompt for the older-build fallback that still needs the
-    /// presence radio (hearts on, Nearby Friends off). Hidden in the common mesh path — replaces the
-    /// old dead "Hearts travel in person for now" label.
-    @ViewBuilder
-    private var presenceNudge: some View {
-        if sessionHeartsNeedPresence {
-            Button {
-                store.setAllowNearbyPresence(true)
-            } label: {
-                Text("Turn on Nearby Friends to send hearts")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.parchment)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 12))
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("sessionInfo.enablePresence")
-        }
-    }
-
-    /// The Connection Inspector entry point, behind the proximity debug-tools setting as clamped
-    /// for this build (`FernletStore.proximityDebugToolsEnabled`: always off in Release).
-    @ViewBuilder
-    private var debugInspectorButton: some View {
-        if store.proximityDebugToolsEnabled {
-            Button {
-                store.showConnectionInspector = true
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "dot.radiowaves.left.and.right")
-                        .foregroundStyle(Color.moss)
-                    Text("Connection Inspector")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.bark)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(Color.slate)
-                }
-                .padding(14)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("sessionInfo.inspectorButton")
-        }
-    }
-
-    /// Pending removal proposals awaiting a second.
-    @ViewBuilder
-    private var removalRequestsSection: some View {
-        if !manager.pendingRemovalProposals.isEmpty {
-            Text("Removal Requests")
-                .font(.fernlet(.header))
-                .foregroundStyle(Color.bark)
-
-            ForEach(manager.pendingRemovalProposals) { proposal in
-                removalRequestCard(proposal)
-            }
-        }
-    }
-
-    /// One pending removal proposal: what was asked, and this device's part in it.
-    private func removalRequestCard(_ proposal: MeshRemovalProposalPayload) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("\(PeerNameDisplay.shown(proposal.proposerDisplayName, fingerprint: proposal.proposerFingerprint, in: .fernlet)) asked to remove \(PeerNameDisplay.shown(proposal.targetDisplayName, fingerprint: proposal.targetFingerprint, in: .fernlet)).")
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.bark)
-            if manager.canSecondRemoval(proposal) {
-                Button("Second Removal", role: .destructive) {
-                    manager.secondRemoval(proposal)
-                }
-                .font(.fernlet(.label))
-            } else {
-                Text("Waiting for another participant to second this decision.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-            }
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
-    }
-
-    /// Ends the session (confirmed by the end-session alert).
-    private var endSessionButton: some View {
-        Button("End session") {
-            leaveSessionConfirm = true
-        }
-        .buttonStyle(ActionPillButtonStyle(.destructive))
-        .accessibilityIdentifier("sessionInfo.endSession")
-    }
-
-    // MARK: - Send good vibes (in-session)
-
-    /// The trusted-friend record behind a session participant, when hearts can go to them:
-    /// consent on, known in the vault by fingerprint, not blocked or removed.
-    private func trustedFriend(for participant: MeshSessionParticipant) -> ProximityTrustedPeerRecord? {
-        guard store.settings.allowNearbyHearts else { return nil }
-        return store.trustedProximityPeers.first {
-            IdentityService.fingerprintsMatch($0.fingerprint, participant.fingerprint)
-                && $0.blockedAt == nil
-                && $0.revokedAt == nil
-        }
-    }
-
-    /// A quiet one-tap heart beside a connected friend. TF b19 item 5: in-session hearts now ride the
-    /// live mesh session (reliable — the peer is right here, already connected over a verified channel)
-    /// instead of the fragile on-demand presence connect. A session peer on an older build (no `hearts`
-    /// mesh capability) falls back to the presence path so nothing regresses. Enabled only while the
-    /// 5-minute cooldown to them is clear, they're reachable, and no send is in flight; no counts shown
-    /// anywhere. A filled check marks the cooldown — a state, never a number.
-    private func sessionHeartButton(for friend: ProximityTrustedPeerRecord) -> some View {
-        let onCooldown = !store.heartLedger.canSendHeart(to: friend.fingerprint)
-        // `canSendHeart` is fail-closed (Track A): an UNLOADED ledger also answers false, and the
-        // cooldown copy would be a lie there — nothing was sent. Say what is actually wrong, exactly
-        // as the friend row does (FriendListView's `onCooldown` branch).
-        let ledgerUnavailable = onCooldown && !store.heartLedger.isLoaded
-        // **Three-way since P6 item 6, and the order matters** — it lives in
-        // `sessionHeartTransport(meshLinked:presenceReachable:meshAddressable:)` below, which is
-        // where its reasoning and its behavioural pin are. This body only reads the three seams.
-        let meshLinked = features.hearts.hasLiveHeartSlot(forFingerprint: friend.fingerprint)
-        let presenceReachable = store.presenceManager.isReachable(fingerprint: friend.fingerprint)
-        let meshAddressable = features.hearts.canSendSessionHeart(toFingerprint: friend.fingerprint)
-        let transport = Self.sessionHeartTransport(
-            meshLinked: meshLinked, presenceReachable: presenceReachable,
-            meshAddressable: meshAddressable
-        )
-        // **Reachability is the transport's own answer, never a re-derived disjunction** (P6 item 6
-        // fix review, P3-e). `(meshLinked, !presenceReachable, !meshAddressable)` — row 4 of the
-        // table below — resolves to `.unavailable` while the disjunction reads true, which enabled
-        // the button over a tap whose switch has nothing to run: a silent tap, with a haptic.
-        let reachable = transport != .unavailable
-        let sending = sessionHeartSendInProgress
-        let friendName = PeerNameDisplay.shown(friend.displayName, fingerprint: friend.fingerprint, placeholder: .met, in: .fernlet)
-        let firstName = PeerNameDisplay.firstName(friend.displayName, fingerprint: friend.fingerprint, placeholder: .met, in: .fernlet)
-        let state = SendGoodVibesLabel.state(onCooldown: onCooldown, reachable: reachable, sending: sending)
-        return Button {
-            // Haptic acknowledgement so the tap is never silent (TF b19 item 5 tier 1): `logged`, a
-            // one-tap action that landed in place.
-            FernletFeedback.system.play(.logged)
-            switch transport {
-            case .mesh: features.hearts.sendSessionHeart(to: friend)
-            case .presence: store.presenceManager.sendHeart(to: friend)
-            case .unavailable: break
-            }
-        } label: {
-            // Compact in-row form of the "Send good vibes" affordance (good-vibes 10c): a
-            // dusty-rose/terracotta heart when ready, a soft-filled check within the cooldown,
-            // muted apart.
-            Image(systemName: state == .cooldown ? "checkmark" : "heart.fill")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(sessionHeartForeground(for: state))
-                .frame(width: 30, height: 30)
-                .background(sessionHeartBackground(for: state), in: Circle())
-        }
-        .buttonStyle(.plain)
-        .disabled(onCooldown || !reachable || sending)
-        .accessibilityLabel(
-            ledgerUnavailable
-                ? "Fernlet couldn't reach its own notes just now — unlock and reopen to send hearts."
-                : onCooldown
-                    ? "You just sent \(firstName) some warmth — hearts settle for a few minutes."
-                    : reachable
-                        ? "Send good vibes to \(friendName)"
-                        : "\(firstName) isn't reachable for a heart right now."
-        )
-        // Voice Control: the heart is drawn with no words, and every row has one, so the friend's
-        // name is what makes it sayable and unique ("Heart Sam"), whichever state the label is in.
-        .accessibilityInputLabels([Text("Heart \(firstName)"), Text("Send good vibes to \(firstName)")])
-    }
-
-    /// Which pipe one heart tap takes.
-    enum SessionHeartTransport: Equatable {
-        /// The routed store: delivered now over a live slot, or staged and custodied for a member
-        /// with no link.
-        case mesh
-        /// The presence path, which delivers now to a friend who is presence-reachable.
-        case presence
-        /// Neither can carry it; the affordance is disabled in this state.
-        case unavailable
-    }
-
-    /// The three-way order behind the heart tap, as a pure function of the three seams the button
-    /// reads (P6 item 6 fix review, P3-6 — it was only ever pinned by scanning this file's text,
-    /// which a reordering that kept the same three lines would have passed).
-    ///
-    /// The order is a PRODUCT rule. A routed heart to an admitted member with no live mesh slot is
-    /// staged and CUSTODIED — delivered only if a link forms before the mesh ends, and otherwise
-    /// expired at `hardDeadline + 20 min` while the sender saw "Sent" and spent five minutes of
-    /// cooldown. So a live presence link, which delivers now, must still win over that: a live
-    /// `.hearts` slot first (delivered now, capability known), then presence while the friend is
-    /// presence-reachable (delivered now), and only then a routed custodied heart — the star case,
-    /// which is the unlock and which presence cannot serve at all. Taking `canSendSessionHeart`
-    /// literally as the whole decision would make presence unreachable in practice while leaving it
-    /// alone in source.
-    ///
-    /// - Parameters:
-    ///   - meshLinked: A live, hearts-capable slot faces the friend.
-    ///   - presenceReachable: The presence path can reach them right now.
-    ///   - meshAddressable: They are on the derived roster with a resolvable key.
-    /// - Returns: the pipe the tap takes.
-    static func sessionHeartTransport(
-        meshLinked: Bool, presenceReachable: Bool, meshAddressable: Bool
-    ) -> SessionHeartTransport {
-        if meshLinked, meshAddressable { return .mesh }
-        if presenceReachable { return .presence }
-        if meshAddressable { return .mesh }
-        return .unavailable
-    }
-
-    /// A send is in flight — **presence-only since P6 item 6**, and that is correct rather than a
-    /// loss. The routed mint is fully synchronous: there is no window between the tap and the
-    /// durable stage for a mesh `.sending` state to describe, so the case was deleted with the
-    /// legacy transport. The presence pipeline's multi-second connect still has one.
-    private var sessionHeartSendInProgress: Bool {
-        switch store.presenceManager.heartSendState {
-        case .connecting, .verifying: return true
-        default: return false
-        }
-    }
-
-    /// The MESH path's status line, localized by construction (P6 item 6).
-    private var sessionHeartStatusKey: LocalizedStringKey? {
-        SessionHeartStatusCopy.line(features.hearts.sessionHeartState)
-    }
-
-    /// The PRESENCE fallback's status line. `PresenceManager`'s `heartSendState.failed(message:)`
-    /// arrives already resolved in this device's language (FernletSocial's
-    /// `FernletSocialCopy.Presence`, under `bundle: .module`, Spanish round 2026-10-20), so it is drawn
-    /// verbatim — never through `LocalizedStringKey(runtimeString)`; the other three lines are this
-    /// view's own keys. Names go through `SessionHeartStatusCopy.shownRecipient`: the state carries
-    /// the trust-vault name, which is the fingerprint for a friend kept before their name arrived.
-    /// `.failed`'s sentence is the manager's, built on `PresenceManager.firstName(of:in:)`, which
-    /// applies the same rule.
-    private var presenceHeartStatusText: Text? {
-        switch store.presenceManager.heartSendState {
-        case .idle: return nil
-        case .connecting(let name): return Text("Connecting to \(SessionHeartStatusCopy.shownRecipient(name))…")
-        case .verifying(let name): return Text("Saying hello to \(SessionHeartStatusCopy.shownRecipient(name))…")
-        case .sent(let name): return Text("Sent \(SessionHeartStatusCopy.shownRecipient(name)) some good vibes.")
-        case .failed(let message): return Text(verbatim: message)
-        }
-    }
-
-    /// TF b19 item 5 tier 1: adopt the actionable `needsPresence` affordance (mirroring FriendListView)
-    /// only where the presence path still applies — i.e. a session friend on an OLDER build who can't
-    /// receive a mesh heart, while hearts are on but the Nearby Friends (presence) radio is off. In the
-    /// common case (both peers updated) hearts ride the mesh and need no presence, so this stays hidden.
-    private var sessionHeartsNeedPresence: Bool {
-        guard store.settings.allowNearbyHearts, !store.settings.allowNearbyPresence else { return false }
-        return manager.sessionParticipants.contains { participant in
-            guard !participant.isLocal, let friend = trustedFriend(for: participant) else { return false }
-            return !features.hearts.canSendSessionHeart(toFingerprint: friend.fingerprint)
-                && !features.hearts.hasLiveHeartSlot(forFingerprint: friend.fingerprint)
-        }
-    }
-
-    private func sessionHeartForeground(for state: SendGoodVibesLabel.SendState) -> Color {
-        switch state {
-        case .ready, .sending: Color.terracotta
-        case .cooldown: Color.terracotta.opacity(0.7)
-        case .notNearby: Color.bark.opacity(0.35)
-        }
-    }
-
-    private func sessionHeartBackground(for state: SendGoodVibesLabel.SendState) -> Color {
-        switch state {
-        case .ready, .sending: Color.terracotta.opacity(0.14)
-        case .cooldown: Color.dustyRose.opacity(0.16)
-        case .notNearby: Color.bark.opacity(0.06)
-        }
-    }
-
-    // MARK: - Incoming message signal (TF b19 item 6)
-
-    /// An inbound message arrived while the chat sheet was closed. While the app is active, a soft
-    /// knock (`messageIn`, at most one per ten seconds however fast peers send — never the success
-    /// pattern, which means "a task you started succeeded") is the in-app nudge (the dot badge on the
-    /// chat button is already showing). While it isn't active, fire a best-effort local notification instead — the mesh radio
-    /// (MultipeerConnectivity then, QUIC now) usually suspends in the background, so this rarely reaches
-    /// us there, but we fire it if it does. Never fires while the chat sheet is open (the store doesn't
-    /// count those as unread).
-    private func handleUnreadMessageArrival() {
-        switch scenePhase {
-        case .active:
-            FernletFeedback.system.play(.messageIn)
-        default:
-            postSessionMessageNotification()
-        }
-    }
-
-    private func postSessionMessageNotification() {
-        // The most recent inbound message drives the notification's sender name. It was already
-        // sanitized by SessionMessageStore.receiveIncoming; NotificationService re-sanitizes defensively.
-        guard let latest = features.chat.sessionMessages.messages.last(where: { !$0.isOutgoing }) else { return }
-        // R3: one in-flight post at a time. Peers drive this event, so an unbounded Task per inbound
-        // message would be peer-controlled fan-out; the notification is a nudge, not a log, so
-        // coalescing to the newest sender while one is posting is the right bound.
-        guard messageNotificationTask == nil else { return }
-        let name = latest.senderDisplayName
-        messageNotificationTask = Task {
-            await NotificationService.postSessionMessage(from: name)
-            messageNotificationTask = nil
-        }
-    }
-
-    private var renameMeshSheet: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 22) {
-                        Text("Rename session")
-                            .font(.fernlet(.displayMedium))
-                            .foregroundStyle(Color.bark)
-
-                        SheetField("New name") {
-                            TextField("Session name", text: Binding(
-                                get: { newMeshName },
-                                set: { newMeshName = String($0.prefix(Self.maxMeshNameLength)) }
-                            ), prompt: .fieldPrompt("Session name"))
-                            .sheetTextInput()
-                            .accessibilityIdentifier("sessionInfo.renameField")
-                        }
-                    }
-                    .padding(20)
-                    .padding(.bottom, 10)
-                }
-
-                SheetSaveBar(
-                    label: "Rename",
-                    disabled: newMeshName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ) {
-                    // R3/R5: the name is broadcast to every peer in the mesh descriptor, so it is
-                    // bounded here as well as at the field (the advertised copy caps separately).
-                    let trimmed = String(newMeshName.trimmingCharacters(in: .whitespacesAndNewlines)
-                        .prefix(Self.maxMeshNameLength))
-                    guard !trimmed.isEmpty else { return }
-                    manager.renameMesh(trimmed)
-                    renamingMesh = false
-                }
-            }
-            .background(Color.parchment)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { renamingMesh = false }
-                        .foregroundStyle(Color.slate)
-                }
-            }
-        }
-    }
-
+    /// Asks about the newest removal proposal somebody else made, when none is up
+    /// (``SessionRemovalQueue``). Session info, Messages and Leave live on Home's session button now;
+    /// the prompts ride every session surface, this one included (``SessionPromptsModifier``).
     private func presentNextRemovalProposalIfNeeded() {
-        guard activeRemovalProposal == nil else { return }
-        activeRemovalProposal = manager.pendingRemovalProposals.last {
-            $0.proposerFingerprint != manager.localFingerprint
-        }
-    }
-}
-
-/// The session's interruptive prompts, lifted out of ``DisposableCameraView``'s `body` (R4).
-///
-/// Applied as one modifier so the ordering of the admission sheet, the mesh-error alert, the
-/// removal-proposal alert and the end-session confirmation is identical to the inline version it
-/// replaced. State stays in the view; this only presents it.
-private struct SessionPromptsModifier: ViewModifier {
-    let manager: MeshNetworkManager
-    @Binding var activeRemovalProposal: MeshRemovalProposalPayload?
-    @Binding var leaveSessionConfirm: Bool
-    @Binding var showInfo: Bool
-    let beginDevelop: () -> Void
-
-    /// The session alert's sentence: a refused routed share forks its frozen cause into localized
-    /// copy (P5 review finding 5); the legacy `meshError` `String` renders as it always has.
-    private var sessionAlertMessage: Text {
-        if let refusal = manager.routedShareRefusal {
-            return Text(RoutedShareRefusalCopy.message(refusal))
-        }
-        return Text(manager.meshError ?? "")
-    }
-
-    func body(content: Content) -> some View {
-        content
-            .sheet(isPresented: Binding(
-                get: { !manager.pendingAdmissionRequests.isEmpty && manager.currentMesh != nil },
-                set: { isPresented in
-                    if !isPresented {
-                        manager.pendingAdmissionRequests.forEach { manager.declineAdmission($0) }
-                    }
-                }
-            )) {
-                admissionSheet
-            }
-            .alert(RoutedShareRefusalCopy.title, isPresented: Binding(
-                get: { manager.meshError != nil || manager.routedShareRefusal != nil },
-                set: { isPresented in
-                    // Dismiss only the notice that was on screen (the refusal shows ahead of a
-                    // legacy String), so a rotation notice written behind a refusal is re-presented
-                    // rather than swallowed by one tap.
-                    guard !isPresented else { return }
-                    if manager.routedShareRefusal != nil {
-                        manager.clearRoutedShareRefusal()
-                    } else {
-                        manager.meshError = nil
-                    }
-                }
-            )) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                sessionAlertMessage
-            }
-            .modifier(SessionRemovalPromptsModifier(
-                manager: manager,
-                activeRemovalProposal: $activeRemovalProposal,
-                leaveSessionConfirm: $leaveSessionConfirm,
-                showInfo: $showInfo,
-                beginDevelop: beginDevelop
-            ))
-    }
-
-    /// The pending join requests for the current mesh.
-    @ViewBuilder
-    private var admissionSheet: some View {
-        if let mesh = manager.currentMesh {
-            JoinPromptSheet(
-                requests: manager.pendingAdmissionRequests,
-                targetName: mesh.name,
-                displayName: { PeerNameDisplay.shown($0.requesterDisplayName, fingerprint: $0.requesterFingerprint, in: .fernlet) },
-                accessibilityPrefix: "mesh.admission",
-                allow: { manager.allowAdmission($0) },
-                decline: { manager.declineAdmission($0) }
-            )
-        }
-    }
-}
-
-/// The two destructive session prompts: seconding a removal proposal, and ending the session.
-private struct SessionRemovalPromptsModifier: ViewModifier {
-    let manager: MeshNetworkManager
-    @Binding var activeRemovalProposal: MeshRemovalProposalPayload?
-    @Binding var leaveSessionConfirm: Bool
-    @Binding var showInfo: Bool
-    let beginDevelop: () -> Void
-
-    func body(content: Content) -> some View {
-        content
-            .alert(
-                activeRemovalProposal.map {
-                    "Remove \(PeerNameDisplay.shown($0.targetDisplayName, fingerprint: $0.targetFingerprint, in: .fernlet))?"
-                } ?? "Remove participant?",
-                isPresented: $activeRemovalProposal.isPresent(),
-                presenting: activeRemovalProposal
-            ) { proposal in
-                if manager.canSecondRemoval(proposal) {
-                    Button("Second Removal", role: .destructive) {
-                        manager.secondRemoval(proposal)
-                        activeRemovalProposal = nil
-                    }
-                }
-                Button("Not Now", role: .cancel) {
-                    activeRemovalProposal = nil
-                }
-            } message: { proposal in
-                Text("\(PeerNameDisplay.shown(proposal.proposerDisplayName, fingerprint: proposal.proposerFingerprint, in: .fernlet)) asked to remove \(PeerNameDisplay.shown(proposal.targetDisplayName, fingerprint: proposal.targetFingerprint, in: .fernlet)) from this session. A different participant must second the decision.")
-            }
-            .alert("End session?", isPresented: $leaveSessionConfirm) {
-                Button("End Session", role: .destructive) {
-                    showInfo = false
-                    beginDevelop()
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("You will stop sharing with everyone in this session.")
-            }
+        activeRemovalProposal = SessionRemovalQueue.next(current: activeRemovalProposal,
+                                                         pending: manager.pendingRemovalProposals,
+                                                         localFingerprint: manager.localFingerprint)
     }
 }

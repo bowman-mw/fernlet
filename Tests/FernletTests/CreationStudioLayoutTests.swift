@@ -33,13 +33,40 @@ struct CreationStudioLayoutTests {
     /// iPhone SE at `accessibility-extra-extra-extra-large` (AX5), measured 2026-09-30: the chips
     /// wrap into three tall rows (a 224.5pt header) and the tool row is a column (161.8pt), in a
     /// 381.5pt page. Nothing close to a canvas fits beside them, so the page scrolls (from the
-    /// controls only). Even the screenful below the header is under the minimum here, so the
-    /// canvas gets the minimum — which the page can still show whole.
-    @Test func iPhoneSEAtTheLargestAccessibilitySizeScrollsWithAWholeMinimumCanvas() {
+    /// controls only). Since the canvases went to the companion's scale (W-07, minimum 150pt), the
+    /// screenful below the header (183pt) clears the minimum, so the tool row and the canvas fill one
+    /// screen when scrolled to the bottom, and the page still shows the canvas whole.
+    @Test func iPhoneSEAtTheLargestAccessibilitySizeScrollsWithAWholeScreenfulCanvas() {
         let result = layout(viewport: 381.5, header: 224.5, tools: 161.8)
         #expect(!result.fits)
-        #expect(result.canvasHeight == CreationStudioLayout.minimumCanvasHeight)
+        #expect(result.canvasHeight == 183)
         #expect(2 * padding + result.canvasHeight <= 381.5)
+    }
+
+    /// iPhone 17, text size `large`, the hat (W-07): a 556pt page, the header with the size line under
+    /// it (132pt), the tools (44pt) and the up-close and on-the-map previews (144pt) leave a 176pt
+    /// canvas — it fits, previews and all, so nothing scrolls.
+    @Test func theStudioFitsWithItsPreviewsOnAnIPhone17() {
+        let result = CreationStudioLayout(viewportHeight: 556, headerHeight: 132, toolsHeight: 44,
+                                          previewsHeight: 144, spacing: spacing, padding: padding)
+        #expect(result.fits && result.showsPreviews)
+        #expect(result.canvasHeight == 176)
+    }
+
+    /// Where the previews alone would turn scrolling on (a held item's note on an iPhone 17, or any
+    /// kind on an iPhone SE), they give way and the page still does not scroll; where the page scrolls
+    /// anyway, they show.
+    @Test func thePreviewsGiveWayRatherThanTurnScrollingOn() {
+        let held = CreationStudioLayout(viewportHeight: 556, headerHeight: 132, toolsHeight: 44, footerHeight: 60,
+                                        previewsHeight: 144, spacing: spacing, padding: padding)
+        #expect(held.fits && !held.showsPreviews)
+        #expect(held.canvasHeight == 556 - 132 - 44 - 60 - 3 * spacing - 2 * padding)
+        let small = CreationStudioLayout(viewportHeight: 415, headerHeight: 146, toolsHeight: 44, previewsHeight: 144,
+                                         spacing: spacing, padding: padding)
+        #expect(small.fits && !small.showsPreviews && small.canvasHeight == 177)
+        let scrolling = CreationStudioLayout(viewportHeight: 381.5, headerHeight: 224.5, toolsHeight: 161.8,
+                                             previewsHeight: 144, spacing: spacing, padding: padding)
+        #expect(!scrolling.fits && scrolling.showsPreviews)
     }
 
     /// iPhone 17 at AX5, measured 2026-09-30: a 225pt header and a 161.5pt tool column in a

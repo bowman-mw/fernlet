@@ -57,13 +57,20 @@ struct CookingTimerSoundToggle: View {
     @AppStorage(CookingCuePreferences.soundsKey) private var sounds = CookingCuePreferences.defaultSounds
 
     var body: some View {
+        // World build (b3-cook-step): the name over its line, beside the framed switch the root's
+        // toggle style draws. The line is drawn now, so it is no longer extra spoken content.
         Toggle(isOn: $sounds) {
-            Label("Timer sound", systemImage: sounds ? "speaker.wave.2" : "speaker.slash")
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.bark)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Timer sound")
+                    .font(FernletFramedFont.rowTitleBold)
+                    .foregroundStyle(WorldPalette.bark)
+                Text("A quiet chime when the timer runs out. It follows your ring/silent switch.")
+                    .font(FernletFramedFont.rowDetail)
+                    .foregroundStyle(WorldPalette.dim)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .tint(Color.moss)
-        .accessibilityCustomContent("Details", Text("A quiet chime when the timer runs out. It follows your ring/silent switch."))
         .accessibilityIdentifier("cookingMode.timerSound")
     }
 }

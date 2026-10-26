@@ -2,77 +2,65 @@
 //  SillyStatsView.swift
 //  Fernlet
 //
-//  The silly stats page (a large sheet from the Home card, or pushed from Milestones) and the Home
-//  card itself. Only stats with something behind them show; the rest stay hidden until life gets
-//  around to them, with no list of what is missing — nothing here is a goal.
+//  The silly stats part of the Stamp book (`StampBookPage`) and the Home card. Only stats with
+//  something behind them show; the rest stay hidden until life gets around to them, with no list of
+//  what is missing — nothing here is a goal. The silly stamps (`SillyStampViews`) sit above them.
 //
 
 import SwiftUI
 import FernletUI
 import FernletFoundation
 
-/// The silly stats sheet: its own header and Done, over ``SillyStatsList``.
-///
-/// Presented from the Home card as a large sheet (the read-only-from-Home rule Milestones and
-/// Trends follow), with its own `NavigationStack` like ``MilestonesView``.
+/// The silly stats sheet, which is the Stamp book now (design `b2-milestones`, draft 2: Milestones, the
+/// keepsake shelf and Silly stats are one page). Opens at the silly stamps, since the stamp banner is
+/// what presents it.
 struct SillyStatsView: View {
     var store: FernletStore
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                SheetHeader(
-                    title: "Silly stats",
-                    subtitle: "Completely useless numbers, lovingly counted.",
-                    onDone: { dismiss() }
-                )
-                SillyStatsList(store: store)
-            }
-            .background(Color.parchment)
-            .toolbar(.hidden, for: .navigationBar)
-        }
+        MilestonesView(store: store, startsAtStamps: true)
     }
 }
 
-/// The revealed stat cards, refreshed from the diary and Apple Health each time they appear.
-///
-/// Used by the sheet and by the push from Milestones.
+/// The Stamp book's lower part (design `b2-keepsakes`, draft 2): the Silly stats label and line, then
+/// each revealed stat's card. Only stats with something behind them show; the rest stay hidden until
+/// life gets around to them, with no list of what is missing — nothing here is a goal.
 struct SillyStatsList: View {
-    var store: FernletStore
+    var stats: SillyStatsService
 
     var body: some View {
-        let stats = store.sillyStats
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                if stats.revealed.isEmpty {
-                    Text("Nothing silly to report yet. Stats turn up on their own as you log — no hurry.")
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
-                } else {
-                    ForEach(stats.revealed, id: \.self) { kind in
-                        SillyStatCard(kind: kind, tally: stats.tally)
-                    }
-                    if stats.revealed.count < SillyStatKind.allCases.count {
-                        Text("More stats turn up as life happens.")
-                            .font(.fernlet(.bubble))
-                            .foregroundStyle(Color.slate)
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 4)
-                    }
+        VStack(alignment: .leading, spacing: 14) {
+            SectionLabel("Silly stats")
+                .padding(.top, 4)
+            Text("Completely useless numbers, lovingly counted.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(WorldPalette.dim)
+                .fernletWrappingText()
+                .padding(.horizontal, 2)
+            if stats.revealed.isEmpty {
+                Text("Nothing silly to report yet. Stats turn up on their own as you log — no hurry.")
+                    .font(.fernlet(.body))
+                    .foregroundStyle(WorldPalette.dim)
+                    .fernletWrappingText()
+            } else {
+                ForEach(stats.revealed, id: \.self) { kind in
+                    SillyStatCard(kind: kind, tally: stats.tally)
+                }
+                if stats.revealed.count < SillyStatKind.allCases.count {
+                    Text("More stats turn up as life happens.")
+                        .font(.fernlet(.bubble))
+                        .foregroundStyle(WorldPalette.dim)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 4)
                 }
             }
-            .padding(20)
-            .uxScreenAnchor("screen.sillyStats")
         }
-        .background(Color.parchment)
-        .task { await store.sillyStats.refresh(store: store) }
+        .uxScreenAnchor("screen.sillyStats")
     }
 }
 
-/// One stat: emoji and title, the big number, the comparison, extras (the cookie table, the pizza
-/// chart), and how it's counted.
+/// One stat (design `b2-keepsakes`): its pixel icon and title, the big number, the comparison, extras
+/// (the cookie table, the pizza chart), and how it's counted.
 struct SillyStatCard: View {
     var kind: SillyStatKind
     var tally: SillyStatsTally
@@ -80,23 +68,22 @@ struct SillyStatCard: View {
     var body: some View {
         let text = SillyStatsCopy.text(for: kind, tally: tally)
         FernletCard {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    Text(verbatim: text.emoji)
-                        .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    WorldSpriteView(sprite: StampBookArt.statIcon(for: kind), scale: 2)
                     Text(verbatim: text.title)
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.slate)
+                        .font(.fernlet(.bodySmall))
+                        .foregroundStyle(WorldPalette.dim)
                 }
                 HStack(alignment: .center, spacing: 12) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(verbatim: text.headline)
                             .font(.fernlet(.displayMedium))
-                            .foregroundStyle(Color.bark)
+                            .foregroundStyle(WorldPalette.bark)
                             .fernletWrappingText()
                         Text(verbatim: text.detail)
                             .font(.fernlet(.body))
-                            .foregroundStyle(Color.bark)
+                            .foregroundStyle(WorldPalette.bark)
                             .fernletWrappingText()
                     }
                     Spacer(minLength: 0)
@@ -109,7 +96,7 @@ struct SillyStatCard: View {
                 }
                 Text(verbatim: text.footnote)
                     .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
+                    .foregroundStyle(WorldPalette.dim)
                     .fernletWrappingText()
             }
         }

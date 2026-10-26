@@ -238,6 +238,7 @@ struct BackgroundRefreshBoundaryTests {
     /// ``everyFernletKitModuleIsClassifiedForTheRefreshHandler()``, so a module added to the package
     /// fails this wall until somebody decides which side of it the refresh handler is on.
     static let forbiddenModuleReasons: [String: String] = [
+        "WorldMapStore": "the World build's location history (lifted fog cells, walk lines, workout-space pins); a background refresh never reads where someone has been.",
         "ProximityKit": "the mesh itself — §17.2's first prohibition; a refresh that can reach a radio is a second owner of them.",
         "AIProviders": "the FoundationModels inference module; §17.2 forbids Foundation Models outright.",
         "AIContext": "the de-identified AI payload contract — the handler has no AI step, so naming it would mean one was added.",

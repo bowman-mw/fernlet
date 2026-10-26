@@ -102,8 +102,8 @@ struct MessagesRecipeCardParityTests {
                 == String(localized: "messages.card.recipe", defaultValue: "Fernlet recipe", bundle: appex))
         #expect(FernletMessagesCardCopy.cardOpensInFernlet
                 == String(localized: "messages.card.opensInFernlet", defaultValue: "Opens in Fernlet on iPhone", bundle: appex))
-        #expect(FernletMessagesCardCopy.recipeWordmark
-                == String(localized: "messages.card.wordmark.recipe", defaultValue: "FERNLET RECIPE", bundle: appex))
+        #expect(FernletMessagesCardCopy.recipeTag
+                == String(localized: "messages.card.tag.recipe", defaultValue: "Fernlet recipe", bundle: appex))
     }
 
     /// In the app, the card's copy is read from the iMessage app's bundle — the one the app embeds —

@@ -351,6 +351,8 @@ struct FernletApp: App {
         if newPhase == .background {
             if case .ready(let store) = loader.phase {
                 store.flushPendingSnapshotSave()
+                // World W-09 (i): the map's location runs while Fernlet is open and stops here.
+                store.worldAppDidEnterBackground()
                 // P5 item 10: the foreground falling leg. Custody keeps running on
                 // ciphertext; plaintext stops here. Since P7 item 2 the edge hands the raw phase
                 // to the run-policy funnel, which decides the gate.
@@ -478,7 +480,11 @@ struct FernletApp: App {
     /// loader-phase switch (launch screen / ready content / failure view).
     @ViewBuilder
     private var content: some View {
-        if shouldOpenPrivacyDataForUITest {
+        if UITestSupport.shouldOpenWorldMapHarness {
+            worldMapHarnessContent
+        } else if let scene = UITestSupport.worldFoundationGallery {
+            worldFoundationGalleryContent(scene: scene)
+        } else if shouldOpenPrivacyDataForUITest {
             privacyDataTestContent
         } else {
             switch loader.phase {
@@ -500,6 +506,9 @@ struct FernletApp: App {
                     // this does nothing at all, and in release it is a compiled-out no-op. It
                     // speaks no radio verb: it moves the store facts the run policy reads.
                     .task { RecipeShareLaneHarness.install(store: store) }
+                    // World Batch 4's Live Activity screenshots: absent FERNLET_UI_TEST_LIVE_ACTIVITY
+                    // this does nothing, and in release it is a compiled-out no-op.
+                    .task { LiveActivityDemoHarness.install() }
                     // P5 item 10's launch push. `.onChange(of: scenePhase)` carries no `initial:`,
                     // and on a cold launch the loader reaches `.ready` AFTER the
                     // `.inactive → .active` edge — without this the gate would sit fail-closed for
@@ -518,6 +527,23 @@ struct FernletApp: App {
                 .transition(.opacity)
             }
         }
+    }
+
+    /// DEBUG-only: `FERNLET_UI_TEST_WORLD_MAP_HARNESS=1` renders the World map seam on its own
+    /// (`WorldMapHarnessView`) with no store load. Empty in Release, where the flag is always false.
+    @ViewBuilder
+    private var worldMapHarnessContent: some View {
+        #if DEBUG
+        WorldMapHarnessView()
+        #endif
+    }
+
+    /// DEBUG-only: the World foundation gallery at one scene (`FERNLET_UI_TEST_WORLD_GALLERY`).
+    @ViewBuilder
+    private func worldFoundationGalleryContent(scene: String) -> some View {
+        #if DEBUG
+        WorldFoundationGallery(scene: scene)
+        #endif
     }
 
     /// DEBUG-only: `FERNLET_UI_TEST_OPEN_PRIVACY_DATA=1` renders the Privacy Data settings screen
@@ -753,7 +779,7 @@ private extension UIView {
 }
 #endif
 
-/// Full-screen fallback for a failed store load: names the error and offers a retry.
+/// Full-screen fallback for a failed store load (design `b2-launch-fail`): names the error and offers a retry.
 ///
 /// Rendered only from ``FernletApp``'s `.failed` loader phase; the button re-runs
 /// ``FernletStoreLoader/retry()`` so a transient persistence failure never strands the user on a
@@ -763,33 +789,7 @@ private struct LaunchFailureView: View {
     let retry: () -> Void
 
     var body: some View {
-        VStack(spacing: 18) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 38, weight: .semibold))
-                .foregroundStyle(Color.terracotta)
-
-            VStack(spacing: 8) {
-                Text("Fernlet couldn't open")
-                    .font(.fernlet(.header))
-                    .foregroundStyle(Color.bark)
-                    .multilineTextAlignment(.center)
-                Text(error.localizedDescription)
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .multilineTextAlignment(.center)
-                    .fernletWrappingText()
-            }
-
-            Button("Try again", action: retry)
-                .buttonStyle(.plain)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.onMoss)
-                .padding(.horizontal, 28)
-                .padding(.vertical, 14)
-                .background(Color.mossFill, in: RoundedRectangle(cornerRadius: 14))
-        }
-        .padding(28)
-        .frame(maxWidth: 420)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Design `b2-launch-fail`: the dotted page, the pixel warning, the framed Try again.
+        WorldLaunchFailure(message: error.localizedDescription, retry: retry)
     }
 }

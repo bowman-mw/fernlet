@@ -54,7 +54,7 @@ final class ScreenAppearanceUITests: XCTestCase {
     @MainActor
     func testFriendsTabAppearance() throws {
         let app = UXTestApp.launch()
-        app.buttons["Friends"].firstMatch.tap()
+        app.buttons["Album"].firstMatch.tap()
         try UXScreenProbe(app, "Friends tab", in: self)
             .assertOnScreen("screen.friends")
             .assertBelowStatusBar("screen.friends")

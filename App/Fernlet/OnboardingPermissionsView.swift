@@ -32,12 +32,13 @@ struct OnboardingPermissionsView: View {
                 backAction: backAction
             ) {
                 VStack(spacing: 10) {
-                    permissionRow("heart.text.square.fill", title: "Health", body: "Asked the first time you log a workout or open a health feature.")
-                    permissionRow("figure.run", verbatimTitle: HealthCapability.workoutLogging.title,
+                    permissionRow(WorldSprites.heartSm, title: "Health", body: "Asked the first time you log a workout or open a health feature.")
+                    permissionRow(WorldSprites.shoe, verbatimTitle: HealthCapability.workoutLogging.title,
                                   verbatimBody: HealthCapability.workoutLogging.summary)
-                    permissionRow("camera.fill", title: "Camera", body: "Asked when you first scan a nutrition label.")
+                    permissionRow(WorldSprites.photo, title: "Camera", body: "Asked when you first scan a nutrition label.")
                     notificationsRow
-                    permissionRow("location.fill", title: "Coarse location", body: "Asked only if you turn on weather-aware recovery prompts.")
+                    // Today's location card, kept as it is: the map's own location ask is step 5c.
+                    permissionRow(WorldSprites.pin, title: "Coarse location", body: "Asked only if you turn on weather-aware recovery prompts.")
                 }
             }
             SheetSaveBar(label: "Start Fernlet") { finishAction() }
@@ -48,23 +49,9 @@ struct OnboardingPermissionsView: View {
 
     /// The one permission with no natural in-app trigger, so it is offered here explicitly.
     private var notificationsRow: some View {
-        HStack(alignment: .top, spacing: 12) {
-            rowIcon("bell.badge.fill")
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Notifications")
-                    .font(.fernlet(.headerMedium))
-                    .foregroundStyle(Color.bark)
-                Text("A gentle daily check-in reminder, only if you want one.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-            }
-            Spacer(minLength: 8)
-            notificationsControl
-        }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+        OnboardingCard(sprite: OnboardingArt.bell, title: Text("Notifications"),
+                       detail: Text("A gentle daily check-in reminder, only if you want one."),
+                       accessory: AnyView(notificationsControl))
     }
 
     @ViewBuilder
@@ -79,18 +66,12 @@ struct OnboardingPermissionsView: View {
         case .off:
             Text("Off in Settings")
                 .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
+                .foregroundStyle(WorldPalette.dim)
         case .undecided:
             Button { requestNotifications() } label: {
                 Text(requestingNotifications ? "…" : "Turn on")
-                    .font(.fernlet(.label))
-                    // F3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
-                    .foregroundStyle(Color.mossInk)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.moss.opacity(0.12), in: Capsule())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
             .disabled(requestingNotifications)
             .accessibilityIdentifier("onboarding.permissions.notifications")
         }
@@ -128,47 +109,17 @@ struct OnboardingPermissionsView: View {
 
     /// One permission card named by authored copy. `LocalizedStringKey`, not `String`: the `String`
     /// this took sent every literal row through `Text`'s verbatim overload, so none localized.
-    private func permissionRow(_ systemImage: String, title: LocalizedStringKey, body: LocalizedStringKey) -> some View {
-        permissionCard(systemImage, title: Text(title), body: Text(body))
+    private func permissionRow(_ sprite: WorldSprite, title: LocalizedStringKey, body: LocalizedStringKey) -> some View {
+        permissionCard(sprite, title: Text(title), body: Text(body))
     }
 
-    /// The verbatim form, for copy another module already resolved (`HealthCapability`'s). A
-    /// distinct label, never a same-label `String` overload a literal would pick.
-    private func permissionRow(_ systemImage: String, verbatimTitle: String, verbatimBody: String) -> some View {
-        permissionCard(systemImage, title: Text(verbatim: verbatimTitle), body: Text(verbatim: verbatimBody))
+    private func permissionRow(_ sprite: WorldSprite, verbatimTitle: String, verbatimBody: String) -> some View {
+        permissionCard(sprite, title: Text(verbatim: verbatimTitle), body: Text(verbatim: verbatimBody))
     }
 
-    /// The shared card chrome for both `permissionRow` forms.
-    private func permissionCard(_ systemImage: String, title: Text, body: Text) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            rowIcon(systemImage)
-            VStack(alignment: .leading, spacing: 4) {
-                title
-                    .font(.fernlet(.headerMedium))
-                    .foregroundStyle(Color.bark)
-                body
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-            }
-            // Same width claim as `privacyRow` on the welcome step. More conspicuous here: the sibling
-            // `notificationsRow` in this same VStack already has its Spacer, so the Notifications card
-            // rendered full-width while these four rendered narrow and centred beside it.
-            Spacer(minLength: 8)
-        }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.bark.opacity(0.08), lineWidth: 1))
-    }
-
-    private func rowIcon(_ systemImage: String) -> some View {
-        // T1-8: `permissionRow`'s HStack isn't `.combine`d, so this glyph would otherwise be its
-        // own VoiceOver stop announcing the raw SF Symbol name ahead of the row's title/body text.
-        Image(systemName: systemImage)
-            .font(.headline.weight(.semibold))
-            .foregroundStyle(Color.moss)
-            .frame(width: 30, height: 30)
-            .background(Color.moss.opacity(0.10), in: Circle())
-            .accessibilityHidden(true)
+    /// One card (design `b2-onb-8`): a framed pixel tile, the permission and when it is asked.
+    private func permissionCard(_ sprite: WorldSprite, title: Text, body: Text) -> some View {
+        OnboardingCard(sprite: sprite, title: title, detail: body)
+            .accessibilityElement(children: .combine)
     }
 }

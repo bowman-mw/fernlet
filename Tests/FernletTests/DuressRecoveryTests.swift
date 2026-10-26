@@ -84,6 +84,8 @@ private final class RecoveryFixture {
     /// open after a recovery-lock + custodian recovery round trip.
     let sealedCorpusRow: Data
     let purgeCount = RecoveryTestCounter()
+    /// How often the World map's location-history purge ran (World build).
+    let mapPurgeCount = RecoveryTestCounter()
 
     static let corpusPlaintext = Data("a journal entry that must survive a recovery-lock".utf8)
 
@@ -102,6 +104,8 @@ private final class RecoveryFixture {
         }
         let counter = purgeCount
         service.installDuressPurgeHook { counter.increment() }
+        let mapCounter = mapPurgeCount
+        service.installRecoveryLockPurgeHook { mapCounter.increment() }
     }
 
     /// Enrolls `custodianIdentity` the way the ceremony does: seal the content key to its
@@ -371,6 +375,19 @@ struct DuressRecoveryLockTriggerTests {
         defer { fixture.cleanup() }
 
         #expect(fixture.purgeCount.value == 0)
+    }
+
+    /// The corpus is kept, but where someone has been is not (World build; design page answer 16):
+    /// the trigger runs the map's purge exactly once, and a second install can't replace it.
+    @Test func theTriggerPurgesTheWorldMapHistoryOnce() async throws {
+        let fixture = try await triggeredFixture()
+        defer { fixture.cleanup() }
+
+        #expect(fixture.mapPurgeCount.value == 1)
+        let stranger = RecoveryTestCounter()
+        fixture.service.installRecoveryLockPurgeHook { stranger.increment() }
+        fixture.service.recoveryLockPurgeHook?()
+        #expect(stranger.value == 0 && fixture.mapPurgeCount.value == 2, "the purge hook must be set-once")
     }
 
     /// The coerced user can now say truthfully that they cannot open it — neither factor works.

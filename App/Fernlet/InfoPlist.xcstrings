@@ -118,19 +118,36 @@
         }
       }
     },
+    "NSLocationAlwaysAndWhenInUseUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "With background mapping on, Fernlet uncovers the map from the places you visit during the day, using little battery. It stays on this iPhone."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Con el mapeo en segundo plano activado, Fernlet descubre el mapa con los lugares que visitas durante el día, con poca batería. Todo se queda en este iPhone."
+          }
+        }
+      }
+    },
     "NSLocationWhenInUseUsageDescription" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fernlet uses your approximate location only to check the weather for gentle recovery prompts, when you turn that on."
+            "value" : "Your companion lives on a map of where you are. The map uncovers as you go, and the history stays on this iPhone."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Fernlet usa tu ubicación aproximada solo para consultar el clima y sugerirte un descanso con calma, cuando activas esa opción."
+            "value" : "Tu compañero vive en un mapa de dónde estás. El mapa se descubre mientras vas, y el historial se queda en este iPhone."
           }
         }
       }
@@ -165,6 +182,23 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Fernlet guarda las fotos compartidas que elijas después de una sesión con amigos."
+          }
+        }
+      }
+    },
+    "WorldWalk" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Precise location draws the line of this walk or run. The line stays on this iPhone."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La ubicación precisa dibuja la línea de esta caminata o carrera. La línea se queda en este iPhone."
           }
         }
       }

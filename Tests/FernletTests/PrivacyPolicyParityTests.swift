@@ -96,6 +96,45 @@ struct PrivacyPolicyParityTests {
     ///   rating and the override reason, pain among them (`ExerciseResult`);
     /// - `Workout suggestions.` — sleep, resting heart rate and heart-rate variability shape the
     ///   planner's readiness, the stalled-lift check and the heart-rate zones, on the device.
+    ///
+    /// The seven markers added 2026-10-24 (World build step 5c; the owner approved the "Location and the
+    /// map" paragraph and the added sentence word for word) pin what the map keeps and who sees it:
+    /// - `cells about 35 m across` — the fog is a coarse record, on this iPhone only;
+    /// - `only during a walk you started` — the only times location runs in the background (with the
+    ///   optional low-power mapping);
+    /// - `it never receives your map history or your walks` — Apple Maps gets the area on screen, nothing kept;
+    /// - `keeps a rolling 30-day timeline of the places` — Where you've been;
+    /// - `which holds only a visit count, never dates` — Places you return to;
+    /// - `therapists are never named or kept` — the allowlist's refusal;
+    /// - `so the photo can sit on your map` — a solo photo's place, never at a refused place.
+    ///
+    /// The two markers added in World build round 5 (owner-approved the same day, word for word) pin:
+    /// - `anywhere else, it keeps no place` — a solo photo keeps its place only at the everyday places;
+    /// - `keeps only Apple's reference to it, never its details` — the Apple Maps lookups and what a place
+    ///   you return to keeps of Apple's answer (its name is asked for again when you look).
+    ///
+    /// The four markers added in World build round 6 (both additions owner-approved word for word) pin:
+    /// - `unless you add one yourself` — a place Fernlet won't name is kept only when the person adds it;
+    /// - `You can put a photo on the map yourself.` — a solo photo with no place, placed by hand;
+    /// - `If you mark a place as your home (up to two) or as a hotel you stay at` — homes and hotels are kept;
+    /// - `it stays until you remove it in Settings › Home map` — and where they go away.
+    ///
+    /// The three markers added in World build round 6b (both owner-approved word for word, 2026-10-25) pin:
+    /// - `encrypted on this iPhone only and never in a backup, to uncover the map around it` — the homes
+    ///   sentence's approved rewording (homes and hotels live in the map's device file, never in a backup);
+    /// - `If you add the map widget, Fernlet gives it a picture of the map around you` — the map widget
+    ///   (Q36): marked places and saved trails reach the widget, on this iPhone only and never in a backup;
+    /// - `the widget's copy is deleted whenever you delete your map history` — and it goes with the history.
+    ///
+    /// The two markers added with W-09 (i) (owner, 2026-10-26: "Change that to while fernlet is open"; a
+    /// verbatim swap of "while the map is open" in both sentences) pin when places are noted and looked up:
+    /// - `collected while Fernlet is open` — Where you've been's timeline, a panel or sheet over the map or not;
+    /// - `only while Fernlet is open` — the Apple Maps lookup.
+    ///
+    /// The marker added when the World build readied for main (owner, 2026-10-26, option (a): "like
+    /// your journal" goes, word for word in all three copies) pins how the places are kept:
+    /// - `All of this is encrypted on this iPhone only: never synced` — Where you've been, Places you
+    ///   return to and solo photos' places.
     private static let substanceMarkers = [
         "iOS may refuse or end it at any time",
         "never retroactively repurposed",
@@ -123,7 +162,26 @@ struct PrivacyPolicyParityTests {
         "Heart rate during cardio",
         "holds the reading in memory only",
         "Easy, Good or Tough",
-        "Workout suggestions."
+        "Workout suggestions.",
+        "cells about 35 m across",
+        "only during a walk you started",
+        "it never receives your map history or your walks",
+        "keeps a rolling 30-day timeline of the places",
+        "which holds only a visit count, never dates",
+        "therapists are never named or kept",
+        "so the photo can sit on your map",
+        "anywhere else, it keeps no place",
+        "keeps only Apple's reference to it, never its details",
+        "unless you add one yourself",
+        "You can put a photo on the map yourself.",
+        "If you mark a place as your home (up to two) or as a hotel you stay at",
+        "it stays until you remove it in Settings › Home map",
+        "encrypted on this iPhone only and never in a backup, to uncover the map around it",
+        "If you add the map widget, Fernlet gives it a picture of the map around you",
+        "the widget's copy is deleted whenever you delete your map history",
+        "collected while Fernlet is open",
+        "only while Fernlet is open",
+        "All of this is encrypted on this iPhone only: never synced"
     ]
 
     /// Loads each copy's text, keyed by its repo-relative path.

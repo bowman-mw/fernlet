@@ -40,8 +40,7 @@ struct RecipeIngredientRows: View {
                     rememberedPortions: { store.rememberedPortionGrams(for: $0) }
                 )
                 .padding(14)
-                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                .modifier(RecipeEditorCardFrame())
             } else {
                 CollapsedIngredientRow(
                     ingredient: ingredient,
@@ -55,20 +54,71 @@ struct RecipeIngredientRows: View {
     }
 }
 
-/// The cream-card label every recipe-editor action button wears ("Add ingredient", "Scan barcode",
-/// "Add step", "Add another part").
+/// The label every recipe-editor action button wears ("Add ingredient", "Scan barcode", "Add step",
+/// "Add another part"): a pixel icon and the word, full width. The button itself takes
+/// `ActionPillButtonStyle(.secondary)`, the framed secondary of `b3-recipe-new`.
 struct RecipeEditorActionLabel: View {
     let title: LocalizedStringKey
-    let systemImage: String
+    /// The pixel icon; nil draws the framed plus.
+    var sprite: WorldSprite?
 
     var body: some View {
-        Label(title, systemImage: systemImage)
-            .font(.fernlet(.label))
-            .foregroundStyle(Color.moss)
-            .frame(maxWidth: .infinity)
-            .padding(12)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        HStack(spacing: 7) {
+            if let sprite {
+                WorldSpriteView(sprite: sprite, scale: 2)
+            } else {
+                FernletIcon(.plus, scale: 2)
+            }
+            Text(title)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+/// The framed card an open ingredient editor, a step and a part sit in (`b3-recipe-new`: "each
+/// ingredient is a framed card"): paper in a 2-pt ink frame with the look's solid shadow, or today's
+/// cream card without the look. Under the look it is a section of its own; inside another section (a
+/// part's card, the Share screen's ``FernletCard``) it is one of that section's rows (the frame rule,
+/// `ref-frames-rule`): no fill, frame or shadow, a hairline above it.
+struct RecipeEditorCardFrame: ViewModifier {
+    var radius: CGFloat = FernletFramedLook.cardRadius
+    @Environment(\.fernletFramedLook) private var look
+    @Environment(\.fernletInFramedSection) private var inSection
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        if look != nil, inSection {
+            content.overlay(alignment: .top) { FernletDottedRule() }
+        } else {
+            content
+                // The frame rule (ref-frames-rule): pieces inside this card draw flat.
+                .environment(\.fernletInFramedSection, look != nil)
+                .background(look?.paper ?? Color.cream, in: shape)
+                .overlay(shape.strokeBorder(look?.ink ?? Color.bark.opacity(0.10), lineWidth: look == nil ? 1 : 2))
+                .background { shape.fill(look?.shadow ?? Color.clear).offset(y: 3) }
+        }
+    }
+}
+
+/// A 34-pt pixel-glyph control on a step or part card (move earlier, later, remove), dimmed when it
+/// can't act, named by `label` for VoiceOver and Voice Control.
+struct RecipeEditorGlyphButton: View {
+    let sprite: WorldSprite
+    let enabled: Bool
+    let label: Text
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            WorldSpriteView(sprite: sprite, scale: 2)
+                .opacity(enabled ? 1 : 0.3)
+                .frame(minWidth: 34, minHeight: 34)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .accessibilityLabel(label)
     }
 }
 
@@ -88,46 +138,25 @@ struct RecipeStepEditorCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
+            HStack(spacing: 4) {
                 Text("Step \(index + 1)")
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.rowDetailBold)
+                    .foregroundStyle(WorldPalette.dim)
                 Spacer()
-                controlButton(systemImage: "chevron.up", enabled: index > 0,
-                              label: "Move step \(index + 1) up") { onMove(-1) }
-                controlButton(systemImage: "chevron.down", enabled: index < count - 1,
-                              label: "Move step \(index + 1) down") { onMove(1) }
-                controlButton(systemImage: "xmark", enabled: true, tint: Color.slate,
-                              label: "Remove step \(index + 1)") { onRemove() }
+                RecipeEditorGlyphButton(sprite: WorldSprites.chevU, enabled: index > 0,
+                                        label: Text("Move step \(index + 1) up")) { onMove(-1) }
+                RecipeEditorGlyphButton(sprite: WorldSprites.chevD, enabled: index < count - 1,
+                                        label: Text("Move step \(index + 1) down")) { onMove(1) }
+                RecipeEditorGlyphButton(sprite: WorldSprites.xx, enabled: true,
+                                        label: Text("Remove step \(index + 1)")) { onRemove() }
             }
             SheetTextEditor(text: $step.text, placeholder: "what to do in this step", minHeight: 60)
             StepTimerControl(durationSeconds: $step.durationSeconds)
         }
         .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        .modifier(RecipeEditorCardFrame())
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(accessibilityIdentifier)
-    }
-
-    /// One 34pt glyph control on a step card; the up/down/remove buttons share this styling exactly.
-    private func controlButton(
-        systemImage: String,
-        enabled: Bool,
-        tint: Color = Color.moss,
-        label: LocalizedStringKey,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(enabled ? tint : Color.slate.opacity(0.3))
-                .frame(minWidth: 34, minHeight: 34)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
-        .accessibilityLabel(label)
     }
 }
 
@@ -167,23 +196,25 @@ struct RecipePartEditorCard: View {
                                  onRemove: actions.removeIngredient)
             AdaptiveStack(spacing: 8) {
                 Button(action: actions.addIngredient) {
-                    RecipeEditorActionLabel(title: "Add ingredient", systemImage: "plus")
+                    RecipeEditorActionLabel(title: "Add ingredient")
                 }
-                .buttonStyle(.plain)
                 .disabled(!canAddIngredient)
                 #if canImport(UIKit)
                 Button(action: actions.scanBarcode) {
-                    RecipeEditorActionLabel(title: "Scan barcode", systemImage: "barcode.viewfinder")
+                    RecipeEditorActionLabel(title: "Scan barcode", sprite: WorldSprites.barcode)
                 }
-                .buttonStyle(.plain)
                 .disabled(!canAddIngredient)
                 #endif
             }
+            .buttonStyle(ActionPillButtonStyle(.secondary))
             subheading("Steps (optional)")
             steps
         }
+        // The frame rule (ref-frames-rule): pieces inside this card draw flat.
+        .environment(\.fernletInFramedSection, true)
         .padding(14)
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.moss.opacity(0.28), lineWidth: 1.5))
+        .background(WorldPalette.sage.opacity(0.5), in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(WorldPalette.moss, lineWidth: 2))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("recipeEditor.part.\(index)")
     }
@@ -192,16 +223,14 @@ struct RecipePartEditorCard: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Part \(index + 1) of \(count)")
-                    .font(.fernlet(.labelSmall))
-                    .tracking(0.8)
-                    .textCase(.uppercase)
-                    .foregroundStyle(Color.slate)
-                    .accessibilityAddTraits(.isHeader)
+                SectionLabel(Text("Part \(index + 1) of \(count)"))
                 Spacer()
-                glyphButton("chevron.up", enabled: index > 0, label: "Make part \(index + 1) earlier") { actions.move(-1) }
-                glyphButton("chevron.down", enabled: index < count - 1, label: "Make part \(index + 1) later") { actions.move(1) }
-                glyphButton("trash", enabled: true, label: "Remove part \(index + 1)", action: actions.remove)
+                RecipeEditorGlyphButton(sprite: WorldSprites.chevU, enabled: index > 0,
+                                        label: Text("Make part \(index + 1) earlier")) { actions.move(-1) }
+                RecipeEditorGlyphButton(sprite: WorldSprites.chevD, enabled: index < count - 1,
+                                        label: Text("Make part \(index + 1) later")) { actions.move(1) }
+                RecipeEditorGlyphButton(sprite: WorldSprites.trash, enabled: true,
+                                        label: Text("Remove part \(index + 1)"), action: actions.remove)
             }
             TextField("Name this part, like Dressing", text: nameBinding, prompt: .fieldPrompt("Name this part, like Dressing"))
                 .submitLabel(.done)
@@ -232,9 +261,9 @@ struct RecipePartEditorCard: View {
                 )
             }
             Button(action: actions.addStep) {
-                RecipeEditorActionLabel(title: "Add step", systemImage: "plus")
+                RecipeEditorActionLabel(title: "Add step")
             }
-            .buttonStyle(.plain)
+            .buttonStyle(ActionPillButtonStyle(.secondary))
             .disabled(!canAddStep)
             .accessibilityIdentifier("recipeEditor.part.\(index).addStep")
         }
@@ -242,22 +271,9 @@ struct RecipePartEditorCard: View {
 
     private func subheading(_ title: LocalizedStringKey) -> some View {
         Text(title)
-            .font(.fernlet(.labelSmall))
-            .foregroundStyle(Color.slate)
+            .font(FernletFramedFont.rowDetailBold)
+            .foregroundStyle(WorldPalette.dim)
             .accessibilityAddTraits(.isHeader)
-    }
-
-    private func glyphButton(
-        _ systemImage: String, enabled: Bool, label: LocalizedStringKey, action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(enabled ? Color.moss : Color.slate.opacity(0.3))
-        }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
-        .fernletIconButton(label)
     }
 }
 
@@ -288,9 +304,9 @@ struct RecipePartsEditor: View {
             Button {
                 if draft.addPart() != nil { expandedId = nil }
             } label: {
-                RecipeEditorActionLabel(title: "Add another part", systemImage: "plus.square.on.square")
+                RecipeEditorActionLabel(title: "Add another part")
             }
-            .buttonStyle(.plain)
+            .buttonStyle(ActionPillButtonStyle(.secondary))
             .disabled(!draft.canAddPart)
             .accessibilityIdentifier("recipeEditor.addPart")
         }

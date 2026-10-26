@@ -45,22 +45,6 @@ struct ImportRecipeIntent: AppIntent {
     }
 }
 
-/// A compact static system snippet; it contains only fields the import will persist.
-private struct RecipeExchangeConfirmation: View {
-    let packet: RecipeExchangePacket
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(verbatim: packet.recipe.name).font(.headline)
-            Text("\(packet.recipe.servings) servings · \(packet.recipe.ingredients.count) ingredients")
-            Text("\(packet.recipe.steps?.count ?? 0) steps · \(packet.includesNotes ? "Notes included" : "No notes")")
-            if let parts = packet.recipe.components, !parts.isEmpty {
-                Text("Parts: \(parts.map(\.name).joined(separator: " · "))")
-            }
-        }
-    }
-}
-
 /// Exports a single planned workout as a one-day `CoachPlan` exchange packet.
 struct ExportWorkoutPlanIntent: AppIntent {
     static let title: LocalizedStringResource = "Export workout plan"
@@ -111,47 +95,9 @@ struct ImportWorkoutPlanIntent: AppIntent {
     }
 }
 
-/// The confirmation shows exactly the safety/collision facts the existing foreground review uses.
-private struct WorkoutPlanExchangeConfirmation: View {
-    let preview: WorkoutPlanImportPreview
-
-    private var lastDayKey: String {
-        let highestDay = preview.review.plan.days.map(\.dayIndex).max() ?? 1
-        return FernletStore.dayKey(startingOn: preview.startDayKey, offsetBy: highestDay - 1) ?? preview.startDayKey
-    }
-
-    private var changeCounts: String {
-        let edits = preview.review.resolvedEdits.filter(\.isMeaningful)
-        let changed = edits.filter { $0.action != .delete }.count
-        let removed = edits.filter { $0.action == .delete }.count
-        return "\(preview.review.plan.sessionCount) added · \(changed) changed · \(removed) removed"
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(verbatim: preview.review.plan.title).font(.headline)
-            Text(verbatim: preview.review.plan.coachDisplayName.isEmpty ? "Sender not specified" : preview.review.plan.coachDisplayName)
-            Text("\(preview.review.plan.days.count) days · \(preview.review.plan.sessionCount) workouts")
-            Text("\(preview.startDayKey) – \(lastDayKey)")
-            Text("\(preview.review.collidingDayKeys.count) collisions · \(preview.policy.displayName)")
-            Text(changeCounts)
-            if !preview.review.safetyFlags.isEmpty {
-                Text("\(preview.review.safetyFlags.count) avoided or unavailable exercise warnings")
-                    .foregroundStyle(.orange)
-            }
-        }
-    }
-}
-
-private extension WorkoutPlanCollisionPolicy {
-    var displayName: String {
-        switch self {
-        case .keepExistingWorkouts: "Keep existing workouts"
-        case .addAlongside: "Add alongside"
-        case .replaceFutureConflicts: "Replace future conflicts"
-        }
-    }
-}
+// The two confirmations' views — `RecipeExchangeConfirmation` and `WorkoutPlanExchangeConfirmation`,
+// Fernlet's card inside Shortcuts' prompt — are in World/Shortcuts/ExchangeSnippetViews.swift
+// (World Review Batch 4, `b4-sc-recipe`, `b4-sc-plan`).
 
 /// Reads an `IntentFile` only after checking an in-place file's size. In-memory files have no
 /// separately observable length, so their bounded `Data` is checked immediately after loading.

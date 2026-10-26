@@ -19,11 +19,16 @@ import FernletUI
 /// next scan of the same product hits instantly. Calls `onResolved` exactly once.
 struct BarcodeResolveFlowView: View {
     var store: FernletStore
+    /// The page Back returns to ("Log meal"), already resolved; nil says "Back".
+    var backTitle: String? = nil
+    /// When set, a photo added on the camera-off page goes here (the meal sheet's capture front door)
+    /// instead of being searched for a barcode only.
+    var onPhoto: ((UIImage) -> Void)? = nil
     var onResolved: (FoodItem) -> Void
     @State private var notFound: ScannedBarcode?
 
     var body: some View {
-        BarcodeScanView { code in
+        BarcodeScanView(backTitle: backTitle, onPhoto: onPhoto) { code in
             if let item = store.foodCatalog.item(forBarcode: code) {
                 onResolved(item)
             } else {
@@ -31,7 +36,8 @@ struct BarcodeResolveFlowView: View {
             }
         }
         .navigationDestination(item: $notFound) { scanned in
-            BarcodeNotFoundView(store: store, barcode: scanned.code, onCreated: onResolved)
+            BarcodeNotFoundView(store: store, barcode: scanned.code, backTitle: String(localized: "Scan a food"),
+                                onCreated: onResolved)
         }
     }
 }
@@ -46,22 +52,23 @@ struct ScannedBarcode: Identifiable, Hashable {
     var id: String { code }
 }
 
-// MARK: - Local palette (barcode handoff mockup 11a–11c)
-
-/// Warm off-white used for the viewfinder corner brackets — reads clearly over live camera video in
-/// both light and dark. Local to this file per the styling rules (no shared color-file edits).
-private extension Color {
-    static let scannerBracket = Color(white: 0.91)
-}
-
 // MARK: - Scanner screen
 
-/// Live barcode viewfinder (VisionKit `DataScannerViewController`) with a graceful still-photo
-/// fallback (`VNDetectBarcodesRequest` over the existing `ImagePickerView`/`PhotosPicker`) for
-/// devices and simulators where the live scanner is unsupported. Delivers the raw payload string;
-/// callers normalize via `FoodCatalog.item(forBarcode:)` / `FoodBarcode`.
+/// "Scan a food" (`b3-barcode-off`, `b3-barcode-scan` draft 2): the live barcode viewfinder (VisionKit
+/// `DataScannerViewController`) under the World scan window, with a graceful still-photo fallback
+/// (`VNDetectBarcodesRequest` over the photo picker) where the live scanner is unsupported or the camera
+/// is off. Delivers the raw payload string; callers normalize via `FoodCatalog.item(forBarcode:)` /
+/// `FoodBarcode`.
+///
+/// Log meal reaches it only when its live camera can't run; there `onPhoto` hands an added photo to the
+/// meal sheet's capture front door, which reads a barcode, a label, or keeps it as the meal photo. The
+/// recipe editor's scan reaches it directly and keeps the barcode-only reading.
 struct BarcodeScanView: View {
     var detector: any BarcodePayloadDetecting = VisionBarcodeDetector()
+    /// The page Back returns to, already resolved; nil says "Back".
+    var backTitle: String? = nil
+    /// Takes an added photo instead of the barcode-only reading (Log meal's camera-off path).
+    var onPhoto: ((UIImage) -> Void)? = nil
     var onCode: (String) -> Void
 
     @State private var showingCamera = false
@@ -86,6 +93,7 @@ struct BarcodeScanView: View {
     /// The single in-flight still-photo detection (see `handlePickedImage`); cancelled when a new photo
     /// is picked and when the scanner goes away.
     @State private var detectionTask: Task<Void, Never>?
+    @Environment(\.fernletFramedLook) private var look
 
     @Environment(\.scenePhase) private var scenePhase
 
@@ -101,9 +109,8 @@ struct BarcodeScanView: View {
                 cameraOffFallback
             }
         }
-        .background(Color.parchment)
-        .navigationTitle("Scan a food")
-        .navigationBarTitleDisplayMode(.inline)
+        .foodSheetBackground()
+        .foodSheetPushedPage("Scan a food", back: backTitle)
         .onChange(of: scenePhase) { _, newPhase in
             // Returning from Settings (where the user may have just enabled camera access) retries
             // the live scanner; if it's still denied, becameUnavailable flips us back.
@@ -117,14 +124,14 @@ struct BarcodeScanView: View {
         .onDisappear { detectionTask?.cancel() }
     }
 
-    // MARK: Live viewfinder (11a)
+    // MARK: Live viewfinder (b3-barcode-scan)
 
-    /// The DataScanner representable with a calm frame overlaid on top: dimmed surround, warm corner
-    /// brackets, a soft moss scan line, and the one caption. The scanner + delivery behavior is
-    /// untouched — this is presentation chrome layered over the live video.
+    /// The DataScanner representable under the World scan window (dimmed surround, pixel corner
+    /// brackets, the moss scan line, the caption on a dark plate) and the framed "Add by hand". The
+    /// scanner + delivery behavior is untouched — this is presentation chrome over the live video.
     private var liveScanner: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            WorldPalette.rgb(0x221C17).ignoresSafeArea()
 
             BarcodeDataScannerView(
                 // Once we've handed a code off (a real payload OR an empty hand-entry), pause the live
@@ -145,39 +152,32 @@ struct BarcodeScanView: View {
             // latch (and re-arms the paused scanner), so the user can scan a different product.
             .onAppear { handedOff = false }
 
-            ScanFrameOverlay(caption: "Point the camera at the product's barcode.")
+            FoodScanWindow(caption: "Point the camera at the product's barcode.")
 
-            // A kind way out, right on the frame (mockup 11a): a translucent "Add by hand" pill
-            // pinned to the bottom, wired to the same hand-entry path as the camera-off fallback so
-            // the user is never trapped waiting for a scan.
+            // A kind way out, right on the frame: "Add by hand" pinned to the bottom, wired to the
+            // same hand-entry path as the camera-off fallback so the user is never trapped waiting.
             VStack {
                 Spacer()
-                Button {
-                    deliver("")
-                } label: {
-                    Label("Add by hand", systemImage: "plus")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.cream)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 12)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .overlay(Capsule().stroke(Color.cream.opacity(0.2), lineWidth: 1))
+                Button { deliver("") } label: {
+                    HStack(spacing: 8) {
+                        FernletIcon(.plus, scale: 2)
+                        Text("Add by hand")
+                    }
                 }
-                .buttonStyle(.plain)
-                .padding(.bottom, 44)
+                .buttonStyle(ActionPillButtonStyle(.secondary))
+                .padding(.bottom, 32)
                 .accessibilityIdentifier("barcodeAddByHand")
             }
-            .ignoresSafeArea(edges: .bottom)
         }
     }
 
-    // MARK: Camera-off fallback (11a, right)
+    // MARK: Camera-off fallback (b3-barcode-off)
 
     /// Calm, non-blocking landing when the camera is unavailable: never a red error, just "no worries"
     /// with a photo path (existing `showingCamera` / `PhotosPicker`) and a hand-entry escape hatch.
     private var cameraOffFallback: some View {
         ScrollView {
-            VStack(spacing: 20) {
+            VStack(spacing: 18) {
                 cameraOffHeader
                 cameraOffActions
 
@@ -187,99 +187,74 @@ struct BarcodeScanView: View {
                     }
                 } label: {
                     Text("Turn on camera in Settings")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.slate)
-                        .underline()
+                        .font(look == nil ? .fernlet(.label) : FernletFramedFont.button)
+                        .foregroundStyle(look?.link ?? Color.slate)
+                        .frame(minHeight: 44)
                 }
                 .buttonStyle(.plain)
-                .padding(.top, 2)
 
                 pickedPhotoStatus
             }
             .frame(maxWidth: .infinity)
-            .padding(24)
+            .padding(.horizontal, 18)
+            .padding(.top, 14)
             .padding(.bottom, 20)
         }
     }
 
-    /// The camera-off icon tile plus its two lines of copy.
+    /// The camera-off sign (a pixel camera on a gold tile) plus its two lines of copy.
     private var cameraOffHeader: some View {
-        VStack(spacing: 20) {
-            // Soft camera-off icon tile.
-            ZStack {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(Color.goldenrod.opacity(0.14))
-                Image(systemName: "camera.metering.none")
-                    .font(.system(size: 34, weight: .light))
-                    .foregroundStyle(Color.goldenrod)
+        VStack(spacing: 14) {
+            FernletIconTile(size: 84, fill: WorldPalette.rgb(0xF2D58A)) {
+                WorldSpriteView(sprite: FoodSprites.cameraOff, scale: 5, tint: WorldPalette.rgb(0x3A2414))
             }
-            .frame(width: 80, height: 80)
-            .padding(.top, 40)
+            .accessibilityHidden(true)
 
-            VStack(spacing: 12) {
+            VStack(spacing: 8) {
                 Text("Camera access is off")
-                    .font(.fernlet(.header))
-                    .foregroundStyle(Color.bark)
+                    .font(look == nil ? .fernlet(.header) : FernletFramedFont.cardTitle)
+                    .foregroundStyle(look?.text ?? Color.bark)
                     .multilineTextAlignment(.center)
 
                 Text("No worries — you can add a photo of the barcode, or just enter it by hand.")
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.slate)
+                    .font(look == nil ? .fernlet(.body) : FernletFramedFont.body)
+                    .foregroundStyle(look?.dim ?? Color.slate)
                     .multilineTextAlignment(.center)
                     .fernletWrappingText()
-                    .frame(maxWidth: 300)
             }
         }
     }
 
     /// The two ways out of a camera-off scanner: add a photo (camera or library) or enter by hand.
     private var cameraOffActions: some View {
-        VStack(spacing: 11) {
-            // Primary — moss, wired to the existing photo path (camera → library fallback).
+        VStack(spacing: 12) {
+            // Primary — wired to the existing photo path (camera → library fallback).
             Menu {
                 if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                    Button {
-                        showingCamera = true
-                    } label: {
-                        Label("Take a photo", systemImage: "camera.fill")
-                    }
+                    Button { showingCamera = true } label: { Label("Take a photo", systemImage: "camera.fill") }
                 }
-                Button {
-                    isPhotoLibraryPickerActive = true
-                } label: {
+                Button { isPhotoLibraryPickerActive = true } label: {
                     Label("Choose from library", systemImage: "photo.on.rectangle")
                 }
             } label: {
-                Label("Add a photo instead", systemImage: "camera.fill")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.onMoss)
-                    .frame(maxWidth: .infinity)
-                    .padding(15)
-                    .background(Color.moss, in: RoundedRectangle(cornerRadius: 15))
+                HStack(spacing: 10) {
+                    WorldSpriteView(sprite: FoodSprites.camera, scale: 2)
+                    Text("Add a photo instead")
+                }
+                .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.plain)
+            .menuStyle(.button)
+            .buttonStyle(ActionPillButtonStyle(.primary))
             // The library branch is a PhotosPicker so we keep the exact existing selection path.
             .photosPicker(isPresented: $isPhotoLibraryPickerActive, selection: $selectedPhotoItem, matching: .images)
 
             // Secondary — enter the barcode's macros by hand (skips detection, opens the
             // remember-a-food naming screen for this scan with no payload found).
-            Button {
-                deliver("")
-            } label: {
-                Text("Enter details by hand")
-                    .font(.fernlet(.label))
-                    // T1-3: text ink, not the `goldenrod` accent (2.22:1).
-                    .foregroundStyle(Color.goldenrodInk)
-                    .frame(maxWidth: .infinity)
-                    .padding(14)
-                    .background(
-                        RoundedRectangle(cornerRadius: 15)
-                            .stroke(Color.goldenrod.opacity(0.4), lineWidth: 1.5)
-                    )
+            Button { deliver("") } label: {
+                Text("Enter details by hand").frame(maxWidth: .infinity)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(ActionPillButtonStyle(.secondary))
         }
-        .frame(maxWidth: 300)
     }
 
     /// Preview + detection status for a picked photo, so the camera-off fallback stays a working flow.
@@ -290,8 +265,8 @@ struct BarcodeScanView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(maxHeight: 220)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(look?.ink ?? Color.bark.opacity(0.10), lineWidth: 2))
                 .frame(maxWidth: .infinity)
                 .padding(.top, 6)
                 // T2-10: this is the camera-off fallback's only feedback on whether the barcode
@@ -304,18 +279,17 @@ struct BarcodeScanView: View {
                 ProgressView()
                     .accessibilityHidden(true)
                 Text("Looking for a barcode...")
-                    .font(.fernlet(.bubble))
-                    .foregroundStyle(Color.slate)
+                    .font(look == nil ? .fernlet(.bubble) : FernletFramedFont.note)
+                    .foregroundStyle(look?.dim ?? Color.slate)
             }
         }
 
         if let detectionNotice {
             Text(detectionNotice)
-                .font(.fernlet(.bubble))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.bubble) : FernletFramedFont.note)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .multilineTextAlignment(.center)
                 .fernletWrappingText()
-                .frame(maxWidth: 320)
         }
     }
 
@@ -332,6 +306,11 @@ struct BarcodeScanView: View {
     }
 
     private func handlePickedImage(_ image: UIImage) {
+        // Log meal's camera-off path: the meal sheet reads the photo (barcode, label, or meal photo).
+        if let onPhoto {
+            onPhoto(image)
+            return
+        }
         stillImage = image
         detectionNotice = nil
         isDetecting = true
@@ -352,157 +331,6 @@ struct BarcodeScanView: View {
                                           comment: "Barcode scanner: a snapped or chosen photo showed no readable barcode")
                 FernletFeedback.system.play(.caveat)
             }
-        }
-    }
-}
-
-// MARK: - Viewfinder chrome (11a)
-
-/// Clean scan-frame chrome drawn over the live DataScanner: a dimmed surround with a clear window,
-/// warm off-white rounded corner brackets, a soft glowing moss scan line, and one gentle caption.
-/// Purely decorative — it never intercepts the camera or its delivery.
-private struct ScanFrameOverlay: View {
-    /// `LocalizedStringKey`, not `String` (review T2-1): the caption is both drawn and spoken, and
-    /// a `String` lands on the verbatim overload of BOTH `Text(_:)` and `.accessibilityLabel(_:)`.
-    var caption: LocalizedStringKey
-
-    /// T1-6: the app's one ungated `repeatForever` — rebuilt on the repo's `TimelineView(.animation
-    /// (paused:))` idiom (`DisposableCameraView.swift`'s LED breathe) so Reduce Motion can freeze it
-    /// on a single frame instead of only being able to hide it outright.
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private let windowWidth: CGFloat = 250
-    private let windowHeight: CGFloat = 160
-    private let cornerRadius: CGFloat = 22
-    /// Full up-and-back round trip; matches the previous `.easeInOut(duration: 2.6)
-    /// .repeatForever(autoreverses: true)` (2.6s each way).
-    private let sweepPeriod: Double = 5.2
-
-    var body: some View {
-        GeometryReader { geo in
-            let window = CGRect(
-                x: (geo.size.width - windowWidth) / 2,
-                y: geo.size.height * 0.42 - windowHeight / 2,
-                width: windowWidth,
-                height: windowHeight
-            )
-
-            TimelineView(.animation(paused: reduceMotion)) { timeline in
-                let elapsed = timeline.date.timeIntervalSinceReferenceDate
-                // Raised cosine: 0 → 1 → 0 once per `sweepPeriod`, an ease-in/ease-out-shaped
-                // round trip with no discontinuity at the turnarounds.
-                let t = (1 - cos(elapsed * 2 * .pi / sweepPeriod)) / 2
-                let lowerY = -window.height / 2 + 8
-                let upperY = window.height / 2 - 8
-                let sweepOffset = lowerY + (upperY - lowerY) * t
-                chrome(window: window, sweepOffset: sweepOffset, geoWidth: geo.size.width)
-            }
-        }
-        .allowsHitTesting(false)
-        .accessibilityElement()
-        .accessibilityLabel(caption)
-    }
-
-    /// The dimmed surround, corner brackets + scan line, and caption for one animation frame — split
-    /// out of ``body`` so it stays under the Power-of-10 line ceiling once the sweep math and the
-    /// Reduce Motion environment read landed on top of it.
-    @ViewBuilder
-    private func chrome(window: CGRect, sweepOffset: CGFloat, geoWidth: CGFloat) -> some View {
-        ZStack {
-            // Dimmed surround with a clear cut-out window.
-            Color.black.opacity(0.5)
-                .reverseMask {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .frame(width: window.width, height: window.height)
-                        .position(x: window.midX, y: window.midY)
-                }
-
-            // Corner brackets + scan line, positioned on the window.
-            ZStack {
-                ScanBrackets(cornerRadius: cornerRadius)
-                    .stroke(Color.scannerBracket, style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                    .frame(width: window.width, height: window.height)
-
-                // Soft glowing moss scan line, sweeping between the top and bottom of the window.
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.moss.opacity(0), Color.moss, Color.moss.opacity(0)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(width: window.width - 16, height: 2)
-                    .shadow(color: Color.moss.opacity(0.8), radius: 6)
-                    .offset(y: sweepOffset)
-            }
-            .position(x: window.midX, y: window.midY)
-
-            // Caption below the window.
-            Text(caption)
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.cream)
-                .multilineTextAlignment(.center)
-                .shadow(color: .black.opacity(0.4), radius: 6)
-                .frame(maxWidth: geoWidth - 80)
-                .position(x: geoWidth / 2, y: window.maxY + 64)
-        }
-    }
-}
-
-/// The four rounded L-shaped corner brackets of the scan window, as one stroked Shape.
-private struct ScanBrackets: Shape {
-    var cornerRadius: CGFloat
-    /// How far each bracket arm extends along an edge from its corner.
-    var arm: CGFloat = 30
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let r = cornerRadius
-
-        // Top-left
-        path.move(to: CGPoint(x: rect.minX, y: rect.minY + arm + r))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + r))
-        path.addArc(center: CGPoint(x: rect.minX + r, y: rect.minY + r), radius: r,
-                    startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
-        path.addLine(to: CGPoint(x: rect.minX + r + arm, y: rect.minY))
-
-        // Top-right
-        path.move(to: CGPoint(x: rect.maxX - r - arm, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX - r, y: rect.minY))
-        path.addArc(center: CGPoint(x: rect.maxX - r, y: rect.minY + r), radius: r,
-                    startAngle: .degrees(270), endAngle: .degrees(0), clockwise: false)
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + r + arm))
-
-        // Bottom-right
-        path.move(to: CGPoint(x: rect.maxX, y: rect.maxY - r - arm))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - r))
-        path.addArc(center: CGPoint(x: rect.maxX - r, y: rect.maxY - r), radius: r,
-                    startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
-        path.addLine(to: CGPoint(x: rect.maxX - r - arm, y: rect.maxY))
-
-        // Bottom-left
-        path.move(to: CGPoint(x: rect.minX + r + arm, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.minX + r, y: rect.maxY))
-        path.addArc(center: CGPoint(x: rect.minX + r, y: rect.maxY - r), radius: r,
-                    startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - r - arm))
-
-        return path
-    }
-}
-
-private extension View {
-    /// Masks out (punches a hole through) the receiver using the given shape — used to cut the clear
-    /// scan window into the dimmed surround.
-    func reverseMask<Mask: View>(@ViewBuilder _ mask: () -> Mask) -> some View {
-        self.mask {
-            Rectangle()
-                .overlay(alignment: .center) {
-                    mask()
-                        .blendMode(.destinationOut)
-                }
-                .compositingGroup()
         }
     }
 }
@@ -635,6 +463,8 @@ struct BarcodeNotFoundView: View {
     /// arrive pre-filled here so the naming screen opens with the rings populated (no rescan needed).
     /// nil for the ordinary barcode not-found handoff.
     var prefilledScan: NutritionLabelResult? = nil
+    /// The page Back returns to ("Log meal", "Scan a food"), already resolved; nil says "Back".
+    var backTitle: String? = nil
     var onCreated: (FoodItem) -> Void
 
     @State private var name = ""
@@ -676,19 +506,22 @@ struct BarcodeNotFoundView: View {
     /// The Open Food Facts product this screen was prefilled from, if the user looked the barcode up.
     /// Cleared when they rescan the label, because the numbers are then their own.
     @State private var onlineImport: OpenFoodFactsProduct?
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
         Group {
             if let rememberedItem {
+                // b3-remembered: Done top right is the way on (the serving step), no Back.
                 RememberedConfirmationView(item: rememberedItem) {
                     onCreated(rememberedItem)
                 }
+                .toolbar(.hidden, for: .navigationBar)
             } else {
                 namingScreen
+                    .foodSheetPushedPage("Remember product", back: backTitle)
             }
         }
-        .background(Color.parchment)
-        .navigationBarTitleDisplayMode(.inline)
+        .foodSheetBackground()
         // Always pushed (the meal sheet's or the recipe editor's stack), so the name field's
         // keyboard "Done" is declared on the page: a Done outside the stack never reaches it.
         .keyboardDoneToolbar()
@@ -713,32 +546,30 @@ struct BarcodeNotFoundView: View {
 
     // MARK: Naming screen (11b)
 
-    /// The scrolling half of the naming screen: header, name field, label-scan row, macro rings.
-    /// Split out of ``namingScreen`` so both stay inside the 60-line body budget (R4).
+    /// The scrolling half of the naming screen (`b3-remember` draft 2, "quieter"): the one-line header
+    /// beside a small companion, the name first, Open Food Facts as one button, the optional label
+    /// scan, then the macro tiles. Split out of ``namingScreen`` so both stay inside the 60-line body
+    /// budget (R4).
     private var namingFormBody: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 16) {
                 namingHeader
+
+                FoodSheetField("What should we call it?") {
+                    TextField("Hazelnut oat bar", text: $name, prompt: .fieldPrompt("Hazelnut oat bar"))
+                        .sheetTextInput()
+                }
 
                 if let lookupBarcode = OpenFoodFactsBarcode(scanned: barcode) {
                     OpenFoodFactsLookupCard(store: store, barcode: lookupBarcode, onFound: applyOnlineImport)
-                }
-
-                Text("Give it a name and it'll be here next time you scan.")
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-
-                SheetField("What should we call it?") {
-                    TextField("Hazelnut oat bar", text: $name, prompt: .fieldPrompt("Hazelnut oat bar"))
-                        .sheetTextInput()
                 }
 
                 labelScanButton
 
                 macroSection
             }
-            .padding(20)
+            .padding(.horizontal, 18)
+            .padding(.top, 4)
             .padding(.bottom, 10)
         }
     }
@@ -748,12 +579,8 @@ struct BarcodeNotFoundView: View {
             namingFormBody
 
             if let saveNotice {
-                Text(saveNotice)
-                    .font(.fernlet(.bubble))
-                    .foregroundStyle(Color.terracotta)
-                    .multilineTextAlignment(.center)
-                    .fernletWrappingText()
-                    .padding(.horizontal, 20)
+                FernletNotice(text: Text(saveNotice), tone: .warn) { EmptyView() }
+                    .padding(.horizontal, 18)
                     .padding(.bottom, 8)
             }
 
@@ -771,7 +598,6 @@ struct BarcodeNotFoundView: View {
                 }
             }
         }
-        .navigationTitle("Remember product")
         .confirmationDialog(
             "No macros yet",
             isPresented: $showingEmptyMacroNudge,
@@ -804,7 +630,8 @@ struct BarcodeNotFoundView: View {
         .onChange(of: showingEmptyMacroNudge) { _, _ in consumePendingLabelScan() }
         .onChange(of: showingPlausibilityReview) { _, _ in consumePendingLabelScan() }
         .navigationDestination(isPresented: $showingLabelScanner) {
-            NutritionLabelCameraSheet(showCalories: store.settings.showCalories) { result in
+            NutritionLabelCameraSheet(showCalories: store.settings.showCalories,
+                                      backTitle: String(localized: "Remember")) { result in
                 scanResult = result
                 // The user's own scan replaces Open Food Facts' numbers, so the save is theirs.
                 onlineImport = nil
@@ -815,106 +642,84 @@ struct BarcodeNotFoundView: View {
         }
     }
 
-    /// The quiet eyebrow plus the friendly "New to Fernlet" header with its little companion face.
+    /// The one-line header beside a small companion (draft 2: "We haven't met this one").
     private var namingHeader: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            // Quiet "ADD A FOOD" eyebrow above the friendly header (mockup 11b).
-            Text("Add a food")
-                .font(.fernlet(.labelSmall))
-                .tracking(1.4)
-                .textCase(.uppercase)
-                .foregroundStyle(Color.softTaupe)
-
-            // Friendly "New to Fernlet" header with a little companion face.
-            HStack(spacing: 12) {
-                CompanionFace()
-                    .frame(width: 52, height: 52)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("New to Fernlet")
-                        .font(.fernlet(.labelSmall))
-                        .tracking(1.2)
-                        .textCase(.uppercase)
-                        // T1-3: text ink, not the `goldenrod` accent (2.22:1).
-                        .foregroundStyle(Color.goldenrodInk)
-                    Text("We haven't met this one")
-                        .font(.fernlet(.header))
-                        .foregroundStyle(Color.bark)
-                        .fernletWrappingText()
-                }
-            }
+        HStack(spacing: 12) {
+            FernletIconTile(size: 48) { headerCompanion }
+                .accessibilityHidden(true)
+            Text("We haven't met this one")
+                .font(look == nil ? .fernlet(.header) : FernletFramedFont.cardTitle)
+                .foregroundStyle(look?.text ?? Color.bark)
+                .fernletWrappingText()
+                .accessibilityAddTraits(.isHeader)
         }
     }
 
-    /// The optional dashed "scan the nutrition label" row, wired to the existing scanner flow.
+    /// The companion beside the header: its pixel sprite, still, in the World look (`b3-remember`);
+    /// today's face without it.
+    @ViewBuilder private var headerCompanion: some View {
+        if look != nil {
+            let state = store.liveCompanionState
+            let companion = WorldCompanionLook(appearance: store.settings.companionAppearance, state: state, asleep: false)
+            WorldCompanionCanvas(grid: WorldCompanionPainter.paint(state: state, look: companion, pose: WorldCompanionPose()),
+                                 scale: 2)
+                .frame(width: WorldCompanionSprite.size(scale: 2).width, height: WorldCompanionSprite.size(scale: 2).height)
+        } else {
+            CompanionFace().frame(width: 36, height: 36)
+        }
+    }
+
+    /// The optional "scan the nutrition label" row, a dashed framed card wired to the label scanner.
     private var labelScanButton: some View {
         Button {
             showingLabelScanner = true
         } label: {
             HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 13, style: .continuous)
-                        .fill(Color.moss.opacity(0.14))
-                    Image(systemName: "doc.viewfinder")
-                        .font(.system(size: 20, weight: .regular))
-                        .foregroundStyle(Color.moss)
-                }
-                .frame(width: 44, height: 44)
-
+                FernletIconTile(size: 44) { WorldSpriteView(sprite: FoodSprites.doc, scale: 3) }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(scanResult == nil ? "Scan the nutrition label" : "Rescan the nutrition label")
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.bark)
+                        .font(FoodFont.rowName)
+                        .foregroundStyle(look?.text ?? Color.bark)
                     Text("optional — we'll read the macros for you")
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
+                        .font(FernletFramedFont.rowDetail)
+                        .foregroundStyle(look?.dim ?? Color.slate)
                         .fernletWrappingText()
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-
-                Image(systemName: "chevron.right")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(Color.softTaupe)
+                FernletIcon(.chevron, scale: 2)
             }
-            .padding(16)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 18))
+            .padding(14)
             .overlay(
-                RoundedRectangle(cornerRadius: 18)
-                    .stroke(Color.moss.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(look?.ink ?? Color.moss.opacity(0.4), style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
             )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
 
-    /// Macros, per serving — grams only. NEVER a calorie value.
+    /// Macros, per serving — grams only, NEVER a calorie value: three framed tiles with the pixel
+    /// drumstick, wheat and drop, each over its macro's colour bar.
     private var macroSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Macros, per serving")
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
-                Spacer()
+                SectionLabel("Macros, per serving")
+                Spacer(minLength: 8)
                 Text("grams — no calories here")
-                    .font(.fernlet(.bubble))
-                    .foregroundStyle(Color.softTaupe)
+                    .font(FernletFramedFont.rowDetail)
+                    .foregroundStyle(look?.dim ?? Color.softTaupe)
             }
 
-            HStack(spacing: 11) {
-                MacroRingTile(label: "Protein", grams: scanResult?.protein ?? 0, tint: .moss)
-                MacroRingTile(label: "Carbs", grams: scanResult?.carbs ?? 0, tint: .goldenrod)
-                MacroRingTile(label: "Fat", grams: scanResult?.fat ?? 0, tint: .terracotta)
+            HStack(spacing: 10) {
+                FoodMacroTile(kind: .protein, grams: scanResult?.protein ?? 0)
+                FoodMacroTile(kind: .carbs, grams: scanResult?.carbs ?? 0)
+                FoodMacroTile(kind: .fat, grams: scanResult?.fat ?? 0)
             }
 
-            if scanResult == nil {
-                // "add them later" retired with FOOD-24 (2026-08-21): the meal sheet now has a
-                // stated "Enter macros by hand" path, so the honest pointer names it.
-                Text("Scanning the label fills in the macros — or enter them by hand on the meal sheet.")
-                    .font(.fernlet(.bubble))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-            } else if let servingSize = scanResult?.servingSize, servingSize.isEmpty == false {
+            if let servingSize = scanResult?.servingSize, servingSize.isEmpty == false {
                 Text("Per serving: \(servingSize)")
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.note)
+                    .foregroundStyle(look?.dim ?? Color.slate)
             }
         }
     }
@@ -1123,185 +928,159 @@ struct BarcodeNotFoundView: View {
     }
 }
 
-// MARK: - Remembered confirmation (11c)
+// MARK: - Remembered confirmation (b3-remembered)
 
-/// The soft "Remembered" success state: a green check medallion, a warm line naming the food, and a
-/// mini food chip showing the macros in grams (never calories). "Done" hands the just-created item
-/// back to the flow.
-private struct RememberedConfirmationView: View {
+/// The soft "Remembered" success state (`b3-remembered`, approved 2026-10-24): Done top right (the way
+/// on to the serving step), a framed moss medal with a pixel tick, a warm line naming the food, and the
+/// food on a framed card with its macros as coloured tags in grams (never calories). The Open Food Facts
+/// credit shows when the numbers came from there.
+struct RememberedConfirmationView: View {
     let item: FoodItem
     var onDone: () -> Void
 
     @State private var appeared = false
+    @Environment(\.fernletFramedLook) private var look
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 0) {
-            Spacer(minLength: 0)
-
-            VStack(spacing: 26) {
-                checkMedallion
-                messageBlock
-                foodChip
+            HStack {
+                Spacer()
+                Button("Done", action: onDone)
+                    .buttonStyle(.plain)
+                    .font(FernletFramedFont.sheetControl)
+                    .foregroundStyle(look?.link ?? Color.moss)
+                    .fernletTapTarget()
+                    .accessibilityIdentifier("sheet.done")
             }
-            .padding(.horizontal, 34)
-
-            Spacer(minLength: 0)
-
-            doneButton
+            .padding(.horizontal, 18)
+            .padding(.top, 4)
+            ScrollView {
+                VStack(spacing: 18) {
+                    checkMedallion
+                    messageBlock
+                    foodChip
+                    attribution
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 40)
+                .padding(.bottom, 20)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) { appeared = true }
+            withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.7)) { appeared = true }
         }
     }
 
-    /// The green check medallion, scaling in on appear.
+    /// The framed moss medal with the pixel tick, scaling in on appear (still under Reduce Motion).
     private var checkMedallion: some View {
         ZStack {
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [Color.moss.opacity(0.2), Color.moss.opacity(0)],
-                        center: .center, startRadius: 0, endRadius: 52
-                    )
-                )
-                .frame(width: 104, height: 104)
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [Color.fern, Color.moss],
-                        center: UnitPoint(x: 0.42, y: 0.36), startRadius: 2, endRadius: 60
-                    )
-                )
-                .frame(width: 80, height: 80)
-                .shadow(color: Color.moss.opacity(0.3), radius: 12, y: 8)
-            Image(systemName: "checkmark")
-                .font(.system(size: 34, weight: .bold))
-                .foregroundStyle(Color.onMoss)
+            Circle().fill(look?.mark ?? Color.moss)
+            Circle().strokeBorder(look?.ink ?? Color.clear, lineWidth: 3)
+            WorldSpriteView(sprite: WorldSprites.check, scale: 6, tint: WorldPalette.gameCream)
         }
-        .scaleEffect(appeared ? 1 : 0.6)
-        .opacity(appeared ? 1 : 0)
+        .frame(width: 96, height: 96)
+        .background { Circle().fill(look?.shadow ?? Color.clear).offset(y: 4) }
+        .scaleEffect(appeared || reduceMotion ? 1 : 0.6)
+        .opacity(appeared || reduceMotion ? 1 : 0)
+        .accessibilityHidden(true)
     }
 
     /// "Remembered" plus the warm line naming the food.
     private var messageBlock: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             Text("Remembered")
-                .font(.fernlet(.display))
-                .foregroundStyle(Color.bark)
+                .font(.custom(FernletFontName.frauncesSemiBold, size: 40, relativeTo: .largeTitle))
+                .foregroundStyle(look?.text ?? Color.bark)
+                .accessibilityAddTraits(.isHeader)
 
             Text("\(item.name) is in your foods now — scan it again and it'll log in a tap.")
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.body) : FernletFramedFont.body)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .multilineTextAlignment(.center)
                 .fernletWrappingText()
-                .frame(maxWidth: 300)
-
-            // The licence notice for a food whose numbers came from an attributed source (Open Food
-            // Facts, ODbL) — already localized by the domain model.
-            if let attribution = item.source.attributionLine {
-                Text(verbatim: attribution)
-                    .font(.fernlet(.labelSmall))
-                    .foregroundStyle(Color.slate)
-                    .multilineTextAlignment(.center)
-            }
         }
     }
 
-    /// Mini food chip — name + grams (P / C / F). No calories.
-    private var foodChip: some View {
-        HStack(spacing: 13) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.goldenrod.opacity(0.16))
-                Image(systemName: "bag.fill")
-                    .font(.system(size: 18))
-                    .foregroundStyle(Color.goldenrod)
-            }
-            .frame(width: 42, height: 42)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(item.name)
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.bark)
-                    .lineLimit(1)
-                HStack(spacing: 10) {
-                    // T1-3: text ink for the two tokens that have one; `.stat` is 14pt.
-                    Text("P \(item.macros.protein)")
-                        .foregroundStyle(Color.mossInk)
-                    Text("C \(item.macros.carbs)")
-                        .foregroundStyle(Color.goldenrodInk)
-                    Text("F \(item.macros.fat)")
-                        .foregroundStyle(Color.terracotta)
-                }
-                .font(.fernlet(.stat))
-            }
-            Spacer(minLength: 0)
+    /// The licence notice for a food whose numbers came from an attributed source (Open Food Facts,
+    /// ODbL) — already localized by the domain model.
+    @ViewBuilder private var attribution: some View {
+        if let attribution = item.source.attributionLine {
+            Text(verbatim: attribution)
+                .font(FernletFramedFont.rowDetail)
+                .foregroundStyle(look?.dim ?? Color.slate)
+                .multilineTextAlignment(.center)
         }
-        .padding(15)
-        .frame(maxWidth: 290)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 18))
+    }
+
+    /// The food on a framed card: the basket on a gold tile, its name, and P / C / F as tags.
+    private var foodChip: some View {
+        FernletCard {
+            HStack(spacing: 13) {
+                FernletIconTile(size: 44, fill: WorldPalette.rgb(0xF2D58A)) {
+                    WorldSpriteView(sprite: WorldSprites.basket, scale: 2)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.name)
+                        .font(FoodFont.rowName)
+                        .foregroundStyle(look?.text ?? Color.bark)
+                        .lineLimit(2)
+                    FoodMacroTagRow(macros: item.macros)
+                }
+                Spacer(minLength: 0)
+            }
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(item.name), \(item.macros.protein) grams protein, \(item.macros.carbs) grams carbs, \(item.macros.fat) grams fat")
-    }
-
-    /// The single "Done" action that hands the created item back to the flow.
-    private var doneButton: some View {
-        Button(action: onDone) {
-            Text("Done")
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.onMoss)
-                .frame(maxWidth: .infinity)
-                .padding(16)
-                .background(Color.moss, in: RoundedRectangle(cornerRadius: 16))
-        }
-        .buttonStyle(.plain)
-        .padding(20)
     }
 }
 
 // MARK: - Small pieces
 
-/// A macro ring tile: a tinted progress-style ring with the grams count inside and a colored label
-/// beneath. Grams only — this tile never renders or computes calories.
-private struct MacroRingTile: View {
-    /// The macro's name. `LocalizedStringKey`: as a `String` "Protein" / "Carbs" / "Fat" were drawn verbatim.
-    var label: LocalizedStringKey
-    var grams: Int
-    var tint: Color
+/// One macro on Remember product (`b3-remember` draft 2): a framed tile with the macro's pixel icon
+/// (drumstick, wheat, drop), the grams in bold, the name, and a bar in the macro's colour. Grams
+/// only — this tile never renders or computes calories.
+private struct FoodMacroTile: View {
+    let kind: FoodMacroKind
+    let grams: Int
+    @Environment(\.fernletFramedLook) private var look
 
-    /// A gentle, purely decorative fill so an all-zero tile still reads as a ring, not an error. The
-    /// value is cosmetic — the truth is the "\(grams)g" in the center.
-    private var fill: CGFloat {
-        let capped = min(max(grams, 0), 40)
-        return 0.12 + CGFloat(capped) / 40 * 0.78
+    private var name: LocalizedStringKey {
+        switch kind {
+        case .protein: "Protein"
+        case .carbs: "Carbs"
+        case .fat: "Fat"
+        }
+    }
+
+    private var sprite: WorldSprite {
+        switch kind {
+        case .protein: FoodSprites.drumstick
+        case .carbs: FoodSprites.wheat
+        case .fat: FoodSprites.fatDrop
+        }
     }
 
     var body: some View {
-        VStack(spacing: 10) {
-            ZStack {
-                Circle()
-                    .stroke(tint.opacity(0.18), lineWidth: 6)
-                Circle()
-                    .trim(from: 0, to: fill)
-                    .stroke(tint, style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                Text("\(grams)g")
-                    .font(.fernlet(.stat))
-                    .foregroundStyle(Color.bark)
+        FernletCard {
+            VStack(spacing: 6) {
+                WorldSpriteView(sprite: sprite, scale: 3)
+                Text(verbatim: "\(grams)g")
+                    .font(.custom(FernletFontName.dmSansBold, size: 22, relativeTo: .title3))
+                    .foregroundStyle(look?.text ?? Color.bark)
+                    .monospacedDigit()
+                Text(name)
+                    .font(FernletFramedFont.rowDetail)
+                    .foregroundStyle(look?.dim ?? Color.slate)
+                kind.colour
+                    .frame(height: 8)
+                    .overlay(Rectangle().strokeBorder(look?.ink ?? Color.clear, lineWidth: 1.5))
             }
-            .frame(width: 56, height: 56)
-
-            Text(label)
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(tint)
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
-        .padding(.horizontal, 12)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 18))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("\(Text(label)): \(grams) grams"))
+        .accessibilityLabel(Text("\(Text(name)): \(grams) grams"))
     }
 }
 

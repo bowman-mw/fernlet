@@ -224,7 +224,9 @@ private final class PlayedLog {
     /// create branch then leaves the spoken confirmation to the toast.
     @Test func logAndSaveReportsItsMeal() throws {
         let food = try RepoRoot.source("App/Fernlet/FoodView.swift")
-        let action = try #require(region(food, from: "Button(\"Log & save\") {", to: "finishAfterSave(named: name)"))
+        // The World editor (b3-recipe-new) draws the button with a full-width label, so the pin reads
+        // its action from the line that creates the recipe it logs.
+        let action = try #require(region(food, from: "let recipe = addDraftRecipe()", to: "finishAfterSave(named: name)"))
         #expect(action.contains("onMealsLogged([meal])"), "\"Log & save\" logs without reporting to the toast")
         #expect(food.contains("onMealsLogged: onMealsLogged.then(onCreatedRecipeLogged)"),
                 "the book's create branch no longer learns that \"Log & save\" logged")
@@ -244,10 +246,11 @@ private final class PlayedLog {
     }
 
     /// ContentView hands the toast to every surface that logs: Home (for its meal chips), the Food
-    /// tab, the Home-presented recipe book and the Home-presented recipe editor.
+    /// tab, the Home-presented recipe book, the Home-presented recipe editor and the World map (its
+    /// blue button's "Log your usual", round 6).
     @Test func contentViewWiresTheToastToEveryHost() throws {
         let content = try RepoRoot.source("App/Fernlet/ContentView.swift")
-        #expect(content.components(separatedBy: "onMealsLogged: mealLogReporter").count - 1 == 4)
+        #expect(content.components(separatedBy: "onMealsLogged: mealLogReporter").count - 1 == 5)
         #expect(content.contains("RecipeSheet(store: store, onMealsLogged: mealLogReporter)"))
         let home = try RepoRoot.source("App/Fernlet/HomeView.swift")
         #expect(home.contains("onMealsLogged: onMealsLogged"), "Home no longer passes the toast to its ambient cards")

@@ -27,7 +27,10 @@ import FernletUI
 /// app's runtime wiring hub.
 ///
 /// Structure: `launchRoot` shows `LaunchScreen` until ``LaunchPreparationService`` finishes, then
-/// the paged `TabView` (Home/Food/Move/Friends/Private) with the custom floating tab bar. All
+/// the five-page `TabView` (Home/Food/Move/Friends/Private). **World build:** Home is the live map
+/// (`WorldMapHome`) with the item bar over it (`WorldItemBar`), the other four pages are full-screen
+/// panels in the approved frame (`WorldPanelFrame`), and Today, Log and Settings open as panels over
+/// everything (`worldOverlay`); the tab still drives every gate, exactly as the floating bar did. All
 /// modal surfaces flow through one `activeSheet: FernletSheet?` slot (plus dedicated slots for the
 /// connection inspector, incoming proximity recipe shares, and the meal-logged toast's Adjust
 /// correction sheet), with dismiss-then-represent chaining for editor and First Aid handoffs.
@@ -69,13 +72,31 @@ struct ContentView: View {
     @State private var selectedTab: FernletTab = .home
     @State private var privateHubSection: PrivateHubSection = .journal
     @State private var isHomeTabBarCompact = false
-    /// The largest floating-tab-bar height measured this view lifetime. It stays stable across the
-    /// compact/expand animation, so that animation cannot relayout every tab's scroll content on
-    /// each frame. The camera session overrides the published value to zero while hiding the bar.
-    @State private var tabBarReservedHeight: CGFloat = 0
+    /// The World Home's panel that is not a tab (Today, Log, Settings), open over everything; nil when
+    /// none is. The four tab panels are the `TabView`'s own pages (World build, plan step 1b).
+    @State private var worldOverlay: WorldPanel?
+    /// Whether the World Home's disposable camera (the blue button's, ``WorldDisposableCamera``) is open
+    /// full screen over everything: the session button and the stamp banner hold back while it is.
+    @State private var isWorldCameraOpen = false
+    /// A page of the Album panel Home asked for (Friends nearby, Activities, Friend shops), handed to the
+    /// panel, which pushes it one deep and clears this (`b4-mem-blue-*`, `b4-mem-home-shop`).
+    @State private var pendingFriendsRoute: FriendsRoute?
+    /// The Stamp book asked for by the stamp banner or the stamp widget: Today opens and pushes it at its
+    /// stamps (owner, 2026-10-24: no sheet), and the Today panel's HomeView takes and clears this.
+    @State private var pendingStampBook = false
+    /// Whether the session-end keep-as-friends prompt is up (``KeepFriendsPromptHost``, owner
+    /// 2026-10-24: shown wherever the person is, Home included).
+    @State private var isKeepFriendsPromptUp = false
+    /// Whether one of the Album's full-screen covers is up (a wall photo, a "Just you" set, the
+    /// session celebration): the keep prompt is never requested over one.
+    @State private var isAlbumCoverUp = false
     /// How far the keyboard reaches above the interface's bottom edge, zero while it is down. The
     /// bar stays behind the keyboard; the meal-logged toast reads this to rest on the keyboard.
     @State private var keyboardOverlap: CGFloat = 0
+    /// The home indicator's safe area under the interface. The item bar sits in it (26 pt off the
+    /// physical bottom, as the design draws it); the meal toast, which keeps the safe area, takes it
+    /// off its lift so it still rests 8 pt above the bar.
+    @State private var bottomSafeArea: CGFloat = 0
     /// Per-tab re-select tokens: bumped each time the ALREADY-selected tab is tapped again. Each tab
     /// page decides what that means from its own navigation state (`tabReselect`): pop to its main
     /// page when something is pushed, otherwise scroll to the top.
@@ -124,11 +145,11 @@ struct ContentView: View {
     /// §4.5). Cleared when the hub locks.
     @State private var requestedSealedBackupV2Settle = false
     @Environment(\.scenePhase) private var scenePhase
-    /// Read by ``customTabBar`` (at accessibility text sizes the five labels break mid-word —
-    /// "Hom/e", "Frien/ds" — and the bar swallows a fifth of the screen, so they stop being drawn)
-    /// and by the `.workout` route (3b·AX3: the sheet opens `.large` when the kind chips can no
+    /// Read by the `.workout` route (3b·AX3: the sheet opens `.large` when the kind chips can no
     /// longer fit the medium detent).
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// Read by the silly-stats stamp banner: it fades in place of sliding down under Reduce Motion.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(store: FernletStore, healthKitService: HealthKitService) {
         self.store = store
@@ -141,6 +162,9 @@ struct ContentView: View {
             // Every passcode setup sheet, wherever it is presented from, asks the same coordinator
             // before it mints a fresh key over sealed entries (period-data design §4.4 step 2).
             .environment(\.fernletPrivateHubOpener, privateHubOpener)
+            // World build: the one design language (b1-language) on every screen and every sheet the
+            // root presents: framed cards, chips, buttons and switches (`FernletFramedLook`).
+            .worldDesignLanguage()
             .onChange(of: activeSheet?.id) { oldID, newID in
                 handleActiveSheetIDChange(oldID: oldID, newID: newID)
             }
@@ -263,10 +287,11 @@ struct ContentView: View {
                 sheetContent(for: sheet)
             }
             .sheet(isPresented: $store.showConnectionInspector) {
+                // The inspector carries its own sheet frame (`fernletSheet()`, Done top right); a detent or
+                // grabber line here would win over it.
                 ConnectionInspectorView(inspector: store.connectionInspector)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
                     .presentationBackgroundInteraction(.enabled)
+                    .worldDesignLanguage()
             }
             .sheet(item: pendingRecipeShareBinding) { share in
                 ProximityRecipeShareReviewSheet(
@@ -274,9 +299,8 @@ struct ContentView: View {
                     store: store,
                     manager: store.recipeShareManager
                 )
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationCornerRadius(20)
+                .fernletSheet()
+                .worldDesignLanguage()
             }
             // FLOW-15: the toast's "Adjust" action — the same correction sheet the meal row's
             // Adjust opens, presented from the root because the toast outlives the logging sheet.
@@ -306,6 +330,13 @@ struct ContentView: View {
             // window scene, the scene phase, the launch and the root sheet (First Aid waits it out).
             .modifier(SessionPhotoReviewTriggers(
                 store: store, activeSheet: activeSheet, launchComplete: launcher.isDone, scenePhase: scenePhase
+            ))
+            // A session that ended with no photos asks "Keep as friends?" wherever the person is, Home
+            // included (owner, 2026-10-24), once per session end; never over a root presentation or a
+            // cover, never in a decoy.
+            .modifier(KeepFriendsPromptHost(
+                store: store, isRootSheetUp: rootPresentationOtherThanKeepPromptIsUp, launchComplete: launcher.isDone,
+                isCoverUp: isWorldCameraOpen || isAlbumCoverUp, keepFriendsPromptPresented: $isKeepFriendsPromptUp
             ))
     }
 
@@ -372,6 +403,8 @@ struct ContentView: View {
 
     private func handleTabChange(from oldTab: FernletTab, to newTab: FernletTab) {
         isHomeTabBarCompact = false
+        // A card in Today or Log that opens a tab (a period log opens Private) leaves the overlay.
+        if newTab != .home { worldOverlay = nil }
         // P7 items 2–3: the run policy's tab fact, mirrored into the store the way `lockState` and
         // `duressSessionActive` are — and then the policy re-run, which is what arms or stands down
         // the Friends radios and the two listeners now (`ProximityRunSeams.swift`).
@@ -381,22 +414,6 @@ struct ContentView: View {
         }
         applyProximityRunPolicyFromView()
         syncAwayHeartsIfActive()
-    }
-
-    /// Preserves each page's scroll position and pushed pages across tabs. Re-selecting its current
-    /// tab bumps that tab's re-select token, and the page acts on it (`tabReselect`): with a page
-    /// pushed inside the tab it pops to the tab's main page (asking first when a pushed editor holds
-    /// typed input), and at the main page it scrolls to the top — one or the other, never both. Doing either while changing selection made SwiftUI
-    /// receive a scroll request and a navigation request in the same frame, so a switch only
-    /// switches. Home pushes nothing on its own stack, so a re-tap there only scrolls; a push added
-    /// to it must adopt `tabReselect` the way Food, Move, Friends, Journal and Cycle do.
-    private func selectTab(_ tab: FernletTab) {
-        guard selectedTab == tab else {
-            selectedTab = tab
-            return
-        }
-        tabResetTokens[tab, default: 0] += 1
-        isHomeTabBarCompact = false
     }
 
     /// The mesh this device is on changed (network migration P8 item 6).
@@ -419,6 +436,8 @@ struct ContentView: View {
 
     private func handleScenePhaseChange(_ phase: ScenePhase) {
         if phase == .active {
+            // World W-09 (i): back in front, the map's location runs again, whatever is over the map.
+            if launcher.isDone { store.startWorldMapLocation() }
             // If the app stayed resident across local midnight, roll the store over to the new
             // day FIRST (flushes yesterday under its own key, re-keys "today") so the widget/
             // coin refreshers below and any subsequent logging operate on the correct day.
@@ -654,6 +673,9 @@ struct ContentView: View {
             PetInteractionGovernor.clearPersistentState()
             // Same for the silly stats' companion pacing: every seeded run starts with a mention due.
             SillyStatsCompanionPacer.clearPersistentState()
+            // And with an empty stamp book, which the launch refresh begins afresh from the seed.
+            SillyStampStore.clearPersistentState()
+            store.sillyStats.clear()
         }
         // Period log suite: cycle sharing OFF (the shipped default) whatever an earlier suite left
         // in this simulator's keychain. Before the sheet hook below presents anything.
@@ -687,10 +709,13 @@ struct ContentView: View {
         async let _ = autoImportHealthContextIfAvailable()
         await launcher.prepare(store: store)
         store.markLaunchScreenDismissed()
+        // World W-09 (i): the map's location runs while Fernlet is open, even on a launch straight into a panel.
+        store.startWorldMapLocation()
         #if DEBUG
         // UX appearance tests: jump straight to a sheet by its FernletSheet.id
         // (generalizes the older FERNLET_UI_TEST_OPEN_SETTINGS hook).
         if let initialSheet = UITestSupport.initialSheet { activeSheet = initialSheet }
+        if let initialWorldPanel = UITestSupport.initialWorldPanel { openWorldPanel(initialWorldPanel) }
         // Session photos U3: an ended session's photos held for review before the first evaluation.
         UITestSupport.seedHeldSessionPhotosIfRequested(on: store.meshFeatures.photos)
         #endif
@@ -732,6 +757,7 @@ struct ContentView: View {
             case .journal: activeSheet = .journal
             case .water: activeSheet = .water
             case .home: selectedTab = .home
+            case .stamps: openStampBookInToday()
             case .trainerPrepareSummary: openTrainerExport(.prepareSummary)
             case .trainerCopySummaryAndPrompt: openTrainerExport(.copySummaryAndPrompt)
             case .trainerPastePlan: openTrainerExport(.pastePlan)
@@ -818,7 +844,7 @@ struct ContentView: View {
             } else {
                 LaunchScreen(
                     statusMessage: launcher.statusMessage,
-                    companionState: store.companionState,
+                    companionState: store.liveCompanionState,
                     companionAppearance: store.settings.companionAppearance,
                     showsCompanion: true
                 )
@@ -830,36 +856,11 @@ struct ContentView: View {
 
     private var mainInterface: some View {
         mainTabContent
-            // The bar's stable reserved height + 8pt breathing room, zeroed while the camera session
-            // hides the bar. Consumed by fernletTabBarBottomClearance() on each page's scroll
-            // content — the fix for the last card resting behind the floating bar at max scroll —
-            // and by fernletTabBarSafeAreaClearance() on a pushed editor with a pinned save bar.
-            .environment(
-                \.fernletTabBarClearance,
-                isDisposableCameraSessionActive ? 0 : tabBarReservedHeight + 8
-            )
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if !isDisposableCameraSessionActive {
-                    customTabBar
-                        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: isCustomTabBarCompact)
-                        // Keep the safe-area inset at the largest measured tab-bar height while the
-                        // bar compacts. Without this floor, the viewport itself grew and shrank during
-                        // a drag, which made otherwise smooth scrolling visibly jump. A minimum (not
-                        // fixed) height still permits Dynamic Type to establish a larger reservation.
-                        .frame(minHeight: tabBarReservedHeight, alignment: .bottom)
-                        // Reserve the largest bar height for the pages' bottom clearance. This
-                        // safeAreaInset positions the bar but does NOT reach the pages' scroll
-                        // views through the UIKit-backed TabView; retaining the expanded height
-                        // prevents compacting's intermediate geometry from relaying every frame
-                        // into all five scroll views.
-                        .onGeometryChange(for: CGFloat.self) { proxy in
-                            proxy.size.height
-                        } action: { height in
-                            updateTabBarReservedHeight(with: height)
-                        }
-                }
-            }
-            // Keep the floating tab bar pinned to the physical bottom, behind the keyboard, instead
+            // World build: the panels cover the whole screen, so nothing under a page needs room for
+            // a bar; the item bar shows only over the map, which scrolls nothing.
+            .environment(\.fernletTabBarClearance, 0)
+            .overlay(alignment: .bottom) { worldItemBarOverlay }
+            // Keep the item bar pinned to the physical bottom, behind the keyboard, instead
             // of riding up on top of it. The ignore belongs HERE, on the view carrying the inset, and
             // not inside the inset's closure: SwiftUI lays an inset's content out with no bottom safe
             // area of its own, so an ignore in there reaches nothing. Until 2026-10-01 the closure
@@ -869,73 +870,61 @@ struct ContentView: View {
             // keyboard itself — a page ended at the keyboard's top before this line existed and still
             // does — so the fields and scroll views inside them keep clearing the keyboard.
             .ignoresSafeArea(.keyboard, edges: .bottom)
+            .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { bottomSafeArea = $0 }
             // FLOW-15 (artboard 4b): the meal-logged toast sits at the BOTTOM, lifted over the bar so
             // the two never cover each other. Outside the keyboard ignore above, so with the keyboard
             // up it rests on the keyboard instead of hiding behind it with the bar.
             .overlay(alignment: .bottom) { mealLogToastOverlay }
             .animation(.spring(response: 0.34, dampingFraction: 0.86), value: mealLogNotification?.id)
+            // A silly-stats stamp earned just now: a banner at the TOP, clear of the meal toast a
+            // cookie's log raises at the bottom.
+            .overlay { worldOverlayPanel }
+            .overlay(alignment: .top) { sillyStampBannerOverlay }
+            .animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.36, dampingFraction: 0.86), value: shownStampBanner)
             .fernletKeyboardOverlap($keyboardOverlap)
             .tint(Color.moss)
             .background(sceneBackground.ignoresSafeArea())
     }
 
-    /// How far the meal-logged toast rises off the interface's bottom edge: the bar's whole inset
-    /// while the keyboard is down, and nothing once the keyboard reaches over the bar.
+    /// How far the meal-logged toast rises off the interface's bottom edge: clear of the item bar while
+    /// the map shows it, and nothing once the keyboard reaches over the bar or a panel covers it.
     private var mealLogToastLift: CGFloat {
         FernletTabBarClearance.reservation(
-            clearance: isDisposableCameraSessionActive ? 0 : tabBarReservedHeight,
+            clearance: isWorldMapFrontmost ? max(0, WorldItemBar.height + WorldItemBar.bottomGap + 8 - bottomSafeArea) : 0,
             keyboardOverlap: keyboardOverlap
         )
-    }
-
-    /// Retains the expanded floating-bar height for this view lifetime. A smaller measurement is
-    /// the compact animation in progress, not a reason to rewrite every page's bottom padding.
-    private func updateTabBarReservedHeight(with height: CGFloat) {
-        let stableHeight = FernletTabBarClearance.stableHeight(
-            current: tabBarReservedHeight,
-            measured: height
-        )
-        guard stableHeight != tabBarReservedHeight else { return }
-        var transaction = Transaction()
-        transaction.animation = nil
-        withTransaction(transaction) {
-            tabBarReservedHeight = stableHeight
-        }
     }
 
     /// Always the five-tab `tabPages`, unconditionally — its structural identity must never
     /// change, or SwiftUI tears down and rebuilds every tab (losing all @State) on the swap.
     ///
-    /// This used to be an `if isDisposableCameraSessionActive { SocialHubView(...) } else { tabPages }`.
-    /// Because a `@ViewBuilder` if/else is `_ConditionalContent<SocialHubView, TabView>` — two
-    /// different types in the same slot — flipping the condition removed the whole `TabView` and
-    /// inserted a bare `SocialHubView`, then reversed it at session end. Every tab (Home/Food/Move/
-    /// Journal/Private) was destroyed and rebuilt with empty @State, each painting `Color.parchment`
-    /// before its `.onAppear` `store.loadDays()` refilled it — the "blank then loads" symptom, fired
-    /// on every friend-mesh session edge (and every Social↔other tab hop during a session).
-    ///
-    /// The swap was also redundant: the disposable camera is NOT a separate top-level surface —
-    /// `FriendsView` (the body of the `.social` tab's `SocialHubView`) already swaps itself to
-    /// `DisposableCameraView` while `isInSession && sessionReady` (ConnectView.swift:36). So the
-    /// camera still takes over the Social tab full-bleed here; the takeover's *look* — dark
-    /// `sceneBackground`, suppressed bottom scrim, and the landscape tab-bar hide — is applied by
-    /// the modifiers in `mainInterface` that read `isDisposableCameraSessionActive`, entirely
-    /// independent of this slot's identity. Removing the swap also revives the connection-success
-    /// overlay + haptic in `FriendsView.onChange(of: isInSession)`, which the old swap defeated by
-    /// destroying that instance in the same transaction as the flip.
+    /// This used to be an `if <camera session> { SocialHubView(...) } else { tabPages }`. Because a
+    /// `@ViewBuilder` if/else is `_ConditionalContent<SocialHubView, TabView>` — two different types
+    /// in the same slot — flipping the condition removed the whole `TabView` and rebuilt every tab
+    /// with empty @State on every friend-mesh session edge (the "blank then loads" symptom). The
+    /// session camera is a full-screen cover of the Friends panel now (b3-friends-session), so nothing
+    /// here swaps or takes over the tab at all.
     private var mainTabContent: some View {
         tabPages
     }
 
     /// True while any ROOT-presented sheet is covering the tab pages: the `activeSheet` router
     /// (Settings, Trends, First Aid, the logging sheets, …), the connection inspector, an
-    /// incoming recipe-share review, or the toast's meal-correction slot. Composed into the
+    /// incoming recipe-share review, the toast's meal-correction slot, or the session-end keep-as-friends
+    /// prompt (``KeepFriendsPromptHost``). Composed into the
     /// Private hub's capture-friction `isFrontmost` — the hub stays alive beneath a root sheet,
     /// so a screenshot taken while an unprotected sheet covers the Personal tab must not spend
     /// the once-per-session nudge on a banner nobody can see. The recipe-share slot presents
     /// only while `activeSheet` is nil, so checking the pending queue directly covers it in
     /// both states.
     private var rootSheetIsCoveringTabs: Bool {
+        rootPresentationOtherThanKeepPromptIsUp || isKeepFriendsPromptUp
+    }
+
+    /// The root's presentations except the keep-as-friends prompt: what that prompt waits out. Its own
+    /// flag stays out, or its watchdog's withdrawal would read as a covering sheet going away and
+    /// re-arm the check without bound.
+    private var rootPresentationOtherThanKeepPromptIsUp: Bool {
         activeSheet != nil
             || store.showConnectionInspector
             || store.recipeShareManager.pendingRecipeShares.first != nil
@@ -946,39 +935,53 @@ struct ContentView: View {
 
     private var tabPages: some View {
         TabView(selection: $selectedTab) {
-            HomeView(
-                store: store,
-                healthKitService: healthKitService,
-                activeSheet: $activeSheet,
-                selectedTab: $selectedTab,
-                privateHubSection: $privateHubSection,
-                isTabBarCompact: $isHomeTabBarCompact,
-                tabResetToken: resetTokenBinding(for: .home),
-                periodStore: periodStore,
-                stressService: stressService,
-                isActive: selectedTab == .home && !rootSheetIsCoveringTabs,
-                onMealsLogged: mealLogReporter
-            )
-            .tabPage(.home)
-            FoodView(store: store, onMealsLogged: mealLogReporter, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .food))
-                .tabPage(.food)
-            MoveView(
-                store: store,
-                activeSheet: $activeSheet,
-                trainerExportLaunchAction: $trainerExportLaunchAction,
-                isTabBarCompact: $isHomeTabBarCompact,
-                tabResetToken: resetTokenBinding(for: .move)
-            )
-                .tabPage(.move)
-            SocialHubView(store: store, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .social))
-                .tabPage(.social)
+            // World build (plan step 1b): Home is the live map; the four other tabs are full-screen
+            // panels in the approved frame. Same pages, same tab gates, same @State lifetimes.
+            WorldMapHome(store: store, isFrontmost: isWorldMapFrontmost, isLaunched: launcher.isDone,
+                         bodySignal: HomeView.companionBodySignal(enabled: store.settings.stressAwarenessEnabled,
+                                                                  assessment: stressService.assessment),
+                         onOpen: openWorldPanel,
+                         // The blue button's friend choices open Friends nearby or Activities in the Album.
+                         onFriends: openFriends,
+                         // The quick start's "Suggest today's workout" opens Move's suggestion sheet.
+                         onSheet: { activeSheet = $0 },
+                         stampBannerShowing: shownStampBanner != nil,
+                         isCameraOpen: $isWorldCameraOpen,
+                         onMealsLogged: mealLogReporter)
+                .tabPage(.home)
+            WorldPanelFrame(panel: .food, onClose: closeWorldPanel) {
+                FoodView(store: store, onMealsLogged: mealLogReporter, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .food))
+            }
+            .tabPage(.food)
+            WorldPanelFrame(panel: .move, onClose: closeWorldPanel) {
+                MoveView(
+                    store: store,
+                    activeSheet: $activeSheet,
+                    trainerExportLaunchAction: $trainerExportLaunchAction,
+                    isTabBarCompact: $isHomeTabBarCompact,
+                    tabResetToken: resetTokenBinding(for: .move)
+                )
+            }
+            .tabPage(.move)
+            // The Album (b4-mem-root): just the album, the same in a session. Home's buttons push its pages
+            // (Friends nearby, Activities, Friend shops), and a session started from Friends nearby closes
+            // it back to Home.
+            WorldPanelFrame(panel: .friends, onClose: closeWorldPanel) {
+                SocialHubView(store: store, activeSheet: $activeSheet, isTabBarCompact: $isHomeTabBarCompact,
+                              tabResetToken: resetTokenBinding(for: .social), requestedRoute: $pendingFriendsRoute,
+                              onFinished: closeWorldPanel, keepFriendsPromptIsUp: isKeepFriendsPromptUp,
+                              albumCoverIsUp: $isAlbumCoverUp)
+            }
+            .tabPage(.social)
             // `!rootSheetIsCoveringTabs`: the hub stays alive beneath a root-presented sheet, so
             // its capture-friction pulse must not fire (and spend the once-per-session nudge
             // invisibly) while an unprotected sheet — Settings, Trends, First Aid from a
             // notification tap, an incoming recipe share — fully covers the Personal tab. The
             // protected sheets claim the nudge themselves, visibly, via their own attachments.
-            PrivateHubView(store: store, periodStore: periodStore, intimacyStore: intimacyStore, healthKitService: healthKitService, periodContext: periodContext, worryBox: worryBoxService, activeSheet: $activeSheet, section: $privateHubSection, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .personal), isActive: selectedTab == .personal, isFrontmost: selectedTab == .personal && !rootSheetIsCoveringTabs, privateHubOpener: privateHubOpener)
-                .tabPage(.personal)
+            WorldPanelFrame(panel: .personal, onClose: closeWorldPanel) {
+                PrivateHubView(store: store, periodStore: periodStore, intimacyStore: intimacyStore, healthKitService: healthKitService, periodContext: periodContext, worryBox: worryBoxService, activeSheet: $activeSheet, section: $privateHubSection, isTabBarCompact: $isHomeTabBarCompact, tabResetToken: resetTokenBinding(for: .personal), isActive: selectedTab == .personal, isFrontmost: selectedTab == .personal && !rootSheetIsCoveringTabs, privateHubOpener: privateHubOpener)
+            }
+            .tabPage(.personal)
         }
         // Paging is OFF: the floating tab bar is the navigation. `.page` style handed every
         // horizontal drag not swallowed by an inner scroller to the pager, so a drag on Home's
@@ -986,7 +989,7 @@ struct ContentView: View {
         // onto Food mid-gesture. Making the strip hit-testable is not a fix — a non-scrolling view
         // still lets the pager take the drag — so the page style is gone entirely and tab switching
         // is deliberate (tab-bar taps only). That also subsumes the old camera-session special case
-        // (`.scrollDisabled(isDisposableCameraSessionActive)`), which existed only to stop a stray
+        // (a `.scrollDisabled` while the camera took over the tab), which existed only to stop a stray
         // drag swiping off the live camera.
         //
         // Locking the *pager* with `.scrollDisabled(true)` is NOT the way to do this: that modifier
@@ -1001,157 +1004,107 @@ struct ContentView: View {
         // bar this style would otherwise draw beneath the floating one.
     }
 
-    /// Whether the disposable-camera surface is the Social tab's content right now.
-    ///
-    /// It must read the SAME predicate as the swap that actually shows it
-    /// (`ConnectView`'s `isInSession && sessionReady`), so this one stays on `isInSession` and is
-    /// not re-pointed at `hasCommittedPeer` (P6 item 2): the compact tab bar and the dark scene
-    /// background are the camera's chrome, and a founded mesh keeps the camera up across a blip by
-    /// design. Pointing only this half at the lifecycle predicate would draw parchment and a full
-    /// tab bar over a visible camera.
-    private var isDisposableCameraSessionActive: Bool {
-        selectedTab == .social
-            && store.meshNetworkManager.isInSession
+    /// Whether the World map is what the person sees: launch done, Home, no panel over it, no root sheet.
+    /// The companion's first line waits for the launch screen to lift, as the location updates do (which
+    /// then keep running under panels and sheets while Fernlet is open, W-09 (i)).
+    private var isWorldMapFrontmost: Bool {
+        launcher.isDone && selectedTab == .home && worldOverlay == nil && !rootSheetIsCoveringTabs
     }
 
-    private var isCustomTabBarCompact: Bool {
-        !isDisposableCameraSessionActive && isHomeTabBarCompact
+    /// The item bar, over the map only (every panel covers it), behind the keyboard, 26 pt off the
+    /// physical bottom. The clear full-height container is what reaches into the home indicator's safe
+    /// area: a fixed-height bar ignoring it on its own stays where the safe area ends. Clear takes no
+    /// touches and is no element, so the map under it stays reachable.
+    @ViewBuilder
+    private var worldItemBarOverlay: some View {
+        if selectedTab == .home && worldOverlay == nil {
+            ZStack(alignment: .bottom) {
+                Color.clear
+                // The session on Home (b3-home-session): the green session button bottom left, the
+                // mirror of the blue button, beside the item bar's left end. It draws nothing outside a
+                // session, and hosts the session's prompts only while the map is in front and the blue
+                // button's camera is not over it (one surface for the prompts at a time).
+                WorldSessionButton(store: store, isFrontmost: isWorldMapFrontmost && !isWorldCameraOpen)
+                    .padding(.bottom, WorldMapHome.bottomLift)
+                // For the hour after a session the same corner is the gold shop button (b4-mem-home-shop);
+                // it draws nothing during a session, so the two never show together.
+                WorldShopButton(store: store) { openFriends(.friendShop) }
+                    .padding(.bottom, WorldMapHome.bottomLift)
+                WorldItemBar(onOpen: openWorldPanel)
+                    .padding(.horizontal, 9)
+                    .padding(.bottom, WorldItemBar.bottomGap)
+            }
+            .ignoresSafeArea(edges: .bottom)
+            .transition(.opacity)
+        }
     }
 
+    /// The panel that is not a tab, open over everything: Today (today's whole Home until the Today
+    /// panel of step 4), Log (Home's Quick log and mood cards) or Settings.
+    @ViewBuilder
+    private var worldOverlayPanel: some View {
+        if let panel = worldOverlay {
+            WorldPanelFrame(panel: panel, onClose: closeWorldPanel) {
+                if panel == .settings {
+                    SettingsSheet(store: store, onClose: closeWorldPanel)
+                        .environment(lockService)
+                        .environment(storagePreferencesStore)
+                } else {
+                    HomeView(
+                        store: store,
+                        healthKitService: healthKitService,
+                        activeSheet: $activeSheet,
+                        selectedTab: $selectedTab,
+                        privateHubSection: $privateHubSection,
+                        isTabBarCompact: $isHomeTabBarCompact,
+                        tabResetToken: resetTokenBinding(for: .home),
+                        periodStore: periodStore,
+                        stressService: stressService,
+                        isActive: !rootSheetIsCoveringTabs,
+                        onMealsLogged: mealLogReporter,
+                        presentation: panel == .log ? .quickLog : .today,
+                        stampBookRequest: panel == .today ? $pendingStampBook : .constant(false)
+                    )
+                }
+            }
+            .transition(.opacity)
+        }
+    }
+
+    /// Opens a World panel: a tab panel by selecting its tab (so every tab gate runs as it always
+    /// did), any other over the map.
+    private func openWorldPanel(_ panel: WorldPanel) {
+        if let tab = panel.tab {
+            worldOverlay = nil
+            selectedTab = tab
+        } else {
+            worldOverlay = panel
+        }
+    }
+
+    /// Opens the Album panel at one of its pages (Friends nearby, Activities, Friend shops): the page is
+    /// handed over first, so the panel pushes it as it opens.
+    private func openFriends(_ route: FriendsRoute) {
+        pendingFriendsRoute = route
+        openWorldPanel(.friends)
+    }
+
+    /// Closes whatever panel is open and returns to the map. Closing Settings does what dismissing
+    /// its sheet always did: re-arm Health observation and refresh workouts.
+    private func closeWorldPanel() {
+        if worldOverlay == .settings {
+            configureHealthChangeObservation()
+            Task { await store.refreshWorkoutsFromHealth() }
+        }
+        worldOverlay = nil
+        if selectedTab != .home { selectedTab = .home }
+    }
+
+    /// The scene behind every page. Parchment always: the session camera used to take over the
+    /// Friends tab and darken this scene, but it is a full-screen cover now that paints its own
+    /// (b3-friends-session), so the takeover's dark scene is retired with it.
     private var sceneBackground: Color {
-        isDisposableCameraSessionActive
-            ? Color(red: 0.13, green: 0.10, blue: 0.08)
-            : Color.parchment
-    }
-
-    private var customTabBar: some View {
-        let isCompact = isCustomTabBarCompact
-        let cornerRadius: CGFloat = isCompact ? 22 : 26
-        // The label is drawn only when there is room for it to stay one word: compacted (scrolled)
-        // or at accessibility text sizes it is dropped visually and survives as the button's
-        // VoiceOver label, which is what stops "Hom/e" / "Frien/ds" and the SF-Symbol announcements
-        // ("leaf", "person.2") the hidden label used to leave behind.
-        let hidesLabel = isCompact || dynamicTypeSize.isAccessibilitySize
-
-        return HStack(spacing: isCompact ? 4 : 0) {
-            ForEach(FernletTab.allCases) { tab in
-                tabButton(tab, isCompact: isCompact, hidesLabel: hidesLabel)
-            }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityAddTraits(.isTabBar)
-        .padding(.horizontal, isCompact ? 6 : 8)
-        // T1-9: compact trimmed from 5 to 2 to compensate for each button's frame now carrying a
-        // 44pt minimum height (was 38pt compacted) — keeps the floating bar's own footprint close
-        // to its previous size (4+44=48, was 10+38=48) while the tap target inside it grows.
-        // F5 correction: non-compact restored to its original 6 — the non-compact button already
-        // measures ~58pt tall (icon + label + padding), so `minHeight: 44` is a no-op there and
-        // trimming this padding shrank the bar's non-compact footprint by 6pt for zero accessibility
-        // gain, an unreviewed density change.
-        .padding(.vertical, isCompact ? 2 : 6)
-        .frame(maxWidth: isCompact ? 300 : .infinity)
-        .background(tabBarBackground, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .stroke(Color.bark.opacity(0.08), lineWidth: 1)
-        )
-        .shadow(color: Color.bark.opacity(0.12), radius: isCompact ? 12 : 16, x: 0, y: isCompact ? 4 : 6)
-        .padding(.horizontal, isCompact ? 40 : 20)
-        .padding(.bottom, isCompact ? 4 : 12)
-    }
-
-    /// T3-13, folded into the T1-9 commit: Reduce Transparency asks system materials to be
-    /// replaced with an opaque equivalent rather than merely dimmed — the tab bar is one of only
-    /// four material surfaces in the tree, so this is a one-site fix rather than a wall.
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-
-    private var tabBarBackground: AnyShapeStyle {
-        reduceTransparency ? AnyShapeStyle(Color.parchment) : AnyShapeStyle(.regularMaterial)
-    }
-
-    /// One tab bar button — extracted from ``customTabBar`` (54 of 60 code lines on its own)
-    /// before T1-9's 44pt frame and T3-13's material swap could land on top of it.
-    private func tabButton(_ tab: FernletTab, isCompact: Bool, hidesLabel: Bool) -> some View {
-        let isSelected = selectedTab == tab
-        return Button {
-            selectTab(tab)
-        } label: {
-            VStack(spacing: 3) {
-                Image(systemName: tab.systemImage)
-                    // Scales with Dynamic Type instead of a fixed 18/20pt, so the bar's one
-                    // remaining element grows with the user's text size.
-                    .font(isCompact ? .body : .title3)
-                    .frame(minHeight: isCompact ? 22 : 24)
-                // Laid out only while it is drawn. Hidden by zero opacity in a zero-height frame,
-                // the label stayed in the layout, and the accessibility audit measured it as
-                // clipped text on every screen with a tab bar.
-                if !hidesLabel {
-                    Text(verbatim: tab.title)
-                        .font(.fernlet(.labelSmall))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .transition(.opacity)
-                        // Always hidden: the Button carries the title as its accessibility
-                        // label, so VoiceOver reads it in every state (drawn or not) exactly once.
-                        .accessibilityHidden(true)
-                }
-            }
-            // F1 fix: under Reduce Transparency `tabBarBackground` resolves to solid `Color.parchment`
-            // (below), which is exactly the selected pill's own fill — the indicator went invisible
-            // (1.00:1) for the low-vision users the accommodation serves, leaving hue-only (moss vs
-            // slate) encoding. Swap to the existing filled-button pair instead of inventing a hex:
-            // `mossFill` measures **4.67:1 against parchment** (well past the 3:1 non-text floor) and
-            // its own `onMoss` ink measures 5.36:1 on it (clears 4.5:1 text too, for the non-compact
-            // label). Both tokens are already adaptive, so dark mode (mossFill 6.65:1 on midnight)
-            // needs no separate branch.
-            // A5 carried finding (A2's review, §4.2). The `reduceTransparency` half above was fixed
-            // and measured; the DEFAULT half was not. The selected pill fills with opaque
-            // `Color.parchment` and the label under it is `.fernlet(.labelSmall)` — small text, so
-            // the 4.5:1 floor applies — and `moss` on parchment measures **3.74:1**. Swapped to
-            // `mossInk`, the already-approved deepened text variant of the same hue: **5.54:1 on
-            // parchment**, unchanged in dark mode (dark `mossInk` and dark `moss` are the same
-            // value), and it costs the pill nothing visually because the fill and the `.isSelected`
-            // trait carry the selection, not the exact green.
-            .foregroundStyle(isSelected ? (reduceTransparency ? Color.onMoss : Color.mossInk) : Color.slate)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, isCompact ? 8 : 9)
-            .background(
-                isSelected ? (reduceTransparency ? Color.mossFill : Color.parchment) : Color.clear,
-                in: RoundedRectangle(cornerRadius: isCompact ? 14 : 16, style: .continuous)
-            )
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isSelected)
-            // T1-9: AssistiveTouch, Switch Control and Eye Tracking all key off the element's own
-            // frame, not the drawn pill — grows the tap target to 44pt without growing the visible
-            // background (the outer bar's own padding above was trimmed to match).
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(verbatim: tab.title))
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-        // Settings is reachable from every tab (FLOW-34): the gear itself lives only on the
-        // Home header, so a long press on the Home tab item opens it from wherever you are.
-        // `simultaneousGesture` leaves the plain tap — switch tabs — untouched.
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.5).onEnded { _ in
-                guard tab == .home else { return }
-                // B12: the hidden press was caught. The VoiceOver action below opens the same sheet
-                // without it: a named action is not a press.
-                FernletFeedback.system.play(.held)
-                selectedTab = .home
-                activeSheet = .settings
-            }
-        )
-        // The long press as a VoiceOver action on the Home tab (Actions rotor), so "Settings from
-        // any tab" is not a sighted-only shortcut. Same effect as the gesture.
-        .accessibilityActions {
-            if tab == .home {
-                Button("Open Settings") {
-                    selectedTab = .home
-                    activeSheet = .settings
-                }
-            }
-        }
+        Color.parchment
     }
 
     /// Routes a sheet case to its family builder. Split per family (not per case) because the flat
@@ -1179,14 +1132,10 @@ struct ContentView: View {
     private func loggingSheet(for sheet: FernletSheet) -> some View {
         switch sheet {
         case .meal:
-            // At accessibility sizes the six 80pt meal-type chips overflow the medium detent, so
-            // the sheet opens .large instead of hiding a control (artboard 4a·AX3). The reporter, not
-            // a bare closure: a meal kept without its photo lands on the toast as a caveat.
+            // Full height like every World sheet (`b3-meal`; the chrome no longer reads detents). The
+            // reporter, not a bare closure: a meal kept without its photo lands on the toast as a caveat.
             MealSheet(store: store, onLogged: mealLogReporter)
-                .fernletSheetChrome(
-                    anchor: "sheet.meal",
-                    detents: dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large]
-                )
+                .fernletSheetChrome(anchor: "sheet.meal", detents: [.large])
         case .recipe:
             // "Log & save" reports its meal to the toast, which shows once this sheet has closed.
             RecipeSheet(store: store, onMealsLogged: mealLogReporter)
@@ -1265,11 +1214,18 @@ struct ContentView: View {
             // Artboard 3f: one rule for read-only destinations from Home — they present as large
             // sheets, matching Trends, First aid and the gear. MilestonesView carries its own
             // NavigationStack so the keepsake shelf pushes inside the sheet's own stack.
+            // World build: MilestonesView is the Stamp book in a sheet and carries its own
+            // `fernletSheet()`, so the presenter adds no sheet chrome of its own (a second frame would
+            // draw a second grabber). The stamp banner's route; Today pushes the same page.
             MilestonesView(store: store)
-                .fernletSheetChrome(anchor: "sheet.milestones", detents: [.large])
+                .uxScreenAnchor("sheet.milestones")
+                .keyboardDoneToolbar()
+                .worldDesignLanguage()
         case .sillyStats:
             SillyStatsView(store: store)
-                .fernletSheetChrome(anchor: "sheet.sillyStats", detents: [.large])
+                .uxScreenAnchor("sheet.sillyStats")
+                .keyboardDoneToolbar()
+                .worldDesignLanguage()
         case .stressExplainer:
             StressExplainerSheet(assessment: stressService.assessment, onFirstAid: {
                 // Chain into First Aid via the dismiss-then-represent pattern (single-active sheet).
@@ -1538,7 +1494,8 @@ struct ContentView: View {
         switch section {
         case .journal:
             applySealedJournalActivation(for: lockState)
-        case .cycle:
+        // Places (World build step 5c) reads its own log under the hub key when its page opens.
+        case .cycle, .places:
             break
         case .worryBox:
             worryBoxService.updateActivation(
@@ -1707,6 +1664,11 @@ struct ContentView: View {
         // writer replacing it would defuse the wipe silently.
         lockService.installDuressPurgeHook { [store] in
             Task { _ = await store.deleteAllData(includingHealthKitSamples: true) }
+        }
+        // The recovery lock keeps the recoverable corpus but not where someone has been: the World
+        // map's sealed location history and its keys go (design page answer 16; World build only).
+        lockService.installRecoveryLockPurgeHook { [store] in
+            if !store.worldFog.clearAll() { FernletAuditLog.log("worldMap.recoveryLockPurge.incomplete") }
         }
         // The other half of the duress-recovery custody story, and the one that is NOT a duress path
         // at all: "Delete everything" regenerates this device's proximity identity while deliberately
@@ -1984,6 +1946,83 @@ struct ContentView: View {
         }
     }
 
+    /// The stamp banner on screen: the first one waiting, held back while the launch screen, a root
+    /// sheet or the World Home's disposable camera (a full-screen cover) covers the tabs, so a banner is
+    /// never spent where nobody can see it. A held banner stays queued and shows when the cover lifts.
+    private var shownStampBanner: SillyStatKind? {
+        guard launcher.isDone, !rootSheetIsCoveringTabs, !isWorldCameraOpen else { return nil }
+        return store.sillyStats.pendingStampBanners.first
+    }
+
+    /// The top banner slot for a stamp earned just now (``SillyStampBanner``). Slides down from the
+    /// top, or fades under Reduce Motion. Claims only its own frame, like the meal toast, so the
+    /// page beneath stays reachable.
+    @ViewBuilder
+    private var sillyStampBannerOverlay: some View {
+        if let kind = shownStampBanner {
+            SillyStampBanner(kind: kind) { openStampBook(from: kind) }
+                // Grows with text size up to the map's own plates' cap, so at the largest sizes it
+                // holds its lines without covering half the map.
+                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                .frame(maxWidth: 352)
+                .padding(.horizontal, 16)
+                .padding(.top, stampBannerTop)
+                .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                .id(kind)
+                .task(id: kind) { await presentStampBanner(kind) }
+        }
+    }
+
+    /// How far below the top the stamp banner drops: under the status plate over the map (design
+    /// `b1-stamp-banner`), under the wooden title plate in a panel.
+    private var stampBannerTop: CGFloat {
+        guard isWorldMapFrontmost else { return 72 }
+        return dynamicTypeSize.isAccessibilitySize ? 150 : 112
+    }
+
+    /// Speaks the stamp banner for VoiceOver, holds it for its window, then lets the next one show.
+    ///
+    /// Cancelled when a sheet covers the banner before its window ends; the stamp then stays queued
+    /// and the banner (with its announcement) comes back when the sheet closes.
+    private func presentStampBanner(_ kind: SillyStatKind) async {
+        // Spoken once a closing sheet has settled — and when a meal toast is up, after that toast's
+        // own sentence, since an announcement cuts off the one before it. A reasoned pause, like
+        // `TaskConfirmation.sheetSettle`; the owner's VoiceOver device pass is where it is heard.
+        let pause = mealLogNotification == nil ? TaskConfirmation.sheetSettle : TaskConfirmation.sheetSettle + Self.stampAfterMealToastPause
+        // Read at post time, not at view construction: VoiceOver can be turned on mid-session. The
+        // banner opens the stamp book, so an assistive user gets the action window.
+        let window = FernletDismissalWindow.system.window(
+            standard: .seconds(4),
+            assistive: FernletDismissalWindow.assistiveActionWindow)
+        do {
+            try await Task.sleep(for: pause)
+            FernletAnnouncer.system.announce(.status, resolved: SillyStampCopy.announcement(for: kind))
+            try await Task.sleep(for: window)
+        } catch {
+            // Covered by a sheet, or the app is going away: the banner stays queued.
+            return
+        }
+        store.sillyStats.bannerShown(kind)
+    }
+
+    /// How long the stamp's announcement waits behind the meal toast's ("Meal logged. Undo is at
+    /// the bottom of the screen.") — about the time that sentence takes to speak.
+    static let stampAfterMealToastPause: Duration = .seconds(3)
+
+    /// The stamp banner's tap: opens Today and pushes the Stamp book at its stamps (owner, 2026-10-24).
+    private func openStampBook(from kind: SillyStatKind) {
+        store.sillyStats.bannerShown(kind)
+        openStampBookInToday()
+    }
+
+    /// Opens the Today panel over Home and asks it to push the Stamp book at its stamps: the stamp
+    /// banner's tap and the stamp widget's land the same way.
+    private func openStampBookInToday() {
+        pendingStampBook = true
+        if selectedTab != .home { selectedTab = .home }
+        openWorldPanel(.today)
+    }
+
     /// The toast's "Undo": removes the just-logged meal(s) from the day they were logged to — for
     /// today exactly as the meal row's X does (`store.deleteMeal`, sealed photo cleanup and AI-retry
     /// clearing included). Only the meals actually removed are announced: a past day's write can
@@ -2109,12 +2148,21 @@ extension View {
             .tag(tab)
     }
 
-    /// The presentation chrome every routed sheet shares: the UX-test screen anchor, the detent set,
-    /// a visible drag indicator, the house 20pt presentation corner radius, the moss tint, and the
-    /// keyboard "Done" accessory.
+    /// The presentation chrome every routed sheet shares: the UX-test screen anchor, the World sheet
+    /// frame (``SwiftUI/View/fernletSheet()``: full height, paper, the ink top edge and the wooden
+    /// grabber), the moss tint, the keyboard "Done" accessory, and the one design language.
     ///
     /// One modifier rather than the same lines repeated per case — the values are identical across
-    /// all 22 sheets except the anchor and the detents.
+    /// all 22 sheets except the anchor.
+    ///
+    /// World build (Batch 3, owner 2026-10-24): every sheet is full height, so `detents` is no longer
+    /// read. The parameter stays so every call site (here and in the Food tab) keeps compiling while the
+    /// lanes still pass one; the presenter's own detent and grabber lines would otherwise win over the
+    /// sheet's `fernletSheet()` and keep the half detent and the system grabber.
+    ///
+    /// `worldDesignLanguage()` is applied here, on the sheet's own content, because a presented sheet
+    /// does not inherit the root's toggle and form styles: without it a routed sheet's switches and
+    /// Forms drew the system look under the framed paper.
     ///
     /// The last two are here rather than per sheet because a routed sheet is attached to
     /// `launchRoot`, OUTSIDE the `.tint(Color.moss)` on `mainInterface`: every un-tinted system
@@ -2127,13 +2175,12 @@ extension View {
     /// wraps a stack (meal, recipe, recipe book, Settings, First aid), every page of the stack —
     /// its root included — is hosted in its own controller and never sees it, so those pages
     /// declare their own (2026-10-01).
-    func fernletSheetChrome(anchor: String, detents: Set<PresentationDetent>) -> some View {
+    func fernletSheetChrome(anchor: String, detents _: Set<PresentationDetent>) -> some View {
         uxScreenAnchor(anchor)
-            .presentationDetents(detents)
-            .presentationDragIndicator(.visible)
-            .presentationCornerRadius(20)
+            .fernletSheet()
             .tint(Color.moss)
             .keyboardDoneToolbar()
+            .worldDesignLanguage()
     }
 }
 
@@ -2357,22 +2404,19 @@ private struct MealToastPillStyle: ButtonStyle {
 // MARK: - Launch screen
 
 /// The calm launch/loading screen: a time-of-day greeting, a rotating status line, and (once the
-/// store exists) the pulsing companion.
+/// store exists) the companion — drawn as the World launch scene (design `b2-launch`): the dotted page,
+/// the pixel companion, the Fraunces greeting, the status line and the framed moss bar, which stands
+/// still under Reduce Motion (``WorldLaunchScene`` handles that itself).
 ///
 /// Shown twice per cold launch — by ``FernletApp`` while ``FernletStoreLoader`` runs (no
 /// companion) and by ``ContentView`` while ``LaunchPreparationService`` prepares (with the
-/// companion). Status text falls back to `LaunchPreparationService.initialStatusMessage` so the
-/// line never renders empty.
+/// companion) — so both phases match. Status text falls back to
+/// `LaunchPreparationService.initialStatusMessage` so the line never renders empty.
 struct LaunchScreen: View {
     var statusMessage: String
     var companionState: CompanionState = .thriving
     var companionAppearance: CompanionAppearance = .standard
     var showsCompanion = false
-
-    /// T1-6: pauses both `TimelineView` clocks below — the halo pulse and the loading-dot wave —
-    /// rather than hiding them, so the launch screen still renders, just without the perpetual
-    /// motion Reduce Motion asks to remove.
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var greeting: String {
         Self.greeting(for: Date.now)
@@ -2397,66 +2441,12 @@ struct LaunchScreen: View {
     }
 
     var body: some View {
-        ZStack {
-            Color.parchment.ignoresSafeArea()
-
-            VStack(spacing: 32) {
-                Spacer()
-
-                if showsCompanion {
-                    TimelineView(.animation(paused: reduceMotion)) { timeline in
-                        let elapsed = timeline.date.timeIntervalSinceReferenceDate
-                        let pulse = 1 + 0.14 * ((sin(elapsed * .pi / 0.85) + 1) / 2)
-
-                        ZStack {
-                            Circle()
-                                .fill(Color.fern.opacity(0.07))
-                                .frame(width: 168, height: 168)
-                                .scaleEffect(pulse)
-                            CompanionView(
-                                state: companionState,
-                                appearance: companionAppearance,
-                                size: 112
-                            )
-                            // Decorative: the launch illustration. The greeting below it is what
-                            // the screen actually says.
-                            .accessibilityHidden(true)
-                        }
-                    }
-                }
-
-                VStack(spacing: 10) {
-                    Text(greeting)
-                        .font(.fernlet(.display))
-                        .foregroundStyle(Color.bark)
-
-                    Text(displayedStatusMessage)
-                        .font(.fernlet(.bubble))
-                        .foregroundStyle(Color.slate)
-                        .animation(.easeInOut(duration: 0.25), value: displayedStatusMessage)
-                }
-
-                TimelineView(.animation(paused: reduceMotion)) { timeline in
-                    let elapsed = timeline.date.timeIntervalSinceReferenceDate
-
-                    HStack(spacing: 7) {
-                        ForEach(0..<3, id: \.self) { i in
-                            let wave = (sin((elapsed - Double(i) * 0.18) * .pi / 0.55) + 1) / 2
-                            Circle()
-                                .fill(Color.moss)
-                                .frame(width: 7, height: 7)
-                                .opacity(0.2 + 0.65 * wave)
-                        }
-                    }
-                }
-
-                Spacer()
-            }
-        }
-        // UX-test anchor (a frozen token, never display text): `UXTestApp.launch` waits for this
-        // to leave the tree before a test's first tap. `.contain` keeps the greeting and the status
-        // line individually readable, exactly as they were.
-        .uxScreenAnchor("launch.screen")
+        WorldLaunchScene(greeting: greeting, status: displayedStatusMessage,
+                         companion: showsCompanion ? (companionState, companionAppearance) : nil)
+            // UX-test anchor (a frozen token, never display text): `UXTestApp.launch` waits for this
+            // to leave the tree before a test's first tap. `.contain` keeps the greeting and the status
+            // line individually readable, exactly as they were.
+            .uxScreenAnchor("launch.screen")
     }
 }
 

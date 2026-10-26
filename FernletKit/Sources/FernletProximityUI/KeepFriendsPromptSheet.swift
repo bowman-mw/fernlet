@@ -14,16 +14,18 @@ import FernletConnections
 struct KeepFriendsSection: View {
     let candidates: [MeshSessionRosterEntry]
     @Binding var keptFingerprints: Set<String>
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(verbatim: FernletProximityUICopy.KeepFriends.sectionTitle)
-                .font(.fernlet(.headerMedium))
-                .foregroundStyle(Color.bark)
+                .font(look == nil ? .fernlet(.headerMedium) : FernletFramedFont.cardTitle)
+                .foregroundStyle(look?.text ?? Color.bark)
+                .accessibilityAddTraits(.isHeader)
 
             Text(verbatim: FernletProximityUICopy.KeepFriends.explainer)
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.body)
+                .foregroundStyle(look?.dim ?? Color.slate)
                 .fernletWrappingText()
 
             VStack(spacing: 8) {
@@ -60,6 +62,7 @@ private struct KeepFriendRow: View {
     let candidate: MeshSessionRosterEntry
     let isKept: Bool
     let toggle: () -> Void
+    @Environment(\.fernletFramedLook) private var look
 
     /// The display name is peer-supplied wire input: ``PeerNameDisplay`` sanitizes it (control,
     /// zero-width and bidi scalars out) and turns an identifier filed as a name into the placeholder.
@@ -70,20 +73,24 @@ private struct KeepFriendRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Text(verbatim: displayName)
-                .font(.fernlet(.headerMedium))
-                .foregroundStyle(Color.bark)
+                .font(look == nil ? .fernlet(.headerMedium) : FernletFramedFont.rowTitleBold)
+                .foregroundStyle(look?.text ?? Color.bark)
 
             Spacer(minLength: 12)
 
+            // b3-keep-friends: a framed Keep, and Keeping on the accent once chosen.
             Button(isKept ? FernletProximityUICopy.KeepFriends.keeping : FernletProximityUICopy.KeepFriends.keep) { toggle() }
-                .buttonStyle(ChipButtonStyle(selected: isKept))
+                .buttonStyle(ActionPillButtonStyle(isKept ? .primary : .secondary, size: .small))
+                .accessibilityAddTraits(isKept ? .isSelected : [])
                 .accessibilityIdentifier("friends.keepFriend.\(candidate.fingerprint)")
         }
         .padding(12)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+        .frame(minHeight: 60)
+        .background(look?.paper ?? Color.cream, in: RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(isKept ? Color.moss : Color.bark.opacity(0.08), lineWidth: isKept ? 1.5 : 1)
+                .strokeBorder(isKept ? (look?.mark ?? Color.moss) : (look?.ink ?? Color.bark.opacity(0.08)),
+                              lineWidth: look == nil ? (isKept ? 1.5 : 1) : (isKept ? 3 : FernletFramedLook.frameWidth))
         )
         // Deliberately no accessibilityIdentifier on this container — a container id would
         // shadow the per-row button id above (known settings-toggle gotcha).
@@ -104,7 +111,31 @@ public struct KeepFriendsPromptSheet: View {
         self.done = done
     }
 
+    @Environment(\.fernletFramedLook) private var look
+
     public var body: some View {
+        if look != nil {
+            framed
+        } else {
+            standard
+        }
+    }
+
+    /// The World build's sheet (b3-keep-friends): Done top right in the sheet header, the title in the
+    /// sheet, framed rows. The presenter adds the sheet frame (`fernletSheet()`).
+    private var framed: some View {
+        ScrollView {
+            KeepFriendsSection(candidates: candidates, keptFingerprints: $keptFingerprints)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 8)
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            SheetHeader(title: Text(verbatim: FernletProximityUICopy.KeepFriends.sessionTitle), onDone: done)
+        }
+    }
+
+    /// Today's sheet, outside the World build.
+    private var standard: some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {

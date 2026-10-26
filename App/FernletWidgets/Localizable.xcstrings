@@ -36,6 +36,7 @@
       }
     },
     "%lld percent" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -84,6 +85,27 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "+15 s"
+          }
+        }
+      }
+    },
+    "A picture of the map around you, with your marked places and saved trails." : {
+      "comment" : "The large map widget's description in the widget gallery (the privacy policy's own words)",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Una imagen del mapa a tu alrededor, con tus lugares marcados y tus rutas guardadas."
+          }
+        }
+      }
+    },
+    "A stamp from your stamp book, and the one you earned today." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un sello de tu álbum, y el que ganaste hoy."
           }
         }
       }
@@ -183,7 +205,19 @@
         }
       }
     },
+    "Bean Counter" : {
+      "comment" : "Silly stats stamp name, earned when Coffee Tower first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Contador de granos"
+          }
+        }
+      }
+    },
     "Care score" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -209,6 +243,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Fernlet no pudo actualizar tu entrenamiento justo ahora. Inténtalo de nuevo en un momento."
+          }
+        }
+      }
+    },
+    "Crumb Goblin" : {
+      "comment" : "Silly stats stamp name, earned when Cookies Per Day first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Duende de las migas"
           }
         }
       }
@@ -257,12 +302,34 @@
         }
       }
     },
+    "Encore" : {
+      "comment" : "Silly stats stamp name, earned when Shower Concerts first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¡Otra, otra!"
+          }
+        }
+      }
+    },
     "Ends the current rest early and moves to your next set." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Termina antes el descanso actual y pasa a tu próxima serie."
+          }
+        }
+      }
+    },
+    "Eucalyptus Dreams" : {
+      "comment" : "Silly stats stamp name, earned when Koala Days (sleep) first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sueños de eucalipto"
           }
         }
       }
@@ -319,6 +386,38 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Terminar entrenamiento"
+          }
+        }
+      }
+    },
+    "Floss Boss" : {
+      "comment" : "Silly stats stamp name, earned when Floss Rope first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hilo de oro"
+          }
+        }
+      }
+    },
+    "From your stamp book" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De tu álbum de sellos"
+          }
+        }
+      }
+    },
+    "Good Bean" : {
+      "comment" : "Silly stats stamp name, earned the first time the companion is petted; 'good bean' is an affectionate nickname",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Puro cariño"
           }
         }
       }
@@ -390,6 +489,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Mantén %@"
+          }
+        }
+      }
+    },
+    "House Special" : {
+      "comment" : "Silly stats stamp name, earned when a homemade recipe becomes the Signature Dish",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Especialidad de la casa"
           }
         }
       }
@@ -512,6 +622,16 @@
         }
       }
     },
+    "New today" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nuevo hoy"
+          }
+        }
+      }
+    },
     "Next" : {
       "localizations" : {
         "es" : {
@@ -625,12 +745,45 @@
         }
       }
     },
+    "Opening Night" : {
+      "comment" : "Silly stats stamp name, earned when Dream Cinema (dream sleep) first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Noche de estreno"
+          }
+        }
+      }
+    },
+    "Outlived a Gastrotrich" : {
+      "comment" : "Silly stats stamp name, earned after three days together; a gastrotrich is a tiny creature that lives about three days",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Le ganamos a un gastrotrico"
+          }
+        }
+      }
+    },
     "Paused" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "En pausa"
+          }
+        }
+      }
+    },
+    "Piano Mover" : {
+      "comment" : "Silly stats stamp name, earned when Total Tonnage (weight lifted) first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cargador de pianos"
           }
         }
       }
@@ -746,6 +899,17 @@
         }
       }
     },
+    "Rubber Duck" : {
+      "comment" : "Silly stats stamp name, earned when Bathtub Index (water drunk) first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Patito de goma"
+          }
+        }
+      }
+    },
     "Set %lld of %lld" : {
       "localizations" : {
         "en" : {
@@ -841,6 +1005,49 @@
         }
       }
     },
+    "Slice of Life" : {
+      "comment" : "Silly stats stamp name, earned when Pizza Pie Chart first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Rebanada de vida"
+          }
+        }
+      }
+    },
+    "Small Step" : {
+      "comment" : "Silly stats stamp name, earned when the walk to the Moon first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un pequeño paso"
+          }
+        }
+      }
+    },
+    "Stamps" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sellos"
+          }
+        }
+      }
+    },
+    "Starting Line" : {
+      "comment" : "Silly stats stamp name, earned when Brush Marathon first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Línea de salida"
+          }
+        }
+      }
+    },
     "Steady pace" : {
       "comment" : "Workout Live Activity, guided cardio: a steady-state segment.",
       "localizations" : {
@@ -887,6 +1094,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Peso sugerido %@"
+          }
+        }
+      }
+    },
+    "Sunny Side Up" : {
+      "comment" : "Silly stats stamp name, earned when Egg-onomics first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Huevo estrellado"
           }
         }
       }
@@ -945,6 +1163,17 @@
         }
       }
     },
+    "To Step or Not to Step" : {
+      "comment" : "Silly stats stamp name, earned when steps reach one Hamlet; a play on Hamlet's famous line",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Caminar o no caminar"
+          }
+        }
+      }
+    },
     "Today's water, with a button to add a bottle." : {
       "localizations" : {
         "es" : {
@@ -968,6 +1197,28 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Quité 15 segundos a tu descanso."
+          }
+        }
+      }
+    },
+    "Top Banana" : {
+      "comment" : "Silly stats stamp name, earned when Bananas for Scale first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Plátano jefe"
+          }
+        }
+      }
+    },
+    "Up and Up" : {
+      "comment" : "Silly stats stamp name, earned when Stairway to Somewhere first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cada vez más alto"
           }
         }
       }
@@ -1033,6 +1284,17 @@
         }
       }
     },
+    "Wheels and Waves" : {
+      "comment" : "Silly stats stamp name, earned when Grand Tours (swims and rides) first appears",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ruedas y olas"
+          }
+        }
+      }
+    },
     "Workout" : {
       "localizations" : {
         "es" : {
@@ -1086,6 +1348,27 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Tu compañero, con la ropa que le pusiste, y cómo va su día."
+          }
+        }
+      }
+    },
+    "Your first stamp is waiting" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu primer sello te espera"
+          }
+        }
+      }
+    },
+    "Your map" : {
+      "comment" : "The large map widget's name in the widget gallery",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tu mapa"
           }
         }
       }
@@ -1625,6 +1908,294 @@
         }
       }
     },
+    "widget.hearts.label" : {
+      "comment" : "VoiceOver name for the row of pixel hearts on a Fernlet widget: the day's care score",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Care"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cuidado"
+          }
+        }
+      }
+    },
+    "widget.hearts.oneGold" : {
+      "comment" : "VoiceOver, after the care percentage: one gold heart a friend gave in person, shown after the six hearts",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "one gold heart from a friend"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "un corazón dorado de un amigo"
+          }
+        }
+      }
+    },
+    "widget.hearts.percent" : {
+      "comment" : "VoiceOver value of the widget's hearts: the care score as a percentage. Example: '58 percent'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%lld percent"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld por ciento"
+          }
+        }
+      }
+    },
+    "widget.hearts.percentAndGold" : {
+      "comment" : "VoiceOver value of the widget's hearts with a friend's gold hearts: the percentage, then the gold hearts. Example: '58 percent, one gold heart from a friend'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
+    "widget.hearts.twoGold" : {
+      "comment" : "VoiceOver, after the care percentage: two gold hearts friends gave in person, shown after the six hearts",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "two gold hearts from friends"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "dos corazones dorados de amigos"
+          }
+        }
+      }
+    },
+    "widget.macro.carbs" : {
+      "comment" : "The letter before the carbs bar on the map widget (Spanish: C)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "C"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "C"
+          }
+        }
+      }
+    },
+    "widget.macro.fat" : {
+      "comment" : "The letter before the fat bar on the map widget (Spanish: G, grasa)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "F"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "G"
+          }
+        }
+      }
+    },
+    "widget.macro.protein" : {
+      "comment" : "The letter before the protein bar on the map widget (Spanish: P)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "P"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "P"
+          }
+        }
+      }
+    },
+    "widget.macros.spoken" : {
+      "comment" : "The map widget, VoiceOver: today's macros against their targets (the app's status plate says the same)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Protein %1$lld of %2$lld grams, carbs %3$lld of %4$lld, fat %5$lld of %6$lld."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Proteína %1$lld de %2$lld gramos, carbohidratos %3$lld de %4$lld, grasa %5$lld de %6$lld."
+          }
+        }
+      }
+    },
+    "widget.map.takenAt" : {
+      "comment" : "The map widget's tag: when its picture of the map was taken, a time today or else a date. Example: 'Map from 9:40 AM'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Map from %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mapa de %@"
+          }
+        }
+      }
+    },
+    "widget.stamp.count" : {
+      "comment" : "On the medium stamp widget: how many of the silly stamps you have. Example: '5 of 19'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$lld de %2$lld"
+          }
+        }
+      }
+    },
+    "widget.stamp.countSpoken" : {
+      "comment" : "VoiceOver on the medium stamp widget: how many of the silly stamps you have. Example: '5 of 19 stamps'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld stamps"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$lld de %2$lld sellos"
+          }
+        }
+      }
+    },
+    "widget.stamp.earnedAt" : {
+      "comment" : "Under a stamp earned today on the stamp widget: the time it was earned. Example: 'Earned 9:12'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Earned %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ganado a las %@"
+          }
+        }
+      }
+    },
+    "widget.stamp.earnedOn" : {
+      "comment" : "Under a stamp on the stamp widget: the day it was earned. Example: 'Earned Sunday, 19 October'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Earned %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ganado el %@"
+          }
+        }
+      }
+    },
+    "widget.stamp.spokenOn" : {
+      "comment" : "VoiceOver, after a stamp's name on the stamp widget: the day it was earned. Example: 'earned Sunday, 19 October'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "earned %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ganado el %@"
+          }
+        }
+      }
+    },
+    "widget.stamp.spokenToday" : {
+      "comment" : "VoiceOver, after a stamp's name on the stamp widget: earned today, and when. Example: 'earned today at 9:12'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "earned today at %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ganado hoy a las %@"
+          }
+        }
+      }
+    },
     "widget.thought.asleep" : {
       "comment" : "The companion's line on the thought widget while it is asleep. Says nothing about how the day went",
       "extractionState" : "extracted_with_value",
@@ -1931,9 +2502,26 @@
         }
       }
     },
+    "widget.water.fraction" : {
+      "comment" : "Today's bottles of water over the day's target, beside one water drop on a widget. Example: '2 / 4'",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld / %2$lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$lld / %2$lld"
+          }
+        }
+      }
+    },
     "widget.water.ofTarget" : {
       "comment" : "Under today's bottle count on the water widget: the day's target. Plural on the target ('of 1 bottle')",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "variations" : {
@@ -1975,7 +2563,6 @@
     },
     "widget.water.progress" : {
       "comment" : "Today's water against the day's target, spoken by VoiceOver and shown on the Control Center control. The noun follows the TARGET ('1 of 1 bottle', '2 of 4 bottles')",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {

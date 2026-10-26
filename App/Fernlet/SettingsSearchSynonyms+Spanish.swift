@@ -53,6 +53,18 @@ extension SettingsSearchSynonyms {
         "Spoken cues": ["indicaciones por voz", "voz", "hablar", "leer en voz alta", "decir"],
         "Cooking timer sound": ["sonido del temporizador de cocina", "cocina", "cocinar", "temporizador", "sonido"],
         "Breathing haptics": ["vibraciones al respirar", "respiración", "respirar", "ritmo", "vibración"],
+        // Home map (World build step 5c)
+        "Home map": ["mapa de inicio", "mapa", "ubicación", "lugares", "marcas", "dónde has estado"],
+        "Map the world in the background": ["mapear el mundo en segundo plano", "segundo plano", "siempre",
+                                            "bajo consumo", "visitas"],
+        "Uncover the map as you go": ["descubrir el mapa mientras vas", "niebla", "descubrir", "explorar"],
+        "Save new routes": ["guardar rutas nuevas", "rutas", "ruta", "líneas", "senderos", "borrar rutas"],
+        "Remember places I stop at": ["recordar los lugares donde me detengo", "lugares", "visitas", "dónde has estado",
+                                      "dejar de guardar lugares"],
+        "Remember places I eat out": ["recordar los lugares donde como fuera", "restaurantes", "restaurante", "comer fuera",
+                                      "lo de siempre"],
+        "Homes and hotels": ["casas y hoteles", "casa", "hogar", "hotel", "salir del hotel", "segunda casa"],
+        "Delete map history": ["borrar el historial del mapa", "historial del mapa", "olvidar espacios", "limpiar mapa"],
         // AI & data sources
         "AI status": ["estado de la ia", "ia", "inteligencia artificial", "en el dispositivo", "asistente", "estado"],
         "Turn AI off": ["desactivar la ia", "apagar la ia", "ia apagada", "sin ia", "modo manual"],
@@ -114,6 +126,8 @@ extension SettingsSearchSynonyms {
         "Also include in trainer summaries": ["incluir también en los resúmenes para entrenador",
                                               "contenido del resumen", "objetivo", "sueño", "malestar", "bienestar",
                                               "opciones del entrenador"],
+        "Recipes you share": ["recetas que compartes", "incluir notas", "incluir foto", "notas de la receta",
+                              "foto de la receta", "compartir recetas", "recetas compartidas"],
         "Delete everything": ["borrar todo", "eliminar todo", "borrar", "restablecer", "eliminar todos los datos",
                               "eliminar", "empezar de cero"],
         "AI activity log": ["registro de actividad de ia", "actividad de ia", "registro de ia", "llamadas de ia",
@@ -137,6 +151,8 @@ extension SettingsSearchSynonyms {
         "Reset app lock": ["restablecer bloqueo de la app", "restablecer bloqueo", "olvidé mi código", "quitar bloqueo"],
         // Friends & sharing
         "Nearby friends": ["amigos cerca", "cerca", "amigos", "presencia", "proximidad", "compartir"],
+        "Friends & Blocks": ["amigos y bloqueos", "amigos", "bloqueos", "bloquear", "desbloquear", "lista de amigos", "denunciar"],
+        "Change name": ["cambiar nombre", "nombre", "apodo", "apareces como", "nombre visible"],
         "Share your vibe": ["compartir tu ánimo", "ánimo", "estado de ánimo", "compartir ánimo", "amigos"],
         "Nearby hearts": ["corazones con amigos cerca", "corazones", "corazón", "enviar corazón", "amigos"],
         "Deliver hearts when apart": ["entregar corazones después", "corazones", "lejos", "separados", "entregar",
@@ -149,6 +165,9 @@ extension SettingsSearchSynonyms {
         "Period tracking": ["seguimiento del periodo", "periodo", "ciclo", "menstruación", "regla", "visibilidad",
                             "ocultar periodo"],
         "Intimacy tracking": ["seguimiento de intimidad", "intimidad", "íntimo", "visibilidad", "ocultar intimidad",
-                              "sensible"]
+                              "sensible"],
+        "Advanced period tracking": ["seguimiento avanzado del periodo", "avanzado", "síntomas", "moco cervical",
+                                     "flujo cervical", "ovulación", "prueba de ovulación", "temperatura basal",
+                                     "manchado", "fertilidad"]
     ]
 }

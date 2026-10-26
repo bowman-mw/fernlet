@@ -75,7 +75,7 @@
     },
     "messages.action.share" : {
       "comment" : "Button inserting the selected item into the Messages conversation. The ↗ arrow is decorative and may be dropped if it reads badly in this language.",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -91,9 +91,27 @@
         }
       }
     },
+    "messages.action.shareItem" : {
+      "comment" : "Button inserting the selected recipe or workout into the Messages conversation's draft (it does not send it). Drawn beside a share icon, top right of the panel, so keep it to one short word.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Share"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Compartir"
+          }
+        }
+      }
+    },
     "messages.brand" : {
       "comment" : "Wordmark above the composer title. 'Fernlet' is the product name and must NOT be translated; the ⌁ glyph and the two spaces are the mark's fixed typography. Translate only if the product ships under a different name in this language.",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -105,6 +123,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "⌁  FERNLET"
+          }
+        }
+      }
+    },
+    "messages.brand.name" : {
+      "comment" : "The app's name beside its pixel fern mark at the top of the Messages panel, above the title. 'Fernlet' is the product name and must NOT be translated. Translate only if the product ships under a different name in this language.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fernlet"
           }
         }
       }
@@ -217,9 +253,45 @@
         }
       }
     },
+    "messages.card.tag.recipe" : {
+      "comment" : "Tag DRAWN INTO the card artwork the recipient sees in the conversation, in a small framed label top left beside the pixel fern. It has room for about 30 characters; a longer translation is cut off. 'Fernlet' is the product name and must not be translated.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet recipe"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Receta de Fernlet"
+          }
+        }
+      }
+    },
+    "messages.card.tag.workout" : {
+      "comment" : "Workout counterpart of messages.card.tag.recipe: drawn into the card artwork in a small framed label beside the pixel fern, room for about 30 characters, and the same untranslated product name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet workout"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Entrenamiento de Fernlet"
+          }
+        }
+      }
+    },
     "messages.card.wordmark.recipe" : {
       "comment" : "Wordmark DRAWN INTO the card artwork the recipient sees in the conversation. Rendered at 28pt into a 1200×630 image, so a much longer translation will not fit; upper case matches the mark. 'Fernlet' is the product name and must not be translated.",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -237,7 +309,7 @@
     },
     "messages.card.wordmark.workout" : {
       "comment" : "Workout counterpart of messages.card.wordmark.recipe — same 28pt width limit and the same untranslated product name.",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1210,7 +1282,7 @@
       }
     },
     "messages.workout.subtitleWithNotes" : {
-      "comment" : "Composer subtitle and preview line for a planned workout whose own written notes travel with it, so the sender knows before sending. %@ is the date and workout count, e.g. '2026-10-18 · 1 workout'.",
+      "comment" : "Composer subtitle, preview line and sent card subcaption for a planned workout whose own written notes travel with it, so the sender and the recipient know. %@ is the date and workout count, e.g. '2026-10-18 · 1 workout'.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {

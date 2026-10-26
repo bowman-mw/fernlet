@@ -223,10 +223,14 @@ struct CompanionEmotionPresentationTests {
         let bundle = try RepoRoot.source("App/FernletWidgets/FernletWidgetsBundle.swift")
         let models = try RepoRoot.source("App/FernletWidgets/WidgetSharedModels.swift")
         let engine = try RepoRoot.source("FernletKit/Sources/FernletScoring/CompanionEmotionEngine.swift")
+        // Round 6b: the companion widget's moments live in one function the map widget shares
+        // (`entryDates(for:now:calendar:)`), and the timeline makes an entry of each.
         let provider = try #require(CompanionEmotionPrivacyTests.body(of: "func getTimeline(", in: bundle), "getTimeline is gone")
-        #expect(provider.contains("WidgetEmotionTimeline.transitionDates(in: snapshot?.companionEmotionTimeline"),
+        let moments = try #require(CompanionEmotionPrivacyTests.body(of: "static func entryDates(", in: bundle), "entryDates is gone")
+        #expect(moments.contains("WidgetEmotionTimeline.transitionDates(in: snapshot?.companionEmotionTimeline"),
                 "the provider no longer asks for the emotion transitions — a sleepy face would wait for the next reload")
-        #expect(provider.contains("entries += transitions.map"), "the transitions no longer become timeline entries")
+        #expect(moments.contains("dates += WidgetEmotionTimeline.transitionDates"), "the transitions no longer become moments")
+        #expect(provider.contains("Self.entryDates(for: snapshot, now: now).map"), "the moments no longer become timeline entries")
         let rule = "$0.at <= date && calendar.startOfDay(for: $0.at) == day"
         let widgetLookup = try #require(CompanionEmotionPrivacyTests.body(of: "static func emotion(in moments:", in: models))
         let appLookup = try #require(CompanionEmotionPrivacyTests.body(of: "public static func emotion(in timeline:", in: engine))
@@ -235,8 +239,10 @@ struct CompanionEmotionPresentationTests {
         #expect(bundle.contains("static let lockScreenShowsEmotion = false"),
                 "the Lock Screen now draws feelings — the owner chose the state face only (2026-09-24)")
         let views = try RepoRoot.source("App/FernletWidgets/CompanionWidgetViews.swift")
-        #expect(views.components(separatedBy: "FernletWidgetEmotionPolicy.lockScreenEmotion(entry.currentCompanionEmotion)").count == 2,
-                "the Lock Screen face must route its emotion through the policy (the rectangular card was retired 2026-10-21)")
+        // Two Lock Screen families since World Review Batch 4 (2026-10-24): the face, and the hearts-and-
+        // water rectangle that speaks the companion's status. Both route the feeling through the policy.
+        #expect(views.components(separatedBy: "FernletWidgetEmotionPolicy.lockScreenEmotion(entry.currentCompanionEmotion)").count == 3,
+                "each Lock Screen family must route its emotion through the policy (the face and the rectangle)")
         let policy = try #require(CompanionEmotionPrivacyTests.body(of: "static func lockScreenEmotion(", in: bundle),
                                   "the Lock Screen emotion policy is gone")
         #expect(policy.contains("emotion.hidesTheDay || lockScreenShowsEmotion ? emotion : nil"),

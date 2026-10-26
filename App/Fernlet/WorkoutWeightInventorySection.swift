@@ -12,6 +12,10 @@ import FernletUI
 /// (``WorkoutLoadContextBuilder/defaultUnit(for:)``) from the first edit on; an inventory set in the
 /// other unit keeps its own.
 ///
+/// World build (`comp-space-weights`, approved 2026-10-25): one frame holding "Weights I have" in
+/// Fraunces, the optional note, then each block under a hairline; a pair's chip is a plain chip with its
+/// ✕, Add dumbbell a small secondary button, and Clear a danger text button under the entry row.
+///
 /// Accessibility: every control is a button, chip or stepper named by its visible text ("15 lb",
 /// "Home set 5–25 lb", "45 lb plates") — Voice Control answers to that word — with the selected
 /// trait on chips that are on; a pair's chip removes it, so VoiceOver hears "Remove 15 lb" while
@@ -44,23 +48,24 @@ struct WorkoutWeightInventorySection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Weights I have")
-                    .font(.fernlet(.labelSmall))
-                    .tracking(0.6)
-                    .textCase(.uppercase)
-                    .foregroundStyle(Color.slate)
-                    .accessibilityAddTraits(.isHeader)
-                Text("Optional. With these set, Fernlet suggests only weights you can make here, and adds reps before a big jump.",
-                     comment: "Location editor: what listing the weights a space has does")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
+        FernletCard {
+            VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Weights I have")
+                        .font(.custom(FernletFontName.frauncesSemiBold, size: 19, relativeTo: .title3))
+                        .foregroundStyle(WorldPalette.bark)
+                        .accessibilityAddTraits(.isHeader)
+                    Text("Optional. With these set, Fernlet suggests only weights you can make here, and adds reps before a big jump.",
+                         comment: "Location editor: what listing the weights a space has does")
+                        .font(FernletFramedFont.note)
+                        .foregroundStyle(WorldPalette.dim)
+                        .fernletWrappingText()
+                }
+                if capabilities.contains(.dumbbell) { FernletDottedRule(); WeightDumbbellBlock(weights: editable) }
+                if capabilities.contains(.kettlebell) { FernletDottedRule(); WeightKettlebellBlock(weights: editable) }
+                if capabilities.contains(.barbell) { FernletDottedRule(); WeightBarbellBlock(weights: editable) }
             }
-            if capabilities.contains(.dumbbell) { WeightDumbbellBlock(weights: editable) }
-            if capabilities.contains(.kettlebell) { WeightKettlebellBlock(weights: editable) }
-            if capabilities.contains(.barbell) { WeightBarbellBlock(weights: editable) }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
@@ -106,7 +111,8 @@ private func choose(in weights: Binding<WorkoutWeightInventory>, _ edit: (inout 
     FernletFeedback.system.select(next, in: &weights.wrappedValue)
 }
 
-/// A block's title (a heading for VoiceOver's rotor) and its one-line caption.
+/// A block's title (a heading for VoiceOver's rotor) and its one-line caption: DM Sans bold 16 over the
+/// dim 13.5-pt note (`comp-space-weights`).
 private struct WeightBlockTitle: View {
     let title: LocalizedStringKey
     let caption: LocalizedStringKey
@@ -114,14 +120,32 @@ private struct WeightBlockTitle: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.bark)
+                .font(FernletFramedFont.fieldBold)
+                .foregroundStyle(WorldPalette.bark)
                 .accessibilityAddTraits(.isHeader)
             Text(caption)
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
+                .font(FernletFramedFont.note)
+                .foregroundStyle(WorldPalette.dim)
                 .fernletWrappingText()
         }
+    }
+}
+
+/// A block's Clear as the design's danger text button (`comp-space-weights`' "Clear dumbbells"), centred
+/// under the entry row, its 44-pt target the row's width.
+private struct WeightClearButton: View {
+    let title: LocalizedStringKey
+    let identifier: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(title, action: action)
+            .font(FernletFramedFont.button)
+            .foregroundStyle(Color.terracottaInk)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityIdentifier(identifier)
     }
 }
 
@@ -148,13 +172,15 @@ private struct WeightDumbbellBlock: View {
                             weights.removeDumbbell(weight)
                         }
                     }
-                    Button("Clear dumbbells") { weights.setDumbbells([]) }
-                        .buttonStyle(ChipButtonStyle(selected: false))
-                        .accessibilityIdentifier("workout.location.weights.dumbbells.clear")
                 }
             }
             WeightEntryRow(title: "Dumbbell weight", addTitle: "Add dumbbell", unit: weights.unit,
                            identifier: "workout.location.weights.dumbbells.add") { weights.addDumbbell($0) }
+            if !weights.dumbbells.isEmpty {
+                WeightClearButton(title: "Clear dumbbells", identifier: "workout.location.weights.dumbbells.clear") {
+                    weights.setDumbbells([])
+                }
+            }
         }
     }
 
@@ -192,14 +218,14 @@ private struct WeightKettlebellBlock: View {
                     .buttonStyle(ChipButtonStyle(selected: weights.ownsKettlebell(size)))
                     .accessibilityIdentifier("workout.location.weights.kettlebell")
                 }
-                if !weights.kettlebells.isEmpty {
-                    Button("Clear kettlebells") { weights.setKettlebells([]) }
-                    .buttonStyle(ChipButtonStyle(selected: false))
-                    .accessibilityIdentifier("workout.location.weights.kettlebells.clear")
-                }
             }
             WeightEntryRow(title: "Kettlebell weight", addTitle: "Add kettlebell", unit: weights.unit,
                            identifier: "workout.location.weights.kettlebells.add") { weights.addKettlebell($0) }
+            if !weights.kettlebells.isEmpty {
+                WeightClearButton(title: "Clear kettlebells", identifier: "workout.location.weights.kettlebells.clear") {
+                    weights.setKettlebells([])
+                }
+            }
         }
     }
 
@@ -249,9 +275,9 @@ private struct WeightBarbellBlock: View {
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
-                Button("Clear barbell") { weights.clearBarbell() }
-                    .buttonStyle(ChipButtonStyle(selected: false))
-                    .accessibilityIdentifier("workout.location.weights.barbell.clear")
+                WeightClearButton(title: "Clear barbell", identifier: "workout.location.weights.barbell.clear") {
+                    weights.clearBarbell()
+                }
             }
         }
     }
@@ -294,7 +320,9 @@ private struct WeightRemoveChip: View {
                     .accessibilityHidden(true)
             }
         }
-        .buttonStyle(ChipButtonStyle(selected: true))
+        // A plain chip with its ✕ (`comp-space-weights`): the presets and kettlebell sizes are the
+        // chips that are on.
+        .buttonStyle(ChipButtonStyle(selected: false))
         .accessibilityLabel(Text("Remove \(text)"))
         .accessibilityInputLabels([Text(verbatim: text), Text("Remove \(text)")])
         .accessibilityIdentifier(identifier)
@@ -377,7 +405,7 @@ private struct WeightEntryRow: View {
                     .foregroundStyle(Color.slate)
                     .accessibilityHidden(true)
                 Button(addTitle, action: add)
-                    .buttonStyle(ChipButtonStyle(selected: true))
+                    .buttonStyle(ActionPillButtonStyle(.secondary, size: .small))
                     .disabled(parsed == nil)
                     .accessibilityIdentifier(identifier)
             }

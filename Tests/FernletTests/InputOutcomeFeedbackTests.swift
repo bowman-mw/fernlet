@@ -188,10 +188,17 @@ private final class SpokenLog {
     /// action can't be pressed here, so the source is pinned): the Move tab's log, edit and plan
     /// sheets, workout setup with its session and weight fields, the injury picker, the custom
     /// exercise form, the ready screen's food question, the set editor's effort and reason, the
-    /// Activities chips, and Settings' care-task group and memory category chips (2026-10-21).
+    /// Activities chips, and Settings' care-task group and memory category chips (2026-10-21; the care-task group is the framed segmented control since the World build).
     @Test func theRemainingSelectionChipsChooseThroughTheSharedHelper() throws {
+        // World build (Batch 3 draft 2): the log, edit and plan sheets' Kind, Intensity and Split chips
+        // became FernletSegmentedPicker / FernletDropdown, which tick through the same helper inside
+        // FernletUI; the Suggest sheet's feeling chips still call it here.
+        let move = try RepoRoot.source("App/Fernlet/MoveView.swift")
+        let framedChoices = move.components(separatedBy: "FernletSegmentedPicker(").count - 1
+            + move.components(separatedBy: "FernletDropdown(").count - 1
+        #expect(framedChoices >= 4, "Move's sheets choose kind, intensity and split through the framed controls")
         let pins: [(path: String, selects: Int)] = [
-            ("App/Fernlet/MoveView.swift", 5),
+            ("App/Fernlet/MoveView.swift", 1),
             ("App/Fernlet/WorkoutSetupView.swift", 2),
             ("App/Fernlet/WorkoutSessionSection.swift", 2),
             ("App/Fernlet/WorkoutWeightInventorySection.swift", 1),
@@ -200,12 +207,17 @@ private final class SpokenLog {
             ("App/Fernlet/WorkoutFoodAware.swift", 1),
             ("App/Fernlet/WorkoutSetEditorViews.swift", 2),
             ("App/Fernlet/ActivitiesView.swift", 1),
-            ("App/Fernlet/SettingsSheet.swift", 2)
+            ("App/Fernlet/SettingsSheet.swift", 1)
         ]
         for (path, selects) in pins {
             let found = try RepoRoot.source(path).components(separatedBy: "FernletFeedback.system.select(").count - 1
             #expect(found >= selects, "\(path): \(found) of its \(selects) selection chips choose through the helper")
         }
+        // World build (b2-settings-care): the care-task group became the framed segmented control,
+        // which chooses through the same helper inside FernletUI.
+        #expect(try RepoRoot.source("App/Fernlet/SettingsSheet.swift")
+                    .contains(#"FernletSegmentedPicker("Time of day", selection: newCareTaskGroupBinding"#),
+                "Settings' care-task group no longer picks through the framed segmented control")
         let weights = try RepoRoot.source("App/Fernlet/WorkoutWeightInventorySection.swift")
         #expect(weights.components(separatedBy: "choose(in: $weights)").count - 1 >= 3,
                 "the dumbbell presets, the kettlebells and the bar edit through the inventory helper")

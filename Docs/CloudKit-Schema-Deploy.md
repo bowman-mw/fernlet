@@ -32,7 +32,12 @@ what this ritual does.
    - Sign the target simulator into an iCloud account (Settings ▸ sign in). The account only needs
      to exist; no Fernlet data is required.
    - Confirm the scheme's CloudKit environment is **Development** (the default for a Debug build in
-     the simulator).
+     the simulator). `Fernlet.entitlements` carries no
+     `com.apple.developer.icloud-container-environment` key, so the signing decides: a TestFlight or
+     App Store build uses Production and a run from Xcode uses Development. (The World build pinned it
+     to `Production` from 2026-10-25 until it readied for main on 2026-10-26;
+     `WorldIdentityBoundaryTests` now pins the key absent.) `initializeCloudKitSchema` cannot write
+     Production, and the Simulator works only with Development.
    - Launch the app with the argument. Either:
      - Xcode ▸ Edit Scheme ▸ Run ▸ Arguments ▸ *Arguments Passed On Launch* ▸ add
        `INITIALIZE_CLOUDKIT_SCHEMA`, then Run; **or**

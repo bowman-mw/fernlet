@@ -25,6 +25,9 @@ struct PeriodSensitiveSettingsView: View {
     /// Confirmation for the two hide toggles — same shared alert every destructive Settings
     /// change uses; the mutation lives only inside `perform`.
     @State private var pendingDestructiveAction: DestructiveConfirmation?
+    /// Advanced period tracking, mirrored from ``CyclePreferences`` (device-only defaults are not
+    /// observable) and written back through it, which ignores a decoy session's writes.
+    @State private var advancedTracking = false
 
     var body: some View {
         ScrollView {
@@ -42,46 +45,84 @@ struct PeriodSensitiveSettingsView: View {
                 intimacyCard
                 appLockLink
             }
-            .padding(20)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
             .padding(.bottom, 20)
         }
         .scrollContentBackground(.hidden)
-        .background(Color.parchment)
-        .navigationTitle("Period & sensitive content")
+        // World (b3-period-settings): the dotted page under the plate, whose Back names Settings and
+        // shortens to its arrow for this long title.
+        .fernletPageBackground()
+        .fernletPushedPage(LocalizedStringResource("Period & sensitive content"))
         .navigationBarTitleDisplayMode(.inline)
         .destructiveConfirmation($pendingDestructiveAction)
+        .onAppear { advancedTracking = CyclePreferences.advancedTracking(duressSessionActive: store.duressSessionActive) }
     }
 
     // MARK: - Period
 
+    /// World (b3-period-settings): the section label above a framed card of switches; Advanced period
+    /// tracking (new) sits under Period tracking, and the footer stays under the switches.
     private var periodCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             SectionLabel("Period")
-            hubToggle("Period tracking", isOn: periodTrackingVisibleBinding)
-                .accessibilityIdentifier("settings.period.visible")
-            // Cosmetic sub-options: these still read cycle data, so they only make sense — and
-            // are only offered — while the hard gate above is on.
-            if store.isPeriodTrackingVisible {
-                hubToggle("Hide predictions", isOn: Binding(
-                    get: { store.settings.hidePredictions },
-                    set: { store.setHidePredictions($0) }
-                ))
-                hubToggle("Hide fertile window", isOn: Binding(
-                    get: { store.settings.hideFertileWindow },
-                    set: { store.setHideFertileWindow($0) }
-                ))
-                hubToggle("Period-aware care", isOn: Binding(
-                    get: { store.settings.periodAwareScoringEnabled },
-                    set: { store.setPeriodAwareScoringEnabled($0) }
-                ))
+            VStack(alignment: .leading, spacing: 14) {
+                hubToggle("Period tracking", isOn: periodTrackingVisibleBinding)
+                    .accessibilityIdentifier("settings.period.visible")
+                // Cosmetic sub-options: these still read cycle data, so they only make sense — and
+                // are only offered — while the hard gate above is on.
+                if store.isPeriodTrackingVisible {
+                    advancedTrackingToggle
+                    hubToggle("Hide predictions", isOn: Binding(
+                        get: { store.settings.hidePredictions },
+                        set: { store.setHidePredictions($0) }
+                    ))
+                    hubToggle("Hide fertile window", isOn: Binding(
+                        get: { store.settings.hideFertileWindow },
+                        set: { store.setHideFertileWindow($0) }
+                    ))
+                    hubToggle("Period-aware care", isOn: Binding(
+                        get: { store.settings.periodAwareScoringEnabled },
+                        set: { store.setPeriodAwareScoringEnabled($0) }
+                    ))
+                }
+                settingsFootnote(Text(periodFooter))
             }
-            Text(periodFooter)
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
+            .modifier(PeriodSettingsCardFrame())
         }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// Advanced period tracking (`b3-period-settings`, new): off by default; on, Log period offers every
+    /// symptom and observation. Device-only (``CyclePreferences``); a decoy session's switch changes
+    /// nothing that persists.
+    private var advancedTrackingToggle: some View {
+        Toggle(isOn: Binding(
+            get: { advancedTracking },
+            set: { newValue in
+                advancedTracking = newValue
+                CyclePreferences.setAdvancedTracking(newValue, duressSessionActive: store.duressSessionActive)
+            }
+        )) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Advanced period tracking")
+                    .font(FernletFramedFont.rowTitleBold)
+                    .foregroundStyle(WorldPalette.bark)
+                Text("Log every symptom, cervical mucus, ovulation tests, basal temperature and spotting between periods.",
+                     comment: "Settings › Period & sensitive content: the line under the Advanced period tracking switch, saying what it adds to Log period.")
+                    .font(FernletFramedFont.rowDetail)
+                    .foregroundStyle(WorldPalette.dim)
+                    .fernletWrappingText()
+            }
+        }
+        .accessibilityIdentifier("settings.period.advanced")
+    }
+
+    /// A footnote under a card's switches, in the dim ink.
+    private func settingsFootnote(_ text: Text) -> some View {
+        text
+            .font(FernletFramedFont.note)
+            .foregroundStyle(WorldPalette.dim)
+            .fernletWrappingText()
     }
 
     private var periodFooter: LocalizedStringKey {
@@ -93,28 +134,26 @@ struct PeriodSensitiveSettingsView: View {
     // MARK: - Intimacy
 
     private var intimacyCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             SectionLabel("Intimacy")
-            if store.isIntimateLoggingAllowed {
-                hubToggle("Intimacy tracking", isOn: intimacyTrackingVisibleBinding)
-                    .accessibilityIdentifier("settings.intimacy.visible")
-                Text(intimacyFooter)
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
-                    .fernletWrappingText()
-            } else {
-                // Age is a floor, not a preference — say the true reason rather than showing a
-                // toggle that would silently do nothing. The notice also carries the only way back
-                // for someone who installed before this gate existed, or who has had a birthday.
-                AgeGateNotice(
-                    gate: .intimacy,
-                    feature: .intimacyTracking,
-                    ageAssurance: store.ageAssurance
-                )
+            VStack(alignment: .leading, spacing: 14) {
+                if store.isIntimateLoggingAllowed {
+                    hubToggle("Intimacy tracking", isOn: intimacyTrackingVisibleBinding)
+                        .accessibilityIdentifier("settings.intimacy.visible")
+                    settingsFootnote(Text(intimacyFooter))
+                } else {
+                    // Age is a floor, not a preference — say the true reason rather than showing a
+                    // toggle that would silently do nothing. The notice also carries the only way back
+                    // for someone who installed before this gate existed, or who has had a birthday.
+                    AgeGateNotice(
+                        gate: .intimacy,
+                        feature: .intimacyTracking,
+                        ageAssurance: store.ageAssurance
+                    )
+                }
             }
+            .modifier(PeriodSettingsCardFrame())
         }
-        .padding(14)
-        .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
     private var intimacyFooter: LocalizedStringKey {
@@ -131,26 +170,24 @@ struct PeriodSensitiveSettingsView: View {
         NavigationLink(value: SettingsRoute.appLock) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 12) {
-                    Image(systemName: "lock.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.moss)
+                    // World: the pixel lock and the pixel chevron.
+                    FernletIcon(.lock, scale: 2)
                         .frame(width: 28)
+                        .accessibilityHidden(true)
                     Text("App lock")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.bark)
+                        .font(FernletFramedFont.rowTitleBold)
+                        .foregroundStyle(WorldPalette.bark)
                     Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(Color.slate)
+                    FernletIcon(.chevron, scale: 2)
+                        .accessibilityHidden(true)
                 }
                 Text("Private journal, cycle and intimacy notes can sit behind Fernlet's own passcode.")
-                    .font(.fernlet(.bodySmall))
-                    .foregroundStyle(Color.slate)
+                    .font(FernletFramedFont.rowDetail)
+                    .foregroundStyle(WorldPalette.dim)
                     .fernletWrappingText()
             }
-            .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+            .modifier(PeriodSettingsCardFrame())
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -221,8 +258,19 @@ struct PeriodSensitiveSettingsView: View {
     private func hubToggle(_ title: LocalizedStringKey, isOn: Binding<Bool>) -> some View {
         Toggle(isOn: isOn) {
             Text(title)
-                .font(.fernlet(.label))
-                .foregroundStyle(Color.bark)
+                .font(FernletFramedFont.rowTitleBold)
+                .foregroundStyle(WorldPalette.bark)
         }
+    }
+}
+
+/// A card on the Period & sensitive content page (`b3-period-settings`): the framed paper card of the
+/// design language, the content 16 pt in.
+private struct PeriodSettingsCardFrame: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fernletFramed(WorldTheme.framedLook, fill: WorldPalette.paper, cornerRadius: FernletFramedLook.cardRadius)
     }
 }

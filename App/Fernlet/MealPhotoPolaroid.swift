@@ -164,22 +164,23 @@ private struct MealPhotoUnavailableCard: View {
     /// Authored copy, so `LocalizedStringKey` (as `String` both states were drawn verbatim).
     let title: LocalizedStringKey
     let detail: LocalizedStringKey
+    @Environment(\.fernletFramedLook) private var look
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .fill(Color.cream)
+        RoundedRectangle(cornerRadius: look == nil ? 18 : 10, style: .continuous)
+            .fill(look?.raised ?? Color.cream)
             .frame(height: 320)
             .overlay {
                 VStack(spacing: 10) {
                     Image(systemName: systemImage)
                         .font(.largeTitle.weight(.light))
-                        .foregroundStyle(Color.slate)
+                        .foregroundStyle(look?.dim ?? Color.slate)
                     Text(title)
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.slate)
+                        .font(look == nil ? .fernlet(.body) : FernletFramedFont.button)
+                        .foregroundStyle(look?.text ?? Color.slate)
                     Text(detail)
-                        .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
+                        .font(look == nil ? .fernlet(.bodySmall) : FernletFramedFont.note)
+                        .foregroundStyle(look?.dim ?? Color.slate)
                         .multilineTextAlignment(.center)
                         .fernletWrappingText()
                         .padding(.horizontal, 24)
@@ -192,6 +193,10 @@ private struct MealPhotoUnavailableCard: View {
 /// the day it was logged, dismissible. Mirrors the progress-photo detail's shape but deliberately WITHOUT
 /// any lock/snapshot gating — meal photos aren't private the way body photos are. Loads the sealed bytes
 /// lazily off the passed closure; never fetches anything over the network.
+///
+/// World design `b2-meal-photo` (approved 2026-10-23): the photo in a 2-pt ink frame on the dotted page,
+/// its meal in Fraunces and the day below. Pushed inside a panel (`isPushed`), the plate carries "Meal
+/// photo" with Back and ✕; presented as a sheet, the sheet's own header carries the title and Done.
 struct MealPhotoDetailView: View {
     let name: String
     let loggedAt: Date
@@ -199,8 +204,11 @@ struct MealPhotoDetailView: View {
     /// Existence-only probe (no decrypt): distinguishes a photo that never synced here from one that's
     /// here but won't open. See `MealPhotoPolaroid.hasSealedData`.
     let hasSealedData: () -> Bool
+    /// True when a panel's stack pushed this page (the plate's Back returns); false for a sheet.
+    var isPushed = false
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.fernletFramedLook) private var look
     @State private var image: UIImage?
     /// nil until the sealed read runs; false once it comes back empty (no openable bytes on this device).
     @State private var bytesAvailable: Bool?
@@ -214,24 +222,32 @@ struct MealPhotoDetailView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    photoArea
-                        .frame(maxWidth: .infinity)
+        if isPushed {
+            page
+                .fernletPageBackground()
+                .fernletPushedPage("Meal photo")
+        } else {
+            VStack(spacing: 0) {
+                SheetHeader(title: "Meal photo", onDone: { dismiss() })
+                page
+            }
+            .background(look?.paper ?? Color.parchment)
+            .fernletSheet()
+        }
+    }
 
-                    captionBlock
-                }
-                .padding(20)
+    /// The framed photo over its meal and day.
+    private var page: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                photoArea
+                    .frame(maxWidth: .infinity)
+                    .modifier(MealPhotoFrame())
+
+                captionBlock
             }
-            .background(Color.parchment)
-            .navigationTitle("Meal photo")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
         }
         .task { await loadImage() }
     }
@@ -245,7 +261,7 @@ struct MealPhotoDetailView: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: look == nil ? 18 : 10, style: .continuous))
                     // T2-10: the full-size meal photo, same reason as the polaroid thumbnail.
                     .accessibilityIgnoresInvertColors()
             } else if presence == .onOtherDevice {
@@ -265,13 +281,17 @@ struct MealPhotoDetailView: View {
                     detail: "This photo is saved on this device but couldn't be opened. Its details are still here."
                 )
             } else {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.cream)
+                RoundedRectangle(cornerRadius: look == nil ? 18 : 10, style: .continuous)
+                    .fill(look?.raised ?? Color.cream)
                     .frame(height: 320)
                     .overlay {
-                        Image(systemName: "fork.knife")
-                            .font(.largeTitle.weight(.light))
-                            .foregroundStyle(Color.slate)
+                        if look != nil {
+                            WorldSpriteView(sprite: WorldSprites.onigiri, scale: 5)
+                        } else {
+                            Image(systemName: "fork.knife")
+                                .font(.largeTitle.weight(.light))
+                                .foregroundStyle(Color.slate)
+                        }
                     }
             }
         }
@@ -281,11 +301,12 @@ struct MealPhotoDetailView: View {
     private var captionBlock: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(name)
-                .font(.fernlet(.displayMedium))
-                .foregroundStyle(Color.bark)
+                .font(look == nil ? .fernlet(.displayMedium) : FernletFramedFont.sheetTitle)
+                .foregroundStyle(look?.text ?? Color.bark)
+                .fernletWrappingText()
             Text(loggedAt.formatted(.dateTime.weekday(.wide).month(.wide).day()))
-                .font(.fernlet(.body))
-                .foregroundStyle(Color.slate)
+                .font(look == nil ? .fernlet(.body) : FernletFramedFont.body)
+                .foregroundStyle(look?.dim ?? Color.slate)
         }
     }
 
@@ -301,6 +322,23 @@ struct MealPhotoDetailView: View {
         }
         bytesAvailable = true
         image = await UIImage(data: data)?.byPreparingForDisplay()
+    }
+}
+
+/// The meal photo's frame in the World look (`.photo3`): a 2-pt ink edge in 10-pt corners over a solid
+/// shadow 3 pt down. Nothing without the look.
+private struct MealPhotoFrame: ViewModifier {
+    @Environment(\.fernletFramedLook) private var look
+
+    func body(content: Content) -> some View {
+        if let look {
+            let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+            content
+                .overlay(shape.strokeBorder(look.ink, lineWidth: FernletFramedLook.frameWidth))
+                .background { shape.fill(look.shadow).offset(y: 3) }
+        } else {
+            content
+        }
     }
 }
 #endif

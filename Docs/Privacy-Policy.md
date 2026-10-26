@@ -75,13 +75,24 @@
      asleep is the one feeling the Lock Screen may show, because it says nothing about the day. The
      widget's file also carries the companion's name and how it is dressed, both already kept by the
      app. A disclosure of processing on the device; nothing new leaves the device and no promise is
-     weakened under §13). Before
+     weakened under §13), and 2026-10-24 (the World build's step 5c, approved by the owner on 2026-10-24:
+     §6's location paragraph becomes "Location and the map" — the map, the fog's coarse cells, walk
+     lines while "Save new routes" is on, workout-space pins, background location only during a walk
+     or with background mapping on, Apple Maps receiving the area on screen — and the approved added
+     sentence on Where you've been, Places you return to and solo photos' places. Everything stays on
+     the device; nothing new is sent to the developer and no promise is weakened under §13), and
+     2026-10-25 (the World build's round 6, both additions approved by the owner word for word: a place
+     Fernlet won't name can be added by the person ("unless you add one yourself"), a solo photo with no
+     place can be put on the map by the person, and a home (up to two) or a hotel the person marks is
+     kept, encrypted on this iPhone only, to uncover the map around it and to welcome them back, until they remove
+     it in Settings › Home map. Everything stays on the device; nothing new is sent to the developer and
+     no promise is weakened under §13). Before
      submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
      (2) keep it in sync with the in-app copy in App/Fernlet/PrivacyPolicyView.swift (Settings →
      Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
      the effective date in all three. -->
 
-**Effective date:** October 21, 2026
+**Effective date:** October 25, 2026
 **Developer:** Michael Bowman Olay
 **Contact:** fernletapp@gmail.com
 
@@ -379,9 +390,41 @@ conversation, and anyone they forward it to, can read what the card carries; we 
 Fernlet cannot take it back once sent. A card you receive is only a suggestion: nothing is saved
 until you open it in Fernlet, review it, and confirm.
 
-Optional coarse (approximate) location may be used only for gentle weather-based prompts and, if you
-choose, to tag an in-person group activity. Location is never tracked over time and never attached to
-your identity for us.
+**Location and the map.** Location is optional. If you allow it, Fernlet uses it on your phone to
+place your companion on the map and to uncover the map as you go, and, as before, for gentle
+weather-based prompts and, if you choose, to tag an in-person group activity. What Fernlet keeps is
+a coarse record of the parts of the map you have uncovered (cells about 35 m across) and, while
+"Save new routes" is on, the line of each walk you record yourself, plus where your workout spaces
+are if you ask it to remember them. All of it is encrypted on this iPhone only: never synced, backed
+up, exported, shared with friends, given to the AI or sent to us, and you can delete it at any time
+in Settings → Home map. Fernlet uses location in the background only during a walk you started, or
+if you turn on the optional low-power background mapping. The map itself is drawn by Apple Maps,
+which receives the area on your screen in order to send its map images, under Apple's privacy terms;
+it never receives your map history or your walks. Location is never attached to your identity for
+us.
+
+With Where you've been in Private, Fernlet also keeps a rolling 30-day timeline of the places you
+stopped at, collected while Fernlet is open and, if you turn on background mapping, through the day.
+It also keeps a list of Places you return to, which holds only a visit count, never dates. Both
+cover everyday places only: food and drink, gyms, parks, beaches and campgrounds. Places like
+doctors' offices, lawyers or therapists are never named or kept, unless you add one yourself.
+When you take a photo with the camera on your own at one of those everyday places, Fernlet keeps
+where it was taken, so the photo can sit on your map; anywhere else, it keeps no place.
+You can put a photo on the map yourself.
+All of this is encrypted on this iPhone only: never synced, backed up, exported, shared,
+given to the AI or sent to us.
+You can delete a day, a photo, or all of it, at any time.
+If you mark a place as your home (up to two) or as a hotel you stay at, Fernlet keeps it,
+encrypted on this iPhone only and never in a backup, to uncover the map around it and to welcome
+you back when you return; it stays until you remove it in Settings › Home map.
+If you add the map widget, Fernlet gives it a picture of the map around you, with your marked places
+and saved trails, on this iPhone only and never in a backup; your visit counts and the history of
+where you've been stay sealed in Private, and the widget's copy is deleted whenever you delete your map history.
+
+To name a place you stop at, or to check where a photo you take on your own was taken, Fernlet asks
+Apple Maps what is near you, only while Fernlet is open. For a place you return to, Fernlet
+keeps only Apple's reference to it, never its details, and asks Apple Maps for its name again when
+you look at your places.
 
 ## 7. Artificial intelligence
 
