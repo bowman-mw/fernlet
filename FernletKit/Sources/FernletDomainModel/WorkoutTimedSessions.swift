@@ -110,12 +110,15 @@ public nonisolated enum WorkoutTimedSessions {
     static let easyPartWords: Set<String> = ["easy", "slow", "recover", "recovery", "rest", "off", "walk", "jog"]
 
     /// The stretches a mobility flow adds after the owner's flow when the flow alone runs short.
-    static let mobilityExtras = ["Figure-four stretch", "Thread the needle", "Supine twist", "Calf stretch", "Doorway chest stretch"]
+    static let mobilityExtras = [
+        "Figure-four stretch", "Thread the needle", "Supine twist", "Calf stretch", "Doorway chest stretch",
+        "Pigeon stretch", "Cobra stretch", "Knee-to-chest stretch", "Seated hamstring stretch", "Neck side stretch",
+    ]
     /// The rest day's gentle sequence: kneeling, lying and seated stretches only — nothing to balance on
     /// and no deep lunge — from child's pose down to the floor and back up to sitting.
     static let gentleMoves = [
-        "Child's pose", "Cat-cow", "Supine twist", "Lying hamstring stretch", "Figure-four stretch",
-        "Butterfly stretch", "Cross-body shoulder stretch",
+        "Child's pose", "Cat-cow", "Knee-to-chest stretch", "Supine twist", "Lying hamstring stretch",
+        "Figure-four stretch", "Butterfly stretch", "Cross-body shoulder stretch",
     ]
 
     // MARK: Reading a descriptor
@@ -138,7 +141,8 @@ public nonisolated enum WorkoutTimedSessions {
         if label.contains("interval") {
             return .intervals(rounds: max(1, minutes / 2), workSeconds: 60, easySeconds: 60)
         }
-        let easy = easyLabelWords.contains { label.contains($0) }
+        // An easy session on a machine carries its pace after the minutes ("Rowing machine - 20 min easy").
+        let easy = easyLabelWords.contains { label.contains($0) } || WorkoutCardioMachines.isEasy(clause: parts.clause)
         return .steady(minutes: minutes, pace: easy ? .easy : .steady)
     }
 
@@ -375,10 +379,15 @@ public nonisolated enum WorkoutTimedSessions {
     // MARK: Logging
 
     /// The activity a timed line logs as — the same types the Log sheet offers, so Apple Health files it
-    /// as what it was rather than "Other": interval cardio as HIIT, a steady walk as walking, other
-    /// steady cardio as mixed cardio, a stretch session as flexibility. Nil for a line the runner does
-    /// not time.
+    /// as what it was rather than "Other": a session on a named machine as that machine's activity
+    /// (``WorkoutCardioMachines``: rowing, indoor cycling, elliptical, stair climbing, walking), other
+    /// interval cardio as HIIT, a steady walk as walking, other steady cardio as mixed cardio, a
+    /// stretch session as flexibility. Nil for a line the runner does not time.
     public static func activityType(forDescriptor descriptor: String) -> WorkoutActivityType? {
+        if classify(descriptor) != nil, let machine = WorkoutCardioMachines.machine(in: descriptor),
+           let type = WorkoutCardioMachines.activityType(forMachine: machine) {
+            return type
+        }
         switch classify(descriptor) {
         case .intervals: return .hiit
         case .steady: return label(of: descriptor).lowercased().contains("walk") ? .walking : .mixedCardio

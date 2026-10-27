@@ -706,5 +706,491 @@
     "gifFemale": "246113",
     "illustrationMale": "4870",
     "illustrationFemale": "2461"
+  },
+  "Dumbbell overhead triceps extension": {
+    "gifMale": "043013",
+    "gifFemale": "239013",
+    "illustrationMale": "0430",
+    "illustrationFemale": "2390"
+  },
+  "Dumbbell kickback": {
+    "gifMale": "035413",
+    "gifFemale": "237313",
+    "illustrationMale": "0354",
+    "illustrationFemale": "2373"
+  },
+  "Cable overhead triceps extension": {
+    "gifMale": "1143613",
+    "gifFemale": "1143513",
+    "illustrationMale": "11436",
+    "illustrationFemale": "11435"
+  },
+  "Band overhead triceps extension": {
+    "gifMale": "393913",
+    "gifFemale": "091413",
+    "illustrationMale": "3939",
+    "illustrationFemale": "0914"
+  },
+  "Knee push-up": {
+    "gifMale": "321113",
+    "gifFemale": "118213",
+    "illustrationMale": "3211",
+    "illustrationFemale": "1182"
+  },
+  "Wall push-up": {
+    "gifMale": "065913",
+    "gifFemale": "261413",
+    "illustrationMale": "0659",
+    "illustrationFemale": "2614"
+  },
+  "Close-grip push-up": {
+    "gifMale": "025913",
+    "gifFemale": "261513",
+    "illustrationMale": "0259",
+    "illustrationFemale": "2615"
+  },
+  "Decline push-up": {
+    "gifMale": "027913",
+    "gifFemale": "028013",
+    "illustrationMale": "0279",
+    "illustrationFemale": "0280"
+  },
+  "Chest press machine": {
+    "gifMale": "057713",
+    "gifFemale": "245713",
+    "illustrationMale": "0577",
+    "illustrationFemale": "2457"
+  },
+  "Machine shoulder press": {
+    "gifMale": "145413",
+    "gifFemale": "288313",
+    "illustrationMale": "1454",
+    "illustrationFemale": "2883"
+  },
+  "Assisted dip": {
+    "gifMale": "000913",
+    "gifFemale": "252813",
+    "illustrationMale": "0009",
+    "illustrationFemale": "2528"
+  },
+  "Pec deck": {
+    "gifMale": "103013",
+    "gifFemale": "242713",
+    "illustrationMale": "1030",
+    "illustrationFemale": "2427"
+  },
+  "Cable lateral raise": {
+    "gifMale": "019213",
+    "gifFemale": "223113",
+    "illustrationMale": "0192",
+    "illustrationFemale": "2231"
+  },
+  "Chest-supported dumbbell row": {
+    "gifMale": "032713",
+    "gifFemale": "251013",
+    "illustrationMale": "0327",
+    "illustrationFemale": "2510"
+  },
+  "Seated row machine": {
+    "gifMale": "135013",
+    "gifFemale": "224613",
+    "illustrationMale": "1350",
+    "illustrationFemale": "2246"
+  },
+  "Assisted pull-up": {
+    "gifMale": "001713",
+    "gifFemale": "252913",
+    "illustrationMale": "0017",
+    "illustrationFemale": "2529"
+  },
+  "Band-assisted pull-up": {
+    "gifMale": "097013",
+    "gifFemale": null,
+    "illustrationMale": "0970",
+    "illustrationFemale": null
+  },
+  "Band face pull": {
+    "gifMale": "560713",
+    "gifFemale": null,
+    "illustrationMale": "5607",
+    "illustrationFemale": null
+  },
+  "Reverse pec deck": {
+    "gifMale": "060213",
+    "gifFemale": "282213",
+    "illustrationMale": "0602",
+    "illustrationFemale": "2822"
+  },
+  "Band external rotation": {
+    "gifMale": "215113",
+    "gifFemale": "092113",
+    "illustrationMale": "2151",
+    "illustrationFemale": "0921"
+  },
+  "Barbell curl": {
+    "gifMale": "003113",
+    "gifFemale": "359213",
+    "illustrationMale": "0031",
+    "illustrationFemale": "3592"
+  },
+  "Box squat": {
+    "gifMale": "1016813",
+    "gifFemale": "654113",
+    "illustrationMale": "10168",
+    "illustrationFemale": "6541"
+  },
+  "Wall sit": {
+    "gifMale": "073413",
+    "gifFemale": "669613",
+    "illustrationMale": "0734",
+    "illustrationFemale": "6696"
+  },
+  "Dumbbell front squat": {
+    "gifMale": "296613",
+    "gifFemale": "296713",
+    "illustrationMale": "2966",
+    "illustrationFemale": "2967"
+  },
+  "Pistol squat to box": {
+    "gifMale": "298413",
+    "gifFemale": "298513",
+    "illustrationMale": "2984",
+    "illustrationFemale": "2985"
+  },
+  "Smith machine squat": {
+    "gifMale": "328113",
+    "gifFemale": "1130513",
+    "illustrationMale": "3281",
+    "illustrationFemale": "11305"
+  },
+  "Split squat": {
+    "gifMale": "236813",
+    "gifFemale": "275213",
+    "illustrationMale": "2368",
+    "illustrationFemale": "2752"
+  },
+  "Side lunge": {
+    "gifMale": "297213",
+    "gifFemale": "297313",
+    "illustrationMale": "2972",
+    "illustrationFemale": "2973"
+  },
+  "Walking lunge": {
+    "gifMale": "155713",
+    "gifFemale": "429513",
+    "illustrationMale": "1557",
+    "illustrationFemale": "4295"
+  },
+  "Dumbbell single-leg Romanian deadlift": {
+    "gifMale": "175713",
+    "gifFemale": "263513",
+    "illustrationMale": "1757",
+    "illustrationFemale": "2635"
+  },
+  "Bodyweight single-leg deadlift": {
+    "gifMale": "392813",
+    "gifFemale": "292013",
+    "illustrationMale": "3928",
+    "illustrationFemale": "2920"
+  },
+  "Bodyweight good morning": {
+    "gifMale": "555513",
+    "gifFemale": null,
+    "illustrationMale": "5555",
+    "illustrationFemale": null
+  },
+  "Dumbbell glute bridge": {
+    "gifMale": "333513",
+    "gifFemale": "342713",
+    "illustrationMale": "3335",
+    "illustrationFemale": "3427"
+  },
+  "Dumbbell hip thrust": {
+    "gifMale": "474213",
+    "gifFemale": "575413",
+    "illustrationMale": "4742",
+    "illustrationFemale": "5754"
+  },
+  "Band pull-through": {
+    "gifMale": "099113",
+    "gifFemale": "302413",
+    "illustrationMale": "0991",
+    "illustrationFemale": "3024"
+  },
+  "Single-leg calf raise": {
+    "gifMale": "138713",
+    "gifFemale": "262513",
+    "illustrationMale": "1387",
+    "illustrationFemale": "2625"
+  },
+  "Dumbbell single-leg calf raise": {
+    "gifMale": "040913",
+    "gifFemale": "262413",
+    "illustrationMale": "0409",
+    "illustrationFemale": "2624"
+  },
+  "Crunch": {
+    "gifMale": "027413",
+    "gifFemale": "027513",
+    "illustrationMale": "0274",
+    "illustrationFemale": "0275"
+  },
+  "Curl-up": {
+    "gifMale": "301613",
+    "gifFemale": "301513",
+    "illustrationMale": "3016",
+    "illustrationFemale": "3015"
+  },
+  "Lying leg raise": {
+    "gifMale": "116313",
+    "gifFemale": "480813",
+    "illustrationMale": "1163",
+    "illustrationFemale": "4808"
+  },
+  "Hanging knee raise": {
+    "gifMale": "981913",
+    "gifFemale": null,
+    "illustrationMale": "9819",
+    "illustrationFemale": null
+  },
+  "Knee plank": {
+    "gifMale": "323813",
+    "gifFemale": "499613",
+    "illustrationMale": "3238",
+    "illustrationFemale": "4996"
+  },
+  "Bent-knee side plank": {
+    "gifMale": null,
+    "gifFemale": "013313",
+    "illustrationMale": null,
+    "illustrationFemale": "0133"
+  },
+  "Stationary bike": {
+    "gifMale": "213813",
+    "gifFemale": "226413",
+    "illustrationMale": "2138",
+    "illustrationFemale": "2264"
+  },
+  "Recumbent bike": {
+    "gifMale": "219313",
+    "gifFemale": "242813",
+    "illustrationMale": "2193",
+    "illustrationFemale": "2428"
+  },
+  "Elliptical": {
+    "gifMale": "219213",
+    "gifFemale": "226313",
+    "illustrationMale": "2192",
+    "illustrationFemale": "2263"
+  },
+  "Rowing machine": {
+    "gifMale": "116113",
+    "gifFemale": "226213",
+    "illustrationMale": "1161",
+    "illustrationFemale": "2262"
+  },
+  "Stair climber": {
+    "gifMale": "231113",
+    "gifFemale": "249013",
+    "illustrationMale": "2311",
+    "illustrationFemale": "2490"
+  },
+  "Easy walk": {
+    "gifMale": "225813",
+    "gifFemale": "226113",
+    "illustrationMale": "2258",
+    "illustrationFemale": "2261"
+  },
+  "Marching on the spot": {
+    "gifMale": "442013",
+    "gifFemale": "569013",
+    "illustrationMale": "4420",
+    "illustrationFemale": "5690"
+  },
+  "Jumping jack": {
+    "gifMale": "309413",
+    "gifFemale": "051613",
+    "illustrationMale": "3094",
+    "illustrationFemale": "0516"
+  },
+  "Neck side stretch": {
+    "gifMale": "140313",
+    "gifFemale": "428913",
+    "illustrationMale": "1403",
+    "illustrationFemale": "4289"
+  },
+  "Cobra stretch": {
+    "gifMale": "148213",
+    "gifFemale": "426713",
+    "illustrationMale": "1482",
+    "illustrationFemale": "4267"
+  },
+  "Knee-to-chest stretch": {
+    "gifMale": "181013",
+    "gifFemale": "055913",
+    "illustrationMale": "1810",
+    "illustrationFemale": "0559"
+  },
+  "Pigeon stretch": {
+    "gifMale": "194313",
+    "gifFemale": "228013",
+    "illustrationMale": "1943",
+    "illustrationFemale": "2280"
+  },
+  "Seated hamstring stretch": {
+    "gifMale": "1046213",
+    "gifFemale": "731013",
+    "illustrationMale": "10462",
+    "illustrationFemale": "7310"
+  },
+  "Wrist circles": {
+    "gifMale": "142813",
+    "gifFemale": "432313",
+    "illustrationMale": "1428",
+    "illustrationFemale": "4323"
+  },
+  "Upper back foam roll": {
+    "gifMale": "538413",
+    "gifFemale": "542313",
+    "illustrationMale": "5384",
+    "illustrationFemale": "5423"
+  },
+  "Leg swings": {
+    "gifMale": "350213",
+    "gifFemale": "257313",
+    "illustrationMale": "3502",
+    "illustrationFemale": "2573"
+  },
+  "V-up": {
+    "gifMale": "362213",
+    "gifFemale": "082513",
+    "illustrationMale": "3622",
+    "illustrationFemale": "0825"
+  },
+  "Weighted V-up": {
+    "gifMale": "333613",
+    "gifFemale": "344613",
+    "illustrationMale": "3336",
+    "illustrationFemale": "3446"
+  },
+  "Alternating knee tuck": {
+    "gifMale": "394413",
+    "gifFemale": null,
+    "illustrationMale": "3944",
+    "illustrationFemale": null
+  },
+  "Tucked toe tap": {
+    "gifMale": "600213",
+    "gifFemale": "600313",
+    "illustrationMale": "6002",
+    "illustrationFemale": "6003"
+  },
+  "Reverse crunch": {
+    "gifMale": "087213",
+    "gifFemale": "067113",
+    "illustrationMale": "0872",
+    "illustrationFemale": "0671"
+  },
+  "Bicycle crunch": {
+    "gifMale": "621113",
+    "gifFemale": "621213",
+    "illustrationMale": "6211",
+    "illustrationFemale": "6212"
+  },
+  "Flutter kick": {
+    "gifMale": "117913",
+    "gifFemale": "573413",
+    "illustrationMale": "1179",
+    "illustrationFemale": "5734"
+  },
+  "Heel tap": {
+    "gifMale": "000613",
+    "gifFemale": "380113",
+    "illustrationMale": "0006",
+    "illustrationFemale": "3801"
+  },
+  "Hollow rock": {
+    "gifMale": "564913",
+    "gifFemale": null,
+    "illustrationMale": "5649",
+    "illustrationFemale": null
+  },
+  "Plank shoulder tap": {
+    "gifMale": "369913",
+    "gifFemale": "466013",
+    "illustrationMale": "3699",
+    "illustrationFemale": "4660"
+  },
+  "Cable woodchopper": {
+    "gifMale": "086213",
+    "gifFemale": "120813",
+    "illustrationMale": "0862",
+    "illustrationFemale": "1208"
+  },
+  "Cable lat pullover": {
+    "gifMale": "603613",
+    "gifFemale": "106713",
+    "illustrationMale": "6036",
+    "illustrationFemale": "1067"
+  },
+  "Single-arm cable row": {
+    "gifMale": "021413",
+    "gifFemale": null,
+    "illustrationMale": "0214",
+    "illustrationFemale": null
+  },
+  "Neutral-grip lat pulldown": {
+    "gifMale": "758313",
+    "gifFemale": null,
+    "illustrationMale": "7583",
+    "illustrationFemale": null
+  },
+  "T-bar row": {
+    "gifMale": "060613",
+    "gifFemale": "288513",
+    "illustrationMale": "0606",
+    "illustrationFemale": "2885"
+  },
+  "Single-arm lat pulldown": {
+    "gifMale": "120413",
+    "gifFemale": "359613",
+    "illustrationMale": "1204",
+    "illustrationFemale": "3596"
+  },
+  "Cable curl": {
+    "gifMale": "086813",
+    "gifFemale": "015613",
+    "illustrationMale": "0868",
+    "illustrationFemale": "0156"
+  },
+  "Cable glute kickback": {
+    "gifMale": "022813",
+    "gifFemale": "088013",
+    "illustrationMale": "0228",
+    "illustrationFemale": "0880"
+  },
+  "Hip abduction machine": {
+    "gifMale": "059713",
+    "gifFemale": "361113",
+    "illustrationMale": "0597",
+    "illustrationFemale": "3611"
+  },
+  "Hip adduction machine": {
+    "gifMale": "059813",
+    "gifFemale": "361213",
+    "illustrationMale": "0598",
+    "illustrationFemale": "3612"
+  },
+  "Cable pull-through": {
+    "gifMale": "120613",
+    "gifFemale": "232413",
+    "illustrationMale": "1206",
+    "illustrationFemale": "2324"
+  },
+  "Donkey kick": {
+    "gifMale": "303413",
+    "gifFemale": "147413",
+    "illustrationMale": "3034",
+    "illustrationFemale": "1474"
   }
 }

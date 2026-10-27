@@ -1222,12 +1222,18 @@ public nonisolated enum WorkoutIntensity: String, Codable, CaseIterable, Identif
     }
 }
 
-/// What logging inputs an exercise expects (strength sets, treadmill fields, or none).
+/// What logging inputs an exercise expects (strength sets, treadmill fields, minutes, or none).
 ///
-/// A catalog attribute on ``ExerciseTarget``; defaults to `.strength` for legacy rows.
+/// A catalog attribute on ``ExerciseTarget``; defaults to `.strength` for legacy rows. `timed` is the
+/// cardio done for a length of time (the exercise bike, rower, elliptical, stair climber, a walk,
+/// marching on the spot): the Log sheet asks for minutes and writes "Rowing machine - 20 min", the
+/// same shape the planner's cardio lines take. Only bundled catalog rows carry it — a custom exercise
+/// and a coach plan's token map never produce it — so no synced row an older build decodes strictly
+/// can hold it.
 public nonisolated enum ExerciseInputKind: String, Codable, Sendable {
     case strength
     case treadmill
+    case timed
     case none
 }
 
@@ -1291,7 +1297,7 @@ public nonisolated enum ExerciseMeasure: String, Codable, Sendable {
 /// `MuscleGroup.fromLegacyString` into `primaryMuscles`.
 ///
 /// The curation fields (`plane`, `modality`, `difficulty`, `measure`, `alternativeEquipment`,
-/// `requiredGear`, `unilateral`) are written by the bundled catalog. A custom row (coach-plan import) keeps
+/// `requiredGear`, `unilateral`, `variation`) are written by the bundled catalog. A custom row (coach-plan import) keeps
 /// their defaults, and `encode(to:)` writes each one only when it differs from its default, so a
 /// synced custom row's persisted shape is unchanged and an older build never meets the new keys.
 /// They decode through raw strings/ints, so an unknown token from a newer catalog falls back to the
@@ -1335,6 +1341,15 @@ public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable, Send
     /// Done one side at a time (a lunge stretch, a single-leg stance): the warm-up and cool-down
     /// prescribe it twice, left then right.
     public var unilateral: Bool
+    /// A variation of a staple — an easier or harder step (a knee push-up, a single-leg Romanian
+    /// deadlift) or the same work with another tool (a cable overhead triceps extension beside the
+    /// pushdown). The planner fills a slot with it only where no staple can (the gap it was added for:
+    /// triceps with dumbbells only) or as the supported choice for a mild injury
+    /// (``WorkoutProgram/bestExercise(for:in:excluding:biasTokens:experience:location:limits:)``);
+    /// otherwise it is the harder step at the heaviest weight, a swap, a coach's pick or a how-to page.
+    /// Adding variations to the catalog (2026-10-21) therefore leaves the plans people already follow,
+    /// and the weight history behind them, as they were.
+    public var variation: Bool
 
     public var bodyRegion: BodyRegion {
         let regions = Set(primaryMuscles.map { $0.region })
@@ -1394,7 +1409,8 @@ public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable, Send
         measure: ExerciseMeasure = .reps,
         alternativeEquipment: [Equipment] = [],
         requiredGear: [GymEquipment] = [],
-        unilateral: Bool = false
+        unilateral: Bool = false,
+        variation: Bool = false
     ) {
         self.name = name
         self.primaryMuscles = primaryMuscles
@@ -1409,6 +1425,7 @@ public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable, Send
         self.alternativeEquipment = alternativeEquipment
         self.requiredGear = requiredGear
         self.unilateral = unilateral
+        self.variation = variation
     }
 
     public init(from decoder: Decoder) throws {
@@ -1441,6 +1458,7 @@ public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable, Send
         let gear = try container.decodeIfPresent([String].self, forKey: .requiredGear) ?? []
         requiredGear = gear.compactMap(GymEquipment.init(rawValue:))
         unilateral = try container.decodeIfPresent(Bool.self, forKey: .unilateral) ?? false
+        variation = try container.decodeIfPresent(Bool.self, forKey: .variation) ?? false
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -1459,6 +1477,7 @@ public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable, Send
         if !alternativeEquipment.isEmpty { try container.encode(alternativeEquipment, forKey: .alternativeEquipment) }
         if !requiredGear.isEmpty { try container.encode(requiredGear, forKey: .requiredGear) }
         if unilateral { try container.encode(unilateral, forKey: .unilateral) }
+        if variation { try container.encode(variation, forKey: .variation) }
     }
 
     /// Persisted JSON keys for an ``ExerciseTarget`` catalog row (`id` is derived from `name`, so
@@ -1467,7 +1486,7 @@ public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable, Send
     /// `legacyMuscles` maps the old `muscles` string-array key so pre-split rows still decode.
     private enum CodingKeys: String, CodingKey {
         case name, primaryMuscles, secondaryMuscles, equipment, movementPattern, inputKind
-        case plane, modality, difficulty, measure, alternativeEquipment, requiredGear, unilateral
+        case plane, modality, difficulty, measure, alternativeEquipment, requiredGear, unilateral, variation
         case legacyMuscles = "muscles"
     }
 }
@@ -1605,24 +1624,57 @@ public nonisolated enum WorkoutExerciseCatalog {
         return unique.prefix(4).joined(separator: ", ")
     }
 
+    /// Other names people call a bundled exercise by, keyed by its frozen catalog name, so typing
+    /// one finds it (the owner's own words, 2026-10-27: "ab roller" is the Ab wheel). Matching
+    /// inputs, never display text: they stay English, like the frozen names they point at, and a
+    /// name here is never a second identity for the exercise.
+    static let searchAliases: [String: [String]] = [
+        "Ab wheel": ["ab roller"],
+        "Leg extension": ["quad extension"],
+        "Leg curl": ["hamstring curl"],
+        "Lying leg raise": ["laying leg raise"],
+        "Hanging knee raise": ["hanging tuck", "hanging knee tuck"],
+        "Alternating knee tuck": ["alt knee tuck"],
+        "Cable lat pullover": ["lat pull over", "straight-arm pulldown"],
+        "Neutral-grip lat pulldown": ["mag grip pulldown", "mag grip pull down"],
+        "Chest press machine": ["machine chest press"],
+        "Chest-supported dumbbell row": ["chest-supported row"],
+        "Cable overhead triceps extension": ["overhead cable triceps extension"],
+    ]
+
+    /// The exercises a picker query finds. An alias only ever adds results after every exercise the
+    /// query finds by name, muscle or category, so a caller that takes `.first` (a Recent chip, a
+    /// logged line read back) resolves exactly as it did before the aliases, a custom exercise
+    /// named "Ab roller" included.
     public static func search(_ query: String) -> [ExerciseTarget] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return allExercises }
         let normalized = trimmed.lowercased()
-        return allExercises.filter { exercise in
-            exercise.name.lowercased().contains(normalized)
-                // The drawn name too (D-L2): a translated name finds its exercise, and the frozen
-                // English name above stays a searchable alias on every device.
-                || exercise.displayName.lowercased().contains(normalized)
-                || exercise.category.rawValue.lowercased().contains(normalized)
-                // Match the FROZEN tokens as well as the localized names. Tokens alone would break
-                // English search ("upper back" no longer finds `upperBack`); localized names alone
-                // would break the moment the catalog and the device disagree on language. Matching
-                // both is a strict superset of today's behavior in English, and keeps a user who
-                // types an English muscle name on a translated device finding the same exercises.
-                || exercise.muscleTokens.contains { $0.lowercased().contains(normalized) }
-                || exercise.muscles.contains { $0.lowercased().contains(normalized) }
+        let exercises = allExercises
+        let direct = exercises.filter { matchesDirectly($0, normalized) }
+        let found = Set(direct.map(\.name))
+        let aliased = exercises.filter { exercise in
+            !found.contains(exercise.name)
+                && (searchAliases[exercise.name] ?? []).contains { $0.contains(normalized) }
         }
+        return direct + aliased
+    }
+
+    /// Whether `exercise` matches a lowercased, trimmed picker query by its own names, category or
+    /// muscles.
+    private static func matchesDirectly(_ exercise: ExerciseTarget, _ normalized: String) -> Bool {
+        exercise.name.lowercased().contains(normalized)
+            // The drawn name too (D-L2): a translated name finds its exercise, and the frozen
+            // English name above stays a searchable alias on every device.
+            || exercise.displayName.lowercased().contains(normalized)
+            || exercise.category.rawValue.lowercased().contains(normalized)
+            // Match the FROZEN tokens as well as the localized names. Tokens alone would break
+            // English search ("upper back" no longer finds `upperBack`); localized names alone
+            // would break the moment the catalog and the device disagree on language. Matching
+            // both is a strict superset of today's behavior in English, and keeps a user who
+            // types an English muscle name on a translated device finding the same exercises.
+            || exercise.muscleTokens.contains { $0.lowercased().contains(normalized) }
+            || exercise.muscles.contains { $0.lowercased().contains(normalized) }
     }
 
     private static func loadBaseExercises() -> [ExerciseTarget] {

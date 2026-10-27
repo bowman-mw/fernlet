@@ -1512,7 +1512,7 @@ public nonisolated enum WorkoutProgram {
                 goal: goal, intensity: intensity, style: style, feasible: pool.shown, biasTokens: biasTokens,
                 profile: profile, location: location, progression: progression, load: load,
                 limits: limits, recentHard: recent?.hardMuscles ?? [], options: options,
-                hiddenFeasible: pool.hidden, alternates: preferences.alternateKeys
+                hiddenFeasible: pool.hidden, alternates: preferences.alternateKeys, cardioSeed: rotationIndex
             )
             let rendered = render(
                 session: session, inputs: inputs, context: context, used: &dayUsed,
@@ -1608,7 +1608,8 @@ public nonisolated enum WorkoutProgram {
             // The descriptor IS the session, so a time budget caps the minutes it names.
             let capped = WorkoutSessionBudget.capped(session.conditioning ?? inputs.style.conditioningLabel,
                                                      length: inputs.options.length)
-            let detail = capped.text
+            // The machine the location has, named after the cap so the cap never drops "easy".
+            let detail = WorkoutCardioMachines.named(capped.text, feasible: inputs.feasible, seed: inputs.cardioSeed)
             let exercises = [PrescribedExercise(name: detail, sets: 0, reps: "", role: .accessory, fromCatalog: false)]
             let suggestion = WorkoutSuggestion(
                 name: name, exercises: detail,
@@ -1657,6 +1658,9 @@ public nonisolated enum WorkoutProgram {
         /// Saved alternates (``WorkoutExercisePreferences/alternateKeys``): the original's comparison
         /// key → the alternate's frozen name.
         var alternates: [String: String] = [:]
+        /// The split's rotation index, which picks among the location's cardio machines
+        /// (``WorkoutCardioMachines/named(_:feasible:seed:)``) so they alternate from day to day.
+        var cardioSeed = 0
     }
 
     /// The safety-filtered pool split into what the planner may suggest and what the user hid.
@@ -1983,7 +1987,10 @@ public nonisolated enum WorkoutProgram {
     /// is then dropped and named in the session note). Ties fall to the name, so the pick is
     /// deterministic; the equipment and difficulty terms in ``slotScore`` keep real ties rare. With
     /// `limits` naming a mild area, a machine, cable or bench-supported variant of a lift that loads
-    /// it scores higher (``InjuryLimits/supportBonus(for:)``).
+    /// it scores higher (``InjuryLimits/supportBonus(for:)``). A ``ExerciseTarget/variation`` competes
+    /// only where no staple is eligible, or as such a supported variant where no eligible staple is
+    /// one already: a mild elbow keeps its Preacher curl (a machine, so already supported) rather
+    /// than trading it for a Cable curl that wins only on the name tie-break (2026-10-27).
     static func bestExercise(
         for slot: WorkoutSlotSpec,
         in feasible: [ExerciseTarget],
@@ -1993,8 +2000,11 @@ public nonisolated enum WorkoutProgram {
         location: WorkoutLocation,
         limits: InjuryLimits = .empty
     ) -> ExerciseTarget? {
-        feasible
-            .filter { used.contains($0.name) == false && isEligible($0, for: slot) }
+        let eligible = feasible.filter { used.contains($0.name) == false && isEligible($0, for: slot) }
+        let hasStaple = eligible.contains { !$0.variation }
+        let hasSupportedStaple = eligible.contains { !$0.variation && limits.supportBonus(for: $0) > 0 }
+        return eligible
+            .filter { !hasStaple || !$0.variation || (!hasSupportedStaple && limits.supportBonus(for: $0) > 0) }
             .map { exercise -> (ExerciseTarget, Int) in
                 let score = slotScore(
                     slot: slot, exercise: exercise, biasTokens: biasTokens,

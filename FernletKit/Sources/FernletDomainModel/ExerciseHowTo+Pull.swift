@@ -30,6 +30,20 @@ extension ExerciseHowToCatalog {
             bandPullApart,
             bandBicepsCurl,
             dumbbellPullover,
+            chestSupportedDumbbellRow,
+            seatedRowMachine,
+            assistedPullUp,
+            bandAssistedPullUp,
+            bandFacePull,
+            reversePecDeck,
+            bandExternalRotation,
+            barbellCurl,
+            cableLatPullover,
+            singleArmCableRow,
+            neutralGripLatPulldown,
+            tBarRow,
+            singleArmLatPulldown,
+            cableCurl,
         ]
     }
 
@@ -432,6 +446,326 @@ extension ExerciseHowToCatalog {
                             bundle: .module, comment: "Dumbbell pullover: the one common mistake to avoid, as a short phrase"),
             easier: String(localized: "exercise.dumbbellPullover.easier", defaultValue: "Use a lighter dumbbell and a shorter range.",
                            bundle: .module, comment: "Dumbbell pullover: an easier version, as a short instruction")
+        )
+    }
+
+    static var chestSupportedDumbbellRow: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Chest-supported dumbbell row", keyStem: "chestSupportedDumbbellRow",
+            displayName: String(localized: "exercise.chestSupportedDumbbellRow.name", defaultValue: "Chest-supported dumbbell row",
+                                bundle: .module, comment: "Exercise name shown on screen (dumbbell exercise)"),
+            cues: [
+                String(localized: "exercise.chestSupportedDumbbellRow.cue1", defaultValue: "Lie chest-down on a bench set to a low incline.",
+                       bundle: .module, comment: "Chest-supported dumbbell row: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.chestSupportedDumbbellRow.cue2", defaultValue: "Let the dumbbells hang straight down, palms facing in.",
+                       bundle: .module, comment: "Chest-supported dumbbell row: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.chestSupportedDumbbellRow.cue3", defaultValue: "Pull your elbows back until they pass your ribs.",
+                       bundle: .module, comment: "Chest-supported dumbbell row: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.chestSupportedDumbbellRow.cue4", defaultValue: "Squeeze your shoulder blades, then lower slowly to straight arms.",
+                       bundle: .module, comment: "Chest-supported dumbbell row: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.chestSupportedDumbbellRow.mistake", defaultValue: "Lifting the chest off the bench to heave the weights up.",
+                            bundle: .module, comment: "Chest-supported dumbbell row: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.chestSupportedDumbbellRow.easier", defaultValue: "Use lighter dumbbells, or do the band row.",
+                           bundle: .module, comment: "Chest-supported dumbbell row: an easier version, as a short instruction")
+        )
+    }
+
+    static var seatedRowMachine: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Seated row machine", keyStem: "seatedRowMachine",
+            displayName: String(localized: "exercise.seatedRowMachine.name", defaultValue: "Seated row machine",
+                                bundle: .module, comment: "Exercise name shown on screen (machine exercise)"),
+            cues: [
+                String(localized: "exercise.seatedRowMachine.cue1", defaultValue: "Set the seat so the handles are at mid-chest height.",
+                       bundle: .module, comment: "Seated row machine: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.seatedRowMachine.cue2", defaultValue: "Adjust the chest pad so you can just reach the handles.",
+                       bundle: .module, comment: "Seated row machine: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.seatedRowMachine.cue3", defaultValue: "Sit tall against the pad and pull your elbows back.",
+                       bundle: .module, comment: "Seated row machine: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.seatedRowMachine.cue4", defaultValue: "Squeeze your shoulder blades, then let your arms return slowly.",
+                       bundle: .module, comment: "Seated row machine: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.seatedRowMachine.mistake", defaultValue: "Rocking back off the chest pad to yank the handles.",
+                            bundle: .module, comment: "Seated row machine: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.seatedRowMachine.easier", defaultValue: "Use a lighter weight, or do the band row.",
+                           bundle: .module, comment: "Seated row machine: an easier version, as a short instruction")
+        )
+    }
+
+    static var assistedPullUp: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Assisted pull-up", keyStem: "assistedPullUp",
+            displayName: String(localized: "exercise.assistedPullUp.name", defaultValue: "Assisted pull-up",
+                                bundle: .module, comment: "Exercise name shown on screen (machine exercise)"),
+            cues: [
+                String(localized: "exercise.assistedPullUp.cue1", defaultValue: "Set the assistance: more weight on the stack means more help.",
+                       bundle: .module, comment: "Assisted pull-up: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.assistedPullUp.cue2", defaultValue: "Grip the handles, then kneel or stand on the pad.",
+                       bundle: .module, comment: "Assisted pull-up: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.assistedPullUp.cue3", defaultValue: "Pull your elbows down until your chin is above your hands.",
+                       bundle: .module, comment: "Assisted pull-up: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.assistedPullUp.cue4", defaultValue: "Lower slowly until your arms are straight.",
+                       bundle: .module, comment: "Assisted pull-up: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.assistedPullUp.mistake", defaultValue: "Dropping fast to the bottom and letting the pad bounce you up.",
+                            bundle: .module, comment: "Assisted pull-up: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.assistedPullUp.easier", defaultValue: "Add more assistance weight so the machine helps you more.",
+                           bundle: .module, comment: "Assisted pull-up: an easier version, as a short instruction")
+        )
+    }
+
+    static var bandAssistedPullUp: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Band-assisted pull-up", keyStem: "bandAssistedPullUp",
+            displayName: String(localized: "exercise.bandAssistedPullUp.name", defaultValue: "Band-assisted pull-up",
+                                bundle: .module, comment: "Exercise name shown on screen (resistance band exercise)"),
+            cues: [
+                String(localized: "exercise.bandAssistedPullUp.cue1", defaultValue: "Anchor the band securely around the bar so it cannot slip.",
+                       bundle: .module, comment: "Band-assisted pull-up: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.bandAssistedPullUp.cue2", defaultValue: "Place one knee or foot in the bottom of the loop.",
+                       bundle: .module, comment: "Band-assisted pull-up: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.bandAssistedPullUp.cue3", defaultValue: "Hang with straight arms, hands a bit wider than shoulders.",
+                       bundle: .module, comment: "Band-assisted pull-up: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.bandAssistedPullUp.cue4", defaultValue: "Pull your elbows down until your chin clears the bar.",
+                       bundle: .module, comment: "Band-assisted pull-up: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.bandAssistedPullUp.cue5", defaultValue: "Lower slowly to straight arms, staying steady in the loop.",
+                       bundle: .module, comment: "Band-assisted pull-up: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.bandAssistedPullUp.mistake", defaultValue: "Bouncing out of the bottom so the band does all the work.",
+                            bundle: .module, comment: "Band-assisted pull-up: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.bandAssistedPullUp.easier", defaultValue: "Use a thicker band for more help, or do inverted rows.",
+                           bundle: .module, comment: "Band-assisted pull-up: an easier version, as a short instruction")
+        )
+    }
+
+    static var bandFacePull: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Band face pull", keyStem: "bandFacePull",
+            displayName: String(localized: "exercise.bandFacePull.name", defaultValue: "Band face pull",
+                                bundle: .module, comment: "Exercise name shown on screen (resistance band exercise)"),
+            cues: [
+                String(localized: "exercise.bandFacePull.cue1", defaultValue: "Anchor the band securely at about face height.",
+                       bundle: .module, comment: "Band face pull: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.bandFacePull.cue2", defaultValue: "Hold an end in each hand, thumbs pointing back toward you.",
+                       bundle: .module, comment: "Band face pull: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.bandFacePull.cue3", defaultValue: "Pull toward your face, spreading your hands apart.",
+                       bundle: .module, comment: "Band face pull: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.bandFacePull.cue4", defaultValue: "Pause with your hands beside your ears, elbows high.",
+                       bundle: .module, comment: "Band face pull: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.bandFacePull.cue5", defaultValue: "Return slowly without letting the band snap forward.",
+                       bundle: .module, comment: "Band face pull: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.bandFacePull.mistake", defaultValue: "Letting the elbows drop so it turns into a row.",
+                            bundle: .module, comment: "Band face pull: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.bandFacePull.easier", defaultValue: "Use a lighter band, or do band pull-aparts.",
+                           bundle: .module, comment: "Band face pull: an easier version, as a short instruction")
+        )
+    }
+
+    static var reversePecDeck: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Reverse pec deck", keyStem: "reversePecDeck",
+            displayName: String(localized: "exercise.reversePecDeck.name", defaultValue: "Reverse pec deck",
+                                bundle: .module, comment: "Exercise name shown on screen (machine exercise)"),
+            cues: [
+                String(localized: "exercise.reversePecDeck.cue1", defaultValue: "Set the seat so the handles are at shoulder height.",
+                       bundle: .module, comment: "Reverse pec deck: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.reversePecDeck.cue2", defaultValue: "Sit facing the pad, chest resting against it.",
+                       bundle: .module, comment: "Reverse pec deck: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.reversePecDeck.cue3", defaultValue: "Hold the handles with a soft bend in your elbows.",
+                       bundle: .module, comment: "Reverse pec deck: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.reversePecDeck.cue4", defaultValue: "Sweep your arms out and back to about shoulder level.",
+                       bundle: .module, comment: "Reverse pec deck: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.reversePecDeck.cue5", defaultValue: "Pause, then let the handles return slowly.",
+                       bundle: .module, comment: "Reverse pec deck: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.reversePecDeck.mistake", defaultValue: "Shrugging up and rocking the body to move a weight that is too heavy.",
+                            bundle: .module, comment: "Reverse pec deck: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.reversePecDeck.easier", defaultValue: "Use a lighter weight, or do band pull-aparts.",
+                           bundle: .module, comment: "Reverse pec deck: an easier version, as a short instruction")
+        )
+    }
+
+    static var bandExternalRotation: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Band external rotation", keyStem: "bandExternalRotation",
+            displayName: String(localized: "exercise.bandExternalRotation.name", defaultValue: "Band external rotation",
+                                bundle: .module, comment: "Exercise name shown on screen (resistance band exercise)"),
+            cues: [
+                String(localized: "exercise.bandExternalRotation.cue1", defaultValue: "Anchor the band securely at elbow height beside you.",
+                       bundle: .module, comment: "Band external rotation: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.bandExternalRotation.cue2", defaultValue: "Stand side-on, holding the band in your far hand.",
+                       bundle: .module, comment: "Band external rotation: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.bandExternalRotation.cue3", defaultValue: "Bend your elbow at a right angle, tucked against your side.",
+                       bundle: .module, comment: "Band external rotation: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.bandExternalRotation.cue4", defaultValue: "Rotate your forearm outward, keeping your elbow in place.",
+                       bundle: .module, comment: "Band external rotation: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.bandExternalRotation.cue5", defaultValue: "Return slowly, then switch sides.",
+                       bundle: .module, comment: "Band external rotation: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.bandExternalRotation.mistake", defaultValue: "Letting the elbow drift away from your side as you turn.",
+                            bundle: .module, comment: "Band external rotation: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.bandExternalRotation.easier", defaultValue: "Use a lighter band and a smaller turn.",
+                           bundle: .module, comment: "Band external rotation: an easier version, as a short instruction")
+        )
+    }
+
+    static var barbellCurl: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Barbell curl", keyStem: "barbellCurl",
+            displayName: String(localized: "exercise.barbellCurl.name", defaultValue: "Barbell curl",
+                                bundle: .module, comment: "Exercise name shown on screen (barbell exercise)"),
+            cues: [
+                String(localized: "exercise.barbellCurl.cue1", defaultValue: "Stand tall, gripping the bar shoulder-width apart, palms facing forward.",
+                       bundle: .module, comment: "Barbell curl: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.barbellCurl.cue2", defaultValue: "Keep your elbows close to your sides.",
+                       bundle: .module, comment: "Barbell curl: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.barbellCurl.cue3", defaultValue: "Curl the bar toward your shoulders without leaning back.",
+                       bundle: .module, comment: "Barbell curl: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.barbellCurl.cue4", defaultValue: "Lower slowly until your arms are straight.",
+                       bundle: .module, comment: "Barbell curl: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.barbellCurl.mistake", defaultValue: "Leaning back and swinging the hips to lift the bar.",
+                            bundle: .module, comment: "Barbell curl: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.barbellCurl.easier", defaultValue: "Use just the empty bar, or do biceps curls with dumbbells.",
+                           bundle: .module, comment: "Barbell curl: an easier version, as a short instruction")
+        )
+    }
+
+    static var cableLatPullover: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Cable lat pullover", keyStem: "cableLatPullover",
+            displayName: String(localized: "exercise.cableLatPullover.name", defaultValue: "Cable lat pullover",
+                                bundle: .module, comment: "Exercise name shown on screen (cable machine exercise)"),
+            cues: [
+                String(localized: "exercise.cableLatPullover.cue1", defaultValue: "Set a straight bar or rope on a high pulley.",
+                       bundle: .module, comment: "Cable lat pullover: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.cableLatPullover.cue2", defaultValue: "Step back and hinge slightly at the hips, arms nearly straight.",
+                       bundle: .module, comment: "Cable lat pullover: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.cableLatPullover.cue3", defaultValue: "Keep your elbows fixed and sweep the bar to your thighs.",
+                       bundle: .module, comment: "Cable lat pullover: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.cableLatPullover.cue4", defaultValue: "Pause, then let the bar rise slowly in the same arc.",
+                       bundle: .module, comment: "Cable lat pullover: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.cableLatPullover.mistake", defaultValue: "Bending the elbows and pushing the bar down with the arms.",
+                            bundle: .module, comment: "Cable lat pullover: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.cableLatPullover.easier", defaultValue: "Use a lighter weight and a shorter arc.",
+                           bundle: .module, comment: "Cable lat pullover: an easier version, as a short instruction")
+        )
+    }
+
+    static var singleArmCableRow: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Single-arm cable row", keyStem: "singleArmCableRow",
+            displayName: String(localized: "exercise.singleArmCableRow.name", defaultValue: "Single-arm cable row",
+                                bundle: .module, comment: "Exercise name shown on screen (cable machine exercise)"),
+            cues: [
+                String(localized: "exercise.singleArmCableRow.cue1", defaultValue: "Set a handle at mid-height and hold it in one hand.",
+                       bundle: .module, comment: "Single-arm cable row: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.singleArmCableRow.cue2", defaultValue: "Sit or stand tall, arm reaching long toward the machine.",
+                       bundle: .module, comment: "Single-arm cable row: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.singleArmCableRow.cue3", defaultValue: "Row your elbow back until it passes your ribs.",
+                       bundle: .module, comment: "Single-arm cable row: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.singleArmCableRow.cue4", defaultValue: "Squeeze your shoulder blade, then return to a long reach.",
+                       bundle: .module, comment: "Single-arm cable row: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.singleArmCableRow.cue5", defaultValue: "Finish your reps, then switch sides.",
+                       bundle: .module, comment: "Single-arm cable row: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.singleArmCableRow.mistake", defaultValue: "Twisting the torso to pull the handle back.",
+                            bundle: .module, comment: "Single-arm cable row: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.singleArmCableRow.easier", defaultValue: "Use a lighter weight, or do the cable row with both hands.",
+                           bundle: .module, comment: "Single-arm cable row: an easier version, as a short instruction")
+        )
+    }
+
+    static var neutralGripLatPulldown: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Neutral-grip lat pulldown", keyStem: "neutralGripLatPulldown",
+            displayName: String(localized: "exercise.neutralGripLatPulldown.name", defaultValue: "Neutral-grip lat pulldown",
+                                bundle: .module, comment: "Exercise name shown on screen (cable machine exercise)"),
+            cues: [
+                String(localized: "exercise.neutralGripLatPulldown.cue1", defaultValue: "Attach a handle that keeps your palms facing each other.",
+                       bundle: .module, comment: "Neutral-grip lat pulldown: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.neutralGripLatPulldown.cue2", defaultValue: "Sit with your thighs snug under the pad, arms reaching up.",
+                       bundle: .module, comment: "Neutral-grip lat pulldown: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.neutralGripLatPulldown.cue3", defaultValue: "Pull the handle to your upper chest, elbows down and in.",
+                       bundle: .module, comment: "Neutral-grip lat pulldown: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.neutralGripLatPulldown.cue4", defaultValue: "Let the handle rise slowly until your arms are straight.",
+                       bundle: .module, comment: "Neutral-grip lat pulldown: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.neutralGripLatPulldown.mistake", defaultValue: "Leaning far back and swinging to pull the handle down.",
+                            bundle: .module, comment: "Neutral-grip lat pulldown: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.neutralGripLatPulldown.easier", defaultValue: "Use a lighter weight, or try the band lat pulldown.",
+                           bundle: .module, comment: "Neutral-grip lat pulldown: an easier version, as a short instruction")
+        )
+    }
+
+    static var tBarRow: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "T-bar row", keyStem: "tBarRow",
+            displayName: String(localized: "exercise.tBarRow.name", defaultValue: "T-bar row",
+                                bundle: .module, comment: "Exercise name shown on screen (barbell exercise)"),
+            cues: [
+                String(localized: "exercise.tBarRow.cue1", defaultValue: "Straddle the bar, or lie chest-down on the machine's pad.",
+                       bundle: .module, comment: "T-bar row: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.tBarRow.cue2", defaultValue: "Hinge forward with a flat back and grip the handle.",
+                       bundle: .module, comment: "T-bar row: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.tBarRow.cue3", defaultValue: "Row the handle toward your lower chest, elbows close.",
+                       bundle: .module, comment: "T-bar row: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.tBarRow.cue4", defaultValue: "Squeeze your shoulder blades, then lower with control.",
+                       bundle: .module, comment: "T-bar row: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.tBarRow.mistake", defaultValue: "Rounding the back or heaving the weight up with the hips.",
+                            bundle: .module, comment: "T-bar row: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.tBarRow.easier", defaultValue: "Use a lighter weight, or do the chest-supported dumbbell row.",
+                           bundle: .module, comment: "T-bar row: an easier version, as a short instruction")
+        )
+    }
+
+    static var singleArmLatPulldown: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Single-arm lat pulldown", keyStem: "singleArmLatPulldown",
+            displayName: String(localized: "exercise.singleArmLatPulldown.name", defaultValue: "Single-arm lat pulldown",
+                                bundle: .module, comment: "Exercise name shown on screen (cable machine exercise)"),
+            cues: [
+                String(localized: "exercise.singleArmLatPulldown.cue1", defaultValue: "Set one handle on a high pulley.",
+                       bundle: .module, comment: "Single-arm lat pulldown: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.singleArmLatPulldown.cue2", defaultValue: "Kneel or sit facing it, one arm reaching up.",
+                       bundle: .module, comment: "Single-arm lat pulldown: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.singleArmLatPulldown.cue3", defaultValue: "Pull your elbow down to your side.",
+                       bundle: .module, comment: "Single-arm lat pulldown: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.singleArmLatPulldown.cue4", defaultValue: "Let the handle rise slowly for a stretch at the top.",
+                       bundle: .module, comment: "Single-arm lat pulldown: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.singleArmLatPulldown.cue5", defaultValue: "Finish your reps, then switch sides.",
+                       bundle: .module, comment: "Single-arm lat pulldown: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.singleArmLatPulldown.mistake", defaultValue: "Leaning sideways and twisting to pull the handle down.",
+                            bundle: .module, comment: "Single-arm lat pulldown: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.singleArmLatPulldown.easier", defaultValue: "Use a lighter weight, or try the band lat pulldown.",
+                           bundle: .module, comment: "Single-arm lat pulldown: an easier version, as a short instruction")
+        )
+    }
+
+    static var cableCurl: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Cable curl", keyStem: "cableCurl",
+            displayName: String(localized: "exercise.cableCurl.name", defaultValue: "Cable curl",
+                                bundle: .module, comment: "Exercise name shown on screen (cable machine exercise)"),
+            cues: [
+                String(localized: "exercise.cableCurl.cue1", defaultValue: "Set a straight bar or rope on a low pulley.",
+                       bundle: .module, comment: "Cable curl: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.cableCurl.cue2", defaultValue: "Stand tall facing the machine, elbows pinned at your sides.",
+                       bundle: .module, comment: "Cable curl: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.cableCurl.cue3", defaultValue: "Curl the bar toward your shoulders without swinging.",
+                       bundle: .module, comment: "Cable curl: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.cableCurl.cue4", defaultValue: "Lower slowly until your arms are straight.",
+                       bundle: .module, comment: "Cable curl: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.cableCurl.mistake", defaultValue: "Letting the elbows drift forward as the bar comes up.",
+                            bundle: .module, comment: "Cable curl: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.cableCurl.easier", defaultValue: "Use a lighter weight, or curl one arm at a time.",
+                           bundle: .module, comment: "Cable curl: an easier version, as a short instruction")
         )
     }
 }

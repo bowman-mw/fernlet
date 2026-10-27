@@ -435,16 +435,18 @@ struct WorkoutSessionBudgetTests {
 
     // MARK: - Cardio, and the shared estimate
 
-    /// A cardio session is its descriptor, so the budget caps the minutes it names.
+    /// A cardio session is its descriptor, so the budget caps the minutes it names — before the planner
+    /// names the location's machine (a full gym's rower, ``WorkoutCardioMachines``), so the cap's
+    /// rewrite never touches the machine line.
     @Test func cardioSessionsCapTheMinutesTheyName() throws {
         let capped = try session(WorkoutSessions.longCardio, goal: .weightManagement,
                                  options: WorkoutSessionOptions(length: .min30))
-        #expect(capped.exercises.first?.name == "Steady cardio - 30 min")
-        #expect(capped.suggestion.exercises == "Steady cardio - 30 min")
+        #expect(capped.exercises.first?.name == "Rowing machine - 30 min")
+        #expect(capped.suggestion.exercises == "Rowing machine - 30 min")
         #expect(capped.suggestion.notes.contains("Shortened to fit 30 min."))
         #expect(WorkoutSessionTime.minutes(of: capped.exercises, goal: .weightManagement) == 30)
         let open = try session(WorkoutSessions.longCardio, goal: .weightManagement)
-        #expect(open.exercises.first?.name == "Steady cardio - 40 min")
+        #expect(open.exercises.first?.name == "Rowing machine - 40 min")
         let intervals = "Intervals - 8 × 1 min hard / 1 min easy"
         #expect(WorkoutSessionBudget.capped(intervals, length: .min20).text == intervals)
         #expect(WorkoutSessionBudget.capped("Easy cardio - 20 min", length: .min20).note == nil)

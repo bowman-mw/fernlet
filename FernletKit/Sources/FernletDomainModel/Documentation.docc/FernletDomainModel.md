@@ -510,7 +510,14 @@ that shares the slot's movement pattern, its ``MovementPlane`` when both name on
 primary muscle — otherwise the slot is dropped and the session note names it. Among eligible
 exercises the score adds target fit, a tool preference by slot role and ``ExperienceLevel`` (barbell
 first for trained lifters' main lifts, dumbbells and machines for beginners, bands and bodyweight as
-fallbacks), and an ``ExerciseDifficulty`` fit; only then does the name break a tie.
+fallbacks), and an ``ExerciseDifficulty`` fit; only then does the name break a tie. A row marked
+``ExerciseTarget/variation`` (an easier or harder step, or a staple's work with another tool — 37 of
+the 59 rows the Gym Visual expansion added on 2026-10-21, and all 22 of the owner's additions on
+2026-10-27) competes only where no staple is eligible, or as the supported variant for a mild injury, so
+adding variations fills gaps without moving the plans people already follow. The picker's
+`WorkoutExerciseCatalog.search` also matches `searchAliases`, the names people call a bundled exercise
+by ("ab roller" for the Ab wheel); an alias only adds results after the direct matches, so a lookup
+that takes the first result resolves as before.
 ``WorkoutSafetyFilter`` gates equipment on the exercise's tool or any alternative plus every piece of
 required gear (a pull-up bar, a bench). The split advances by the last logged split day
 (`WorkoutProgram.nextDayIndex(in:recentSessionNames:)`), not by weekday.
@@ -535,7 +542,9 @@ free-text note read by whole words
 builds wrote. The picker wins for an area it names; the rest is severe. Severe leaves the area's work
 out (its muscles, its movement patterns, and for the spine a loaded bar); mild leaves out only the
 heavy end (barbell, advanced, jumps), scores machine, cable and bench-supported variants higher, and
-prescribes the area's main lift as accessory work.
+prescribes the area's main lift as accessory work. A Smith machine row is a machine row — the supported
+end, by the owner's call of 2026-10-21 — but its bar still sits on the spine, so a spine area counts a
+Smith squat as loading it, as it counts a back squat.
 
 The 48-hour guard (``WorkoutRecoveryGuard``) reads yesterday's hard sets
 (``WorkoutRecoveryGuard/RecentTraining``, gathered app-side): when today's split day would train
@@ -582,7 +591,13 @@ owner's warm-up order with 30–45 s holds (the ``SessionBlock/mobility`` block)
 gentle stretching a short floor stretch that is never the day's session. A line it cannot read with
 certainty (drills, a mixed "mobility + walk", "3 rounds") stays the untimed step it was. A finished
 run's log folds segments back into their line, and a cardio or mobility session logs as the matching
-``WorkoutActivityType`` (HIIT, walking, mixed cardio, flexibility). A guided sport session logs the sport
+``WorkoutActivityType`` (HIIT, walking, mixed cardio, flexibility). Where the location has a cardio
+machine the person may use, ``WorkoutCardioMachines`` (2026-10-21) has the plan's generic cardio line name
+it by its frozen catalog name — "Rowing machine - 20 min easy", rotating among the location's machines by
+the split's rotation index — so the runner's step is that exercise (its how-to sheet and its name in the
+user's language come with it) and the session logs as rowing, indoor cycling, elliptical, stair climbing or
+walking; with no machine the generic line stays. The Log sheet logs the same machines in minutes
+(``ExerciseInputKind/timed``). A guided sport session logs the sport
 named in Workout setup when Fernlet models it (``WorkoutSportActivity``: pickleball, tennis, volleyball,
 golf, hockey, boxing, skiing…, with bare "football" American football in the US and Canada and soccer
 elsewhere), else the generic type — as it does for a distance sport, whose gym session is not a run. Each segment's pace aims for a heart-rate zone (roadmap step 4b): ``HeartRateZones`` builds five zones from the person's own maximum heart rate when they gave one (120–220 bpm), else from age by Tanaka (208 − 0.7 × age), and, when a trusted resting heart rate is given, by Karvonen's heart-rate reserve (percent of maximum otherwise), and maps easy and steady to zone 2 and hard to zone 4. Pure; the live reading is the app's.
@@ -647,6 +662,7 @@ The planner's words are localized without touching what it stores (2026-10-20, i
 - ``ExerciseSide``
 - ``WorkoutSessionBlocks``
 - ``WorkoutTimedSessions``
+- ``WorkoutCardioMachines``
 - ``WorkoutSportActivity``
 - ``TimedDescriptor``
 - ``CardioSegment``
