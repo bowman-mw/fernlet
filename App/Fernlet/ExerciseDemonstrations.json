@@ -1060,5 +1060,137 @@
     "gifFemale": "257313",
     "illustrationMale": "3502",
     "illustrationFemale": "2573"
+  },
+  "V-up": {
+    "gifMale": "362213",
+    "gifFemale": "082513",
+    "illustrationMale": "3622",
+    "illustrationFemale": "0825"
+  },
+  "Weighted V-up": {
+    "gifMale": "333613",
+    "gifFemale": "344613",
+    "illustrationMale": "3336",
+    "illustrationFemale": "3446"
+  },
+  "Alternating knee tuck": {
+    "gifMale": "394413",
+    "gifFemale": null,
+    "illustrationMale": "3944",
+    "illustrationFemale": null
+  },
+  "Tucked toe tap": {
+    "gifMale": "600213",
+    "gifFemale": "600313",
+    "illustrationMale": "6002",
+    "illustrationFemale": "6003"
+  },
+  "Reverse crunch": {
+    "gifMale": "087213",
+    "gifFemale": "067113",
+    "illustrationMale": "0872",
+    "illustrationFemale": "0671"
+  },
+  "Bicycle crunch": {
+    "gifMale": "621113",
+    "gifFemale": "621213",
+    "illustrationMale": "6211",
+    "illustrationFemale": "6212"
+  },
+  "Flutter kick": {
+    "gifMale": "117913",
+    "gifFemale": "573413",
+    "illustrationMale": "1179",
+    "illustrationFemale": "5734"
+  },
+  "Heel tap": {
+    "gifMale": "000613",
+    "gifFemale": "380113",
+    "illustrationMale": "0006",
+    "illustrationFemale": "3801"
+  },
+  "Hollow rock": {
+    "gifMale": "564913",
+    "gifFemale": null,
+    "illustrationMale": "5649",
+    "illustrationFemale": null
+  },
+  "Plank shoulder tap": {
+    "gifMale": "369913",
+    "gifFemale": "466013",
+    "illustrationMale": "3699",
+    "illustrationFemale": "4660"
+  },
+  "Cable woodchopper": {
+    "gifMale": "086213",
+    "gifFemale": "120813",
+    "illustrationMale": "0862",
+    "illustrationFemale": "1208"
+  },
+  "Cable lat pullover": {
+    "gifMale": "603613",
+    "gifFemale": "106713",
+    "illustrationMale": "6036",
+    "illustrationFemale": "1067"
+  },
+  "Single-arm cable row": {
+    "gifMale": "021413",
+    "gifFemale": null,
+    "illustrationMale": "0214",
+    "illustrationFemale": null
+  },
+  "Neutral-grip lat pulldown": {
+    "gifMale": "758313",
+    "gifFemale": null,
+    "illustrationMale": "7583",
+    "illustrationFemale": null
+  },
+  "T-bar row": {
+    "gifMale": "060613",
+    "gifFemale": "288513",
+    "illustrationMale": "0606",
+    "illustrationFemale": "2885"
+  },
+  "Single-arm lat pulldown": {
+    "gifMale": "120413",
+    "gifFemale": "359613",
+    "illustrationMale": "1204",
+    "illustrationFemale": "3596"
+  },
+  "Cable curl": {
+    "gifMale": "086813",
+    "gifFemale": "015613",
+    "illustrationMale": "0868",
+    "illustrationFemale": "0156"
+  },
+  "Cable glute kickback": {
+    "gifMale": "022813",
+    "gifFemale": "088013",
+    "illustrationMale": "0228",
+    "illustrationFemale": "0880"
+  },
+  "Hip abduction machine": {
+    "gifMale": "059713",
+    "gifFemale": "361113",
+    "illustrationMale": "0597",
+    "illustrationFemale": "3611"
+  },
+  "Hip adduction machine": {
+    "gifMale": "059813",
+    "gifFemale": "361213",
+    "illustrationMale": "0598",
+    "illustrationFemale": "3612"
+  },
+  "Cable pull-through": {
+    "gifMale": "120613",
+    "gifFemale": "232413",
+    "illustrationMale": "1206",
+    "illustrationFemale": "2324"
+  },
+  "Donkey kick": {
+    "gifMale": "303413",
+    "gifFemale": "147413",
+    "illustrationMale": "3034",
+    "illustrationFemale": "1474"
   }
 }

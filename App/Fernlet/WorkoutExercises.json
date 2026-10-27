@@ -2649,5 +2649,310 @@
     "difficulty": 1,
     "measure": "seconds",
     "unilateral": true
+  },
+  {
+    "name": "V-up",
+    "primaryMuscles": [
+      "abs"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "strength",
+    "difficulty": 2,
+    "variation": true
+  },
+  {
+    "name": "Weighted V-up",
+    "primaryMuscles": [
+      "abs"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "dumbbell",
+    "movementPattern": "isolation",
+    "inputKind": "strength",
+    "difficulty": 3,
+    "variation": true
+  },
+  {
+    "name": "Alternating knee tuck",
+    "primaryMuscles": [
+      "abs"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "strength",
+    "difficulty": 1,
+    "variation": true
+  },
+  {
+    "name": "Tucked toe tap",
+    "primaryMuscles": [
+      "abs"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "strength",
+    "difficulty": 1,
+    "variation": true
+  },
+  {
+    "name": "Reverse crunch",
+    "primaryMuscles": [
+      "abs"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "strength",
+    "difficulty": 1,
+    "variation": true
+  },
+  {
+    "name": "Bicycle crunch",
+    "primaryMuscles": [
+      "abs",
+      "obliques"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "strength",
+    "difficulty": 1,
+    "variation": true
+  },
+  {
+    "name": "Flutter kick",
+    "primaryMuscles": [
+      "abs"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "strength",
+    "difficulty": 1,
+    "measure": "seconds",
+    "variation": true
+  },
+  {
+    "name": "Heel tap",
+    "primaryMuscles": [
+      "obliques"
+    ],
+    "secondaryMuscles": [
+      "abs"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "strength",
+    "difficulty": 1,
+    "variation": true
+  },
+  {
+    "name": "Hollow rock",
+    "primaryMuscles": [
+      "abs"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "strength",
+    "difficulty": 2,
+    "variation": true
+  },
+  {
+    "name": "Plank shoulder tap",
+    "primaryMuscles": [
+      "abs"
+    ],
+    "secondaryMuscles": [
+      "obliques",
+      "frontDelts"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "strength",
+    "difficulty": 2,
+    "variation": true
+  },
+  {
+    "name": "Cable woodchopper",
+    "primaryMuscles": [
+      "obliques"
+    ],
+    "secondaryMuscles": [
+      "abs"
+    ],
+    "equipment": "cable",
+    "movementPattern": "twist",
+    "inputKind": "strength",
+    "difficulty": 1,
+    "variation": true
+  },
+  {
+    "name": "Cable lat pullover",
+    "primaryMuscles": [
+      "lats"
+    ],
+    "secondaryMuscles": [
+      "triceps"
+    ],
+    "equipment": "cable",
+    "movementPattern": "isolation",
+    "inputKind": "strength",
+    "difficulty": 1,
+    "variation": true
+  },
+  {
+    "name": "Single-arm cable row",
+    "primaryMuscles": [
+      "upperBack",
+      "lats"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "rearDelts"
+    ],
+    "equipment": "cable",
+    "movementPattern": "pull",
+    "inputKind": "strength",
+    "plane": "horizontal",
+    "difficulty": 1,
+    "variation": true
+  },
+  {
+    "name": "Neutral-grip lat pulldown",
+    "primaryMuscles": [
+      "lats"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "upperBack"
+    ],
+    "equipment": "cable",
+    "movementPattern": "pull",
+    "inputKind": "strength",
+    "plane": "vertical",
+    "difficulty": 1,
+    "variation": true
+  },
+  {
+    "name": "T-bar row",
+    "primaryMuscles": [
+      "upperBack",
+      "lats"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "rearDelts",
+      "lowerBack"
+    ],
+    "equipment": "barbell",
+    "movementPattern": "pull",
+    "inputKind": "strength",
+    "plane": "horizontal",
+    "difficulty": 2,
+    "alternativeEquipment": [
+      "machine"
+    ],
+    "variation": true
+  },
+  {
+    "name": "Single-arm lat pulldown",
+    "primaryMuscles": [
+      "lats"
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "upperBack"
+    ],
+    "equipment": "cable",
+    "movementPattern": "pull",
+    "inputKind": "strength",
+    "plane": "vertical",
+    "difficulty": 1,
+    "variation": true
+  },
+  {
+    "name": "Cable curl",
+    "primaryMuscles": [
+      "biceps"
+    ],
+    "secondaryMuscles": [
+      "forearms"
+    ],
+    "equipment": "cable",
+    "movementPattern": "isolation",
+    "inputKind": "strength",
+    "difficulty": 1,
+    "variation": true
+  },
+  {
+    "name": "Cable glute kickback",
+    "primaryMuscles": [
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "hamstrings"
+    ],
+    "equipment": "cable",
+    "movementPattern": "isolation",
+    "inputKind": "strength",
+    "difficulty": 1,
+    "variation": true
+  },
+  {
+    "name": "Hip abduction machine",
+    "primaryMuscles": [
+      "abductors",
+      "glutes"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "machine",
+    "movementPattern": "isolation",
+    "inputKind": "strength",
+    "difficulty": 1,
+    "variation": true
+  },
+  {
+    "name": "Hip adduction machine",
+    "primaryMuscles": [
+      "adductors"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "machine",
+    "movementPattern": "isolation",
+    "inputKind": "strength",
+    "difficulty": 1,
+    "variation": true
+  },
+  {
+    "name": "Cable pull-through",
+    "primaryMuscles": [
+      "glutes",
+      "hamstrings"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "cable",
+    "movementPattern": "hinge",
+    "inputKind": "strength",
+    "difficulty": 1,
+    "variation": true
+  },
+  {
+    "name": "Donkey kick",
+    "primaryMuscles": [
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "hamstrings"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "strength",
+    "difficulty": 1,
+    "variation": true
   }
 ]

@@ -4080,6 +4080,216 @@
         }
       }
     },
+    "exercise.alternatingKneeTuck.cue1" : {
+      "comment" : "Alternating knee tuck: how-to cue 1 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Setz dich auf den Boden und lehn dich zurück auf die Hände oder Unterarme."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sit on the floor and lean back on your hands or forearms."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Siéntate en el suelo y échate hacia atrás apoyándote en las manos o los antebrazos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Assieds-toi au sol et penche-toi en arrière sur les mains ou les avant-bras."
+          }
+        }
+      }
+    },
+    "exercise.alternatingKneeTuck.cue2" : {
+      "comment" : "Alternating knee tuck: how-to cue 2 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Streck beide Beine lang aus, knapp über dem Boden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Stretch both legs out long, just off the floor."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estira las dos piernas, despegadas apenas del suelo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Allonge les deux jambes, juste au-dessus du sol."
+          }
+        }
+      }
+    },
+    "exercise.alternatingKneeTuck.cue3" : {
+      "comment" : "Alternating knee tuck: how-to cue 3 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Zieh ein Knie zur Brust, während das andere Bein gestreckt bleibt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Draw one knee toward your chest as the other stays long."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lleva una rodilla hacia el pecho mientras la otra pierna sigue estirada."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ramène un genou vers la poitrine pendant que l'autre jambe reste tendue."
+          }
+        }
+      }
+    },
+    "exercise.alternatingKneeTuck.cue4" : {
+      "comment" : "Alternating knee tuck: how-to cue 4 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Wechsle die Beine fließend und halte die Brust oben."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Switch legs smoothly, keeping your chest lifted."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cambia de pierna con suavidad, manteniendo el pecho elevado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Change de jambe en douceur, en gardant la poitrine haute."
+          }
+        }
+      }
+    },
+    "exercise.alternatingKneeTuck.easier" : {
+      "comment" : "Alternating knee tuck: an easier version, as a short instruction",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Setz die Ferse des gestreckten Beins zwischen den Wiederholungen ab."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rest the straight leg's heel on the floor between tucks."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Apoya el talón de la pierna estirada en el suelo entre repeticiones."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pose le talon de la jambe tendue au sol entre chaque ramené."
+          }
+        }
+      }
+    },
+    "exercise.alternatingKneeTuck.mistake" : {
+      "comment" : "Alternating knee tuck: the one common mistake to avoid, as a short phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Auf die Hände zusammensacken, sodass der Rücken rund wird."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Slumping onto the hands so the back rounds."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hundirse sobre las manos y redondear la espalda."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "S'affaisser sur les mains en arrondissant le dos."
+          }
+        }
+      }
+    },
+    "exercise.alternatingKneeTuck.name" : {
+      "comment" : "Exercise name shown on screen (bodyweight exercise)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Wechselndes Knieanziehen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Alternating knee tuck"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Encogimiento de rodilla alterno"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ramené de genou alterné"
+          }
+        }
+      }
+    },
     "exercise.arnoldPress.cue1" : {
       "comment" : "Arnold press: how-to cue 1 of 4, a short imperative step",
       "extractionState" : "extracted_with_value",
@@ -9330,6 +9540,216 @@
         }
       }
     },
+    "exercise.bicycleCrunch.cue1" : {
+      "comment" : "Bicycle crunch: how-to cue 1 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Leg dich auf den Rücken, die Fingerspitzen locker am Kopf."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lie on your back, fingertips resting lightly by your head."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Acuéstate boca arriba, con las yemas de los dedos apoyadas suavemente junto a la cabeza."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Allonge-toi sur le dos, le bout des doigts posé légèrement près de la tête."
+          }
+        }
+      }
+    },
+    "exercise.bicycleCrunch.cue2" : {
+      "comment" : "Bicycle crunch: how-to cue 2 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Heb die Schultern an und bring die Knie über die Hüfte."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lift your shoulders and bring your knees above your hips."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Despega los hombros y sube las rodillas por encima de la cadera."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Décolle les épaules et monte les genoux au-dessus des hanches."
+          }
+        }
+      }
+    },
+    "exercise.bicycleCrunch.cue3" : {
+      "comment" : "Bicycle crunch: how-to cue 3 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dreh einen Ellbogen zum gegenüberliegenden Knie, während sich das andere Bein streckt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Turn one elbow toward the opposite knee as the other leg straightens."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Gira un codo hacia la rodilla contraria mientras estiras la otra pierna."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tourne un coude vers le genou opposé pendant que l'autre jambe se tend."
+          }
+        }
+      }
+    },
+    "exercise.bicycleCrunch.cue4" : {
+      "comment" : "Bicycle crunch: how-to cue 4 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Wechsle die Seite in einem ruhigen, gleichmäßigen Rhythmus."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Switch sides in a smooth, steady rhythm."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cambia de lado con un ritmo suave y constante."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Change de côté sur un rythme fluide et régulier."
+          }
+        }
+      }
+    },
+    "exercise.bicycleCrunch.easier" : {
+      "comment" : "Bicycle crunch: an easier version, as a short instruction",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Halte das gestreckte Bein höher über dem Boden und mach langsam."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Keep the straight leg higher off the floor, and go slowly."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mantén la pierna estirada más alta y ve despacio."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Garde la jambe tendue plus haut au-dessus du sol, et va lentement."
+          }
+        }
+      }
+    },
+    "exercise.bicycleCrunch.mistake" : {
+      "comment" : "Bicycle crunch: the one common mistake to avoid, as a short phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hetzen und am Nacken ziehen, statt den Brustkorb zu drehen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rushing and pulling on the neck instead of turning the ribs."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ir con prisas y tirar del cuello en vez de girar las costillas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aller trop vite et tirer sur la nuque au lieu de tourner les côtes."
+          }
+        }
+      }
+    },
+    "exercise.bicycleCrunch.name" : {
+      "comment" : "Exercise name shown on screen (bodyweight exercise)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fahrrad-Crunch"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bicycle crunch"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Crunch bicicleta"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Crunch vélo"
+          }
+        }
+      }
+    },
     "exercise.birdDog.cue1" : {
       "comment" : "Bird dog: how-to cue 1 of 4, a short imperative step",
       "extractionState" : "extracted_with_value",
@@ -11820,6 +12240,216 @@
         }
       }
     },
+    "exercise.cableCurl.cue1" : {
+      "comment" : "Cable curl: how-to cue 1 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Häng eine gerade Stange oder ein Seil unten an den Kabelzug."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set a straight bar or rope on a low pulley."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pon una barra recta o una cuerda en la polea baja."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fixe une barre droite ou une corde à la poulie basse."
+          }
+        }
+      }
+    },
+    "exercise.cableCurl.cue2" : {
+      "comment" : "Cable curl: how-to cue 2 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Steh aufrecht vor der Maschine, Ellbogen fest an den Seiten."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Stand tall facing the machine, elbows pinned at your sides."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ponte de pie frente a la máquina, con los codos pegados al cuerpo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Debout face à la machine, garde les coudes collés au corps."
+          }
+        }
+      }
+    },
+    "exercise.cableCurl.cue3" : {
+      "comment" : "Cable curl: how-to cue 3 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Beug die Arme und bring die Stange ohne Schwung zu den Schultern."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Curl the bar toward your shoulders without swinging."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sube la barra hacia los hombros sin balancearte."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Monte la barre vers les épaules sans te balancer."
+          }
+        }
+      }
+    },
+    "exercise.cableCurl.cue4" : {
+      "comment" : "Cable curl: how-to cue 4 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Senk langsam ab, bis die Arme gestreckt sind."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lower slowly until your arms are straight."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Baja despacio hasta estirar los brazos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Redescends lentement jusqu'à tendre les bras."
+          }
+        }
+      }
+    },
+    "exercise.cableCurl.easier" : {
+      "comment" : "Cable curl: an easier version, as a short instruction",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nimm weniger Gewicht oder trainier einen Arm nach dem anderen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Use a lighter weight, or curl one arm at a time."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Usa menos peso o haz el curl con un brazo cada vez."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Prends une charge plus légère, ou fais le curl un bras à la fois."
+          }
+        }
+      }
+    },
+    "exercise.cableCurl.mistake" : {
+      "comment" : "Cable curl: the one common mistake to avoid, as a short phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Die Ellbogen beim Hochziehen nach vorn wandern lassen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Letting the elbows drift forward as the bar comes up."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dejar que los codos se adelanten al subir la barra."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Laisser les coudes avancer quand la barre monte."
+          }
+        }
+      }
+    },
+    "exercise.cableCurl.name" : {
+      "comment" : "Exercise name shown on screen (cable machine exercise)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bizepscurl am Kabelzug"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cable curl"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Curl en polea"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Curl à la poulie"
+          }
+        }
+      }
+    },
     "exercise.cableFly.cue1" : {
       "comment" : "Cable fly: how-to cue 1 of 5, a short imperative step",
       "extractionState" : "extracted_with_value",
@@ -12056,6 +12686,456 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Écarté à la poulie"
+          }
+        }
+      }
+    },
+    "exercise.cableGluteKickback.cue1" : {
+      "comment" : "Cable glute kickback: how-to cue 1 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Häng eine Fußmanschette unten an den Kabelzug und stell dich vor die Maschine."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Strap one ankle to a low pulley and face the machine."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Engancha una tobillera a la polea baja y ponte frente a la máquina."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Attache une sangle de cheville à la poulie basse et mets-toi face à la machine."
+          }
+        }
+      }
+    },
+    "exercise.cableGluteKickback.cue2" : {
+      "comment" : "Cable glute kickback: how-to cue 2 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Halt dich am Rahmen fest und lehn dich leicht vor, Knie locker."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hold the frame and lean forward slightly, knees soft."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Agárrate a la estructura e inclínate un poco hacia delante, con las rodillas algo flexionadas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tiens-toi au cadre et penche-toi légèrement en avant, genoux souples."
+          }
+        }
+      }
+    },
+    "exercise.cableGluteKickback.cue3" : {
+      "comment" : "Cable glute kickback: how-to cue 3 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Drück das Bein mit der Manschette nach hinten, indem du das Gesäß anspannst."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Push the strapped leg back by squeezing your glute."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lleva hacia atrás la pierna de la tobillera apretando el glúteo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pousse la jambe attachée vers l'arrière en serrant le fessier."
+          }
+        }
+      }
+    },
+    "exercise.cableGluteKickback.cue4" : {
+      "comment" : "Cable glute kickback: how-to cue 4 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Stopp, bevor du ins Hohlkreuz gehst, und komm dann langsam zurück."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Stop before your lower back arches, then return slowly."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Para antes de que la zona lumbar se arquee y vuelve despacio."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Arrête-toi avant que le bas du dos ne se cambre, puis reviens lentement."
+          }
+        }
+      }
+    },
+    "exercise.cableGluteKickback.cue5" : {
+      "comment" : "Cable glute kickback: how-to cue 5 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mach deine Wiederholungen fertig, dann Seite wechseln."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Finish your reps, then switch sides."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Termina tus repeticiones y cambia de lado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Termine tes répétitions, puis change de côté."
+          }
+        }
+      }
+    },
+    "exercise.cableGluteKickback.easier" : {
+      "comment" : "Cable glute kickback: an easier version, as a short instruction",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nimm weniger Gewicht oder mach Donkey Kicks auf dem Boden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Use a lighter weight, or do donkey kicks on the floor."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Usa menos peso o haz patadas de burro en el suelo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Prends une charge plus légère, ou fais des donkey kicks au sol."
+          }
+        }
+      }
+    },
+    "exercise.cableGluteKickback.mistake" : {
+      "comment" : "Cable glute kickback: the one common mistake to avoid, as a short phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ins Hohlkreuz gehen, um das Bein höher zu schwingen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Arching the lower back to swing the leg higher."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Arquear la zona lumbar para lanzar la pierna más alto."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cambrer le bas du dos pour lancer la jambe plus haut."
+          }
+        }
+      }
+    },
+    "exercise.cableGluteKickback.name" : {
+      "comment" : "Exercise name shown on screen (cable machine exercise)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Gesäß-Kickback am Kabelzug"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cable glute kickback"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Patada de glúteo en polea"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Kickback fessier à la poulie"
+          }
+        }
+      }
+    },
+    "exercise.cableLatPullover.cue1" : {
+      "comment" : "Cable lat pullover: how-to cue 1 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Häng eine gerade Stange oder ein Seil oben an den Kabelzug."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set a straight bar or rope on a high pulley."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pon una barra recta o una cuerda en la polea alta."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fixe une barre droite ou une corde à la poulie haute."
+          }
+        }
+      }
+    },
+    "exercise.cableLatPullover.cue2" : {
+      "comment" : "Cable lat pullover: how-to cue 2 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Geh einen Schritt zurück und beug dich leicht aus der Hüfte, Arme fast gestreckt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Step back and hinge slightly at the hips, arms nearly straight."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Da un paso atrás e inclínate un poco desde la cadera, con los brazos casi estirados."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Recule d'un pas et penche-toi un peu depuis les hanches, bras presque tendus."
+          }
+        }
+      }
+    },
+    "exercise.cableLatPullover.cue3" : {
+      "comment" : "Cable lat pullover: how-to cue 3 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Beweg die Ellbogen nicht und führ die Stange im Bogen zu den Oberschenkeln."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Keep your elbows fixed and sweep the bar to your thighs."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mantén los codos fijos y lleva la barra en arco hasta los muslos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Garde les coudes fixes et descends la barre en arc jusqu'aux cuisses."
+          }
+        }
+      }
+    },
+    "exercise.cableLatPullover.cue4" : {
+      "comment" : "Cable lat pullover: how-to cue 4 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Halte kurz und lass die Stange dann langsam im selben Bogen hoch."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pause, then let the bar rise slowly in the same arc."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Haz una pausa y deja que la barra suba despacio por el mismo arco."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marque une pause, puis laisse remonter la barre lentement par le même arc."
+          }
+        }
+      }
+    },
+    "exercise.cableLatPullover.easier" : {
+      "comment" : "Cable lat pullover: an easier version, as a short instruction",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nimm weniger Gewicht und einen kürzeren Bogen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Use a lighter weight and a shorter arc."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Usa menos peso y un arco más corto."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Prends une charge plus légère et un arc plus court."
+          }
+        }
+      }
+    },
+    "exercise.cableLatPullover.mistake" : {
+      "comment" : "Cable lat pullover: the one common mistake to avoid, as a short phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Die Ellbogen beugen und die Stange mit den Armen nach unten drücken."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bending the elbows and pushing the bar down with the arms."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Doblar los codos y empujar la barra hacia abajo con los brazos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Plier les coudes et pousser la barre vers le bas avec les bras."
+          }
+        }
+      }
+    },
+    "exercise.cableLatPullover.name" : {
+      "comment" : "Exercise name shown on screen (cable machine exercise)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pullover am Kabelzug"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cable lat pullover"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pullover en polea"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pull-over à la poulie"
           }
         }
       }
@@ -12540,6 +13620,216 @@
         }
       }
     },
+    "exercise.cablePullThrough.cue1" : {
+      "comment" : "Cable pull-through: how-to cue 1 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Häng ein Seil unten an den Kabelzug und dreh ihm den Rücken zu."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set a rope on a low pulley and face away from it."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pon una cuerda en la polea baja y colócate de espaldas a ella."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fixe une corde à la poulie basse et tourne-lui le dos."
+          }
+        }
+      }
+    },
+    "exercise.cablePullThrough.cue2" : {
+      "comment" : "Cable pull-through: how-to cue 2 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Halte das Seil zwischen den Beinen und geh zwei Schritte nach vorn."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Grip the rope between your legs and take two steps forward."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sujeta la cuerda entre las piernas y da dos pasos hacia delante."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tiens la corde entre les jambes et fais deux pas en avant."
+          }
+        }
+      }
+    },
+    "exercise.cablePullThrough.cue3" : {
+      "comment" : "Cable pull-through: how-to cue 3 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Beug dich aus der Hüfte und lass das Seil die Hände durch die Beine ziehen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hinge at the hips, letting the rope draw your hands through."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Inclínate desde la cadera y deja que la cuerda lleve las manos entre las piernas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bascule depuis les hanches et laisse la corde ramener tes mains entre les jambes."
+          }
+        }
+      }
+    },
+    "exercise.cablePullThrough.cue4" : {
+      "comment" : "Cable pull-through: how-to cue 4 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Spann das Gesäß an, schieb die Hüfte nach vorn und richte dich auf."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Squeeze your glutes to bring your hips forward and stand tall."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aprieta los glúteos para llevar la cadera adelante y subir."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Serre les fessiers pour ramener les hanches vers l'avant et te redresser."
+          }
+        }
+      }
+    },
+    "exercise.cablePullThrough.easier" : {
+      "comment" : "Cable pull-through: an easier version, as a short instruction",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nimm weniger Gewicht oder mach den Pull-Through mit Band."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Use a lighter weight, or do the band pull-through."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Usa menos peso o haz el pull-through con banda."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Prends une charge plus légère, ou fais le pull-through à l'élastique."
+          }
+        }
+      }
+    },
+    "exercise.cablePullThrough.mistake" : {
+      "comment" : "Cable pull-through: the one common mistake to avoid, as a short phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "In die Hocke gehen oder mit den Armen ziehen, statt aus der Hüfte zu beugen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Squatting down or pulling the rope with the arms instead of hinging."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hacer una sentadilla o tirar de la cuerda con los brazos en lugar de inclinarse desde la cadera."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "S'accroupir ou tirer la corde avec les bras au lieu de basculer depuis les hanches."
+          }
+        }
+      }
+    },
+    "exercise.cablePullThrough.name" : {
+      "comment" : "Exercise name shown on screen (cable machine exercise)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pull-Through am Kabelzug"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cable pull-through"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pull-through en polea"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pull-through à la poulie"
+          }
+        }
+      }
+    },
     "exercise.cableRow.cue1" : {
       "comment" : "Cable row: how-to cue 1 of 4, a short imperative step",
       "extractionState" : "extracted_with_value",
@@ -12746,6 +14036,246 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Tirage horizontal à la poulie"
+          }
+        }
+      }
+    },
+    "exercise.cableWoodchopper.cue1" : {
+      "comment" : "Cable woodchopper: how-to cue 1 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Stell den Kabelzug hoch ein und stell dich seitlich zum Gerät."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set the cable high and stand side-on to the machine."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Coloca la polea alta y ponte de lado a la máquina."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Règle la poulie en position haute et place-toi de profil par rapport à l'appareil."
+          }
+        }
+      }
+    },
+    "exercise.cableWoodchopper.cue2" : {
+      "comment" : "Cable woodchopper: how-to cue 2 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Greif den Griff mit beiden Händen über der Schulter, die dem Gerät näher ist."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hold the handle in both hands above the shoulder nearest the machine."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Agarra el asa con ambas manos por encima del hombro más cercano a la máquina."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Saisis la poignée à deux mains au-dessus de l'épaule côté appareil."
+          }
+        }
+      }
+    },
+    "exercise.cableWoodchopper.cue3" : {
+      "comment" : "Cable woodchopper: how-to cue 3 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Zieh ihn diagonal über den Körper nach unten zur anderen Hüfte."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pull it down across your body toward the opposite hip."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tira del asa hacia abajo cruzando el cuerpo, hacia la cadera contraria."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tire-la vers le bas en travers du corps, vers la hanche opposée."
+          }
+        }
+      }
+    },
+    "exercise.cableWoodchopper.cue4" : {
+      "comment" : "Cable woodchopper: how-to cue 4 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dreh den Rumpf mit und lass den Fuß auf der Geräteseite mitdrehen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Turn through your trunk and let the near foot pivot."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Gira el tronco y deja que pivote el pie más cercano a la máquina."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tourne le buste et laisse pivoter le pied côté appareil."
+          }
+        }
+      }
+    },
+    "exercise.cableWoodchopper.cue5" : {
+      "comment" : "Cable woodchopper: how-to cue 5 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Geh langsam zurück und wiederhole es dann zur anderen Seite."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Return slowly, then repeat facing the other way."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Vuelve despacio y luego repite mirando hacia el otro lado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Reviens lentement, puis recommence de l'autre côté."
+          }
+        }
+      }
+    },
+    "exercise.cableWoodchopper.easier" : {
+      "comment" : "Cable woodchopper: an easier version, as a short instruction",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nimm weniger Gewicht und mach die Bewegung kleiner."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Use a lighter weight and make the movement smaller."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Usa menos peso y haz el movimiento más corto."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Prends une charge plus légère et réduis l'amplitude du mouvement."
+          }
+        }
+      }
+    },
+    "exercise.cableWoodchopper.mistake" : {
+      "comment" : "Cable woodchopper: the one common mistake to avoid, as a short phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nur mit den Armen ziehen, während der Rumpf stillsteht."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pulling with the arms alone while the trunk stays still."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tirar solo con los brazos mientras el tronco se queda quieto."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tirer seulement avec les bras pendant que le buste reste immobile."
+          }
+        }
+      }
+    },
+    "exercise.cableWoodchopper.name" : {
+      "comment" : "Exercise name shown on screen (cable machine exercise)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Holzhacker am Kabelzug"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cable woodchopper"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Leñador en polea"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bûcheron à la poulie"
           }
         }
       }
@@ -17066,6 +18596,246 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Dips"
+          }
+        }
+      }
+    },
+    "exercise.donkeyKick.cue1" : {
+      "comment" : "Donkey kick: how-to cue 1 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Geh in den Vierfüßlerstand, Hände unter den Schultern."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start on hands and knees, hands under your shoulders."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ponte a cuatro patas, con las manos bajo los hombros."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mets-toi à quatre pattes, mains sous les épaules."
+          }
+        }
+      }
+    },
+    "exercise.donkeyKick.cue2" : {
+      "comment" : "Donkey kick: how-to cue 2 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Halte ein Knie im rechten Winkel gebeugt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Keep one knee bent at a right angle."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mantén una rodilla doblada en ángulo recto."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Garde un genou plié à angle droit."
+          }
+        }
+      }
+    },
+    "exercise.donkeyKick.cue3" : {
+      "comment" : "Donkey kick: how-to cue 3 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Heb diesen Fuß Richtung Decke, indem du das Gesäß anspannst."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lift that foot toward the ceiling by squeezing your glute."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sube ese pie hacia el techo apretando el glúteo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Monte ce pied vers le plafond en serrant le fessier."
+          }
+        }
+      }
+    },
+    "exercise.donkeyKick.cue4" : {
+      "comment" : "Donkey kick: how-to cue 4 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Stopp, bevor du ins Hohlkreuz gehst, und senk dann langsam ab."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Stop before your lower back arches, then lower slowly."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Para antes de que la zona lumbar se arquee y baja despacio."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Arrête-toi avant que le bas du dos ne se cambre, puis redescends lentement."
+          }
+        }
+      }
+    },
+    "exercise.donkeyKick.cue5" : {
+      "comment" : "Donkey kick: how-to cue 5 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mach deine Wiederholungen fertig, dann Seite wechseln."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Finish your reps, then switch sides."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Termina tus repeticiones y cambia de lado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Termine tes répétitions, puis change de côté."
+          }
+        }
+      }
+    },
+    "exercise.donkeyKick.easier" : {
+      "comment" : "Donkey kick: an easier version, as a short instruction",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Heb den Fuß nur halb so hoch oder mach stattdessen Beckenheben."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lift the foot only partway, or do glute bridges instead."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sube el pie solo a medias o haz puentes de glúteos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Monte le pied seulement à mi-hauteur, ou fais plutôt des ponts fessiers."
+          }
+        }
+      }
+    },
+    "exercise.donkeyKick.mistake" : {
+      "comment" : "Donkey kick: the one common mistake to avoid, as a short phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Das Bein hochschwingen und den unteren Rücken durchhängen lassen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Swinging the leg up and letting the lower back sag."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lanzar la pierna hacia arriba y dejar que la zona lumbar se hunda."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lancer la jambe vers le haut et laisser le bas du dos se creuser."
+          }
+        }
+      }
+    },
+    "exercise.donkeyKick.name" : {
+      "comment" : "Exercise name shown on screen (bodyweight exercise)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Donkey Kick"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Donkey kick"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Patada de burro"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Donkey kick"
           }
         }
       }
@@ -21840,6 +23610,246 @@
         }
       }
     },
+    "exercise.flutterKick.cue1" : {
+      "comment" : "Flutter kick: how-to cue 1 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Leg dich auf den Rücken, die Hände unter dem Becken oder neben dem Körper."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lie on your back, hands under your hips or by your sides."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Acuéstate boca arriba, con las manos bajo la cadera o a los lados."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Allonge-toi sur le dos, mains sous le bassin ou le long du corps."
+          }
+        }
+      }
+    },
+    "exercise.flutterKick.cue2" : {
+      "comment" : "Flutter kick: how-to cue 2 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Drück den unteren Rücken in den Boden und heb beide gestreckten Beine leicht an."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Press your lower back down and lift both straight legs slightly."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Presiona la zona lumbar contra el suelo y despega un poco las dos piernas estiradas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Plaque le bas du dos au sol et décolle légèrement les deux jambes tendues."
+          }
+        }
+      }
+    },
+    "exercise.flutterKick.cue3" : {
+      "comment" : "Flutter kick: how-to cue 3 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bewege die Beine abwechselnd auf und ab, klein und schnell."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Kick your legs up and down in turn, small and quick."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mueve las piernas arriba y abajo por turnos, con patadas cortas y rápidas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fais de petits battements rapides et alternés, de haut en bas."
+          }
+        }
+      }
+    },
+    "exercise.flutterKick.cue4" : {
+      "comment" : "Flutter kick: how-to cue 4 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Spür es im unteren Bauch, nicht im unteren Rücken."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Feel it low in your stomach, not your lower back."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Siéntelo en la parte baja del abdomen, no en la zona lumbar."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sens le travail dans le bas du ventre, pas dans le bas du dos."
+          }
+        }
+      }
+    },
+    "exercise.flutterKick.cue5" : {
+      "comment" : "Flutter kick: how-to cue 5 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Atme die ganze Zeit gleichmäßig, halte nicht die Luft an."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Breathe steadily the whole time; don't hold your breath."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Respira de forma constante todo el tiempo; no aguantes la respiración."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Respire régulièrement tout du long, sans bloquer ta respiration."
+          }
+        }
+      }
+    },
+    "exercise.flutterKick.easier" : {
+      "comment" : "Flutter kick: an easier version, as a short instruction",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Halte die Beine höher oder beug die Knie ein wenig."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hold your legs higher, or bend your knees a little."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sube más las piernas o dobla un poco las rodillas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Monte les jambes plus haut, ou plie un peu les genoux."
+          }
+        }
+      }
+    },
+    "exercise.flutterKick.mistake" : {
+      "comment" : "Flutter kick: the one common mistake to avoid, as a short phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Den unteren Rücken ins Hohlkreuz gehen lassen, wenn die Beine müde werden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Letting the lower back arch as the legs tire."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dejar que la zona lumbar se arquee cuando las piernas se cansan."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Laisser le bas du dos se cambrer quand les jambes fatiguent."
+          }
+        }
+      }
+    },
+    "exercise.flutterKick.name" : {
+      "comment" : "Exercise name shown on screen (bodyweight exercise)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Flutter Kicks"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Flutter kick"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Patada de aleteo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Battements de jambes"
+          }
+        }
+      }
+    },
     "exercise.frontRaise.cue1" : {
       "comment" : "Front raise: how-to cue 1 of 5, a short imperative step",
       "extractionState" : "extracted_with_value",
@@ -23880,6 +25890,216 @@
         }
       }
     },
+    "exercise.heelTap.cue1" : {
+      "comment" : "Heel tap: how-to cue 1 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Leg dich auf den Rücken, Knie gebeugt, Füße flach und hüftbreit auseinander."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lie on your back, knees bent, feet flat and hip-width apart."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Acuéstate boca arriba, con las rodillas dobladas y los pies apoyados a la anchura de la cadera."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Allonge-toi sur le dos, genoux pliés, pieds à plat écartés de la largeur des hanches."
+          }
+        }
+      }
+    },
+    "exercise.heelTap.cue2" : {
+      "comment" : "Heel tap: how-to cue 2 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Heb Kopf und Schultern ein wenig vom Boden ab."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lift your head and shoulders a little off the floor."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Despega un poco la cabeza y los hombros del suelo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Décolle légèrement la tête et les épaules du sol."
+          }
+        }
+      }
+    },
+    "exercise.heelTap.cue3" : {
+      "comment" : "Heel tap: how-to cue 3 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Greif mit einer Hand zur Ferse auf derselben Seite und neig dich seitlich."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Reach one hand toward the heel on that side, bending sideways."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lleva una mano hacia el talón del mismo lado, inclinándote hacia ese lado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tends une main vers le talon du même côté en t'inclinant sur le côté."
+          }
+        }
+      }
+    },
+    "exercise.heelTap.cue4" : {
+      "comment" : "Heel tap: how-to cue 4 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Wechsle die Seite und lass die Schultern die ganze Zeit oben."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Switch sides, keeping your shoulders up the whole time."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cambia de lado sin bajar los hombros en ningún momento."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Change de côté en gardant les épaules décollées tout du long."
+          }
+        }
+      }
+    },
+    "exercise.heelTap.easier" : {
+      "comment" : "Heel tap: an easier version, as a short instruction",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Stell die Füße näher an die Hüfte, damit der Weg kürzer ist."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Move your feet closer to your hips so the reach is shorter."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Acerca los pies a la cadera para que el alcance sea más corto."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Rapproche les pieds des hanches pour raccourcir la distance."
+          }
+        }
+      }
+    },
+    "exercise.heelTap.mistake" : {
+      "comment" : "Heel tap: the one common mistake to avoid, as a short phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Kopf und Schultern zwischen den Berührungen wieder ablegen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Dropping the head and shoulders back down between taps."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bajar la cabeza y los hombros al suelo entre toques."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Reposer la tête et les épaules au sol entre deux touchers."
+          }
+        }
+      }
+    },
+    "exercise.heelTap.name" : {
+      "comment" : "Exercise name shown on screen (bodyweight exercise)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fersentippen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Heel tap"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Toque de talones"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Toucher de talons"
+          }
+        }
+      }
+    },
     "exercise.highKnees.cue1" : {
       "comment" : "High knees: how-to cue 1 of 4, a short imperative step",
       "extractionState" : "extracted_with_value",
@@ -24086,6 +26306,426 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Montées de genoux"
+          }
+        }
+      }
+    },
+    "exercise.hipAbductionMachine.cue1" : {
+      "comment" : "Hip abduction machine: how-to cue 1 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Setz dich aufrecht hin, die Polster außen an den Knien."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sit tall with the pads on the outside of your knees."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Siéntate con la espalda recta y los soportes por fuera de las rodillas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Assieds-toi, dos droit, les coussins contre l'extérieur des genoux."
+          }
+        }
+      }
+    },
+    "exercise.hipAbductionMachine.cue2" : {
+      "comment" : "Hip abduction machine: how-to cue 2 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Halte die Griffe und lass den Rücken an der Lehne."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hold the handles and keep your back against the seat."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sujeta los agarres y mantén la espalda apoyada en el respaldo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tiens les poignées et garde le dos contre le dossier."
+          }
+        }
+      }
+    },
+    "exercise.hipAbductionMachine.cue3" : {
+      "comment" : "Hip abduction machine: how-to cue 3 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Drück die Knie so weit auseinander, wie es angenehm ist."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Push your knees apart as far as is comfortable."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Separa las rodillas hasta donde te resulte cómodo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Écarte les genoux aussi loin que c'est confortable."
+          }
+        }
+      }
+    },
+    "exercise.hipAbductionMachine.cue4" : {
+      "comment" : "Hip abduction machine: how-to cue 4 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Halte kurz und lass die Knie dann langsam wieder zusammenkommen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pause, then let your knees come back together slowly."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Haz una pausa y deja que las rodillas se junten despacio."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marque une pause, puis laisse les genoux se rapprocher lentement."
+          }
+        }
+      }
+    },
+    "exercise.hipAbductionMachine.easier" : {
+      "comment" : "Hip abduction machine: an easier version, as a short instruction",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nimm weniger Gewicht oder mach Clamshells auf dem Boden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Use a lighter weight, or do clamshells on the floor."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Usa menos peso o haz la almeja en el suelo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Prends une charge plus légère, ou fais le coquillage au sol."
+          }
+        }
+      }
+    },
+    "exercise.hipAbductionMachine.mistake" : {
+      "comment" : "Hip abduction machine: the one common mistake to avoid, as a short phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Die Gewichte beim Zusammenführen der Knie herunterknallen lassen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Letting the weights crash down as the knees come back together."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dejar que las pesas caigan de golpe al juntar las rodillas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Laisser les poids retomber d'un coup quand les genoux se rapprochent."
+          }
+        }
+      }
+    },
+    "exercise.hipAbductionMachine.name" : {
+      "comment" : "Exercise name shown on screen (machine exercise)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abduktorenmaschine"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hip abduction machine"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abductores en máquina"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abducteurs à la machine"
+          }
+        }
+      }
+    },
+    "exercise.hipAdductionMachine.cue1" : {
+      "comment" : "Hip adduction machine: how-to cue 1 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Setz dich aufrecht hin, die Polster innen an den Knien."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sit tall with the pads on the inside of your knees."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Siéntate con la espalda recta y los soportes por dentro de las rodillas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Assieds-toi, dos droit, les coussins contre l'intérieur des genoux."
+          }
+        }
+      }
+    },
+    "exercise.hipAdductionMachine.cue2" : {
+      "comment" : "Hip adduction machine: how-to cue 2 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fang nur so breit an, wie es sich angenehm anfühlt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start with your legs only as wide as feels comfortable."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Empieza con las piernas solo tan abiertas como te resulte cómodo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Commence avec un écart de jambes qui reste confortable."
+          }
+        }
+      }
+    },
+    "exercise.hipAdductionMachine.cue3" : {
+      "comment" : "Hip adduction machine: how-to cue 3 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Drück die Knie zusammen, bis sich die Polster berühren."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Squeeze your knees together until the pads meet."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Junta las rodillas hasta que los soportes se toquen."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Serre les genoux jusqu'à ce que les coussins se touchent."
+          }
+        }
+      }
+    },
+    "exercise.hipAdductionMachine.cue4" : {
+      "comment" : "Hip adduction machine: how-to cue 4 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lass die Beine langsam gegen das Gewicht wieder auseinandergehen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Let your legs open slowly against the weight."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Deja que las piernas se abran despacio, frenando el peso."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Laisse les jambes s'ouvrir lentement en retenant la charge."
+          }
+        }
+      }
+    },
+    "exercise.hipAdductionMachine.easier" : {
+      "comment" : "Hip adduction machine: an easier version, as a short instruction",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nimm weniger Gewicht und fang mit engerer Beinstellung an."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Use a lighter weight and a narrower starting position."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Usa menos peso y empieza con las piernas menos abiertas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Prends une charge plus légère et pars avec les jambes moins écartées."
+          }
+        }
+      }
+    },
+    "exercise.hipAdductionMachine.mistake" : {
+      "comment" : "Hip adduction machine: the one common mistake to avoid, as a short phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Zu breit anfangen und die Beine vom Gewicht auseinanderreißen lassen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Starting too wide and letting the weight yank the legs apart."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Empezar con las piernas demasiado abiertas y dejar que el peso las separe de golpe."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Partir avec les jambes trop écartées et laisser la charge les ouvrir d'un coup."
+          }
+        }
+      }
+    },
+    "exercise.hipAdductionMachine.name" : {
+      "comment" : "Exercise name shown on screen (machine exercise)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Adduktorenmaschine"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hip adduction machine"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aductores en máquina"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Adducteurs à la machine"
           }
         }
       }
@@ -24566,6 +27206,216 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Hollow hold"
+          }
+        }
+      }
+    },
+    "exercise.hollowRock.cue1" : {
+      "comment" : "Hollow rock: how-to cue 1 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Geh in den Hollow Hold: unterer Rücken am Boden, Schultern und Beine angehoben."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Get into a hollow hold: lower back down, shoulders and legs lifted."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Colócate en hollow hold: zona lumbar en el suelo, hombros y piernas elevados."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mets-toi en hollow hold, bas du dos au sol, épaules et jambes décollées."
+          }
+        }
+      }
+    },
+    "exercise.hollowRock.cue2" : {
+      "comment" : "Hollow rock: how-to cue 2 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Streck die Arme über den Kopf und halte die Beine geschlossen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Reach your arms overhead and keep your legs together."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Estira los brazos por encima de la cabeza y mantén las piernas juntas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tends les bras au-dessus de la tête et garde les jambes serrées."
+          }
+        }
+      }
+    },
+    "exercise.hollowRock.cue3" : {
+      "comment" : "Hollow rock: how-to cue 3 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Schaukle sanft Richtung Schultern, dann Richtung Becken."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rock gently toward your shoulders, then toward your hips."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Balancéate suavemente hacia los hombros y luego hacia la cadera."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bascule doucement vers les épaules, puis vers le bassin."
+          }
+        }
+      }
+    },
+    "exercise.hollowRock.cue4" : {
+      "comment" : "Hollow rock: how-to cue 4 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Halte die gleiche gebogene Form während des ganzen Schaukelns."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Keep the same curved shape the whole time you rock."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mantén la misma forma curvada durante todo el balanceo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Garde la même forme arrondie pendant tout le balancement."
+          }
+        }
+      }
+    },
+    "exercise.hollowRock.easier" : {
+      "comment" : "Hollow rock: an easier version, as a short instruction",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Beug die Knie und streck die Arme nach vorn, oder halte die Position ohne zu schaukeln."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bend your knees and reach forward, or hold without rocking."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dobla las rodillas y estira los brazos al frente, o mantén la posición sin balancearte."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Plie les genoux et tends les bras devant toi, ou tiens la position sans basculer."
+          }
+        }
+      }
+    },
+    "exercise.hollowRock.mistake" : {
+      "comment" : "Hollow rock: the one common mistake to avoid, as a short phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "In Hüfte oder Knien einknicken, sodass die Form verloren geht."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bending at the hips or knees so the shape breaks."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Doblar la cadera o las rodillas y perder la forma."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Plier les hanches ou les genoux et perdre la forme."
+          }
+        }
+      }
+    },
+    "exercise.hollowRock.name" : {
+      "comment" : "Exercise name shown on screen (bodyweight exercise)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hollow Rock"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hollow rock"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hollow rock"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hollow rock"
           }
         }
       }
@@ -31050,6 +33900,216 @@
         }
       }
     },
+    "exercise.neutralGripLatPulldown.cue1" : {
+      "comment" : "Neutral-grip lat pulldown: how-to cue 1 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Häng einen Griff ein, bei dem die Handflächen zueinander zeigen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Attach a handle that keeps your palms facing each other."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Coloca un agarre que deje las palmas enfrentadas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fixe une poignée qui garde tes paumes face à face."
+          }
+        }
+      }
+    },
+    "exercise.neutralGripLatPulldown.cue2" : {
+      "comment" : "Neutral-grip lat pulldown: how-to cue 2 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Setz dich mit den Oberschenkeln fest unter das Polster, Arme nach oben gestreckt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sit with your thighs snug under the pad, arms reaching up."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Siéntate con los muslos bien sujetos bajo el soporte y los brazos hacia arriba."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Assieds-toi, cuisses bien calées sous les boudins, bras tendus vers le haut."
+          }
+        }
+      }
+    },
+    "exercise.neutralGripLatPulldown.cue3" : {
+      "comment" : "Neutral-grip lat pulldown: how-to cue 3 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Zieh den Griff zur oberen Brust, Ellbogen nach unten und eng am Körper."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pull the handle to your upper chest, elbows down and in."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lleva el agarre a la parte alta del pecho, con los codos abajo y pegados."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tire la poignée vers le haut de la poitrine, coudes vers le bas et près du corps."
+          }
+        }
+      }
+    },
+    "exercise.neutralGripLatPulldown.cue4" : {
+      "comment" : "Neutral-grip lat pulldown: how-to cue 4 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lass den Griff langsam hoch, bis die Arme gestreckt sind."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Let the handle rise slowly until your arms are straight."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Deja que el agarre suba despacio hasta estirar los brazos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Laisse remonter la poignée lentement jusqu'à tendre les bras."
+          }
+        }
+      }
+    },
+    "exercise.neutralGripLatPulldown.easier" : {
+      "comment" : "Neutral-grip lat pulldown: an easier version, as a short instruction",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nimm weniger Gewicht oder probier Latziehen mit Band."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Use a lighter weight, or try the band lat pulldown."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Usa menos peso o prueba el jalón con banda."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Prends une charge plus légère, ou essaie le tirage vertical à l'élastique."
+          }
+        }
+      }
+    },
+    "exercise.neutralGripLatPulldown.mistake" : {
+      "comment" : "Neutral-grip lat pulldown: the one common mistake to avoid, as a short phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sich weit zurücklehnen und den Griff mit Schwung herunterziehen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Leaning far back and swinging to pull the handle down."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Echarse muy atrás y balancearse para bajar el agarre."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se pencher loin en arrière et se balancer pour descendre la poignée."
+          }
+        }
+      }
+    },
+    "exercise.neutralGripLatPulldown.name" : {
+      "comment" : "Exercise name shown on screen (cable machine exercise)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Latziehen mit neutralem Griff"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Neutral-grip lat pulldown"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Jalón al pecho con agarre neutro"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tirage vertical prise neutre"
+          }
+        }
+      }
+    },
     "exercise.nordicCurl.cue1" : {
       "comment" : "Nordic curl: how-to cue 1 of 4, a short imperative step",
       "extractionState" : "extracted_with_value",
@@ -33120,6 +36180,216 @@
         }
       }
     },
+    "exercise.plankShoulderTap.cue1" : {
+      "comment" : "Plank shoulder tap: how-to cue 1 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Beginn in der hohen Plank, Hände unter den Schultern."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start in a high plank, hands under your shoulders."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Empieza en plancha alta, con las manos bajo los hombros."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Commence en planche bras tendus, mains sous les épaules."
+          }
+        }
+      }
+    },
+    "exercise.plankShoulderTap.cue2" : {
+      "comment" : "Plank shoulder tap: how-to cue 2 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Stell die Füße etwas weiter als hüftbreit auseinander."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set your feet a little wider than your hips."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Separa los pies un poco más que la anchura de la cadera."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Écarte les pieds un peu plus que la largeur des hanches."
+          }
+        }
+      }
+    },
+    "exercise.plankShoulderTap.cue3" : {
+      "comment" : "Plank shoulder tap: how-to cue 3 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Heb eine Hand und tipp die gegenüberliegende Schulter an."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lift one hand to tap the opposite shoulder."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Levanta una mano y toca el hombro contrario."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lève une main pour toucher l'épaule opposée."
+          }
+        }
+      }
+    },
+    "exercise.plankShoulderTap.cue4" : {
+      "comment" : "Plank shoulder tap: how-to cue 4 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Halte die Hüfte ruhig und gerade und wechsle dann die Hand."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Keep your hips still and level, then switch hands."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mantén la cadera quieta y nivelada, y cambia de mano."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Garde les hanches immobiles et à niveau, puis change de main."
+          }
+        }
+      }
+    },
+    "exercise.plankShoulderTap.easier" : {
+      "comment" : "Plank shoulder tap: an easier version, as a short instruction",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Stell die Füße weiter auseinander oder setz die Knie auf dem Boden ab."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set your feet wider, or rest your knees on the floor."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Separa más los pies o apoya las rodillas en el suelo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Écarte davantage les pieds, ou pose les genoux au sol."
+          }
+        }
+      }
+    },
+    "exercise.plankShoulderTap.mistake" : {
+      "comment" : "Plank shoulder tap: the one common mistake to avoid, as a short phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Die Hüfte bei jeder Berührung hin und her schaukeln lassen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rocking the hips side to side with each tap."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Balancear la cadera de lado a lado en cada toque."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Balancer les hanches d'un côté à l'autre à chaque toucher."
+          }
+        }
+      }
+    },
+    "exercise.plankShoulderTap.name" : {
+      "comment" : "Exercise name shown on screen (bodyweight exercise)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Plank mit Schultertippen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Plank shoulder tap"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Plancha con toque de hombro"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Planche avec toucher d'épaule"
+          }
+        }
+      }
+    },
     "exercise.preacherCurl.cue1" : {
       "comment" : "Preacher curl: how-to cue 1 of 4, a short imperative step",
       "extractionState" : "extracted_with_value",
@@ -34166,6 +37436,216 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Vélo semi-allongé"
+          }
+        }
+      }
+    },
+    "exercise.reverseCrunch.cue1" : {
+      "comment" : "Reverse crunch: how-to cue 1 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Leg dich auf den Rücken, die Arme flach neben dem Körper."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lie on your back with your arms flat by your sides."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Acuéstate boca arriba con los brazos apoyados a los lados."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Allonge-toi sur le dos, bras à plat le long du corps."
+          }
+        }
+      }
+    },
+    "exercise.reverseCrunch.cue2" : {
+      "comment" : "Reverse crunch: how-to cue 2 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Heb die gebeugten Knie an, bis sie über der Hüfte sind."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lift your bent knees until they're above your hips."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sube las rodillas dobladas hasta que queden sobre la cadera."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Monte les genoux pliés jusqu'à ce qu'ils soient au-dessus des hanches."
+          }
+        }
+      }
+    },
+    "exercise.reverseCrunch.cue3" : {
+      "comment" : "Reverse crunch: how-to cue 3 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Roll das Becken vom Boden hoch und zieh die Knie zur Brust."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Curl your hips off the floor, drawing your knees toward your chest."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Despega la cadera del suelo enrollándote y lleva las rodillas hacia el pecho."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Enroule le bassin pour le décoller du sol, genoux vers la poitrine."
+          }
+        }
+      }
+    },
+    "exercise.reverseCrunch.cue4" : {
+      "comment" : "Reverse crunch: how-to cue 4 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Senk das Becken langsam wieder auf den Boden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lower your hips slowly back to the floor."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Baja la cadera despacio hasta el suelo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Redescends lentement le bassin au sol."
+          }
+        }
+      }
+    },
+    "exercise.reverseCrunch.easier" : {
+      "comment" : "Reverse crunch: an easier version, as a short instruction",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mach die Bewegung kleiner und heb das Becken nur ein wenig an."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Make the curl smaller, lifting your hips only a little."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Haz un movimiento más corto y despega la cadera solo un poco."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fais un mouvement plus petit, en décollant le bassin juste un peu."
+          }
+        }
+      }
+    },
+    "exercise.reverseCrunch.mistake" : {
+      "comment" : "Reverse crunch: the one common mistake to avoid, as a short phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Die Beine schwingen, um das Becken hochzuwerfen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Swinging the legs to throw the hips up."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Balancear las piernas para lanzar la cadera hacia arriba."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Balancer les jambes pour lancer le bassin vers le haut."
+          }
+        }
+      }
+    },
+    "exercise.reverseCrunch.name" : {
+      "comment" : "Exercise name shown on screen (bodyweight exercise)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Reverse Crunch"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Reverse crunch"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Crunch inverso"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Crunch inversé"
           }
         }
       }
@@ -36926,6 +40406,486 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Planche latérale"
+          }
+        }
+      }
+    },
+    "exercise.singleArmCableRow.cue1" : {
+      "comment" : "Single-arm cable row: how-to cue 1 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Stell einen Griff auf mittlere Höhe und nimm ihn in eine Hand."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set a handle at mid-height and hold it in one hand."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pon un agarre a media altura y sujétalo con una mano."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Règle une poignée à mi-hauteur et tiens-la d'une main."
+          }
+        }
+      }
+    },
+    "exercise.singleArmCableRow.cue2" : {
+      "comment" : "Single-arm cable row: how-to cue 2 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sitz oder steh aufrecht, den Arm lang zur Maschine gestreckt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sit or stand tall, arm reaching long toward the machine."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Siéntate o ponte de pie con la espalda recta y el brazo bien estirado hacia la máquina."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Assieds-toi ou mets-toi debout, dos droit, bras bien tendu vers la machine."
+          }
+        }
+      }
+    },
+    "exercise.singleArmCableRow.cue3" : {
+      "comment" : "Single-arm cable row: how-to cue 3 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Zieh den Ellbogen nach hinten, bis er an den Rippen vorbei ist."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Row your elbow back until it passes your ribs."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lleva el codo atrás hasta que pase las costillas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tire le coude vers l'arrière jusqu'à ce qu'il dépasse les côtes."
+          }
+        }
+      }
+    },
+    "exercise.singleArmCableRow.cue4" : {
+      "comment" : "Single-arm cable row: how-to cue 4 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Drück das Schulterblatt nach hinten, dann streck den Arm wieder lang."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Squeeze your shoulder blade, then return to a long reach."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aprieta el omóplato y vuelve a estirar el brazo del todo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Serre l'omoplate, puis reviens bras bien tendu."
+          }
+        }
+      }
+    },
+    "exercise.singleArmCableRow.cue5" : {
+      "comment" : "Single-arm cable row: how-to cue 5 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mach deine Wiederholungen fertig, dann Seite wechseln."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Finish your reps, then switch sides."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Termina tus repeticiones y cambia de lado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Termine tes répétitions, puis change de côté."
+          }
+        }
+      }
+    },
+    "exercise.singleArmCableRow.easier" : {
+      "comment" : "Single-arm cable row: an easier version, as a short instruction",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nimm weniger Gewicht oder rudere mit beiden Händen am Kabelzug."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Use a lighter weight, or do the cable row with both hands."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Usa menos peso o haz el remo en polea con las dos manos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Prends une charge plus légère, ou fais le tirage horizontal à deux mains."
+          }
+        }
+      }
+    },
+    "exercise.singleArmCableRow.mistake" : {
+      "comment" : "Single-arm cable row: the one common mistake to avoid, as a short phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Den Oberkörper verdrehen, um den Griff nach hinten zu ziehen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Twisting the torso to pull the handle back."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Girar el torso para tirar del agarre hacia atrás."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tourner le buste pour tirer la poignée vers l'arrière."
+          }
+        }
+      }
+    },
+    "exercise.singleArmCableRow.name" : {
+      "comment" : "Exercise name shown on screen (cable machine exercise)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Einarmiges Rudern am Kabelzug"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Single-arm cable row"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Remo a una mano en polea"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tirage horizontal unilatéral à la poulie"
+          }
+        }
+      }
+    },
+    "exercise.singleArmLatPulldown.cue1" : {
+      "comment" : "Single-arm lat pulldown: how-to cue 1 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Häng einen Einzelgriff oben an den Kabelzug."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set one handle on a high pulley."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pon un agarre en la polea alta."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fixe une poignée à la poulie haute."
+          }
+        }
+      }
+    },
+    "exercise.singleArmLatPulldown.cue2" : {
+      "comment" : "Single-arm lat pulldown: how-to cue 2 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Knie dich oder setz dich davor, einen Arm nach oben gestreckt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Kneel or sit facing it, one arm reaching up."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Arrodíllate o siéntate frente a ella, con un brazo estirado hacia arriba."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Agenouille-toi ou assieds-toi face à elle, un bras tendu vers le haut."
+          }
+        }
+      }
+    },
+    "exercise.singleArmLatPulldown.cue3" : {
+      "comment" : "Single-arm lat pulldown: how-to cue 3 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Zieh den Ellbogen nach unten an deine Seite."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pull your elbow down to your side."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Baja el codo hasta el costado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tire le coude vers le bas, jusqu'à ton flanc."
+          }
+        }
+      }
+    },
+    "exercise.singleArmLatPulldown.cue4" : {
+      "comment" : "Single-arm lat pulldown: how-to cue 4 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lass den Griff langsam hoch, bis du oben eine Dehnung spürst."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Let the handle rise slowly for a stretch at the top."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Deja que el agarre suba despacio hasta notar el estiramiento arriba."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Laisse remonter la poignée lentement pour sentir l'étirement en haut."
+          }
+        }
+      }
+    },
+    "exercise.singleArmLatPulldown.cue5" : {
+      "comment" : "Single-arm lat pulldown: how-to cue 5 of 5, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mach deine Wiederholungen fertig, dann Seite wechseln."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Finish your reps, then switch sides."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Termina tus repeticiones y cambia de lado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Termine tes répétitions, puis change de côté."
+          }
+        }
+      }
+    },
+    "exercise.singleArmLatPulldown.easier" : {
+      "comment" : "Single-arm lat pulldown: an easier version, as a short instruction",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nimm weniger Gewicht oder probier Latziehen mit Band."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Use a lighter weight, or try the band lat pulldown."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Usa menos peso o prueba el jalón con banda."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Prends une charge plus légère, ou essaie le tirage vertical à l'élastique."
+          }
+        }
+      }
+    },
+    "exercise.singleArmLatPulldown.mistake" : {
+      "comment" : "Single-arm lat pulldown: the one common mistake to avoid, as a short phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sich zur Seite lehnen und verdrehen, um den Griff herunterzuziehen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Leaning sideways and twisting to pull the handle down."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Inclinarse de lado y girar el cuerpo para bajar el agarre."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Se pencher sur le côté et se tordre pour descendre la poignée."
+          }
+        }
+      }
+    },
+    "exercise.singleArmLatPulldown.name" : {
+      "comment" : "Exercise name shown on screen (cable machine exercise)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Einarmiges Latziehen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Single-arm lat pulldown"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Jalón a una mano en polea"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tirage vertical unilatéral"
           }
         }
       }
@@ -41040,6 +45000,216 @@
         }
       }
     },
+    "exercise.tBarRow.cue1" : {
+      "comment" : "T-bar row: how-to cue 1 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Stell dich breitbeinig über die Stange oder leg die Brust auf das Polster der Maschine."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Straddle the bar, or lie chest-down on the machine's pad."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Colócate a horcajadas sobre la barra o apoya el pecho en el soporte de la máquina."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Place-toi à cheval sur la barre, ou pose la poitrine sur le support de la machine."
+          }
+        }
+      }
+    },
+    "exercise.tBarRow.cue2" : {
+      "comment" : "T-bar row: how-to cue 2 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Beug dich mit geradem Rücken aus der Hüfte vor und fass den Griff."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hinge forward with a flat back and grip the handle."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Inclínate desde la cadera con la espalda recta y sujeta el agarre."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Penche-toi depuis les hanches, dos plat, et saisis la poignée."
+          }
+        }
+      }
+    },
+    "exercise.tBarRow.cue3" : {
+      "comment" : "T-bar row: how-to cue 3 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Zieh den Griff zur unteren Brust, Ellbogen eng am Körper."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Row the handle toward your lower chest, elbows close."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lleva el agarre hacia la parte baja del pecho, con los codos pegados."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tire la poignée vers le bas de la poitrine, coudes près du corps."
+          }
+        }
+      }
+    },
+    "exercise.tBarRow.cue4" : {
+      "comment" : "T-bar row: how-to cue 4 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Drück die Schulterblätter zusammen und senk dann kontrolliert ab."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Squeeze your shoulder blades, then lower with control."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Junta los omóplatos y baja con control."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Serre les omoplates, puis redescends avec contrôle."
+          }
+        }
+      }
+    },
+    "exercise.tBarRow.easier" : {
+      "comment" : "T-bar row: an easier version, as a short instruction",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nimm weniger Gewicht oder mach Kurzhantelrudern auf der Schrägbank."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Use a lighter weight, or do the chest-supported dumbbell row."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Usa menos peso o haz el remo con mancuernas en banco inclinado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Prends une charge plus légère, ou fais le rowing haltères sur banc incliné."
+          }
+        }
+      }
+    },
+    "exercise.tBarRow.mistake" : {
+      "comment" : "T-bar row: the one common mistake to avoid, as a short phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Den Rücken runden oder das Gewicht mit Schwung aus der Hüfte hochreißen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rounding the back or heaving the weight up with the hips."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Redondear la espalda o subir el peso con un impulso de cadera."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Arrondir le dos ou soulever la charge d'un coup de hanches."
+          }
+        }
+      }
+    },
+    "exercise.tBarRow.name" : {
+      "comment" : "Exercise name shown on screen (barbell exercise)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "T-Bar-Rudern"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "T-bar row"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Remo en barra T"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Rowing barre en T"
+          }
+        }
+      }
+    },
     "exercise.threadTheNeedle.cue1" : {
       "comment" : "Thread the needle: how-to cue 1 of 5, a short imperative step",
       "extractionState" : "extracted_with_value",
@@ -42180,6 +46350,216 @@
         }
       }
     },
+    "exercise.tuckedToeTap.cue1" : {
+      "comment" : "Tucked toe tap: how-to cue 1 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Leg dich auf den Rücken und drück den unteren Rücken in den Boden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lie on your back and press your lower back down."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Acuéstate boca arriba y presiona la zona lumbar contra el suelo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Allonge-toi sur le dos et plaque le bas du dos au sol."
+          }
+        }
+      }
+    },
+    "exercise.tuckedToeTap.cue2" : {
+      "comment" : "Tucked toe tap: how-to cue 2 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Heb die Knie über die Hüfte, Schienbeine parallel zum Boden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lift your knees over your hips, shins level with the floor."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sube las rodillas por encima de la cadera, con las espinillas paralelas al suelo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Monte les genoux au-dessus des hanches, tibias parallèles au sol."
+          }
+        }
+      }
+    },
+    "exercise.tuckedToeTap.cue3" : {
+      "comment" : "Tucked toe tap: how-to cue 3 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Senk einen Fuß ab, das Knie bleibt gebeugt, und tipp mit den Zehen auf."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lower one foot, knee still bent, and tap your toes down."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Baja un pie, con la rodilla aún doblada, y toca el suelo con la punta."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Descends un pied, genou toujours plié, et touche le sol du bout des orteils."
+          }
+        }
+      }
+    },
+    "exercise.tuckedToeTap.cue4" : {
+      "comment" : "Tucked toe tap: how-to cue 4 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Bring ihn wieder hoch und tipp dann mit dem anderen Fuß."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bring it back up, then tap with the other foot."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Vuelve a subirlo y toca con el otro pie."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Remonte-le, puis touche le sol avec l'autre pied."
+          }
+        }
+      }
+    },
+    "exercise.tuckedToeTap.easier" : {
+      "comment" : "Tucked toe tap: an easier version, as a short instruction",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Beug die Knie stärker, damit die Fersen näher an der Hüfte aufsetzen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bend your knees more so your heels tap closer to your hips."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dobla más las rodillas para que los talones toquen el suelo más cerca de la cadera."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Plie davantage les genoux pour que les talons touchent le sol plus près des hanches."
+          }
+        }
+      }
+    },
+    "exercise.tuckedToeTap.mistake" : {
+      "comment" : "Tucked toe tap: the one common mistake to avoid, as a short phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Den unteren Rücken ins Hohlkreuz gehen lassen, wenn der Fuß sinkt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Letting the lower back arch as the foot lowers."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dejar que la zona lumbar se arquee al bajar el pie."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Laisser le bas du dos se cambrer quand le pied descend."
+          }
+        }
+      }
+    },
+    "exercise.tuckedToeTap.name" : {
+      "comment" : "Exercise name shown on screen (bodyweight exercise)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Toe Tap in Tischposition"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tucked toe tap"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Toque de pies en posición de mesa"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Toe tap jambes en table"
+          }
+        }
+      }
+    },
     "exercise.turkishGetUp.cue1" : {
       "comment" : "Turkish get-up: how-to cue 1 of 5, a short imperative step",
       "extractionState" : "extracted_with_value",
@@ -42656,6 +47036,216 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Rouleau de massage du haut du dos"
+          }
+        }
+      }
+    },
+    "exercise.vUp.cue1" : {
+      "comment" : "V-up: how-to cue 1 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Leg dich auf den Rücken, Beine gestreckt, Arme über dem Kopf ausgestreckt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lie on your back, legs straight, arms reaching overhead."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Acuéstate boca arriba, con las piernas estiradas y los brazos por encima de la cabeza."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Allonge-toi sur le dos, jambes tendues, bras tendus au-dessus de la tête."
+          }
+        }
+      }
+    },
+    "exercise.vUp.cue2" : {
+      "comment" : "V-up: how-to cue 2 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Spann den Bauch an und drück den unteren Rücken in den Boden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Brace your stomach and press your lower back down."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tensa el abdomen y presiona la zona lumbar contra el suelo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Gaine le ventre et plaque le bas du dos au sol."
+          }
+        }
+      }
+    },
+    "exercise.vUp.cue3" : {
+      "comment" : "V-up: how-to cue 3 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Heb Beine und Oberkörper gleichzeitig an und greif nach den Schienbeinen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lift your legs and upper body together, reaching for your shins."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sube las piernas y el torso a la vez, llevando las manos hacia las espinillas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Monte les jambes et le buste en même temps, mains vers les tibias."
+          }
+        }
+      }
+    },
+    "exercise.vUp.cue4" : {
+      "comment" : "V-up: how-to cue 4 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Senk dich langsam und kontrolliert ab, bis du wieder flach liegst."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lower slowly with control until you're lying flat again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Baja despacio y con control hasta volver a apoyarte en el suelo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Redescends lentement, avec contrôle, jusqu'à revenir à plat au sol."
+          }
+        }
+      }
+    },
+    "exercise.vUp.easier" : {
+      "comment" : "V-up: an easier version, as a short instruction",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Zieh beim Hochkommen die Knie zur Brust."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bend your knees into a tuck as you come up."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dobla las rodillas hacia el pecho al subir."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Plie les genoux vers la poitrine en montant."
+          }
+        }
+      }
+    },
+    "exercise.vUp.mistake" : {
+      "comment" : "V-up: the one common mistake to avoid, as a short phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mit Schwung hochkommen und hart zurückfallen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Swinging up with momentum and dropping back down hard."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Subir con impulso y dejarse caer de golpe."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Monter avec de l'élan et retomber lourdement."
+          }
+        }
+      }
+    },
+    "exercise.vUp.name" : {
+      "comment" : "Exercise name shown on screen (bodyweight exercise)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Klappmesser"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "V-up"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abdominal en V"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "V-up"
           }
         }
       }
@@ -43346,6 +47936,216 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Chaise contre le mur"
+          }
+        }
+      }
+    },
+    "exercise.weightedVUp.cue1" : {
+      "comment" : "Weighted V-up: how-to cue 1 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Leg dich auf den Rücken und halte eine Kurzhantel mit beiden Händen über dem Kopf."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lie on your back holding one dumbbell overhead in both hands."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Acuéstate boca arriba sujetando una mancuerna con ambas manos por encima de la cabeza."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Allonge-toi sur le dos, un haltère tenu à deux mains au-dessus de la tête."
+          }
+        }
+      }
+    },
+    "exercise.weightedVUp.cue2" : {
+      "comment" : "Weighted V-up: how-to cue 2 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Halte die Beine gestreckt und den unteren Rücken am Boden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Keep your legs straight and your lower back pressed down."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mantén las piernas estiradas y la zona lumbar pegada al suelo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Garde les jambes tendues et le bas du dos plaqué au sol."
+          }
+        }
+      }
+    },
+    "exercise.weightedVUp.cue3" : {
+      "comment" : "Weighted V-up: how-to cue 3 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Heb Beine und Brust gleichzeitig an und führ das Gewicht zu den Schienbeinen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lift your legs and chest together, bringing the weight toward your shins."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sube las piernas y el pecho a la vez, llevando el peso hacia las espinillas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Monte les jambes et le buste ensemble, en amenant le poids vers les tibias."
+          }
+        }
+      }
+    },
+    "exercise.weightedVUp.cue4" : {
+      "comment" : "Weighted V-up: how-to cue 4 of 4, a short imperative step",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Senk dich langsam ab und halte die Kurzhantel fest im Griff."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lower slowly, keeping a firm grip on the dumbbell."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Baja despacio, sujetando la mancuerna con firmeza."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Redescends lentement en tenant fermement l'haltère."
+          }
+        }
+      }
+    },
+    "exercise.weightedVUp.easier" : {
+      "comment" : "Weighted V-up: an easier version, as a short instruction",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nimm eine leichtere Kurzhantel oder mach das Klappmesser ohne Gewicht."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Use a lighter dumbbell, or do V-ups with no weight."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Usa una mancuerna más ligera o haz el ejercicio sin peso."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Prends un haltère plus léger, ou fais des V-ups sans poids."
+          }
+        }
+      }
+    },
+    "exercise.weightedVUp.mistake" : {
+      "comment" : "Weighted V-up: the one common mistake to avoid, as a short phrase",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Die Kurzhantel schwingen, um den Körper hochzuwerfen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Swinging the dumbbell to throw the body up."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Balancear la mancuerna para impulsar el cuerpo hacia arriba."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Balancer l'haltère pour lancer le corps vers le haut."
+          }
+        }
+      }
+    },
+    "exercise.weightedVUp.name" : {
+      "comment" : "Exercise name shown on screen (dumbbell exercise)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Klappmesser mit Kurzhantel"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Weighted V-up"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abdominal en V con mancuerna"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "V-up avec haltère"
           }
         }
       }

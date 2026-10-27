@@ -1988,7 +1988,9 @@ public nonisolated enum WorkoutProgram {
     /// deterministic; the equipment and difficulty terms in ``slotScore`` keep real ties rare. With
     /// `limits` naming a mild area, a machine, cable or bench-supported variant of a lift that loads
     /// it scores higher (``InjuryLimits/supportBonus(for:)``). A ``ExerciseTarget/variation`` competes
-    /// only where no staple is eligible, or as such a supported variant.
+    /// only where no staple is eligible, or as such a supported variant where no eligible staple is
+    /// one already: a mild elbow keeps its Preacher curl (a machine, so already supported) rather
+    /// than trading it for a Cable curl that wins only on the name tie-break (2026-10-27).
     static func bestExercise(
         for slot: WorkoutSlotSpec,
         in feasible: [ExerciseTarget],
@@ -2000,8 +2002,9 @@ public nonisolated enum WorkoutProgram {
     ) -> ExerciseTarget? {
         let eligible = feasible.filter { used.contains($0.name) == false && isEligible($0, for: slot) }
         let hasStaple = eligible.contains { !$0.variation }
+        let hasSupportedStaple = eligible.contains { !$0.variation && limits.supportBonus(for: $0) > 0 }
         return eligible
-            .filter { !hasStaple || !$0.variation || limits.supportBonus(for: $0) > 0 }
+            .filter { !hasStaple || !$0.variation || (!hasSupportedStaple && limits.supportBonus(for: $0) > 0) }
             .map { exercise -> (ExerciseTarget, Int) in
                 let score = slotScore(
                     slot: slot, exercise: exercise, biasTokens: biasTokens,

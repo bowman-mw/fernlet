@@ -21,7 +21,8 @@ struct ExerciseDemonstrationTests {
     static let mappingPath = "App/Fernlet/ExerciseDemonstrations.json"
     static let dropFolder = "App/Fernlet/ExerciseMedia"
     /// The IDs the mapping research asked the owner to check by eye before buying.
-    static let flaggedIDs = ["029213", "037813", "041013", "157613", "209913", "430113", "068413"]
+    static let flaggedIDs = ["029213", "037813", "041013", "157613", "209913", "430113", "068413",
+                             "394413", "600213", "600313", "086213", "120813", "022813", "088013", "232413"]
 
     /// Every version of one exercise, with short IDs so the expectations read easily.
     static let everyVersion = ExerciseDemonstrationIDs(
@@ -109,7 +110,7 @@ struct ExerciseDemonstrationTests {
     @Test func theMappingDecodesAndNamesEveryCatalogExerciseByItsFrozenName() throws {
         let mapping = try Self.committedMapping()
         let names = try Self.catalogRows().map(\.name)
-        #expect(names.count == 177, "the catalog changed size: add the new exercise's Gym Visual IDs")
+        #expect(names.count == 199, "the catalog changed size: add the new exercise's Gym Visual IDs")
         #expect(Set(mapping.keys) == Set(names),
                 "unmapped: \(Set(names).subtracting(mapping.keys).sorted()); not in the catalog: \(Set(mapping.keys).subtracting(names).sorted())")
         for (name, ids) in mapping {
@@ -119,13 +120,13 @@ struct ExerciseDemonstrationTests {
         let both = mapping.values.filter { $0.gifMale != nil && $0.gifFemale != nil }.count
         let maleOnly = mapping.values.filter { $0.gifMale != nil && $0.gifFemale == nil }.count
         let femaleOnly = mapping.values.filter { $0.gifMale == nil && $0.gifFemale != nil }.count
-        #expect(both == 159)
-        #expect(maleOnly == 13)
+        #expect(both == 177)
+        #expect(maleOnly == 17)
         #expect(femaleOnly == 5)
     }
 
     /// The committed file holds Gym Visual IDs and nothing else: GIF IDs of 6 or 7 digits,
-    /// illustration IDs of 4 or 5, every one used once, the seven flagged ones among them.
+    /// illustration IDs of 4 or 5, every one used once, the flagged ones among them.
     @Test func theMappingHoldsOnlyGymVisualIDs() throws {
         let mapping = try Self.committedMapping()
         var seen: [String] = []
@@ -139,7 +140,7 @@ struct ExerciseDemonstrationTests {
                 seen.append(still)
             }
         }
-        #expect(seen.count == 672 && Set(seen).count == seen.count, "an ID is shared or the mapping lost rows")
+        #expect(seen.count == 752 && Set(seen).count == seen.count, "an ID is shared or the mapping lost rows")
         #expect(Set(Self.flaggedIDs).isSubset(of: seen), "a flagged ID left the mapping")
         let raw = try RepoRoot.source(Self.mappingPath)
         for key in ["gifMale", "gifFemale", "illustrationMale", "illustrationFemale"] {

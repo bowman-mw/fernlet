@@ -58,7 +58,7 @@ With Reduce Motion on, an illustration comes first; if only a GIF is present, it
 held still. Only files actually in the bundle count, so a missing file simply falls through to the
 next choice, and the app builds and runs with this folder empty.
 
-## Check these seven by eye before buying
+## Check these by eye before buying
 
 The mapping flagged these as variants or differently titled items. Look at Gym Visual's preview,
 and skip or swap any that would teach the wrong form (with its paired illustration):
@@ -72,5 +72,10 @@ and skip or swap any that would teach the wrong form (with its paired illustrati
 | `209913` | Figure-four stretch |
 | `430113` | Cross-body shoulder stretch (female) |
 | `068413` | Treadmill run (male) |
+| `394413` | Alternating knee tuck (male; Gym Visual's "Seated Alternate Crunch", reclined on a bench) |
+| `600213`, `600313` | Tucked toe tap ("Lying Toe Tap": check the knees stay bent at 90°) |
+| `086213`, `120813` | Cable woodchopper ("Cable Twist (up-down)") |
+| `022813`, `088013` | Cable glute kickback ("Cable Standing Hip Extension") |
+| `232413` | Cable pull-through (female; a straight-legged rope version) |
 
 A swapped item needs its new ID in `ExerciseDemonstrations.json` too.

@@ -512,9 +512,12 @@ exercises the score adds target fit, a tool preference by slot role and ``Experi
 first for trained lifters' main lifts, dumbbells and machines for beginners, bands and bodyweight as
 fallbacks), and an ``ExerciseDifficulty`` fit; only then does the name break a tie. A row marked
 ``ExerciseTarget/variation`` (an easier or harder step, or a staple's work with another tool — 37 of
-the 59 rows the Gym Visual expansion added on 2026-10-21) competes only where no staple is eligible, or
-as the supported variant for a mild injury, so adding variations fills gaps without moving the plans
-people already follow.
+the 59 rows the Gym Visual expansion added on 2026-10-21, and all 22 of the owner's additions on
+2026-10-27) competes only where no staple is eligible, or as the supported variant for a mild injury, so
+adding variations fills gaps without moving the plans people already follow. The picker's
+`WorkoutExerciseCatalog.search` also matches `searchAliases`, the names people call a bundled exercise
+by ("ab roller" for the Ab wheel); an alias only adds results after the direct matches, so a lookup
+that takes the first result resolves as before.
 ``WorkoutSafetyFilter`` gates equipment on the exercise's tool or any alternative plus every piece of
 required gear (a pull-up bar, a bench). The split advances by the last logged split day
 (`WorkoutProgram.nextDayIndex(in:recentSessionNames:)`), not by weekday.

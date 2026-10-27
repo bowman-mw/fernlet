@@ -53,7 +53,7 @@ struct ExerciseHowToTests {
 
     @Test func everyCatalogRowHasThreeToFiveCuesOneMistakeAndOneEasierVersion() throws {
         let rows = try Self.catalogRows()
-        #expect(rows.count == 177, "the catalog changed size — write how-to text for any new row")
+        #expect(rows.count == 199, "the catalog changed size — write how-to text for any new row")
         for row in rows {
             let entry = try #require(ExerciseHowToCatalog.entry(for: row.name), "\(row.name) has no how-to entry")
             #expect(entry.name == row.name)

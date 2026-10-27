@@ -32,6 +32,17 @@ extension ExerciseHowToCatalog {
             hangingKneeRaise,
             kneePlank,
             bentKneeSidePlank,
+            vUp,
+            weightedVUp,
+            alternatingKneeTuck,
+            tuckedToeTap,
+            reverseCrunch,
+            bicycleCrunch,
+            flutterKick,
+            heelTap,
+            hollowRock,
+            plankShoulderTap,
+            cableWoodchopper,
         ]
     }
 
@@ -492,6 +503,252 @@ extension ExerciseHowToCatalog {
                             bundle: .module, comment: "Bent-knee side plank: the one common mistake to avoid, as a short phrase"),
             easier: String(localized: "exercise.bentKneeSidePlank.easier", defaultValue: "Hold for less time, or rest your top hand on the floor.",
                            bundle: .module, comment: "Bent-knee side plank: an easier version, as a short instruction")
+        )
+    }
+
+    static var vUp: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "V-up", keyStem: "vUp",
+            displayName: String(localized: "exercise.vUp.name", defaultValue: "V-up",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.vUp.cue1", defaultValue: "Lie on your back, legs straight, arms reaching overhead.",
+                       bundle: .module, comment: "V-up: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.vUp.cue2", defaultValue: "Brace your stomach and press your lower back down.",
+                       bundle: .module, comment: "V-up: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.vUp.cue3", defaultValue: "Lift your legs and upper body together, reaching for your shins.",
+                       bundle: .module, comment: "V-up: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.vUp.cue4", defaultValue: "Lower slowly with control until you're lying flat again.",
+                       bundle: .module, comment: "V-up: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.vUp.mistake", defaultValue: "Swinging up with momentum and dropping back down hard.",
+                            bundle: .module, comment: "V-up: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.vUp.easier", defaultValue: "Bend your knees into a tuck as you come up.",
+                           bundle: .module, comment: "V-up: an easier version, as a short instruction")
+        )
+    }
+
+    static var weightedVUp: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Weighted V-up", keyStem: "weightedVUp",
+            displayName: String(localized: "exercise.weightedVUp.name", defaultValue: "Weighted V-up",
+                                bundle: .module, comment: "Exercise name shown on screen (dumbbell exercise)"),
+            cues: [
+                String(localized: "exercise.weightedVUp.cue1", defaultValue: "Lie on your back holding one dumbbell overhead in both hands.",
+                       bundle: .module, comment: "Weighted V-up: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.weightedVUp.cue2", defaultValue: "Keep your legs straight and your lower back pressed down.",
+                       bundle: .module, comment: "Weighted V-up: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.weightedVUp.cue3", defaultValue: "Lift your legs and chest together, bringing the weight toward your shins.",
+                       bundle: .module, comment: "Weighted V-up: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.weightedVUp.cue4", defaultValue: "Lower slowly, keeping a firm grip on the dumbbell.",
+                       bundle: .module, comment: "Weighted V-up: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.weightedVUp.mistake", defaultValue: "Swinging the dumbbell to throw the body up.",
+                            bundle: .module, comment: "Weighted V-up: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.weightedVUp.easier", defaultValue: "Use a lighter dumbbell, or do V-ups with no weight.",
+                           bundle: .module, comment: "Weighted V-up: an easier version, as a short instruction")
+        )
+    }
+
+    static var alternatingKneeTuck: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Alternating knee tuck", keyStem: "alternatingKneeTuck",
+            displayName: String(localized: "exercise.alternatingKneeTuck.name", defaultValue: "Alternating knee tuck",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.alternatingKneeTuck.cue1", defaultValue: "Sit on the floor and lean back on your hands or forearms.",
+                       bundle: .module, comment: "Alternating knee tuck: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.alternatingKneeTuck.cue2", defaultValue: "Stretch both legs out long, just off the floor.",
+                       bundle: .module, comment: "Alternating knee tuck: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.alternatingKneeTuck.cue3", defaultValue: "Draw one knee toward your chest as the other stays long.",
+                       bundle: .module, comment: "Alternating knee tuck: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.alternatingKneeTuck.cue4", defaultValue: "Switch legs smoothly, keeping your chest lifted.",
+                       bundle: .module, comment: "Alternating knee tuck: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.alternatingKneeTuck.mistake", defaultValue: "Slumping onto the hands so the back rounds.",
+                            bundle: .module, comment: "Alternating knee tuck: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.alternatingKneeTuck.easier", defaultValue: "Rest the straight leg's heel on the floor between tucks.",
+                           bundle: .module, comment: "Alternating knee tuck: an easier version, as a short instruction")
+        )
+    }
+
+    static var tuckedToeTap: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Tucked toe tap", keyStem: "tuckedToeTap",
+            displayName: String(localized: "exercise.tuckedToeTap.name", defaultValue: "Tucked toe tap",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.tuckedToeTap.cue1", defaultValue: "Lie on your back and press your lower back down.",
+                       bundle: .module, comment: "Tucked toe tap: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.tuckedToeTap.cue2", defaultValue: "Lift your knees over your hips, shins level with the floor.",
+                       bundle: .module, comment: "Tucked toe tap: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.tuckedToeTap.cue3", defaultValue: "Lower one foot, knee still bent, and tap your toes down.",
+                       bundle: .module, comment: "Tucked toe tap: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.tuckedToeTap.cue4", defaultValue: "Bring it back up, then tap with the other foot.",
+                       bundle: .module, comment: "Tucked toe tap: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.tuckedToeTap.mistake", defaultValue: "Letting the lower back arch as the foot lowers.",
+                            bundle: .module, comment: "Tucked toe tap: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.tuckedToeTap.easier", defaultValue: "Bend your knees more so your heels tap closer to your hips.",
+                           bundle: .module, comment: "Tucked toe tap: an easier version, as a short instruction")
+        )
+    }
+
+    static var reverseCrunch: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Reverse crunch", keyStem: "reverseCrunch",
+            displayName: String(localized: "exercise.reverseCrunch.name", defaultValue: "Reverse crunch",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.reverseCrunch.cue1", defaultValue: "Lie on your back with your arms flat by your sides.",
+                       bundle: .module, comment: "Reverse crunch: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.reverseCrunch.cue2", defaultValue: "Lift your bent knees until they're above your hips.",
+                       bundle: .module, comment: "Reverse crunch: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.reverseCrunch.cue3", defaultValue: "Curl your hips off the floor, drawing your knees toward your chest.",
+                       bundle: .module, comment: "Reverse crunch: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.reverseCrunch.cue4", defaultValue: "Lower your hips slowly back to the floor.",
+                       bundle: .module, comment: "Reverse crunch: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.reverseCrunch.mistake", defaultValue: "Swinging the legs to throw the hips up.",
+                            bundle: .module, comment: "Reverse crunch: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.reverseCrunch.easier", defaultValue: "Make the curl smaller, lifting your hips only a little.",
+                           bundle: .module, comment: "Reverse crunch: an easier version, as a short instruction")
+        )
+    }
+
+    static var bicycleCrunch: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Bicycle crunch", keyStem: "bicycleCrunch",
+            displayName: String(localized: "exercise.bicycleCrunch.name", defaultValue: "Bicycle crunch",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.bicycleCrunch.cue1", defaultValue: "Lie on your back, fingertips resting lightly by your head.",
+                       bundle: .module, comment: "Bicycle crunch: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.bicycleCrunch.cue2", defaultValue: "Lift your shoulders and bring your knees above your hips.",
+                       bundle: .module, comment: "Bicycle crunch: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.bicycleCrunch.cue3", defaultValue: "Turn one elbow toward the opposite knee as the other leg straightens.",
+                       bundle: .module, comment: "Bicycle crunch: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.bicycleCrunch.cue4", defaultValue: "Switch sides in a smooth, steady rhythm.",
+                       bundle: .module, comment: "Bicycle crunch: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.bicycleCrunch.mistake", defaultValue: "Rushing and pulling on the neck instead of turning the ribs.",
+                            bundle: .module, comment: "Bicycle crunch: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.bicycleCrunch.easier", defaultValue: "Keep the straight leg higher off the floor, and go slowly.",
+                           bundle: .module, comment: "Bicycle crunch: an easier version, as a short instruction")
+        )
+    }
+
+    static var flutterKick: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Flutter kick", keyStem: "flutterKick",
+            displayName: String(localized: "exercise.flutterKick.name", defaultValue: "Flutter kick",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.flutterKick.cue1", defaultValue: "Lie on your back, hands under your hips or by your sides.",
+                       bundle: .module, comment: "Flutter kick: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.flutterKick.cue2", defaultValue: "Press your lower back down and lift both straight legs slightly.",
+                       bundle: .module, comment: "Flutter kick: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.flutterKick.cue3", defaultValue: "Kick your legs up and down in turn, small and quick.",
+                       bundle: .module, comment: "Flutter kick: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.flutterKick.cue4", defaultValue: "Feel it low in your stomach, not your lower back.",
+                       bundle: .module, comment: "Flutter kick: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.flutterKick.cue5", defaultValue: "Breathe steadily the whole time; don't hold your breath.",
+                       bundle: .module, comment: "Flutter kick: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.flutterKick.mistake", defaultValue: "Letting the lower back arch as the legs tire.",
+                            bundle: .module, comment: "Flutter kick: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.flutterKick.easier", defaultValue: "Hold your legs higher, or bend your knees a little.",
+                           bundle: .module, comment: "Flutter kick: an easier version, as a short instruction")
+        )
+    }
+
+    static var heelTap: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Heel tap", keyStem: "heelTap",
+            displayName: String(localized: "exercise.heelTap.name", defaultValue: "Heel tap",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.heelTap.cue1", defaultValue: "Lie on your back, knees bent, feet flat and hip-width apart.",
+                       bundle: .module, comment: "Heel tap: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.heelTap.cue2", defaultValue: "Lift your head and shoulders a little off the floor.",
+                       bundle: .module, comment: "Heel tap: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.heelTap.cue3", defaultValue: "Reach one hand toward the heel on that side, bending sideways.",
+                       bundle: .module, comment: "Heel tap: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.heelTap.cue4", defaultValue: "Switch sides, keeping your shoulders up the whole time.",
+                       bundle: .module, comment: "Heel tap: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.heelTap.mistake", defaultValue: "Dropping the head and shoulders back down between taps.",
+                            bundle: .module, comment: "Heel tap: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.heelTap.easier", defaultValue: "Move your feet closer to your hips so the reach is shorter.",
+                           bundle: .module, comment: "Heel tap: an easier version, as a short instruction")
+        )
+    }
+
+    static var hollowRock: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Hollow rock", keyStem: "hollowRock",
+            displayName: String(localized: "exercise.hollowRock.name", defaultValue: "Hollow rock",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.hollowRock.cue1", defaultValue: "Get into a hollow hold: lower back down, shoulders and legs lifted.",
+                       bundle: .module, comment: "Hollow rock: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.hollowRock.cue2", defaultValue: "Reach your arms overhead and keep your legs together.",
+                       bundle: .module, comment: "Hollow rock: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.hollowRock.cue3", defaultValue: "Rock gently toward your shoulders, then toward your hips.",
+                       bundle: .module, comment: "Hollow rock: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.hollowRock.cue4", defaultValue: "Keep the same curved shape the whole time you rock.",
+                       bundle: .module, comment: "Hollow rock: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.hollowRock.mistake", defaultValue: "Bending at the hips or knees so the shape breaks.",
+                            bundle: .module, comment: "Hollow rock: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.hollowRock.easier", defaultValue: "Bend your knees and reach forward, or hold without rocking.",
+                           bundle: .module, comment: "Hollow rock: an easier version, as a short instruction")
+        )
+    }
+
+    static var plankShoulderTap: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Plank shoulder tap", keyStem: "plankShoulderTap",
+            displayName: String(localized: "exercise.plankShoulderTap.name", defaultValue: "Plank shoulder tap",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.plankShoulderTap.cue1", defaultValue: "Start in a high plank, hands under your shoulders.",
+                       bundle: .module, comment: "Plank shoulder tap: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.plankShoulderTap.cue2", defaultValue: "Set your feet a little wider than your hips.",
+                       bundle: .module, comment: "Plank shoulder tap: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.plankShoulderTap.cue3", defaultValue: "Lift one hand to tap the opposite shoulder.",
+                       bundle: .module, comment: "Plank shoulder tap: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.plankShoulderTap.cue4", defaultValue: "Keep your hips still and level, then switch hands.",
+                       bundle: .module, comment: "Plank shoulder tap: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.plankShoulderTap.mistake", defaultValue: "Rocking the hips side to side with each tap.",
+                            bundle: .module, comment: "Plank shoulder tap: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.plankShoulderTap.easier", defaultValue: "Set your feet wider, or rest your knees on the floor.",
+                           bundle: .module, comment: "Plank shoulder tap: an easier version, as a short instruction")
+        )
+    }
+
+    static var cableWoodchopper: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Cable woodchopper", keyStem: "cableWoodchopper",
+            displayName: String(localized: "exercise.cableWoodchopper.name", defaultValue: "Cable woodchopper",
+                                bundle: .module, comment: "Exercise name shown on screen (cable machine exercise)"),
+            cues: [
+                String(localized: "exercise.cableWoodchopper.cue1", defaultValue: "Set the cable high and stand side-on to the machine.",
+                       bundle: .module, comment: "Cable woodchopper: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.cableWoodchopper.cue2", defaultValue: "Hold the handle in both hands above the shoulder nearest the machine.",
+                       bundle: .module, comment: "Cable woodchopper: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.cableWoodchopper.cue3", defaultValue: "Pull it down across your body toward the opposite hip.",
+                       bundle: .module, comment: "Cable woodchopper: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.cableWoodchopper.cue4", defaultValue: "Turn through your trunk and let the near foot pivot.",
+                       bundle: .module, comment: "Cable woodchopper: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.cableWoodchopper.cue5", defaultValue: "Return slowly, then repeat facing the other way.",
+                       bundle: .module, comment: "Cable woodchopper: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.cableWoodchopper.mistake", defaultValue: "Pulling with the arms alone while the trunk stays still.",
+                            bundle: .module, comment: "Cable woodchopper: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.cableWoodchopper.easier", defaultValue: "Use a lighter weight and make the movement smaller.",
+                           bundle: .module, comment: "Cable woodchopper: an easier version, as a short instruction")
         )
     }
 }

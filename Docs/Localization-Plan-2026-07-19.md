@@ -423,6 +423,12 @@ that put the machine's localized name in front. The Log sheet's minutes field fo
 app keys ("Minutes", its "20" prompt, "distance, level, notes"). Those six keys need Spanish drafts on
 `claude/spanish-switch-on` before Spanish ships.
 
+**Addendum (2026-10-27, the owner's 22 additions).** The catalog grows from 177 to 199 (V-ups, knee tucks, toe
+taps, crunch and cable variations, the T-bar row, the hip machines). Same rules: frozen English names, and every
+new `exercise.<keyStem>.` key carries es, fr and de machine drafts marked `needs_review`. The picker's new
+search aliases (`WorkoutExerciseCatalog.searchAliases`: "ab roller" finds the Ab wheel) are matching inputs,
+not display text, so they stay English and get no keys; a translated display name is already searchable.
+
 ---
 
 ## 4. Phase 2 — Translation pass (es / fr / de)

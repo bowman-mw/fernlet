@@ -57,6 +57,11 @@ extension ExerciseHowToCatalog {
             bandPullThrough,
             singleLegCalfRaise,
             dumbbellSingleLegCalfRaise,
+            cableGluteKickback,
+            hipAbductionMachine,
+            hipAdductionMachine,
+            cablePullThrough,
+            donkeyKick,
         ]
     }
 
@@ -1105,6 +1110,120 @@ extension ExerciseHowToCatalog {
                             bundle: .module, comment: "Dumbbell single-leg calf raise: the one common mistake to avoid, as a short phrase"),
             easier: String(localized: "exercise.dumbbellSingleLegCalfRaise.easier", defaultValue: "Do it on flat ground, or do single-leg calf raises with no weight.",
                            bundle: .module, comment: "Dumbbell single-leg calf raise: an easier version, as a short instruction")
+        )
+    }
+
+    static var cableGluteKickback: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Cable glute kickback", keyStem: "cableGluteKickback",
+            displayName: String(localized: "exercise.cableGluteKickback.name", defaultValue: "Cable glute kickback",
+                                bundle: .module, comment: "Exercise name shown on screen (cable machine exercise)"),
+            cues: [
+                String(localized: "exercise.cableGluteKickback.cue1", defaultValue: "Strap one ankle to a low pulley and face the machine.",
+                       bundle: .module, comment: "Cable glute kickback: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.cableGluteKickback.cue2", defaultValue: "Hold the frame and lean forward slightly, knees soft.",
+                       bundle: .module, comment: "Cable glute kickback: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.cableGluteKickback.cue3", defaultValue: "Push the strapped leg back by squeezing your glute.",
+                       bundle: .module, comment: "Cable glute kickback: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.cableGluteKickback.cue4", defaultValue: "Stop before your lower back arches, then return slowly.",
+                       bundle: .module, comment: "Cable glute kickback: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.cableGluteKickback.cue5", defaultValue: "Finish your reps, then switch sides.",
+                       bundle: .module, comment: "Cable glute kickback: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.cableGluteKickback.mistake", defaultValue: "Arching the lower back to swing the leg higher.",
+                            bundle: .module, comment: "Cable glute kickback: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.cableGluteKickback.easier", defaultValue: "Use a lighter weight, or do donkey kicks on the floor.",
+                           bundle: .module, comment: "Cable glute kickback: an easier version, as a short instruction")
+        )
+    }
+
+    static var hipAbductionMachine: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Hip abduction machine", keyStem: "hipAbductionMachine",
+            displayName: String(localized: "exercise.hipAbductionMachine.name", defaultValue: "Hip abduction machine",
+                                bundle: .module, comment: "Exercise name shown on screen (machine exercise)"),
+            cues: [
+                String(localized: "exercise.hipAbductionMachine.cue1", defaultValue: "Sit tall with the pads on the outside of your knees.",
+                       bundle: .module, comment: "Hip abduction machine: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.hipAbductionMachine.cue2", defaultValue: "Hold the handles and keep your back against the seat.",
+                       bundle: .module, comment: "Hip abduction machine: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.hipAbductionMachine.cue3", defaultValue: "Push your knees apart as far as is comfortable.",
+                       bundle: .module, comment: "Hip abduction machine: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.hipAbductionMachine.cue4", defaultValue: "Pause, then let your knees come back together slowly.",
+                       bundle: .module, comment: "Hip abduction machine: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.hipAbductionMachine.mistake", defaultValue: "Letting the weights crash down as the knees come back together.",
+                            bundle: .module, comment: "Hip abduction machine: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.hipAbductionMachine.easier", defaultValue: "Use a lighter weight, or do clamshells on the floor.",
+                           bundle: .module, comment: "Hip abduction machine: an easier version, as a short instruction")
+        )
+    }
+
+    static var hipAdductionMachine: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Hip adduction machine", keyStem: "hipAdductionMachine",
+            displayName: String(localized: "exercise.hipAdductionMachine.name", defaultValue: "Hip adduction machine",
+                                bundle: .module, comment: "Exercise name shown on screen (machine exercise)"),
+            cues: [
+                String(localized: "exercise.hipAdductionMachine.cue1", defaultValue: "Sit tall with the pads on the inside of your knees.",
+                       bundle: .module, comment: "Hip adduction machine: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.hipAdductionMachine.cue2", defaultValue: "Start with your legs only as wide as feels comfortable.",
+                       bundle: .module, comment: "Hip adduction machine: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.hipAdductionMachine.cue3", defaultValue: "Squeeze your knees together until the pads meet.",
+                       bundle: .module, comment: "Hip adduction machine: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.hipAdductionMachine.cue4", defaultValue: "Let your legs open slowly against the weight.",
+                       bundle: .module, comment: "Hip adduction machine: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.hipAdductionMachine.mistake", defaultValue: "Starting too wide and letting the weight yank the legs apart.",
+                            bundle: .module, comment: "Hip adduction machine: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.hipAdductionMachine.easier", defaultValue: "Use a lighter weight and a narrower starting position.",
+                           bundle: .module, comment: "Hip adduction machine: an easier version, as a short instruction")
+        )
+    }
+
+    static var cablePullThrough: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Cable pull-through", keyStem: "cablePullThrough",
+            displayName: String(localized: "exercise.cablePullThrough.name", defaultValue: "Cable pull-through",
+                                bundle: .module, comment: "Exercise name shown on screen (cable machine exercise)"),
+            cues: [
+                String(localized: "exercise.cablePullThrough.cue1", defaultValue: "Set a rope on a low pulley and face away from it.",
+                       bundle: .module, comment: "Cable pull-through: how-to cue 1 of 4, a short imperative step"),
+                String(localized: "exercise.cablePullThrough.cue2", defaultValue: "Grip the rope between your legs and take two steps forward.",
+                       bundle: .module, comment: "Cable pull-through: how-to cue 2 of 4, a short imperative step"),
+                String(localized: "exercise.cablePullThrough.cue3", defaultValue: "Hinge at the hips, letting the rope draw your hands through.",
+                       bundle: .module, comment: "Cable pull-through: how-to cue 3 of 4, a short imperative step"),
+                String(localized: "exercise.cablePullThrough.cue4", defaultValue: "Squeeze your glutes to bring your hips forward and stand tall.",
+                       bundle: .module, comment: "Cable pull-through: how-to cue 4 of 4, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.cablePullThrough.mistake", defaultValue: "Squatting down or pulling the rope with the arms instead of hinging.",
+                            bundle: .module, comment: "Cable pull-through: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.cablePullThrough.easier", defaultValue: "Use a lighter weight, or do the band pull-through.",
+                           bundle: .module, comment: "Cable pull-through: an easier version, as a short instruction")
+        )
+    }
+
+    static var donkeyKick: ExerciseHowTo {
+        ExerciseHowTo(
+            name: "Donkey kick", keyStem: "donkeyKick",
+            displayName: String(localized: "exercise.donkeyKick.name", defaultValue: "Donkey kick",
+                                bundle: .module, comment: "Exercise name shown on screen (bodyweight exercise)"),
+            cues: [
+                String(localized: "exercise.donkeyKick.cue1", defaultValue: "Start on hands and knees, hands under your shoulders.",
+                       bundle: .module, comment: "Donkey kick: how-to cue 1 of 5, a short imperative step"),
+                String(localized: "exercise.donkeyKick.cue2", defaultValue: "Keep one knee bent at a right angle.",
+                       bundle: .module, comment: "Donkey kick: how-to cue 2 of 5, a short imperative step"),
+                String(localized: "exercise.donkeyKick.cue3", defaultValue: "Lift that foot toward the ceiling by squeezing your glute.",
+                       bundle: .module, comment: "Donkey kick: how-to cue 3 of 5, a short imperative step"),
+                String(localized: "exercise.donkeyKick.cue4", defaultValue: "Stop before your lower back arches, then lower slowly.",
+                       bundle: .module, comment: "Donkey kick: how-to cue 4 of 5, a short imperative step"),
+                String(localized: "exercise.donkeyKick.cue5", defaultValue: "Finish your reps, then switch sides.",
+                       bundle: .module, comment: "Donkey kick: how-to cue 5 of 5, a short imperative step"),
+            ],
+            mistake: String(localized: "exercise.donkeyKick.mistake", defaultValue: "Swinging the leg up and letting the lower back sag.",
+                            bundle: .module, comment: "Donkey kick: the one common mistake to avoid, as a short phrase"),
+            easier: String(localized: "exercise.donkeyKick.easier", defaultValue: "Lift the foot only partway, or do glute bridges instead.",
+                           bundle: .module, comment: "Donkey kick: an easier version, as a short instruction")
         )
     }
 }

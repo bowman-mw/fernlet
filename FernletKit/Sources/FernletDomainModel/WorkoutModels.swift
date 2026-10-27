@@ -1624,24 +1624,57 @@ public nonisolated enum WorkoutExerciseCatalog {
         return unique.prefix(4).joined(separator: ", ")
     }
 
+    /// Other names people call a bundled exercise by, keyed by its frozen catalog name, so typing
+    /// one finds it (the owner's own words, 2026-10-27: "ab roller" is the Ab wheel). Matching
+    /// inputs, never display text: they stay English, like the frozen names they point at, and a
+    /// name here is never a second identity for the exercise.
+    static let searchAliases: [String: [String]] = [
+        "Ab wheel": ["ab roller"],
+        "Leg extension": ["quad extension"],
+        "Leg curl": ["hamstring curl"],
+        "Lying leg raise": ["laying leg raise"],
+        "Hanging knee raise": ["hanging tuck", "hanging knee tuck"],
+        "Alternating knee tuck": ["alt knee tuck"],
+        "Cable lat pullover": ["lat pull over", "straight-arm pulldown"],
+        "Neutral-grip lat pulldown": ["mag grip pulldown", "mag grip pull down"],
+        "Chest press machine": ["machine chest press"],
+        "Chest-supported dumbbell row": ["chest-supported row"],
+        "Cable overhead triceps extension": ["overhead cable triceps extension"],
+    ]
+
+    /// The exercises a picker query finds. An alias only ever adds results after every exercise the
+    /// query finds by name, muscle or category, so a caller that takes `.first` (a Recent chip, a
+    /// logged line read back) resolves exactly as it did before the aliases, a custom exercise
+    /// named "Ab roller" included.
     public static func search(_ query: String) -> [ExerciseTarget] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return allExercises }
         let normalized = trimmed.lowercased()
-        return allExercises.filter { exercise in
-            exercise.name.lowercased().contains(normalized)
-                // The drawn name too (D-L2): a translated name finds its exercise, and the frozen
-                // English name above stays a searchable alias on every device.
-                || exercise.displayName.lowercased().contains(normalized)
-                || exercise.category.rawValue.lowercased().contains(normalized)
-                // Match the FROZEN tokens as well as the localized names. Tokens alone would break
-                // English search ("upper back" no longer finds `upperBack`); localized names alone
-                // would break the moment the catalog and the device disagree on language. Matching
-                // both is a strict superset of today's behavior in English, and keeps a user who
-                // types an English muscle name on a translated device finding the same exercises.
-                || exercise.muscleTokens.contains { $0.lowercased().contains(normalized) }
-                || exercise.muscles.contains { $0.lowercased().contains(normalized) }
+        let exercises = allExercises
+        let direct = exercises.filter { matchesDirectly($0, normalized) }
+        let found = Set(direct.map(\.name))
+        let aliased = exercises.filter { exercise in
+            !found.contains(exercise.name)
+                && (searchAliases[exercise.name] ?? []).contains { $0.contains(normalized) }
         }
+        return direct + aliased
+    }
+
+    /// Whether `exercise` matches a lowercased, trimmed picker query by its own names, category or
+    /// muscles.
+    private static func matchesDirectly(_ exercise: ExerciseTarget, _ normalized: String) -> Bool {
+        exercise.name.lowercased().contains(normalized)
+            // The drawn name too (D-L2): a translated name finds its exercise, and the frozen
+            // English name above stays a searchable alias on every device.
+            || exercise.displayName.lowercased().contains(normalized)
+            || exercise.category.rawValue.lowercased().contains(normalized)
+            // Match the FROZEN tokens as well as the localized names. Tokens alone would break
+            // English search ("upper back" no longer finds `upperBack`); localized names alone
+            // would break the moment the catalog and the device disagree on language. Matching
+            // both is a strict superset of today's behavior in English, and keeps a user who
+            // types an English muscle name on a translated device finding the same exercises.
+            || exercise.muscleTokens.contains { $0.lowercased().contains(normalized) }
+            || exercise.muscles.contains { $0.lowercased().contains(normalized) }
     }
 
     private static func loadBaseExercises() -> [ExerciseTarget] {
