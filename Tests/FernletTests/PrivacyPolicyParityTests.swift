@@ -135,6 +135,14 @@ struct PrivacyPolicyParityTests {
     /// your journal" goes, word for word in all three copies) pins how the places are kept:
     /// - `All of this is encrypted on this iPhone only: never synced` — Where you've been, Places you
     ///   return to and solo photos' places.
+    ///
+    /// The three markers added with car and bike detection (round 7; the Motion sentence approved by the
+    /// owner 2026-10-25, "Approve both", and the background sentence's replacement 2026-10-26, both word
+    /// for word) pin what driving and cycling detection do:
+    /// - `you're driving, the road you take` — background mapping traces a detected drive in full, so the
+    ///   background sentence no longer says "low-power" (`only during a walk you started` stays pinned);
+    /// - `If you turn on Log my bike rides` — Motion & Fitness is read only behind that switch;
+    /// - `never keeps the motion data itself` — bike rides log as exercise, and the motion data is never kept.
     private static let substanceMarkers = [
         "iOS may refuse or end it at any time",
         "never retroactively repurposed",
@@ -181,7 +189,10 @@ struct PrivacyPolicyParityTests {
         "the widget's copy is deleted whenever you delete your map history",
         "collected while Fernlet is open",
         "only while Fernlet is open",
-        "All of this is encrypted on this iPhone only: never synced"
+        "All of this is encrypted on this iPhone only: never synced",
+        "you're driving, the road you take",
+        "If you turn on Log my bike rides",
+        "never keeps the motion data itself"
     ]
 
     /// Loads each copy's text, keyed by its repo-relative path.
