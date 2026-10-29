@@ -137,8 +137,13 @@ struct SettingsSheet: View {
     /// ``announceSearchResultCount(_:)``.
     @State private var searchAnnouncementTask: Task<Void, Never>?
 
+    /// The pushed pages. Empty on open, except a DEBUG screenshot run's `FERNLET_UI_TEST_BB_SCENARIO=goal`,
+    /// which opens on Goal & nutrition (`bb-goal`).
+    /// Type-erased, so a page that pushes its own value type keeps working inside the stack.
+    @State private var settingsPath = NavigationPath(UITestSupport.bodybuildingScenario == "goal" ? [SettingsRoute.goalNutrition] : [])
+
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $settingsPath) {
             settingsRoot
                 .navigationDestination(for: SettingsRoute.self) { route in
                     destination(for: route)
@@ -987,7 +992,11 @@ struct SettingsSheet: View {
         // `setSelectedGoal` so the pick schedules a snapshot save (a bare keypath binding never did).
         GoalPresetCards(selectedGoal: Binding(
             get: { store.settings.selectedGoal },
-            set: { store.setSelectedGoal($0) }
+            set: {
+                store.setSelectedGoal($0)
+                // Bodybuilding seats its Bathroom tile in Care's place, once (`bb-bowel`).
+                store.seatBathroomTileIfNeeded()
+            }
         ), weightManagementDeficitPercent: NutritionTargetCalculator.weightManagementDeficitPercent(for: store.settings))
         if let note = goalOverrideFootnote {
             Text(note)

@@ -2727,6 +2727,8 @@ struct MealSheet: View {
     /// Toggled by the explicit Change selection action to re-run the unchanged selected name.
     @State private var catalogSearchRestart = false
     @State private var mealType: MealType?
+    /// The Bodybuilding goal's Free meal tag (`bb-free`): sealed for the logged meals when Save lands.
+    @State private var isFreeMeal = false
     @State private var notice: String?
     @State private var path: [MealFlowDestination] = []
     /// The typed product query held while the user reads the one-time egress disclosure.
@@ -2826,8 +2828,17 @@ struct MealSheet: View {
         }
     }
 
+    /// The host's reporter, sealing the Free meal tag first for exactly the meals logged when the chip
+    /// is on and the Bodybuilding goal is chosen (`bb-free`), on the day they landed.
+    private var logReporter: MealLogReporter {
+        guard isFreeMeal, store.isBathroomTileAvailable else { return onLogged }
+        return onLogged.first { [store] meals, dayKey in _ = store.tagFreeMeals(meals, loggedTo: dayKey) }
+    }
+
     /// Opens with the seed's description and by-hand macros, once (a later appear keeps the edits).
     private func applySeed() {
+        // DEBUG screenshot run (`bb-free`): `FERNLET_UI_TEST_BB_SCENARIO=free` opens with the tag on.
+        if UITestSupport.bodybuildingScenario == "free" { isFreeMeal = true }
         guard let seed, description.isEmpty else { return }
         description = seed.description
         if let macros = seed.macros {
@@ -3007,7 +3018,7 @@ struct MealSheet: View {
         RecentMealsSheet(store: store) { meal in
             let copiedMeal = store.copyMeal(
                 meal, mealType: mealType ?? MealParser.classifyMealType(meal.name))
-            onLogged([copiedMeal])
+            logReporter([copiedMeal])
             didLogFromRecent = true
             showingRecentMeals = false
         }
@@ -3054,7 +3065,7 @@ struct MealSheet: View {
         let photoAttached = true
         #endif
         reviewContext = nil
-        onLogged(committed, landedWithCaveat: !photoAttached)
+        logReporter(committed, landedWithCaveat: !photoAttached)
         closeAfterLogging(photoAttached: photoAttached)
     }
 
@@ -3151,7 +3162,7 @@ struct MealSheet: View {
             meal = store.logLabelScannedFoodItem(pending.item, mealType: mealType, servings: servings)
         }
         BarcodeServingMemory.setLastServings(servings, for: pending.item.barcode)
-        onLogged([meal])
+        logReporter([meal])
         // Clearing the pending food dismisses this sheet; the sheet's `onDismiss` then exits the
         // scan-log flow (same net effect as the old explicit `dismiss()` here).
         pendingScannedFood = nil
@@ -3178,6 +3189,10 @@ struct MealSheet: View {
                     }
 
                     FoodMealTypeDropdown(selection: $mealType, inferred: inferredMealType)
+
+                    if store.isBathroomTileAvailable {
+                        FreeMealTagRow(isFreeMeal: $isFreeMeal)
+                    }
 
                     if isEnteringMacrosByHand {
                         manualMacrosSection
@@ -3464,7 +3479,7 @@ struct MealSheet: View {
         if FoodProductWebSearch.shouldSearch(for: mealDescription, foodItems: store.foodItems) {
             if let cachedProduct = store.cachedWebImportedFoodProduct(for: mealDescription) {
                 let meal = store.logWebImportedFoodProduct(cachedProduct, mealType: selectedMealType)
-                onLogged([meal])
+                logReporter([meal])
                 dismiss()
                 return
             }
@@ -3502,7 +3517,7 @@ struct MealSheet: View {
         #else
         let photoAttached = true
         #endif
-        onLogged([meal], landedWithCaveat: !photoAttached)
+        logReporter([meal], landedWithCaveat: !photoAttached)
         closeAfterLogging(photoAttached: photoAttached)
     }
 
@@ -3515,7 +3530,7 @@ struct MealSheet: View {
         #else
         let photoAttached = true
         #endif
-        onLogged([meal], landedWithCaveat: !photoAttached)
+        logReporter([meal], landedWithCaveat: !photoAttached)
         closeAfterLogging(photoAttached: photoAttached)
     }
 
@@ -3557,7 +3572,7 @@ struct MealSheet: View {
             #else
             let photoAttached = true
             #endif
-            onLogged(meals, landedWithCaveat: !photoAttached)
+            logReporter(meals, landedWithCaveat: !photoAttached)
             closeAfterLogging(photoAttached: photoAttached)
         }
     }
