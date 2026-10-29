@@ -26,6 +26,7 @@ enum SettingsShortcutSprite {
         case .breathing: WorldSprites.breathe
         case .grounding: WorldSprites.leaf
         case .worryBox: WorldSprites.box
+        case .bathroom: BathroomRollSprite.roll
         }
     }
 }

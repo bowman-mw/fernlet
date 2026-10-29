@@ -34,6 +34,7 @@ extension FernletStore {
             prefs.setDeload(weekStart: deload, true)
         }
         settings.bodybuildingCalendar = prefs
+        seedBathroomDemoCount()
         // Idempotent: the first seeded day already holding a workout means an earlier launch seeded them.
         guard loadDay(for: first).workouts.isEmpty else { return }
         for offset in 0..<(7 * Self.bodybuildingDemoWeeks + 7) {
