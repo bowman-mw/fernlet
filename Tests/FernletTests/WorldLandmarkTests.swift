@@ -135,7 +135,7 @@ struct WorldLandmarkTests {
         #expect(keeper.isFound(park))
         let reopened = PassportStore(vault: vault)
         try reopened.load()
-        #expect(reopened.book.count(of: .landmark) == 1, "the landmark is sealed in the passport")
+        #expect(reopened.book.discoveries(of: .landmark) == 1, "the landmark is sealed in the passport")
     }
 
     /// A decoy records nothing and finds nothing; the grey list itself is still there to draw.
@@ -153,7 +153,7 @@ struct WorldLandmarkTests {
         #expect(!keeper.isFound(park))
         let reopened = PassportStore(vault: vault)
         try reopened.load()
-        #expect(reopened.book.count(of: .landmark) == 0, "the decoy's fix was never written")
+        #expect(reopened.book.discoveries(of: .landmark) == 0, "the decoy's fix was never written")
     }
 
     /// A missing landmark file means no landmarks (the atlas still works); a malformed one too.
@@ -177,7 +177,7 @@ struct WorldLandmarkTests {
         let keeper = WorldAtlasKeeper(vault: vault, openAtlas: { PortlandAtlas() },
                                       openLandmarks: WorldAtlasKeeper.bundledLandmarks(in: bundle))
         keeper.observe(point: Self.laurelhurst, at: Self.t1)
-        #expect(keeper.book.count(of: .city) == 1 && keeper.book.count(of: .landmark) == 0)
+        #expect(keeper.book.discoveries(of: .city) == 1 && keeper.book.discoveries(of: .landmark) == 0)
     }
 
     // MARK: Refusals

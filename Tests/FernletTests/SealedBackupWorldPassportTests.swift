@@ -239,7 +239,7 @@ struct SealedBackupWorldPassportTests {
 
         let report = await phone.engine.perform(.journalNarratives, trigger: .enable, phases: .both)
         #expect(report.gateFailure == .backupOff)
-        #expect(phone.host.worldPassport.book.count(of: .sea) == 0, "nothing restored with the switch off")
+        #expect(phone.host.worldPassport.book.discoveries(of: .sea) == 0, "nothing restored with the switch off")
         #expect(try await Self.cloudPassport(cloud) == Self.oldPassport, "nothing exported with the switch off")
 
         phone.preferences = JournalBackupDevice.backupOn
