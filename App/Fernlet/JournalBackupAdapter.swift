@@ -3,6 +3,7 @@ import CryptoKit
 import FernletFoundation
 import Foundation
 import PrivateMemoryStore
+import WorldMapStore
 
 /// A sealed-content DEVICE key (journal, Worry Box) read WITHOUT minting — the one helper the "entries
 /// this iPhone can't open" check and the journal Sealed backup share (journal and intimacy Sealed
@@ -101,7 +102,20 @@ struct SealedBackupJournalReferences: Equatable {
 ///   idempotent merge re-adds the missing ones.
 /// - A v1 chunk is a bare `[JournalNarrative]` array.
 ///
-/// No tier-two memory, Core Memory note or summary is carried (§7.5): exactly `JournalNarrative` rows.
+/// No tier-two memory, Core Memory note or summary is carried (§7.5): exactly `JournalNarrative` rows,
+/// plus the World passport on the head.
+///
+/// **The World passport** (round 7, owner 2026-10-29: "so a new phone gets it back"; sealed like journal
+/// text). The head of every journal set carries the passport's own versioned bytes
+/// (``headPassport()``, `PassportBook.encoded()`; `"passport"` in ``SealedBackupV2Envelope``), sealed by
+/// the journal chunks' own content-key path, so nothing of it reaches CloudKit in the clear. It rides
+/// the journal's switch (`sealedBackupJournalEnabled`: no switch of its own until the design session
+/// gives it one), its owner hold, its compare-and-swap, its export spacing and its deletes (turning the
+/// journal backup off, and Delete everything, delete the passport's copy with the journal's). A
+/// restore merges it by token, keeping the earliest date and never removing a local entry
+/// (``restorePassport(_:)``, `PassportBook.merge`), before the records. A passport that can't be read
+/// right now (the phone locked, a decoy) fails the export rather than writing a head without it, and a
+/// failed merge keeps the restore unresolved for a later pass. Empty, it is left off the head.
 @MainActor
 final class JournalBackupAdapter: SealedBackupV2Adapter {
     /// Answers the sealed journal store — read on first use, so an adapter whose payload never runs
@@ -119,6 +133,12 @@ final class JournalBackupAdapter: SealedBackupV2Adapter {
     let deviceKey: @MainActor () -> SealedDeviceKeyRead
     /// Rebuilds the day skeletons of restored entries; false when a day write failed.
     let reinstate: @MainActor ([JournalNarrativeSkeleton]) -> Bool
+    /// The World passport as it is now; throws when it can't be read right now (never an empty one in
+    /// its place).
+    let passport: @MainActor () throws -> PassportBook
+    /// Merges a restored passport into this iPhone's (by token, the earliest date kept) and saves;
+    /// throws when it was not saved.
+    let mergePassport: @MainActor (PassportBook) throws -> Void
 
     /// Creates the adapter.
     ///
@@ -129,18 +149,24 @@ final class JournalBackupAdapter: SealedBackupV2Adapter {
     ///     every row.
     ///   - deviceKey: The journal device key, read without minting.
     ///   - reinstate: Rebuilds day skeletons; false when a write failed.
+    ///   - passport: The World passport now; throws when it can't be read.
+    ///   - mergePassport: Merges a restored passport and saves; throws when it was not saved.
     init(
         repository: @escaping @MainActor () -> JournalNarrativeRepository,
         isOpen: @escaping @MainActor () -> Bool,
         references: @escaping @MainActor () -> SealedBackupJournalReferences?,
         deviceKey: @escaping @MainActor () -> SealedDeviceKeyRead,
-        reinstate: @escaping @MainActor ([JournalNarrativeSkeleton]) -> Bool
+        reinstate: @escaping @MainActor ([JournalNarrativeSkeleton]) -> Bool,
+        passport: @escaping @MainActor () throws -> PassportBook,
+        mergePassport: @escaping @MainActor (PassportBook) throws -> Void
     ) {
         self.repositoryProvider = repository
         self.isOpen = isOpen
         self.references = references
         self.deviceKey = deviceKey
         self.reinstate = reinstate
+        self.passport = passport
+        self.mergePassport = mergePassport
     }
 
     /// The sealed journal store (resolved once).
@@ -236,6 +262,33 @@ final class JournalBackupAdapter: SealedBackupV2Adapter {
                 try repository.delete(ids: Array(stillDead[start..<min(start + batch, stillDead.count)]))
             }
             return stillDead.count
+        }
+    }
+
+    /// The World passport's versioned bytes for the head, or nil while it is empty. Throws while the
+    /// seam is shut or the passport can't be read right now, so no head is written without it.
+    func headPassport() throws -> Data? {
+        try withOpenSeam {
+            let book = try passport()
+            guard !book.isEmpty else { return nil }
+            return try book.encoded()
+        }
+    }
+
+    /// Merges the head's passport into this iPhone's (by token, the earliest date kept, nothing local
+    /// removed). Bytes this build can't read are ``SealedBackupV2FormatError/unreadableRecords`` (a
+    /// newer Fernlet wrote them: never dropped, never written over); a failed save is rethrown, so the
+    /// restore stays unresolved and a later pass merges again.
+    func restorePassport(_ data: Data) throws {
+        try withOpenSeam {
+            let book: PassportBook
+            do {
+                book = try PassportBook(data: data)
+            } catch {
+                FernletAuditLog.log("sealedBackup.v2.journalPassportUnreadable")
+                throw SealedBackupV2FormatError.unreadableRecords
+            }
+            try mergePassport(book)
         }
     }
 }

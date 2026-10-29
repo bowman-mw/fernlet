@@ -93,7 +93,10 @@ public nonisolated struct WorldMapKeys: Sendable {
 /// (complete for the store, until-first-unlock for the locked-phone buffer), and kept in a folder
 /// excluded from device backup. Nothing here is synced, exported, shared, given to the AI, or written to
 /// Apple Health, and nothing in `CloudKitSync`, `AIProviders`, `AIContext`, `FernletSocial` or
-/// `FernletConnections` can import this module (the strict build fails them).
+/// `FernletConnections` can import this module (the strict build fails them). The one exception is the
+/// passport's book (``PassportBook``, round 7): the app's journal Sealed backup carries its versioned
+/// bytes inside the journal set's sealed head, sealed under the backup's own key before anything
+/// reaches CloudKit; the file itself, and every other file here, never leaves the iPhone.
 ///
 /// `clearAll()` is the wipe: Delete everything and the silent wipe reach it through `FernletStore`'s
 /// funnel, and the recovery lock through its own purge hook.

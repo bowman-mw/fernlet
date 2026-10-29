@@ -20,6 +20,12 @@ import WorldMapStore
 /// recovery lock's purge hook, and "Delete map history"), and the file lives in the vault's folder, which
 /// `WorldMapVault.clearAll()` removes with its keys.
 ///
+/// **The sealed iCloud backup** (owner 2026-10-29: "so a new phone gets it back"). The passport rides on
+/// the head of the journal's Sealed backup set (`JournalBackupAdapter`), sealed like the journal's text
+/// and behind the journal's switch: ``bookForBackup()`` hands it out (never in a decoy, never an empty
+/// stand-in for one that can't be read), ``restore(_:)`` merges a restored one by token keeping the
+/// earliest date, and ``onPassportChanged`` tells the store the journal's backup owes an upload.
+///
 /// **Discoveries for Sprout** (idea B). ``discoveries()`` is a stream of each first visit, announced only
 /// after it is saved, at most ``eventBufferSize`` held for a slow reader (the newest kept). The companion
 /// hooks in later; nothing reads it yet.
@@ -55,6 +61,12 @@ final class WorldAtlasKeeper {
     @ObservationIgnored private var atlas: AtlasState = .notOpened
     @ObservationIgnored private var lastRead: GeoPoint?
     @ObservationIgnored private var subscriber: AsyncStream<AtlasDiscovery>.Continuation?
+    /// Runs after the passport on disk changed for the sealed backup's sake: a first visit was saved, or
+    /// ``clearAll()`` removed it. The store sets it to mark the journal's backup owed
+    /// (`markSealedBackupDirty(.journalNarratives)`), since the journal's head carries the passport, so
+    /// the next export writes the new passport, or drops a deleted one. A restore does not run it (the
+    /// restore marks the journal owed itself). Nil (tests) does nothing.
+    @ObservationIgnored var onPassportChanged: (@MainActor () -> Void)?
 
     /// A keeper over `vault`, opening the atlas with `openAtlas` when the first fix arrives (the app passes
     /// ``bundledPack(in:open:)``; tests pass a fake). `openAtlas` returns nil when there is no atlas.
@@ -108,6 +120,7 @@ final class WorldAtlasKeeper {
         lastRead = point
         guard !found.isEmpty else { return }
         book = store.book
+        onPassportChanged?()
         announce(found)
     }
 
@@ -119,33 +132,48 @@ final class WorldAtlasKeeper {
         book = on ? PassportBook() : store.book
     }
 
-    /// The wipe: forgets the passport and removes its file. Whether the file is gone.
+    /// The wipe: forgets the passport and removes its file, then runs ``onPassportChanged`` so the
+    /// journal's backup drops its copy at the next export (a wipe that deletes the backup itself owes
+    /// nothing: the store's dirty mark is a no-op during Delete everything). Whether the file is gone.
     func clearAll() -> Bool {
         lastRead = nil
         book = PassportBook()
-        return store.removeAll()
+        let removed = store.removeAll()
+        onPassportChanged?()
+        return removed
     }
 
     // MARK: The sealed backup
 
-    /// The passport to put in the sealed iCloud backup, or nil in a decoy or while it can't be read.
-    func bookForBackup() -> PassportBook? {
-        guard !isDecoy, loadStore() else { return nil }
+    /// Why the sealed backup can't have the passport right now (it then writes and merges nothing).
+    enum BackupRefusal: Error, Equatable {
+        /// A decoy session is showing: nothing real is handed out or written.
+        case decoy
+        /// The passport can't be read right now (the phone is locked): try again later.
+        case unreadable
+    }
+
+    /// The passport to put in the sealed iCloud backup (the journal's head carries it): the person's whole
+    /// passport, empty when nothing has been visited. Throws ``BackupRefusal`` in a decoy and while it
+    /// can't be read, never an empty book in its place, so a backup is never written without it.
+    func bookForBackup() throws -> PassportBook {
+        guard !isDecoy else { throw BackupRefusal.decoy }
+        guard loadStore() else { throw BackupRefusal.unreadable }
         return store.book
     }
 
-    /// Merges a passport restored from the sealed backup into this one (by token, the earliest date kept).
-    /// Whether it was merged and saved; never in a decoy. A restore announces nothing.
-    func restore(_ restored: PassportBook) -> Bool {
-        guard !isDecoy else { return false }
+    /// Merges a passport restored from the sealed backup into this one (by token, the earliest date kept,
+    /// nothing local removed) and saves it; a restore announces nothing. Throws ``BackupRefusal/decoy`` in
+    /// a decoy, and the store's error when it could not be read or saved (the book is then as it was).
+    func restore(_ restored: PassportBook) throws {
+        guard !isDecoy else { throw BackupRefusal.decoy }
         do {
             _ = try store.restore(restored)
         } catch {
             FernletAuditLog.log("worldMap.passport.restoreFailed")
-            return false
+            throw error
         }
         book = store.book
-        return true
     }
 
     // MARK: Discoveries

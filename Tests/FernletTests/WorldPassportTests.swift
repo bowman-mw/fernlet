@@ -216,10 +216,13 @@ struct WorldPassportTests {
         keeper.observe(point: Self.portlandPoint, at: Self.t1)
         #expect(keeper.book.count(of: .country) == 1)
         keeper.setDecoy(true)
-        #expect(keeper.book.isEmpty && keeper.bookForBackup() == nil)
+        #expect(keeper.book.isEmpty)
+        #expect(throws: WorldAtlasKeeper.BackupRefusal.decoy) { try keeper.bookForBackup() }
         keeper.observe(point: Self.caribbeanPoint, at: Self.t2)
         #expect(keeper.book.isEmpty)
-        #expect(!keeper.restore(PassportBook()), "a decoy restores nothing")
+        #expect(throws: WorldAtlasKeeper.BackupRefusal.decoy, "a decoy restores nothing") {
+            try keeper.restore(PassportBook())
+        }
         keeper.setDecoy(false)
         #expect(keeper.book.count(of: .country) == 1 && keeper.book.count(of: .sea) == 0)
         let reopened = PassportStore(vault: vault)
@@ -296,16 +299,58 @@ struct WorldPassportTests {
         var restored = PassportBook()
         _ = restored.record(Self.portland, at: Self.t1)
         _ = restored.record(Self.antarctica, at: Self.t3)
-        #expect(keeper.restore(restored))
+        try keeper.restore(restored)
         #expect(keeper.book.firstVisit(.country, token: "US") == Self.t1)
         #expect(keeper.book.firstVisit(.continent, token: "antarctica") == Self.t3)
         let reopened = PassportStore(vault: vault)
         try reopened.load()
-        #expect(reopened.book == keeper.book && keeper.bookForBackup() == keeper.book)
+        #expect(try reopened.book == keeper.book && keeper.bookForBackup() == keeper.book)
         keeper.endDiscoveries()
         var heard = 0
         for await _ in stream.prefix(32) { heard += 1 }
         #expect(heard == 4, "only the observed fix's four first visits; the restore announces none")
+    }
+
+    /// The sealed backup's hook (the store marks the journal's backup owed): it runs when a first visit is
+    /// saved and when the wipe removes the passport, never for a fix that found nothing new, a decoy's fix or
+    /// a restore.
+    @Test func thePassportChangedHookRunsForSavedFirstVisitsAndTheWipeOnly() throws {
+        let vault = WorldMapVault.ephemeral()
+        defer { _ = vault.clearAll() }
+        let keeper = Self.keeper(vault)
+        var changes = 0
+        keeper.onPassportChanged = { changes += 1 }
+        keeper.observe(point: Self.portlandPoint, at: Self.t1)
+        #expect(changes == 1, "a saved first visit")
+        keeper.observe(point: Self.portlandPoint.offset(east: 120, north: 0), at: Self.t2)
+        #expect(changes == 1, "nothing new was found")
+        keeper.setDecoy(true)
+        keeper.observe(point: Self.pacificPoint, at: Self.t2)
+        keeper.setDecoy(false)
+        #expect(changes == 1, "a decoy's fix changes nothing")
+        var restored = PassportBook()
+        _ = restored.record(Self.antarctica, at: Self.t3)
+        try keeper.restore(restored)
+        #expect(changes == 1, "a restore marks the journal owed itself")
+        #expect(try keeper.bookForBackup().count(of: .continent) == 2)
+        #expect(keeper.clearAll())
+        #expect(changes == 2, "the wipe drops the backup's copy at the next export")
+    }
+
+    /// While the passport can't be read (the phone locked), the backup gets an error, never an empty book
+    /// that would be written over the one in iCloud.
+    @Test func aLockedPassportIsRefusedToTheBackupNeverEmpty() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("WorldMap-\(UUID().uuidString)")
+        let key = SymmetricKey(size: .bits256)
+        let writer = WorldMapVault(directory: directory, keys: WorldMapKeys(key: { _ in key }, removeAll: { true }))
+        defer { _ = writer.clearAll() }
+        Self.keeper(writer).observe(point: Self.portlandPoint, at: Self.t1)
+        let locked = WorldMapVault(directory: directory, keys: WorldMapKeys(
+            key: { _ in throw WorldMapVault.VaultError.keyUnavailable }, removeAll: { true }))
+        let keeper = Self.keeper(locked)
+        #expect(throws: WorldAtlasKeeper.BackupRefusal.unreadable) { try keeper.bookForBackup() }
+        #expect(throws: WorldMapVault.VaultError.keyUnavailable) { try keeper.restore(PassportBook()) }
+        #expect(try Self.keeper(writer).bookForBackup().count(of: .country) == 1, "the passport is still there")
     }
 }
 
