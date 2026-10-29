@@ -60,6 +60,9 @@ SIMPLIFY_DEGREES = 0.001
 # latitude) and under a third of its 10-pt hex. 0.003° (1 pt) and 0.005° do not leave the 6 MiB cap any margin.
 ADMIN1_SIMPLIFY_DEGREES = 0.008
 MAX_ADMIN1 = 8192
+# A code differently named admin-1 features share stays with the largest only when it is this many times the
+# area of all the others together (New South Wales over Lord Howe Island, Cundinamarca over Bogotá).
+ADMIN1_DOMINANCE = 10.0
 SCALE = 100_000
 FILL_RADIUS = 5
 MIN_SEA_CELLS = 3
@@ -125,8 +128,8 @@ THE_195 = frozenset(UN_MEMBERS) | {"VA", "PS"}
 assert len(set(UN_MEMBERS)) == 193 and len(THE_195) == 195, "the 195 table is wrong"
 
 ALPHA2 = re.compile(r"^[A-Z]{2}$")
-# A real ISO 3166-2 code (Natural Earth marks its own stand-ins with "~" or "-99-").
-ISO_3166_2 = re.compile(r"^[A-Z]{2}-[A-Z0-9]{1,3}$")
+# A real ISO 3166-2 code (Natural Earth marks its own stand-ins with "~", "-99-" or an "X" and digits).
+ISO_3166_2 = re.compile(r"^[A-Z]{2}-(?!X[0-9])[A-Z0-9]{1,3}$")
 WIKIDATA = re.compile(r"^Q[0-9]+$")
 
 
@@ -1056,15 +1059,17 @@ def admin1_country(attrs, a3_codes, ctry_codes, report, name):
 
 def admin1_features(features, a3_codes, ctry_codes, report):
     """One dict per admin-1 feature whose country CTRY has: ISO code (or None), ne_id, country, names,
-    rings. A feature with no country or no rings is logged and left out."""
+    rings. A feature with no country, rings or name (a few unnamed islets) is logged and left out: a fix
+    there names only its country."""
     items = []
     for geom, attrs in features:
         name = text_field(attrs, "NAME_EN", "NAME")
         ne_id = attrs.get("NE_ID")
         country = admin1_country(attrs, a3_codes, ctry_codes, report, name)
         rings = polygon_rings(geom)
-        if country is None or not rings or not isinstance(ne_id, int):
-            report.unmap("admin-1 %s (ne_id %s): no CTRY country, rings or ne_id; left out of ADM1" % (name, ne_id))
+        if country is None or not rings or not isinstance(ne_id, int) or not name:
+            report.unmap("admin-1 %r (ne_id %s): no CTRY country, rings, ne_id or name; left out of ADM1"
+                         % (name, ne_id))
             continue
         iso = text_field(attrs, "ISO_3166_2").upper()
         if not ISO_3166_2.match(iso):
@@ -1076,11 +1081,31 @@ def admin1_features(features, a3_codes, ctry_codes, report):
     return items
 
 
+def rings_area(rings):
+    """The rings' net area in square degrees, a degree of longitude taken at their mean latitude (signed
+    shoelace sums, so a hole subtracts)."""
+    if not rings:
+        return 0.0
+    signed = sum(float(np.dot(r[:-1, 0], r[1:, 1]) - np.dot(r[1:, 0], r[:-1, 1])) / 2 for r in rings)
+    mean_lat = float(np.mean(np.concatenate([r[:, 1] for r in rings])))
+    return abs(signed) * float(np.cos(np.radians(mean_lat)))
+
+
+def admin1_code_holder(names):
+    """Which name keeps a code differently named features share: the largest, when it is ADMIN1_DOMINANCE
+    times the area of all the others together; else None (the code names none of them)."""
+    areas = {name: sum(rings_area(m["rings"]) for m in same) for name, same in names.items()}
+    largest = max(sorted(areas), key=lambda name: areas[name])
+    others = sum(area for name, area in areas.items() if name != largest)
+    return largest if areas[largest] >= ADMIN1_DOMINANCE * others else None
+
+
 def admin1_entries(items, report):
     """The ADM1 entries before encoding, each with its frozen token. A real ISO 3166-2 code is the token
     when every feature carrying it has one name (several such features merge into one entry, as Natural Earth
-    splits a few provinces into pieces); a code several differently named features share (Bosnia's cantons
-    all say BA-BIH) names none of them, and each name becomes its own entry, "ne:<smallest ne_id>"."""
+    splits a few provinces into pieces). A code several differently named features share stays with the
+    largest when it dwarfs the rest (admin1_code_holder) and names none of the others (Bosnia's cantons all
+    say BA-BIH, so none keeps it); each name without the code is its own entry, "ne:<smallest ne_id>"."""
     groups = {}
     for item in sorted(items, key=lambda i: i["ne_id"]):
         key = (item["iso"], item["country"]) if item["iso"] else ("ne:%d" % item["ne_id"], item["country"])
@@ -1090,11 +1115,14 @@ def admin1_entries(items, report):
         names = {}
         for member in members:
             names.setdefault(member["name"], []).append(member)
-        if len(names) > 1:
+        holder = next(iter(names)) if len(names) == 1 else None
+        if len(names) > 1 and not code.startswith("ne:"):
+            holder = admin1_code_holder(names)
             report.counts["admin-1 codes shared by differently named features"] = \
                 report.counts.get("admin-1 codes shared by differently named features", 0) + 1
+            report.note("admin-1 code %s shared by %s; kept by %s" % (code, ", ".join(sorted(names)), holder))
         for name, same in sorted(names.items()):
-            token = code if len(names) == 1 else "ne:%d" % same[0]["ne_id"]
+            token = code if name == holder else "ne:%d" % same[0]["ne_id"]
             spanish = next((m["spanish"] for m in same if m["spanish"]), "")
             entries.append({"token": token, "country": country, "name": name, "spanish": spanish,
                             "rings": [r for m in same for r in m["rings"]], "pieces": len(same)})

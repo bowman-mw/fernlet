@@ -18,9 +18,11 @@ The synthetic world (10° cells, 16×16 sub-cells of 0.625°):
   countries     ZA = L with a hole that is LS; AU = the bay land; DK, GL
   cities        Alpha (Q1, 2M, inside an urban polygon), Beta (ne:123, 50k, no polygon), Gamma (Q3, in LS)
   admin-1       ZA-GT (lon 0..30; its Spanish name equals the English), ZA-WC (lon 30..65, a Spanish name),
-                ZA-NC in two pieces (merged), two differently named features sharing AU-BAY (each ne:<id>),
-                a stand-in code "-99-X1~" in LS (ne:<id>), DK-84 0.005° across (kept), GL-QE whose ADM0_A3 is
-                unknown (placed by ISO_A2), and one with no country at all (left out)
+                ZA-NC in two pieces (merged), two equal, differently named features sharing AU-BAY (each
+                ne:<id>), DK-81 shared by a mainland and an islet a 1,600th its size (the mainland keeps it),
+                stand-in codes "-99-X1~" in LS and "DK-X02" (each ne:<id>), DK-84 0.005° across (kept), GL-QE
+                whose ADM0_A3 is unknown (placed by ISO_A2), and one with no country and one with no name (both
+                left out)
   urban areas   Alpha's polygon (kept); one with no city anywhere near (dropped); one 2 km east of Beta,
                 inside a town's 5 km reach (kept, holding no point); one 10 km east of Beta (dropped)
   climate       5° pixels: class 7 on lon 0..30, 14 on lon 30..60 (lat -30..30), a 3-to-1 mix of 5 and 9
@@ -240,6 +242,14 @@ def write_admin1(folder):
                                   "NE_ID": 51}),
         ([box(-10, -10, -5, -5)], {"ISO_3166_2": "ZZ-01", "ISO_A2": "-1", "ADM0_A3": "ZZZ", "NAME": "Nowhere",
                                    "NE_ID": 61}),
+        ([box(-20, -10, -15, -5)], {"ISO_3166_2": "ZA-X01", "ISO_A2": "ZA", "ADM0_A3": "ZAF", "NAME": "",
+                                    "NE_ID": 71}),
+        ([box(-30, -10, -25, -5)], {"ISO_3166_2": "DK-X02", "ISO_A2": "DK", "ADM0_A3": "DNK",
+                                    "NAME": "Stand-in", "NE_ID": 81}),
+        ([box(-50, 30, -46, 34)], {"ISO_3166_2": "DK-81", "ISO_A2": "DK", "ADM0_A3": "DNK", "NAME": "Mainland",
+                                   "NE_ID": 92}),
+        ([box(-46, 30, -45.9, 30.1)], {"ISO_3166_2": "DK-81", "ISO_A2": "DK", "ADM0_A3": "DNK", "NAME": "Islet",
+                                       "NE_ID": 91}),
     ]
     write_layer(folder, "ne_10m_admin_1_states_provinces", 5, [r[0] for r in rows], fields, [r[1] for r in rows])
 
@@ -480,7 +490,7 @@ def check_admin1(c, atlas):
     """ADM1: tokens, countries, names, merges, the tiny polygon and the even-odd rings."""
     admin1 = atlas["admin1"]
     c.equal("admin-1 tokens (sorted by country, then token)", list(admin1),
-            ["ne:21", "ne:22", "DK-84", "GL-QE", "ne:31", "ZA-GT", "ZA-NC", "ZA-WC"])
+            ["ne:21", "ne:22", "DK-81", "DK-84", "ne:81", "ne:91", "GL-QE", "ne:31", "ZA-GT", "ZA-NC", "ZA-WC"])
     c.equal("sections end where their counts say", atlas["ends"], (True, True))
     get = lambda token: admin1.get(token, {"country": None, "names": None, "rings": []})  # noqa: E731
     c.equal("Spanish equal to English is stored empty", get("ZA-GT")["names"], ["Gauteng", ""])
@@ -489,6 +499,8 @@ def check_admin1(c, atlas):
     c.equal("a shared code with two names names neither", (get("ne:21")["names"], get("ne:22")["names"]),
             (["Bay North", ""], ["Bay South", ""]))
     c.equal("a stand-in code takes ne:<id>", get("ne:31")["country"], "LS")
+    c.equal("a shared code stays with a feature that dwarfs the rest", (get("DK-81")["names"], get("ne:91")["names"]),
+            (["Mainland", ""], ["Islet", ""]))
     c.equal("an unknown ADM0_A3 falls back to ISO_A2", get("GL-QE")["country"], "GL")
     c.equal("a tiny polygon keeps its ring", len(get("DK-84")["rings"]), 1)
     c.equal("point in Gauteng", inside(get("ZA-GT")["rings"], 10, 0), True)
@@ -516,6 +528,7 @@ def main():
         check_tables(c, atlas)
         check_admin1(c, atlas)
         c.equal("summary logs the admin-1 left out", "Nowhere" in log and "left out of ADM1" in log, True)
+        c.equal("summary logs the unnamed admin-1", "'' (ne_id 71)" in log, True)
         c.equal("summary names a missing promoted sea", "'Hudson Bay' not found" in log, True)
         c.equal("summary logs the tiny sea", "Tiny Sea" in log and "dropped into its neighbour" in log, True)
         c.equal("summary logs the cut-off sea", "Lake Sea" in log and "not joined" in log, True)
