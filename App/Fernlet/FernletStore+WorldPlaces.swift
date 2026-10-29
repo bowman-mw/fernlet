@@ -169,7 +169,9 @@ extension FernletStore {
             for id in log.stops.compactMap(\.workoutID) { worldRoutes.delete(for: id) }
         }
         worldPlaces.forget()
-        let deleted = worldPlaces.store.deleteAll()
+        // Round 7: the "Not here" spots and the places remembered go with Where you've been.
+        let marksGone = worldPlaces.removeMarks()
+        let deleted = worldPlaces.store.deleteAll() && marksGone
         // The homes and hotel stay (removed in Settings › Home map); the map reads them again.
         worldPlaces.reloadDeviceSide()
         return deleted
@@ -196,6 +198,8 @@ extension FernletStore {
             if let eating = worldPlaces.eatingPlaces.first(where: { $0.id == id || ($0.placeID == reference && reference != nil) }) {
                 worldPlaces.renameEatingPlace(eating.id, to: name)
             }
+            // Round 7: a remembered restaurant's or gym's icon takes the name too.
+            worldPlaces.renameKeptPlace(id, to: name)
             return log
         } catch {
             FernletAuditLog.log("worldMap.places.renameFailed")

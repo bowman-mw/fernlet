@@ -4,6 +4,7 @@ import WorldMapStore
 
 /// One day of "Where you've been" (`b2-where-been`'s top card): the day's name and "kept 30 days", its
 /// stops in time order, a sketch of the day, and (on the page's first card) the note on what is collected.
+/// With ``onDeleteStop``, a tap on a stop (or its VoiceOver action) asks to delete it (W-14, `ref-del-stop`).
 struct WorldPlacesDayCard: View {
     let day: Date
     let stops: [PlaceStop]
@@ -16,6 +17,10 @@ struct WorldPlacesDayCard: View {
     var homes: HomeBook = .empty
     /// How long the person was out and about that day, when they left and got back.
     var outAndAbout: TimeInterval? = nil
+    /// Deletes one stop, after its dialog; nil leaves the stops untappable.
+    var onDeleteStop: ((PlaceStop) -> Void)? = nil
+    /// The stop whose delete dialog is up.
+    @State private var deletingStop: PlaceStop?
 
     var body: some View {
         FernletCard {
@@ -33,7 +38,7 @@ struct WorldPlacesDayCard: View {
                 if let outAndAbout { WorldOutAndAboutLine(duration: outAndAbout) }
                 ForEach(stops) { stop in
                     FernletDottedRule()
-                    WorldPlaceStopRow(stop: stop, title: title(of: stop), detail: detail(of: stop))
+                    stopRow(stop)
                 }
                 WorldDaySketch(lines: lines, points: points)
                     .frame(height: 130)
@@ -46,6 +51,25 @@ struct WorldPlacesDayCard: View {
                 }
             }
         }
+        .modifier(WorldStopDeleteDialog(stop: $deletingStop, title: title(of:), message: message(of:)) { onDeleteStop?($0) })
+    }
+
+    /// One stop: with ``onDeleteStop``, a button that asks to delete it, with the same VoiceOver action.
+    @ViewBuilder
+    private func stopRow(_ stop: PlaceStop) -> some View {
+        let row = WorldPlaceStopRow(stop: stop, title: title(of: stop), detail: detail(of: stop))
+        if onDeleteStop != nil {
+            Button { deletingStop = stop } label: { row.contentShape(Rectangle()) }
+                .buttonStyle(.plain)
+                .accessibilityAction(named: Text(WorldPlacesDeleteCopy.deleteStop)) { deletingStop = stop }
+        } else {
+            row
+        }
+    }
+
+    /// What deleting `stop` does, for its dialog.
+    private func message(of stop: PlaceStop) -> String? {
+        WorldPlacesDeleteCopy.stopMessage(stop, place: places.first { $0.id == stop.placeID }, name: title(of: stop), homes: homes)
     }
 
     /// The day's saved walk and run lines, as they are on this iPhone now.
@@ -128,7 +152,8 @@ struct WorldPlaceStopRow: View {
     }
 }
 
-/// "Places you return to": each place and its visit count, never a date. A tap renames it. A place shows
+/// "Places you return to": each place and its visit count, never a date. A tap renames it; its long-press
+/// menu and VoiceOver actions also open it in Apple Maps and delete it (W-14, `ref-del-menu`). A place shows
 /// the person's own name, else the name Apple Maps gave again by its reference, else "A place you return
 /// to" (offline, or no reference).
 struct WorldReturnedPlacesCard: View {
@@ -138,6 +163,8 @@ struct WorldReturnedPlacesCard: View {
     /// Opens a place with Apple's reference in Apple Maps (form answer 53): the row's long-press menu
     /// and VoiceOver action, beside the rename alert's button.
     let onOpenInMaps: (PlaceRecord) -> Void
+    /// Asks to delete a place (its confirmation, `ref-del-confirm`).
+    let onDelete: (PlaceRecord) -> Void
     let onRename: (PlaceRecord) -> Void
 
     var body: some View {
@@ -166,31 +193,43 @@ struct WorldReturnedPlacesCard: View {
         }
     }
 
-    /// One place: its name and visit count; a tap renames it, and a place with Apple's reference also
-    /// opens in Apple Maps from its long-press menu and its VoiceOver actions.
-    @ViewBuilder
+    /// One place: its name and visit count; a tap renames it. Its long-press menu (the row lifted on paper)
+    /// and its VoiceOver actions are ``WorldPlaceRowAction``'s: Open in Apple Maps with Apple's reference,
+    /// and Delete this place; VoiceOver's also Rename.
     private func row(_ place: PlaceRecord) -> some View {
-        let button = Button { onRename(place) } label: {
+        Button { onRename(place) } label: {
             rowLabel(place)
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityHint(Text(WorldPlacesCopy.renameHint))
-        if place.placeID != nil {
-            button
-                .contextMenu {
-                    Button { onOpenInMaps(place) } label: { Text(WorldPlacesCopy.openInMaps) }
-                } preview: {
-                    // The row lifted on paper, so the page under the menu never shows through it.
-                    rowLabel(place)
-                        .padding(16)
-                        .frame(width: 320)
-                        .background(WorldPalette.paperLight)
+        .contextMenu {
+            ForEach(WorldPlaceRowAction.menu(for: place), id: \.self) { action in
+                Button(role: action.isDestructive ? ButtonRole.destructive : nil) { perform(action, on: place) } label: {
+                    Label { Text(action.title) } icon: { Image(systemName: action.symbol ?? "ellipsis") }
                 }
-                .accessibilityAction(named: Text(WorldPlacesCopy.openInMaps)) { onOpenInMaps(place) }
-        } else {
-            button
+            }
+        } preview: {
+            // The row lifted on paper, so the page under the menu never shows through it.
+            rowLabel(place)
+                .padding(16)
+                .frame(width: 320)
+                .background(WorldPalette.paperLight)
+        }
+        .accessibilityActions {
+            ForEach(WorldPlaceRowAction.spoken(for: place), id: \.self) { action in
+                Button { perform(action, on: place) } label: { Text(action.title) }
+            }
+        }
+    }
+
+    /// Does `action` to `place`.
+    private func perform(_ action: WorldPlaceRowAction, on place: PlaceRecord) {
+        switch action {
+        case .rename: onRename(place)
+        case .openInMaps: onOpenInMaps(place)
+        case .delete: onDelete(place)
         }
     }
 

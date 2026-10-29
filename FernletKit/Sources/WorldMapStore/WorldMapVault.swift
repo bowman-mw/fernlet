@@ -156,6 +156,12 @@ public final class WorldMapVault {
         /// matched against. Under the buffer key, because Always mode's visits arrive with the phone locked.
         public static let placesDevice = File(name: "places-device.bin", purpose: FernletCryptoPurpose.AEAD.worldMapPlacesDeviceV1,
                                               role: .buffer)
+        /// What "Remember this place" keeps beside the device side (round 7): the spots the person said "Not
+        /// here" to and the places they remembered themselves (the app's `WorldPlaceMarksStore`). The device
+        /// side's purpose and key (Always mode's visits read it with the phone locked), bound to its own
+        /// context, so neither file ever opens as the other.
+        public static let placeMarks = File(name: "places-marks.bin", purpose: FernletCryptoPurpose.AEAD.worldMapPlacesDeviceV1,
+                                            role: .buffer, context: Data("placeMarks".utf8))
         /// Where each solo camera photo was taken (`PhotoPlaceStore`), by photo id.
         public static let photoPlaces = File(name: "photo-places.bin", purpose: FernletCryptoPurpose.AEAD.worldMapPhotoPlacesV1,
                                              role: .store)

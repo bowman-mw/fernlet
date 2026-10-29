@@ -105,7 +105,7 @@ struct PrivacyPolicyParityTests {
     /// - `it never receives your map history or your walks` — Apple Maps gets the area on screen, nothing kept;
     /// - `keeps a rolling 30-day timeline of the places` — Where you've been;
     /// - `which holds only a visit count, never dates` — Places you return to;
-    /// - `therapists are never named or kept` — the allowlist's refusal;
+    /// - `therapists are never named for you` — the allowlist's refusal (reworded in round 7, below);
     /// - `so the photo can sit on your map` — a solo photo's place, never at a refused place.
     ///
     /// The two markers added in World build round 5 (owner-approved the same day, word for word) pin:
@@ -114,10 +114,15 @@ struct PrivacyPolicyParityTests {
     ///   you return to keeps of Apple's answer (its name is asked for again when you look).
     ///
     /// The four markers added in World build round 6 (both additions owner-approved word for word) pin:
-    /// - `unless you add one yourself` — a place Fernlet won't name is kept only when the person adds it;
+    /// - `Any other place is kept only if you add it yourself` — a place outside the allowlist is kept only
+    ///   when the person adds it (round 6's `unless you add one yourself`, reworded in round 7, below);
     /// - `You can put a photo on the map yourself.` — a solo photo with no place, placed by hand;
     /// - `If you mark a place as your home (up to two) or as a hotel you stay at` — homes and hotels are kept;
     /// - `it stays until you remove it in Settings › Home map` — and where they go away.
+    ///
+    /// World build round 7 (owner-approved word for word, 2026-10-26, with "Remember this place" anywhere)
+    /// rewords the allowlist sentence: `By itself, Fernlet keeps only everyday places` pins that Fernlet
+    /// keeps nothing else on its own, and the two markers above now read the new wording.
     ///
     /// The three markers added in World build round 6b (both owner-approved word for word, 2026-10-25) pin:
     /// - `encrypted on this iPhone only and never in a backup, to uncover the map around it` — the homes
@@ -176,11 +181,12 @@ struct PrivacyPolicyParityTests {
         "it never receives your map history or your walks",
         "keeps a rolling 30-day timeline of the places",
         "which holds only a visit count, never dates",
-        "therapists are never named or kept",
+        "therapists are never named for you",
         "so the photo can sit on your map",
         "anywhere else, it keeps no place",
         "keeps only Apple's reference to it, never its details",
-        "unless you add one yourself",
+        "Any other place is kept only if you add it yourself",
+        "By itself, Fernlet keeps only everyday places",
         "You can put a photo on the map yourself.",
         "If you mark a place as your home (up to two) or as a hotel you stay at",
         "it stays until you remove it in Settings › Home map",

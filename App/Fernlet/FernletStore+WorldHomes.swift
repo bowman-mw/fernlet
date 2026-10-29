@@ -73,18 +73,38 @@ extension FernletStore {
 
     // MARK: A place the person adds (ref-tag-*)
 
-    /// The spot the last lookup refused while the person is still there (`ref-tag-home`), or nil: none, they
-    /// moved on, it is old, a walk is recording, or a decoy.
-    func worldRefusedSpot(near fix: WorldFix?, now: Date = Date()) -> GeoPoint? {
-        if WorldPlacesTestScenes.scenes.contains("refused"), !duressSessionActive, let fix { return fix.point }
-        guard !duressSessionActive, !worldLocation.isWalking, let spot = worldPlaces.refusedSpot, let fix,
-              spot.point.distance(to: fix.point) <= WorldPlacesKeeper.refusedSpotReach,
-              now.timeIntervalSince(spot.at) <= WorldPlacesKeeper.refusedSpotLife else { return nil }
-        return spot.point
+    /// The spot "Remember this place" offers while the person stays (`ref-tag-home` draft 2, `ref-tag-how`):
+    /// stayed more than 2 minutes, within 50 m, not a home, a hotel or a place they keep. Nil otherwise,
+    /// while a walk is recording, or in a decoy. DEBUG scenes `refused`, `unnamedSpot` and `namedSpot` stand
+    /// one in where the person stands (display only).
+    func worldRememberSpot(near fix: WorldFix?, now: Date = Date()) -> WorldRememberSpot? {
+        guard !duressSessionActive else { return nil }
+        if let fix, let stand = WorldPlacesTestScenes.rememberSpot(at: fix.point, now: now) { return stand }
+        guard !worldLocation.isWalking else { return nil }
+        return worldPlaces.shownRememberSpot(near: fix?.point, now: now)
     }
 
-    /// Remembers the place the person named at `point` (`ref-tag-name`): it joins their places, with a visit
-    /// now. Nothing in a decoy. Whether it was kept.
+    /// "Not here" on the offered spot (`ref-tag-how`). Nothing in a decoy.
+    func dismissWorldRememberSpot() {
+        guard !duressSessionActive else { return }
+        worldPlaces.dismissRememberSpot()
+    }
+
+    /// Remembers the offered `spot` as a place under `name`, at `point` where the sheet's pin ended up
+    /// (`ref-tag-name`, `ref-tag-unnamed`, `ref-tag-named`): it joins the person's places with a visit now.
+    /// A changed name for a place Where you've been already holds reaches it while Private is open; otherwise
+    /// it shows on the map and Apple's name stays in Where you've been until renamed there. Nothing real in a
+    /// decoy. Whether it was kept.
+    @discardableResult
+    func rememberWorldSpot(_ spot: WorldRememberSpot, named name: String, at point: GeoPoint, now: Date = Date()) -> Bool {
+        guard !duressSessionActive else { return true }
+        guard let outcome = worldPlaces.remember(spot, named: name, at: point, date: now) else { return false }
+        if let label = outcome.pendingRename { _ = renameWorldPlace(outcome.placeID, to: label, now: now) }
+        return true
+    }
+
+    /// Remembers the place the person named at `point` (draft 1's `ref-tag-name`): it joins their places,
+    /// with a visit now. Nothing in a decoy. Whether it was kept.
     @discardableResult
     func rememberWorldPlace(named name: String, at point: GeoPoint, now: Date = Date()) -> Bool {
         guard !duressSessionActive else { return true }
@@ -127,5 +147,7 @@ extension FernletStore {
         guard !duressSessionActive else { return }
         worldPlaces.forget()
         if !worldPlaces.store.deleteEverything() { FernletAuditLog.log("worldMap.places.resetDeleteFailed") }
+        // Round 7: the "Not here" spots and the places remembered go with them.
+        if !worldPlaces.removeMarks() { FernletAuditLog.log("worldMap.placeMarks.resetDeleteFailed") }
     }
 }

@@ -4,12 +4,12 @@
 //
 //  The credit Apple's WeatherKit terms ask of an app that shows anything made from Apple's weather
 //  data (the owner's pick, 2026-10-25). Fernlet shows only what it makes from the current conditions —
-//  the sky behind the companion, the gentler-day note, the short-walk offer — which the terms call a
+//  the weather on the map, the gentler-day note, the short-walk offer — which the terms call a
 //  value-added product: one must credit " Weather" and say that the data Apple provides has been
 //  modified (WeatherKit's "Get started" guide, "Apple Weather and third-party attribution"; the
 //  Developer Program License Agreement, Attachment 8). The two weather-made cards carry
 //  `AppleWeatherCaption`; Settings → AI & data sources and Acknowledgments carry the mark, the notice
-//  and Apple's legal page of weather data sources. The Home sky is decoration and carries none.
+//  and Apple's legal page of weather data sources. The map's rain and snow are decoration and carry none.
 //
 //  The mark is Apple's text form, the Apple logo (U+F8FF) and "Weather", as Apple's guide writes it,
 //  drawn in the system font, the only face that has the logo. Nothing is fetched to draw it: the image
@@ -71,22 +71,21 @@ struct AppleWeatherCaption: View {
     }
 }
 
-/// Under the weather switch in Settings → AI & data sources: the mark, the notice that Fernlet modifies
-/// the data Apple provides, and ``AppleWeatherSourcesLink``.
+/// Under the weather switch in Settings → AI & data sources: two framed rows like the switches above
+/// it (main-merge-2 follow-up 3, owner 2026-10-26), the mark over the notice that Fernlet modifies the
+/// data Apple provides, then ``AppleWeatherSourcesLink`` in a row of its own, as Acknowledgments draws
+/// them.
 ///
-/// Drawn whether the switch is on or off, so the credit sits where the feature is chosen.
+/// Drawn whether the switch is on or off, so the credit sits where the feature is chosen. Its body is
+/// the two rows with no container, so ``FernletFramedSection`` splits them with its hairline.
 struct AppleWeatherNotice: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            AppleWeatherAttribution.markText(.subheadline)
-                .foregroundStyle(Color.bark)
-            Text("Fernlet modifies the data Apple provides into its own gentle signals, never a forecast.",
-                 comment: "Settings, under the weather switch and the Apple Weather mark: the notice Apple's terms ask for, that Fernlet changes Apple's weather data. 'Gentle signals' are the sky behind the companion, the gentler-day note and the short-walk idea.")
-                .font(.fernlet(.bodySmall))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
-            AppleWeatherSourcesLink()
-        }
+        FernletRowLabel(title: AppleWeatherAttribution.markText(.body),
+                        detail: Text("Fernlet modifies the data Apple provides into its own gentle signals, never a forecast.",
+                                     comment: "Settings, under the weather switch and the Apple Weather mark: the notice Apple's terms ask for, that Fernlet changes Apple's weather data. 'Gentle signals' are the weather on the map, the gentler-day note and the short-walk idea."))
+            // A two-line row takes the kit's row padding above and below its words, as the switches do.
+            .padding(.vertical, 7)
+        AppleWeatherSourcesLink()
     }
 }
 

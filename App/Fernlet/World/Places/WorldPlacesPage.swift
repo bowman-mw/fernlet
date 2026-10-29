@@ -15,6 +15,9 @@ import WorldMapStore
 /// - **Places you return to**: a visit count each, never dates. Tap one to rename it; one with Apple's
 ///   reference also opens in Apple Maps (form answer 53: its button in the rename alert, the row's long-press
 ///   menu and its VoiceOver action), which fetches and shows the name and address; nothing is kept.
+/// - **One place, or one stop** (W-14, `ref-del-*`): Delete this place, from the rename alert, the long-press
+///   menu or VoiceOver, takes the place and every stop there; a tap on a stop on any day's card deletes that
+///   stop alone, by Delete a day's count rule. Each behind a confirmation; homes and hotels stay.
 /// - **The last 30 days** (every day's card), **Delete a day** and **Delete all of it**, each delete behind a
 ///   confirmation; a day's delete also deletes its walks' and runs' saved lines (the workouts stay in Move).
 ///
@@ -37,6 +40,8 @@ struct WorldPlacesPage: View {
     @State private var homeSheet: WorldPlaceSheetMode?
     /// Open in Apple Maps found nothing (offline, or the place is gone): its alert is up.
     @State private var mapsFailed = false
+    /// The place whose delete confirmation is up (W-14, `ref-del-confirm`).
+    @State private var deletingPlace: PlaceRecord?
     @Environment(FernletLockService.self) private var lockService
 
     var body: some View {
@@ -49,12 +54,7 @@ struct WorldPlacesPage: View {
                         .accessibilityAddTraits(.isHeader)
                         .fixedSize(horizontal: false, vertical: true)
                     latestDay
-                    // Homes and hotels are not places you return to (round 6, `ref-home-where`).
-                    WorldReturnedPlacesCard(places: (log?.returnedTo ?? []).filter { !store.worldHomes.isHomeOrHotel($0.point) },
-                                            names: names, onOpenInMaps: openInMaps) { place in
-                        newName = place.label ?? names[place.id]?.name ?? ""
-                        renaming = place
-                    }
+                    returnedPlaces
                     actions
                 }
                 .padding(.horizontal, 16)
@@ -74,11 +74,14 @@ struct WorldPlacesPage: View {
             // Round 6 (`ref-home-set`): a place you return to can become a home or your hotel.
             Button { homeSheet = .remember(start: place.point, kind: .home) } label: { Text(WorldHomeCopy.makeHome) }
             // Round 6b (form answer 53): the place in Apple Maps, by its reference.
-            if place.placeID != nil {
+            if WorldPlaceRenameButton.order(for: place).contains(.openInMaps) {
                 Button { openInMaps(place) } label: { Text(WorldPlacesCopy.openInMaps) }
             }
+            // W-14 (`ref-del-alert`): its confirmation follows.
+            Button(role: .destructive) { deletingPlace = place } label: { Text(WorldPlacesDeleteCopy.deletePlace) }
             Button("Cancel", role: .cancel) {}
         }
+        .modifier(WorldPlaceDeleteConfirmation(place: $deletingPlace, names: names, onDelete: deletePlace))
         .alert(Text(WorldPlacesCopy.openInMapsFailed), isPresented: $mapsFailed) {
             Button("OK", role: .cancel) {}
         }
@@ -102,9 +105,19 @@ struct WorldPlacesPage: View {
     private var latestDay: some View {
         if let log, let day = log.days().first {
             WorldPlacesDayCard(day: day, stops: log.stops(on: day), places: log.places, names: names, store: store, showsNote: true,
-                               homes: store.worldHomes, outAndAbout: log.outAndAbout(on: day))
+                               homes: store.worldHomes, outAndAbout: log.outAndAbout(on: day)) { _ = deleteStop($0) }
         } else {
             WorldPlacesEmptyCard()
+        }
+    }
+
+    /// Places you return to: a tap renames a place; its menu and actions open it in Maps or delete it.
+    private var returnedPlaces: some View {
+        // Homes and hotels are not places you return to (round 6, `ref-home-where`).
+        WorldReturnedPlacesCard(places: (log?.returnedTo ?? []).filter { !store.worldHomes.isHomeOrHotel($0.point) },
+                                names: names, onOpenInMaps: openInMaps, onDelete: { deletingPlace = $0 }) { place in
+            newName = place.label ?? names[place.id]?.name ?? ""
+            renaming = place
         }
     }
 
@@ -135,7 +148,7 @@ struct WorldPlacesPage: View {
     private func destination(_ route: WorldPlacesRoute) -> some View {
         switch route {
         case .days:
-            WorldPlacesDaysPage(log: log ?? .empty, names: names, store: store)
+            WorldPlacesDaysPage(log: log ?? .empty, names: names, store: store) { deleteStop($0) }
         case .deleteDay:
             WorldPlacesDeleteDayPage(log: log ?? .empty) { day in
                 if store.deleteWorldPlaceDay(day) { FernletFeedback.system.play(.done) }
@@ -188,6 +201,26 @@ extension WorldPlacesPage {
         renaming = nil
     }
 
+    /// Deletes `place` and every stop there, after its confirmation (`ref-del-confirm`).
+    private func deletePlace(_ place: PlaceRecord) {
+        finishDelete(store.deleteWorldPlace(place.id))
+    }
+
+    /// Deletes one stop, after its dialog (`ref-del-stop`); the log after it, or nil when it couldn't.
+    @discardableResult
+    private func deleteStop(_ stop: PlaceStop) -> PlaceLog? {
+        finishDelete(store.deleteWorldPlaceStop(stop.id))
+    }
+
+    /// Shows the log after a delete, with the done cue, or reads it again with the failed cue when the
+    /// delete couldn't be done (as Delete all of it does). Returns `next`.
+    @discardableResult
+    private func finishDelete(_ next: PlaceLog?) -> PlaceLog? {
+        FernletFeedback.system.play(next == nil ? .failed : .done)
+        if let next { log = next } else { reload() }
+        return next
+    }
+
     /// Delete all of it, after its confirmation.
     private func deleteAll() {
         FernletFeedback.system.play(store.deleteAllWorldPlaces() ? .done : .failed)
@@ -205,19 +238,26 @@ nonisolated enum WorldPlacesRoute: Hashable, Sendable {
     case deleteDay
 }
 
-/// "The last 30 days": every day's card, newest first.
+/// "The last 30 days": every day's card, newest first; a tap on any stop asks to delete it (W-14).
 struct WorldPlacesDaysPage: View {
     let log: PlaceLog
     /// The names asked for again on the Places page, by place id.
     let names: [UUID: WorldPlaceName]
     var store: FernletStore
+    /// Deletes one stop; the log after it, or nil when it couldn't be done.
+    let onDeleteStop: (PlaceStop) -> PlaceLog?
+    /// The log after this page's last delete, shown in place of the one it was pushed with.
+    @State private var updated: PlaceLog?
 
     var body: some View {
+        let log = updated ?? self.log
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
                 ForEach(log.days(), id: \.self) { day in
                     WorldPlacesDayCard(day: day, stops: log.stops(on: day), places: log.places, names: names, store: store,
-                                       showsNote: false, homes: store.worldHomes, outAndAbout: log.outAndAbout(on: day))
+                                       showsNote: false, homes: store.worldHomes, outAndAbout: log.outAndAbout(on: day)) { stop in
+                        if let next = onDeleteStop(stop) { updated = next }
+                    }
                 }
             }
             .padding(16)
