@@ -1472,7 +1472,7 @@ struct DeleteAllDataTests {
     /// The reversibility trap, asserted end to end: every deletion path must stay reachable while
     /// the app is LOCKED, so nothing in it — row-delete or rebuild — may need the content key.
     ///
-    /// Seals one row in each of the five sealed entities under a real `FernletLockService` content
+    /// Seals one row in each of the six sealed entities under a real `FernletLockService` content
     /// key, engages the lock (scrubbing that key), then drives the real funnel with the real
     /// repositories wired to the hooks. The rows must be gone, the store file rebuilt, and the lock
     /// must still hold no key on the way out — a wipe that had to decrypt to delete would have had
@@ -1512,7 +1512,11 @@ struct DeleteAllDataTests {
         // AND the legacy narrative, through the production helper the ContentView hook calls.
         try CycleRecordRepository(controller: controller)
             .insert(CycleRecord(event: UserLoggedCycleEvent(date: Date(), flowLevel: .heavy, note: "cycle record")), contentKey: key)
-        #expect(Self.sealedRowCount(in: controller) == 5, "precondition: the five sealed rows were not seeded")
+        // The sealed body tally (World bodybuilding, round 7 piece B1): no row hook of its own — the
+        // funnel's store rebuild takes it (and leg 11 deletes the journal device key it is sealed
+        // under in production; any key stands in for it here).
+        try BodyTallyRepository(controller: controller).save(BodyDayTally(dayKey: "2026-08-10", bathroomVisits: 2), key: key)
+        #expect(Self.sealedRowCount(in: controller) == 6, "precondition: the six sealed rows were not seeded")
 
         lock.lock(reason: .manual)
         #expect(lock.contentKey(for: .privateHub) == nil, "precondition: the wipe must run with the lock engaged")
@@ -1678,7 +1682,7 @@ struct DeleteAllDataTests {
     private static func sealedRowCount(in controller: PrivatePersistenceController) -> Int {
         let context = controller.container.viewContext
         return context.performAndWait {
-            ["MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative", "CycleRecord"].reduce(0) { total, entityName in
+            ["MenstrualNarrative", "JournalNarrative", "IntimacyLog", "WorryNarrative", "CycleRecord", "BodyTally"].reduce(0) { total, entityName in
                 let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
                 return total + ((try? context.fetch(request).count) ?? 0)
             }

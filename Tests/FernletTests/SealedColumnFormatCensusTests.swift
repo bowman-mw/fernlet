@@ -273,13 +273,14 @@ struct SealedColumnFormatCensusTests {
     }
 
     // MARK: An empty store reports zeroes for every censused column — a real answer, and the shape
-    // the Phase 3 gate is looking for. Every one of the eight columns (seven since the census began,
-    // plus `CycleRecord.payloadCiphertext` from 2026-09-30) must be present in the result, so "no key
-    // for this column" can never be mistaken for "zero legacy in this column".
-    @Test func anEmptyStoreReportsAZeroTallyForAllEightColumns() throws {
+    // the Phase 3 gate is looking for. Every one of the nine columns (seven since the census began,
+    // plus `CycleRecord.payloadCiphertext` from 2026-09-30 and `BodyTally.payloadCiphertext` from
+    // 2026-10-29) must be present in the result, so "no key for this column" can never be mistaken
+    // for "zero legacy in this column".
+    @Test func anEmptyStoreReportsAZeroTallyForAllNineColumns() throws {
         let census = try SealedColumnFormatCensus.run(controller: makeController())
 
-        #expect(census.columns.count == 8)
+        #expect(census.columns.count == 9)
         for column in SealedColumnFormatCensus.censusedColumns {
             #expect(census.columns[column] == SealedColumnFormatTally(), "\(column) is missing from the census")
         }
@@ -292,7 +293,7 @@ struct SealedColumnFormatCensusTests {
 
     // MARK: The census table is hand-written, so it can silently fall behind the model. This
     // independently enumerates every model attribute whose name ends in "Ciphertext" and demands
-    // an exact match — a sixth sealed entity or a ninth ciphertext column fails HERE instead of
+    // an exact match — a seventh sealed entity or a tenth ciphertext column fails HERE instead of
     // going quietly un-censused and letting a legacy row hide from the Phase 3 gate.
     @Test func theCensusTableCoversExactlyTheModelsCiphertextColumns() {
         let model = PrivatePersistenceController(inMemory: true).container.managedObjectModel
@@ -305,7 +306,7 @@ struct SealedColumnFormatCensusTests {
         }
 
         #expect(discovered == Set(SealedColumnFormatCensus.censusedColumns))
-        #expect(discovered.count == 8, "the sealed store should have exactly 8 ciphertext columns")
+        #expect(discovered.count == 9, "the sealed store should have exactly 9 ciphertext columns")
         // And the production guard agrees with the independent enumeration.
         #expect(throws: Never.self) {
             try SealedColumnFormatCensus.verifyTable(matches: model)
@@ -327,7 +328,7 @@ struct SealedColumnFormatCensusTests {
             Issue.record("expected a table/model mismatch")
             return
         }
-        #expect(missing.count == 8, "every censused column should be reported missing")
+        #expect(missing.count == 9, "every censused column should be reported missing")
         #expect(unlisted.isEmpty)
     }
 
