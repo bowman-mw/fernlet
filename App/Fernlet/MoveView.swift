@@ -23,6 +23,10 @@ struct MoveView: View {
     @Binding var isTabBarCompact: Bool
     @Binding var tabResetToken: Int
     @State private var path = NavigationPath()
+    #if DEBUG
+    /// Whether the DEBUG `FERNLET_UI_TEST_MOVE_PAGE` hook already pushed its page this launch.
+    @State private var didApplyUITestMovePage = false
+    #endif
     /// The root page's own scroll-to-top token; `tabReselect` bumps it only when nothing is pushed.
     @State private var scrollToTopToken = 0
     @State private var displayedWeek: Date = .now
@@ -372,6 +376,12 @@ struct MoveView: View {
 
             WeeklyTotalsLink { path.append(MoveRoute.weeklyTotals) }
 
+            if store.isBodybuildingCalendarOn {
+                // The Bodybuilding goal's Day calendar (World round 7, `bb-month`): only with that goal.
+                MoveLinkCard(title: Text(BodybuildingCalendarText.pageTitle), sprite: BodybuildingCalendarSprites.grid,
+                             identifier: "move.dayCalendar") { path.append(MoveRoute.dayCalendar) }
+            }
+
             todaysMovementSection
 
             #if canImport(UIKit)
@@ -446,8 +456,23 @@ struct MoveView: View {
             ExerciseHistoryView(store: store)
         case .weeklyTotals:
             WeeklyTotalsView(store: store)
+        case .dayCalendar:
+            BodybuildingCalendarPage(store: store) { path.append(MoveRoute.dayCalendarSignals) }
+        case .dayCalendarSignals:
+            BodybuildingSignalsPage(store: store)
+        case .dayCalendarDay(let dateKey):
+            BodybuildingDayCard(store: store, dateKey: dateKey)
         }
     }
+
+    #if DEBUG
+    /// DEBUG screenshot hook (`FERNLET_UI_TEST_MOVE_PAGE`): pushes a Day calendar page once.
+    private func applyUITestMovePage() {
+        guard !didApplyUITestMovePage, let routes = store.uiTestMoveRoutes(for: UITestSupport.initialMovePage) else { return }
+        didApplyUITestMovePage = true
+        routes.forEach { path.append($0) }
+    }
+    #endif
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -473,6 +498,9 @@ struct MoveView: View {
             loadInitialSnapshotsIfNeeded()
             store.reconcileGuidedRunFromAppGroup()
             openRequestedTrainerExportIfNeeded()
+            #if DEBUG
+            applyUITestMovePage()
+            #endif
         }
         .alert("Couldn't save this photo", isPresented: $showPhotoSaveFailedAlert) {
             Button("OK", role: .cancel) {}

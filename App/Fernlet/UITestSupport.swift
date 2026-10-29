@@ -256,6 +256,10 @@ enum UITestSupport {
     /// the usual five weeks with one deload week. Consumed by `FernletStore.seedBodybuildingDemoWeeks`.
     static var bodybuildingScenario: String? { env["FERNLET_UI_TEST_BB_SCENARIO"] }
 
+    /// `FERNLET_UI_TEST_MOVE_PAGE=bb-month|bb-week|bb-signals|bb-day` — push that Day calendar page when the
+    /// Move panel opens (with `FERNLET_UI_TEST_WORLD_PANEL=move`). Consumed by `MoveView`.
+    static var initialMovePage: String? { env["FERNLET_UI_TEST_MOVE_PAGE"] }
+
     /// Holds ``seededHeldSessionPhotoCount`` generated JPEGs through the session photos' own capture door
     /// with no session live — so each is held AWAITING in the sealed pending corpus exactly as a
     /// real ended session's photo is, never on the wall — unless a review is already outstanding
@@ -329,6 +333,7 @@ enum UITestSupport {
     static var seededHeldSessionPhotoCount: Int? { nil }
     static var uiTestGoal: GoalType? { nil }
     static var bodybuildingScenario: String? { nil }
+    static var initialMovePage: String? { nil }
     static func seedHeldSessionPhotosIfRequested(on photos: MeshSessionPhotos) {}
     static var isTestHarnessActive: Bool { false }
     #endif

@@ -3,9 +3,9 @@
 //  Fernlet
 //
 //  DEBUG-only: past weeks for the Bodybuilding day calendar's screenshots (World round 7). Run from
-//  `seedDemoContent` when `FERNLET_UI_TEST_GOAL=bodybuilding`. Plain day-record content only (workouts
-//  with their planned splits, sleep, meals, a quick mood, steps in the device-local Health context):
-//  nothing sealed, nothing sent anywhere.
+//  `seedDemoContent` when `FERNLET_UI_TEST_GOAL=bodybuilding`. Day-record content (workouts with their
+//  planned splits, sleep, meals, a quick mood, steps in the device-local Health context), sealed tallies
+//  through the BodyTallyStore funnel, and fixture weights held in memory; nothing sent anywhere.
 //
 
 #if DEBUG && canImport(UIKit)
@@ -25,6 +25,7 @@ extension FernletStore {
         guard let thisWeek = bodybuildingWeekStart(),
               let first = BodybuildingWeeks.dayKey(thisWeek, addingDays: -7 * Self.bodybuildingDemoWeeks, calendar: calendar)
         else { return }
+        defer { seedBodybuildingDemoTallies(from: first) }
         var prefs = BodybuildingCalendarSettings()
         prefs.bathroomTileSeeded = settings.bodybuildingCalendar.bathroomTileSeeded
         if UITestSupport.bodybuildingScenario != "suggest",
@@ -42,6 +43,48 @@ extension FernletStore {
             }
         }
         flushPendingSnapshotSave()
+    }
+
+    /// Seeds the sealed tallies once (one to three bathroom visits a day, a Free meal tag on each Sunday's
+    /// first meal, through the BodyTallyStore funnel), and hands the Day calendar fixture weights in place
+    /// of Health on every seeded launch. Screenshot data only.
+    @MainActor
+    private func seedBodybuildingDemoTallies(from first: String) {
+        let calendar = bodybuildingWeekCalendar
+        let alreadySeeded = bathroomVisits(on: first) > 0
+        var weights: [String: Double] = [:]
+        for offset in 0..<(7 * Self.bodybuildingDemoWeeks + 7) {
+            guard let key = BodybuildingWeeks.dayKey(first, addingDays: offset, calendar: calendar),
+                  key <= todayKey else { break }
+            weights[key] = 81.4 - Double(offset) * 0.03 + Double((offset * 7) % 9) / 10
+            guard !alreadySeeded else { continue }
+            setBathroomVisits(1 + (offset * 5) % 3, on: key)
+            if offset % 7 == 6, let meal = loadDay(for: key).meals.first {
+                setFreeMeal(true, mealID: meal.id, on: key)
+            }
+        }
+        BodyWeightReader.fixtureKilograms = weights
+    }
+
+    /// The Move pages `FERNLET_UI_TEST_MOVE_PAGE` pushes: `bb-month` and `bb-week` (the calendar opening on
+    /// that view), `bb-signals`, `bb-day` (the deload week's Wednesday, or today's week's Monday). Nil
+    /// for any other token, or when the Bodybuilding goal is not on.
+    func uiTestMoveRoutes(for token: String?) -> [MoveRoute]? {
+        guard let token, isBodybuildingCalendarOn, let thisWeek = bodybuildingWeekStart() else { return nil }
+        switch token {
+        case "bb-month", "bb-week":
+            var prefs = bodybuildingCalendarSettings
+            prefs.opensOn = token == "bb-week" ? .week : .month
+            bodybuildingCalendarSettings = prefs
+            return [.dayCalendar]
+        case "bb-signals":
+            return [.dayCalendar, .dayCalendarSignals]
+        case "bb-day":
+            let day = BodybuildingWeeks.dayKey(thisWeek, addingDays: -12, calendar: bodybuildingWeekCalendar) ?? thisWeek
+            return [.dayCalendar, .dayCalendarDay(day)]
+        default:
+            return nil
+        }
     }
 
     /// One seeded day: push, pull, legs, rest in turn, with sleep, steps, meals and a quick mood.
