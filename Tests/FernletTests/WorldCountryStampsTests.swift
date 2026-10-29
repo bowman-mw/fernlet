@@ -29,6 +29,13 @@ struct WorldCountryStampsTests {
         "IQ", "SY", "LB", "IL", "PS", "JO",
     ]
 
+    /// Africa's 54 (2026-10-29).
+    static let africa: Set<String> = [
+        "MA", "DZ", "TN", "LY", "EG", "SD", "MR", "SN", "GM", "GW", "GN", "SL", "LR", "CI", "ML", "BF", "GH", "TG",
+        "BJ", "NE", "NG", "CV", "CM", "TD", "CF", "GQ", "GA", "CG", "CD", "ST", "AO", "BI", "RW", "UG", "KE", "TZ",
+        "ET", "ER", "DJ", "SO", "SS", "SC", "KM", "MG", "MU", "MZ", "MW", "ZM", "ZW", "BW", "NA", "ZA", "LS", "SZ",
+    ]
+
     /// Asia's last 23 (2026-10-29), Japan's Fuji redrawn.
     static let asiaRest: Set<String> = [
         "JP", "CN", "MN", "KR", "VN", "LA", "KH", "TH", "MM", "MY", "SG", "SA", "YE", "OM", "AE", "QA", "BH", "KW",
@@ -109,7 +116,10 @@ struct WorldCountryStampsTests {
         #expect(Self.asiaFirst.isSubset(of: Set(stamps.stamps.keys)))
         #expect(Self.asiaRest.isSubset(of: Set(stamps.stamps.keys)), "Asia is complete")
         #expect(stamps.stamp(for: "AZ")?.label == ["AZƏRBAYCAN"])
-        #expect(stamps.stamp(for: "NG") == nil, "Africa's batch hasn't landed: no stamp, a dashed space")
+        #expect(Self.africa.isSubset(of: Set(stamps.stamps.keys)), "Africa is complete")
+        #expect(stamps.stamp(for: "CM")?.label == ["CAMEROUN", "CAMEROON"])
+        #expect(stamps.stamp(for: "CG")?.label == ["CONGO"] && stamps.stamp(for: "CD")?.label == ["RD CONGO"])
+        #expect(stamps.stamp(for: "BR") == nil, "South America's batch hasn't landed: no stamp, a dashed space")
         #expect(stamps.stamp(for: "VA")?.batch == "eu", "the smallest of the passport's countries has its stamp")
     }
 
