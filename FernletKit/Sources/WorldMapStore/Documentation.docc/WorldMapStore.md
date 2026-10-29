@@ -53,11 +53,14 @@ Round 7 (ideas 1, 2, 4, 7, A and B; contract in `Docs/World-Atlas-Pack.md`). The
 
 **Landmarks** (World-Exploration-Spec §2; ``WorldLandmarks``, ``AtlasLandmark``). A hand-written list in its own bundled file, `WorldLandmarks.json`, beside the pack and not in it (never an OpenStreetMap import, never fetched). Two tiers (``AtlasLandmarkTier``): a famous landmark has its own pixel art, named by an art id (``WorldLandmarks/famousArtIDs``: 28 drawn, all approved 2026-10-29: `eiffel`, `empire`, `opera`, `colosseum` and the owner's 24 more; a future famous landmark waits in ``WorldLandmarks/placeholderArtIDs``, which ``AtlasLandmarkTier/drawable`` draws with a generic icon until its art is approved); the art itself is ``WorldLandmarkArt`` (the design session's sprites, palette, halos, not-found greys and scales, bundled as `WorldLandmarkArt.json`; ``WorldLandmarkArt/sprite(for:)`` picks what a landmark draws now); every other one a generic icon (``AtlasLandmarkKind``: park, bridge, lighthouse, stadium, castle, tower). Each entry has a frozen lowerCamel token, an English and a Spanish name (data, shown only once found), its city's atlas token, a point and a find radius of 50 to 600 m. ``WorldLandmarks/init(data:)`` refuses a whole file for any broken entry, an unknown key, a second use of a token, a version it does not read, or more than ``WorldLandmarks/maxLandmarks`` (5,000). An accepted fix within a landmark's radius finds it: ``AtlasWithLandmarks`` puts the tokens into ``AtlasVisit/landmarks`` (at most ``AtlasVisit/maxLandmarks``), and the passport keeps each one once as kind `landmark`, after the city and before the terrain. The city card reads ``PassportBook/foundLandmarkCount(inCity:of:)`` against ``WorldLandmarks/landmarks(inCity:)``, and the map asks ``PassportBook/isFound(_:)``; before it is found a landmark is drawn grey and unnamed through the fog, even in a decoy, since the list is public data and a decoy's empty book finds nothing.
 
+**States and provinces, and the world view's zoom** (World-Exploration-Spec, "The world view", answers 9 and 13). The pack's `ADM1` section holds Natural Earth's admin-1 states and provinces (``AtlasAdmin1``: a frozen token, its ISO 3166-2 code or `ne:<id>`; the country's alpha-2; English and Spanish names; an outline at 0.008°). ``WorldAtlas/admin1(at:)`` tests only the entries of the country under the fix when there is one, and ``WorldAtlas/placeName(at:)`` gives the plate's place (``AtlasPlaceName``: the admin-1 names and the country code, the screen naming the country). ``AtlasPolygon/ring(_:)``, ``WorldAtlas/admin1s(overlapping:)`` and ``WorldAtlas/countries(overlapping:)`` hand the screen the lines to draw. No county data, ever. ``AtlasZoomLevel`` is the ladder World → Country → State → City (about 4.97, 20.7, 86.3 and 360 pt a degree of latitude at 45°; the ends from the mockup, a geometric ladder between), with + and − availability, country lines from Country, state lines and the plate's place from State. ``WorldViewHexGrid`` lays a level's 10-pt hexes over Web Mercator and ``WorldViewHexGrid/uncovered(by:)`` maps the lifted fog cells to the hexes they uncover, so one fog store drives every level; ``WorldAtlas/zoomDescription(level:centre:)`` gives the zoom control's VoiceOver parts.
+
 ``AtlasTerrainClassifier`` maps the Köppen-Geiger code and the latitude to an ``AtlasTerrain``, and picks a few ``AtlasFlora`` (cacti only in the Americas). ``AtlasSeason`` gives meteorological seasons, flipped south of the equator, and none of the four inside the tropics.
 
 Bounded throughout:
 
-- at most 250 seas, 512 countries, 16,384 urban boundaries and 16,384 cities;
+- at most 250 seas, 512 countries, 16,384 urban boundaries, 16,384 cities and 8,192 states and provinces;
+- the admin-1 search tests one country's entries (or, the country unknown, one pass over the table); the world-view aggregation reads at most ``WorldViewHexGrid/maxLiftedCells`` fog cells;
 - at most 10,000 rings a feature and 200,000 points a ring, with every varint capped at ten bytes;
 - the reach search walks at most 81 cells of 256 sub-cells each;
 - the city search reads at most 51 one-degree cells of the city index, then at most one pass over the urban boundaries.
@@ -159,3 +162,11 @@ This module holds location history (the lifted fog cells, saved walk and run lin
 - ``AtlasLandmarkTier``
 - ``AtlasLandmarkKind``
 - ``AtlasWithLandmarks``
+
+### States, provinces and the world view
+
+- ``AtlasAdmin1``
+- ``AtlasPlaceName``
+- ``AtlasZoomLevel``
+- ``WorldViewHexGrid``
+- ``AtlasZoomDescription``
