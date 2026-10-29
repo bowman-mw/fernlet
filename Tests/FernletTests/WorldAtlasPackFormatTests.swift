@@ -201,6 +201,28 @@ struct WorldAtlasPackTests {
         #expect(atlas.city(at: GeoPoint(42.0, -93.5)) == nil, "rural Iowa")
     }
 
+    /// The Mediterranean's nine seas are nine entries (design session, Exploration v6; owner 2026-10-29): a
+    /// reading in the Adriatic earns the Adriatic, never the Mediterranean, whose own stamp is its open water.
+    @Test func theMediterraneansNineSeasAreTheirOwnEntries() throws {
+        let atlas = try WorldAtlas(data: Self.shippedPack())
+        let seas: [(String, String, GeoPoint)] = [
+            ("Mediterranean Sea", "Q4918", GeoPoint(34.0, 20.0)), ("Alboran Sea", "Q199408", GeoPoint(36.0, -3.5)),
+            ("Balearic Sea", "Q200712", GeoPoint(40.5, 2.0)), ("Ligurian Sea", "Q42820", GeoPoint(43.9, 8.9)),
+            ("Tyrrhenian Sea", "Q38882", GeoPoint(40.0, 12.5)), ("Ionian Sea", "Q37495", GeoPoint(38.0, 18.5)),
+            ("Adriatic Sea", "Q13924", GeoPoint(43.0, 15.5)), ("Aegean Sea", "Q34575", GeoPoint(38.5, 25.0)),
+            ("Sea of Crete", "Q193149", GeoPoint(35.8, 25.0)),
+        ]
+        for (name, token, point) in seas {
+            #expect(atlas.seas.contains { $0.token == token && $0.names.english == name }, "\(name) is in SEAS")
+            let visit = atlas.visit(at: point)
+            #expect(visit.sea?.token == token, "\(name)'s water earns \(name)")
+            #expect(visit.ocean == nil)
+        }
+        // A beach counts its own sea: Split is the Adriatic, Mykonos the Aegean.
+        #expect(atlas.visit(at: GeoPoint(43.5031, 16.4400)).sea?.token == "Q13924")
+        #expect(atlas.visit(at: GeoPoint(37.4467, 25.3289)).sea?.token == "Q34575")
+    }
+
     /// The bundled pack's bytes.
     private static func shippedPack() throws -> Data {
         let url = try #require(Bundle.main.url(forResource: "WorldAtlas", withExtension: "pack"))
