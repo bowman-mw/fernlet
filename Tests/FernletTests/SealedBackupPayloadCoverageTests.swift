@@ -29,6 +29,10 @@ import PrivateStoreCore
 import WorldMapStore
 @testable import Fernlet
 
+/// A passport that can't be read right now, as ``FakeSealedBackupHost/passportUnreadable`` throws it
+/// (a locked phone's `WorldAtlasKeeper.BackupRefusal.unreadable` in production).
+struct PassportUnreadableForTest: Error, Equatable {}
+
 /// A minimal `SealedBackupContext` so the coordinator can be tested without a `FernletStore`.
 ///
 /// Everything it exposes is a plain settable property or a recorded call — the point is that these
@@ -55,7 +59,8 @@ final class FakeSealedBackupHost: SealedBackupContext {
                 return
             }
             restoreHold.hold(keepingCopiesFrom: StoragePreferences(
-                sealedBackupPeriodEnabled: true, sealedBackupJournalEnabled: true, sealedBackupIntimacyEnabled: true
+                sealedBackupPeriodEnabled: true, sealedBackupJournalEnabled: true, sealedBackupIntimacyEnabled: true,
+                sealedBackupPassportEnabled: true
             ))
         }
     }
@@ -71,6 +76,8 @@ final class FakeSealedBackupHost: SealedBackupContext {
             case .periodData: return self.periodRestoreSeed
             case .intimacyLogs: return self.intimacyRestoreSeed
             case .journalNarratives: return self.journalRestoreSeed
+            // Production's passport seed: no legacy latch, unresolved like a fresh install.
+            case .worldPassport: return false
             case .sensitiveNotes: return false
             }
         }
@@ -182,18 +189,23 @@ final class FakeSealedBackupHost: SealedBackupContext {
     /// The World passport's vault: a temporary folder and in-memory keys (``tearDownWorldPassport()``
     /// removes it).
     let worldPassportVault = WorldMapVault.ephemeral()
-    /// The World passport keeper the journal's head reads and merges into — production's `worldFog.atlas`
-    /// type, over ``worldPassportVault``, with no atlas (a test fills it through `restore`).
+    /// The World passport keeper the passport backup reads and merges into — production's
+    /// `worldFog.atlas` type, over ``worldPassportVault``, with no atlas (a test fills it through
+    /// `restore`).
     lazy var worldPassport = WorldAtlasKeeper(vault: worldPassportVault, openAtlas: { nil })
+    /// Whether the passport can't be read right now (a test's stand-in for a locked phone): the read
+    /// throws ``PassportUnreadableForTest``.
+    var passportUnreadable = false
 
     /// Mirrors `FernletStore.sealedBackupWorldPassport()`: the keeper's book, refused in a decoy or while
     /// it can't be read.
     func sealedBackupWorldPassport() throws -> PassportBook {
-        try worldPassport.bookForBackup()
+        guard !passportUnreadable else { throw PassportUnreadableForTest() }
+        return try worldPassport.bookForBackup()
     }
 
     /// Mirrors `FernletStore.restoreSealedBackupWorldPassport(_:)`: the keeper's merge.
-    func restoreSealedBackupWorldPassport(_ book: PassportBook) throws {
+    func restoreSealedBackupWorldPassport(_ book: PassportBook) throws -> Int {
         try worldPassport.restore(book)
     }
 
@@ -666,7 +678,8 @@ struct SealedBackupPayloadCoverageTests {
         defaults.removeObject(forKey: SealedBackupRestoreHold.preResetCopiesKey)
         #expect(hold.payloadsKeepingPreResetCopy == Set(SealedBackupRestoreHold.reuploadablePayloads), "no record: fail closed")
         hold.forgetPreResetCopy(of: .periodData)
-        #expect(hold.payloadsKeepingPreResetCopy == [.journalNarratives, .intimacyLogs])
+        #expect(hold.payloadsKeepingPreResetCopy == [.journalNarratives, .intimacyLogs, .worldPassport],
+                "fail closed keeps the passport's copy too (round 7: its own payload)")
         #expect(!hold.keepsPreResetCopy(of: .sensitiveNotes), "the retired payload is never re-uploaded")
     }
 

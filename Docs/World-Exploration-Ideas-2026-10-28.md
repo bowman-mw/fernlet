@@ -97,6 +97,12 @@ Four linked ideas from the owner, plus the constraints they run into in this cod
   it back. No plain record syncs. It stays on the sealed side of the S3 wall: `AIProviders` and `CloudKitSync`
   never reach it (`Scripts/spm-wall-check.sh`).
 - **Roads (idea 7).** Keep the 1 km circle round home for now. Road reveal is not built.
+- **North Korea** (later the same day): "Take north korea out of the passport". The passport counts 194 countries
+  (Asia 47); KP's outline stays in the atlas, so its continent and coast still count, but a reading there earns no
+  country or city entry (`WorldAtlas.passportCountryTotal`, `WorldAtlas.excludedFromPassport`).
+- **Crimea counts as Ukraine; region names use everyday English** ("Madrid · Spain", "Bavaria · Germany", never
+  "Community of Madrid"): the atlas generator's `TERRITORY_OVERRIDES` and everyday-names rule
+  ([World-Atlas-Pack.md](World-Atlas-Pack.md), `CTRY` and `ADM1`).
 - **Screens.** Design first: the data, rules and engines are built (round 7, lane ideas-data), and no new screen
   is, until the design session's pages are approved. The pack format and rules are in
   [World-Atlas-Pack.md](World-Atlas-Pack.md).

@@ -4,12 +4,13 @@ import Foundation
 public nonisolated struct AtlasCountry: Hashable, Sendable {
     /// The territory's ISO 3166-1 alpha-2 code (Natural Earth `ISO_A2_EH`), the frozen token.
     public let code: String
-    /// The sovereign state's alpha-2 code (a territory counts toward it in "N of 195").
+    /// The sovereign state's alpha-2 code (a territory counts toward it in "N of 194").
     public let sovereignCode: String
     /// The country's own continent, for display, or nil when the pack gives none.
     public let continent: AtlasContinent?
-    /// Whether it is one of the 195 (193 UN members, the Holy See, Palestine).
-    public let isOneOf195: Bool
+    /// Whether it is one of the passport's ``WorldAtlas/passportCountryTotal`` (the 193 UN members, the Holy See
+    /// and Palestine, without North Korea: owner, 2026-10-29).
+    public let countsInPassport: Bool
     /// Its outline.
     public let polygon: AtlasPolygon
 }
@@ -24,8 +25,8 @@ public nonisolated enum AtlasWater: Hashable, Sendable {
 }
 
 /// Every section of a pack decoded and checked, ready for ``WorldAtlas``. Bounded: at most ``maxSeas`` seas,
-/// ``maxCountries`` countries, ``maxUrbanAreas`` urban boundaries and ``maxCities`` cities (each refused
-/// beyond), every raster exactly one byte a cell, every code within its table.
+/// ``maxCountries`` countries, ``maxUrbanAreas`` urban boundaries, ``maxCities`` cities and ``maxAdmin1s``
+/// states and provinces (each refused beyond), every raster exactly one byte a cell, every code within its table.
 nonisolated struct WorldAtlasLayers: Sendable {
     /// The most seas: `OCEA` codes 6...255.
     static let maxSeas = 250
@@ -52,6 +53,8 @@ nonisolated struct WorldAtlasLayers: Sendable {
     let urbanAreas: [AtlasPolygon]
     let cities: [AtlasCity]
     let cityPolygons: [Int]
+    let admin1s: [AtlasAdmin1]
+    let admin1Groups: [AtlasAdmin1Group]
     let metaJSON: String?
 
     /// Every layer of `pack`, or the reason one is refused.
@@ -71,6 +74,9 @@ nonisolated struct WorldAtlasLayers: Sendable {
         let cities = try Self.cities(try pack.section("CITY"), urbanCount: urbanAreas.count)
         self.cities = cities.map(\.city)
         cityPolygons = cities.map(\.polygon)
+        let admin1 = try Self.admin1s(try pack.section("ADM1"), countryCodes: Set(countries.map(\.code)))
+        admin1s = admin1.entries
+        admin1Groups = admin1.groups
         metaJSON = pack.sections["META"].flatMap { String(bytes: $0, encoding: .utf8) }
     }
 
@@ -135,7 +141,7 @@ nonisolated struct WorldAtlasLayers: Sendable {
             let polygon = try AtlasPolygon.read(from: &reader)
             countries.append(AtlasCountry(code: code, sovereignCode: sovereign,
                                           continent: AtlasContinent(packCode: continentCode),
-                                          isOneOf195: flags & 1 == 1, polygon: polygon))
+                                          countsInPassport: flags & 1 == 1, polygon: polygon))
         }
         try reader.expectEnd()
         return countries

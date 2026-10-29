@@ -35,14 +35,6 @@ struct SealedBackupHeadStamp: Equatable, Hashable, Sendable {
 /// chunk names its writer and set, so a restore can prove each chunk belongs to the head's set (§5.3)
 /// and a chunk spliced in from another set at the same generation fails closed. `R` is the payload's
 /// own `Codable` record, whose coding keys are frozen tokens too.
-///
-/// **The passport** (round 7, owner 2026-10-29: "so a new phone gets it back"). The JOURNAL set's head
-/// may also carry `"passport"`: the World passport's own versioned bytes (`PassportBook.encoded()`,
-/// base64 in the JSON), so they are sealed by exactly the journal chunks' content-key path and ride
-/// the journal's switch, owner hold, compare-and-swap and deletes. Absent on every other chunk, on
-/// every other payload's set, and while the passport is empty. An earlier build ignores the key (it
-/// decodes only the keys it knows), so its journal restore is unchanged; its next journal export
-/// writes a head without one.
 struct SealedBackupV2Envelope<Record: Codable>: Codable {
     /// The envelope format this build writes.
     static var formatVersion: Int { 2 }
@@ -55,22 +47,19 @@ struct SealedBackupV2Envelope<Record: Codable>: Codable {
     var total: Int?
     /// The chunk's records.
     var records: [Record]
-    /// The World passport's bytes (the journal head only); nil everywhere else.
-    var passport: Data?
 
     /// FROZEN keys.
     enum CodingKeys: String, CodingKey {
         case version = "v"
-        case writer, set, total, records, passport
+        case writer, set, total, records
     }
 
     /// Creates an envelope.
-    init(writer: String, set: String, total: Int?, records: [Record], passport: Data? = nil) {
+    init(writer: String, set: String, total: Int?, records: [Record]) {
         self.writer = writer
         self.set = set
         self.total = total
         self.records = records
-        self.passport = passport
     }
 
     /// Decodes an envelope. A `v` other than ``formatVersion`` throws
@@ -83,7 +72,6 @@ struct SealedBackupV2Envelope<Record: Codable>: Codable {
         set = header.set
         total = header.total
         records = try container.decode([Record].self, forKey: .records)
-        passport = try container.decodeIfPresent(Data.self, forKey: .passport)
     }
 
     /// Encodes the frozen shape.
@@ -94,25 +82,6 @@ struct SealedBackupV2Envelope<Record: Codable>: Codable {
         try container.encode(set, forKey: .set)
         try container.encodeIfPresent(total, forKey: .total)
         try container.encode(records, forKey: .records)
-        try container.encodeIfPresent(passport, forKey: .passport)
-    }
-}
-
-/// The head's `"passport"` field alone (§5.1, round 7) — what a journal restore reads from the head
-/// without decoding its records a second time.
-struct SealedBackupV2EnvelopePassport: Decodable, Equatable {
-    /// The World passport's bytes, or nil when the head carries none.
-    var passport: Data?
-
-    /// The one frozen key read.
-    private enum CodingKeys: String, CodingKey {
-        case passport
-    }
-
-    /// Decodes the field (absent is nil).
-    init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        passport = try container.decodeIfPresent(Data.self, forKey: .passport)
     }
 }
 
@@ -182,13 +151,6 @@ enum SealedBackupV2Format {
     /// The header of a v2 chunk plaintext (throws for v1 or anything this build cannot read).
     static func header(of plaintext: Data) throws -> SealedBackupV2EnvelopeHeader {
         try JSONDecoder().decode(SealedBackupV2EnvelopeHeader.self, from: plaintext)
-    }
-
-    /// The passport bytes a head plaintext carries, or nil (a v1 set never carries one). Throws a
-    /// `DecodingError` when the field is there but is not base64 bytes.
-    static func passport(of plaintext: Data) throws -> Data? {
-        guard !isV1(plaintext) else { return nil }
-        return try JSONDecoder().decode(SealedBackupV2EnvelopePassport.self, from: plaintext).passport
     }
 
     /// Encodes one v2 chunk.

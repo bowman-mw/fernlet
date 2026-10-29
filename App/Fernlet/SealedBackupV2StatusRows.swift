@@ -19,8 +19,8 @@ enum SealedBackupV2RowChoice: Equatable {
 
 /// One payload's Sealed backup rows inside Privacy & Data's backup banner (journal and intimacy
 /// Sealed backup v2 design 2026-09-30, §10.1): one sentence per ``SealedBackupV2RowState``, with the
-/// choices that state offers — the intimate logs' (unit B2) and the journal's (unit B3), each through
-/// its own ``SealedBackupV2RowCopy``.
+/// choices that state offers — the intimate logs' (unit B2), the journal's (unit B3) and the World
+/// passport's (round 7), each through its own ``SealedBackupV2RowCopy``.
 ///
 /// The parent shows the intimate-log rows only while intimacy tracking is visible and no duress
 /// session runs, and the journal rows only outside a duress session (``FernletStore/intimacyBackupRowState``
@@ -288,6 +288,52 @@ extension SealedBackupV2RowCopy {
             remove: Choice(title: Text(LocalizedStringResource("privacy.sealedBackup.journal.removeThem", defaultValue: "Remove them",
                                                                comment: "Privacy & Data: remove the journal entries this iPhone cannot open from the journal Sealed backup. 'Them' is the entries.")),
                            hint: Text("Checks the entries again, then deletes those that still can't be opened.", comment: "Accessibility hint for Remove them on the journal Sealed backup."))
+        )
+    }
+
+    /// The World passport backup's words (round 7). A passport set is never paused (its places are not
+    /// sealed one by one) and never an earlier Fernlet's, but every state keeps its own sentence.
+    static var passport: SealedBackupV2RowCopy {
+        SealedBackupV2RowCopy(
+            identifierPrefix: "privacy.sealedBackup.passport",
+            catchUpIdentifier: "privacy.sealedBackup.passportDeferred",
+            heldByAnotherDevice: Text("Your passport backup was saved from another iPhone. Backing up this iPhone would replace it.",
+                                      comment: "Privacy & Data: the World passport Sealed backup belongs to another iPhone."),
+            heldByEarlierFernlet: Text("Your passport backup in iCloud was saved by an earlier version of Fernlet, which didn't record which iPhone saved it. Backing up this iPhone would replace it.",
+                                       comment: "Privacy & Data: the World passport Sealed backup was written by an earlier Fernlet that named no iPhone."),
+            olderThanSeen: Text("The passport backup in iCloud is older than one this iPhone has already seen, so it wasn't added.",
+                                comment: "Privacy & Data: the World passport Sealed backup restore refused a set older than one this iPhone has seen."),
+            waitingForRestore: Text("Your passport backup will be added to this iPhone the next time you open Private. New places are backed up after that.",
+                                    comment: "Privacy & Data: this iPhone has not added its World passport Sealed backup yet."),
+            waitingForKeyRestoring: Text("Your passport backup is waiting for its key from iCloud Keychain. Make sure iCloud Keychain is on. New places aren't backed up until it arrives.",
+                                         comment: "Privacy & Data: the World passport Sealed backup restore waits for its key from iCloud Keychain."),
+            waitingForKeyExporting: Text("Your passport backup is waiting for its key from iCloud Keychain. Make sure iCloud Keychain is on.",
+                                         comment: "Privacy & Data: the World passport Sealed backup export waits for its key from iCloud Keychain."),
+            sealedWithOtherKey: Text("Your passport backup was saved with a key this iPhone doesn't have yet. It usually arrives through iCloud Keychain.",
+                                     comment: "Privacy & Data: the World passport Sealed backup is sealed with a key this iPhone lacks."),
+            damaged: Text("The passport backup in iCloud is damaged and can't be opened.",
+                          comment: "Privacy & Data: the World passport Sealed backup will not authenticate."),
+            needsNewerFernlet: Text("Your passport backup needs a newer version of Fernlet. Update Fernlet to keep backing up your passport.",
+                                    comment: "Privacy & Data: the World passport Sealed backup needs a newer Fernlet."),
+            paused: Text("Some places in your passport can't be opened on this iPhone, so your passport backup is paused.",
+                         comment: "Privacy & Data: places this iPhone cannot open pause the World passport Sealed backup."),
+            tooLarge: Text("Your passport is too large for Sealed backup.", comment: "Privacy & Data: the World passport Sealed backup is over its size bound."),
+            failed: Text("Your passport backup didn't finish. It will try again when you next open Private.",
+                         comment: "Privacy & Data: the last World passport Sealed backup export failed."),
+            catchUp: Text("The newest places in your passport will be added to Sealed backup the next time you open Private.",
+                          comment: "Privacy & Data: World passport changes the next Private visit backs up."),
+            restoreHere: Choice(title: Text("Restore it here", comment: "Privacy & Data: add another iPhone's Sealed backup (journal or intimate logs) to this iPhone."),
+                                hint: Text("Adds the backup's places to this iPhone the next time you open Private.", comment: "Accessibility hint for Restore it here on the World passport Sealed backup.")),
+            restoreAnyway: Choice(title: Text("Restore anyway", comment: "Privacy & Data: restore an older Sealed backup (journal or intimate logs) anyway."),
+                                  hint: Text("Adds the older backup's places to this iPhone.", comment: "Accessibility hint for Restore anyway on the World passport Sealed backup.")),
+            replace: Choice(title: Text("Replace it with this iPhone's passport", comment: "Privacy & Data: back up this iPhone over the World passport Sealed backup in iCloud."),
+                            hint: Text("Backs up this iPhone over the backup in iCloud.", comment: "Accessibility hint for Replace on a Sealed backup (journal or intimate logs).")),
+            startNew: Choice(title: Text("Start a new backup", comment: "Privacy & Data: start a new Sealed backup (journal or intimate logs) over one this iPhone cannot open."),
+                             hint: Text("Replaces a backup this iPhone can't open.", comment: "Accessibility hint for Start a new backup on a Sealed backup (journal or intimate logs).")),
+            // Its own key: "them" is the PLACES here, which take their own gender in Spanish.
+            remove: Choice(title: Text(LocalizedStringResource("privacy.sealedBackup.passport.removeThem", defaultValue: "Remove them",
+                                                               comment: "Privacy & Data: remove the passport places this iPhone cannot open from the World passport Sealed backup. 'Them' is the places.")),
+                           hint: Text("Checks the places again, then deletes those that still can't be opened.", comment: "Accessibility hint for Remove them on the World passport Sealed backup."))
         )
     }
 }

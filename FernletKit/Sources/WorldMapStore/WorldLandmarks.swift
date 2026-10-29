@@ -17,6 +17,12 @@ public nonisolated enum AtlasLandmarkTier: Hashable, Sendable {
     case famous(artID: String)
     /// Every other landmark: one of the generic icons.
     case generic(AtlasLandmarkKind)
+
+    /// The art the map draws now: a drawn famous id, else the generic icon (a placeholder's stand-in).
+    public var drawable: AtlasLandmarkTier {
+        guard case .famous(let artID) = self, let stand = WorldLandmarks.placeholderArtIDs[artID] else { return self }
+        return .generic(stand)
+    }
 }
 
 /// One landmark from the hand-written list. Before it is found the map draws it grey and unnamed through the
@@ -88,9 +94,21 @@ public nonisolated struct WorldLandmarks: Sendable {
     public static let maxNameBytes = 120
     /// A find radius's allowed range, in metres: a tower about 150, a big park 250 to 400 from its centre.
     public static let radiusRange: ClosedRange<Double> = 50...600
-    /// The famous tier's art ids: the only three drawn so far (Eiffel Tower, Empire State Building, Sydney
-    /// Opera House).
-    public static let famousArtIDs: Set<String> = ["eiffel", "empire", "opera"]
+    /// The famous tier's drawn and approved art ids: the first three, the Colosseum and the owner's 24 more
+    /// (all approved 2026-10-29), each a sprite in `WorldLandmarkArt.json`.
+    public static let drawnArtIDs: Set<String> = [
+        "eiffel", "empire", "opera", "colosseum",
+        "bigben", "goldengate", "pisa", "burjkhalifa", "spaceneedle", "liberty", "tajmahal", "greatwall", "redeemer",
+        "pyramids", "sagrada", "acropolis",
+        "towerbridge", "harbourbridge", "cntower", "skytree", "stbasils", "brandenburg", "petronas", "machupicchu",
+        "chichenitza", "petra", "angkorwat", "hollywood",
+    ]
+    /// Famous art ids not drawn and approved yet, each with the generic icon the map uses meanwhile (none
+    /// today). A new famous landmark joins here first; when its art is approved its id moves to
+    /// ``drawnArtIDs``, and its token never changes.
+    public static let placeholderArtIDs: [String: AtlasLandmarkKind] = [:]
+    /// Every famous art id a list may name: the drawn ones and the placeholders.
+    public static var famousArtIDs: Set<String> { drawnArtIDs.union(placeholderArtIDs.keys) }
     /// The widest search ``landmarks(near:withinMetres:)`` answers, in metres (the flat-earth distance is
     /// good to well under a percent at this range).
     public static let maxSearchMetres = 50_000.0
@@ -350,5 +368,10 @@ public nonisolated struct AtlasWithLandmarks: AtlasVisitResolving {
         guard point.isValid else { return visit }
         visit.landmarks = landmarks.found(at: point).map(\.token)
         return visit
+    }
+
+    /// The atlas's own water answer (landmarks never make water).
+    public func isWater(at point: GeoPoint) -> Bool {
+        atlas.isWater(at: point)
     }
 }

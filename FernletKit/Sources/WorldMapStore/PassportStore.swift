@@ -6,6 +6,16 @@ import Foundation
 public nonisolated protocol AtlasVisitResolving: Sendable {
     /// Everything the atlas says about a fix at `point`.
     func visit(at point: GeoPoint) -> AtlasVisit
+    /// Whether the atlas puts water at `point` (the weekly corner skips water, owner 2026-10-29). The default
+    /// reads ``visit(at:)``'s terrain; the bundled atlas answers from its land mask alone.
+    func isWater(at point: GeoPoint) -> Bool
+}
+
+extension AtlasVisitResolving {
+    /// Water when ``visit(at:)`` says the terrain is water.
+    public func isWater(at point: GeoPoint) -> Bool {
+        visit(at: point).terrain == .water
+    }
 }
 
 /// The World passport on this iPhone (round 7, idea 4; owner 2026-10-29: sealed like journal text,

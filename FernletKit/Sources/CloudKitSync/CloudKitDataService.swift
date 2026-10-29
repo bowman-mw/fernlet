@@ -466,7 +466,7 @@ public final class CloudKitDataService {
     public func sealedBackupPresence() async throws -> SealedBackupPresence {
         try await ensureSignedIn()
         var presence = SealedBackupPresence()
-        // R2: bounded by the four payload cases and the three corpora.
+        // R2: bounded by the five payload cases and the three corpora.
         for payload in SealedBackupPayloadType.allCases {
             if try await recordExists(sealedBackupRecordID(payloadType: payload)) { presence.payloads.insert(payload) }
         }

@@ -6,8 +6,9 @@ import Foundation
 /// landmark is kept by its token alone; its city comes from the bundled list (``WorldLandmarks``), so the
 /// city card counts it with ``foundLandmarkCount(inCity:of:)``.
 ///
-/// **Versioned bytes.** ``encoded()`` and ``init(data:)`` are the one format, used both for the sealed file on
-/// the iPhone (``PassportStore``) and for the passport's part of Fernlet's sealed iCloud backup: JSON with a
+/// **Versioned bytes.** ``encoded()`` and ``init(data:)`` are the one format of the sealed file on the iPhone
+/// (``PassportStore``); Fernlet's sealed iCloud backup carries the same entries one record each and rebuilds a
+/// restored book with ``init(discoveries:)`` under the same rules. The bytes are JSON with a
 /// `version` field (``currentVersion``) and one object per kind, token to first date in seconds since 1970.
 /// A version this build does not know, a kind over its cap, or a token that is not a token is refused whole.
 /// Landmarks joined version 1 as one more kind key (`landmark`); a build from before them reads such a book
@@ -171,6 +172,34 @@ public nonisolated struct PassportBook: Codable, Equatable, Sendable {
     }
 
     // MARK: Restoring
+
+    /// The most entries a book holds: the caps' sum.
+    public static var maxEntries: Int {
+        AtlasDiscoveryKind.allCases.reduce(0) { $0 + cap(for: $1) }
+    }
+
+    /// A passport holding exactly `discoveries` (the entries the passport's sealed iCloud backup carried, one
+    /// record each), every token kept once with its earliest date. The list is refused whole, never trimmed,
+    /// under the rules ``init(data:)`` applies to the same entries: more than ``maxEntries`` is
+    /// ``BookError/tooLarge``, a token that is not a token of its kind (or a date that is not finite) is
+    /// ``BookError/badToken(_:)``, and more of a kind than its cap is ``BookError/overCap(_:)``. Bounded by
+    /// ``maxEntries``.
+    public init(discoveries: [AtlasDiscovery]) throws {
+        guard discoveries.count <= Self.maxEntries else { throw BookError.tooLarge }
+        var read: [AtlasDiscoveryKind: [String: Date]] = [:]
+        for discovery in discoveries.prefix(Self.maxEntries) {
+            let kind = discovery.kind
+            guard Self.isValidToken(discovery.token, of: kind), discovery.at.timeIntervalSince1970.isFinite else {
+                throw BookError.badToken(kind)
+            }
+            var list = read[kind] ?? [:]
+            list[discovery.token] = list[discovery.token].map { min($0, discovery.at) } ?? discovery.at
+            guard list.count <= Self.cap(for: kind) else { throw BookError.overCap(kind) }
+            read[kind] = list
+        }
+        version = Self.currentVersion
+        entries = read
+    }
 
     /// Merges `other` (a passport restored from the sealed backup) into this one by token, keeping the earliest
     /// date of each; returns how many entries were added or moved earlier. New entries past a cap are refused

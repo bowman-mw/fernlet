@@ -76,6 +76,32 @@ struct WorldCornerNudgeTests {
     }
 
     /// Weeks differ by the week's hash, and a new week passes over last week's corner when it can.
+    /// Water is never a corner (owner, 2026-10-29): with the week's own pick and every cell east of home
+    /// called water, the pick moves to dry ground; with everything water there is none.
+    @Test func waterIsNeverACorner() throws {
+        let start = FogCornerNudge.weekStart(for: Self.thursday, calendar: Self.utc)
+        let dry = try #require(FogCornerNudge.pick(home: Self.home, revealed: [], weekStart: start))
+        let wet: (HexCell) -> Bool = { cell in
+            cell == dry || MercatorHexGrid.centreGeo(of: cell).longitude > Self.home.longitude
+        }
+        let moved = try #require(FogCornerNudge.pick(home: Self.home, revealed: [], weekStart: start, isWater: wet))
+        #expect(moved != dry && !wet(moved))
+        #expect(FogCornerNudge.pick(home: Self.home, revealed: [], weekStart: start, isWater: { _ in true }) == nil)
+    }
+
+    /// The shipped atlas moves a real seafront corner ashore: at Santa Monica's beach this week's plain pick
+    /// is on the Pacific, and the pick that asks the atlas is on land.
+    @Test func theShippedAtlasMovesASeafrontCornerAshore() throws {
+        let url = try #require(Bundle.main.url(forResource: "WorldAtlas", withExtension: "pack"))
+        let atlas = try WorldAtlas(data: Data(contentsOf: url))
+        let beach = GeoPoint(34.0100, -118.4970)
+        let water: (HexCell) -> Bool = { atlas.isWater(at: MercatorHexGrid.centreGeo(of: $0)) }
+        let plain = try #require(FogCornerNudge.pick(home: beach, revealed: [], weekStart: Self.monday))
+        #expect(water(plain), "the week's plain pick is at sea")
+        let ashore = try #require(FogCornerNudge.pick(home: beach, revealed: [], weekStart: Self.monday, isWater: water))
+        #expect(!water(ashore))
+    }
+
     @Test func nextWeekPicksADifferentCellWhenItCan() throws {
         let weeks = (0..<8).compactMap { index in
             FogCornerNudge.pick(home: Self.home, revealed: [], weekStart: Self.monday.addingTimeInterval(Double(index) * Self.week))
