@@ -162,6 +162,10 @@ public final class WorldMapVault {
         /// The World passport (`PassportStore`, round 7): each first visit by kind and token, with its date.
         public static let passport = File(name: "passport.bin", purpose: FernletCryptoPurpose.AEAD.worldMapPassportV1,
                                           role: .store)
+        /// The week's new corner (`FogCornerStore`, round 7): one week start, one cell and whether it was
+        /// reached, so the week's pick survives a relaunch.
+        public static let corner = File(name: "corner.bin", purpose: FernletCryptoPurpose.AEAD.worldMapCornerV1,
+                                        role: .store)
     }
 
     /// The folder the files live in.
