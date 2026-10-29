@@ -447,9 +447,11 @@ struct ExerciseDemonstrationTests {
     /// resource, the drop folder, the licensor.
     static let demonstrationTokens = ["ExerciseDemonstration", "ExerciseMedia", "GymVisual", "Gym Visual", "gymvisual"]
     /// The only files that may name the demonstrations. A new caller is a deliberate change here.
+    /// The approved animation tile is one: it shares the demonstration's layout, spoken name, pause
+    /// access and corner mark (the owner's own animations, not Gym Visual media).
     static let demonstrationFiles: Set<String> = [
         "App/Fernlet/ExerciseDemonstration.swift", "App/Fernlet/ExerciseDemonstrationView.swift",
-        "App/Fernlet/ExerciseHowToSheet.swift",
+        "App/Fernlet/ExerciseHowToSheet.swift", "App/Fernlet/ExerciseAnimationTile.swift",
     ]
 
     /// Every regular file under `root` (repo-relative), sorted.
