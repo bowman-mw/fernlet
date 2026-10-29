@@ -240,7 +240,7 @@ struct AcknowledgmentsView: View {
             VStack(alignment: .leading, spacing: 6) {
                 AppleWeatherAttribution.markText(.body)
                     .foregroundStyle(Color.bark)
-                paragraph(Text("When weather-aware recovery prompts are on, Fernlet asks Apple Weather for the current conditions near you, at most ten times a day. Fernlet modifies the data Apple provides: it becomes the sky behind your companion, the gentler-day note and the short-walk idea, never a forecast."))
+                paragraph(Text("When weather-aware recovery prompts are on, Fernlet asks Apple Weather for the current conditions near you, at most ten times a day. Fernlet modifies the data Apple provides: it becomes the weather on your map, the gentler-day note and the short-walk idea, never a forecast."))
             }
             AppleWeatherSourcesLink()
         }
