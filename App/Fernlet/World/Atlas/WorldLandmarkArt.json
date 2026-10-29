@@ -1,0 +1,326 @@
+{
+  "version": 1,
+  "about": "Landmark art for the World map, approved on the Exploration page (ex-landmark; the Colosseum is ex-colosseum, waiting). Each sprite is rows of palette letters; '.' is clear. Famous art is drawn at 3 points per pixel on the map, generic icons at 3.5, each with a one-pixel halo around every non-clear pixel.",
+  "palette": {
+    "k": "#4A2E1C",
+    "b": "#8A5A3A",
+    "l": "#B98352",
+    "g": "#D2C8B2",
+    "d": "#A39B88",
+    "w": "#FFF3C4",
+    "s": "#F6F1E4",
+    "c": "#D6CCB6",
+    "p": "#B9805A",
+    "r": "#B5523B",
+    "t": "#74482A",
+    "h": "#3D6B30",
+    "G": "#8CC063",
+    "e": "#5E9A48",
+    "y": "#F2D58A",
+    "a": "#6FA8D0",
+    "u": "#E3D3A6",
+    "n": "#4A2E1C",
+    "o": "#C9BFA8",
+    "m": "#9AA6AE"
+  },
+  "halo": {
+    "found": {
+      "light": "#FFF6E2",
+      "dark": "#F3E6C8"
+    },
+    "notFound": {
+      "light": "#F4F1EA",
+      "dark": "#8B9398"
+    }
+  },
+  "notFound": {
+    "note": "Before it's found the art is grey and unnamed: 'k' takes the outline colour, every other letter the fill.",
+    "light": {
+      "outline": "#7E878C",
+      "fill": "#C3C9CC"
+    },
+    "dark": {
+      "outline": "#A7AFB4",
+      "fill": "#5E676D"
+    }
+  },
+  "scale": {
+    "famous": 3,
+    "generic": 3.5
+  },
+  "famous": {
+    "eiffel": {
+      "en": "Eiffel Tower",
+      "es": "Torre Eiffel",
+      "city": {
+        "en": "Paris",
+        "es": "París"
+      },
+      "size": [
+        17,
+        26
+      ],
+      "rows": [
+        "........k........",
+        "........k........",
+        ".......kbk.......",
+        ".......kbk.......",
+        ".......klk.......",
+        "......kblbk......",
+        "......kbbbk......",
+        "......kblbk......",
+        "......kbbbk......",
+        ".....kkkkkkk.....",
+        ".....kblllbk.....",
+        ".....kbbbbbk.....",
+        "....kbbk.kbbk....",
+        "....kblk.klbk....",
+        "....kbbk.kbbk....",
+        "...kbbk...kbbk...",
+        "..kkkkkkkkkkkkk..",
+        "..kbbbbbbbbbbbk..",
+        "..kbbk.....kbbk..",
+        "..kbk.......kbk..",
+        ".kbbk..kkk..kbbk.",
+        ".kbk..k...k..kbk.",
+        "kbbk.k.....k.kbbk",
+        "kbk..k.....k..kbk",
+        "kbk...........kbk",
+        "kkk...........kkk"
+      ]
+    },
+    "empire": {
+      "en": "Empire State Building",
+      "es": "Empire State Building",
+      "city": {
+        "en": "New York",
+        "es": "Nueva York"
+      },
+      "size": [
+        13,
+        28
+      ],
+      "rows": [
+        "......k......",
+        "......k......",
+        "......k......",
+        ".....kgk.....",
+        ".....kgk.....",
+        "....kggdk....",
+        "....kgwdk....",
+        "...kggggdk...",
+        "...kgwgwdk...",
+        "...kggggdk...",
+        "..kggggggdk..",
+        "..kgwgwgwdk..",
+        "..kggggggdk..",
+        "..kgwgwgwdk..",
+        ".kggggggggdk.",
+        ".kgwgwgwgwdk.",
+        ".kggggggggdk.",
+        ".kgwgwgwgwdk.",
+        ".kggggggggdk.",
+        ".kgwgwgwgwdk.",
+        ".kggggggggdk.",
+        ".kgwgwgwgwdk.",
+        "kggggggggggdk",
+        "kgwgwgwgwgwdk",
+        "kggggggggggdk",
+        "kgwgwgwgwgwdk",
+        "kggggggggggdk",
+        "kkkkkkkkkkkkk"
+      ]
+    },
+    "opera": {
+      "en": "Sydney Opera House",
+      "es": "Ópera de Sídney",
+      "city": {
+        "en": "Sydney",
+        "es": "Sídney"
+      },
+      "size": [
+        27,
+        13
+      ],
+      "rows": [
+        "....k........k.............",
+        "....kk......ksk............",
+        "...kssk.....kssk.......k...",
+        "..ksssck....kssck.....ksk..",
+        "..ksssck...ksssck....kssk..",
+        "..kssssck.ksssssck..kssck..",
+        ".ksssssck.ksssssck..ksssck.",
+        "ksssssssckkssssssckkssssck.",
+        "ksssssssckssssssscksssssck.",
+        "kkkkkkkkkkkkkkkkkkkkkkkkkk.",
+        "kppppppppppppppppppppppppk.",
+        "kppppppppppppppppppppppppk.",
+        "kkkkkkkkkkkkkkkkkkkkkkkkkk."
+      ]
+    },
+    "colosseum": {
+      "en": "Colosseum",
+      "es": "Coliseo",
+      "city": {
+        "en": "Rome",
+        "es": "Roma"
+      },
+      "size": [
+        30,
+        17
+      ],
+      "rows": [
+        "..kkkkkkkkkkkkkkkkk...........",
+        ".kouuuuuuuuuuuuuuuuk..........",
+        ".knuuuunuuuunuuuunuk..........",
+        "koouuuuuuuuuuuuuuuuuk.........",
+        "kuuyyyyyyyyyyyyyyyyykkkkkk....",
+        "kttuttuttuttuttuttuttdnndnkk..",
+        "knnunnunnunnunnunnunnkkndnndk.",
+        "knnunnunnunnunnunnunnunndnndk.",
+        "kuuyyyyyyyyyyyyyyyyyyyykkkkkk.",
+        "kttuttuttuttuttuttuttuttuttotk",
+        "knnunnunnunnunnunnunnunnunnonk",
+        "knnunnunnunnunnunnunnunnunnonk",
+        "kuuyyyyyyyyyyyyyyyyyyyyyyyyuuk",
+        "kttuttuttuttuttuttuttuttuttotk",
+        "knnunnunnunnunnunnunnunnunnonk",
+        "knnunnunnunnunnunnunnunnunnonk",
+        "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkk"
+      ]
+    }
+  },
+  "generic": {
+    "park": {
+      "en": "Big park",
+      "es": "Gran parque",
+      "size": [
+        16,
+        11
+      ],
+      "rows": [
+        "...hhhhh........",
+        "..hGGeeeh..hhh..",
+        ".hhGeeeehhhGehh.",
+        ".hGeeeeeehGeeeh.",
+        ".heeeeeeeheeeeh.",
+        "..heeeeeh.heehh.",
+        "...hhhhh...hh...",
+        ".....tt.....t...",
+        ".....tt.....t...",
+        "............t...",
+        "uuuuuuuuuuuuuuuu"
+      ]
+    },
+    "bridge": {
+      "en": "Bridge",
+      "es": "Puente",
+      "size": [
+        16,
+        12
+      ],
+      "rows": [
+        "...r........r...",
+        "..rrr......rrr..",
+        "..nrn......nrn..",
+        ".n.r.n....n.r.n.",
+        ".n.r..n..n..r.n.",
+        "n..r...nn...r..n",
+        "n..r........r..n",
+        "kkkkkkkkkkkkkkkk",
+        "oooooooooooooooo",
+        "...r........r...",
+        "aaaraaaaaaaaraaa",
+        "aaaaaaaaaaaaaaaa"
+      ]
+    },
+    "lighthouse": {
+      "en": "Lighthouse",
+      "es": "Faro",
+      "size": [
+        12,
+        16
+      ],
+      "rows": [
+        ".....kk.....",
+        "....kyyk....",
+        "...kkkkkk...",
+        "....kssk....",
+        "....krrk....",
+        "....kssk....",
+        "...kssssk...",
+        "...krrrrk...",
+        "...kssssk...",
+        "...kssssk...",
+        "..kssssssk..",
+        "..krrrrrrk..",
+        "..kssssssk..",
+        ".kkkkkkkkkk.",
+        ".mmmmmmmmmm.",
+        "mmmmmmmmmmmm"
+      ]
+    },
+    "stadium": {
+      "en": "Stadium",
+      "es": "Estadio",
+      "size": [
+        16,
+        9
+      ],
+      "rows": [
+        "k..............k",
+        "kk............kk",
+        "k..kkkkkkkkkk..k",
+        "k.kssssssssssk.k",
+        "kkkrsrsrsrsrsrkk",
+        "kssssssssssssssk",
+        "krrrrrrrrrrrrrrk",
+        "kssssssssssssssk",
+        "kkkkkkkkkkkkkkkk"
+      ]
+    },
+    "castle": {
+      "en": "Castle",
+      "es": "Castillo",
+      "size": [
+        17,
+        9
+      ],
+      "rows": [
+        "k.k.k.......k.k.k",
+        "kkkkk.k.k.k.kkkkk",
+        "koookkkkkkkkkoook",
+        "konokoooooookonok",
+        "koookoooooookoook",
+        "koookookkkookoook",
+        "konokoktttkokonok",
+        "koookoktttkokoook",
+        "kkkkkkkkkkkkkkkkk"
+      ]
+    },
+    "tower": {
+      "en": "Tower",
+      "es": "Torre",
+      "size": [
+        13,
+        14
+      ],
+      "rows": [
+        "......k......",
+        "......k......",
+        ".....kmk.....",
+        "..kkkkkkkkk..",
+        ".kwwwwwwwwwk.",
+        "..kkkkkkkkk..",
+        ".....kmk.....",
+        ".....kmk.....",
+        "....kmkmk....",
+        "....km.mk....",
+        "...kmk.kmk...",
+        "...km...mk...",
+        "..kmk...kmk..",
+        "..kkk...kkk.."
+      ]
+    }
+  }
+}
