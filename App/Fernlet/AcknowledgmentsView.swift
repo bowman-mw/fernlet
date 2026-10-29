@@ -164,6 +164,7 @@ struct AcknowledgmentsView: View {
                 cryptoSwiftSection
                 fontsSection
                 foodDataSection
+                mapDataSection
                 weatherSection
             }
             .padding(.horizontal, 16)
@@ -230,6 +231,26 @@ struct AcknowledgmentsView: View {
             paragraph(Text("Products found with a barcode lookup come from Open Food Facts, under the Open Database License (ODbL). The foods built into Fernlet come from USDA FoodData Central, which is in the public domain."))
         }
     }
+
+    /// Where the World map's atlas comes from (round 7, `Docs/World-Atlas-Pack.md`): Natural Earth, public
+    /// domain, credited though it asks for none; and Beck et al.'s Köppen-Geiger maps under CC BY 4.0, whose
+    /// licence asks for the credit, the licence's name and a note that Fernlet changed the data. The
+    /// citation stays in English, as its authors wrote it; the licence's address is in NOTICE, not here.
+    private var mapDataSection: some View {
+        FernletFramedSection(header: Text("Map data")) {
+            paragraph(Text("The World map's land, seas, countries and cities come from Natural Earth, which is in the public domain and asks for no credit. Both map sources travel inside the app: Fernlet never downloads map data."))
+            paragraph(Text("The climate zones that pick the map's terrain and plants come from this work, under the Creative Commons Attribution 4.0 International license (CC BY 4.0). Fernlet changed the data: it reduced the map to cells a tenth of a degree wide and turned its climate classes into terrain."))
+            Text(verbatim: Self.koppenCitation)
+                .font(.fernlet(.body))
+                .italic()
+                .foregroundStyle(Color.bark)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+        }
+    }
+
+    /// Beck et al.'s citation, as the dataset asks to be cited (a notice, never translated).
+    static let koppenCitation = "Beck, H. E., Zimmermann, N. E., McVicar, T. R., Vergopolan, N., Berg, A., & Wood, E. F. (2018). Present and future Köppen-Geiger climate classification maps at 1-km resolution. Scientific Data, 5, 180214."
 
     /// Where the weather comes from: the Apple Weather mark, the notice that Fernlet modifies Apple's
     /// data, and Apple's legal page, as WeatherKit's terms ask (``AppleWeatherAttribution``). "Ten" is
