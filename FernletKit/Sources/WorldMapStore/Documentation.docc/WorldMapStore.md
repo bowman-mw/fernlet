@@ -35,6 +35,24 @@ A key that can't be read right now is an error, never a reason to mint a new one
 
 **Wipes.** ``WorldMapVault/clearAll()`` removes the folder and both keys. Delete everything and the duress silent wipe reach it through `FernletStore.resetAll()`; the duress recovery lock through its own purge hook (design page answer 16). A decoy session never reads or writes it.
 
+### The atlas
+
+Round 7 (ideas 1, 2, 4, 7, A and B; contract in `Docs/World-Atlas-Pack.md`). The app bundles one file, `WorldAtlas.pack`, and never fetches anything for it. ``WorldAtlasPack`` opens it: the `FWA1` header and section table, each body raw DEFLATE inflated through Apple's Compression framework into a buffer of exactly its stated length (the module's one unsafe-pointer seam, `WorldAtlasInflate.swift`, allowlisted). It refuses, with a ``WorldAtlasPackError`` and never a trap, a file over ``WorldAtlasPack/maxPackBytes`` (6 MiB), a wrong magic or version, a section past the end, a `rawLength` over 64 MiB or one that disagrees with the body, and a missing section. ``WorldAtlasPack/expectedSHA256`` pins the shipped file and stays "unpinned" until the pack is generated.
+
+``WorldAtlas`` is the parsed pack, immutable and `Sendable`. Its ``AtlasGrid`` size comes from the `LAND` header (0.1° when shipped, 10° or 5° in tests). It answers ``WorldAtlas/isLand(at:)`` (coast cells read their 16 × 16 sub-mask), ``WorldAtlas/climateCode(at:)``, ``WorldAtlas/continent(at:)``, ``WorldAtlas/country(at:)`` (an ``AtlasPolygon`` box first, then the even-odd rule, so holes work) and ``WorldAtlas/city(at:)``. ``WorldAtlas/water(near:within:)`` returns the nearest ocean or sea (``AtlasWater``) within ``WorldAtlas/oceanReachMetres``. ``WorldAtlas/visit(at:)`` applies all the rules to one accepted fix:
+
+- the ocean or sea within 2 km, never both, since a sea is its own passport entry;
+- Antarctica anywhere south of ``WorldAtlas/antarcticaLatitude`` (60°S, on land, ice or sea);
+- the nearest city sharing an urban boundary, or a city with no boundary within ``WorldAtlas/townRadiusMetres(for:)``.
+
+``AtlasTerrainClassifier`` maps the Köppen-Geiger code and the latitude to an ``AtlasTerrain``, and picks a few ``AtlasFlora`` (cacti only in the Americas). ``AtlasSeason`` gives meteorological seasons, flipped south of the equator, and none of the four inside the tropics.
+
+Bounded throughout:
+
+- at most 250 seas, 512 countries, 16,384 urban boundaries and 16,384 cities;
+- at most 10,000 rings a feature and 200,000 points a ring, with every varint capped at ten bytes;
+- the reach search walks at most 81 cells of 256 sub-cells each.
+
 ### Its place on the walls
 
 This module holds location history (the lifted fog cells, saved walk and run lines, workout-space pins, Where you've been and the solo photos' places), so it sits on the far side of the S3 wall from every module that sends data anywhere. `CloudKitSync`, `AIProviders`, `AIContext`, `FernletSocial` and `FernletConnections` do not depend on it, and the strict build (`Scripts/spm-wall-check.sh`, `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR`) fails any of them that imports it. It holds no display strings, so it has no string catalog.
@@ -91,3 +109,26 @@ This module holds location history (the lifted fog cells, saved walk and run lin
 - ``HomeMove``
 - ``EatingPlace``
 - ``EatingMeal``
+
+### The atlas
+
+- ``WorldAtlasPack``
+- ``WorldAtlasPackError``
+- ``WorldAtlas``
+- ``AtlasGrid``
+- ``AtlasPolygon``
+- ``AtlasCountry``
+- ``AtlasWater``
+- ``AtlasTerrainClassifier``
+- ``AtlasFlora``
+- ``AtlasSeason``
+- ``AtlasVisit``
+- ``AtlasContinent``
+- ``AtlasOcean``
+- ``AtlasSea``
+- ``AtlasCity``
+- ``AtlasCityNames``
+- ``AtlasCitySize``
+- ``AtlasTerrain``
+- ``AtlasDiscovery``
+- ``AtlasDiscoveryKind``

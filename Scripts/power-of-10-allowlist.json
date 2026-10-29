@@ -45,5 +45,10 @@
   "rule": "R9-UNSAFE",
   "path": "FernletKit/Sources/PrivateStoreCore/PrivatePersistenceController.swift",
   "reason": "Core Data seam: `NSPersistentContainer` is not `Sendable`, so the process-wide sealed-store controller cannot be a checked-Sendable global, and real actor isolation is unavailable because all four sealed repositories are deliberately `nonisolated` so keyless deletion works from any executor while the app is locked. Invariant: `shared` is a `let` initialized exactly once by Swift's lazy-static machinery; every use of `container.viewContext` happens inside `NSManagedObjectContext.performAndWait`, which serializes on the context's own queue; and the one piece of mutable state outside that discipline, `didFailToLoad`, is now read and written only under the type's `stateLock` (`NSLock`)."
+ },
+ {
+  "rule": "R9-UNSAFE",
+  "path": "FernletKit/Sources/WorldMapStore/WorldAtlasInflate.swift",
+  "reason": "Compression-framework seam: the World atlas pack's raw DEFLATE section bodies (Docs/World-Atlas-Pack.md) inflate through compression_decode_buffer, a C function that takes typed buffer pointers, so the file's ONE function borrows them with withUnsafeMutableBufferPointer and withUnsafeBufferPointer. Invariant: the destination is an owned [UInt8] of exactly rawLength + 1 bytes, allocated before the call, and the source an owned copy of the stored bytes; both pointers are used only inside the nested closures for the one synchronous call, which is given each buffer's own count so it never writes past the end; no pointer, buffer or index escapes; and the result is accepted only when the written count equals rawLength (a longer stream fills the guard byte and is refused). File-wide because the file holds nothing else."
  }
 ]
