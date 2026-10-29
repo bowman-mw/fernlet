@@ -86,13 +86,18 @@
      place can be put on the map by the person, and a home (up to two) or a hotel the person marks is
      kept, encrypted on this iPhone only, to uncover the map around it and to welcome them back, until they remove
      it in Settings › Home map. Everything stays on the device; nothing new is sent to the developer and
-     no promise is weakened under §13). Before
+     no promise is weakened under §13), and 2026-10-29 (the World build's round 7, approved by the owner
+     word for word on 2026-10-26 with "Remember this place" anywhere: "By itself, Fernlet keeps only
+     everyday places …" replaces "Both cover everyday places only …", because the person may now add any
+     spot they stay at (a flat, a friend's), and places like doctors' offices are never named for them.
+     Everything stays on the device; nothing new is sent to the developer and no promise is weakened
+     under §13). Before
      submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
      (2) keep it in sync with the in-app copy in App/Fernlet/PrivacyPolicyView.swift (Settings →
      Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
      the effective date in all three. -->
 
-**Effective date:** October 25, 2026
+**Effective date:** October 29, 2026
 **Developer:** Michael Bowman Olay
 **Contact:** fernletapp@gmail.com
 
@@ -405,9 +410,10 @@ us.
 
 With Where you've been in Private, Fernlet also keeps a rolling 30-day timeline of the places you
 stopped at, collected while Fernlet is open and, if you turn on background mapping, through the day.
-It also keeps a list of Places you return to, which holds only a visit count, never dates. Both
-cover everyday places only: food and drink, gyms, parks, beaches and campgrounds. Places like
-doctors' offices, lawyers or therapists are never named or kept, unless you add one yourself.
+It also keeps a list of Places you return to, which holds only a visit count, never dates.
+By itself, Fernlet keeps only everyday places: food and drink, gyms, parks, beaches and campgrounds.
+Any other place is kept only if you add it yourself, and places like doctors' offices, lawyers or
+therapists are never named for you.
 When you take a photo with the camera on your own at one of those everyday places, Fernlet keeps
 where it was taken, so the photo can sit on your map; anywhere else, it keeps no place.
 You can put a photo on the map yourself.
