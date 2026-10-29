@@ -74,8 +74,8 @@ nonisolated enum WorldTrace: Equatable, Sendable {
 ///   stop), so the map uncovers the road driven as a thin line (`nf-car`). When the drive ends, or iOS pauses
 ///   the updates, exactly what ran before comes back: the low-power mode stays, a walk or the map in front
 ///   keep their updates, and otherwise the updates stop. This widens the `location` background mode's use
-///   beyond a walk the person started; the approved privacy sentence says so ("…and, while you're driving,
-///   the road you take"). Never without Always and background mapping, and never during a walk
+///   beyond a walk the person started; the approved privacy sentence says so ("…and, while you're driving or
+///   riding, the road you take"). Never without Always and background mapping, and never during a walk
 ///   (``tracesDrive(permission:backgroundMapping:declaresBackground:walking:)``).
 /// - **A bike ride, followed closely (Refinements group 19, `ref-ride-line`, owner-approved 2026-10-29):**
 ///   exactly as a drive is traced, under the same conditions
