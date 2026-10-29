@@ -36,8 +36,10 @@ extension FernletStore {
     }
 
     /// A reading for the fog: lifted, and saved at once when it arrived while the app isn't active (W-09 B2).
+    /// While driving only the cell under it lifts, a thin line along the road (round 7, `nf-car`).
     func liftWorldFog(_ fix: WorldFix) {
-        worldFog.handle(fix, saveNow: UIApplication.shared.applicationState != .active)
+        worldFog.handle(fix, saveNow: UIApplication.shared.applicationState != .active,
+                        thinLine: worldLocation.rides.isDriving)
     }
 
     /// Arms background mapping when the person turned it on and Always is allowed, or turns it off.

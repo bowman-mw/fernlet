@@ -1,0 +1,116 @@
+import Foundation
+import Testing
+import WorldMapStore
+@testable import Fernlet
+
+/// The driving trace and the car's thin line (round 7, car and bike detection; owner 2026-10-26, `nf-car`):
+/// when a drive is traced in the background, how much fog a reading in a car lifts, and that every reading
+/// reaches car detection before the keepers and carries its in-car answer.
+@MainActor
+struct WorldDriveTraceTests {
+    private static let here = GeoPoint(45.5205, -122.6255)
+    private static let now = Date(timeIntervalSince1970: 2_000_000_000)
+    private static let permissions: [WorldLocationPermission] = [.notAsked, .denied, .whileUsing, .always]
+
+    // MARK: When a drive is traced
+
+    /// Only Always, with background mapping on and the `location` background mode declared, and no walk
+    /// recording, traces a drive; every other combination leaves the updates as they were.
+    @Test func aDriveIsTracedOnlyWithAlwaysAndBackgroundMapping() {
+        var traced: [String] = []
+        for permission in Self.permissions {
+            for mapping in [false, true] {
+                for declared in [false, true] {
+                    for walking in [false, true] where WorldLocationSource.tracesDrive(
+                        permission: permission, backgroundMapping: mapping, declaresBackground: declared, walking: walking) {
+                        traced.append("\(permission) \(mapping) \(declared) \(walking)")
+                    }
+                }
+            }
+        }
+        #expect(traced == ["always true true false"])
+    }
+
+    /// The table's rows the owner cares about, one by one.
+    @Test func theTraceNeverRunsWithoutAlwaysOrDuringAWalk() {
+        #expect(WorldLocationSource.tracesDrive(permission: .always, backgroundMapping: true, declaresBackground: true, walking: false))
+        #expect(!WorldLocationSource.tracesDrive(permission: .whileUsing, backgroundMapping: true, declaresBackground: true, walking: false))
+        #expect(!WorldLocationSource.tracesDrive(permission: .always, backgroundMapping: false, declaresBackground: true, walking: false))
+        #expect(!WorldLocationSource.tracesDrive(permission: .always, backgroundMapping: true, declaresBackground: false, walking: false))
+        #expect(!WorldLocationSource.tracesDrive(permission: .always, backgroundMapping: true, declaresBackground: true, walking: true))
+    }
+
+    // MARK: The thin line
+
+    /// A fog keeper over a fresh vault and its own settings, loaded.
+    private static func keeper() throws -> (WorldFogKeeper, WorldMapVault) {
+        let defaults = try #require(UserDefaults(suiteName: "WorldDriveTraceTests.\(UUID().uuidString)"))
+        let vault = WorldMapVault.ephemeral()
+        let keeper = WorldFogKeeper(vault: vault, defaults: defaults, isProtectedDataAvailable: { true })
+        keeper.load()
+        return (keeper, vault)
+    }
+
+    /// In a car a reading lifts exactly the cell under it; on foot the same reading lifts the 50-m circle.
+    @Test func aReadingInACarLiftsOnlyTheCellUnderIt() throws {
+        let (keeper, vault) = try Self.keeper()
+        defer { _ = vault.clearAll() }
+        let fix = WorldFix(point: Self.here, accuracy: 8, at: Self.now, isPrecise: true, speed: 20)
+        #expect(keeper.handle(fix, thinLine: true) == 1)
+        #expect(keeper.visibleCells == [MercatorHexGrid.cell(containing: Self.here)])
+        let onFoot = WorldFix(point: Self.here.offset(east: 800, north: 0), accuracy: 8, at: Self.now, isPrecise: true)
+        let circle = Set(MercatorHexGrid.cells(around: onFoot.point, within: WorldFogKeeper.liftRadius))
+        #expect(circle.count > 1)
+        #expect(keeper.handle(onFoot) == circle.count)
+        #expect(keeper.visibleCells == circle.union([MercatorHexGrid.cell(containing: Self.here)]))
+    }
+
+    /// A drive's readings a few cells apart draw a line one cell wide, and a background one is written at
+    /// once as before (W-09 B2).
+    @Test func aDriveDrawsALineOneCellWideAndSavesInTheBackground() throws {
+        let (keeper, vault) = try Self.keeper()
+        defer { _ = vault.clearAll() }
+        let road = (0..<6).map { step in Self.here.offset(east: Double(step) * 25, north: 0) }
+        for point in road {
+            keeper.handle(WorldFix(point: point, accuracy: 8, at: Self.now, isPrecise: true, speed: 25),
+                          saveNow: true, thinLine: true)
+        }
+        let line = Set(road.map { MercatorHexGrid.cell(containing: $0) })
+        #expect(keeper.visibleCells == line)
+        let reopened = WorldFogKeeper(vault: vault, isProtectedDataAvailable: { true })
+        reopened.load()
+        #expect(reopened.visibleCells == line, "each background reading was saved at once")
+    }
+
+    // MARK: Delivery
+
+    /// Every reading reaches car detection first, so the one handed on carries its in-car answer: none
+    /// without Motion (the stop watch keeps its speed rule), and Motion's answer with it. Nothing traces
+    /// without Always.
+    @Test func aDeliveredReadingCarriesItsInCarAnswer() {
+        let source = WorldLocationSource()
+        var handed: [WorldFix] = []
+        source.onFix = { fix in handed.append(fix) }
+        let fix = WorldFix(point: Self.here, accuracy: 8, at: Self.now, isPrecise: true, speed: 1)
+        source.deliver(fix)
+        #expect(handed.last?.inCar == nil)
+        source.rides.usesMotion = true
+        source.deliver(WorldFix(point: Self.here, accuracy: 8, at: Self.now.addingTimeInterval(5), isPrecise: true, speed: 1))
+        #expect(handed.count == 2)
+        #expect(handed.last?.inCar == source.rides.inCarFlag)
+        #expect(handed.last?.inCar == false)
+        #expect(source.latest == handed.last)
+        #expect(!source.isTracingDrive)
+    }
+
+    /// A reading CoreLocation could not place is dropped before car detection or the keepers see it.
+    @Test func anInvalidReadingReachesNoOne() {
+        let source = WorldLocationSource()
+        var handed = 0
+        source.onFix = { _ in handed += 1 }
+        source.deliver(WorldFix(point: Self.here, accuracy: -1, at: Self.now, isPrecise: true))
+        source.deliver(WorldFix(point: Self.here, accuracy: .infinity, at: Self.now, isPrecise: true))
+        #expect(handed == 0)
+        #expect(source.latest == nil)
+    }
+}
