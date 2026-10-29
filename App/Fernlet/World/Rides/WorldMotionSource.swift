@@ -31,8 +31,12 @@ protocol WorldMotionReading: AnyObject {
 final class WorldMotionSource: WorldMotionReading {
     private let manager = CMMotionActivityManager()
 
+    /// The person's answer now; unavailable on a phone without the coprocessor's activity, or in a build
+    /// whose Info.plist lacks `NSMotionUsageDescription` (querying without it would trap).
     var permission: WorldMotionPermission {
-        guard CMMotionActivityManager.isActivityAvailable() else { return .unavailable }
+        guard WorldLocationSource.declares(Self.usageKey), CMMotionActivityManager.isActivityAvailable() else {
+            return .unavailable
+        }
         return Self.permission(for: CMMotionActivityManager.authorizationStatus())
     }
 
@@ -65,6 +69,9 @@ final class WorldMotionSource: WorldMotionReading {
             WorldMotionSample(kind: kind(of: activity), isConfident: activity.confidence != .low, at: activity.startDate)
         }
     }
+
+    /// The Info.plist key iOS's Motion & Fitness prompt reads (a frozen token).
+    nonisolated static let usageKey = "NSMotionUsageDescription"
 
     /// The most samples one query hands on (a bound; a day of activity is far fewer).
     nonisolated static let maxSamples = 2_000

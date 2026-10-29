@@ -51,6 +51,12 @@ nonisolated enum WorldRideEvent: Equatable, Sendable {
     case rideStarted(Date)
     /// A bike ride ended and is long enough to log.
     case rideEnded(WorldBikeRide)
+
+    /// The finished ride this event carries; nil for any other event.
+    var bikeRide: WorldBikeRide? {
+        guard case .rideEnded(let ride) = self else { return nil }
+        return ride
+    }
 }
 
 /// A bike ride just logged, for Home's note and its Undo (the approved `b1-home-bike` note).

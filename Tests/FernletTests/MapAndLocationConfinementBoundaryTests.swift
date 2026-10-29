@@ -13,6 +13,8 @@ import Testing
 ///   `WeatherKitService.swift`, where weather has always asked for a coarse fix, and
 ///   `WorldLocationSource.swift`, the World map's location (plan step 5a), whose readings leave the file as
 ///   plain `GeoPoint`s.
+/// - **CoreMotion** only in `WorldMotionSource.swift` (round 7, car and bike detection), read only while "Log
+///   my bike rides" is on; its activity leaves the file as plain `WorldMotionSample`s and is never kept.
 ///
 /// The watch build's planned MapKit route card (`WorkoutRouteMapView.swift`) and GPS recorder join these
 /// lists when main is merged into `world-ui`. A stale entry (a listed file that no longer imports the
@@ -29,6 +31,9 @@ struct MapAndLocationConfinementBoundaryTests {
     static let mapModules: Set<String> = ["MapKit", "_MapKit_SwiftUI"]
     /// Modules that read location (WeatherKit's API takes a `CLLocation`).
     static let locationModules: Set<String> = ["CoreLocation", "CoreLocationUI", "WeatherKit"]
+
+    /// Modules that read the motion coprocessor.
+    static let motionModules: Set<String> = ["CoreMotion"]
 
     /// The only files that may import a map module.
     static let mapFiles: Set<String> = ["App/Fernlet/World/Map/AppleMutedBaseMap.swift"]
@@ -48,12 +53,18 @@ struct MapAndLocationConfinementBoundaryTests {
         #expect(importers == Self.locationFiles, "location importers drifted: \(importers.sorted())")
     }
 
+    @Test func motionIsConfinedToTheRideMotionSource() throws {
+        let importers = try Self.files(importingAnyOf: Self.motionModules)
+        #expect(importers == ["App/Fernlet/World/Rides/WorldMotionSource.swift"], "CoreMotion importers drifted: \(importers.sorted())")
+    }
+
     /// The matcher fires on a planted import of each kind, so the wall cannot pass by reading nothing.
     @Test func plantedImportsAreSeen() {
-        let planted = "import SwiftUI\n@preconcurrency import MapKit\nimport CoreLocation\n"
+        let planted = "import SwiftUI\n@preconcurrency import MapKit\nimport CoreLocation\nimport CoreMotion\n"
         let modules = S3BoundaryTests.importedModules(in: planted)
         #expect(!modules.isDisjoint(with: Self.mapModules))
         #expect(!modules.isDisjoint(with: Self.locationModules))
+        #expect(!modules.isDisjoint(with: Self.motionModules))
     }
 
     // MARK: - Helpers

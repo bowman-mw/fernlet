@@ -10,11 +10,14 @@ import WorldMapStore
 ///   ``slowTime``, straight after walking-pace movement (no faster than ``walkingSpeed``). A gap between two
 ///   readings alone never makes a slow spell: the map hears nothing while a car waits at a red light, so
 ///   the reading as it pulls away looks slow over the gap.
-/// - **After a drive** (a reading faster than ``carSpeed`` within ``carWindow`` before the dwell began, or
-///   during it): only a real dwell counts, within ``dwellRadius`` for ``dwellTime``, confirmed by a reading
-///   still inside it or by the keeper's recheck with no newer reading. This holds until car detection exists.
-/// - A reading whose own speed is above walking pace never decides (a car pulling away), and after a drive
-///   the stop is at the dwell's spot, not at the moving reading (``stopPoint``).
+/// - **After a drive:** only a real dwell counts, within ``dwellRadius`` for ``dwellTime``, confirmed by a
+///   reading still inside it or by the keeper's recheck with no newer reading. With car detection's Motion on
+///   (round 7: a reading's ``WorldFix/inCar`` is known), "after a drive" means a reading in a car within
+///   ``carWindow`` before the dwell began, or during it, and speed no longer decides it (a fast bike ride is
+///   no drive). Without Motion (`inCar` nil) the fallback is speed: a reading faster than ``carSpeed`` in
+///   that window.
+/// - A reading whose own speed is above walking pace never decides (a car pulling away), nor does a reading
+///   in a car; after a drive the stop is at the dwell's spot, not at the moving reading (``stopPoint``).
 ///
 /// A reading's speed is CoreLocation's own when it gave one, otherwise the pace from the reading before
 /// (unknown across a gap longer than ``maxGap``, when the app was closed).
@@ -58,12 +61,12 @@ nonisolated struct WorldStopWatch: Equatable, Sendable {
     private var slowCount = 0
     private var slowSince: Date?
     private var walkedIn = false
-    /// When a reading was last faster than ``carSpeed``.
+    /// When a reading was last in a car: in car detection's word when known, else faster than ``carSpeed``.
     private var fastAt: Date?
 
-    /// Takes a reading at `point` at `date`, with CoreLocation's own `speed` when it gave one; whether the
-    /// person has stopped.
-    mutating func observe(_ point: GeoPoint, speed own: Double? = nil, at date: Date) -> Bool {
+    /// Takes a reading at `point` at `date`, with CoreLocation's own `speed` when it gave one and car
+    /// detection's `inCar` when Motion is on; whether the person has stopped.
+    mutating func observe(_ point: GeoPoint, speed own: Double? = nil, inCar: Bool? = nil, at date: Date) -> Bool {
         if spot.map({ $0.distance(to: point) > Self.stayRadius }) ?? true {
             spot = point
             since = date
@@ -72,10 +75,11 @@ nonisolated struct WorldStopWatch: Equatable, Sendable {
             dwell = point
             dwellSince = date
         }
-        observeSpeed(own ?? pace(to: point, at: date), at: date)
+        observeSpeed(own ?? pace(to: point, at: date), inCar: inCar, at: date)
         last = point
         lastAt = date
         if let own, own > Self.walkingSpeed { return false }
+        if inCar == true { return false }
         return isStopped(at: date)
     }
 
@@ -102,7 +106,7 @@ nonisolated struct WorldStopWatch: Equatable, Sendable {
         return left > 0 ? left : nil
     }
 
-    /// Whether a reading at a car's speed came within ``carWindow`` before the dwell began, or during it.
+    /// Whether a reading in a car came within ``carWindow`` before the dwell began, or during it.
     private var isAfterDrive: Bool {
         guard let fastAt, let dwellSince else { return false }
         return fastAt >= dwellSince.addingTimeInterval(-Self.carWindow)
@@ -123,9 +127,14 @@ nonisolated struct WorldStopWatch: Equatable, Sendable {
         return last.distance(to: point) / seconds
     }
 
-    /// Notes a car's speed, and starts, extends or ends the slow run, from one reading's speed.
-    private mutating func observeSpeed(_ speed: Double?, at date: Date) {
-        if let speed, speed > Self.carSpeed { fastAt = date }
+    /// Notes a car (car detection's word when known, else a car's speed), and starts, extends or ends the
+    /// slow run, from one reading's speed.
+    private mutating func observeSpeed(_ speed: Double?, inCar: Bool?, at date: Date) {
+        if let inCar {
+            if inCar { fastAt = date }
+        } else if let speed, speed > Self.carSpeed {
+            fastAt = date
+        }
         if let speed, speed < Self.slowSpeed {
             if slowCount == 0 {
                 slowSince = date
