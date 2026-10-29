@@ -678,7 +678,8 @@ struct SealedBackupPayloadCoverageTests {
         defaults.removeObject(forKey: SealedBackupRestoreHold.preResetCopiesKey)
         #expect(hold.payloadsKeepingPreResetCopy == Set(SealedBackupRestoreHold.reuploadablePayloads), "no record: fail closed")
         hold.forgetPreResetCopy(of: .periodData)
-        #expect(hold.payloadsKeepingPreResetCopy == [.journalNarratives, .intimacyLogs])
+        #expect(hold.payloadsKeepingPreResetCopy == [.journalNarratives, .intimacyLogs, .worldPassport],
+                "fail closed keeps the passport's copy too (round 7: its own payload)")
         #expect(!hold.keepsPreResetCopy(of: .sensitiveNotes), "the retired payload is never re-uploaded")
     }
 
