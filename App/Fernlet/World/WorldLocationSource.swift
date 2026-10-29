@@ -301,6 +301,8 @@ final class WorldLocationSource: NSObject {
     /// iOS paused the updates (the car has stood still a while): the drive's end hint, so the trace stops; a
     /// later reading in a car (a significant move, or the map in front) traces again while the drive lasts.
     fileprivate func driveTracePaused() {
+        // A pause is often a parked car: the rides keeper decides first, which may end the drive and the trace.
+        rides.tickNow()
         guard isTracingDrive else { return }
         stopDriveTrace()
     }

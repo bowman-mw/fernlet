@@ -103,6 +103,22 @@ struct WorldDriveTraceTests {
         #expect(!source.isTracingDrive)
     }
 
+    /// Readings at a car's speed, delivered as CoreLocation hands them on, start a drive: the fog's thin line
+    /// and Home's riding along follow it. Without Always nothing is traced.
+    @Test func deliveredReadingsAtCarSpeedStartADrive() {
+        let source = WorldLocationSource()
+        var changes: [Bool] = []
+        let traced = source.rides.onDrivingChanged
+        source.rides.onDrivingChanged = { driving in changes.append(driving); traced?(driving) }
+        for step in 0..<3 {
+            source.deliver(WorldFix(point: Self.here.offset(east: Double(step) * 200, north: 0), accuracy: 8,
+                                    at: Self.now.addingTimeInterval(Double(step) * 10), isPrecise: true, speed: 20))
+        }
+        #expect(source.rides.isDriving)
+        #expect(changes == [true])
+        #expect(!source.isTracingDrive)
+    }
+
     /// A reading CoreLocation could not place is dropped before car detection or the keepers see it.
     @Test func anInvalidReadingReachesNoOne() {
         let source = WorldLocationSource()

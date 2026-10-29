@@ -59,9 +59,11 @@ extension FernletStore {
 
     /// The map's location while Fernlet is open (W-09 (i)), from the app's own edges (the launch screen
     /// lifting, the app back in front), so it runs even when Home isn't drawn (a launch straight into a
-    /// panel). A no-op without permission or when already running.
+    /// panel). A no-op without permission or when already running. Each edge also looks for bike rides the
+    /// motion history holds from while the app was closed (round 7).
     func startWorldMapLocation() {
         wireWorldRides()
+        Task { await catchUpWorldBikeRides() }
         worldFog.load()
         worldLocation.startForeground()
     }

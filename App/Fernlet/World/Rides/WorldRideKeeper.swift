@@ -159,8 +159,9 @@ final class WorldRideKeeper {
     }
 
     /// One tick of the loop: the motion since the last query, then the watch as of now. Whether the person
-    /// is still driving or cycling.
-    private func tickNow() -> Bool {
+    /// is still driving or cycling. The location source also ticks when iOS pauses its updates at a stop.
+    @discardableResult
+    func tickNow() -> Bool {
         let now = Date()
         readMotion(through: now)
         apply(watch.tick(at: now))
