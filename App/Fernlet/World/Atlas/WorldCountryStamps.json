@@ -907,6 +907,293 @@
       ],
       "batch": "eu"
     },
+    "nl": {
+      "en": "Netherlands",
+      "es": "Países Bajos",
+      "label": [
+        "NEDERLAND"
+      ],
+      "symbol": "a windmill",
+      "ink": "#2E8B57",
+      "rows": [
+        ".kk........kk.",
+        "..kk......kk..",
+        "...kk....kk...",
+        "....kk..kk....",
+        ".....k.kk.....",
+        ".....kk.k.....",
+        "....kkkkkk....",
+        "...kkk..kkk...",
+        "..kkk....kkk..",
+        ".kk.k....k.kk.",
+        "kk..k.kk.k..kk",
+        "....k.kk.k....",
+        "...k..kk..k...",
+        "...kkkkkkkk..."
+      ],
+      "batch": "eu"
+    },
+    "be": {
+      "en": "Belgium",
+      "es": "Bélgica",
+      "label": [
+        "BELGIQUE",
+        "BELGIË"
+      ],
+      "symbol": "the Belfry of Bruges",
+      "ink": "#7B4BA8",
+      "rows": [
+        "......kk......",
+        ".....kkkk.....",
+        ".....k..k.....",
+        ".....kkkk.....",
+        "....kk..kk....",
+        "....k.kk.k....",
+        "....kkkkkk....",
+        "...kk.kk.kk...",
+        "...k..kk..k...",
+        "...kkkkkkkk...",
+        "..kk.k..k.kk..",
+        "..k..k..k..k..",
+        ".kkkkkkkkkkkk.",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "eu"
+    },
+    "lu": {
+      "en": "Luxembourg",
+      "es": "Luxemburgo",
+      "label": [
+        "LUXEMBOURG"
+      ],
+      "symbol": "the old town on its cliff",
+      "ink": "#B3343A",
+      "rows": [
+        "..k.....k.....",
+        ".kkk...kkk..k.",
+        ".k.k.k.k.k.kkk",
+        "kkkkkkkkkkkk.k",
+        "k.k.k.kk.k.kkk",
+        "kkkkkkkkkkkkkk",
+        "k............k",
+        ".k..k......k.k",
+        ".k...k....k..k",
+        "..k........k.k",
+        "..k..k.k..k..k",
+        "...k......k..k",
+        "...k.....k...k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "eu"
+    },
+    "de": {
+      "en": "Germany",
+      "es": "Alemania",
+      "label": [
+        "DEUTSCHLAND"
+      ],
+      "symbol": "Neuschwanstein Castle",
+      "ink": "#B3343A",
+      "rows": [
+        "...k......k...",
+        "...k.....kkk..",
+        "..kkk....k.k..",
+        "..k.k..k.kkk..",
+        "..kkk.kkkk.k..",
+        "..k.k.k..k.k..",
+        ".kkkkkkkkkkkk.",
+        ".k.k.k.k.k.kk.",
+        ".kkkkkkkkkkkk.",
+        ".k.k.k..k.k.k.",
+        ".kkkkk..kkkkk.",
+        ".kkkkk..kkkkk.",
+        "kkkkkkkkkkkkkk",
+        ".kk.kk..kk.kk."
+      ],
+      "batch": "eu"
+    },
+    "ch": {
+      "en": "Switzerland",
+      "es": "Suiza",
+      "label": [
+        "HELVETIA"
+      ],
+      "symbol": "the Matterhorn",
+      "ink": "#7B4BA8",
+      "rows": [
+        ".......k......",
+        "......kk......",
+        "......k.k.....",
+        ".....kk.k.....",
+        ".....k..kk....",
+        "....kk.k.k....",
+        "....k.k...k...",
+        "...kk.....kk..",
+        "..kk.......k..",
+        "..k..kk....kk.",
+        ".kk.k..k.k..k.",
+        ".k.k....k.k.kk",
+        "k.k........k.k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "eu"
+    },
+    "at": {
+      "en": "Austria",
+      "es": "Austria",
+      "label": [
+        "ÖSTERREICH"
+      ],
+      "symbol": "the Riesenrad, Vienna's big wheel",
+      "ink": "#B3343A",
+      "rows": [
+        "..............",
+        "....kkkkkk....",
+        "...k..k...k...",
+        "..k.k.k..k.k..",
+        "..k..kkkk..k..",
+        "..kkkkkkkkkk..",
+        "..k..kkkk..k..",
+        "..k..kkkk..k..",
+        "..k.kkk.kk.k..",
+        "...kk.k..kk...",
+        "....kkkkkk....",
+        "...k......k...",
+        "...k......k...",
+        ".kkkkkkkkkkkk."
+      ],
+      "batch": "eu"
+    },
+    "li": {
+      "en": "Liechtenstein",
+      "es": "Liechtenstein",
+      "label": [
+        "LIECHTENSTEIN"
+      ],
+      "symbol": "Vaduz Castle on its cliff",
+      "ink": "#B3343A",
+      "rows": [
+        "...k.k.k......",
+        "...kkkkk......",
+        "...k...k.k.k.k",
+        "...k.k.k.kkkkk",
+        "...k...kkk...k",
+        "..kkkkkkkk.k.k",
+        "..k........k.k",
+        ".kk.........kk",
+        ".k...........k",
+        "kk..k......k.k",
+        "k....k.....k.k",
+        "k.k.....k....k",
+        "k...k.....k..k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "eu"
+    },
+    "mc": {
+      "en": "Monaco",
+      "es": "Mónaco",
+      "label": [
+        "MONACO"
+      ],
+      "symbol": "a Grand Prix car, seen from above",
+      "ink": "#2F6FA3",
+      "rows": [
+        "...kkkkkkkk...",
+        "......kk......",
+        ".kk...kk...kk.",
+        ".kk..kkkk..kk.",
+        ".kkkkkkkkkkkk.",
+        ".kk..kkkk..kk.",
+        ".....kkkk.....",
+        ".....k..k.....",
+        ".....kkkk.....",
+        "....kkkkkk....",
+        "kk..kkkkkk..kk",
+        "kkkkkkkkkkkkkk",
+        "kk..kkkkkk..kk",
+        "..kkkkkkkkkk.."
+      ],
+      "batch": "eu"
+    },
+    "pt": {
+      "en": "Portugal",
+      "es": "Portugal",
+      "label": [
+        "PORTUGAL"
+      ],
+      "symbol": "the Rooster of Barcelos",
+      "ink": "#2F6FA3",
+      "rows": [
+        "....k.k.......",
+        "....kkkk......",
+        "...kk.kk......",
+        "..kkkkkk...k..",
+        "....kkkk..kkk.",
+        "....kkkkkkk.kk",
+        "....kk.k.kkkk.",
+        "....kkkkkkkk..",
+        ".....kkkkkk...",
+        "......k.k.....",
+        "......k.k.....",
+        ".....kk.kk....",
+        "...kkkkkkkkk..",
+        ".............."
+      ],
+      "batch": "eu"
+    },
+    "es": {
+      "en": "Spain",
+      "es": "España",
+      "label": [
+        "ESPAÑA"
+      ],
+      "symbol": "a Spanish guitar",
+      "ink": "#2F6FA3",
+      "rows": [
+        "...........kk.",
+        "..........kkk.",
+        ".........kk...",
+        "........kk....",
+        ".......kk.....",
+        "...kkkkk......",
+        "..kkk.kkk.....",
+        ".kk.kkk.kk....",
+        "kk..k.k..k....",
+        "k..kkk...k....",
+        "k........k....",
+        "kk......kk....",
+        ".kk....kk.....",
+        "..kkkkkk......"
+      ],
+      "batch": "eu"
+    },
+    "ad": {
+      "en": "Andorra",
+      "es": "Andorra",
+      "label": [
+        "ANDORRA"
+      ],
+      "symbol": "a cable car over the Pyrenees",
+      "ink": "#B3343A",
+      "rows": [
+        "kk............",
+        "..kk..........",
+        "....kk........",
+        "......kkk.....",
+        ".......k.kk...",
+        ".....kkkkk.kk.",
+        ".....k.k.k...k",
+        ".....kkkkk....",
+        ".....kkkkk....",
+        "..............",
+        "...k..........",
+        "..k.k.....k...",
+        ".k...k...k.k..",
+        "k.....k.k...k."
+      ],
+      "batch": "eu"
+    },
     "it": {
       "en": "Italy",
       "es": "Italia",

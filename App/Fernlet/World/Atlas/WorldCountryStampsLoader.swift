@@ -1,4 +1,5 @@
 import FernletFoundation
+import FernletUI
 import Foundation
 import WorldMapStore
 
@@ -10,6 +11,10 @@ enum WorldCountryStampsLoader {
     static let resource = "WorldCountryStamps"
     /// The bundled file's extension.
     static let fileExtension = "json"
+    /// The face the passport draws stamp labels in: DM Sans Bold, the stamp book's label face. The design
+    /// assumes Pixelify Sans, which Fernlet does not carry and never adds; `WorldCountryStampsTests` holds every
+    /// label character to this face's glyphs, so a missing one fails rather than falling back silently.
+    static let labelFontName = FernletFontName.dmSansBold
 
     /// The stamps bundled in `bundle`, or nil (logged).
     static func bundled(in bundle: Bundle = .main) -> WorldCountryStamps? {

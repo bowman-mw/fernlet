@@ -1,5 +1,7 @@
+import CoreText
 import Foundation
 import Testing
+import UIKit
 import WorldMapStore
 @testable import Fernlet
 
@@ -21,6 +23,26 @@ struct WorldCountryStampsTests {
         "RS", "ME", "AL", "MK", "GR", "BG", "RO", "MD", "HU", "SK", "CZ", "PL", "UA", "BY", "RU",
     ]
 
+    /// Europe's last 11, redrawn and approved (2026-10-29).
+    static let europeRest: Set<String> = ["NL", "BE", "LU", "DE", "CH", "AT", "LI", "MC", "PT", "ES", "AD"]
+
+    /// Every label character has a glyph in the face the passport draws labels in (design session, 2026-10-29:
+    /// the art assumed Pixelify Sans, which has no Ə or Ệ; Fernlet never adds fonts, so the bundled face is the
+    /// one to hold). The accented capitals the labels use today are named, so a face swap that drops one fails.
+    @Test func everyLabelCharacterHasAGlyphInTheStampFace() throws {
+        let stamps = try #require(WorldCountryStampsLoader.bundled())
+        let face = try #require(UIFont(name: WorldCountryStampsLoader.labelFontName, size: 12))
+        #expect(face.fontName == WorldCountryStampsLoader.labelFontName, "the stamp face is registered")
+        let font = CTFontCreateWithName(face.fontName as CFString, 12, nil)
+        let used = Set(stamps.stamps.values.flatMap { $0.label.joined() })
+        let named: Set<Character> = ["Č", "İ", "Ë", "Ñ", "À", "É", "Í", "Ö", "Â"]
+        for character in used.union(named) {
+            let units = Array(String(character).utf16)
+            var glyphs = [CGGlyph](repeating: 0, count: units.count)
+            #expect(CTFontGetGlyphsForCharacters(font, units, &glyphs, units.count), "no glyph for \(character)")
+        }
+    }
+
     @Test func theBundledStampsLoadAndKeepTheirRules() throws {
         let stamps = try #require(WorldCountryStampsLoader.bundled())
         #expect(Self.northAmerica.isSubset(of: Set(stamps.stamps.keys)))
@@ -37,7 +59,8 @@ struct WorldCountryStampsTests {
         }
         #expect(stamps.stamp(for: "us")?.englishName == "United States")
         #expect(stamps.stamp(for: "MX")?.label.joined(separator: " ").contains("MÉXICO") == true)
-        #expect(stamps.stamp(for: "DE") == nil, "a stamp still being redrawn: none yet, a dashed space")
+        #expect(Self.europeRest.isSubset(of: Set(stamps.stamps.keys)), "Europe is complete")
+        #expect(stamps.stamp(for: "JP") == nil, "Asia's batch hasn't landed: no stamp, a dashed space")
         #expect(stamps.stamp(for: "VA")?.batch == "eu", "the smallest of the 195 has its stamp")
     }
 
