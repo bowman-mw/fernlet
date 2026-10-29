@@ -14,15 +14,7 @@ import Foundation
 import HealthKit
 import HealthKitGateway
 
-/// One body-mass reading: when, and how heavy.
-nonisolated struct BodyWeightSample: Equatable, Sendable {
-    /// When the reading was taken (or the start of the day it averages).
-    let date: Date
-    /// The weight in kilograms.
-    let kilograms: Double
-}
-
-/// Where the calendar's weight readings come from: Health on a device, a fixture in a DEBUG
+/// Where the calendar's weight readings (``BodyWeightSample``, the domain model's weigh-in) come from: Health on a device, a fixture in a DEBUG
 /// screenshot run, a canned list in a test.
 protocol BodyWeightSampleSource {
     /// The readings taken from `start` up to `end`; empty when there are none or nothing may be read.
