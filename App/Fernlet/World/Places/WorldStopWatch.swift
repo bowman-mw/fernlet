@@ -102,6 +102,21 @@ nonisolated struct WorldStopWatch: Equatable, Sendable {
         return left > 0 ? left : nil
     }
 
+    /// When the person began staying where the stop is decided: the dwell's start after a drive, otherwise
+    /// the spot's (round 7, `ref-tag-how`: "Remember this place" shows once they have stayed over 2 minutes).
+    var stayStart: Date? { isAfterDrive ? dwellSince : since }
+
+    /// Starts the spot (and the dwell) at `point` from `date`: a low-power visit from iOS, with background
+    /// mapping on, says the person arrived there then (round 7, `ref-tag-how`), so a reading there once
+    /// Fernlet opens counts the stay from the arrival. A reading farther away starts a new spot as usual.
+    mutating func seed(_ point: GeoPoint, since date: Date) {
+        guard point.isValid else { return }
+        spot = point
+        since = date
+        dwell = point
+        dwellSince = date
+    }
+
     /// Whether a reading at a car's speed came within ``carWindow`` before the dwell began, or during it.
     private var isAfterDrive: Bool {
         guard let fastAt, let dwellSince else { return false }

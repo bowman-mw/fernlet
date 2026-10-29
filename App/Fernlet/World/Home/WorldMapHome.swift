@@ -136,6 +136,8 @@ struct WorldMapHome: View {
         .onChange(of: isLaunched) { updateLocation() }
         .onChange(of: scenePhase) { updateLocation() }
         .onChange(of: store.worldLocation.latest) { old, fix in moved(from: old, to: fix) }
+        // Round 7 (`ref-tag-named`): a restaurant or gym just remembered gets its icon at once.
+        .onChange(of: store.worldPlaces.keptPlaces) { if isFrontmost { readPlaces() } }
         // A pinch or a double-tap zoom keeps following at the new distance (W-10).
         .onChange(of: camera.distance) { if camera.follows { follow(store.worldLocation.latest) } }
         // Ten seconds without a touch, off following: Sprout again (`ref-recenter-auto`).
@@ -264,10 +266,10 @@ struct WorldMapHome: View {
                         .transition(.opacity)
                 }
                 HStack(alignment: .bottom, spacing: 10) {
-                    // Round 6 (`ref-tag-home`): beside the blue button at a spot Fernlet refused.
-                    if cardContext == nil, let spot = store.worldRefusedSpot(near: store.worldLocation.latest) {
+                    // Round 7 (`ref-tag-home` d2): beside the blue button anywhere the person stays.
+                    if cardContext == nil, let spot = store.worldRememberSpot(near: store.worldLocation.latest) {
                         // Above the blue button's label, which slides out over it for 30 s (form answer 28).
-                        WorldTagPlaceButton { placeSheet = .remember(start: spot, kind: .place) }
+                        WorldTagPlaceButton(onRemember: { placeSheet = .spot(spot) }, onNotHere: store.dismissWorldRememberSpot)
                             .zIndex(1)
                     }
                     if let glyph = WorldQuickStart.glyph(for: buttonContext) {
@@ -461,6 +463,7 @@ struct WorldMapHome: View {
         switch marker.kind {
         case .space: openCard(spaceID: marker.id)
         case .eatingPlace: openCard(spaceID: nil, eatingID: marker.id)
+        case .keptGym: openCard(spaceID: nil)
         }
     }
 

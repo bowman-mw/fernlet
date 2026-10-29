@@ -23,9 +23,11 @@ import WorldMapStore
 /// - **Walks and runs** recorded on the map join the timeline with their length.
 ///
 /// **Round 6** (owner-approved 2026-10-25):
-/// - **A refused spot** (`ref-tag-home`): the last lookup refused where the person stands; held in memory
-///   only (``refusedSpot``), so Home can offer "Remember this place" until the person moves on. Nothing is
-///   kept unless they add it (``WorldPlacesKeeper/remember(_:at:)``).
+/// - **Remember this place** (`ref-tag-home`; round 7, draft 2: anywhere the person stays): once they have
+///   stopped somewhere for more than 2 minutes that isn't a home, a hotel or a place they keep, the spot is
+///   offered in memory only (``rememberSpot``, ``WorldRememberSpot``) until they move on. Nothing is kept
+///   unless they add it (``remember(_:named:at:date:)``); "Not here" keeps a quiet "don't ask here"
+///   (``WorldPlaceMarks``) except at a spot Fernlet won't name, where it only hides the button.
 /// - **Homes and hotels** (`ref-home-*`): every reading and visit is checked against them on the phone
 ///   (``observeHomes(_:at:departed:)``); leaving and getting back join the timeline, getting home after an
 ///   hour away leaves Sprout a greeting, and no visit is ever noted at a home or a hotel.
@@ -55,13 +57,13 @@ final class WorldPlacesKeeper {
     static let maxVisitAccuracy = 200.0
     /// The worst accuracy a reading may have and still say whether the person is home, in metres.
     static let maxHomeAccuracy = 100.0
-    /// How far from a refused spot the person moves before "Remember this place" goes, in metres.
-    static let refusedSpotReach = 50.0
-    /// How long a refused spot is offered while the person stays.
-    static let refusedSpotLife: TimeInterval = 2 * 60 * 60
+    /// How far from the offered spot the person moves before "Remember this place" goes, in metres.
+    static let rememberReach = 50.0
 
     /// The sealed log and device side.
     @ObservationIgnored let store: PlaceLogStore
+    /// "Not here" and the places the person remembered (round 7).
+    @ObservationIgnored let marks: WorldPlaceMarksStore
     @ObservationIgnored let lookup: any WorldPlaceLooking
     /// Whether "Remember places I stop at" is on now.
     @ObservationIgnored let remembersPlaces: () -> Bool
@@ -70,7 +72,7 @@ final class WorldPlacesKeeper {
     @ObservationIgnored private var lastLookup: (point: GeoPoint, at: Date)?
     @ObservationIgnored private var isLookingUp = false
     /// Whether the person has stopped (W-13); in memory only.
-    @ObservationIgnored private var stopWatch = WorldStopWatch()
+    @ObservationIgnored private(set) var stopWatch = WorldStopWatch()
     /// The check that runs once the person may have stayed long enough, with no new reading to say so (the
     /// map's 10 m filter sends none while they sit still).
     @ObservationIgnored private var stopCheck: Task<Void, Never>?
@@ -81,8 +83,12 @@ final class WorldPlacesKeeper {
     @ObservationIgnored var eatsAt: [String: Bool] = [:]
     /// Whether a decoy session is showing.
     private(set) var isDecoy = false
-    /// Where the last lookup refused the spot the person stands at (`ref-tag-home`), and when; in memory only.
-    var refusedSpot: (point: GeoPoint, at: Date)?
+    /// The spot "Remember this place" offers while the person stays (`ref-tag-home`); in memory only.
+    var rememberSpot: WorldRememberSpot?
+    /// A spot Fernlet won't name whose button "Not here" hid until the person leaves (in memory only).
+    @ObservationIgnored var hiddenSpot: GeoPoint?
+    /// The places the person remembered, as last read or saved (the map draws a restaurant's or gym's icon).
+    var keptPlaces: [WorldKeptPlace] = []
     /// The homes and hotel as last read or saved (the map draws them).
     var homes: HomeBook = .empty
     /// The places to eat as last read or saved (the map draws the favourites).
@@ -99,6 +105,7 @@ final class WorldPlacesKeeper {
          remembersPlaces: @escaping () -> Bool = { WorldMapPreferences.remembersPlaces() },
          remembersEatingOut: @escaping () -> Bool = { WorldMapPreferences.remembersEatingOut() }) {
         store = PlaceLogStore(vault: vault)
+        marks = WorldPlaceMarksStore(vault: vault)
         self.lookup = lookup
         self.remembersPlaces = remembersPlaces
         self.remembersEatingOut = remembersEatingOut
@@ -124,7 +131,7 @@ final class WorldPlacesKeeper {
         guard !isDecoy, fix.point.isValid else { return false }
         if fix.isPrecise, fix.accuracy <= Self.maxHomeAccuracy { observeHomes(fix.point, at: now) }
         followEatingVisit(fix.point, now: now)
-        if let spot = refusedSpot, spot.point.distance(to: fix.point) > Self.refusedSpotReach { refusedSpot = nil }
+        followRememberSpot(fix.point)
         guard remembersPlaces() || remembersEatingOut(), fix.isPrecise, fix.accuracy <= Self.maxAccuracy else { return false }
         // W-13, W-14: only where the person has stopped, decided at the stop's own spot (after a drive, where
         // they dwelt). Readings on the way (a drive and its red lights, a walk past a pharmacy) look nothing
@@ -147,7 +154,7 @@ final class WorldPlacesKeeper {
                                                                  "places": "\(nearby?.count ?? 0)",
                                                                  "verdict": Self.token(verdict)])
         guard !isDecoy else { return false }
-        refusedSpot = verdict == .refused && remembersPlaces() ? (point, now) : nil
+        if let verdict { offerSpot(WorldRememberSpot.kind(for: verdict, nearby: nearby ?? []), at: point, now: now) }
         var noted = false
         if remembersPlaces(), case .allowed(let placeID) = verdict {
             noted = update { state in
@@ -166,6 +173,8 @@ final class WorldPlacesKeeper {
     func handleVisit(_ visit: WorldVisit) -> Bool {
         guard !isDecoy, visit.accuracy <= Self.maxVisitAccuracy else { return false }
         if visit.accuracy <= Self.maxHomeAccuracy { observeHomes(visit.point, at: visit.arrived, departed: visit.departed) }
+        // Round 7 (`ref-tag-how`, background mapping on): still there, the stay counts from the arrival.
+        if visit.departed == nil, visit.accuracy <= Self.maxHomeAccuracy { stopWatch.seed(visit.point, since: visit.arrived) }
         guard remembersPlaces(), homes.base(near: visit.point) == nil else { return false }
         return noteKnownVisit(at: visit.point, now: visit.arrived) ?? false
     }
@@ -187,7 +196,7 @@ final class WorldPlacesKeeper {
         }
     }
 
-    /// Forgets what is held in memory: the lookup spacing, the refused spot, the visit to a place to eat,
+    /// Forgets what is held in memory: the lookup spacing, the offered spot, the visit to a place to eat,
     /// the homes and places drawn, and every place name asked for again (the wipes, Delete all of it, a
     /// decoy).
     func forget() {
@@ -195,7 +204,9 @@ final class WorldPlacesKeeper {
         stopWatch = WorldStopWatch()
         stopCheck?.cancel()
         stopCheck = nil
-        refusedSpot = nil
+        rememberSpot = nil
+        hiddenSpot = nil
+        keptPlaces = []
         eatingVisit = nil
         eatsAt = [:]
         homes = .empty
@@ -223,6 +234,7 @@ final class WorldPlacesKeeper {
         }
         guard let place = state.knownPlace(near: point) else { return nil }
         lastLookup = (point, now)
+        offerKnownSpot(place, at: point, now: now)
         knownPlaceVisited(place, at: point, now: now)
         guard remembersPlaces() else { return false }
         let next = state.recordingVisit(to: place.id, at: now)
@@ -292,5 +304,6 @@ final class WorldPlacesKeeper {
         } catch {
             FernletAuditLog.log("worldMap.places.readDeferred")
         }
+        if let read = marks.read() { keptPlaces = read.kept }
     }
 }

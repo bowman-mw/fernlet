@@ -54,35 +54,56 @@ struct WorldCompanionExtras: View {
     }
 }
 
-/// "Remember this place" (`ref-tag-home`): the quiet framed button beside the blue button, a pixel pin and
-/// the words, only while the person stands at a spot Fernlet refused with the map open. No banner, sound,
-/// haptic or announcement when it appears. VoiceOver: "Remember this place, button. Fernlet didn't name
-/// this spot." The words grow to about 18 pt at the largest text.
+/// "Remember this place" (`ref-tag-home` draft 2, round 7): the quiet framed chip beside the blue button,
+/// a pixel pin and the words, with a small ✕ ("Not here") on its right, while the person has stayed more
+/// than 2 minutes somewhere that isn't a home, a hotel or a place they keep. No banner, sound, haptic or
+/// announcement when it appears. VoiceOver: "Remember this place, button" and "Not here, button". At the
+/// largest text the words grow to about 18 pt and the ✕ is 44 pt wide; it is a 44-pt target always.
 struct WorldTagPlaceButton: View {
-    let action: () -> Void
+    let onRemember: () -> Void
+    let onNotHere: () -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                WorldSpriteView(sprite: WorldSprites.pin, scale: 2)
-                    .accessibilityHidden(true)
-                Text(WorldHomeCopy.rememberButton)
-                    .font(Font.custom(FernletFontName.dmSansBold, size: 14, relativeTo: .subheadline))
-                    .dynamicTypeSize(...DynamicTypeSize.xxLarge)
-                    .foregroundStyle(WorldPalette.bark)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+        HStack(spacing: 0) {
+            Button(action: onRemember) { rememberLabel }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("world.rememberPlace")
+            Rectangle().fill(WorldPalette.ink).frame(width: 2).accessibilityHidden(true)
+            Button(action: onNotHere) {
+                WorldSpriteView(sprite: WorldSprites.xx, scale: 2)
+                    .frame(width: dynamicTypeSize.isAccessibilitySize ? 44 : 34)
+                    .frame(maxHeight: .infinity)
+                    .contentShape(Rectangle())
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .frame(minHeight: 44)
-            .background(WorldPalette.paperLight, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(WorldPalette.ink, lineWidth: 2))
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(WorldHomeCopy.notHere))
+            .accessibilityIdentifier("world.rememberPlace.notHere")
         }
-        .buttonStyle(.plain)
-        .accessibilityHint(Text(WorldHomeCopy.rememberButtonHint))
-        .accessibilityIdentifier("world.rememberPlace")
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(minHeight: 44)
+        .background(WorldPalette.paperLight, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(WorldPalette.ink, lineWidth: 2))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .accessibilityElement(children: .contain)
+    }
+
+    /// The pin and "Remember this place".
+    private var rememberLabel: some View {
+        HStack(spacing: 6) {
+            WorldSpriteView(sprite: WorldSprites.pin, scale: 2)
+                .accessibilityHidden(true)
+            Text(WorldHomeCopy.rememberButton)
+                .font(Font.custom(FernletFontName.dmSansBold, size: 14, relativeTo: .subheadline))
+                .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+                .foregroundStyle(WorldPalette.bark)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
     }
 }
 
