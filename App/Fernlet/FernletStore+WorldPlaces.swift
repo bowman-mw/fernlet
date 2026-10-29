@@ -51,6 +51,7 @@ extension FernletStore {
     /// without Home ever drawing. With the switch off nothing is built (CoreLocation waits for the map).
     func armWorldBackgroundMappingAtLaunch() {
         guard WorldMapPreferences.alwaysLowPower() else { return }
+        wireWorldRides()
         applyWorldBackgroundMapping()
     }
 
@@ -58,6 +59,7 @@ extension FernletStore {
     /// lifting, the app back in front), so it runs even when Home isn't drawn (a launch straight into a
     /// panel). A no-op without permission or when already running.
     func startWorldMapLocation() {
+        wireWorldRides()
         worldFog.load()
         worldLocation.startForeground()
     }

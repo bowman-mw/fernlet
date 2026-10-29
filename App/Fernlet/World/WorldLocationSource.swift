@@ -17,6 +17,10 @@ nonisolated struct WorldFix: Equatable, Sendable {
     /// CoreLocation's own speed for the reading, in metres a second; nil when it gave none (W-14: the stop
     /// watch tells a car pulling away from a red light from a person who stopped).
     var speed: Double? = nil
+    /// Whether car detection says the person is in a car (round 7: Motion's automotive activity, read only
+    /// while "Log my bike rides" is on and allowed); nil when Motion is off, and the stop watch then keeps its
+    /// speed rule (W-14).
+    var inCar: Bool? = nil
 }
 
 /// A stop iOS noticed in Always mode's low-power visits, in plain values: where, how sure, and when the
@@ -84,6 +88,9 @@ final class WorldLocationSource: NSObject {
     @ObservationIgnored var onFix: ((WorldFix) -> Void)?
     /// Called with every low-power visit (Always mode).
     @ObservationIgnored var onVisit: ((WorldVisit) -> Void)?
+
+    /// Car and bike detection (round 7), fed every reading this source hands on.
+    let rides = WorldRideKeeper()
 
     /// Whether a walk is recording (updates keep running off the map).
     private(set) var isWalking = false

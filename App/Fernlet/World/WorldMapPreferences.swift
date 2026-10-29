@@ -15,6 +15,11 @@ import Foundation
 ///   it is deleted (the fog and the walk lines have their own switches).
 /// - **Remember places I eat out** (on by default, as `b1-settings-map` draws it; World build round 6): whether
 ///   the meals logged at a place to eat are noted there. Off notes no meal; the places kept stay.
+/// - **Log my bike rides** (off by default; round 7, `b1-settings-map`): whether car and bike detection reads
+///   the motion coprocessor, so bike rides log as exercise. Motion & Fitness is asked only when it is turned on.
+/// - **Bike rides checked through** (round 7): the moment the motion history was last looked through for
+///   bike rides, so a ride is logged once and never one from before the switch was turned on. A time only;
+///   no motion data is kept.
 /// - **The map intro answered** (step 5c, `b1-loc-intro`): the intro shows once, before iOS asks; Turn on
 ///   location and Not now both answer it.
 /// - **The companion hint shown** (`ref-hint`): "Tap me to say hi!" shows once on this iPhone.
@@ -33,6 +38,32 @@ nonisolated enum WorldMapPreferences {
         static let remembersEatingOut = "fernlet.worldMap.rememberEatingOut"
         static let locationIntroAnswered = "fernlet.worldMap.locationIntroAnswered"
         static let companionHintShown = "fernlet.worldMap.companionHintShown"
+        static let logBikeRides = "fernlet.worldMap.logBikeRides"
+        static let bikeRidesCheckedThrough = "fernlet.worldMap.bikeRidesCheckedThrough"
+    }
+
+    /// Whether "Log my bike rides" is on (default off).
+    static func logsBikeRides(in defaults: UserDefaults = .standard) -> Bool {
+        defaults.bool(forKey: Key.logBikeRides)
+    }
+
+    /// Sets "Log my bike rides".
+    static func setLogsBikeRides(_ on: Bool, in defaults: UserDefaults = .standard) {
+        defaults.set(on, forKey: Key.logBikeRides)
+    }
+
+    /// When the motion history was last looked through for bike rides; nil before the first look.
+    static func bikeRidesCheckedThrough(in defaults: UserDefaults = .standard) -> Date? {
+        defaults.object(forKey: Key.bikeRidesCheckedThrough) as? Date
+    }
+
+    /// Records how far the motion history has been looked through for bike rides (nil forgets it).
+    static func setBikeRidesCheckedThrough(_ date: Date?, in defaults: UserDefaults = .standard) {
+        guard let date else {
+            defaults.removeObject(forKey: Key.bikeRidesCheckedThrough)
+            return
+        }
+        defaults.set(date, forKey: Key.bikeRidesCheckedThrough)
     }
 
     /// Whether the meals logged at a place to eat are noted there, so it becomes a favourite after three
@@ -131,5 +162,7 @@ nonisolated enum WorldMapPreferences {
         defaults.removeObject(forKey: Key.remembersEatingOut)
         defaults.removeObject(forKey: Key.locationIntroAnswered)
         defaults.removeObject(forKey: Key.companionHintShown)
+        defaults.removeObject(forKey: Key.logBikeRides)
+        defaults.removeObject(forKey: Key.bikeRidesCheckedThrough)
     }
 }
