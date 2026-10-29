@@ -262,6 +262,9 @@ struct PersistedSurfaceWipeBoundaryTests {
         // The journal backup's observed foreign head (design 2026-09-30, §4.3, §9, unit B3): the set it
         // names is deleted by the same leg.
         "fernlet.sealedBackup.journalObservedHead": .cleared(token: "sealedBackupBookkeeping.clearObservedHeadsForWipe"),
+        // The World passport backup's observed foreign head (round 7): the set it names is deleted by
+        // the same leg.
+        "fernlet.sealedBackup.passportObservedHead": .cleared(token: "sealedBackupBookkeeping.clearObservedHeadsForWipe"),
         "fernlet.sealedPhoto.generation.*": .cleared(token: "generationStore.reset"),
         "fernlet.sealedPhoto.restoreRepairIDs.*": .cleared(token: "deleteOwnPhotoEscrowBackups"),
         "fernlet.sealedPhoto.uploadedIDs.*": .cleared(token: "deleteOwnPhotoEscrowBackups"),
@@ -407,6 +410,15 @@ struct PersistedSurfaceWipeBoundaryTests {
         ),
         "fernlet.journalNarrative.restoreResolved": .kept(
             reason: "The journal backup's restore marker (Sealed backup v2 design 2026-09-30, §4.3, unit B3): one bit, 'this install has finished pulling the journal backup'. It must outlive the wipe, or a journal chunk set that survived a failed cloud delete would merge itself back at the next Private visit — the resurrection the marker exists to stop."
+        ),
+        "fernlet.sealedBackup.passportAcceptedHead": .kept(
+            reason: "The World passport backup's accepted head (round 7; Sealed backup v2 design 2026-09-30, §4.3, §9, review R2-F11): two install tags, a counter and a salt prefix, no content. Kept so a passport set that survives a failed cloud delete is this install's own to the next export, which overwrites it and finishes the wipe, instead of being named another iPhone's and offered back."
+        ),
+        "fernlet.sealedBackup.passportInFlight": .kept(
+            reason: "The World passport backup's in-flight generation (round 7): an install tag and the highest generation this install's commits set out to save, no content. Kept because it only states what this install wrote, which the wipe does not make untrue: a passport set of this install's that survives a failed cloud delete stays its own to overwrite (finishing the wipe) instead of being merged back as a newer set."
+        ),
+        "fernlet.worldPassport.restoreResolved": .kept(
+            reason: "The World passport backup's restore marker (round 7): one bit, 'this install has finished pulling the passport backup'. It must outlive the wipe, or a passport set that survived a failed cloud delete would merge itself back at the next Private visit — the resurrection the marker exists to stop."
         ),
         "fernlet.intimacyLog.restoreResolved": .kept(
             reason: "The intimate-log backup's restore marker (Sealed backup v2 design 2026-09-30, §4.3, unit B2): one bit, 'this install has finished pulling the intimate-log backup'. It must outlive the wipe, or an intimacy chunk set that survived a failed cloud delete would merge itself back at the next Private visit — the resurrection the marker exists to stop."
