@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import DiaryStore
 import FernletDomainModel
 @testable import Fernlet
 

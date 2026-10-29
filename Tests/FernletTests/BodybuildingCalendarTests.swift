@@ -295,6 +295,6 @@ struct BodybuildingDayTests {
         #expect(days[0].bathroomVisits == 1 && !days[0].trained)
         #expect(days[1].trained)
         #expect(days[2].isToday)
-        #expect(days[3...].allSatisfy(\.isFuture))
+        #expect(days[3...].allSatisfy { $0.isFuture })
     }
 }
