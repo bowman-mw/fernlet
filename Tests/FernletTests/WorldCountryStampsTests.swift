@@ -23,6 +23,12 @@ struct WorldCountryStampsTests {
         "RS", "ME", "AL", "MK", "GR", "BG", "RO", "MD", "HU", "SK", "CZ", "PL", "UA", "BY", "RU",
     ]
 
+    /// Asia's first 24 (2026-10-29); Japan follows, its sample redrawn.
+    static let asiaFirst: Set<String> = [
+        "BN", "ID", "PH", "TL", "KZ", "KG", "TJ", "TM", "UZ", "NP", "BT", "BD", "IN", "PK", "LK", "MV", "AF", "IR",
+        "IQ", "SY", "LB", "IL", "PS", "JO",
+    ]
+
     /// Europe's last 11, redrawn and approved (2026-10-29).
     static let europeRest: Set<String> = ["NL", "BE", "LU", "DE", "CH", "AT", "LI", "MC", "PT", "ES", "AD"]
 
@@ -60,6 +66,7 @@ struct WorldCountryStampsTests {
         #expect(stamps.stamp(for: "us")?.englishName == "United States")
         #expect(stamps.stamp(for: "MX")?.label.joined(separator: " ").contains("MÉXICO") == true)
         #expect(Self.europeRest.isSubset(of: Set(stamps.stamps.keys)), "Europe is complete")
+        #expect(Self.asiaFirst.isSubset(of: Set(stamps.stamps.keys)))
         #expect(stamps.stamp(for: "JP") == nil, "Asia's batch hasn't landed: no stamp, a dashed space")
         #expect(stamps.stamp(for: "VA")?.batch == "eu", "the smallest of the 195 has its stamp")
     }

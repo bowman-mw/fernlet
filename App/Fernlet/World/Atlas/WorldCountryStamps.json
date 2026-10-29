@@ -4,6 +4,7 @@
   "style": {
     "postmark": "56 x 44 pt: outer rounded rect x 2.5, y 2.5, 51 x 39, radius 5, stroke 2; inner frame x 6, y 6, 44 x 25, radius 3, stroke 0.8; both in the stamp's ink, no fill.",
     "symbol": "14 x 14 pixels centred at x 28, y 18.5, each pixel min(21 / 14, 2.2) = 1.5 pt. About 7 % of ink pixels are left out, chosen by a seeded generator from the country code, so each stamp looks worn in its own way.",
+    "face": "Approved as pixel capitals. The app adds no fonts and draws names in DM Sans Bold; the owner is choosing between DM Sans Bold and pixel letters drawn as art (Country Stamps page, st-face). The labels use only characters DM Sans Bold has (no Ệ, Ơ, Ư).",
     "name": "Pixel capitals (Pixelify Sans), centred at x 28. One line: baseline 38.6, 5.6 pt (4.6 pt over 10 letters). Two lines: baselines 35.2 and 39.6, 4.4 pt (3.9 pt when a line is over 14 letters). Letter-spacing 0.2.",
     "ink": "One of four inks, #2F6FA3, #B3343A, #2E8B57, #7B4BA8, picked by (first code letter + second code letter) mod 4. Dark mode lightens it 38 % toward white.",
     "tilt": "-6 to +6 degrees, from the same seed.",
@@ -1767,6 +1768,630 @@
         "kkkkkkkkkkkkk."
       ],
       "batch": "eu"
+    },
+    "bn": {
+      "en": "Brunei",
+      "es": "Brunéi",
+      "label": [
+        "BRUNEI"
+      ],
+      "symbol": "the golden-domed mosque on its lagoon",
+      "ink": "#2F6FA3",
+      "rows": [
+        "......kk....k.",
+        "......kk...kkk",
+        ".....kkkk...k.",
+        "....k....k..k.",
+        "...k......k.k.",
+        "...k......k.k.",
+        "..kkkkkkkkkkkk",
+        "..k.k.kk.k.k.k",
+        "..k.k.kk.k.k.k",
+        ".kkkkkkkkkkkkk",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "id": {
+      "en": "Indonesia",
+      "es": "Indonesia",
+      "label": [
+        "INDONESIA"
+      ],
+      "symbol": "a Komodo dragon",
+      "ink": "#B3343A",
+      "rows": [
+        "..............",
+        "..............",
+        "..............",
+        "..............",
+        "..........kkk.",
+        "......kkkkk.kk",
+        "kk..kkkkkkkkk.",
+        ".kkkkkkkkkkk..",
+        "...kkkkkkkk...",
+        "...k.kk..k.k..",
+        "..kk..k.kk..k.",
+        "..............",
+        "..............",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "ph": {
+      "en": "Philippines",
+      "es": "Filipinas",
+      "label": [
+        "PILIPINAS"
+      ],
+      "symbol": "a tarsier on a branch",
+      "ink": "#2F6FA3",
+      "rows": [
+        ".k..........k.",
+        "kk..........kk",
+        "k.kkkkkkkkkk.k",
+        ".k..........k.",
+        "k..kk....kk..k",
+        "k.k..k..k..k.k",
+        "k.k.kk..kk.k.k",
+        "k.k..k..k..k.k",
+        "k..kk....kk..k",
+        ".k....kk....k.",
+        "..kkkkkkkkkk..",
+        "...k......k...",
+        "kkkkkkkkkkkkkk",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "tl": {
+      "en": "Timor-Leste",
+      "es": "Timor Oriental",
+      "label": [
+        "TIMOR-LESTE"
+      ],
+      "symbol": "a sacred house of Lospalos",
+      "ink": "#2F6FA3",
+      "rows": [
+        "......kk......",
+        "......kk......",
+        ".....k..k.....",
+        ".....k..k.....",
+        "....k....k....",
+        "....k.kk.k....",
+        "...k......k...",
+        "...k.kkkk.k...",
+        "..kkkkkkkkkk..",
+        "...k.kkkk.k...",
+        "...kkkkkkkk...",
+        "...k.k..k.k...",
+        "...k.k..k.k...",
+        "..kk.kk.kk.kk."
+      ],
+      "batch": "as"
+    },
+    "kz": {
+      "en": "Kazakhstan",
+      "es": "Kazajistán",
+      "label": [
+        "KAZAKHSTAN"
+      ],
+      "symbol": "the Baiterek tower holding its golden egg",
+      "ink": "#B3343A",
+      "rows": [
+        "k............k",
+        ".k...kkkk...k.",
+        "..k.kkkkkk.k..",
+        "..k.kkkkkk.k..",
+        "...k.kkkk.k...",
+        "....k....k....",
+        ".....k..k.....",
+        "......kk......",
+        "......kk......",
+        ".....k..k.....",
+        ".....k..k.....",
+        "....k....k....",
+        "...k......k...",
+        "..kkkkkkkkkk.."
+      ],
+      "batch": "as"
+    },
+    "kg": {
+      "en": "Kyrgyzstan",
+      "es": "Kirguistán",
+      "label": [
+        "KYRGYZSTAN"
+      ],
+      "symbol": "a golden eagle, wings open",
+      "ink": "#2E8B57",
+      "rows": [
+        "..............",
+        "k............k",
+        "kk..........kk",
+        "kkk...kk...kkk",
+        ".kkk.kkkk.kkk.",
+        ".kkkkkkkkkkkk.",
+        "..kkkkkkkkkk..",
+        "...kkkkkkkk...",
+        "....kkkkkk....",
+        ".....kkkk.....",
+        "....k.kk.k....",
+        "....kk..kk....",
+        "..............",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "tj": {
+      "en": "Tajikistan",
+      "es": "Tayikistán",
+      "label": [
+        "TAJIKISTAN"
+      ],
+      "symbol": "the gate of Hisor Fortress",
+      "ink": "#2E8B57",
+      "rows": [
+        "k.k.k....k.k.k",
+        "kkkkk....kkkkk",
+        "k...k....k...k",
+        "k.k.kkkkkk.k.k",
+        "k...k....k...k",
+        "k...k.kk.k...k",
+        "k...kk..kk...k",
+        "k...k....k...k",
+        "k.k.k....k.k.k",
+        "k...k....k...k",
+        "k...k....k...k",
+        "kk..k....k..kk",
+        "kkkkk....kkkkk",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "tm": {
+      "en": "Turkmenistan",
+      "es": "Turkmenistán",
+      "label": [
+        "TÜRKMENISTAN"
+      ],
+      "symbol": "the burning Darvaza crater",
+      "ink": "#B3343A",
+      "rows": [
+        "...k.....k....",
+        "..k.k..k.k.k..",
+        "..k..kk.k..k..",
+        ".k.k.k.k.k.k..",
+        ".kk.k.k.k.k.k.",
+        "kk.k.k.k.k.k.k",
+        "kkkkkkkkkkkkkk",
+        "k............k",
+        ".kk........kk.",
+        "...kkkkkkkk...",
+        "..............",
+        "kk..........kk",
+        "..kk......kk..",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "uz": {
+      "en": "Uzbekistan",
+      "es": "Uzbekistán",
+      "label": [
+        "O'ZBEKISTON"
+      ],
+      "symbol": "a portal of the Registan, Samarkand",
+      "ink": "#7B4BA8",
+      "rows": [
+        "k.....kk.....k",
+        "k....kkkk....k",
+        "k...kkkkkk...k",
+        "kkkkkkkkkkkkkk",
+        "kk..........kk",
+        "kk.kkkkkkkk.kk",
+        "kk.k......k.kk",
+        "kk.k.kkkk.k.kk",
+        "kk.k.k..k.k.kk",
+        "kk.k.k..k.k.kk",
+        "kk.k.k..k.k.kk",
+        "kk.k.k..k.k.kk",
+        "kkkkkkkkkkkkkk",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "np": {
+      "en": "Nepal",
+      "es": "Nepal",
+      "label": [
+        "NEPAL"
+      ],
+      "symbol": "the Boudhanath stupa and its eyes",
+      "ink": "#2E8B57",
+      "rows": [
+        "......kk......",
+        "......kk......",
+        ".....kkkk.....",
+        "......kk......",
+        ".....kkkk.....",
+        "....kkkkkk....",
+        "..kkkkkkkkkk..",
+        "..k.kk..kk.k..",
+        "..k...kk...k..",
+        "..kkkkkkkkkk..",
+        ".kk........kk.",
+        "k............k",
+        "kkkkkkkkkkkkkk",
+        "k.k.k.kk.k.k.k"
+      ],
+      "batch": "as"
+    },
+    "bt": {
+      "en": "Bhutan",
+      "es": "Bután",
+      "label": [
+        "BHUTAN"
+      ],
+      "symbol": "Paro Taktsang, the Tiger's Nest",
+      "ink": "#2E8B57",
+      "rows": [
+        ".......kkkkkkk",
+        "...k...k.....k",
+        "..kkk..k.....k",
+        ".kkkkk.k.....k",
+        "..k.k..k.....k",
+        "..kkkkkk.....k",
+        ".kkkkkkk.....k",
+        "kk.k.k.k.....k",
+        ".kkkkkkk.....k",
+        ".......k.....k",
+        "......k......k",
+        ".....k.......k",
+        "....k........k",
+        "...kkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "bd": {
+      "en": "Bangladesh",
+      "es": "Bangladés",
+      "label": [
+        "BANGLADESH"
+      ],
+      "symbol": "a Bengal tiger",
+      "ink": "#2E8B57",
+      "rows": [
+        ".kk........kk.",
+        "k.kkkkkkkkkk.k",
+        ".k....kk....k.",
+        "k..k..kk..k..k",
+        "k.k........k.k",
+        "k...kk..kk...k",
+        "kk..k....k..kk",
+        "k............k",
+        "kk...kkkk...kk",
+        "k.....kk.....k",
+        ".k..k.kk.k..k.",
+        "..k........k..",
+        "...kkkkkkkk...",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "in": {
+      "en": "India",
+      "es": "India",
+      "label": [
+        "INDIA"
+      ],
+      "symbol": "the Taj Mahal",
+      "ink": "#7B4BA8",
+      "rows": [
+        "......kk......",
+        "......kk......",
+        ".....kkkk.....",
+        "....k....k....",
+        "...k......k...",
+        "...k......k...",
+        "....k....k....",
+        "k....kkkk....k",
+        "k.kkkkkkkkkk.k",
+        "k.k........k.k",
+        "k.k.kk..kk.k.k",
+        "k.k.k....k.k.k",
+        "k.k.k....k.k.k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "pk": {
+      "en": "Pakistan",
+      "es": "Pakistán",
+      "label": [
+        "PAKISTAN"
+      ],
+      "symbol": "the Faisal Mosque and its minarets",
+      "ink": "#7B4BA8",
+      "rows": [
+        "k............k",
+        "k............k",
+        "k.....kk.....k",
+        "k....k..k....k",
+        "k...k....k...k",
+        "k..k......k..k",
+        "k.k...kk...k.k",
+        "kk...k..k...kk",
+        "k...k....k...k",
+        "k..kkkkkkkk..k",
+        "k..k......k..k",
+        "k..k......k..k",
+        "k..kkkkkkkk..k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "lk": {
+      "en": "Sri Lanka",
+      "es": "Sri Lanka",
+      "label": [
+        "SRI LANKA"
+      ],
+      "symbol": "Sigiriya, the Lion Rock",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..............",
+        "...kkkkkkkk...",
+        "..k........k..",
+        "..k.k..k.k.k..",
+        "..k.k..k.k.k..",
+        "..k.k..k...k..",
+        "..k.....k..k..",
+        "..k.kk...k.k..",
+        ".k....k.....k.",
+        "kk.kk.kk.kk.kk",
+        "k.k..k..k..k.k",
+        ".kk.kk.kk.kk.k",
+        "kkkkkkkkkkkkkk",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "mv": {
+      "en": "Maldives",
+      "es": "Maldivas",
+      "label": [
+        "MALDIVES"
+      ],
+      "symbol": "villas over the water",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..............",
+        "...k......k...",
+        "..kkk....kkk..",
+        ".kkkkk..kkkkk.",
+        "..k.k....k.k..",
+        "..kkk....kkk..",
+        "kkkkkkkkkkkkkk",
+        "..k.k....k.k..",
+        "..k.k....k.k..",
+        "..k.k....k.k..",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "af": {
+      "en": "Afghanistan",
+      "es": "Afganistán",
+      "label": [
+        "AFGHANISTAN"
+      ],
+      "symbol": "the Minaret of Jam",
+      "ink": "#7B4BA8",
+      "rows": [
+        "......kk......",
+        ".....kkkk.....",
+        ".....k..k.....",
+        ".....kkkk.....",
+        ".....k..k.....",
+        "....kkkkkk....",
+        "....k.kk.k....",
+        "....k....k....",
+        "....kkkkkk....",
+        "...k.k..k.k...",
+        "...k......k...",
+        "...kkkkkkkk...",
+        "..k..k..k..k..",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "ir": {
+      "en": "Iran",
+      "es": "Irán",
+      "label": [
+        "IRAN"
+      ],
+      "symbol": "the Azadi Tower",
+      "ink": "#7B4BA8",
+      "rows": [
+        ".....kkkk.....",
+        "....k....k....",
+        "....k.kk.k....",
+        "...k..kk..k...",
+        "...k.k..k.k...",
+        "..k..k..k..k..",
+        "..k.k....k.k..",
+        ".k..k....k..k.",
+        ".k.k......k.k.",
+        "k..k......k..k",
+        "k.k........k.k",
+        "k.k........k.k",
+        "k.k........k.k",
+        "kkk........kkk"
+      ],
+      "batch": "as"
+    },
+    "iq": {
+      "en": "Iraq",
+      "es": "Irak",
+      "label": [
+        "IRAQ"
+      ],
+      "symbol": "the spiral minaret of Samarra",
+      "ink": "#2E8B57",
+      "rows": [
+        "......kk......",
+        ".....kkkk.....",
+        ".....kkkk.....",
+        "....kk..k.....",
+        "....k..kkk....",
+        "...kkk...k....",
+        "...k..kkkkk...",
+        "..kkkk....k...",
+        "..k...kkkkkk..",
+        ".kkkkk.....k..",
+        ".k.....kkkkkk.",
+        "kkkkkkk......k",
+        "k......kkkkkkk",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "sy": {
+      "en": "Syria",
+      "es": "Siria",
+      "label": [
+        "SYRIA"
+      ],
+      "symbol": "a noria, the water wheel of Hama",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        "....kkkkkk....",
+        "...kk.k..kk...",
+        "..kk..k...kk..",
+        "..k.k.k..k.k..",
+        ".kk..kkkk..kk.",
+        ".kkkkkkkkkkkk.",
+        ".kk..kkkk..kk.",
+        "..k.k.k..k.k..",
+        "..kk..k...kk..",
+        "...kk.k..kk...",
+        "....kkkkkk....",
+        ".....k..k.....",
+        "kk.kk.kk.kk.kk"
+      ],
+      "batch": "as"
+    },
+    "lb": {
+      "en": "Lebanon",
+      "es": "Líbano",
+      "label": [
+        "LEBANON"
+      ],
+      "symbol": "a cedar of Lebanon",
+      "ink": "#2E8B57",
+      "rows": [
+        "......kk......",
+        "....kkkkkk....",
+        "......kk......",
+        "..kkkkkkkkkk..",
+        "....kkkkkk....",
+        "......kk......",
+        ".kkkkkkkkkkkk.",
+        "...kkkkkkkk...",
+        "......kk......",
+        "kkkkkkkkkkkkkk",
+        "..kkkkkkkkkk..",
+        "......kk......",
+        "......kk......",
+        "....kkkkkk...."
+      ],
+      "batch": "as"
+    },
+    "il": {
+      "en": "Israel",
+      "es": "Israel",
+      "label": [
+        "ISRAEL"
+      ],
+      "symbol": "Masada above the Dead Sea",
+      "ink": "#B3343A",
+      "rows": [
+        "..............",
+        "..............",
+        "...kkkkkkk....",
+        "..k.k.k...k...",
+        "..k.......kk..",
+        ".k.........k..",
+        ".k..k...k...k.",
+        "k...........k.",
+        "k.....k......k",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "ps": {
+      "en": "Palestine",
+      "es": "Palestina",
+      "label": [
+        "PALESTINE"
+      ],
+      "symbol": "an olive tree",
+      "ink": "#7B4BA8",
+      "rows": [
+        "....kkkkk.....",
+        "..kk.....kk...",
+        ".k..k.k.k..k..",
+        "k.k...k...k.k.",
+        "k...k...k...k.",
+        ".kk..k.k..kk..",
+        "....kk.kk.....",
+        ".....kkk......",
+        "......kk......",
+        ".....kk.......",
+        ".....kkk......",
+        "....kkkkk.....",
+        "kkkkkkkkkkkkkk",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "jo": {
+      "en": "Jordan",
+      "es": "Jordania",
+      "label": [
+        "JORDAN"
+      ],
+      "symbol": "the Treasury at Petra",
+      "ink": "#B3343A",
+      "rows": [
+        ".....kkkk.....",
+        ".....k..k.....",
+        "..k..kkkk..k..",
+        ".kkk.k..k.kkk.",
+        ".k.k.kkkk.k.k.",
+        ".kkkkkkkkkkkk.",
+        "......kk......",
+        "....kk..kk....",
+        "..kkkkkkkkkk..",
+        "..k.k.kk.k.k..",
+        "..k.k.kk.k.k..",
+        "..k.k....k.k..",
+        "..k.k....k.k..",
+        ".kkkkkkkkkkkk."
+      ],
+      "batch": "as"
     }
   }
 }
