@@ -2840,6 +2840,7 @@ struct WorkoutSuggestionSheet: View {
             GuidedWorkoutEditorSheet(store: store, session: session)
                 .fernletSheet()
         }
+        .exerciseHowToUITestPresenter(sex: store.effectiveUserProfile.sex)
     }
 
     private func runAdjustment() {

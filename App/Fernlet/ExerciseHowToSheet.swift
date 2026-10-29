@@ -6,10 +6,11 @@
 //  and equipment, three to five cues, the common mistake, an easier version and the one safety line,
 //  reached from the guided runner's exercise card and the plan's exercise rows. The text is the
 //  domain's bundled, localized `ExerciseHowToCatalog`; this file only lays it out. The slot at the top
-//  draws the exercise's demonstration (idea 8, `ExerciseDemonstrationView.swift`): the licensed media
-//  this build carries for the profile's sex, or a placeholder square with the exercise's name when it
-//  carries none. The square is about half the visible height at the medium detent and full size when
-//  expanded. Opened from a plan or the runner, the sheet ends with idea 15's "Don't suggest this"
+//  draws the exercise's demonstration (idea 8): the owner's approved animation (r12,
+//  `ExerciseAnimationTile.swift`) for a bundled catalog exercise, drawn by the profile's character;
+//  otherwise (`ExerciseDemonstrationView.swift`) the licensed media this build carries for the
+//  profile's sex, or a placeholder square with the exercise's name when it carries none. The tile is
+//  about half the visible height at the medium detent and full size when expanded. Opened from a plan or the runner, the sheet ends with idea 15's "Don't suggest this"
 //  (tracker row N6), written through the same store calls as the plan editor's.
 //
 
@@ -42,7 +43,39 @@ extension View {
                 .fernletSheet()
         }
     }
+
+    /// The DEBUG launch hook `FERNLET_UI_TEST_OPEN_HOWTO`: a presenter of its own that opens the named
+    /// exercise's how-to sheet a moment after this view appears, so the tile can be screenshotted
+    /// without a committed plan. Release builds attach nothing.
+    @ViewBuilder
+    func exerciseHowToUITestPresenter(sex: BiologicalSex) -> some View {
+        #if DEBUG
+        modifier(ExerciseHowToUITestPresenter(sex: sex))
+        #else
+        self
+        #endif
+    }
 }
+
+#if DEBUG
+/// Opens `UITestSupport.initialHowToExercise`'s how-to sheet once, after the presenting sheet has
+/// finished its own entrance (a sheet asked for mid-presentation is dropped).
+private struct ExerciseHowToUITestPresenter: ViewModifier {
+    let sex: BiologicalSex
+    @State private var request: ExerciseHowToRequest?
+
+    func body(content: Content) -> some View {
+        content
+            .exerciseHowToSheet($request, sex: sex)
+            .task {
+                guard let name = UITestSupport.initialHowToExercise else { return }
+                // A cancelled wait (the sheet closed) opens nothing.
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
+                request = ExerciseHowToRequest(name: name)
+            }
+    }
+}
+#endif
 
 /// The small info button beside an exercise's name that opens its how-to sheet.
 ///
@@ -146,28 +179,37 @@ struct ExerciseHowToSheet: View {
 
 /// The demonstration at the top of the how-to sheet (comparison report idea 8).
 ///
-/// `ExerciseDemonstrationLibrary` picks the file from what this build carries: the profile's sex
-/// first, then the other's, a still under Reduce Motion. A silent loop or a still reads as one image,
-/// "Demonstration of <name>", with the numbered cues below as its description. With no licensed file
-/// bundled (any build from a clean clone) it draws the decorative placeholder square, which shows the
-/// exercise's name and which VoiceOver skips, so the sheet still reads name first, then the facts and cues.
+/// A bundled catalog exercise draws the owner's approved animation (r12, ``ExerciseAnimationTile``):
+/// a 4:3 tile drawn by the character that follows the profile's Sex (female draws the female
+/// character, anything else the male one), resting on its generated still and starting paused under
+/// Reduce Motion. An exercise with no approved animation (a custom one) keeps the earlier path:
+/// `ExerciseDemonstrationLibrary` picks a licensed file from what this build carries (the profile's
+/// sex first, then the other's, a still under Reduce Motion), and with none bundled (any build from a
+/// clean clone) it draws the decorative placeholder square, which shows the exercise's name and which
+/// VoiceOver skips. A moving tile or a still reads as one image, "Demonstration of <name>", with the
+/// numbered cues below as its description.
 struct ExerciseDemonstrationSlot: View {
-    /// The frozen catalog name the media is looked up by.
+    /// The frozen catalog name the animation and the media are looked up by.
     let exerciseName: String
     let sex: BiologicalSex
-    /// The square's side, from ``ExerciseDemonstrationLayout/side(forVisibleHeight:)``.
+    /// The tile's side, from ``ExerciseDemonstrationLayout/side(forVisibleHeight:)``.
     let side: CGFloat
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        let demonstration = ExerciseDemonstrationLibrary.demonstration(
-            for: exerciseName, sex: sex, reduceMotion: reduceMotion)
-        if let fileName = demonstration.fileName {
-            ExerciseDemonstrationMedia(
-                fileName: fileName, animates: demonstration.animates, exerciseName: exerciseName, side: side)
+        if let animation = ExerciseAnimationCatalog.entry(forExerciseName: exerciseName) {
+            ExerciseAnimationTile(
+                entry: animation, character: ExerciseAnimationCharacter(sex: sex), exerciseName: exerciseName, side: side)
         } else {
-            ExerciseDemonstrationPlaceholder(
-                exerciseName: exerciseName, target: WorkoutExerciseCatalog.exercise(named: exerciseName), side: side)
+            let demonstration = ExerciseDemonstrationLibrary.demonstration(
+                for: exerciseName, sex: sex, reduceMotion: reduceMotion)
+            if let fileName = demonstration.fileName {
+                ExerciseDemonstrationMedia(
+                    fileName: fileName, animates: demonstration.animates, exerciseName: exerciseName, side: side)
+            } else {
+                ExerciseDemonstrationPlaceholder(
+                    exerciseName: exerciseName, target: WorkoutExerciseCatalog.exercise(named: exerciseName), side: side)
+            }
         }
     }
 }

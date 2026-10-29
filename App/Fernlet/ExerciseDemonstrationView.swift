@@ -2,12 +2,14 @@
 //  ExerciseDemonstrationView.swift
 //  Fernlet
 //
-//  Draws the how-to sheet's demonstration (comparison report idea 8): a bundled GIF played a frame at
-//  a time with ImageIO, a still illustration or frozen first frame, or the placeholder tile. Frames
-//  are decoded downsampled to the drawn size, one at a time, so a long GIF never sits in memory whole.
-//  Playback stops when the tile scrolls out of view, the app leaves the foreground or the sheet closes,
-//  and a tap pauses a loop on the frame it shows (WCAG 2.2.2; tracker row C1), with a small pause or
-//  play mark in the corner so the tap is discoverable.
+//  Draws the how-to sheet's demonstration (comparison report idea 8) when the exercise has no approved
+//  animation (a custom exercise): a bundled GIF played a frame at a time with ImageIO, a still
+//  illustration or frozen first frame, or the placeholder tile. Frames are decoded downsampled to the
+//  drawn size, one at a time, so a long GIF never sits in memory whole. Playback stops when the tile
+//  scrolls out of view, the app leaves the foreground or the sheet closes, and a tap pauses a loop on
+//  the frame it shows (WCAG 2.2.2; tracker row C1), with a small pause or play mark in the corner so
+//  the tap is discoverable. The owner's approved animations (r12) draw in `ExerciseAnimationTile.swift`,
+//  which shares this file's layout, spoken name, pause words, pause access and corner mark.
 //
 
 import SwiftUI
@@ -18,9 +20,10 @@ import FernletUI
 /// The demonstration tile's geometry. The media is a picture, not text, so it does not grow with
 /// Dynamic Type; the sheet scrolls instead.
 ///
-/// The tile is square, and its side follows the height the sheet shows. At the medium detent it is
-/// about half of what is visible, so the first cues still show under it. At the large detent it is
-/// the full ``maxSide``.
+/// The tile is square (the approved animation tile, ``ExerciseAnimationTile``, is 4:3 at the same
+/// width), and its side follows the height the sheet shows. At the medium detent it is about half of
+/// what is visible, so the first cues still show under it. At the large detent it is the full
+/// ``maxSide``.
 enum ExerciseDemonstrationLayout {
     /// The longest side a demonstration is drawn at, in points (square, centred, narrower on a
     /// narrow sheet). Frames are decoded at this size times the display scale.
@@ -76,8 +79,7 @@ struct ExerciseDemonstrationMedia: View {
 
     /// "Demonstration of Bulgarian split squat": three spoken words around the drawn name.
     private var spokenName: Text {
-        Text("Demonstration of \(ExerciseHowToCatalog.displayName(for: exerciseName))",
-             comment: "VoiceOver label for the exercise demonstration animation or picture in the how-to sheet. %@ is the exercise name.")
+        ExerciseDemonstrationSpokenName.text(for: exerciseName)
     }
 
     private var playback: ExerciseDemonstrationPlayback {
@@ -206,11 +208,25 @@ enum ExerciseDemonstrationPauseWords {
     }
 }
 
-/// The pause controls a looping demonstration adds to its one image element, and nothing for a
+/// The spoken name every demonstration tile shares, written once so its catalog key carries one
+/// comment: ``ExerciseDemonstrationMedia`` and the approved animation tile (``ExerciseAnimationTile``)
+/// both read "Demonstration of <display name>".
+enum ExerciseDemonstrationSpokenName {
+    /// "Demonstration of Bulgarian split squat": three spoken words around the drawn name of the
+    /// frozen catalog name `exerciseName`.
+    static func text(for exerciseName: String) -> Text {
+        Text("Demonstration of \(ExerciseHowToCatalog.displayName(for: exerciseName))",
+             comment: "VoiceOver label for the exercise demonstration animation or picture in the how-to sheet. %@ is the exercise name.")
+    }
+}
+
+/// The pause controls a moving demonstration adds to its one image element, and nothing for a
 /// still: the value ("Playing" or "Paused"), the named action ("Pause" or "Play"), the same toggle
 /// on activation (a VoiceOver double-tap, Voice Control's "Tap Pause"), short input labels (rule A9)
-/// and the flag that makes Voice Control offer the element at all.
-private struct ExerciseDemonstrationPauseAccess: ViewModifier {
+/// and the flag that makes Voice Control offer the element at all. Shared by the looping
+/// demonstration (``ExerciseDemonstrationMedia``) and the approved animation tile
+/// (``ExerciseAnimationTile``).
+struct ExerciseDemonstrationPauseAccess: ViewModifier {
     /// The tile animates, so there is a loop to pause.
     let pausable: Bool
     let isPaused: Bool
@@ -233,8 +249,9 @@ private struct ExerciseDemonstrationPauseAccess: ViewModifier {
     }
 }
 
-/// The small mark in a looping demonstration's bottom-trailing corner: a pause glyph while it plays
-/// and a play glyph while it is paused, so a sighted person knows a tap pauses it.
+/// The small mark in a moving demonstration's bottom-trailing corner (a looping GIF or an approved
+/// animation): a pause glyph while it plays and a play glyph while it is paused, so a sighted person
+/// knows a tap pauses it.
 ///
 /// Drawn in theme tokens so it holds its contrast in light, dark, Increase Contrast and a custom
 /// theme alike: a `bark` glyph on a `parchment` disc (the theme's own body-text pair), ringed in

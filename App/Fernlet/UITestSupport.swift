@@ -94,6 +94,11 @@ enum UITestSupport {
         return FernletSheet(uiTestID: id)
     }
 
+    /// `FERNLET_UI_TEST_OPEN_HOWTO=<catalog exercise name>` — with `FERNLET_UI_TEST_OPEN_SHEET=workoutSuggestion`,
+    /// the suggestion sheet opens that exercise's how-to sheet over itself (`exerciseHowToUITestPresenter`),
+    /// so the demonstration tile can be screenshotted without tapping through a plan.
+    static var initialHowToExercise: String? { env["FERNLET_UI_TEST_OPEN_HOWTO"] }
+
     /// `FERNLET_UI_TEST_OPEN_CUSTOMIZE=1` — open the companion customization sheet on Home launch.
     /// The sheet is only reachable by a long-press on the hero companion, which XCUITest can't
     /// synthesize; this hook lets the item-creation flow (slot picker → Wardrobe → studio) be driven.
@@ -304,6 +309,7 @@ enum UITestSupport {
     static var opensPrivateDayPage: Bool { false }
     static var seedsTestPIN: Bool { false }
     static var initialTodayPage: String? { nil }
+    static var initialHowToExercise: String? { nil }
     static var shouldOpenCustomize: Bool { false }
     static var shouldSeedStudioCanvas: Bool { false }
     static var shouldOpenWorldMapHarness: Bool { false }
