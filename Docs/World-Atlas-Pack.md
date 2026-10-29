@@ -40,14 +40,17 @@ Offsets count from the start of the file. A reader refuses: a wrong magic or ver
 
 ### The grid
 
-Every raster section uses one global grid of **0.1°** cells: `cols = 3600`, `rows = 1800`. Row 0 is the band from
-90°N down to 89.9°N; column 0 starts at 180°W.
+Every raster section uses one global grid, whose size the `LAND` header states: `cols = 2 × rows`, a cell
+`180° / rows` on a side. The shipped pack uses **0.1°** cells (`cols = 3600`, `rows = 1800`); tests build small
+grids. Row 0 is the band just south of 90°N; column 0 starts at 180°W. With `step = 180 / rows`:
 
 ```
-row = clamp(floor((90 - lat) / 0.1), 0, 1799)
-col = floor((lon + 180) / 0.1) mod 3600        (lon normalised to [-180, 180))
-index = row * 3600 + col
+row = clamp(floor((90 - lat) / step), 0, rows - 1)
+col = floor((lon + 180) / step) mod cols        (lon normalised to [-180, 180))
+index = row * cols + col
 ```
+
+`CLIM`, `OCEA` and `CONT` are each exactly `cols × rows` bytes on the same grid.
 
 ### `LAND`: water and land
 
