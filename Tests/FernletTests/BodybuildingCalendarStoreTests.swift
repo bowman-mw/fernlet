@@ -1,7 +1,7 @@
 import Foundation
 import Testing
-import FernletDomainModel
 import DiaryStore
+import FernletDomainModel
 @testable import Fernlet
 
 /// The day calendar on the store (`FernletStore+BodybuildingCalendar`): on only for Bodybuilding, deload
