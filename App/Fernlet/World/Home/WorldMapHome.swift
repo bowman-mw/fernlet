@@ -52,8 +52,9 @@ struct WorldMapHome: View {
     /// Whether a stamp's banner is showing over the map: the prints step aside for it, as the approved
     /// banner design draws it (`b1-stamp-banner`).
     var stampBannerShowing = false
-    /// Reports whether the disposable camera is open full screen (the root holds the session button and
-    /// the stamp banner back meanwhile).
+    /// Reports whether the disposable camera is open full screen, or the person is riding along
+    /// (`b1-home-car`: banners pause until they're on foot); the root holds the session button's prompts,
+    /// the stamp banner and the keep-as-friends prompt back meanwhile.
     var isCameraOpen: Binding<Bool> = .constant(false)
     /// Where a meal the blue button logs goes: the toast (round 6, "Log your usual"; the root's reporter).
     var onMealsLogged: MealLogReporter = .none
@@ -141,8 +142,9 @@ struct WorldMapHome: View {
         // Ten seconds without a touch, off following: Sprout again (`ref-recenter-auto`).
         .task(id: camera) { await refollowWhenIdle() }
         .onChange(of: notice) { _, kind in announce(kind) }
-        .onChange(of: cameraMode) { _, mode in isCameraOpen.wrappedValue = mode != nil || isLocationIntroUp }
-        .onChange(of: isLocationIntroUp) { _, up in isCameraOpen.wrappedValue = up || cameraMode != nil }
+        .onChange(of: holdsRootBanners, initial: true) { _, held in isCameraOpen.wrappedValue = held }
+        // Riding along (`b1-home-car`): an open quick-start card goes with the blue button.
+        .onChange(of: isDriving) { _, driving in if driving { cardContext = nil } }
         // A permission given (or taken back) in iOS's prompt or in Settings: start or stop following.
         .onChange(of: store.worldLocation.permission) { updateLocation() }
     }
@@ -214,7 +216,8 @@ struct WorldMapHome: View {
     /// The companion with its bubble, its feet on `point`.
     private func companion(at point: CGPoint) -> some View {
         WorldMapCompanion(store: store, bodySignal: bodySignal, isActive: isFrontmost && !isCustomizing, mapLine: mapLine,
-                          isQuiet: isBubbleQuiet, isNight: phase(at: Date()) == .night, hint: isHintShowing, onHintEnded: endHint) {
+                          isQuiet: isBubbleQuiet, isNight: phase(at: Date()) == .night, hint: isHintShowing, isRiding: isDriving,
+                          onHintEnded: endHint) {
             isCustomizing = true
         }
         // Measured at the bubble's own wrap width, so a line of two or three rows is measured as it is
@@ -265,12 +268,13 @@ struct WorldMapHome: View {
                 }
                 HStack(alignment: .bottom, spacing: 10) {
                     // Round 6 (`ref-tag-home`): beside the blue button at a spot Fernlet refused.
-                    if cardContext == nil, let spot = store.worldRefusedSpot(near: store.worldLocation.latest) {
+                    if cardContext == nil, !isDriving, let spot = store.worldRefusedSpot(near: store.worldLocation.latest) {
                         // Above the blue button's label, which slides out over it for 30 s (form answer 28).
                         WorldTagPlaceButton { placeSheet = .remember(start: spot, kind: .place) }
                             .zIndex(1)
                     }
-                    if let glyph = WorldQuickStart.glyph(for: buttonContext) {
+                    // Riding along (`b1-home-car`): quick starts pause until the person is on foot.
+                    if !isDriving, let glyph = WorldQuickStart.glyph(for: buttonContext) {
                         WorldQuickStartButton(glyph: glyph, spokenStatus: WorldQuickStartCopy.spokenStatus(WorldQuickStart.card(for: buttonContext)),
                                               action: toggleCard)
                     }
@@ -285,6 +289,9 @@ struct WorldMapHome: View {
                     .frame(maxWidth: .infinity)
                     .transition(.opacity)
                     .task(id: loggedWalk.id) { await holdToast(loggedWalk) }
+            } else {
+                // A bike ride that logged itself (`b1-home-bike`, round 7).
+                WorldRideNote(store: store, isFrontmost: isFrontmost && scenePhase == .active)
             }
         }
         .ignoresSafeArea(edges: .bottom)
@@ -324,7 +331,7 @@ struct WorldMapHome: View {
         return WorldMapNoticeKind.make(presence: presence, tiles: isOffline ? .failed : tiles.state, loadingLong: loadingLong,
                                        liftedCells: store.worldFog.visibleCells.count,
                                        uncovers: WorldMapPreferences.uncoverAsYouGo(), isDecoy: store.duressSessionActive,
-                                       isWalking: isWalking)
+                                       isWalking: isWalking, isDriving: isDriving)
     }
 
     /// The map's own line for the companion, if it has one.
@@ -339,7 +346,8 @@ struct WorldMapHome: View {
         let now = Date()
         facts.isNight = phase(at: now) == .night || WorldMapCompanion.isPastBedtime(store: store, at: now)
         facts.homeGreeting = homeGreeting
-        return WorldMapLine.line(facts)
+        // While a bike ride's note shows: "Wheee! That was a ride." (`b1-home-bike`).
+        return WorldRideCopy.bubbleLine(noteShowing: store.worldLocation.rides.loggedRide != nil) ?? WorldMapLine.line(facts)
     }
 
     /// What the ground draws: the lifted fog, and the walk's line while it records.
@@ -352,11 +360,19 @@ struct WorldMapHome: View {
     /// Whether a walk is recording.
     private var isWalking: Bool { store.worldLocation.isWalking }
 
-    /// Whether the companion's bubble stays down: under the open quick-start card, and at accessibility
-    /// sizes while a notice, the walk bar or a stamp's banner fills the top, so the large bubble never
-    /// runs into them.
+    /// Whether the person is driving (round 7's car detection; DEBUG `car` stages it): riding along.
+    private var isDriving: Bool { store.worldLocation.rides.isDriving || WorldRideTestScenes.drives }
+
+    /// Whether the root's banners wait: the disposable camera or the map intro is up, or the person is
+    /// riding along.
+    private var holdsRootBanners: Bool { cameraMode != nil || isLocationIntroUp || isDriving }
+
+    /// Whether the companion's bubble stays down: under the open quick-start card, while riding along (as
+    /// `b1-home-car` draws it), and at accessibility sizes while a notice, the walk bar or a stamp's banner
+    /// fills the top, so the large bubble never runs into them.
     private var isBubbleQuiet: Bool {
-        cardContext != nil || (dynamicTypeSize.isAccessibilitySize && (notice != nil || isWalking || stampBannerShowing))
+        cardContext != nil || isDriving
+            || (dynamicTypeSize.isAccessibilitySize && (notice != nil || isWalking || stampBannerShowing))
     }
 
     /// The walk's length so far, in metres.
@@ -731,7 +747,7 @@ extension WorldMapHome {
         return WorldCompanionHint.isDue(alreadyShown: WorldMapPreferences.companionHintShown(),
                                         introAnswered: WorldMapPreferences.locationIntroAnswered() || asked,
                                         permission: store.worldLocation.permission, isAsking: store.worldLocation.isAsking,
-                                        stampBannerShowing: stampBannerShowing,
+                                        stampBannerShowing: stampBannerShowing || isDriving,
                                         isFrontmost: isFrontmost && scenePhase == .active && !isLocationIntroUp,
                                         isDecoy: store.duressSessionActive)
     }
@@ -767,6 +783,7 @@ extension WorldMapHome {
         if scenes.contains("walk") { startWalk() }
         if scenes.contains("qs") { openCard(spaceID: hereSpaceID) }
         if scenes.contains("photo") { await checkTestPhotoPlace() }
+        WorldRideTestScenes.stage(on: store.worldLocation.rides, dayKey: store.todayKey)
         // The discovery round's shots: the map zoomed in or out (W-12's fog at two zooms), and panned away
         // (Back to Sprout) once the map is in front.
         if scenes.contains("near") { camera.distance = 600 }

@@ -11,6 +11,10 @@ import WorldMapStore
 /// reading is accurate to ``maxAccuracy``. Approximate location places the companion in the area and
 /// lifts nothing.
 ///
+/// **In a car** (round 7, `nf-car`, approved) a reading lifts only the cell under it, not the 50-m circle,
+/// so a drive uncovers a thin line along the road (``handle(_:saveNow:thinLine:)``; the store passes
+/// whether car detection says the person is driving).
+///
 /// **Duress.** In a decoy session nothing is read from or written to the store: the map shows only the
 /// cells lifted during the decoy itself, held in memory and dropped when the decoy ends, so a coerced
 /// unlock reveals no history and leaves none behind. The silent wipe and Delete everything reach
@@ -97,18 +101,20 @@ final class WorldFogKeeper {
     /// Lifts the fog around `fix` when the rules allow; returns how many cells were new. With `saveNow`
     /// (a reading delivered while the app isn't active: background mapping, a walk with Maps in front) new
     /// cells are written at once rather than at the next 40, since iOS may end a suspended app first (W-09 B2).
+    /// With `thinLine` (driving, `nf-car`) only the cell under the reading lifts.
     @discardableResult
-    func handle(_ fix: WorldFix, saveNow: Bool = false) -> Int {
-        let added = lift(fix)
+    func handle(_ fix: WorldFix, saveNow: Bool = false, thinLine: Bool = false) -> Int {
+        let added = lift(fix, within: thinLine ? 0 : Self.liftRadius)
         if saveNow, added > 0 { flush() }
         return added
     }
 
-    /// Lifts the fog around `fix` when the rules allow; returns how many cells were new.
-    private func lift(_ fix: WorldFix) -> Int {
+    /// Lifts the fog within `radius` metres of `fix` (0: the cell under it alone) when the rules allow;
+    /// returns how many cells were new.
+    private func lift(_ fix: WorldFix, within radius: Double) -> Int {
         guard WorldMapPreferences.uncoverAsYouGo(in: defaults), fix.isPrecise,
               fix.accuracy <= Self.maxAccuracy, fix.point.isValid else { return 0 }
-        let cells = MercatorHexGrid.cells(around: fix.point, within: Self.liftRadius)
+        let cells = MercatorHexGrid.cells(around: fix.point, within: radius)
         if isDecoy {
             let before = decoyCells.count
             decoyCells.formUnion(cells)

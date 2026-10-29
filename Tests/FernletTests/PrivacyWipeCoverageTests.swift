@@ -176,7 +176,7 @@ struct PrivacyWipeCoverageTests {
         // so they live in their own device-local file, which the wipe removes.
         "deviceDaySummaryStore.clearAll",
         // The World map's sealed location history and both its keys (World build, 2026-10-23), and its
-        // two device-only settings.
+        // device-only settings (the bike-ride switch and its last motion check among them since round 7).
         "worldFog.clearAll",
         "WorldMapPreferences.clearAll",
         // Advanced period tracking's device-only switch (World build, 2026-10-24).

@@ -129,7 +129,7 @@ final class WorldPlacesKeeper {
         // W-13, W-14: only where the person has stopped, decided at the stop's own spot (after a drive, where
         // they dwelt). Readings on the way (a drive and its red lights, a walk past a pharmacy) look nothing
         // up, note no visit and leave the lookup spacing alone.
-        let stopped = recheck ? stopWatch.isStopped(at: now) : stopWatch.observe(fix.point, speed: fix.speed, at: now)
+        let stopped = recheck ? stopWatch.isStopped(at: now) : stopWatch.observe(fix.point, speed: fix.speed, inCar: fix.inCar, at: now)
         guard stopped, let point = stopWatch.stopPoint else {
             scheduleStopCheck(fix, now: now)
             return false

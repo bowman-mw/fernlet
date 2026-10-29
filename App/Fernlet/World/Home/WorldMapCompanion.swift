@@ -39,6 +39,9 @@ struct WorldMapCompanion: View {
     var isNight = false
     /// Whether the one-time "Tap me to say hi!" hint is showing (``WorldCompanionHint``, `ref-hint`).
     var hint = false
+    /// Whether the person is driving: the companion rides along in its small red car (``WorldRideCar``,
+    /// `b1-home-car`, round 7).
+    var isRiding = false
     /// The hint ended: the first tap, or its 12 seconds on Home.
     var onHintEnded: () -> Void = {}
     let onCustomize: () -> Void
@@ -97,7 +100,9 @@ struct WorldMapCompanion: View {
                 .accessibilityHidden(true)
             ZStack {
                 if hint { WorldHintRing() }
-                WorldCompanionSprite(now: now, settled: isSettled, isActive: isActive, pixelScale: pixelScale)
+                WorldCompanionSprite(now: now, settled: isSettled, isActive: isActive,
+                                     pixelScale: isRiding ? WorldRideCar.riderScale : pixelScale)
+                    .modifier(WorldRideCar(isRiding: isRiding))
                     .offset(y: hopLift)
                 if tapCount > 0 { WorldPetHeart().id(tapCount) }
             }
