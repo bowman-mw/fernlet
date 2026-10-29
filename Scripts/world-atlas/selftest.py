@@ -17,6 +17,10 @@ The synthetic world (10° cells, 16×16 sub-cells of 0.625°):
                 "Tiny Sea" (one cell, dropped into its neighbour)
   countries     ZA = L with a hole that is LS; AU = the bay land; DK, GL
   cities        Alpha (Q1, 2M, inside an urban polygon), Beta (ne:123, 50k, no polygon), Gamma (Q3, in LS)
+  admin-1       ZA-GT (lon 0..30; its Spanish name equals the English), ZA-WC (lon 30..65, a Spanish name),
+                ZA-NC in two pieces (merged), two differently named features sharing AU-BAY (each ne:<id>),
+                a stand-in code "-99-X1~" in LS (ne:<id>), DK-84 0.005° across (kept), GL-QE whose ADM0_A3 is
+                unknown (placed by ISO_A2), and one with no country at all (left out)
   urban areas   Alpha's polygon (kept); one with no city anywhere near (dropped); one 2 km east of Beta,
                 inside a town's 5 km reach (kept, holding no point); one 10 km east of Beta (dropped)
   climate       5° pixels: class 7 on lon 0..30, 14 on lon 30..60 (lat -30..30), a 3-to-1 mix of 5 and 9
@@ -146,7 +150,7 @@ def climate_tif(fill):
 
 
 def write_sources(folder):
-    """All eight sources (the coastline too, though only META lists it)."""
+    """All nine sources (the coastline too, though only META lists it)."""
     l_outer = box(0, -30, 65, 30)
     lake = box(20, -10, 40, 10)[::-1]
     bay_land = [(100, 40), (160, 40), (160, -40), (100, -40), (100, -10), (130, -10), (130, 10), (100, 10),
@@ -189,6 +193,7 @@ def write_sources(folder):
     ]
     write_layer(folder, "ne_10m_admin_0_countries", 5, [c[0] for c in countries], country_fields,
                 [c[1] for c in countries])
+    write_admin1(folder)
     place_fields = [("NAME", "C", 30), ("NAME_ES", "C", 30), ("NAME_FR", "C", 30), ("NAME_DE", "C", 30),
                     ("WIKIDATAID", "C", 12), ("NE_ID", "N", 10), ("POP_MAX", "N", 10), ("ISO_A2", "C", 4)]
     places = [
@@ -208,6 +213,35 @@ def write_sources(folder):
         zf.writestr("Beck_KG_V1_future_0p083.tif", climate_tif(False))
         zf.writestr("Beck_KG_V1_present_0p083.tif", climate_tif(True))
         zf.writestr("legend.txt", "synthetic")
+
+
+def write_admin1(folder):
+    """The admin-1 states and provinces (see the module docstring)."""
+    fields = [("ISO_3166_2", "C", 10), ("ISO_A2", "C", 4), ("ADM0_A3", "C", 4), ("NAME", "C", 40),
+              ("NAME_EN", "C", 40), ("NAME_ES", "C", 40), ("NE_ID", "N", 10)]
+    rows = [
+        ([box(0, -30, 30, 30)], {"ISO_3166_2": "ZA-GT", "ISO_A2": "ZA", "ADM0_A3": "ZAF", "NAME": "Gauteng",
+                                 "NAME_ES": "Gauteng", "NE_ID": 11}),
+        ([box(30, -30, 65, 30)], {"ISO_3166_2": "ZA-WC", "ISO_A2": "ZA", "ADM0_A3": "ZAF", "NAME": "Wes-Kaap",
+                                  "NAME_EN": "Western Cape", "NAME_ES": "Cabo Occidental", "NE_ID": 12}),
+        ([box(60, -29, 61, -28)], {"ISO_3166_2": "ZA-NC", "ISO_A2": "ZA", "ADM0_A3": "ZAF",
+                                   "NAME": "Northern Cape", "NE_ID": 14}),
+        ([box(62, -29, 63, -28)], {"ISO_3166_2": "ZA-NC", "ISO_A2": "ZA", "ADM0_A3": "ZAF",
+                                   "NAME": "Northern Cape", "NE_ID": 13}),
+        ([box(100, 10, 160, 40)], {"ISO_3166_2": "AU-BAY", "ISO_A2": "AU", "ADM0_A3": "AUS", "NAME": "Bay North",
+                                   "NE_ID": 21}),
+        ([box(100, -40, 160, -10)], {"ISO_3166_2": "AU-BAY", "ISO_A2": "AU", "ADM0_A3": "AUS",
+                                     "NAME": "Bay South", "NE_ID": 22}),
+        ([box(45, -25, 55, -15)], {"ISO_3166_2": "-99-X1~", "ISO_A2": "-1", "ADM0_A3": "LSO",
+                                   "NAME": "Highlands", "NE_ID": 31}),
+        ([box(-50, 40, -49.995, 40.005)], {"ISO_3166_2": "DK-84", "ISO_A2": "DK", "ADM0_A3": "DNK",
+                                           "NAME": "Speck", "NE_ID": 41}),
+        ([box(-100, 0, -96, 4)], {"ISO_3166_2": "GL-QE", "ISO_A2": "GL", "ADM0_A3": "XXX", "NAME": "Qeqqata",
+                                  "NE_ID": 51}),
+        ([box(-10, -10, -5, -5)], {"ISO_3166_2": "ZZ-01", "ISO_A2": "-1", "ADM0_A3": "ZZZ", "NAME": "Nowhere",
+                                   "NE_ID": 61}),
+    ]
+    write_layer(folder, "ne_10m_admin_1_states_provinces", 5, [r[0] for r in rows], fields, [r[1] for r in rows])
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -300,9 +334,17 @@ def decode(sections):
         country, size, population, lon, lat, urban_index = city_cur.take("2sBIiii")
         cities[token] = {"country": country.decode(), "size": size, "population": population, "lon": lon,
                          "lat": lat, "urban": urban_index, "names": [city_cur.text() for _ in range(4)]}
+    adm1_cur = Cursor(sections["ADM1"])
+    admin1 = {}
+    for _ in range(adm1_cur.take("H")):
+        token, country = adm1_cur.text(), adm1_cur.take("2s").decode()
+        names = [adm1_cur.text(), adm1_cur.text()]
+        admin1[token] = {"country": country, "names": names, "rings": adm1_cur.polygon()[1]}
     return {"cols": cols, "rows": rows, "sub": sub, "state": state, "coast": coast, "clim": sections["CLIM"],
             "ocea": sections["OCEA"], "cont": sections["CONT"], "seas": seas, "countries": countries,
-            "urban": urban, "cities": cities, "meta": json.loads(sections["META"].decode("utf-8"))}
+            "urban": urban, "cities": cities, "admin1": admin1, "ends": (urbn_cur.at == len(urbn_cur.data),
+                                                                       adm1_cur.at == len(adm1_cur.data)),
+            "meta": json.loads(sections["META"].decode("utf-8"))}
 
 
 def cell(atlas, lon, lat):
@@ -430,7 +472,28 @@ def check_tables(c, atlas):
     c.equal("city country in a hole", gamma.get("country"), "LS")
     c.equal("city population", beta.get("population"), 50000)
     c.equal("meta date", atlas["meta"].get("date"), "2026-10-29")
-    c.equal("meta sources", len(atlas["meta"].get("sources", [])), 8)
+    c.equal("meta sources", len(atlas["meta"].get("sources", [])), 9)
+    c.equal("meta admin-1 tolerance", atlas["meta"].get("admin1SimplifyDegrees"), 0.008)
+
+
+def check_admin1(c, atlas):
+    """ADM1: tokens, countries, names, merges, the tiny polygon and the even-odd rings."""
+    admin1 = atlas["admin1"]
+    c.equal("admin-1 tokens (sorted by country, then token)", list(admin1),
+            ["ne:21", "ne:22", "DK-84", "GL-QE", "ne:31", "ZA-GT", "ZA-NC", "ZA-WC"])
+    c.equal("sections end where their counts say", atlas["ends"], (True, True))
+    get = lambda token: admin1.get(token, {"country": None, "names": None, "rings": []})  # noqa: E731
+    c.equal("Spanish equal to English is stored empty", get("ZA-GT")["names"], ["Gauteng", ""])
+    c.equal("NAME_EN wins over NAME", get("ZA-WC")["names"], ["Western Cape", "Cabo Occidental"])
+    c.equal("pieces sharing a code and a name merge", len(get("ZA-NC")["rings"]), 2)
+    c.equal("a shared code with two names names neither", (get("ne:21")["names"], get("ne:22")["names"]),
+            (["Bay North", ""], ["Bay South", ""]))
+    c.equal("a stand-in code takes ne:<id>", get("ne:31")["country"], "LS")
+    c.equal("an unknown ADM0_A3 falls back to ISO_A2", get("GL-QE")["country"], "GL")
+    c.equal("a tiny polygon keeps its ring", len(get("DK-84")["rings"]), 1)
+    c.equal("point in Gauteng", inside(get("ZA-GT")["rings"], 10, 0), True)
+    c.equal("point not in Gauteng", inside(get("ZA-GT")["rings"], 40, 0), False)
+    c.equal("point in Western Cape", inside(get("ZA-WC")["rings"], 40, 0), True)
 
 
 def main():
@@ -451,6 +514,8 @@ def main():
         atlas = decode(read_pack(pack))
         check_grids(c, atlas)
         check_tables(c, atlas)
+        check_admin1(c, atlas)
+        c.equal("summary logs the admin-1 left out", "Nowhere" in log and "left out of ADM1" in log, True)
         c.equal("summary names a missing promoted sea", "'Hudson Bay' not found" in log, True)
         c.equal("summary logs the tiny sea", "Tiny Sea" in log and "dropped into its neighbour" in log, True)
         c.equal("summary logs the cut-off sea", "Lake Sea" in log and "not joined" in log, True)

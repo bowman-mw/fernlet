@@ -48,7 +48,7 @@ def _import_numpy_and_pillow():
 
 np, Image = _import_numpy_and_pillow()
 
-GENERATOR_VERSION = 2
+GENERATOR_VERSION = 3
 PACK_VERSION = 1
 MAGIC = b"FWA1"
 SUB = 16
@@ -56,6 +56,10 @@ DEFAULT_ROWS = 1800
 SIZE_CAP = 6_291_456
 RAW_SECTION_CAP = 64 * 1024 * 1024
 SIMPLIFY_DEGREES = 0.001
+# ADM1's Douglas-Peucker tolerance: about 890 m, under 3 pt at the world view's City zoom (360 pt a degree of
+# latitude) and under a third of its 10-pt hex. 0.003° (1 pt) and 0.005° do not leave the 6 MiB cap any margin.
+ADMIN1_SIMPLIFY_DEGREES = 0.008
+MAX_ADMIN1 = 8192
 SCALE = 100_000
 FILL_RADIUS = 5
 MIN_SEA_CELLS = 3
@@ -72,6 +76,7 @@ SOURCE_LICENCES = {
     "ne_10m_coastline": "public domain (Natural Earth)",
     "ne_10m_geography_marine_polys": "public domain (Natural Earth)",
     "ne_10m_admin_0_countries": "public domain (Natural Earth)",
+    "ne_10m_admin_1_states_provinces": "public domain (Natural Earth)",
     "ne_10m_populated_places": "public domain (Natural Earth)",
     "ne_10m_urban_areas": "public domain (Natural Earth)",
     "Beck_KG_V1": "CC BY 4.0 (Beck et al. 2018, Scientific Data 5:180214)",
@@ -120,6 +125,8 @@ THE_195 = frozenset(UN_MEMBERS) | {"VA", "PS"}
 assert len(set(UN_MEMBERS)) == 193 and len(THE_195) == 195, "the 195 table is wrong"
 
 ALPHA2 = re.compile(r"^[A-Z]{2}$")
+# A real ISO 3166-2 code (Natural Earth marks its own stand-ins with "~" or "-99-").
+ISO_3166_2 = re.compile(r"^[A-Z]{2}-[A-Z0-9]{1,3}$")
 WIKIDATA = re.compile(r"^Q[0-9]+$")
 
 
@@ -162,8 +169,8 @@ def read_source_table(script_dir):
             if len(parts) != 6:
                 raise SystemExit("error: bad source table line in fetch-sources.sh: %r" % line)
             rows.append(dict(zip(("subdir", "file", "bytes", "need", "sha", "url"), parts)))
-    if len(rows) != 8:
-        raise SystemExit("error: fetch-sources.sh lists %d sources, not 8" % len(rows))
+    if len(rows) != 9:
+        raise SystemExit("error: fetch-sources.sh lists %d sources, not 9" % len(rows))
     return rows
 
 
@@ -612,16 +619,16 @@ def quantize_ring(points):
     return q if len(q) >= 4 else None
 
 
-def encoded_rings(rings, report, label):
+def encoded_rings(rings, report, label, tolerance=SIMPLIFY_DEGREES):
     """The rings simplified and quantised (closed int64 arrays); rings that vanish are counted."""
     out = []
     dropped = 0
     for ring in rings:
         # A ring Douglas-Peucker thins to a line (the Holy See is about 0.008° across) is kept at a tenth of
         # the tolerance, then unsimplified, so no small country loses its only ring.
-        q = quantize_ring(simplify_closed_ring(ring, SIMPLIFY_DEGREES))
+        q = quantize_ring(simplify_closed_ring(ring, tolerance))
         if q is None:
-            q = quantize_ring(simplify_closed_ring(ring, SIMPLIFY_DEGREES / 10))
+            q = quantize_ring(simplify_closed_ring(ring, tolerance / 10))
         if q is None:
             q = quantize_ring(ring)
         if q is None:
@@ -717,7 +724,7 @@ def country_features(features, report):
             continent = SEVEN_SEAS_CONTINENT[code]
         if continent == 0:
             report.unmap("country %s: continent %r unmapped" % (name, continent_name))
-        items.append({"code": code, "own": code is not None and code == raw, "admin": name,
+        items.append({"code": code, "own": code is not None and code == raw, "admin": name, "a3": a3,
                       "sovereignt": text_field(attrs, "SOVEREIGNT"), "continent": continent,
                       "rings": polygon_rings(geom)})
     home = {}
@@ -1027,6 +1034,103 @@ def names_blob(english, spanish, french, german, report):
 
 
 # ---------------------------------------------------------------------------------------------------------
+# ADM1: states and provinces (the world view's State zoom: its lines and the plate's place)
+
+
+def admin1_country(attrs, a3_codes, ctry_codes, report, name):
+    """The CTRY code an admin-1 feature belongs to: its ADM0_A3 mapped the way CTRY maps admin-0 (so
+    Somaliland is SO and Kosovo XK), else its own ISO_A2 when CTRY has it, else None. Mismatches are logged."""
+    a3 = text_field(attrs, "ADM0_A3").upper()
+    iso_a2 = text_field(attrs, "ISO_A2").upper()
+    country = a3_codes.get(a3)
+    if country is not None and ALPHA2.match(iso_a2) and iso_a2 != country:
+        report.note("admin-1 %s: ISO_A2 %s but ADM0_A3 %s is %s in CTRY; counted as %s"
+                    % (name, iso_a2, a3, country, country))
+    if country is None and ALPHA2.match(iso_a2) and iso_a2 in ctry_codes:
+        report.note("admin-1 %s: ADM0_A3 %r not in CTRY; counted by its ISO_A2 %s" % (name, a3, iso_a2))
+        country = iso_a2
+    if country is not None and country not in ctry_codes:
+        country = None
+    return country
+
+
+def admin1_features(features, a3_codes, ctry_codes, report):
+    """One dict per admin-1 feature whose country CTRY has: ISO code (or None), ne_id, country, names,
+    rings. A feature with no country or no rings is logged and left out."""
+    items = []
+    for geom, attrs in features:
+        name = text_field(attrs, "NAME_EN", "NAME")
+        ne_id = attrs.get("NE_ID")
+        country = admin1_country(attrs, a3_codes, ctry_codes, report, name)
+        rings = polygon_rings(geom)
+        if country is None or not rings or not isinstance(ne_id, int):
+            report.unmap("admin-1 %s (ne_id %s): no CTRY country, rings or ne_id; left out of ADM1" % (name, ne_id))
+            continue
+        iso = text_field(attrs, "ISO_3166_2").upper()
+        if not ISO_3166_2.match(iso):
+            iso = None
+        elif iso[:2] != country:
+            report.note("admin-1 %s: code %s in country %s" % (name, iso, country))
+        items.append({"iso": iso, "ne_id": ne_id, "country": country, "name": name,
+                      "spanish": text_field(attrs, "NAME_ES"), "rings": rings})
+    return items
+
+
+def admin1_entries(items, report):
+    """The ADM1 entries before encoding, each with its frozen token. A real ISO 3166-2 code is the token
+    when every feature carrying it has one name (several such features merge into one entry, as Natural Earth
+    splits a few provinces into pieces); a code several differently named features share (Bosnia's cantons
+    all say BA-BIH) names none of them, and each name becomes its own entry, "ne:<smallest ne_id>"."""
+    groups = {}
+    for item in sorted(items, key=lambda i: i["ne_id"]):
+        key = (item["iso"], item["country"]) if item["iso"] else ("ne:%d" % item["ne_id"], item["country"])
+        groups.setdefault(key, []).append(item)
+    entries = []
+    for (code, country), members in sorted(groups.items()):
+        names = {}
+        for member in members:
+            names.setdefault(member["name"], []).append(member)
+        if len(names) > 1:
+            report.counts["admin-1 codes shared by differently named features"] = \
+                report.counts.get("admin-1 codes shared by differently named features", 0) + 1
+        for name, same in sorted(names.items()):
+            token = code if len(names) == 1 else "ne:%d" % same[0]["ne_id"]
+            spanish = next((m["spanish"] for m in same if m["spanish"]), "")
+            entries.append({"token": token, "country": country, "name": name, "spanish": spanish,
+                            "rings": [r for m in same for r in m["rings"]], "pieces": len(same)})
+    return entries
+
+
+def build_adm1(items, report):
+    """The ADM1 section: u16 count, then per entry token · country · English · Spanish · polygon (the CTRY
+    encoding at ADMIN1_SIMPLIFY_DEGREES), sorted by country then token."""
+    blobs = []
+    used = set()
+    ring_total = point_total = 0
+    for entry in sorted(admin1_entries(items, report), key=lambda e: (e["country"], e["token"])):
+        if entry["token"] in used:
+            report.unmap("admin-1 %s: token %s used twice; left out" % (entry["name"], entry["token"]))
+            continue
+        rings = encoded_rings(entry["rings"], report, "admin-1", ADMIN1_SIMPLIFY_DEGREES)
+        if not rings:
+            report.unmap("admin-1 %s: no ring survives simplification" % entry["name"])
+            continue
+        used.add(entry["token"])
+        spanish = "" if entry["spanish"] == entry["name"] else entry["spanish"]
+        blobs.append(short_text(entry["token"], report) + entry["country"].encode("ascii") +
+                     short_text(entry["name"], report) + short_text(spanish, report) + encode_polygon(rings))
+        ring_total += len(rings)
+        point_total += sum(len(q) for q in rings)
+    if len(blobs) > MAX_ADMIN1:
+        raise SystemExit("error: %d admin-1 entries, over the reader's %d" % (len(blobs), MAX_ADMIN1))
+    report.counts["admin-1 entries"] = len(blobs)
+    report.counts["admin-1 entries with an ISO 3166-2 token"] = sum(1 for t in used if not t.startswith("ne:"))
+    report.counts["admin-1 rings / points"] = "%d / %d" % (ring_total, point_total)
+    report.counts["admin-1 countries"] = len({b[1 + b[0]:3 + b[0]] for b in blobs})
+    return struct.pack("<H", len(blobs)) + b"".join(blobs)
+
+
+# ---------------------------------------------------------------------------------------------------------
 # URBN and CITY
 
 
@@ -1176,7 +1280,8 @@ def meta_json(args, rows, cols, sources):
                        "licence": SOURCE_LICENCES.get(subdir, "unknown")})
     meta = {"generator": "Scripts/world-atlas/build_world_atlas.py", "generatorVersion": GENERATOR_VERSION,
             "date": args.date, "grid": {"cols": cols, "rows": rows, "sub": SUB},
-            "simplifyDegrees": SIMPLIFY_DEGREES, "sources": listed}
+            "simplifyDegrees": SIMPLIFY_DEGREES, "admin1SimplifyDegrees": ADMIN1_SIMPLIFY_DEGREES,
+            "sources": listed}
     return json.dumps(meta, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 
 
@@ -1239,8 +1344,12 @@ def main(argv):
     cont = build_cont(items, state, rows, cols, report)
     ctry, countries = build_ctry(items, report)
     urbn, city = build_cities(layer("ne_10m_populated_places"), layer("ne_10m_urban_areas"), countries, report)
+    ctry_codes = {code for code, _, _ in countries}
+    a3_codes = {item["a3"]: item["code"] for item in items if item["code"] is not None and item["a3"]}
+    adm1 = build_adm1(admin1_features(layer("ne_10m_admin_1_states_provinces"), a3_codes, ctry_codes, report),
+                      report)
     sections = [("LAND", land), ("CLIM", clim.tobytes()), ("OCEA", ocea.tobytes()), ("SEAS", seas),
-                ("CONT", cont.tobytes()), ("CTRY", ctry), ("URBN", urbn), ("CITY", city),
+                ("CONT", cont.tobytes()), ("CTRY", ctry), ("URBN", urbn), ("CITY", city), ("ADM1", adm1),
                 ("META", meta_json(args, rows, cols, sources))]
     pack = assemble(sections, report)
     print_summary(report, pack, args.out)

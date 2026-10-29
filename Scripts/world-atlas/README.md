@@ -12,8 +12,9 @@ Scripts/world-atlas/fetch-sources.sh            # into ~/Library/Caches/Fernlet/
 Scripts/world-atlas/fetch-sources.sh <dir>      # or anywhere else
 ```
 
-The script downloads eight files (seven Natural Earth 1:10m zips and Beck et al.'s Köppen-Geiger zip, about
-99 MB in all), each into its own new, empty subdirectory, with `curl -fL`. It then checks every file's size and
+The script downloads nine files (eight Natural Earth 1:10m zips, among them the admin-1 states and
+provinces added 2026-10-29 for the world view's State zoom, and Beck et al.'s Köppen-Geiger zip, about 114 MB in
+all), each into its own new, empty subdirectory, with `curl -fL`. It then checks every file's size and
 SHA-256 against the pinned table in the script. A file already in place is only checked again.
 
 The hashes are not pinned yet: every entry reads `UNPINNED`, so a first run prints each computed hash and
@@ -54,4 +55,6 @@ The self-test writes tiny synthetic sources (shapefiles, dBASE tables and a GeoT
 ones) and builds a 10° pack from them. It decodes the pack with its own independent reader and checks these
 rules: land, water and coast states; coast-mask bits; climate majority and nearest fill; the ocean flood (a
 bay takes its ocean, a sea polygon its own sea, an enclosed lake 0); a country with a hole; cities with and
-without an urban polygon; which urban polygons are kept (one holding a city, one only in a town's reach); determinism; and the size cap.
+without an urban polygon; which urban polygons are kept (one holding a city, one only in a town's reach); the
+admin-1 table (ISO 3166-2 tokens, `ne:<id>` for stand-in or shared codes, pieces merged, the country by
+`ADM0_A3` or `ISO_A2`, a tiny polygon kept); determinism; and the size cap.
