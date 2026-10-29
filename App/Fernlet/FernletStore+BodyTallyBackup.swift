@@ -1,3 +1,4 @@
+import CloudKitSync
 import Foundation
 import PrivateHealthStore
 

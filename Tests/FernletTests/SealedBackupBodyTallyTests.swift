@@ -16,6 +16,7 @@ import CloudKitSync
 import CryptoKit
 import Foundation
 import PrivateHealthStore
+import PrivateMemoryStore
 import PrivateStoreCore
 import Testing
 @testable import Fernlet
