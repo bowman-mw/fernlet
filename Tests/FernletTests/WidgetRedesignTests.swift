@@ -92,8 +92,9 @@ struct WidgetRedesignTests {
         let glasses = "if look.topper == .glasses && !closesEyes(state: state, pose: pose) {"
         #expect(widget.contains(glasses) && app.contains(glasses))
         #expect(widget.contains("pose: WidgetCompanionPose(asleep: asleep)"), "the widget's pose is asleep or awake")
-        #expect(widget.contains("case .silhouette(let hex): return grid.isFace(frameX: x, y: y) ? nil : hex"))
-        #expect(app.contains("grid.put(gx, eyeRow - 1, color, face: true)"), "the glasses are part of the cut-out face")
+        #expect(widget.contains("case .silhouette(let hex): return grid.takesOneColour(frameX: x, y: y) ? hex : nil"))
+        #expect(app.contains("grid.put(gx, eyeRow - 1, color, as: .glasses)"), "the glasses are tagged as theirs")
+        #expect(app.contains("case .eye, .mouth, .blush, .tear, .glasses: true"), "and are part of the cut-out face")
     }
 
     // MARK: - Kinds and links
