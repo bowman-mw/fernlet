@@ -1,0 +1,469 @@
+#!/usr/bin/env python3
+"""Self-test for the World atlas generator: `python3 -I Scripts/world-atlas/selftest.py`.
+
+Builds tiny synthetic sources (shapefiles, dBASE tables and a climate GeoTIFF, zipped the way the real
+ones are) in a temporary directory, runs build_world_atlas.py on them with a 10° grid (--rows 18), then
+decodes the pack with its own minimal reader (nothing imported from the generator) and checks the rules
+in Docs/World-Atlas-Pack.md. Prints "selftest: all N checks passed" and exits 0, or names each failure.
+
+The synthetic world (10° cells, 16×16 sub-cells of 0.625°):
+  land "L"      lon 0..65, lat -30..30, with a lake hole lon 20..40, lat -10..10 (a "Lake Sea" polygon
+                covers the lake, joined to nothing, so it must stay 0)
+  land "bay"    lon 100..160, lat -40..40 with a bay cut in from the west (lon 100..130, lat -10..10)
+  islands       lon -100..-96, lat 0..4 (Greenland, a territory of Denmark) and lon -50..-46, lat 40..44
+                (Denmark)
+  oceans        South Atlantic lon -60..0, Indian lon 70..100 (both lat -60..60)
+  seas          "Test Sea" in two polygons sharing Q999 (lon -120..-60), "Gulf of Mexico" (a promoted gulf),
+                "Tiny Sea" (one cell, dropped into its neighbour)
+  countries     ZA = L with a hole that is LS; AU = the bay land; DK, GL
+  cities        Alpha (Q1, 2M, inside an urban polygon), Beta (ne:123, 50k, no polygon), Gamma (Q3, in LS)
+  climate       5° pixels: class 7 on lon 0..30, 14 on lon 30..60 (lat -30..30), a 3-to-1 mix of 5 and 9
+                in the cell lon 10..20, lat 20..30, nothing east of lon 60
+"""
+
+import hashlib
+import io
+import json
+import os
+import struct
+import subprocess
+import sys
+import tempfile
+import zipfile
+import zlib
+
+
+def _import_numpy_and_pillow():
+    """numpy and Pillow, from the user's site-packages when `python3 -I` hides it."""
+    try:
+        import numpy
+        from PIL import Image
+    except ImportError:
+        import site
+        sys.path.append(site.getusersitepackages())
+        import numpy
+        from PIL import Image
+    return numpy, Image
+
+
+np, Image = _import_numpy_and_pillow()
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+GENERATOR = os.path.join(HERE, "build_world_atlas.py")
+ROWS = 18
+
+
+# ---------------------------------------------------------------------------------------------------------
+# Writing synthetic sources
+
+
+def box(west, south, east, north):
+    """A closed clockwise rectangle (shapefile outer-ring order)."""
+    return [(west, north), (east, north), (east, south), (west, south), (west, north)]
+
+
+def shp_bytes(shapes, kind):
+    """A .shp and its .shx for polygons (lists of rings) or points ((x, y))."""
+    records = []
+    for shape in shapes:
+        if kind == 1:
+            records.append(struct.pack("<idd", 1, shape[0], shape[1]))
+            continue
+        points = [p for ring in shape for p in ring]
+        xs, ys = [p[0] for p in points], [p[1] for p in points]
+        parts, at = [], 0
+        for ring in shape:
+            parts.append(at)
+            at += len(ring)
+        body = struct.pack("<i4dii", 5, min(xs), min(ys), max(xs), max(ys), len(shape), len(points))
+        body += struct.pack("<%di" % len(parts), *parts)
+        body += b"".join(struct.pack("<dd", x, y) for x, y in points)
+        records.append(body)
+    main, index, offset = b"", b"", 50
+    for number, body in enumerate(records, 1):
+        main += struct.pack(">ii", number, len(body) // 2) + body
+        index += struct.pack(">ii", offset, len(body) // 2)
+        offset += 4 + len(body) // 2
+
+    def header(length_bytes):
+        head = struct.pack(">i5ii", 9994, 0, 0, 0, 0, 0, length_bytes // 2)
+        return head + struct.pack("<ii4d4d", 1000, kind, -180.0, -90.0, 180.0, 90.0, 0, 0, 0, 0)
+
+    return header(100 + len(main)) + main, header(100 + len(index)) + index
+
+
+def dbf_bytes(fields, rows):
+    """A dBASE III table. fields: [(name, kind "C"/"N", length)]; rows: dicts (missing = blank)."""
+    record_len = 1 + sum(f[2] for f in fields)
+    header_len = 32 + 32 * len(fields) + 1
+    out = struct.pack("<B3BIHH20x", 3, 126, 10, 29, len(rows), header_len, record_len)
+    for name, kind, length in fields:
+        out += struct.pack("<11sc4xBB14x", name.encode("ascii"), kind.encode("ascii"), length, 0)
+    out += b"\r"
+    for row in rows:
+        out += b" "
+        for name, kind, length in fields:
+            value = row.get(name, "")
+            raw = str(value).encode("utf-8")
+            out += raw.rjust(length) if kind == "N" else raw.ljust(length)
+    return out + b"\x1a"
+
+
+def write_layer(folder, stem, kind, shapes, fields, rows):
+    """<folder>/<stem>/<stem>.zip holding the shapefile set, as Natural Earth ships it."""
+    shp, shx = shp_bytes(shapes, kind)
+    os.makedirs(os.path.join(folder, stem))
+    with zipfile.ZipFile(os.path.join(folder, stem, stem + ".zip"), "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(stem + ".shp", shp)
+        archive.writestr(stem + ".shx", shx)
+        archive.writestr(stem + ".dbf", dbf_bytes(fields, rows))
+        archive.writestr(stem + ".cpg", "UTF-8")
+        archive.writestr(stem + ".README.html", "synthetic")
+
+
+def climate_tif(fill):
+    """A 72 × 36 (5°) class raster as TIFF bytes."""
+    grid = np.zeros((36, 72), dtype=np.uint8)
+    if fill:
+        lat = 90.0 - (np.arange(36) + 0.5) * 5.0
+        lon = -180.0 + (np.arange(72) + 0.5) * 5.0
+        band = (lat >= -30) & (lat < 30)
+        grid[np.ix_(band, (lon >= 0) & (lon < 30))] = 7
+        grid[np.ix_(band, (lon >= 30) & (lon < 60))] = 14
+        col = lambda x: int((x + 180) / 5)  # noqa: E731
+        row = lambda y: int((90 - y) / 5)  # noqa: E731
+        grid[row(27.5), col(12.5)] = 5
+        grid[row(27.5), col(17.5)] = 5
+        grid[row(22.5), col(12.5)] = 5
+        grid[row(22.5), col(17.5)] = 9
+    else:
+        grid[:, :] = 29
+    buffer = io.BytesIO()
+    Image.fromarray(grid).save(buffer, format="TIFF")
+    return buffer.getvalue()
+
+
+def write_sources(folder):
+    """All eight sources (the coastline too, though only META lists it)."""
+    l_outer = box(0, -30, 65, 30)
+    lake = box(20, -10, 40, 10)[::-1]
+    bay_land = [(100, 40), (160, 40), (160, -40), (100, -40), (100, -10), (130, -10), (130, 10), (100, 10),
+                (100, 40)]
+    gl_island, dk_island = box(-100, 0, -96, 4), box(-50, 40, -46, 44)
+    plain = [("FEATURECLA", "C", 20), ("SCALERANK", "N", 4)]
+    write_layer(folder, "ne_10m_land", 5, [[l_outer, lake], [bay_land]], plain,
+                [{"FEATURECLA": "Land"}, {"FEATURECLA": "Land"}])
+    write_layer(folder, "ne_10m_minor_islands", 5, [[gl_island], [dk_island]], plain,
+                [{"FEATURECLA": "Minor island"}, {"FEATURECLA": "Minor island"}])
+    write_layer(folder, "ne_10m_coastline", 5, [[l_outer]], plain, [{"FEATURECLA": "Coastline"}])
+    marine_fields = [("featurecla", "C", 16), ("name", "C", 40), ("name_en", "C", 40), ("name_es", "C", 40),
+                     ("name_fr", "C", 40), ("name_de", "C", 40), ("wikidataid", "C", 12), ("ne_id", "N", 10)]
+    marine = [
+        (box(-60, -60, 0, 60), {"featurecla": "ocean", "name": "South Atlantic Ocean", "ne_id": 401}),
+        (box(70, -60, 100, 60), {"featurecla": "ocean", "name": "INDIAN OCEAN", "ne_id": 402}),
+        (box(-120, -60, -90, 60), {"featurecla": "sea", "name": "Test Sea", "name_es": "Mar de Prueba",
+                                   "wikidataid": "Q999", "ne_id": 502}),
+        (box(-90, -60, -60, 60), {"featurecla": "sea", "name": "Test Sea", "wikidataid": "Q999", "ne_id": 501}),
+        (box(-180, 10, -150, 40), {"featurecla": "gulf", "name": "Gulf of Mexico", "ne_id": 600}),
+        (box(-140, 50, -130, 60), {"featurecla": "sea", "name": "Tiny Sea", "wikidataid": "Q7", "ne_id": 700}),
+        (box(20, -10, 40, 10), {"featurecla": "sea", "name": "Lake Sea", "wikidataid": "Q8", "ne_id": 800}),
+        (box(100, -10, 130, 10), {"featurecla": "bay", "name": "Test Bay", "ne_id": 900}),
+    ]
+    write_layer(folder, "ne_10m_geography_marine_polys", 5, [[m[0]] for m in marine], marine_fields,
+                [m[1] for m in marine])
+    country_fields = [("ISO_A2_EH", "C", 4), ("ISO_A2", "C", 4), ("ADM0_A3", "C", 4), ("ADMIN", "C", 30),
+                      ("SOVEREIGNT", "C", 30), ("CONTINENT", "C", 30), ("NE_ID", "N", 10)]
+    countries = [
+        ([l_outer, box(45, -25, 55, -15)[::-1]], {"ISO_A2_EH": "ZA", "ADM0_A3": "ZAF", "ADMIN": "South Africa",
+                                                  "SOVEREIGNT": "South Africa", "CONTINENT": "Africa"}),
+        ([box(45, -25, 55, -15)], {"ISO_A2_EH": "LS", "ADM0_A3": "LSO", "ADMIN": "Lesotho",
+                                   "SOVEREIGNT": "Lesotho", "CONTINENT": "Africa"}),
+        ([bay_land], {"ISO_A2_EH": "AU", "ADM0_A3": "AUS", "ADMIN": "Australia", "SOVEREIGNT": "Australia",
+                      "CONTINENT": "Oceania"}),
+        ([dk_island], {"ISO_A2_EH": "DK", "ADM0_A3": "DNK", "ADMIN": "Denmark", "SOVEREIGNT": "Denmark",
+                       "CONTINENT": "Europe"}),
+        ([gl_island], {"ISO_A2_EH": "GL", "ADM0_A3": "GRL", "ADMIN": "Greenland", "SOVEREIGNT": "Denmark",
+                       "CONTINENT": "North America"}),
+    ]
+    write_layer(folder, "ne_10m_admin_0_countries", 5, [c[0] for c in countries], country_fields,
+                [c[1] for c in countries])
+    place_fields = [("NAME", "C", 30), ("NAME_ES", "C", 30), ("NAME_FR", "C", 30), ("NAME_DE", "C", 30),
+                    ("WIKIDATAID", "C", 12), ("NE_ID", "N", 10), ("POP_MAX", "N", 10), ("ISO_A2", "C", 4)]
+    places = [
+        ((10.5, 10.5), {"NAME": "Alpha", "NAME_ES": "Alfa", "NAME_FR": "Alpha", "NAME_DE": "Alpha",
+                        "WIKIDATAID": "Q1", "NE_ID": 111, "POP_MAX": 2000000, "ISO_A2": "ZA"}),
+        ((12.0, -20.0), {"NAME": "Beta", "NE_ID": 123, "POP_MAX": 50000, "ISO_A2": "ZA"}),
+        ((52.0, -20.0), {"NAME": "Gamma", "NAME_DE": "Gammastadt", "WIKIDATAID": "Q3", "NE_ID": 133,
+                         "POP_MAX": 150000, "ISO_A2": "LS"}),
+    ]
+    write_layer(folder, "ne_10m_populated_places", 1, [p[0] for p in places], place_fields, [p[1] for p in places])
+    write_layer(folder, "ne_10m_urban_areas", 5, [[box(9, 9, 12, 12)], [box(30, 0, 33, 3)]],
+                [("AREA_SQKM", "N", 10)], [{"AREA_SQKM": 1}, {"AREA_SQKM": 2}])
+    os.makedirs(os.path.join(folder, "Beck_KG_V1"))
+    with zipfile.ZipFile(os.path.join(folder, "Beck_KG_V1", "Beck_KG_V1.zip"), "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("Beck_KG_V1_future_0p083.tif", climate_tif(False))
+        zf.writestr("Beck_KG_V1_present_0p083.tif", climate_tif(True))
+        zf.writestr("legend.txt", "synthetic")
+
+
+# ---------------------------------------------------------------------------------------------------------
+# An independent reader
+
+
+class Cursor:
+    """Little-endian reads over one section's bytes."""
+
+    def __init__(self, data):
+        self.data, self.at = data, 0
+
+    def take(self, fmt):
+        values = struct.unpack_from("<" + fmt, self.data, self.at)
+        self.at += struct.calcsize("<" + fmt)
+        return values if len(values) > 1 else values[0]
+
+    def raw(self, count):
+        out = self.data[self.at:self.at + count]
+        self.at += count
+        return out
+
+    def text(self):
+        return self.raw(self.take("B")).decode("utf-8")
+
+    def varint(self):
+        value, shift = 0, 0
+        for _ in range(5):
+            byte = self.take("B")
+            value |= (byte & 0x7F) << shift
+            shift += 7
+            if byte < 0x80:
+                return (value >> 1) ^ -(value & 1)
+        raise ValueError("varint over 5 bytes")
+
+    def polygon(self):
+        bbox = self.take("iiii")
+        rings = []
+        for _ in range(self.take("H")):
+            count = self.take("I")
+            x, y = self.take("ii")
+            ring = [(x, y)]
+            for _ in range(count - 1):
+                x += self.varint()
+                y += self.varint()
+                ring.append((x, y))
+            rings.append(ring)
+        return bbox, rings
+
+
+def read_pack(data):
+    """{tag: raw bytes} after checking magic, version, offsets and lengths."""
+    assert data[:4] == b"FWA1", "magic"
+    version, count = struct.unpack_from("<HH", data, 4)
+    assert version == 1, "version"
+    sections = {}
+    for i in range(count):
+        tag, offset, stored, raw_len = struct.unpack_from("<4sIII", data, 8 + 16 * i)
+        assert offset + stored <= len(data), "section past the end"
+        raw = zlib.decompress(data[offset:offset + stored], -15)
+        assert len(raw) == raw_len, "raw length"
+        sections[tag.decode("ascii")] = raw
+    return sections
+
+
+def decode(sections):
+    """Every section as plain Python structures."""
+    land = Cursor(sections["LAND"])
+    cols, rows, sub = land.take("IIH")
+    state = land.raw(cols * rows)
+    coast = [land.raw(32) for _ in range(land.take("I"))]
+    seas_cur = Cursor(sections["SEAS"])
+    seas = []
+    for _ in range(seas_cur.take("H")):
+        seas.append({"token": seas_cur.text(), "parent": seas_cur.take("B"),
+                     "names": [seas_cur.text() for _ in range(4)]})
+    ctry_cur = Cursor(sections["CTRY"])
+    countries = {}
+    for _ in range(ctry_cur.take("H")):
+        code, sovereign, continent, flags = ctry_cur.take("2s2sBB")
+        bbox, rings = ctry_cur.polygon()
+        countries[code.decode()] = {"sovereign": sovereign.decode(), "continent": continent, "flags": flags,
+                                    "rings": rings}
+    urbn_cur = Cursor(sections["URBN"])
+    urban = [urbn_cur.polygon()[1] for _ in range(urbn_cur.take("I"))]
+    city_cur = Cursor(sections["CITY"])
+    cities = {}
+    for _ in range(city_cur.take("I")):
+        token = city_cur.text()
+        country, size, population, lon, lat, urban_index = city_cur.take("2sBIiii")
+        cities[token] = {"country": country.decode(), "size": size, "population": population, "lon": lon,
+                         "lat": lat, "urban": urban_index, "names": [city_cur.text() for _ in range(4)]}
+    return {"cols": cols, "rows": rows, "sub": sub, "state": state, "coast": coast, "clim": sections["CLIM"],
+            "ocea": sections["OCEA"], "cont": sections["CONT"], "seas": seas, "countries": countries,
+            "urban": urban, "cities": cities, "meta": json.loads(sections["META"].decode("utf-8"))}
+
+
+def cell(atlas, lon, lat):
+    """Grid index and the point's fractions inside the cell (from its north-west corner)."""
+    step = 180.0 / atlas["rows"]
+    fy, fx = (90.0 - lat) / step, (lon + 180.0) / step
+    row = min(max(int(fy // 1), 0), atlas["rows"] - 1)
+    col = int(fx // 1) % atlas["cols"]
+    return row * atlas["cols"] + col, fx - int(fx // 1), fy - int(fy // 1)
+
+
+def is_land(atlas, lon, lat):
+    """LAND's answer at a point, through the coast mask when the cell is mixed."""
+    index, frac_x, frac_y = cell(atlas, lon, lat)
+    kind = atlas["state"][index]
+    if kind != 2:
+        return kind == 1
+    rank = sum(1 for i in range(index) if atlas["state"][i] == 2)
+    bit = int(frac_y * 16) * 16 + int(frac_x * 16)
+    return bool(atlas["coast"][rank][bit >> 3] >> (bit & 7) & 1)
+
+
+def inside(rings, lon, lat):
+    """Even-odd point test over integer rings."""
+    x, y, odd = lon * 1e5, lat * 1e5, False
+    for ring in rings:
+        for (x0, y0), (x1, y1) in zip(ring, ring[1:] + ring[:1]):
+            if (y0 > y) != (y1 > y) and x < x0 + (y - y0) * (x1 - x0) / (y1 - y0):
+                odd = not odd
+    return odd
+
+
+# ---------------------------------------------------------------------------------------------------------
+# The checks
+
+
+class Checks:
+    """Counts passes and collects failures."""
+
+    def __init__(self):
+        self.passed, self.failed = 0, []
+
+    def equal(self, label, got, want):
+        if got == want:
+            self.passed += 1
+        else:
+            self.failed.append("%s: got %r, want %r" % (label, got, want))
+
+
+def run_generator(sources, out, *extra):
+    """The generator's exit code and output."""
+    command = [sys.executable, "-I", GENERATOR, "--sources", sources, "--out", out, "--rows", str(ROWS),
+               "--unverified-sources"] + list(extra)
+    done = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+    return done.returncode, done.stdout
+
+
+def check_grids(c, atlas):
+    """LAND, CLIM, OCEA and CONT at chosen points."""
+    c.equal("grid", (atlas["cols"], atlas["rows"], atlas["sub"]), (36, 18, 16))
+    state = lambda lon, lat: atlas["state"][cell(atlas, lon, lat)[0]]  # noqa: E731
+    c.equal("land cell", state(10, 5), 1)
+    c.equal("lake cell is water", state(25, 5), 0)
+    c.equal("ocean cell", state(-30, 5), 0)
+    c.equal("coast cell", state(65, 5), 2)
+    c.equal("island coast cell", state(-95, 5), 2)
+    c.equal("coast bit land (sx 3)", is_land(atlas, 62.2, 5.0), True)
+    c.equal("coast bit water (sx 12)", is_land(atlas, 67.8, 5.0), False)
+    c.equal("island bit land", is_land(atlas, -98.5, 1.5), True)
+    c.equal("island bit water", is_land(atlas, -98.5, 8.5), False)
+    c.equal("island bit land (sx 5, low bits first)", is_land(atlas, -96.5, 1.5), True)
+    c.equal("island bit water (sx 6, low bits first)", is_land(atlas, -95.9, 1.5), False)
+    clim = lambda lon, lat: atlas["clim"][cell(atlas, lon, lat)[0]]  # noqa: E731
+    c.equal("climate cell", clim(5, 5), 7)
+    c.equal("climate majority 3 to 1", clim(15, 25), 5)
+    c.equal("climate second band", clim(45, 5), 14)
+    c.equal("climate nearest fill on coast", clim(65, 5), 14)
+    c.equal("climate 0 on water", clim(-30, 5), 0)
+    c.equal("climate 0 on a lake", clim(25, 5), 0)
+    ocea = lambda lon, lat: atlas["ocea"][cell(atlas, lon, lat)[0]]  # noqa: E731
+    seas = {s["token"]: 6 + i for i, s in enumerate(atlas["seas"])}
+    c.equal("ocean polygon", ocea(-30, 5), 2)
+    c.equal("bay joined to the Indian Ocean", ocea(115, 5), 3)
+    c.equal("sea polygon takes its sea", ocea(-75, 5), seas.get("Q999"))
+    c.equal("island coast cell in the sea", ocea(-95, 5), seas.get("Q999"))
+    c.equal("promoted gulf takes its sea", ocea(-165, 25), seas.get("ne:600"))
+    c.equal("enclosed lake gets 0", ocea(25, 5), 0)
+    c.equal("enclosed lake gets 0 (2)", ocea(35, -5), 0)
+    c.equal("land gets 0", ocea(10, 5), 0)
+    cont = lambda lon, lat: atlas["cont"][cell(atlas, lon, lat)[0]]  # noqa: E731
+    c.equal("continent Africa", cont(10, 5), 1)
+    c.equal("continent from the nearest country on a coast cell", cont(65, 5), 1)
+    c.equal("continent Oceania", cont(115, 30), 6)
+    c.equal("continent 0 at sea", cont(-30, 5), 0)
+
+
+def check_tables(c, atlas):
+    """SEAS, CTRY, URBN, CITY and META."""
+    seas = {s["token"]: s for s in atlas["seas"]}
+    c.equal("sea tokens", sorted(seas), ["Q999", "ne:600"])
+    c.equal("merged sea names", seas.get("Q999", {}).get("names"), ["Test Sea", "", "", ""])
+    c.equal("sea parent ocean", seas.get("Q999", {}).get("parent"), 2)
+    countries = atlas["countries"]
+    c.equal("country codes", sorted(countries), ["AU", "DK", "GL", "LS", "ZA"])
+    c.equal("point in ZA", inside(countries["ZA"]["rings"], 10, 0), True)
+    c.equal("ZA's hole is not ZA", inside(countries["ZA"]["rings"], 50, -20), False)
+    c.equal("the hole is LS", inside(countries["LS"]["rings"], 50, -20), True)
+    c.equal("lake area still ZA", inside(countries["ZA"]["rings"], 25, 0), True)
+    c.equal("territory sovereign", countries["GL"]["sovereign"], "DK")
+    c.equal("one of the 195", (countries["ZA"]["flags"], countries["DK"]["flags"], countries["GL"]["flags"]),
+            (1, 1, 0))
+    c.equal("country continent", countries["GL"]["continent"], 5)
+    c.equal("urban polygons kept", len(atlas["urban"]), 1)
+    cities = atlas["cities"]
+    c.equal("city tokens", sorted(cities), ["Q1", "Q3", "ne:123"])
+    alpha, beta, gamma = cities.get("Q1", {}), cities.get("ne:123", {}), cities.get("Q3", {})
+    c.equal("city with a polygon", alpha.get("urban"), 0)
+    c.equal("polygon holds the city", inside(atlas["urban"][0], 10.5, 10.5), True)
+    c.equal("city without a polygon", beta.get("urban"), -1)
+    c.equal("city sizes", (alpha.get("size"), beta.get("size"), gamma.get("size")), (2, 0, 1))
+    c.equal("city point", (alpha.get("lon"), alpha.get("lat")), (1050000, 1050000))
+    c.equal("city names", alpha.get("names"), ["Alpha", "Alfa", "", ""])
+    c.equal("city country in a hole", gamma.get("country"), "LS")
+    c.equal("city population", beta.get("population"), 50000)
+    c.equal("meta date", atlas["meta"].get("date"), "2026-10-29")
+    c.equal("meta sources", len(atlas["meta"].get("sources", [])), 8)
+
+
+def main():
+    """Builds, decodes and checks; exits non-zero on any failure."""
+    c = Checks()
+    with tempfile.TemporaryDirectory(prefix="world-atlas-selftest-") as work:
+        sources = os.path.join(work, "sources")
+        os.makedirs(sources)
+        write_sources(sources)
+        out = os.path.join(work, "out", "WorldAtlas.pack")
+        code, log = run_generator(sources, out, "--date", "2026-10-29")
+        if code != 0:
+            print(log)
+            print("selftest: the generator failed (exit %d)" % code)
+            return 1
+        with open(out, "rb") as handle:
+            pack = handle.read()
+        atlas = decode(read_pack(pack))
+        check_grids(c, atlas)
+        check_tables(c, atlas)
+        c.equal("summary names a missing promoted sea", "'Hudson Bay' not found" in log, True)
+        c.equal("summary logs the tiny sea", "Tiny Sea" in log and "dropped into its neighbour" in log, True)
+        c.equal("summary logs the cut-off sea", "Lake Sea" in log and "not joined" in log, True)
+        c.equal("summary prints the hash", "sha256: " + hashlib.sha256(pack).hexdigest() in log, True)
+        again = os.path.join(work, "out", "again.pack")
+        run_generator(sources, again, "--date", "2026-10-29")
+        with open(again, "rb") as handle:
+            c.equal("deterministic", handle.read() == pack, True)
+        capped = os.path.join(work, "out", "capped.pack")
+        code, _ = run_generator(sources, capped, "--size-cap", "100")
+        c.equal("over the cap is refused", (code, os.path.exists(capped)), (1, False))
+    for failure in c.failed:
+        print("FAIL " + failure)
+    if c.failed:
+        print("selftest: %d of %d checks failed" % (len(c.failed), c.passed + len(c.failed)))
+        return 1
+    print("selftest: all %d checks passed" % c.passed)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
