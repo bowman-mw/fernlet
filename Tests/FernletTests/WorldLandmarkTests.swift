@@ -245,9 +245,9 @@ struct WorldLandmarkTests {
     /// The landmarks whose own fix the city rule does not put in their listed city (checked 2026-10-29): Portland
     /// Head Light (Cape Elizabeth, 6 km from Portland, Maine's point), the Tower of Hercules (6 km from A
     /// Coruña's point) and Tsing Ma Bridge (12 km from Hong Kong's) lie outside every urban boundary and past
-    /// the core; Castel Sant'Angelo is nearer the Vatican's point than Rome's, so the rule names Vatican City.
+    /// the core. (Castel Sant'Angelo is Rome's since the city rule counts only the fix's own country's cities.)
     /// Every other landmark resolves to its own city.
-    static let citedElsewhere: Set<String> = ["portlandHeadLight", "towerOfHercules", "tsingMaBridge", "castelSantAngelo"]
+    static let citedElsewhere: Set<String> = ["portlandHeadLight", "towerOfHercules", "tsingMaBridge"]
 
     /// The country under `point`, else the single country found within 2 km of it (nil for none or several).
     static func country(near point: GeoPoint, in atlas: WorldAtlas) -> String? {

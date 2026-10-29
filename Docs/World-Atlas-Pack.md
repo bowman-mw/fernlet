@@ -182,8 +182,9 @@ UTF-8 JSON: the generator version, the generation date, and each source's file n
   say "built-up". So Yankee Stadium (in the fragment holding Stamford's point) and Brooklyn (in one holding none)
   are New York, the CN Tower and central Copenhagen (in gaps between polygons) are Toronto and København by their
   cores, and the Bosphorus Bridge is Istanbul, not İzmit 90 km off. Nearest means nearest: a small town whose
-  point is closer than a megacity's wins (Versailles stays Versailles), and a fix nearer the Vatican's point than
-  Rome's names Vatican City. Bounded: the reader buckets the cities by one-degree cell once
+  point is closer than a megacity's wins (Versailles stays Versailles). On land, only cities of the country under
+  the fix count, so Castel Sant'Angelo is Rome's though the Holy See's point is nearer; a fix at sea counts every
+  city. Bounded: the reader buckets the cities by one-degree cell once
   (`AtlasCityIndex`); a fix reads its own row and the rows either side, and as many columns either side as
   35 km spans half a degree poleward of it, at most 8 (so 51 cells; the cap covers the whole reach to about
   87°), and only when the nearest city in reach lies outside its own core does it make one pass over the urban

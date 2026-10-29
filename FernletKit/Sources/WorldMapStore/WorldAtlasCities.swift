@@ -42,8 +42,15 @@ extension WorldAtlas {
     /// `AtlasCityIndex`), then, only when the nearest city in reach lies outside its own core, one pass over
     /// the urban boundaries (decoder-capped, each box tested before its rings).
     public func city(at point: GeoPoint) -> AtlasCity? {
+        city(at: point, inCountry: country(at: point)?.code)
+    }
+
+    /// The city `point` is in, counting only cities of `countryCode` when it is given (the country under the
+    /// fix: Castel Sant'Angelo is Rome's, though the Holy See's point is nearer). Nil `countryCode` (a fix at
+    /// sea or on land no country claims) counts every city.
+    public func city(at point: GeoPoint, inCountry countryCode: String?) -> AtlasCity? {
         guard point.isValid else { return nil }
-        let nearest = nearestCities(to: point)
+        let nearest = nearestCities(to: point, inCountry: countryCode)
         guard let reached = nearest.reached else { return nil }
         // Every core is inside its own reach, so the nearest city in reach, when it is also in its core, is
         // the nearest candidate of both kinds; otherwise it counts only inside an urban boundary.
@@ -67,12 +74,14 @@ extension WorldAtlas {
     }
 
     /// The nearest city whose reach holds `point` and the nearest whose core holds it, as indices into
-    /// ``cities`` (plain flat-earth distance, the first found on a tie). Bounded: the index's candidates.
-    func nearestCities(to point: GeoPoint) -> (reached: Int?, core: Int?) {
+    /// ``cities`` (plain flat-earth distance, the first found on a tie), only `countryCode`'s cities when it is
+    /// given. Bounded: the index's candidates.
+    func nearestCities(to point: GeoPoint, inCountry countryCode: String? = nil) -> (reached: Int?, core: Int?) {
         var reached: (index: Int, metres: Double)?
         var core: (index: Int, metres: Double)?
         for index in cityGrid.candidates(near: point) where cities.indices.contains(index) {
             let city = cities[index]
+            if let countryCode, city.countryCode != countryCode { continue }
             let metres = Self.separation(point, city.point)
             if metres <= Self.cityReachMetres(for: city.size), metres < (reached?.metres ?? .infinity) {
                 reached = (index, metres)

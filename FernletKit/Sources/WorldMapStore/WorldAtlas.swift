@@ -169,7 +169,8 @@ public nonisolated final class WorldAtlas: Sendable {
         guard point.isValid else { return AtlasVisit(terrain: terrain) }
         let country = country(at: point)
         var visit = AtlasVisit(countryCode: country?.code, sovereignCode: country?.sovereignCode,
-                               continent: continent(at: point), city: city(at: point), terrain: terrain)
+                               continent: continent(at: point), city: city(at: point, inCountry: country?.code),
+                               terrain: terrain)
         switch water(near: point) {
         case .ocean(let ocean): visit.ocean = ocean
         case .sea(let sea): visit.sea = sea
