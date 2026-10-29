@@ -73,6 +73,158 @@ enum WidgetCompanionShape: Equatable, Sendable {
     case pear
     /// Low and spread out, with a flat bottom.
     case puddle
+
+    /// How many rows the face sits below the approved rows (group 17): Pear's whole face a row lower,
+    /// where it is wider; Puddle's a row higher, clear of its flat bottom; Circle and Soft as approved.
+    var faceRowOffset: Int {
+        switch self {
+        case .circle, .soft: 0
+        case .pear: 1
+        case .puddle: -1
+        }
+    }
+
+    /// The highlight's centre, as a column and a row offset from the body's centre (group 17): Circle
+    /// and Soft as approved, Pear lower and Puddle lower and left, where each shape is roomy.
+    var highlightCentre: (x: Double, dy: Double) {
+        switch self {
+        case .circle, .soft: (7, -3.5)
+        case .pear: (7, -2.2)
+        case .puddle: (6.5, -2.1)
+        }
+    }
+
+    /// Whether the highlight keeps one pixel off the outline: true for the moved centres (Pear,
+    /// Puddle), so it never reads as a hole in Pear's narrow top or notches Puddle's edge. Circle and
+    /// Soft keep the approved highlight pixel for pixel.
+    var highlightKeepsClear: Bool { self == .pear || self == .puddle }
+}
+
+/// A face the twin lays out (group 17): the band's faces the painter draws (closed eyes are
+/// `resting`, or `sick`'s own), and the four the Home Screen widgets draw over them (happy, sad,
+/// hungry, thirsty). The map's painter only ever draws the band's; the widget's four are here so
+/// one rule places every face.
+enum WidgetCompanionFace: Equatable, Sendable, CaseIterable {
+    /// Open eyes, a smile and a blush.
+    case thriving
+    /// Open eyes, a flat mouth.
+    case okay
+    /// Half-lidded eyes, a low mouth.
+    case tired
+    /// Closed eyes, a flat mouth: resting, winding down or asleep.
+    case resting
+    /// Closed eyes and the sick day's wavy mouth, one row up, clear of the blanket.
+    case sick
+    /// The widget's happy face: eyes bowed up, a wide smile, a blush.
+    case happy
+    /// The widget's sad face: eyes, brows lifted at the inner ends, a soft frown and a tear.
+    case sad
+    /// The widget's hungry face: eyes raised, an open mouth.
+    case hungry
+    /// The widget's thirsty face: eyes raised, a small open mouth.
+    case thirsty
+
+    /// The band's face the painter draws for `state` in `pose`.
+    static func state(_ state: WidgetCompanionMood, pose: WidgetCompanionPose) -> WidgetCompanionFace {
+        if WidgetCompanionPainter.closesEyes(state: state, pose: pose) { return state == .sick ? .sick : .resting }
+        switch state {
+        case .thriving: return .thriving
+        case .okay: return .okay
+        case .tired: return .tired
+        case .resting: return .resting
+        case .sick: return .sick
+        }
+    }
+
+    /// Its ink cells, cheeks and tear aside, with the eyes on row `eye` and the mouth on row `mouth`.
+    /// `lowered` leaves off the touches that need a row above the eyes: sad's brows, and hungry and
+    /// thirsty's raised eyes, drawn level instead.
+    func cells(eye: Int, mouth: Int, lowered: Bool) -> [(Int, Int)] {
+        let columns = [7, 12]
+        switch self {
+        case .thriving, .okay, .tired, .resting, .sick:
+            let closed = self == .resting || self == .sick
+            let eyes = closed ? [(6, eye + 1), (7, eye + 1), (12, eye + 1), (13, eye + 1)]
+                : columns.flatMap { x in [(x, eye), (x, eye + 1)] }
+            let row = self == .sick ? mouth - 1 : mouth
+            return eyes + bandMouth.map { ($0.0, row + $0.1) }
+        case .happy:
+            let eyes = columns.flatMap { x in [(x - 1, eye + 1), (x, eye), (x + 1, eye + 1)] }
+            return eyes + [(7, mouth), (8, mouth + 1), (9, mouth + 1), (10, mouth + 1), (11, mouth + 1), (12, mouth)]
+        case .sad:
+            let eyes = columns.flatMap { x in [(x, eye), (x, eye + 1)] }
+            let brows = lowered ? [] : [(6, eye - 1), (7, eye - 2), (13, eye - 1), (12, eye - 2)]
+            return eyes + brows + [(8, mouth + 1), (9, mouth), (10, mouth), (11, mouth + 1)]
+        case .hungry, .thirsty:
+            let eyes = columns.flatMap { x in lowered ? [(x, eye), (x, eye + 1)] : [(x, eye - 1), (x, eye)] }
+            let open = self == .hungry ? [(9, mouth), (10, mouth), (9, mouth + 1), (10, mouth + 1)] : [(9, mouth), (10, mouth)]
+            return eyes + open
+        }
+    }
+
+    /// A band's face's mouth, as the painter draws it (the widget's four draw their own, so none here).
+    private var bandMouth: [(Int, Int)] {
+        switch self {
+        case .thriving: WidgetCompanionPainter.mouth(for: .thriving)
+        case .okay: WidgetCompanionPainter.mouth(for: .okay)
+        case .tired: WidgetCompanionPainter.mouth(for: .tired)
+        case .resting: WidgetCompanionPainter.mouth(for: .resting)
+        case .sick: WidgetCompanionPainter.mouth(for: .sick)
+        case .happy, .sad, .hungry, .thirsty: []
+        }
+    }
+}
+
+/// Where a face goes on a body (group 17, approved 2026-10-26). The eyes sit on row round(cy − 1)
+/// and the mouth on round(cy + 2), moved by the shape's ``WidgetCompanionShape/faceRowOffset``. If
+/// the face's cells are not all *clear* there (``WidgetCompanionBody/isClear(_:_:)``: one bare body
+/// pixel between them and the outline every way round), it is `lowered` (in practice only on
+/// Puddle). The cheeks take the first clear pair of (5, 14) on the row above the mouth, (6, 13)
+/// there, (6, 13) on the mouth row, (5, 14) on the mouth row, or none, never on one of the face's
+/// own cells; the tear takes column 5 when both its rows are clear and free there, else 6. A
+/// feeling on a sick day draws its mouth a row above ``mouth``, clear of the blanket, as built.
+struct WidgetCompanionFaceLayout: Equatable, Sendable {
+    /// The cheeks' two columns and their row, as an offset from the mouth's row.
+    struct Cheeks: Equatable, Sendable {
+        /// The left cheek's column.
+        let left: Int
+        /// The right cheek's column.
+        let right: Int
+        /// The cheeks' row less the mouth's.
+        let rowOffset: Int
+    }
+
+    /// The eyes' row (raised eyes sit a row above it).
+    let eye: Int
+    /// The mouth's row (a sick day's wavy mouth sits a row above it).
+    let mouth: Int
+    /// Whether the touches above the eyes are left off (``WidgetCompanionFace/cells(eye:mouth:lowered:)``).
+    let lowered: Bool
+    /// The cheeks, or nil when no pair fits.
+    let cheeks: Cheeks?
+    /// The tear's column, on rows eye + 2 and eye + 3.
+    let tear: Int
+
+    /// The layout of `face` on `body`.
+    init(body: WidgetCompanionBody, face: WidgetCompanionFace) {
+        let offset = body.shape.faceRowOffset
+        let eye = Int((body.cy - 1).rounded()) + offset, mouth = Int((body.cy + 2).rounded()) + offset
+        let lowered = !face.cells(eye: eye, mouth: mouth, lowered: false).allSatisfy { body.isClear($0.0, $0.1) }
+        let taken = face.cells(eye: eye, mouth: mouth, lowered: lowered)
+        let free = { (x: Int, y: Int) in body.isClear(x, y) && !taken.contains { $0 == (x, y) } }
+        let pairs = [Cheeks(left: 5, right: 14, rowOffset: -1), Cheeks(left: 6, right: 13, rowOffset: -1),
+                     Cheeks(left: 6, right: 13, rowOffset: 0), Cheeks(left: 5, right: 14, rowOffset: 0)]
+        self.eye = eye
+        self.mouth = mouth
+        self.lowered = lowered
+        cheeks = pairs.first { free($0.left, mouth + $0.rowOffset) && free($0.right, mouth + $0.rowOffset) }
+        tear = free(5, eye + 2) && free(5, eye + 3) ? 5 : 6
+    }
+
+    /// `face`'s ink cells at this layout, cheeks and tear aside.
+    func cells(for face: WidgetCompanionFace) -> [(Int, Int)] {
+        face.cells(eye: eye, mouth: mouth, lowered: lowered)
+    }
 }
 
 /// What sits on the head.
@@ -260,6 +412,46 @@ struct WidgetCompanionBody: Sendable {
             return dx * dx + dy * dy <= 1
         }
     }
+
+    /// Whether (px, py) is an outline cell: inside the shape, with a side or top/bottom neighbour
+    /// outside it.
+    func isOutline(_ px: Int, _ py: Int) -> Bool {
+        contains(px, py) && (!contains(px - 1, py) || !contains(px + 1, py) || !contains(px, py - 1) || !contains(px, py + 1))
+    }
+
+    /// Whether (px, py) is *clear* (group 17): it and its 8 neighbours are all inside the shape and
+    /// none is an outline cell, so one bare body pixel lies between it and the outline every way round.
+    func isClear(_ px: Int, _ py: Int) -> Bool {
+        for dy in -1...1 {
+            for dx in -1...1 where !contains(px + dx, py + dy) || isOutline(px + dx, py + dy) {
+                return false
+            }
+        }
+        return true
+    }
+
+    /// Whether (px, py) takes the highlight: within radius² 2.3 of the shape's
+    /// ``WidgetCompanionShape/highlightCentre``, and, on a shape whose highlight keeps clear, not
+    /// beside an outline cell (left, right, above or below).
+    func inHighlight(_ px: Int, _ py: Int) -> Bool {
+        let centre = shape.highlightCentre
+        let hx = Double(px) - centre.x, hy = Double(py) - (cy + centre.dy)
+        guard hx * hx + hy * hy <= 2.3 else { return false }
+        guard shape.highlightKeepsClear else { return true }
+        return !(isOutline(px - 1, py) || isOutline(px + 1, py) || isOutline(px, py - 1) || isOutline(px, py + 1))
+    }
+
+    /// The body's own colour at (px, py), or nil outside it: the outline, the highlight, the lower
+    /// shade, the body colour, and on a sick day the blanket over the lower body. The painter fills
+    /// the body with it, and the widget's feeling faces erase a face back to it.
+    func pixelColor(_ px: Int, _ py: Int, sick: Bool) -> UInt32? {
+        guard contains(px, py) else { return nil }
+        let edge = isOutline(px, py)
+        if sick && !edge && Double(py) >= (cy + 1.5).rounded() { return px % 3 == 0 ? 0xD9A57E : 0xF3E6CB }
+        if edge { return dark }
+        if inHighlight(px, py) { return light }
+        return Double(py) >= cy + ry - 2.2 ? low : base
+    }
 }
 
 /// Paints the companion as the approved pixel art: the body with its outline, highlight and lower
@@ -290,10 +482,10 @@ enum WidgetCompanionPainter {
             if look.topper == .sprout { paintSprout(&grid, top: body.top, leaf: look.topperColor) }
             if look.topper == .flower { paintFlower(&grid, top: body.top, petal: look.topperColor) }
         }
-        paintFace(&grid, body: body, state: state, pose: pose)
-        let eyeRow = Int((body.cy - 1).rounded())
+        let layout = WidgetCompanionFaceLayout(body: body, face: .state(state, pose: pose))
+        paintFace(&grid, body: body, layout: layout, state: state, pose: pose)
         if look.topper == .glasses && !closesEyes(state: state, pose: pose) {
-            paintGlasses(&grid, eyeRow: eyeRow, color: glassesColor(look.topperColor))
+            paintGlasses(&grid, eyeRow: layout.eye, color: glassesColor(look.topperColor))
         }
         if let scarf = look.scarf { paintScarf(&grid, body: body, color: scarf) }
         if let cap = look.cap { paintCap(&grid, body: body, color: cap) }
@@ -308,18 +500,12 @@ enum WidgetCompanionPainter {
         pose.asleep || pose.drowsy || state == .resting || state == .sick
     }
 
-    /// Fills the shape with its outline, highlight, lower shade and (when sick) the blanket.
+    /// Fills the shape with its outline, highlight, lower shade and (when sick) the blanket
+    /// (``WidgetCompanionBody/pixelColor(_:_:sick:)``).
     private static func paintBody(_ grid: inout WidgetCompanionGrid, body: WidgetCompanionBody, sick: Bool) {
         for py in 0..<WidgetCompanionGrid.height {
-            for px in 0..<WidgetCompanionGrid.width where body.contains(px, py) {
-                let edge = !body.contains(px - 1, py) || !body.contains(px + 1, py)
-                    || !body.contains(px, py - 1) || !body.contains(px, py + 1)
-                let hy = Double(py) - (body.cy - 3.5)
-                let inHighlight = Double((px - 7) * (px - 7)) + hy * hy <= 2.3
-                var hex = edge ? body.dark : (inHighlight ? body.light : (Double(py) >= body.cy + body.ry - 2.2 ? body.low : body.base))
-                if sick && !edge && Double(py) >= (body.cy + 1.5).rounded() {
-                    hex = px % 3 == 0 ? 0xD9A57E : 0xF3E6CB
-                }
+            for px in 0..<WidgetCompanionGrid.width {
+                guard let hex = body.pixelColor(px, py, sick: sick) else { continue }
                 grid.put(px, py, hex)
             }
         }
@@ -348,12 +534,13 @@ enum WidgetCompanionPainter {
         grid.put(10, top - 4, sun)
     }
 
-    /// Eyes, mouth and blush, by the band (the design's table) or the settled pose.
-    private static func paintFace(_ grid: inout WidgetCompanionGrid, body: WidgetCompanionBody, state: WidgetCompanionMood,
-                                  pose: WidgetCompanionPose) {
-        let eyeRow = Int((body.cy - 1).rounded()), mouthRow = Int((body.cy + 2).rounded())
+    /// Eyes, mouth and blush, by the band (the design's table) or the settled pose, on the rows and
+    /// cheeks the body's ``WidgetCompanionFaceLayout`` gives the band's face.
+    private static func paintFace(_ grid: inout WidgetCompanionGrid, body: WidgetCompanionBody, layout: WidgetCompanionFaceLayout,
+                                  state: WidgetCompanionMood, pose: WidgetCompanionPose) {
+        let eyeRow = layout.eye, mouthRow = layout.mouth
         if pose.settled {
-            paintSettledFace(&grid, eyeRow: eyeRow, mouthRow: mouthRow, closed: closesEyes(state: state, pose: pose) || state == .tired)
+            paintSettledFace(&grid, layout: layout, closed: closesEyes(state: state, pose: pose) || state == .tired)
             return
         }
         if closesEyes(state: state, pose: pose) {
@@ -369,10 +556,14 @@ enum WidgetCompanionPainter {
         // blush. A sick day keeps its own face.
         let face = pose.drowsy && state != .sick ? WidgetCompanionMood.resting : state
         for (x, dy) in mouth(for: face) { grid.put(x, row + dy, ink, face: true) }
-        if face == .thriving {
-            grid.put(5, mouthRow - 1, blush, face: true)
-            grid.put(14, mouthRow - 1, blush, face: true)
-        }
+        if face == .thriving { paintCheeks(&grid, layout: layout) }
+    }
+
+    /// The blush, where the layout found room for it (none when no pair fits).
+    private static func paintCheeks(_ grid: inout WidgetCompanionGrid, layout: WidgetCompanionFaceLayout) {
+        guard let cheeks = layout.cheeks else { return }
+        grid.put(cheeks.left, layout.mouth + cheeks.rowOffset, blush, face: true)
+        grid.put(cheeks.right, layout.mouth + cheeks.rowOffset, blush, face: true)
     }
 
     /// The band's mouth, as (column, row offset) pixels.
@@ -386,15 +577,15 @@ enum WidgetCompanionPainter {
     }
 
     /// The settled pose: happy-arc eyes (closed lids on a low-energy day), a wide smile and a blush.
-    private static func paintSettledFace(_ grid: inout WidgetCompanionGrid, eyeRow: Int, mouthRow: Int, closed: Bool) {
+    private static func paintSettledFace(_ grid: inout WidgetCompanionGrid, layout: WidgetCompanionFaceLayout, closed: Bool) {
+        let eyeRow = layout.eye, mouthRow = layout.mouth
         for x in [7, 12] {
             grid.put(x - 1, eyeRow + 1, ink, face: true)
             grid.put(x, closed ? eyeRow + 1 : eyeRow, ink, face: true)
             if !closed { grid.put(x + 1, eyeRow + 1, ink, face: true) }
         }
         for (x, dy) in [(8, 0), (9, 1), (10, 1), (11, 0)] { grid.put(x, mouthRow + dy, ink, face: true) }
-        grid.put(5, mouthRow - 1, blush, face: true)
-        grid.put(14, mouthRow - 1, blush, face: true)
+        paintCheeks(&grid, layout: layout)
     }
 
     /// The glasses' frames (W-03): ink when the slot is left on Fern, else the accessory colour mixed
