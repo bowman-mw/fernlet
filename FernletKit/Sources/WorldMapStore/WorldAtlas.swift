@@ -215,3 +215,6 @@ public nonisolated final class WorldAtlas: Sendable {
         return (east * east + north * north).squareRoot()
     }
 }
+
+/// The bundled atlas is what the app's passport keeper reads accepted fixes against.
+extension WorldAtlas: AtlasVisitResolving {}

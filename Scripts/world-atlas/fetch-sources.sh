@@ -24,14 +24,14 @@
 set -euo pipefail
 
 read -r -d '' SOURCES <<'TABLE' || true
-ne_10m_land|ne_10m_land.zip|3269070|required|UNPINNED|https://naciscdn.org/naturalearth/10m/physical/ne_10m_land.zip
-ne_10m_minor_islands|ne_10m_minor_islands.zip|314932|required|UNPINNED|https://naciscdn.org/naturalearth/10m/physical/ne_10m_minor_islands.zip
-ne_10m_coastline|ne_10m_coastline.zip|3069451|optional|UNPINNED|https://naciscdn.org/naturalearth/10m/physical/ne_10m_coastline.zip
-ne_10m_geography_marine_polys|ne_10m_geography_marine_polys.zip|940563|required|UNPINNED|https://naciscdn.org/naturalearth/10m/physical/ne_10m_geography_marine_polys.zip
-ne_10m_admin_0_countries|ne_10m_admin_0_countries.zip|4930492|required|UNPINNED|https://naciscdn.org/naturalearth/10m/cultural/ne_10m_admin_0_countries.zip
-ne_10m_populated_places|ne_10m_populated_places.zip|2811199|required|UNPINNED|https://naciscdn.org/naturalearth/10m/cultural/ne_10m_populated_places.zip
-ne_10m_urban_areas|ne_10m_urban_areas.zip|13097698|required|UNPINNED|https://naciscdn.org/naturalearth/10m/cultural/ne_10m_urban_areas.zip
-Beck_KG_V1|Beck_KG_V1.zip|70961149|required|UNPINNED|https://ndownloader.figshare.com/files/12407516
+ne_10m_land|ne_10m_land.zip|3269070|required|e547d749445eaa0964aba76738090ec88f5e63c4585122170f98c67a7ea922dc|https://naciscdn.org/naturalearth/10m/physical/ne_10m_land.zip
+ne_10m_minor_islands|ne_10m_minor_islands.zip|314932|required|47c0b3ce26df7b4dbabdbb251023918cb2f5c83462a426288f1f253da7284db2|https://naciscdn.org/naturalearth/10m/physical/ne_10m_minor_islands.zip
+ne_10m_coastline|ne_10m_coastline.zip|3069451|optional|bfa04cdbcbef07ef90dfca1dabb48062eca29900a113df0f389303e255484017|https://naciscdn.org/naturalearth/10m/physical/ne_10m_coastline.zip
+ne_10m_geography_marine_polys|ne_10m_geography_marine_polys.zip|940563|required|a2d3395904c41e718e02c3ec5bc988712164c524c236fad32d95d282ca303b2a|https://naciscdn.org/naturalearth/10m/physical/ne_10m_geography_marine_polys.zip
+ne_10m_admin_0_countries|ne_10m_admin_0_countries.zip|4930492|required|ce1ac7036499a0edd641fbc093cd209a98f96a49d2eca8480aaacad35138a7f6|https://naciscdn.org/naturalearth/10m/cultural/ne_10m_admin_0_countries.zip
+ne_10m_populated_places|ne_10m_populated_places.zip|2811199|required|cd149186f03d2603e0410da399b980a4357d0ac32d3a2305a49ed3dffcc41d7b|https://naciscdn.org/naturalearth/10m/cultural/ne_10m_populated_places.zip
+ne_10m_urban_areas|ne_10m_urban_areas.zip|13097698|required|2c593114e954ce1adb297ddee5465f05d9e81fa0a26deb13f8500d58a00d7051|https://naciscdn.org/naturalearth/10m/cultural/ne_10m_urban_areas.zip
+Beck_KG_V1|Beck_KG_V1.zip|70961149|required|a33f861200e32e80d5615bba1350ceeb8b0f5e6a6ffdc18b2d1715a3293d7b4b|https://ndownloader.figshare.com/files/12407516
 TABLE
 
 usage() {

@@ -613,7 +613,13 @@ def encoded_rings(rings, report, label):
     out = []
     dropped = 0
     for ring in rings:
+        # A ring Douglas-Peucker thins to a line (the Holy See is about 0.008° across) is kept at a tenth of
+        # the tolerance, then unsimplified, so no small country loses its only ring.
         q = quantize_ring(simplify_closed_ring(ring, SIMPLIFY_DEGREES))
+        if q is None:
+            q = quantize_ring(simplify_closed_ring(ring, SIMPLIFY_DEGREES / 10))
+        if q is None:
+            q = quantize_ring(ring)
         if q is None:
             dropped += 1
         else:
@@ -978,7 +984,14 @@ def finish_seas(kept, label, dist, water, rows, cols, report):
         final.append(group)
     if len(final) > MAX_SEAS:
         raise SystemExit("error: %d seas, over the pack's %d" % (len(final), MAX_SEAS))
-    ocea = remap[label].astype(np.uint8)
+    ocea = remap[label].astype(np.uint8).reshape(rows, cols)
+    # South of 60°S the open ocean is the Southern Ocean (the IHO's 2000 limit), whatever polygon or flood
+    # named it: a ship in the Drake Passage is on the Southern Ocean, not the Atlantic. Seas keep their code.
+    centres = 90.0 - (np.arange(rows) + 0.5) * (180.0 / rows)
+    south = ocea[centres < -60.0]
+    south[(south >= 1) & (south <= 4)] = 5
+    ocea[centres < -60.0] = south
+    ocea = ocea.ravel()
     blobs = [struct.pack("<H", len(final))]
     for index, group in enumerate(final):
         cells = int((ocea == SEA_CODE_BASE + index).sum())

@@ -14,7 +14,8 @@ public nonisolated enum AtlasFlora: String, CaseIterable, Codable, Sendable {
 /// **The mapping** (Beck et al. 2018 codes; Fernlet's documented choices, 2026-10-29):
 /// - Af, Am → tropical forest; Aw → savanna.
 /// - BWh, BWk → desert; BSh (hot steppe) → savanna; BSk (cold steppe) → grassland.
-/// - Csa, Csb, Csc → shrubland (the Mediterranean scrub).
+/// - Csa → shrubland (the Mediterranean scrub); Csb, Csc → temperateForest (the cool dry-summer coasts:
+///   the Pacific Northwest, northern Spain and Chile are conifer and oak country, not scrub).
 /// - Cfa, Cfb, Cwa, Cwb → temperate forest; Cfc (subpolar oceanic: the Faroes, Tierra del Fuego) → grassland, it
 ///   is treeless; Cwc (only on high tropical plateaus) → mountain.
 /// - Dfc, Dfd, Dwc, Dwd, Dsc, Dsd → boreal forest, except equatorward of ``borealLowLatitude`` (40°), where a
@@ -74,7 +75,8 @@ public nonisolated struct AtlasTerrainClassifier: Sendable {
         case 3, 6: return .savanna
         case 4, 5: return .desert
         case 7, 16: return .grassland
-        case 8, 9, 10: return .shrubland
+        case 8: return .shrubland
+        case 9, 10: return .temperateForest
         case 11, 12, 14, 15: return .temperateForest
         case 13: return .mountain
         case 19, 20, 23, 24, 27, 28: return poleward < borealLowLatitude ? .mountain : .borealForest

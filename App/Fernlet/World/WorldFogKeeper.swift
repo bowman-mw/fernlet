@@ -21,6 +21,11 @@ import WorldMapStore
 /// then draws no map (a decoy's map is none). ``widgetMapGeneration`` moves each time, so a picture rendered
 /// across one of them is never written (`WorldWidgetMapWriter`).
 ///
+/// **The passport and the odd hidden tiles** (round 7). ``atlas`` reads only the readings this keeper accepts,
+/// only while the phone is unlocked and never in a decoy, and goes with every wipe through ``clearAll()``.
+/// A lift also lifts any single cell it left fogged with all six neighbours open (`FogGapCloser`), in a
+/// decoy's own cells too.
+///
 /// **A locked phone.** The store's key works only while the phone is unlocked, so readings that
 /// arrive while it is locked (a walk with the screen off, Always mode's visits) go into the
 /// locked-phone buffer and are merged on the next ``load()``.
@@ -39,6 +44,8 @@ final class WorldFogKeeper {
     /// Whether a decoy session is showing.
     private(set) var isDecoy = false
 
+    /// The World passport (round 7): the first visits the accepted readings make, sealed in the vault.
+    @ObservationIgnored let atlas: WorldAtlasKeeper
     @ObservationIgnored private let store: FogCellStore
     @ObservationIgnored private let vault: WorldMapVault
     @ObservationIgnored private let defaults: UserDefaults
@@ -58,6 +65,7 @@ final class WorldFogKeeper {
          isProtectedDataAvailable: (@MainActor () -> Bool)? = nil) {
         self.vault = vault
         self.store = FogCellStore(vault: vault)
+        self.atlas = WorldAtlasKeeper(vault: vault, openAtlas: WorldAtlasKeeper.bundledPack { try WorldAtlas(data: $0) })
         self.defaults = defaults
         self.isProtectedDataAvailable = isProtectedDataAvailable ?? { UIApplication.shared.isProtectedDataAvailable }
         self.widgetMap = WorldWidgetMapFile()
@@ -75,6 +83,7 @@ final class WorldFogKeeper {
             return
         }
         visibleCells = store.cells
+        atlas.load()
     }
 
     /// Lifts the fog around `fix` when the rules allow; returns how many cells were new. With `saveNow`
@@ -95,6 +104,7 @@ final class WorldFogKeeper {
         if isDecoy {
             let before = decoyCells.count
             decoyCells.formUnion(cells)
+            decoyCells.formUnion(FogGapCloser.closing(around: cells, in: decoyCells))
             visibleCells = decoyCells
             return decoyCells.count - before
         }
@@ -102,7 +112,8 @@ final class WorldFogKeeper {
             bufferWhileLocked(cells)
             return 0
         }
-        let added = store.lift(cells)
+        let added = store.lift(cells) + store.lift(FogGapCloser.closing(around: cells, in: store.cells))
+        atlas.observe(point: fix.point, at: fix.at)
         visibleCells = store.cells
         sinceSave += added
         if sinceSave >= Self.saveEvery { flush() }
@@ -130,6 +141,7 @@ final class WorldFogKeeper {
             if !removeWidgetMap() { FernletAuditLog.log("worldMap.widgetMap.decoyDeleteFailed") }
         }
         isDecoy = on
+        atlas.setDecoy(on)
         decoyCells = []
         visibleCells = on ? [] : store.cells
     }
@@ -142,8 +154,9 @@ final class WorldFogKeeper {
         visibleCells = []
         sinceSave = 0
         let pictureGone = removeWidgetMap()
+        let passportGone = atlas.clearAll()
         let vaultGone = vault.clearAll()
-        return vaultGone && pictureGone
+        return vaultGone && pictureGone && passportGone
     }
 
     /// Deletes the map widget's picture and reloads the widget; whether the picture is gone.

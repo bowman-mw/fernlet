@@ -150,12 +150,39 @@ struct WorldAtlasPackFormatTests {
 @MainActor
 struct WorldAtlasPackTests {
     /// The bundled pack's size and checksum.
-    @Test(.disabled("pack not generated yet; the lane enables it with the pinned hash"))
-    func theShippedPackIsCappedAndPinned() throws {
-        let url = try #require(Bundle.main.url(forResource: "WorldAtlas", withExtension: "pack"))
-        let data = try Data(contentsOf: url)
+    @Test func theShippedPackIsCappedAndPinned() throws {
+        let data = try Self.shippedPack()
         #expect(data.count <= WorldAtlasPack.maxPackBytes)
         #expect(WorldAtlasPack.sha256Hex(data) == WorldAtlasPack.expectedSHA256)
         _ = try WorldAtlas(data: data)
+    }
+
+    /// The shipped pack answers real places the way the owner's rules say (spot checks, 2026-10-29).
+    @Test func theShippedPackKnowsRealPlaces() throws {
+        let atlas = try WorldAtlas(data: Self.shippedPack())
+        let portland = atlas.visit(at: GeoPoint(45.5205, -122.6255))
+        #expect(portland.countryCode == "US" && portland.continent == .northAmerica)
+        #expect(portland.city?.names.english == "Portland" && portland.terrain == .temperateForest)
+        // The smallest of the 195 keeps its ring.
+        #expect(atlas.visit(at: GeoPoint(41.9029, 12.4534)).countryCode == "VA")
+        // A sea is its own entry, never its ocean.
+        let nice = atlas.visit(at: GeoPoint(43.6950, 7.2650))
+        #expect(nice.sea?.names.english == "Mediterranean Sea" && nice.ocean == nil)
+        // A territory counts toward its sovereign.
+        let sanJuan = atlas.visit(at: GeoPoint(18.466, -66.105))
+        #expect(sanJuan.countryCode == "PR" && sanJuan.sovereignCode == "US")
+        // Antarctica's lighter rule at sea, and south of 60°S the ocean is the Southern Ocean.
+        let drake = atlas.visit(at: GeoPoint(-60.5, -64.0))
+        #expect(drake.continent == .antarctica && drake.ocean == .southern)
+        // Landmass overrides: Vladivostok is Asia, Honolulu Oceania.
+        #expect(atlas.visit(at: GeoPoint(43.12, 131.89)).continent == .asia)
+        #expect(atlas.visit(at: GeoPoint(21.307, -157.858)).continent == .oceania)
+        #expect(atlas.visit(at: GeoPoint(23.4, 12.0)).terrain == .desert)
+    }
+
+    /// The bundled pack's bytes.
+    private static func shippedPack() throws -> Data {
+        let url = try #require(Bundle.main.url(forResource: "WorldAtlas", withExtension: "pack"))
+        return try Data(contentsOf: url)
     }
 }

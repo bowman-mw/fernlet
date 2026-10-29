@@ -87,7 +87,9 @@ apart. The labels:
 2. A cell inside a polygon whose `featurecla` is `sea`, or one of the large gulfs and bays the generator promotes to
    seas (its `PROMOTED_SEAS` table: the Gulf of Mexico, Hudson Bay, the Bay of Bengal, the Persian Gulf), takes that
    sea.
-3. Every other water cell (smaller bays, gulfs, straits, channels, sounds, and water no polygon names) takes the
+3. South of 60°S, any water labelled an ocean is the Southern Ocean (its IHO limit), so a ship in the Drake
+   Passage is on the Southern Ocean; a sea keeps its own label.
+4. Every other water cell (smaller bays, gulfs, straits, channels, sounds, and water no polygon names) takes the
    label of the nearest labelled cell joined to it by water, so the Bay of Biscay is Atlantic and the Gulf of
    Bothnia is the Baltic Sea.
 
