@@ -14,7 +14,7 @@ The World build's Home is a live map ("A World for Fernlet", design page v9). Ap
 
 ### The sealed history
 
-``WorldMapVault`` is the only place the map's history is written. Every file is AES-GCM sealed with its own authenticated purpose (`FernletCryptoPurpose.AEAD.worldMapFogV1`, `worldMapPendingV1`, `worldMapRouteV1`, `worldMapPinsV1`, `worldMapPlacesV1`, `worldMapPlacesDeviceV1`, `worldMapPhotoPlacesV1`), plus any per-file context (a walk line's workout id), written with file protection, and kept in `Application Support/WorldMap`, a folder excluded from device backups (the flag is re-asserted on every write and when the app opens the vault, not only when the folder is created: `reassertBackupExclusion()`, round 6b). Its two keys (``WorldMapKeys``, ``WorldMapKeyRole``) are this-device-only rows under `com.fernlet.world-map`:
+``WorldMapVault`` is the only place the map's history is written. Every file is AES-GCM sealed with its own authenticated purpose (`FernletCryptoPurpose.AEAD.worldMapFogV1`, `worldMapPendingV1`, `worldMapRouteV1`, `worldMapPinsV1`, `worldMapPlacesV1`, `worldMapPlacesDeviceV1`, `worldMapPhotoPlacesV1`, `worldMapPassportV1`), plus any per-file context (a walk line's workout id), written with file protection, and kept in `Application Support/WorldMap`, a folder excluded from device backups (the flag is re-asserted on every write and when the app opens the vault, not only when the folder is created: `reassertBackupExclusion()`, round 6b). Its two keys (``WorldMapKeys``, ``WorldMapKeyRole``) are this-device-only rows under `com.fernlet.world-map`:
 
 - the **store** key is `WhenUnlockedThisDeviceOnly`, so the fog can only be read or written while the phone is unlocked;
 - the **buffer** key is `AfterFirstUnlockThisDeviceOnly`, for the small locked-phone buffer alone: a walk with the screen off, or Always mode's visits, lift cells while the phone is locked, and those wait there until the next unlock drains them into the store. The same split as `PendingNarrativeBuffer`, for the same reason.
@@ -28,6 +28,8 @@ The World build's Home is a live map ("A World for Fernlet", design page v9). Ap
 **Solo photos' places** (``PhotoPlaceStore``, `photo-places.bin`, `AEAD.worldMapPhotoPlacesV1`): a point per solo camera photo id, kept only where a visit would be kept (an everyday place, or inside a park, beach or campground; ``PlaceClassifier/photoMayKeepPlace(_:)``, owner, round 5), never anywhere else or with no lookup answer, unless the person puts the photo on the map themselves (round 6). Deleting a photo deletes its point. At most 3,650.
 
 **Round 6** (owner-approved 2026-10-25). A park's own features (``NearbyPlace/Kind/feature``: a lake, a restroom, a bike dock, a playground) no longer block the park around them. A place the person adds themselves is an ordinary ``PlaceRecord`` with their name and no reference. The device side gains two optional parts the map reads with Private closed, never folded into the log: the person's **homes and hotel** (``HomeBook``, ``HomePlace``, ``HomeKind``): up to two homes and one hotel stay, the hotels stayed at before (for a welcome back), and where the person was last seen (``HomePresence``), so leaving and getting back join the timeline (``PlaceStop/Kind/leftHome``, ``PlaceStop/Kind/cameHome``, ``PlaceLog/outAndAbout(on:calendar:)``) and getting home after an hour leaves Sprout one greeting (``HomeGreeting``); and the **places the person eats out at** (``EatingPlace``, ``EatingMeal``): Apple's reference, their own name, Fernlet's point and the meals logged there (no dates), a favourite after three (``PlaceClassifier/eatingPlaceID(_:)`` decides food and drink at the moment). "Delete all of it" keeps the homes and hotel (they stay until removed in Settings › Home map); an app-lock reset and every wipe take them. ``MercatorHexGrid/disc(around:radius:)`` gives the circles drawn clear round homes (1 km) and kept places (about 300 m): drawn, never written into the fog.
+
+**The passport** (round 7, owner 2026-10-29; ``PassportStore``, ``PassportBook``, `passport.bin`, `AEAD.worldMapPassportV1`, the store key) is every country or territory, continent, ocean, sea, city and terrain class the person has been to, each by its frozen token (``AtlasDiscovery``) with the date of the first visit; a sea is its own entry, never its ocean. It is sealed on the iPhone like journal text, and the same versioned bytes (``PassportBook/encoded()``, ``PassportBook/init(data:)``) are what Fernlet's sealed iCloud backup carries; a restore merges by token and keeps the earliest date (``PassportStore/restore(_:)``). ``PassportBook/record(_:at:)`` returns only first visits, in a fixed order (country, continent, ocean, sea, city, terrain), and the store saves before it reports one. The app's `WorldAtlasKeeper` reads only the fixes the fog keeper accepted, unlocked and never in a decoy, through ``AtlasVisitResolving`` (the bundled atlas conforms); a decoy shows an empty passport and keeps nothing, and every wipe reaches it through the fog keeper and the vault. At most 300 countries and territories, 7 continents, 5 oceans, 250 seas, 20,000 cities and 20 terrain classes: past a cap a first visit is refused and counted, never an eviction.
 
 A key that can't be read right now is an error, never a reason to mint a new one over it; a file that can't be opened (its key gone, its bytes damaged) is removed, so the map starts fresh rather than carrying noise.
 
@@ -55,7 +57,7 @@ Bounded throughout:
 
 ### Its place on the walls
 
-This module holds location history (the lifted fog cells, saved walk and run lines, workout-space pins, Where you've been and the solo photos' places), so it sits on the far side of the S3 wall from every module that sends data anywhere. `CloudKitSync`, `AIProviders`, `AIContext`, `FernletSocial` and `FernletConnections` do not depend on it, and the strict build (`Scripts/spm-wall-check.sh`, `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR`) fails any of them that imports it. It holds no display strings, so it has no string catalog.
+This module holds location history (the lifted fog cells, saved walk and run lines, workout-space pins, Where you've been, the solo photos' places and the passport), so it sits on the far side of the S3 wall from every module that sends data anywhere. `CloudKitSync`, `AIProviders`, `AIContext`, `FernletSocial` and `FernletConnections` do not depend on it, and the strict build (`Scripts/spm-wall-check.sh`, `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR`) fails any of them that imports it. It holds no display strings, so it has no string catalog.
 
 ## Topics
 
@@ -83,6 +85,9 @@ This module holds location history (the lifted fog cells, saved walk and run lin
 - ``WorldRouteCodec``
 - ``RoutePoint``
 - ``SpacePinStore``
+- ``PassportStore``
+- ``PassportBook``
+- ``AtlasVisitResolving``
 
 ### Where you've been and photo places
 

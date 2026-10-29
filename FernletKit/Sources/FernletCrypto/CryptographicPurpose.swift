@@ -467,6 +467,11 @@ public nonisolated enum FernletCryptoPurpose {
         /// **World build only.** Where each solo camera photo was taken (`PhotoPlaceStore`): a point per
         /// photo id, kept only for a photo taken at an everyday place, under the vault's store key.
         public static let worldMapPhotoPlacesV1 = CryptographicPurpose("fernlet.world-map.photo-places.aead.v1")
+        /// **World build only (round 7, owner 2026-10-29).** The World passport (`PassportStore`): every
+        /// country, continent, ocean, sea, city and terrain class the person has been to, with the date of
+        /// the first visit, sealed under the vault's when-unlocked store key like journal text, kept on this
+        /// iPhone. Its own domain, so a passport file can never open as the fog or any other map file.
+        public static let worldMapPassportV1 = CryptographicPurpose("fernlet.world-map.passport.aead.v1")
         /// **World build only.** A photo taken with the disposable camera on your own
         /// (`SoloCameraPhotoStore`, owner 2026-10-24: kept in the Friends area, ten a day, shown after
         /// the companion sleeps), sealed under the device-bound solo-camera media key. Its own domain,

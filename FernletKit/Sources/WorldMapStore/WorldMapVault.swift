@@ -156,6 +156,9 @@ public final class WorldMapVault {
         /// Where each solo camera photo was taken (`PhotoPlaceStore`), by photo id.
         public static let photoPlaces = File(name: "photo-places.bin", purpose: FernletCryptoPurpose.AEAD.worldMapPhotoPlacesV1,
                                              role: .store)
+        /// The World passport (`PassportStore`, round 7): each first visit by kind and token, with its date.
+        public static let passport = File(name: "passport.bin", purpose: FernletCryptoPurpose.AEAD.worldMapPassportV1,
+                                          role: .store)
     }
 
     /// The folder the files live in.
