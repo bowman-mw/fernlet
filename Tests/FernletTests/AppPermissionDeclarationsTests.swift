@@ -21,7 +21,7 @@ struct AppPermissionDeclarationsTests {
         // line, approved. The background-mapping text is the car round's (owner, 2026-10-26: a detected
         // drive is traced in full, so "using little battery" went).
         "NSLocationWhenInUseUsageDescription": "Your companion lives on a map of where you are. The map uncovers as you go, and the history stays on this iPhone.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "With background mapping on, Fernlet uncovers the map from the places you visit and the roads you drive. It stays on this iPhone.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "With background mapping on, Fernlet uncovers the map from the places you visit and the roads you drive or ride. It stays on this iPhone.",
         // Car and bike detection (owner, 2026-10-25: "Approve both"; round 7): asked only when "Log my bike
         // rides" is turned on.
         "NSMotionUsageDescription": "Fernlet uses motion to tell when you're riding a bike or in a car, only while \"Log my bike rides\" is on. It stays on this iPhone."

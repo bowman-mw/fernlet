@@ -44,7 +44,7 @@ struct HomeMapBikeRidesSettingsTests {
     /// store's answer in both directions rather than writing the preference itself.
     @Test func thePageDrawsTheApprovedRowsAndAsksTheStore() throws {
         let page = try Self.page()
-        #expect(page.contains("detail: \"Always. Low power, except while driving.\""))
+        #expect(page.contains("detail: \"Always. Low power, except while driving or riding.\""))
         #expect(!page.contains("Always, in low power. Fills the fog along your day."))
         #expect(page.contains("FernletRowLabel(\"Log my bike rides\", detail: \"Asks for Motion & Fitness when you turn it on.\")"))
         #expect(page.contains(".accessibilityIdentifier(\"settings.homeMap.bikeRides\")"))

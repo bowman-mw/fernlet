@@ -8,7 +8,7 @@ import WorldMapStore
 /// option A): every map setting on one page, reached from the Settings root's Home map section.
 ///
 /// - **Location:** what iOS allows (a tap opens the map intro while iOS hasn't asked, else Fernlet's page in
-///   the Settings app), and background mapping, off by default: Always, in low power except while driving
+///   the Settings app), and background mapping, off by default: Always, in low power except while driving or riding
 ///   (round 7: a detected drive is traced in full). Turning it on asks iOS to change location to Always (or,
 ///   once iOS has used its one prompt, opens Fernlet's page in the Settings app); it runs once Always is
 ///   allowed, and allowing Always there later turns it on (W-09).
@@ -97,7 +97,7 @@ struct HomeMapSettingsView: View {
             .buttonStyle(FernletRowButtonStyle(showsChevron: true))
             .accessibilityIdentifier("settings.homeMap.location")
             Toggle(isOn: backgroundBinding) {
-                FernletRowLabel("Map the world in the background", detail: "Always. Low power, except while driving.")
+                FernletRowLabel("Map the world in the background", detail: "Always. Low power, except while driving or riding.")
                     .padding(.vertical, 7)
             }
             .disabled(store.worldLocation.permission == .notAsked || store.worldLocation.permission == .denied)
