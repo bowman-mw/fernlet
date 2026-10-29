@@ -957,7 +957,7 @@ public nonisolated struct FitnessGoal: Identifiable, Codable, Equatable {
     }
 }
 
-/// The seven goal presets that shape nutrition targets, training splits, and rest guidance.
+/// The eight goal presets that shape nutrition targets, training splits, and rest guidance.
 ///
 /// The module's central "what is the user optimizing for" switch — consumed by
 /// ``NutritionTargetCalculator``, `WorkoutSplitRecommender`, ``WorkoutGoalStyle``, and
@@ -972,6 +972,9 @@ public nonisolated enum GoalType: String, Codable, CaseIterable, Identifiable, S
     case recovery
     case exploring
     case sportsPrep
+    /// Hypertrophy on purpose, with planned deload weeks (World round 7, `bb-goal`, approved
+    /// 2026-10-29). The only goal that turns on the day calendar in Move (``calendarSummary``).
+    case bodybuilding
 
     public var id: String { rawValue }
 
@@ -996,6 +999,8 @@ public nonisolated enum GoalType: String, Codable, CaseIterable, Identifiable, S
                                 comment: "Goal preset name: trying things out to learn what helps")
         case .sportsPrep: String(localized: "goal.sportsPrep.name", defaultValue: "Sports Prep", bundle: .module,
                                  comment: "Goal preset name: training for a sport")
+        case .bodybuilding: String(localized: "goal.bodybuilding.name", defaultValue: "Bodybuilding", bundle: .module,
+                                   comment: "Goal preset name: building muscle on purpose, with planned lighter (deload) weeks")
         }
     }
 
@@ -1016,6 +1021,8 @@ public nonisolated enum GoalType: String, Codable, CaseIterable, Identifiable, S
                                 comment: "Goal preset card: one-line description of the Exploring goal")
         case .sportsPrep: String(localized: "goal.sportsPrep.tagline", defaultValue: "Train for your sport.", bundle: .module,
                                  comment: "Goal preset card: one-line description of the Sports Prep goal")
+        case .bodybuilding: String(localized: "goal.bodybuilding.tagline", defaultValue: "Build on purpose, rest on purpose.",
+                                   bundle: .module, comment: "Goal preset card: one-line description of the Bodybuilding goal")
         }
     }
 
@@ -1023,7 +1030,7 @@ public nonisolated enum GoalType: String, Codable, CaseIterable, Identifiable, S
     /// consistency / progression vs. the gentler wellness-oriented goals).
     public var isTrainingFocused: Bool {
         switch self {
-        case .strength, .sportsPrep, .weightManagement: true
+        case .strength, .sportsPrep, .weightManagement, .bodybuilding: true
         case .wellness, .mentalHealth, .recovery, .exploring: false
         }
     }
@@ -1031,7 +1038,8 @@ public nonisolated enum GoalType: String, Codable, CaseIterable, Identifiable, S
     /// One-line description of how this goal shapes the daily nutrition targets, for the goal preset
     /// cards. Descriptive only — it summarizes the calorie/protein logic in
     /// `NutritionTargetCalculator` (per-goal calorie multiplier + protein g/kg), it does not recompute
-    /// it. Keep the two in step: strength/sportsPrep eat a little more with more protein, weight
+    /// it. Keep the two in step: strength/sportsPrep eat a little more with more protein, bodybuilding
+    /// eats a small surplus (no more than strength's) with the highest protein, weight
     /// management runs a deficit the user can adjust (gentle by default) with higher protein, recovery
     /// sits near maintenance, and the gentler goals hold at balanced maintenance.
     ///
@@ -1057,6 +1065,9 @@ public nonisolated enum GoalType: String, Codable, CaseIterable, Identifiable, S
         case .sportsPrep:
             String(localized: "goal.sportsPrep.nutrition", defaultValue: "Fuelled for training · high protein (~1.6 g/kg)",
                    bundle: .module, comment: "Goal card: how the Sports Prep goal sets daily nutrition (grams of protein per kilogram of body weight)")
+        case .bodybuilding:
+            String(localized: "goal.bodybuilding.nutrition", defaultValue: "A small surplus · high protein",
+                   bundle: .module, comment: "Goal card: how the Bodybuilding goal sets daily nutrition (a few more calories than maintenance, high protein)")
         case .weightManagement:
             Self.weightManagementSummary(deficitPercent: percent)
         case .recovery:
@@ -1120,6 +1131,24 @@ public nonisolated enum GoalType: String, Codable, CaseIterable, Identifiable, S
         case .sportsPrep:
             String(localized: "goal.sportsPrep.training", defaultValue: "Sport-specific training with strength and conditioning.",
                    bundle: .module, comment: "Goal card and Move tab: the training split the Sports Prep goal recommends")
+        case .bodybuilding:
+            String(localized: "goal.bodybuilding.training", defaultValue: "Push, pull and legs, with deload weeks.",
+                   bundle: .module, comment: "Goal card and Move tab: the training split the Bodybuilding goal recommends. A deload week is a planned lighter week")
+        }
+    }
+
+    /// The preset card's third line, for the one goal that turns something on beyond nutrition and
+    /// training; nil for every other goal (the card then draws two lines, as before).
+    ///
+    /// Bodybuilding's day calendar in Move (`bb-goal`, approved 2026-10-29) shows only while this goal
+    /// is chosen; switching away hides it and deletes nothing.
+    public var calendarSummary: String? {
+        switch self {
+        case .bodybuilding:
+            String(localized: "goal.bodybuilding.calendar", defaultValue: "Turns on the day calendar in Move.",
+                   bundle: .module, comment: "Goal card: the Bodybuilding goal's third line. Choosing it shows a calendar of days on the Move tab")
+        case .wellness, .strength, .weightManagement, .mentalHealth, .recovery, .exploring, .sportsPrep:
+            nil
         }
     }
 
@@ -1158,6 +1187,9 @@ public nonisolated enum GoalType: String, Codable, CaseIterable, Identifiable, S
             self = .exploring
         case Self.sportsPrep.rawValue, "Sports Prep", "Sport", "Sports":
             self = .sportsPrep
+        case Self.bodybuilding.rawValue:
+            // No legacy alias: the goal arrived after the picker stopped persisting its own text.
+            self = .bodybuilding
         default:
             return nil
         }

@@ -267,7 +267,8 @@ nonisolated enum SettingsSearchIndex {
             display: LocalizedStringResource(
                 "settings.search.title.goal", defaultValue: "Goal",
                 comment: "Settings search result: the name of a setting a search can find, on the Goal & nutrition page. Short, sentence case, like the row it leads to."),
-            keywords: ["goal", "preset", "weight loss", "lose weight", "maintain", "gain", "build muscle", "muscle", "sports", "training", "nutrition plan"],
+            keywords: ["goal", "preset", "weight loss", "lose weight", "maintain", "gain", "build muscle", "muscle", "sports", "training", "nutrition plan",
+                       "bodybuilding", "bodybuilder", "hypertrophy", "deload"],
             breadcrumb: .goalNutrition,
             route: .goalNutrition
         ),

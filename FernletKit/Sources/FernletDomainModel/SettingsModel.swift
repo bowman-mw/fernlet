@@ -327,6 +327,13 @@ public nonisolated struct FernletSettings: Codable {
     /// The switch as the planner reads it: on unless switched off.
     public var workoutUsesFoodLogs: Bool { workoutFoodAware ?? true }
 
+    /// The Bodybuilding goal's day calendar: its signals, the view it opens on, the deload weeks and the
+    /// deload suggestion's "Not now" (World round 7, 2026-10-29). Kept whatever goal is chosen, so
+    /// switching away and back loses nothing. Synced, at the top level, and absent from a blob until it
+    /// differs from the default (`workoutStrengthFocus`' contract), so every blob saved before keeps its
+    /// shape exactly.
+    public var bodybuildingCalendar = BodybuildingCalendarSettings()
+
     /// Every top-level settings key this build does NOT know, captured verbatim on decode and written
     /// back verbatim on encode. The GENERIC, systemic counterpart to the per-field `unknown…Token`
     /// side channels above (and the TODO that used to sit in `init(from:)`): when a device on an OLDER
@@ -394,6 +401,8 @@ public nonisolated struct FernletSettings: Codable {
         try decodeHomeLayout(from: container)
         try decodeCareAndProximity(from: container)
         try decodeWorkoutAndExport(from: container)
+        bodybuildingCalendar = try container.decodeIfPresent(BodybuildingCalendarSettings.self, forKey: .bodybuildingCalendar)
+            ?? BodybuildingCalendarSettings()
         try parkUnknownKeys(from: decoder)
     }
 
@@ -740,6 +749,7 @@ public nonisolated struct FernletSettings: Codable {
         case workoutStrengthFocus, unknownWorkoutStrengthFocusToken
         case workoutFoodAware
         case recipeShareIncludesNotes, recipeShareIncludesPicture
+        case bodybuildingCalendar
     }
 
     /// Custom encode (required so `parkedUnknownKeys` can be re-emitted at the top level). It writes the
@@ -755,6 +765,10 @@ public nonisolated struct FernletSettings: Codable {
         try encodeNutritionAndHomeLayout(into: &container)
         try encodeCareAndProximity(into: &container)
         try encodeWorkoutAndExport(into: &container)
+        // Written only once it differs from the default, so every blob saved before keeps its shape.
+        if bodybuildingCalendar != BodybuildingCalendarSettings() {
+            try container.encode(bodybuildingCalendar, forKey: .bodybuildingCalendar)
+        }
 
         // Re-emit every parked key at the TOP LEVEL (never nested). A parked key can never collide with
         // a known key — decode excludes known keys from `parkedUnknownKeys` — but the `knownKeys` guard

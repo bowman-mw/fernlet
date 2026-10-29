@@ -107,6 +107,13 @@ extension FernletStore {
         settings.calorieTargetOverride = nil
         settings.proteinTargetOverride = nil
         settings.fatTargetOverride = nil
+        // `FERNLET_UI_TEST_GOAL` picks a goal AFTER the Wellness reset above, so a screenshot run can
+        // show a goal's own surfaces; Bodybuilding also gets past weeks for its day calendar. Applied on
+        // every seeded launch, before the day-scoped guard below, for the same reason as the reset.
+        if let goal = UITestSupport.uiTestGoal {
+            settings.selectedGoal = goal
+            if goal == .bodybuilding { seedBodybuildingDemoWeeks() }
+        }
 
         guard day.meals.isEmpty, day.workouts.isEmpty else { return }
 

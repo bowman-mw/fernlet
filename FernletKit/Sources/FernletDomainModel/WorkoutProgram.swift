@@ -979,14 +979,14 @@ public nonisolated enum WorkoutSplitCatalog {
     )
     public static let upperLower4 = TrainingSplit(
         id: "upper-lower-4", name: "Upper / Lower",
-        specificity: .balanced, goalFit: [.strength, .weightManagement, .wellness, .sportsPrep],
+        specificity: .balanced, goalFit: [.strength, .weightManagement, .wellness, .sportsPrep, .bodybuilding],
         days: [day("Day 1", [WorkoutSessions.upper]), day("Day 2", [WorkoutSessions.lower]), day("Day 3", [WorkoutSessions.upper]), day("Day 4", [WorkoutSessions.lower])]
     )
 
     // --- Focused ---
     public static let ppl3 = TrainingSplit(
         id: "ppl-3", name: "Push / Pull / Legs",
-        specificity: .focused, goalFit: [.strength, .sportsPrep, .weightManagement],
+        specificity: .focused, goalFit: [.strength, .sportsPrep, .weightManagement, .bodybuilding],
         days: [day("Push", [WorkoutSessions.push]), day("Pull", [WorkoutSessions.pull]), day("Legs", [WorkoutSessions.legs])]
     )
     public static let cardioStrength4 = TrainingSplit(
@@ -1011,24 +1011,24 @@ public nonisolated enum WorkoutSplitCatalog {
     )
     public static let pplUL5 = TrainingSplit(
         id: "ppl-ul-5", name: "PPL + Upper / Lower",
-        specificity: .focused, goalFit: [.strength, .sportsPrep],
+        specificity: .focused, goalFit: [.strength, .sportsPrep, .bodybuilding],
         days: [day("Push", [WorkoutSessions.push]), day("Pull", [WorkoutSessions.pull]), day("Legs", [WorkoutSessions.legs]), day("Upper", [WorkoutSessions.upper]), day("Lower", [WorkoutSessions.lower])]
     )
     public static let ppl6 = TrainingSplit(
         id: "ppl-6", name: "Push / Pull / Legs ×2",
-        specificity: .focused, goalFit: [.strength, .sportsPrep],
+        specificity: .focused, goalFit: [.strength, .sportsPrep, .bodybuilding],
         days: [day("Push A", [WorkoutSessions.push]), day("Pull A", [WorkoutSessions.pull]), day("Legs A", [WorkoutSessions.legs]), day("Push B", [WorkoutSessions.push]), day("Pull B", [WorkoutSessions.pull]), day("Legs B", [WorkoutSessions.legs])]
     )
 
     // --- Specialized / very specific ---
     public static let broSplit5 = TrainingSplit(
         id: "bro-5", name: "Bro Split",
-        specificity: .specialized, goalFit: [.strength],
+        specificity: .specialized, goalFit: [.strength, .bodybuilding],
         days: [day("Chest", [WorkoutSessions.chest]), day("Back", [WorkoutSessions.back]), day("Shoulders", [WorkoutSessions.shoulders]), day("Arms", [WorkoutSessions.arms]), day("Legs", [WorkoutSessions.legs])]
     )
     public static let arnold6 = TrainingSplit(
         id: "arnold-6", name: "Arnold Split",
-        specificity: .specialized, goalFit: [.strength],
+        specificity: .specialized, goalFit: [.strength, .bodybuilding],
         days: [day("Chest & Back", [WorkoutSessions.arnoldChestBack]), day("Shoulders & Arms", [WorkoutSessions.arnoldShouldersArms]), day("Legs", [WorkoutSessions.legs]), day("Chest & Back", [WorkoutSessions.arnoldChestBack]), day("Shoulders & Arms", [WorkoutSessions.arnoldShouldersArms]), day("Legs", [WorkoutSessions.legs])]
     )
     public static let twoADay = TrainingSplit(
@@ -1138,6 +1138,7 @@ public nonisolated enum WorkoutSplitRecommender {
             .map { split -> (split: TrainingSplit, score: Int) in
                 var score = 0
                 score += split.goalFit.contains(goal) ? 120 : -30
+                score += preferenceBonus(split, goal: goal)
                 score -= abs(split.specificity.rawValue - desired.rawValue) * 30
                 score -= abs(split.daysPerWeek - preferredDays) * 12
                 if split.sessionsPerWeek > tolerance {
@@ -1153,6 +1154,17 @@ public nonisolated enum WorkoutSplitRecommender {
                 lhs.score != rhs.score ? lhs.score > rhs.score : lhs.split.id < rhs.split.id
             }
             .map(\.split)
+    }
+
+    /// The ids of the push / pull / legs splits Bodybuilding prefers (`bb-goal`: "Push, pull and legs").
+    public static let pushPullLegsSplitIDs: Set<String> = ["ppl-3", "ppl-ul-5", "ppl-6"]
+
+    /// A goal's lean toward particular splits on top of `goalFit`: Bodybuilding's push / pull / legs
+    /// days win a tie a step of specificity away (one step costs 30). Zero for every other goal, so
+    /// their ranking is unchanged.
+    public static func preferenceBonus(_ split: TrainingSplit, goal: GoalType) -> Int {
+        guard goal == .bodybuilding, pushPullLegsSplitIDs.contains(split.id) else { return 0 }
+        return 40
     }
 
     private static func activityPoints(_ activity: ActivityLevel) -> Int {
@@ -1239,6 +1251,9 @@ public nonisolated struct WorkoutGoalStyle {
             return WorkoutGoalStyle(mainSets: 4, mainReps: "5", accessorySets: 3, accessoryReps: "8-10", includeConditioning: false, conditioningLabel: conditioning, holdSeconds: 40)
         case .sportsPrep:
             return WorkoutGoalStyle(mainSets: 4, mainReps: "5", accessorySets: 3, accessoryReps: "8-12", includeConditioning: false, conditioningLabel: conditioning, holdSeconds: 40)
+        case .bodybuilding:
+            // Hypertrophy: moderate reps on the main lift, higher on accessories, plenty of sets.
+            return WorkoutGoalStyle(mainSets: 4, mainReps: "6-10", accessorySets: 3, accessoryReps: "10-15", includeConditioning: false, conditioningLabel: conditioning, holdSeconds: 40)
         case .weightManagement:
             return WorkoutGoalStyle(mainSets: 3, mainReps: "8-12", accessorySets: 3, accessoryReps: "12-15", includeConditioning: false, conditioningLabel: conditioning, holdSeconds: 40)
         case .wellness:

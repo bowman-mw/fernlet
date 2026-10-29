@@ -150,7 +150,7 @@ public nonisolated enum PlateauTracking: Sendable {
     /// The tracking a goal gets.
     public static func forGoal(_ goal: GoalType) -> PlateauTracking {
         switch goal {
-        case .strength, .sportsPrep: .mainLifts
+        case .strength, .sportsPrep, .bodybuilding: .mainLifts
         case .weightManagement: .strengthHeld
         case .wellness, .mentalHealth, .recovery, .exploring: .off
         }

@@ -1768,7 +1768,8 @@ struct LocalizationBoundaryTests {
 
         #expect(
             GoalType.allCases.map(\.rawValue) == [
-                "wellness", "strength", "weightManagement", "mentalHealth", "recovery", "exploring", "sportsPrep"
+                "wellness", "strength", "weightManagement", "mentalHealth", "recovery", "exploring", "sportsPrep",
+                "bodybuilding"
             ],
             """
             GoalType raw values changed. They are the CURRENT persisted tokens (exported to the coach \
