@@ -16,7 +16,7 @@ public nonisolated enum AtlasContinent: String, CaseIterable, Codable, Sendable 
     }
 }
 
-/// One of the five oceans, as the passport counts them. A sea counts as its parent ocean.
+/// One of the five oceans, as the passport counts them. A sea is its own entry (``AtlasSea``), never its ocean.
 public nonisolated enum AtlasOcean: String, CaseIterable, Codable, Sendable {
     case pacific, atlantic, indian, arctic, southern
 
