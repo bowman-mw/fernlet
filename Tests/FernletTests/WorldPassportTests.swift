@@ -317,12 +317,17 @@ struct WorldPassportTests {
     @Test func thePassportChangedHookRunsForSavedFirstVisitsAndTheWipeOnly() throws {
         let vault = WorldMapVault.ephemeral()
         defer { _ = vault.clearAll() }
-        let keeper = Self.keeper(vault)
+        // A second Portland fix past the spacing, which the fake answers as Portland again (nothing new).
+        let nextDoor = Self.portlandPoint.offset(east: 120, north: 0)
+        var visits = Self.atlas.visits
+        visits[nextDoor] = Self.portland
+        let atlas = FakeAtlas(visits: visits)
+        let keeper = WorldAtlasKeeper(vault: vault, openAtlas: { atlas })
         var changes = 0
         keeper.onPassportChanged = { changes += 1 }
         keeper.observe(point: Self.portlandPoint, at: Self.t1)
         #expect(changes == 1, "a saved first visit")
-        keeper.observe(point: Self.portlandPoint.offset(east: 120, north: 0), at: Self.t2)
+        keeper.observe(point: nextDoor, at: Self.t2)
         #expect(changes == 1, "nothing new was found")
         keeper.setDecoy(true)
         keeper.observe(point: Self.pacificPoint, at: Self.t2)
