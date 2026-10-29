@@ -39,9 +39,10 @@ struct WorldMapCompanion: View {
     var isNight = false
     /// Whether the one-time "Tap me to say hi!" hint is showing (``WorldCompanionHint``, `ref-hint`).
     var hint = false
-    /// Whether the person is driving: the companion rides along in its small red car (``WorldRideCar``,
-    /// `b1-home-car`, round 7).
-    var isRiding = false
+    /// What the companion rides along in, if anything: its small red car while the person drives
+    /// (``WorldRideCar``, `b1-home-car`, round 7), its red bike on a bike ride (``WorldRideBike``,
+    /// `ref-ride-home`, Refinements group 19), named as one image on the bike.
+    var ride: WorldRideVehicle? = nil
     /// The hint ended: the first tap, or its 12 seconds on Home.
     var onHintEnded: () -> Void = {}
     let onCustomize: () -> Void
@@ -84,6 +85,13 @@ struct WorldMapCompanion: View {
         onHintEnded()
     }
 
+    /// What VoiceOver calls the companion: on its bike, one image with the bike ("Sprout, riding a bike",
+    /// Refinements group 19); otherwise, in the car too, "Fernlet companion" as always.
+    private var accessibilityName: Text {
+        guard ride == .bike else { return Text("Fernlet companion") }
+        return Text(verbatim: WorldRideCopy.bikeRider(name: WorldRecenterCopy.companionName(store)))
+    }
+
     /// A tap or VoiceOver's activation: ends the hint, then opens the companion up close.
     private func activate() {
         if hint { onHintEnded() }
@@ -101,8 +109,9 @@ struct WorldMapCompanion: View {
             ZStack {
                 if hint { WorldHintRing() }
                 WorldCompanionSprite(now: now, settled: isSettled, isActive: isActive,
-                                     pixelScale: isRiding ? WorldRideCar.riderScale : pixelScale)
-                    .modifier(WorldRideCar(isRiding: isRiding))
+                                     pixelScale: ride?.riderScale ?? pixelScale)
+                    .modifier(WorldRideCar(isRiding: ride == .car))
+                    .modifier(WorldRideBike(isRiding: ride == .bike))
                     .offset(y: hopLift)
                 if tapCount > 0 { WorldPetHeart().id(tapCount) }
             }
@@ -114,7 +123,7 @@ struct WorldMapCompanion: View {
                 onCustomize()
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Fernlet companion")
+            .accessibilityLabel(accessibilityName)
             .accessibilityValue(CompanionEmotion.accessibilityValue(state: now.state, emotion: now.emotion))
             .accessibilityCustomContent("Thought", Text(verbatim: spokenThought))
             .accessibilityAddTraits(.isButton)

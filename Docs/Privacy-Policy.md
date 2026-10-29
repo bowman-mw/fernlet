@@ -404,7 +404,7 @@ are if you ask it to remember them. All of it is encrypted on this iPhone only: 
 up, exported, shared with friends, given to the AI or sent to us, and you can delete it at any time
 in Settings → Home map. Fernlet uses location in the background only during a walk you started, or
 if you turn on the optional background mapping, which notes the places you stop at and, while
-you're driving, the road you take. If you turn on Log my bike rides, Fernlet uses your iPhone's
+you're driving or riding, the road you take. If you turn on Log my bike rides, Fernlet uses your iPhone's
 motion data to tell when you're cycling or riding in a car, on this iPhone only; it logs your bike
 rides as exercise and never keeps the motion data itself. The map itself is drawn by Apple Maps,
 which receives the area on your screen in order to send its map images, under Apple's privacy terms;

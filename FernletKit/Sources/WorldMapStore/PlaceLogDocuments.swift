@@ -37,9 +37,23 @@ public nonisolated struct PlaceLog: Codable, Equatable, Sendable {
         self.stops = stops
     }
 
+    /// The field names at rest (frozen).
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion, places, stops
+    }
+
+    /// A sealed log, read with any stop this build can't read skipped (`LossyStops`), never failing whole.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        places = try container.decode([PlaceRecord].self, forKey: .places)
+        stops = try container.decode(LossyStops.self, forKey: .stops).stops
+    }
+
     /// This log with the device side's captures folded in at `now`: new places added (up to the cap), each
     /// stop added once (a stop already here, from a fold cut short, is skipped and not counted again), each
-    /// visit counted on its place, then stops older than ``keptDays`` days dropped. A stop that waited longer
+    /// visit counted on its place, the undone outings' stops taken off, then stops older than ``keptDays``
+    /// days dropped. A stop that waited longer
     /// than the timeline keeps (Private not opened for 30 days) is neither added nor counted.
     public func folding(_ device: PlaceDeviceState, now: Date, calendar: Calendar = .current) -> PlaceLog {
         var next = self
@@ -59,6 +73,9 @@ public nonisolated struct PlaceLog: Codable, Equatable, Sendable {
             }
             next.stops.append(stop)
         }
+        // An Undo while Private was locked (round 7): its walk's or ride's stop leaves now.
+        let undone = Set(device.undoneOutings ?? [])
+        if !undone.isEmpty { next.stops.removeAll { $0.isOuting && $0.workoutID.map(undone.contains) == true } }
         next.stops.sort { $0.at < $1.at }
         return next.pruned(now: now, calendar: calendar)
     }
@@ -145,6 +162,14 @@ public nonisolated struct PlaceLog: Codable, Equatable, Sendable {
         return (next, stop.workoutID.map { [$0] } ?? [], emptied)
     }
 
+    /// This log without the walk, run or bike ride whose workout is `workoutID` (a bike ride's note's Undo,
+    /// Refinements group 19): every outing stop that names it goes; places, visits, leaves and returns stay.
+    public func deletingOuting(workoutID: UUID) -> PlaceLog {
+        var next = self
+        next.stops.removeAll { $0.isOuting && $0.workoutID == workoutID }
+        return next
+    }
+
     /// This log with place `id` given the person's own name `name` (trimmed, at most
     /// ``PlaceRecord/maxNameLength``), its label from now on; an empty name changes nothing.
     public func renaming(_ id: UUID, to name: String) -> PlaceLog {
@@ -174,7 +199,7 @@ public nonisolated struct PlaceLog: Codable, Equatable, Sendable {
             case .cameHome:
                 if let leftAt, stop.at > leftAt { total += stop.at.timeIntervalSince(leftAt) }
                 leftAt = nil
-            case .visit, .walk, .run: continue
+            case .visit, .walk, .run, .ride: continue
             }
         }
         return total > 0 ? total : nil
@@ -192,8 +217,11 @@ public nonisolated struct PlaceLog: Codable, Equatable, Sendable {
 /// Private closed (and Always mode's visits with the phone locked): the person's homes and hotel
 /// (``homes``) and the places they eat out at (``restaurants``). Neither is ever folded into the log.
 ///
-/// Frozen at rest: `schemaVersion`, `known`, `pending`, `newPlaces`, `homes` and `restaurants` are field
-/// names. A first-format state (no `schemaVersion`; its new places held the lookup's names and kinds) reads
+/// Round 7 adds ``undoneOutings``: the walks and rides whose stop an Undo took while Private was locked,
+/// so the next fold takes it off the timeline too (owner 2026-10-29).
+///
+/// Frozen at rest: `schemaVersion`, `known`, `pending`, `newPlaces`, `homes`, `restaurants` and
+/// `undoneOutings` are field names. A first-format state (no `schemaVersion`; its new places held the lookup's names and kinds) reads
 /// with those dropped and is sealed again at once (``PlaceLogStore/deviceState()``).
 public nonisolated struct PlaceDeviceState: Codable, Equatable, Sendable {
     /// The format this build writes.
@@ -220,6 +248,9 @@ public nonisolated struct PlaceDeviceState: Codable, Equatable, Sendable {
     public var homes: HomeBook?
     /// The places the person eats out at (round 6); nil until a meal is noted at one.
     public var restaurants: [EatingPlace]?
+    /// The workouts whose outing stop an Undo removed while Private was locked (round 7), oldest first: the
+    /// next fold takes their stops off the log, then forgets them. Nil when none waits.
+    public var undoneOutings: [UUID]?
 
     /// A device state in the current format.
     public init(known: [KnownPlace], pending: [PlaceStop], newPlaces: [PlaceRecord], homes: HomeBook? = nil,
@@ -230,6 +261,24 @@ public nonisolated struct PlaceDeviceState: Codable, Equatable, Sendable {
         self.newPlaces = newPlaces
         self.homes = homes
         self.restaurants = restaurants
+    }
+
+    /// The field names at rest (frozen).
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion, known, pending, newPlaces, homes, restaurants, undoneOutings
+    }
+
+    /// A sealed device side, read with any waiting stop this build can't read skipped (`LossyStops`),
+    /// never failing whole.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion)
+        known = try container.decode([KnownPlace].self, forKey: .known)
+        pending = try container.decode(LossyStops.self, forKey: .pending).stops
+        newPlaces = try container.decode([PlaceRecord].self, forKey: .newPlaces)
+        homes = try container.decodeIfPresent(HomeBook.self, forKey: .homes)
+        restaurants = try container.decodeIfPresent([EatingPlace].self, forKey: .restaurants)
+        undoneOutings = try container.decodeIfPresent([UUID].self, forKey: .undoneOutings)
     }
 
     /// The homes and hotel (empty when none was ever marked).
@@ -311,6 +360,30 @@ public nonisolated struct PlaceDeviceState: Codable, Equatable, Sendable {
         next.pending.append(stop)
         if next.pending.count > Self.maxPending { next.pending.removeFirst(next.pending.count - Self.maxPending) }
         return next
+    }
+
+    /// This state without the waiting walk, run or bike ride whose workout is `workoutID` (a bike ride's
+    /// note's Undo, Refinements group 19); everything else stays.
+    public func removingOuting(workoutID: UUID) -> PlaceDeviceState {
+        var next = self
+        next.pending.removeAll { $0.isOuting && $0.workoutID == workoutID }
+        return next
+    }
+
+    /// This state with workout `workoutID`'s outing stop queued to leave the log at the next fold (an Undo
+    /// while Private is locked), once, at most ``maxPending`` waiting.
+    public func queuingOutingRemoval(workoutID: UUID) -> PlaceDeviceState {
+        var undone = undoneOutings ?? []
+        guard !undone.contains(workoutID), undone.count < Self.maxPending else { return self }
+        undone.append(workoutID)
+        var next = self
+        next.undoneOutings = undone
+        return next
+    }
+
+    /// Whether anything waits for a fold: stops, new places or undone outings.
+    public var waitsForFold: Bool {
+        !pending.isEmpty || !newPlaces.isEmpty || !(undoneOutings ?? []).isEmpty
     }
 
     /// This state after a fold: nothing waits; the known points, the homes and the places to eat stay.

@@ -744,7 +744,7 @@
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Fernlet reads selected Health data only when you enable it — including workouts, body metrics, sleep, recovery, heart rate during guided cardio, and (optionally) cycle data — to give you a complete, on-device picture of your wellbeing.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Fernlet writes the workouts and health observations you explicitly log into Apple Health, so they appear in Apple Fitness and across your devices.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Fernlet connects directly with nearby friends to share recipes and, during a session you start, photos, short-lived messages and hearts. A session may continue in the background.";
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "With background mapping on, Fernlet uncovers the map from the places you visit and the roads you drive. It stays on this iPhone.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "With background mapping on, Fernlet uncovers the map from the places you visit and the roads you drive or ride. It stays on this iPhone.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Your companion lives on a map of where you are. The map uncovers as you go, and the history stays on this iPhone.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Fernlet uses motion to tell when you're riding a bike or in a car, only while \"Log my bike rides\" is on. It stays on this iPhone.";
 				INFOPLIST_KEY_NSNearbyInteractionUsageDescription = "Fernlet uses Ultra Wideband to measure the distance to a nearby friend while you connect.";
@@ -803,7 +803,7 @@
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Fernlet reads selected Health data only when you enable it — including workouts, body metrics, sleep, recovery, heart rate during guided cardio, and (optionally) cycle data — to give you a complete, on-device picture of your wellbeing.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Fernlet writes the workouts and health observations you explicitly log into Apple Health, so they appear in Apple Fitness and across your devices.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Fernlet connects directly with nearby friends to share recipes and, during a session you start, photos, short-lived messages and hearts. A session may continue in the background.";
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "With background mapping on, Fernlet uncovers the map from the places you visit and the roads you drive. It stays on this iPhone.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "With background mapping on, Fernlet uncovers the map from the places you visit and the roads you drive or ride. It stays on this iPhone.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Your companion lives on a map of where you are. The map uncovers as you go, and the history stays on this iPhone.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Fernlet uses motion to tell when you're riding a bike or in a car, only while \"Log my bike rides\" is on. It stays on this iPhone.";
 				INFOPLIST_KEY_NSNearbyInteractionUsageDescription = "Fernlet uses Ultra Wideband to measure the distance to a nearby friend while you connect.";

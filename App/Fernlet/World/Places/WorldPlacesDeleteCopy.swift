@@ -44,7 +44,7 @@ nonisolated enum WorldPlacesDeleteCopy {
     }
 
     /// What deleting `stop` does: for a visit, what is left on its place (`place`, shown as `name`); for a
-    /// walk or run, its line; for a leave or a return, that the home or hotel stays. Nil for a visit whose
+    /// walk, run or bike ride, its line; for a leave or a return, that the home or hotel stays. Nil for a visit whose
     /// place is already gone.
     static func stopMessage(_ stop: PlaceStop, place: PlaceRecord?, name: String, homes: HomeBook) -> String? {
         switch stop.kind {
@@ -55,6 +55,9 @@ nonisolated enum WorldPlacesDeleteCopy {
         case .walk, .run:
             return String(localized: "privatePlaces.deleteStop.line", defaultValue: "Its line leaves the day's sketch. The workout stays in Move.",
                           comment: "Private, Places: deleting a walk or run from a day's timeline; its saved line goes, the workout stays")
+        case .ride:
+            return String(localized: "privatePlaces.deleteStop.line.ride", defaultValue: "Its line leaves the day's sketch. The ride stays in Move.",
+                          comment: "Private, Places: deleting a bike ride from a day's timeline; its saved line goes, the cycling workout stays in Move (Spanish draft: Su línea sale del dibujo del día. El paseo en bici se queda en Moverse.)")
         case .leftHome, .cameHome:
             return stop.placeID.flatMap(homes.place)?.kind == .hotel ? hotelStays : homeStays
         }
