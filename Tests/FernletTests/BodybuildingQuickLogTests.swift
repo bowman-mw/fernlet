@@ -13,6 +13,7 @@ import Testing
 import FernletDomainModel
 import FernletFoundation
 import FernletLock
+import FernletUI
 import PrivateHealthStore
 import PrivateStoreCore
 @testable import Fernlet
