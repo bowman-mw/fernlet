@@ -15,7 +15,11 @@ The synthetic world (10° cells, 16×16 sub-cells of 0.625°):
   oceans        South Atlantic lon -60..0, Indian lon 70..100 (both lat -60..60)
   seas          "Test Sea" in two polygons sharing Q999 (lon -120..-60), "Gulf of Mexico" (a promoted gulf),
                 "Tiny Sea" (one cell, dropped into its neighbour)
-  countries     ZA = L with a hole that is LS; AU = the bay land; DK, GL
+  countries     ZA = L with a hole that is LS; AU = the bay land; DK, GL; GB, IE, FR; and Crimea where it
+                really is: UA's mainland (lon 30..40, lat 46..50) and RU's (lon 37..60, lat 44..60) with Crimea
+                (lon 33..36, lat 44.3..46) a separate part of RU sharing two vertices of UA's southern edge, so
+                the territory override moves it to UA and stitches it into UA's ring (a second source set without
+                that part must stop the run)
   cities        Alpha (Q1, 2M, inside an urban polygon), Beta (ne:123, 50k, no polygon), Gamma (Q3, in LS)
   admin-1       ZA-GT (lon 0..30; its Spanish name equals the English), ZA-WC (lon 30..65, a Spanish name),
                 ZA-NC in two pieces (merged), two equal, differently named features sharing AU-BAY (each
@@ -23,7 +27,11 @@ The synthetic world (10° cells, 16×16 sub-cells of 0.625°):
                 stand-in codes "-99-X1~" in LS and "DK-X02" (each ne:<id>), DK-84 0.005° across (kept), GL-QE
                 whose ADM0_A3 is unknown (placed by ISO_A2), one with no country and one with no name (both left
                 out), and plate groups: GB council areas by GEONUNIT, IE counties by code, FR departments by
-                REGION_COD, an overseas region and an unlisted region each their own group
+                REGION_COD, an overseas region and an unlisted region each their own group; Crimea (UA-43) and
+                Sevastopol (UA-40) filed under ADM0_A3 RUS (both counted as UA), Kherson (UA-65), and the
+                everyday-names rule: "Autonomous Republic of Crimea" is Crimea, "Krasnodar Krai" Krasnodar
+                ("Krai de Krasnodar" in Spanish), "Primorsky Krai" (NAME Primor'ye) keeps its Krai, and Camden's
+                "Municipio de Camden" is stored empty
   urban areas   Alpha's polygon (kept); one with no city anywhere near (dropped); one 2 km east of Beta,
                 inside a town's 5 km reach (kept, holding no point); one 10 km east of Beta (dropped)
   climate       5° pixels: class 7 on lon 0..30, 14 on lon 30..60 (lat -30..30), a 3-to-1 mix of 5 and 9
@@ -152,8 +160,9 @@ def climate_tif(fill):
     return buffer.getvalue()
 
 
-def write_sources(folder):
-    """All nine sources (the coastline too, though only META lists it)."""
+def write_sources(folder, crimea_in_russia=True):
+    """All nine sources (the coastline too, though only META lists it); without Crimea's part of RU when
+    crimea_in_russia is False (the territory override must then stop the run)."""
     l_outer = box(0, -30, 65, 30)
     lake = box(20, -10, 40, 10)[::-1]
     bay_land = [(100, 40), (160, 40), (160, -40), (100, -40), (100, -10), (130, -10), (130, 10), (100, 10),
@@ -199,6 +208,12 @@ def write_sources(folder):
                                    "SOVEREIGNT": "Ireland", "CONTINENT": "Europe"}),
         ([box(-40, 70, -20, 80)], {"ISO_A2_EH": "FR", "ADM0_A3": "FRA", "ADMIN": "France",
                                    "SOVEREIGNT": "France", "CONTINENT": "Europe"}),
+        # UA's southern edge runs (40, 46) -> (36, 46) -> (33, 46) -> (30, 46); Crimea's northern edge runs
+        # (33, 46) -> (36, 46): the same two vertices, the other way round, as Natural Earth's shared border.
+        ([[(30, 50), (40, 50), (40, 46), (36, 46), (33, 46), (30, 46), (30, 50)]],
+         {"ISO_A2_EH": "UA", "ADM0_A3": "UKR", "ADMIN": "Ukraine", "SOVEREIGNT": "Ukraine", "CONTINENT": "Europe"}),
+        ([box(37, 44, 60, 60)] + ([box(33, 44.3, 36, 46)] if crimea_in_russia else []),
+         {"ISO_A2_EH": "RU", "ADM0_A3": "RUS", "ADMIN": "Russia", "SOVEREIGNT": "Russia", "CONTINENT": "Europe"}),
     ]
     write_layer(folder, "ne_10m_admin_0_countries", 5, [c[0] for c in countries], country_fields,
                 [c[1] for c in countries])
@@ -261,7 +276,7 @@ def write_admin1(folder):
         # Plate groups: GB by GEONUNIT, IE by each county's own code, FR by REGION_COD (with Natural Earth's
         # stray tab), an overseas region kept as its own group, and a region PLATE_GROUPS does not list.
         ([box(-40, 60, -35, 65)], {"ISO_3166_2": "GB-CMD", "ADM0_A3": "GBR", "NAME": "Camden", "NE_ID": 101,
-                                   "GEONUNIT": "England"}),
+                                   "NAME_ES": "Municipio de Camden", "GEONUNIT": "England"}),
         ([box(-40, 65, -35, 70)], {"ISO_3166_2": "GB-LDS", "ADM0_A3": "GBR", "NAME": "Leeds", "NE_ID": 102,
                                    "GEONUNIT": "England"}),
         ([box(-35, 60, -30, 70)], {"ISO_3166_2": "GB-GLG", "ADM0_A3": "GBR", "NAME": "Glasgow", "NE_ID": 103,
@@ -274,6 +289,18 @@ def write_admin1(folder):
                                    "REGION_COD": "FR-GUA"}),
         ([box(-30, 70, -20, 80)], {"ISO_3166_2": "FR-99", "ADM0_A3": "FRA", "NAME": "Elsewhere", "NE_ID": 123,
                                    "REGION_COD": "FR-ZZZ"}),
+        # Crimea and Sevastopol as Natural Earth files them (ADM0_A3 RUS, ISO_A2 RU, Ukraine's codes).
+        ([box(33.6, 44.3, 36, 46)], {"ISO_3166_2": "UA-43", "ISO_A2": "RU", "ADM0_A3": "RUS", "NAME": "Crimea",
+                                     "NAME_EN": "Autonomous Republic of Crimea",
+                                     "NAME_ES": "República autónoma de Crimea", "NE_ID": 131}),
+        ([box(33, 44.3, 33.6, 46)], {"ISO_3166_2": "UA-40", "ISO_A2": "RU", "ADM0_A3": "RUS",
+                                     "NAME": "Sevastopol", "NAME_ES": "Sebastopol", "NE_ID": 132}),
+        ([box(30, 46, 40, 50)], {"ISO_3166_2": "UA-65", "ISO_A2": "UA", "ADM0_A3": "UKR", "NAME": "Kherson",
+                                 "NAME_ES": "Jersón", "NE_ID": 133}),
+        ([box(37, 44, 50, 60)], {"ISO_3166_2": "RU-KDA", "ISO_A2": "RU", "ADM0_A3": "RUS", "NAME": "Krasnodar",
+                                 "NAME_EN": "Krasnodar Krai", "NAME_ES": "Krai de Krasnodar", "NE_ID": 134}),
+        ([box(50, 44, 60, 60)], {"ISO_3166_2": "RU-PRI", "ISO_A2": "RU", "ADM0_A3": "RUS", "NAME": "Primor'ye",
+                                 "NAME_EN": "Primorsky Krai", "NAME_ES": "Primorie", "NE_ID": 135}),
     ]
     write_layer(folder, "ne_10m_admin_1_states_provinces", 5, [r[0] for r in rows], fields, [r[1] for r in rows])
 
@@ -497,7 +524,14 @@ def check_tables(c, atlas):
     c.equal("merged sea names", seas.get("Q999", {}).get("names"), ["Test Sea", "", "", ""])
     c.equal("sea parent ocean", seas.get("Q999", {}).get("parent"), 2)
     countries = atlas["countries"]
-    c.equal("country codes", sorted(countries), ["AU", "DK", "FR", "GB", "GL", "IE", "LS", "ZA"])
+    c.equal("country codes", sorted(countries), ["AU", "DK", "FR", "GB", "GL", "IE", "LS", "RU", "UA", "ZA"])
+    ua, ru = countries.get("UA", {"rings": []})["rings"], countries.get("RU", {"rings": []})["rings"]
+    for name, lon, lat in (("Simferopol", 34.1024, 44.9521), ("Sevastopol", 33.52, 44.60), ("Yalta", 34.1663, 44.4952)):
+        c.equal("%s is UA (territory override)" % name, (inside(ua, lon, lat), inside(ru, lon, lat)), (True, False))
+    c.equal("Crimea is stitched into UA's ring, not a ring of its own", len(ua), 1)
+    c.equal("no sliver along the old border: just south of it is UA", inside(ua, 34.5, 45.99), True)
+    c.equal("UA's mainland stays UA", inside(ua, 35, 48), True)
+    c.equal("RU keeps its mainland", (inside(ru, 40, 50), len(ru)), (True, 1))
     c.equal("point in ZA", inside(countries["ZA"]["rings"], 10, 0), True)
     c.equal("ZA's hole is not ZA", inside(countries["ZA"]["rings"], 50, -20), False)
     c.equal("the hole is LS", inside(countries["LS"]["rings"], 50, -20), True)
@@ -530,7 +564,8 @@ def check_admin1(c, atlas):
     admin1 = atlas["admin1"]
     c.equal("admin-1 tokens (sorted by country, then token)", list(admin1),
             ["ne:21", "ne:22", "DK-81", "DK-84", "ne:81", "ne:91", "FR-75", "FR-971", "FR-99", "GB-CMD", "GB-GLG",
-             "GB-LDS", "GL-QE", "IE-CO", "IE-D", "ne:31", "ZA-GT", "ZA-NC", "ZA-WC"])
+             "GB-LDS", "GL-QE", "IE-CO", "IE-D", "ne:31", "RU-KDA", "RU-PRI", "UA-40", "UA-43", "UA-65", "ZA-GT",
+             "ZA-NC", "ZA-WC"])
     c.equal("sections end where their counts say", atlas["ends"], (True, True))
     get = lambda token: admin1.get(token, {"country": None, "names": None, "rings": []})  # noqa: E731
     c.equal("Spanish equal to English is stored empty", get("ZA-GT")["names"], ["Gauteng", ""])
@@ -554,6 +589,16 @@ def check_admin1(c, atlas):
     c.equal("ungrouped countries keep their own entries", group("ZA-GT"), None)
     c.equal("one row per plate group", sorted(g["token"] for g in atlas["groups"]),
             ["FR-IDF", "GB-ENG", "GB-SCT", "IE-L", "IE-M"])
+    c.equal("Crimea's admin-1 rows count as UA", (get("UA-43")["country"], get("UA-40")["country"],
+                                                   get("UA-65")["country"]), ("UA", "UA", "UA"))
+    c.equal("RU's own admin-1 stays RU", get("RU-KDA")["country"], "RU")
+    c.equal("an official long form loses its designation", get("UA-43")["names"], ["Crimea", ""])
+    c.equal("a trailing designation goes when the rest is the feature's own NAME (Spanish too)",
+            get("RU-KDA")["names"], ["Krasnodar", ""])
+    c.equal("a trailing designation stays when the rest is not its own name", get("RU-PRI")["names"],
+            ["Primorsky Krai", "Primorie"])
+    c.equal("a Spanish designation before the English name goes", get("GB-CMD")["names"], ["Camden", ""])
+    c.equal("a Spanish name of its own stays", get("UA-65")["names"], ["Kherson", "Jersón"])
     c.equal("a tiny polygon keeps its ring", len(get("DK-84")["rings"]), 1)
     c.equal("point in Gauteng", inside(get("ZA-GT")["rings"], 10, 0), True)
     c.equal("point not in Gauteng", inside(get("ZA-GT")["rings"], 40, 0), False)
@@ -595,6 +640,15 @@ def main():
         capped = os.path.join(work, "out", "capped.pack")
         code, _ = run_generator(sources, capped, "--size-cap", "100")
         c.equal("over the cap is refused", (code, os.path.exists(capped)), (1, False))
+        c.equal("summary logs the territory override",
+                "territory override Crimea, RU -> UA (rings moved / stitched): 1 / 1" in log, True)
+        no_crimea = os.path.join(work, "no-crimea")
+        os.makedirs(no_crimea)
+        write_sources(no_crimea, crimea_in_russia=False)
+        moved_nothing = os.path.join(work, "out", "no-crimea.pack")
+        code, log = run_generator(no_crimea, moved_nothing)
+        c.equal("an override that moves nothing stops the run",
+                (code, os.path.exists(moved_nothing), "territory override Crimea moved 0 rings" in log), (1, False, True))
     for failure in c.failed:
         print("FAIL " + failure)
     if c.failed:

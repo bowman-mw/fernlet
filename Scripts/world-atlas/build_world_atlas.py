@@ -49,7 +49,7 @@ def _import_numpy_and_pillow():
 
 np, Image = _import_numpy_and_pillow()
 
-GENERATOR_VERSION = 5
+GENERATOR_VERSION = 6
 PACK_VERSION = 1
 MAGIC = b"FWA1"
 SUB = 16
@@ -107,6 +107,21 @@ CONTINENT_CODES = {"africa": 1, "antarctica": 2, "asia": 3, "europe": 4, "north 
 SEVEN_SEAS_CONTINENT = {"MV": 3, "IO": 3, "MU": 1, "SC": 1, "SH": 1, "TF": 1, "GS": 7, "HM": 6}
 # Features whose ISO_A2_EH is -99, by ADM0_A3, counted as the territory the UN recognises there.
 EH_FALLBACK = {"SOL": "SO", "CYN": "CY", "CNM": "CY", "KAB": "KZ"}
+
+# Land Natural Earth's default admin-0 gives one country that counts as another (Docs/World-Atlas-Pack.md, CTRY).
+# Owner, 2026-10-29: "Crimea counts as Ukraine." Natural Earth draws Crimea, Sevastopol with it, as a separate part
+# of Russia's multipolygon (one 424-point ring whose border with Kherson is 46 vertices Ukraine's ring shares
+# exactly), and files Crimea's two admin-1 rows (ISO 3166-2 UA-43, UA-40) under ADM0_A3 RUS. Every ring of "from"
+# lying wholly inside "box" (west, south, east, north) moves to "to", stitched into the "to" ring it shares a border
+# with (so one ring is simplified, and no sliver along the isthmus belongs to anyone else); the admin-1 rows with
+# those codes count as "to". The run stops unless at least one ring moves and every anchor (lon, lat: Simferopol,
+# Sevastopol, Yalta) then lies in "to" and in no ring of "from". Sevastopol's anchor is 1.9 km south of its centre
+# (44.6166, 33.5254), which the source's 10m coast leaves in the open water of Sevastopol Bay: no country holds
+# that point, before or after. CONT is unchanged: both countries are Europe there.
+TERRITORY_OVERRIDES = (
+    {"name": "Crimea", "from": "RU", "to": "UA", "box": (32.3, 44.2, 36.75, 46.3), "admin1": ("UA-43", "UA-40"),
+     "anchors": ((34.1024, 44.9521), (33.52, 44.60), (34.1663, 44.4952))},
+)
 
 LANDMASS_OVERRIDES = (
     "RU: Asia east of 60°E (and across the antimeridian), else Europe",
@@ -748,6 +763,74 @@ def country_features(features, report):
     return items
 
 
+def ring_in_box(ring, box):
+    """Whether every point of the ring lies inside box (west, south, east, north)."""
+    lo, hi = ring.min(axis=0), ring.max(axis=0)
+    return bool(lo[0] >= box[0] and lo[1] >= box[1] and hi[0] <= box[2] and hi[1] <= box[3])
+
+
+def stitched_ring(target, ring):
+    """`target` and `ring` as one ring when they share one border, else None. The shared border must be one
+    run of at least two vertices of `ring`, met in `target` in the opposite order (two neighbours traverse
+    their common edge oppositely): the result walks `target` the long way from the run's first vertex to its
+    last, then `ring` the long way back, so the border between them disappears before simplification."""
+    t, r = target[:-1], ring[:-1]
+    m, n = len(t), len(r)
+    where = {(float(x), float(y)): j for j, (x, y) in enumerate(t)}
+    at = [where.get((float(x), float(y))) for x, y in r]
+    shared = [j is not None for j in at]
+    starts = [i for i in range(n) if shared[i] and not shared[i - 1]]
+    k = sum(shared)
+    if len(starts) != 1 or k < 2 or k >= n:
+        return None
+    a = starts[0]
+    b = (a + k - 1) % n
+    ja, jb = at[a], at[b]
+    if any(at[(a + s) % n] != (ja - s) % m for s in range(k)):
+        return None
+    points = [t[(ja + s) % m] for s in range((jb - ja) % m + 1)] + [r[(b + 1 + s) % n] for s in range(n - k)]
+    return close_ring(np.array(points, dtype=np.float64))
+
+
+def apply_territory_overrides(items, report):
+    """Moves each TERRITORY_OVERRIDES rule's rings from one country to the other (stitched into the ring
+    they share a border with, else added as rings of their own) and checks its anchors; stops the run when a
+    rule moves nothing or an anchor lands wrong, so a changed source never silently undoes the owner's rule."""
+    for rule in TERRITORY_OVERRIDES:
+        target = next((i for i in items if i["code"] == rule["to"] and i["own"]), None)
+        if target is None:
+            raise SystemExit("error: territory override %s: no %s feature" % (rule["name"], rule["to"]))
+        moved = stitched = 0
+        for item in items:
+            if item["code"] != rule["from"]:
+                continue
+            kept = []
+            for ring in item["rings"]:
+                if not ring_in_box(ring, rule["box"]):
+                    kept.append(ring)
+                    continue
+                moved += 1
+                rings = list(target["rings"])
+                for index, other in enumerate(rings):
+                    joined = stitched_ring(other, ring)
+                    if joined is not None:
+                        rings[index] = joined
+                        stitched += 1
+                        break
+                else:
+                    rings.append(ring)
+                target["rings"] = rings
+            item["rings"] = kept
+        source_edges = EdgeSet([r for i in items if i["code"] == rule["from"] for r in i["rings"]])
+        target_edges = EdgeSet(target["rings"])
+        wrong = [p for p in rule["anchors"] if not target_edges.contains(*p) or source_edges.contains(*p)]
+        if moved == 0 or wrong:
+            raise SystemExit("error: territory override %s moved %d rings; anchors not in %s alone: %s"
+                             % (rule["name"], moved, rule["to"], wrong))
+        report.counts["territory override %s, %s -> %s (rings moved / stitched)" % (
+            rule["name"], rule["from"], rule["to"])] = "%d / %d" % (moved, stitched)
+
+
 def build_ctry(items, report):
     """The CTRY section and its entries (code, sovereign, EdgeSet), sorted by code."""
     groups = {}
@@ -1050,6 +1133,17 @@ def names_blob(english, spanish, french, german, report):
 # ADM1 plate groups: the first-level region where Natural Earth's admin-1 is a second-level unit
 
 
+# EVERYDAY NAMES (owner, 2026-10-29): a region is named the way people say it in everyday English, "Madrid ·
+# Spain", "Bavaria · Germany", never by its official long form ("Community of Madrid", "Free State of Bavaria").
+# A designation ("Community of", "Region of", "Republic of", "Emirate of", "Province", "Prefecture", "Krai", ...)
+# is dropped only where an everyday name exists without it: it stays where the rest would be an adjective
+# ("Silesian Voivodeship", "Western Province", "Nenets Autonomous Okrug"), a common word ("Free State", "Rivers
+# State"), or another place's name ("State of Mexico", "Niger State", "Davao Region", "Vientiane Prefecture"). No
+# name is invented: every short form is the source's own (its NAME, NAME_ALT or NAME_ES field) or a hand-written
+# entry below. Spanish follows the same short everyday style ("Madrid", "Baviera", "Cataluña", "Escocia"). The
+# rule covers every hand-written name in PLATE_GROUPS and, through EVERYDAY_AFFIXES and EVERYDAY_NAMES, Natural
+# Earth's own admin-1 names.
+#
 # Where Natural Earth's admin-1 is a second-level unit, the plate and the state lines use the first-level
 # region instead (coordinator, 2026-10-29). Per country: the field whose value names the region, and that
 # value -> (ISO 3166-2 code or None, English, Spanish; "" = use English), or SELF to keep the entry as its own
@@ -1064,7 +1158,7 @@ PLATE_GROUPS = {
         "Wales": ("GB-WLS", "Wales", "Gales"), "Northern Ireland": ("GB-NIR", "Northern Ireland", "Irlanda del Norte"),
     }),
     "BE": ("GEONUNIT", {
-        "Brussels Capital Region": ("BE-BRU", "Brussels-Capital Region", "Región de Bruselas-Capital"),
+        "Brussels Capital Region": ("BE-BRU", "Brussels", "Bruselas"),
         "Flemish Region": ("BE-VLG", "Flanders", "Flandes"), "Walloon Region": ("BE-WAL", "Wallonia", "Valonia"),
     }),
     "FR": ("REGION_COD", {
@@ -1100,10 +1194,10 @@ PLATE_GROUPS = {
         "Cataluña": ("ES-CT", "Catalonia", "Cataluña"), "Ceuta": ("ES-CE", "Ceuta", "Ceuta"),
         "Extremadura": ("ES-EX", "Extremadura", "Extremadura"), "Foral de Navarra": ("ES-NC", "Navarre", "Navarra"),
         "Galicia": ("ES-GA", "Galicia", "Galicia"), "Islas Baleares": ("ES-IB", "Balearic Islands", "Islas Baleares"),
-        "La Rioja": ("ES-RI", "La Rioja", "La Rioja"), "Madrid": ("ES-MD", "Community of Madrid", "Comunidad de Madrid"),
-        "Melilla": ("ES-ML", "Melilla", "Melilla"), "Murcia": ("ES-MC", "Region of Murcia", "Región de Murcia"),
+        "La Rioja": ("ES-RI", "La Rioja", "La Rioja"), "Madrid": ("ES-MD", "Madrid", "Madrid"),
+        "Melilla": ("ES-ML", "Melilla", "Melilla"), "Murcia": ("ES-MC", "Murcia", "Murcia"),
         "País Vasco": ("ES-PV", "Basque Country", "País Vasco"),
-        "Valenciana": ("ES-VC", "Valencian Community", "Comunidad Valenciana"),
+        "Valenciana": ("ES-VC", "Valencia", "Valencia"),
     }),
     "IE": ("", dict(
         [("iso:IE-" + c, ("IE-L", "Leinster", "Leinster"))
@@ -1111,15 +1205,19 @@ PLATE_GROUPS = {
         [("iso:IE-" + c, ("IE-M", "Munster", "Munster")) for c in ("CE", "CO", "KY", "LK", "TA", "WD")] +
         [("iso:IE-" + c, ("IE-C", "Connacht", "Connacht")) for c in ("G", "LM", "MO", "RN", "SO")] +
         [("iso:IE-" + c, ("IE-U", "Ulster", "Úlster")) for c in ("CN", "DL", "MN")])),
+    # Codes and members checked against Natural Earth's REGION and REGION_COD: its REGION says "Dinagat Islands
+    # (Region XIII)" for PH-13, whose members (the Agusans, the Surigaos, Dinagat) are Caraga, and "ARMM" for
+    # PH-14, Bangsamoro since 2019. The 2024 Negros Island Region (PH-18) and Sulu's 2024 exit from Bangsamoro
+    # are not in the source.
     "PH": ("REGION_COD", {
-        "PH-00": ("PH-00", "Metro Manila", "Gran Manila"), "PH-01": ("PH-01", "Ilocos Region", "Región de Ilocos"),
+        "PH-00": ("PH-00", "Metro Manila", "Gran Manila"), "PH-01": ("PH-01", "Ilocos", "Ilocos"),
         "PH-02": ("PH-02", "Cagayan Valley", "Valle de Cagayán"), "PH-03": ("PH-03", "Central Luzon", "Luzón Central"),
-        "PH-05": ("PH-05", "Bicol Region", "Región de Bicol"), "PH-06": ("PH-06", "Western Visayas", "Bisayas Occidental"),
-        "PH-07": ("PH-07", "Central Visayas", "Bisayas Central"), "PH-08": ("PH-08", "Eastern Visayas", "Bisayas Oriental"),
+        "PH-05": ("PH-05", "Bicol", "Bicol"), "PH-06": ("PH-06", "Western Visayas", "Bisayas Occidentales"),
+        "PH-07": ("PH-07", "Central Visayas", "Bisayas Centrales"), "PH-08": ("PH-08", "Eastern Visayas", "Bisayas Orientales"),
         "PH-09": ("PH-09", "Zamboanga Peninsula", "Península de Zamboanga"),
         "PH-10": ("PH-10", "Northern Mindanao", "Mindanao del Norte"), "PH-11": ("PH-11", "Davao Region", "Región de Davao"),
         "PH-12": ("PH-12", "Soccsksargen", ""), "PH-13": ("PH-13", "Caraga", ""), "PH-14": ("PH-14", "Bangsamoro", ""),
-        "PH-15": ("PH-15", "Cordillera Administrative Region", "Región Administrativa de La Cordillera"),
+        "PH-15": ("PH-15", "Cordillera", "Cordillera"),
         "PH-40": ("PH-40", "Calabarzon", ""), "PH-41": ("PH-41", "Mimaropa", ""),
     }),
     "UG": ("REGION", {
@@ -1132,13 +1230,16 @@ PLATE_GROUPS = {
         "LK-5": ("LK-5", "Eastern Province", "Provincia Oriental"),
         "LK-6": ("LK-6", "North Western Province", "Provincia Noroccidental"),
         "LK-7": ("LK-7", "North Central Province", "Provincia Centro-Norte"),
-        "LK-8": ("LK-8", "Uva Province", "Provincia de Uva"), "LK-9": ("LK-9", "Sabaragamuwa Province", "Provincia de Sabaragamuwa"),
+        "LK-8": ("LK-8", "Uva", "Uva"), "LK-9": ("LK-9", "Sabaragamuwa", "Sabaragamuwa"),
     }),
     "GN": ("REGION_COD", {
         "GN.B": ("GN-B", "Boké", ""), "GN.C": ("GN-C", "Conakry", ""), "GN.D": ("GN-D", "Kindia", ""),
         "GN.F": ("GN-F", "Faranah", ""), "GN.K": ("GN-K", "Kankan", ""), "GN.L": ("GN-L", "Labé", ""),
         "GN.M": ("GN-M", "Mamou", ""), "GN.N": ("GN-N", "Nzérékoré", ""),
     }),
+    # Natural Earth's REGION_COD is empty here: the names are its REGION values, the codes ISO 3166-2:BF's
+    # (BF-01..BF-13, the 13 regions in French alphabetical order). Burkina Faso's 2025 reorganisation is not in
+    # the source.
     "BF": ("REGION", {
         "Boucle du Mouhoun": ("BF-01", "Boucle du Mouhoun", ""), "Cascades": ("BF-02", "Cascades", ""),
         "Centre": ("BF-03", "Centre", ""), "Centre-Est": ("BF-04", "Centre-Est", ""), "Centre-Nord": ("BF-05", "Centre-Nord", ""),
@@ -1154,6 +1255,117 @@ PLATE_GROUPS = {
 }
 GROUP_SLUG = re.compile(r"^ne:region:[A-Z]{2}:[a-z0-9-]{1,40}$")
 NO_GROUP = 0xFFFF
+
+# The everyday-names rule (above PLATE_GROUPS) for Natural Earth's own NAME_EN, per country: the designations
+# dropped, and the codes that keep theirs. A leading designation ("Emirate of Dubai") always goes; a trailing
+# one ("Kebbi State") goes only when the rest is the feature's own NAME, a NAME_ALT entry or its NAME_ES (so
+# "Primorsky Krai" and "Zabaykalsky Krai", whose rest is an adjective, keep theirs).
+EVERYDAY_AFFIXES = {
+    "AE": (("Emirate of ",), ()),
+    "CF": ((" Economic Prefecture", " Prefecture"), ()),
+    "FM": ((" State",), ()),
+    "GN": ((" Prefecture",), ("GN-ML",)),  # Mali Prefecture: Mali is a country
+    "JP": ((" Prefecture",), ()),
+    "MM": ((" State",), ()),
+    # Niger is a country; Rivers, Delta and Plateau are words without their "State".
+    "NG": ((" State",), ("NG-NI", "NG-RI", "NG-DE", "NG-PL")),
+    # Natural Earth's own oblasts are bare names ("Rostov"); its krais and republics follow them.
+    "RU": (("Republic of ", " Krai"), ()),
+    "SG": ((" Community Development Council",), ()),
+    "VE": ((" State", " state"), ()),
+}
+
+# The everyday-names rule's hand-written entries, by the feature's ISO 3166-2 code: (English, Spanish), None
+# keeping Natural Earth's (after the affixes and the Spanish rule). Where Natural Earth's English is broken
+# ("Jewish", "of Bougainville", "Altai Republic" for Altai Krai) the entry repairs it from the feature's own
+# fields (its TYPE_EN, NAME, NAME_ALT, NAME_ES and code).
+EVERYDAY_NAMES = {
+    "CO-SAP": ("San Andrés and Providencia", "San Andrés y Providencia"),  # NE: "Archipelago of Saint Andréws"
+    "DE-HB": ("Bremen", None),  # NE: "Free Hanseatic Bremen"
+    "ES-M": ("Madrid", None),  # NE: "Community of Madrid"
+    "GN-ML": (None, "Prefectura de Mali"),  # NE: "Ayuntamiento del Mali" ("town council"); English keeps Prefecture
+    "GR-F": (None, "Islas Jónicas"),  # NE: "Periferia de Islas Jónicas"
+    "GR-J": (None, "Peloponeso"),  # NE: "Periferia de Peloponeso"
+    "PG-NSB": ("Bougainville", None),  # NE: "of Bougainville"
+    "RU-ALT": ("Altai Krai", "Krai de Altái"),  # NE: "Altai Republic" (RU-AL's name); TYPE_EN Territory
+    "RU-CE": ("Chechnya", None),  # NE: "Chechen Republic"; NAME Chechnya
+    "RU-CHU": ("Chukotka", None),  # NE: "Chukotka Autonomous Okrug"; NAME_ES Chukotka
+    "RU-CU": ("Chuvashia", None),  # NE: "Chuvash Republic"; NAME_ALT Chuvashiya, NAME_ES Chuvasia
+    "RU-KC": ("Karachay-Cherkessia", None),  # NE: "Karachay-Cherkess Republic"; NAME_ALT Karachayevo-Cherkessiya
+    "RU-KO": ("Komi", None),  # NE: "Komi Republic"
+    "RU-ME": ("Mari El", None),  # NE: "Mari El Republic"
+    "RU-SA": ("Yakutia", "Yakutia"),  # NE: "Sakha Republic"; NAME "Sakha (Yakutia)"
+    "RU-TY": ("Tuva", None),  # NE: "Tuva Republic"
+    "RU-UD": ("Udmurtia", None),  # NE: "Udmurt Republic"; NAME_ALT Udmurtiya, NAME_ES Udmurtia
+    "RU-YEV": ("Jewish Autonomous Oblast", None),  # NE: "Jewish"; NAME_ES Óblast Autónomo Hebreo
+    "SG-01": (None, "Central"),  # NE: "Consejo Central"
+    "SG-02": (None, "Noreste"),  # NE: "Consejo del Noreste"
+    "SG-04": (None, "Sudeste"),  # NE: "Consejo del Sudeste"
+    "SG-05": (None, "Sudoeste"),  # NE: "Consejo del Sudoeste"
+    "UA-43": ("Crimea", None),  # NE: "Autonomous Republic of Crimea"; NAME Crimea
+}
+
+# The Spanish half of the rule: a NAME_ES that is one of these designations and then the English name ("Municipio
+# de Wandsworth", "Krai de Krasnodar", "República autónoma de Crimea") becomes the name alone (and is then stored
+# empty when it equals the English). Never "Ciudad" or "Territorio", which belong to names ("Ciudad Real").
+SPANISH_DESIGNATION = re.compile(
+    r"^(?:Municipalidad|Municipio|Parroquia|Ayuntamiento|Voivodato|Estado|Krai|Zona|Periferia|Prefectura|Provincia|"
+    r"Región|Distrito|Consejo|Condado|Departamento|Cantón|Emirato|República autónoma|República)"
+    r"(?: de la| de los| de las| del| de)? (.+)$")
+
+
+def folded(text):
+    """Lower-case ASCII letters and digits only, for comparing two spellings of one name."""
+    plain = unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode("ascii").lower()
+    return re.sub(r"[^a-z0-9]", "", plain)
+
+
+def everyday_english(attrs, country, iso, english):
+    """NAME_EN under the everyday-names rule: EVERYDAY_NAMES first, else EVERYDAY_AFFIXES (a trailing
+    designation only when the rest is the feature's own short name)."""
+    fixed = EVERYDAY_NAMES.get(iso or "", (None, None))[0]
+    if fixed is not None:
+        return fixed
+    affixes, keep = EVERYDAY_AFFIXES.get(country, ((), ()))
+    if iso in keep:
+        return english
+    own = {folded(text_field(attrs, "NAME")), folded(text_field(attrs, "NAME_ES"))}
+    own.update(folded(alt) for alt in text_field(attrs, "NAME_ALT").split("|"))
+    for affix in affixes:
+        if affix.endswith(" ") and english.startswith(affix) and len(english) > len(affix):
+            return english[len(affix):]
+        if affix.startswith(" ") and english.endswith(affix) and folded(english[:-len(affix)]) in own:
+            return english[:-len(affix)]
+    return english
+
+
+def everyday_spanish(iso, spanish, english):
+    """NAME_ES under the everyday-names rule: EVERYDAY_NAMES first, else the name without a leading
+    designation when the rest is the English name."""
+    fixed = EVERYDAY_NAMES.get(iso or "", (None, None))[1]
+    if fixed is not None:
+        return fixed
+    match = SPANISH_DESIGNATION.match(spanish)
+    if match and folded(match.group(1)) == folded(english):
+        return match.group(1)
+    return spanish
+
+
+def everyday_names(attrs, country, iso, report):
+    """The feature's English and Spanish names under the everyday-names rule; every change is counted and
+    each English one logged."""
+    english = text_field(attrs, "NAME_EN", "NAME")
+    spanish = text_field(attrs, "NAME_ES")
+    short = everyday_english(attrs, country, iso, english)
+    short_spanish = everyday_spanish(iso, spanish, short)
+    if short != english:
+        key = "admin-1 English names made everyday"
+        report.counts[key] = report.counts.get(key, 0) + 1
+        report.note("admin-1 everyday name: %r -> %r" % (english, short))
+    if short_spanish != spanish:
+        key = "admin-1 Spanish names made everyday"
+        report.counts[key] = report.counts.get(key, 0) + 1
+    return short, short_spanish
 
 
 def region_token(country, code, english):
@@ -1208,11 +1420,18 @@ def build_groups(entries, report):
 
 
 def admin1_country(attrs, a3_codes, ctry_codes, report, name):
-    """The CTRY code an admin-1 feature belongs to: its ADM0_A3 mapped the way CTRY maps admin-0 (so
-    Somaliland is SO and Kosovo XK), else its own ISO_A2 when CTRY has it, else None. Mismatches are logged."""
+    """The CTRY code an admin-1 feature belongs to: a TERRITORY_OVERRIDES rule's "to" for the codes it lists,
+    else its ADM0_A3 mapped the way CTRY maps admin-0 (so Somaliland is SO and Kosovo XK), else its own ISO_A2
+    when CTRY has it, else None. Mismatches are logged."""
     a3 = text_field(attrs, "ADM0_A3").upper()
     iso_a2 = text_field(attrs, "ISO_A2").upper()
     country = a3_codes.get(a3)
+    iso = text_field(attrs, "ISO_3166_2").upper()
+    moved = next((r for r in TERRITORY_OVERRIDES if iso in r["admin1"] and country == r["from"]), None)
+    if moved is not None:
+        report.note("admin-1 %s (%s): counted as %s (territory override %s)"
+                    % (name, iso, moved["to"], moved["name"]))
+        return moved["to"]
     if country is not None and ALPHA2.match(iso_a2) and iso_a2 != country:
         report.note("admin-1 %s: ISO_A2 %s but ADM0_A3 %s is %s in CTRY; counted as %s"
                     % (name, iso_a2, a3, country, country))
@@ -1243,9 +1462,9 @@ def admin1_features(features, a3_codes, ctry_codes, report):
             iso = None
         elif iso[:2] != country:
             report.note("admin-1 %s: code %s in country %s" % (name, iso, country))
-        items.append({"iso": iso, "ne_id": ne_id, "country": country, "name": name,
-                      "spanish": text_field(attrs, "NAME_ES"), "rings": rings,
-                      "group": plate_group(attrs, country, iso, name, report)})
+        name, spanish = everyday_names(attrs, country, iso, report)
+        items.append({"iso": iso, "ne_id": ne_id, "country": country, "name": name, "spanish": spanish,
+                      "rings": rings, "group": plate_group(attrs, country, iso, name, report)})
     return items
 
 
@@ -1546,6 +1765,7 @@ def main(argv):
     clim = build_climate(sources["Beck_KG_V1"]["path"], state, rows, cols, report)
     ocea, seas = build_oceans(layer("ne_10m_geography_marine_polys"), state, rows, cols, report)
     items = country_features(layer("ne_10m_admin_0_countries"), report)
+    apply_territory_overrides(items, report)
     cont = build_cont(items, state, rows, cols, report)
     ctry, countries = build_ctry(items, report)
     urbn, city = build_cities(layer("ne_10m_populated_places"), layer("ne_10m_urban_areas"), countries, report)
