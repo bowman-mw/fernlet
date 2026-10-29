@@ -9,7 +9,8 @@ import WorldMapStore
 ///   first, then the log is sealed again without the place or the stop.
 /// - **It doesn't come back.** A place that goes (deleted, or its last visit deleted) is forgotten on the
 ///   device side too (``PlaceDeviceState/forgettingPlaces(_:)``): no longer matched, nothing of it waiting,
-///   and its place to eat gone with its map icon (`ref-places-map`). The meals and photos stay.
+///   its place to eat gone with its map icon (`ref-places-map`), and a place remembered with "Remember
+///   this place" loses its kept mark and icon (``WorldPlaceMarks/forgetting(_:)``). The meals and photos stay.
 /// - **A walk's or run's stop** takes its saved line with it; the workout stays in Move.
 /// - **Homes and hotels** are never deleted here (Settings › Home map): a leave or a return goes alone.
 /// - **A decoy**, which never has the hub key, deletes nothing real.
@@ -40,6 +41,8 @@ extension FernletStore {
             let removed = current.places.filter { result.removedPlaces.contains($0.id) }
             try worldPlaces.store.updateDeviceState { $0.forgettingPlaces(removed) }
             for workout in result.workoutIDs { worldRoutes.delete(for: workout) }
+            // A place remembered with "Remember this place" loses its kept mark and icon too (round 7).
+            worldPlaces.forgetKeptPlaces(result.removedPlaces)
             // The map's places to eat as they are now, so a deleted place's icon goes at once.
             worldPlaces.reloadDeviceSide()
             return result.log

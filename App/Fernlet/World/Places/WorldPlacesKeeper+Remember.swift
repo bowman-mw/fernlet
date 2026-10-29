@@ -116,6 +116,14 @@ extension WorldPlacesKeeper {
         if next != current, marks.save(next) { keptPlaces = next.kept }
     }
 
+    /// Forgets the remembered places `ids` (deleted in Where you've been, W-14), so a remembered
+    /// restaurant's or gym's icon goes with its place.
+    func forgetKeptPlaces(_ ids: Set<UUID>) {
+        guard !isDecoy, !ids.isEmpty, let current = marks.read() else { return }
+        let next = current.forgetting(ids)
+        if next != current, marks.save(next) { keptPlaces = next.kept }
+    }
+
     /// Asks Apple Maps again, by reference, for the names of the remembered restaurants and gyms the person
     /// didn't rename (in memory only, one at a time, at most ``WorldPlaceMarks/maxKept``), for their icons'
     /// name tags.

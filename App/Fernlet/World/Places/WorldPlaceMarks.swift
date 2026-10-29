@@ -61,6 +61,14 @@ nonisolated struct WorldPlaceMarks: Codable, Equatable, Sendable {
         return next
     }
 
+    /// These marks without the remembered places `ids` (deleted from Where you've been, W-14): their icons
+    /// go, and the button may ask there again.
+    func forgetting(_ ids: Set<UUID>) -> WorldPlaceMarks {
+        var next = self
+        next.kept.removeAll { ids.contains($0.id) }
+        return next
+    }
+
     /// These marks with the remembered place `id` given the person's own name (a rename in Where you've
     /// been); an empty name changes nothing.
     func renaming(_ id: UUID, to name: String) -> WorldPlaceMarks {

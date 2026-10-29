@@ -193,6 +193,24 @@ struct WorldRememberAnywhereTests {
         store.duressSessionActive = false
     }
 
+    /// Deleting a remembered place in Where you've been (W-14, `ref-del-confirm`) takes its kept mark and
+    /// its icon with it; the other remembered places stay.
+    @Test func deletingARememberedPlaceForgetsItsMarkAndIcon() throws {
+        let gymPoint = Self.flat.offset(east: 500, north: 0)
+        let a = WorldKeptPlace(id: UUID(), point: Self.flat, placeID: "I-hoshi", icon: .eat, label: nil)
+        let b = WorldKeptPlace(id: UUID(), point: gymPoint, placeID: "I-gym", icon: .gym, label: nil)
+        let marks = WorldPlaceMarks.empty.keeping(a).keeping(b)
+        #expect(marks.forgetting([a.id]).kept == [b] && !marks.forgetting([a.id]).isKept(near: Self.flat))
+        #expect(marks.forgetting([]) == marks)
+        let store = makeTestStore()
+        let gym = WorldRememberSpot(point: gymPoint, since: Self.now, kind: .named(placeID: "I-gym", name: "Full Gym", category: .gym))
+        #expect(store.rememberWorldSpot(gym, named: "My gym", at: gymPoint, now: Self.now))
+        let kept = try #require(store.worldPlaces.keptPlaces.first)
+        store.worldPlaces.forgetKeptPlaces([kept.id])
+        #expect(store.worldPlaces.keptPlaces.isEmpty)
+        #expect(!store.worldPlaceMarkers(near: nil).markers.contains { $0.kind == .keptGym })
+    }
+
     /// With background mapping on, iOS's visit says when the person arrived: the stay counts from then.
     @Test func aBackgroundVisitCountsTheStayFromTheArrival() async {
         let keeper = Self.keeper([])
