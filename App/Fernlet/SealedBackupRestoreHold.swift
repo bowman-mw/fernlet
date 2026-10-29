@@ -44,7 +44,7 @@ import Foundation
 /// protected. Standard defaults, injected so tests get an isolated suite — so, like the divergence
 /// latches, it travels inside an iCloud or Finder device backup, and a new iPhone set up from one
 /// arrives held (fail closed: that iPhone's restore then also waits for the owner's explicit action).
-/// One boolean and up to three payload tokens; no content.
+/// One boolean and up to four payload tokens; no content.
 struct SealedBackupRestoreHold {
     /// The frozen persisted key of the hold itself.
     static let defaultsKey = "fernlet.sealedBackup.restoreAwaitsOwner"
@@ -56,7 +56,7 @@ struct SealedBackupRestoreHold {
 
     /// The payloads a re-upload can write. The retired `.sensitiveNotes` is never sealed again, so it
     /// never has a copy to keep.
-    static let reuploadablePayloads: [SealedBackupPayloadType] = [.periodData, .journalNarratives, .intimacyLogs]
+    static let reuploadablePayloads: [SealedBackupPayloadType] = [.periodData, .journalNarratives, .intimacyLogs, .worldPassport]
 
     /// Where the bits live.
     let defaults: UserDefaults

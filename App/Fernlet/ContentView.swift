@@ -1777,6 +1777,9 @@ struct ContentView: View {
         case .intimacyLogs:
             guard current.sealedBackupIntimacyReuploadDeferred != deferred else { return }
             preferencesStore.update { $0.sealedBackupIntimacyReuploadDeferred = deferred }
+        case .worldPassport:
+            guard current.sealedBackupPassportReuploadDeferred != deferred else { return }
+            preferencesStore.update { $0.sealedBackupPassportReuploadDeferred = deferred }
         case .sensitiveNotes:
             // The retired payload never seals, so the store never records a deferral for it — this
             // arm is unreachable and deliberately writes nothing.
