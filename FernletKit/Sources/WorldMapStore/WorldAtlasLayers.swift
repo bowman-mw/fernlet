@@ -24,8 +24,8 @@ public nonisolated enum AtlasWater: Hashable, Sendable {
 }
 
 /// Every section of a pack decoded and checked, ready for ``WorldAtlas``. Bounded: at most ``maxSeas`` seas,
-/// ``maxCountries`` countries, ``maxUrbanAreas`` urban boundaries and ``maxCities`` cities (each refused
-/// beyond), every raster exactly one byte a cell, every code within its table.
+/// ``maxCountries`` countries, ``maxUrbanAreas`` urban boundaries, ``maxCities`` cities and ``maxAdmin1s``
+/// states and provinces (each refused beyond), every raster exactly one byte a cell, every code within its table.
 nonisolated struct WorldAtlasLayers: Sendable {
     /// The most seas: `OCEA` codes 6...255.
     static let maxSeas = 250
@@ -52,6 +52,7 @@ nonisolated struct WorldAtlasLayers: Sendable {
     let urbanAreas: [AtlasPolygon]
     let cities: [AtlasCity]
     let cityPolygons: [Int]
+    let admin1s: [AtlasAdmin1]
     let metaJSON: String?
 
     /// Every layer of `pack`, or the reason one is refused.
@@ -71,6 +72,7 @@ nonisolated struct WorldAtlasLayers: Sendable {
         let cities = try Self.cities(try pack.section("CITY"), urbanCount: urbanAreas.count)
         self.cities = cities.map(\.city)
         cityPolygons = cities.map(\.polygon)
+        admin1s = try Self.admin1s(try pack.section("ADM1"), countryCodes: Set(countries.map(\.code)))
         metaJSON = pack.sections["META"].flatMap { String(bytes: $0, encoding: .utf8) }
     }
 

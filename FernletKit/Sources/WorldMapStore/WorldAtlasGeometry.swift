@@ -126,6 +126,19 @@ public nonisolated struct AtlasPolygon: Hashable, Sendable {
         return inside
     }
 
+    /// How many rings the outline has (holes and islands are rings too).
+    public var ringCount: Int { ringEnds.count }
+
+    /// Ring `index`'s points in order, for a screen to draw a country, state or province line (the last
+    /// point repeats the first when the source closed it); empty for an index out of range.
+    public func ring(_ index: Int) -> [GeoPoint] {
+        guard ringEnds.indices.contains(index) else { return [] }
+        let start = index == 0 ? 0 : ringEnds[index - 1], end = ringEnds[index]
+        guard start <= end, end <= lons.count, end <= lats.count else { return [] }
+        // Bounded: one ring, at most maxPointsPerRing points.
+        return (start..<end).map { GeoPoint(Double(lats[$0]) / Self.unitsPerDegree, Double(lons[$0]) / Self.unitsPerDegree) }
+    }
+
     /// Reads `bbox · ringCount · rings` (the `CTRY` and `URBN` encoding) from `reader`.
     static func read(from reader: inout AtlasByteReader) throws -> AtlasPolygon {
         let box = (try reader.i32(), try reader.i32(), try reader.i32(), try reader.i32())

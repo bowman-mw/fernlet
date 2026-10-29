@@ -23,6 +23,7 @@ approves those first. This file is the contract between the generator (`Scripts/
 | Land, minor islands | Natural Earth 1:10m `ne_10m_land`, `ne_10m_minor_islands` | public domain | none required (Fernlet credits it anyway) |
 | Oceans | Natural Earth 1:10m `ne_10m_geography_marine_polys` | public domain | none required |
 | Countries | Natural Earth 1:10m `ne_10m_admin_0_countries` | public domain | none required |
+| States and provinces | Natural Earth 1:10m `ne_10m_admin_1_states_provinces` (owner's OK 2026-10-29) | public domain | none required |
 | Cities | Natural Earth 1:10m `ne_10m_populated_places` + `ne_10m_urban_areas` | public domain | none required |
 | Climate | Beck et al. (2018) Köppen-Geiger 1-km maps, `Beck_KG_V1_present_0p083.tif` | CC BY 4.0 | required: see Acknowledgments |
 
@@ -138,7 +139,7 @@ is never overstated; a polygon holding a city's point is always kept. Natural Ea
 fragments that do not follow its cities (New York's Brooklyn and Queens fragment holds no city's point), so keeping
 only the polygons that hold a point lost whole boroughs. A fix inside a polygon lies inside its box, so every city
 the reader could find in reach of such a fix is in reach of the box. The 2026-10-29 pack keeps 4,393 of 11,878
-polygons (1,056 of them for a city in reach only); `URBN` stores 0.62 MB of the 3.75 MB pack.
+polygons (1,056 of them for a city in reach only); `URBN` stores 0.62 MB of the pack.
 
 ### `CITY`: cities
 
@@ -156,9 +157,53 @@ count × {
 }
 ```
 
+### `ADM1`: states and provinces
+
+For the world view's State and City zooms (World-Exploration-Spec, "The world view", answer 13): the state and
+province lines and the plate's place ("Oregon · United States"). **No county data, ever.**
+
+```
+u16 count
+count × {
+  u8 len · bytes    token: the ISO 3166-2 code ("US-OR"), else "ne:<ne_id>" (frozen; at most 24 bytes)
+  2 ASCII           country alpha-2: a CTRY code (the territory, as CTRY counts it)
+  u8 len · bytes    name (English, UTF-8; never empty)
+  u8 len · bytes    Spanish name (len 0 = use English)
+  i32 × 4  bbox     minLon, minLat, maxLon, maxLat in 1e-5 degrees
+  u16      ringCount
+  ringCount × { u32 pointCount · first point i32 lon, i32 lat · (pointCount-1) × zigzag-LEB128 deltas lon, lat }
+}
+```
+
+Entries are sorted by country, then token. The rings are the `CTRY` encoding (even-odd, 1e-5 degrees), simplified
+(Douglas-Peucker) at **0.008°** (about 890 m, under 3 pt at City's 360 pt a degree and under a third of its 10-pt
+hex); a ring that would vanish is kept at a tenth of the tolerance, then unsimplified, as in `CTRY`. 0.003° (1 pt
+at City) would make a 6.7 MB pack and 0.005° leave 130 KB under the cap, so the shipped pack takes 0.008°.
+
+- **Token.** `ISO_3166_2` when it is a real code (`CC-` and one to three capitals or digits; Natural Earth's own
+  stand-ins, with a `~`, `-99-` or an `X` and digits, are not) and every feature carrying it has one name: several
+  such features (a province Natural Earth cuts into pieces) merge into one entry. A code features of different
+  names share stays with the largest only when it is at least 10 times the area of all the others together
+  (`AU-NSW` stays New South Wales', not Lord Howe Island's; `CO-CUN` Cundinamarca's, not Bogotá's); otherwise it
+  names none of them (Bosnia's nine cantons all say `BA-BIH`). Each name without the code is its own entry,
+  `ne:<its smallest ne_id>`, as is every feature without a real code.
+- **Country.** The feature's `ADM0_A3` mapped exactly as `CTRY` maps admin-0 (so Somaliland is SO and Kosovo XK),
+  else its own `ISO_A2` when `CTRY` has it; the generator logs every disagreement. Each entry's label point lies in
+  its own country's `CTRY` rings (checked 2026-10-29: none in another country). A feature with no `CTRY`
+  country (Dhekelia, Akrotiri, Guantánamo Bay, Kashmir, the Spratlys), no rings or no name (seven unnamed islets)
+  is left out: a fix there names only its country.
+- **Names.** English from `NAME_EN`, else `NAME`; Spanish from `NAME_ES`, stored empty when it equals the English.
+  France's entries are its départements ("Paris"), as Natural Earth draws it.
+
+The 2026-10-29 pack has 4,554 entries over 239 countries (4,293 with an ISO token), 8,480 rings and 435,491
+points; `ADM1` stores 2.01 MB of the 5.77 MB pack (5,767,708 bytes, 524 KB under the cap). A reader refuses a
+count over 8,192, a token of the wrong shape or used twice, a country `CTRY` lacks, an empty English name and any
+malformed outline. `ADM1` is required in version 1 (nothing has shipped).
+
 ### `META`
 
-UTF-8 JSON: the generator version, the generation date, and each source's file name, URL, SHA-256 and licence.
+UTF-8 JSON: the generator version (3 since `ADM1`), the generation date, both simplification tolerances, and each
+source's file name, URL, SHA-256 and licence.
 
 ## The rules the reader applies
 
@@ -192,6 +237,36 @@ UTF-8 JSON: the generator version, the generation date, and each source's file n
 - **Terrain:** water or land from `LAND`, a class from `CLIM` and the latitude, flora from the class, the latitude
   and (for cacti) the Americas.
 - **Landmark:** within the landmark's find radius of its point (below).
+- **State or province** (`WorldAtlas.admin1(at:)`, the plate's `WorldAtlas.placeName(at:)`): the entry whose rings
+  hold the fix, among only the entries of the country under it when `CTRY` has one there (each box first), else
+  among all. No entry, no state: the plate names just the country, and at sea nothing.
+
+## The world view's zoom ladder
+
+World-Exploration-Spec, "The world view" (answers 9 and 13); `AtlasZoomLevel` and `WorldViewHexGrid` in
+`WorldMapStore`. Frozen tokens `world`, `country`, `state`, `city`; City is the closest.
+
+| Level | Points per degree of latitude | Country lines | State lines | Plate names the place | + | − |
+| --- | --- | --- | --- | --- | --- | --- |
+| World | 4.966 (mockup `worldFull`: 874 pt for 176°) | no | no | no | yes | no |
+| Country | 20.70 | yes | no | no | yes | yes |
+| State | 86.33 | yes | yes | yes | yes | yes |
+| City | 360 (mockup `worldZoom`; about 270 km top to bottom) | yes | yes | yes | no | yes |
+
+The mockup gives only World and City, so Country and State sit on a geometric ladder between them, each
+`(360 / 4.966)^(1/3)` ≈ 4.17 times the one below. A level's scale holds at 45° (the fog grid's reference latitude;
+Portland, where the mockup's City view sits) and is a fixed number of points per Web Mercator unit
+(`pointsPerMercatorUnit`), so a level looks the same anywhere on the map.
+
+**Hexes.** At every level a world-view hex is 10 pt across (flat side to flat side) on screen: a regular pointy-top
+grid in Web Mercator at the level's scale, laid out and rounded as the fog's own `MercatorHexGrid` (about 3.1 km
+across at City at 45°, 13 km at State, 54 km at Country, 224 km at World). A hex is uncovered when any lifted fog
+cell's centre lies in it (`WorldViewHexGrid.uncovered(by:)`, at most `FogCellStore.maxCells` cells read), so the
+one fog store drives every level.
+
+**VoiceOver.** `WorldAtlas.zoomDescription(level:centre:)` gives the parts of the zoom control's words: the level's
+token and, from State in, the place at the view's centre (the admin-1 names and the country code). The screen
+formats them ("City, Oregon, United States").
 
 ## Landmarks
 

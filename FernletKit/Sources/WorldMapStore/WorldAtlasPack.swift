@@ -18,14 +18,14 @@ public nonisolated struct WorldAtlasPack: Sendable {
     public static let maxPackBytes = 6_291_456
     /// One section's inflated cap: 64 MiB (the shipped grid's largest section is 6.5 MB).
     public static let maxRawSectionBytes = 67_108_864
-    /// The most sections a table may list (the format has nine).
+    /// The most sections a table may list (the format has ten).
     public static let maxSections = 16
     /// The shipped `WorldAtlas.pack`'s SHA-256, in lowercase hex (generated 2026-10-29 by
     /// `Scripts/world-atlas/build_world_atlas.py`). Regenerating the pack changes it on purpose, in the same
     /// commit.
-    public static let expectedSHA256 = "689defae948f3e1682decb660f05fd2a980063db8599dc139c0928f1f5df151b"
+    public static let expectedSHA256 = "10684fd5cac01116266b183a30732ff25eb3626ed2c54e9a5af8b3fc21123446"
     /// The sections every pack must carry (`META`, the generator's provenance, is optional).
-    public static let requiredTags = ["LAND", "CLIM", "OCEA", "CONT", "SEAS", "CTRY", "URBN", "CITY"]
+    public static let requiredTags = ["LAND", "CLIM", "OCEA", "CONT", "SEAS", "CTRY", "URBN", "CITY", "ADM1"]
     /// Bytes in the fixed header (magic, version, section count).
     static let headerBytes = 8
     /// Bytes in one table entry (tag, offset, stored length, raw length).
