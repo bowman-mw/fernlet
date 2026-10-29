@@ -644,6 +644,15 @@ no bookkeeping.
 - Record crypto, AAD, salt derivation and chunk size are unchanged. The writer and set tags travel only
   inside the escrow-sealed plaintext, except that the set tag also appears in suffix record names (§5.2).
   Both are random-looking, per-install or per-set values with no content.
+- **The World passport (added 2026-10-29, round 7).** The JOURNAL head may also carry `"passport":"<base64>"`,
+  the passport's own versioned bytes (`PassportBook.encoded()`), a frozen key like the others. It is inside
+  the head's sealed plaintext, so it shares the journal's content-key path, switch
+  (`sealedBackupJournalEnabled`), owner hold, E1/E2, spacing and deletes; there is no payload type of its
+  own. Left off while the passport is empty and on every other chunk and payload. The prepare reads it
+  just before sealing the head and FAILS when it can't be read (never a head without it); the restore
+  merges it by token, earliest date kept, just before the records, and bytes this build can't read are
+  `unreadableRecords` (`needsNewerFernlet`). An earlier build ignores the key, so its journal restore is
+  unchanged, but its next journal export writes a head without the passport.
 
 ### 5.2 Cloud layout: set-scoped suffix chunks (R1-BR-3, R1-BR-8, R2-F6, R2-F15)
 - **Names.** The head keeps its name, `sealed-backup.<payload>`. A v2 suffix chunk is

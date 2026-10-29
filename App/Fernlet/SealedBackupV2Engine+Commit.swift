@@ -22,7 +22,9 @@ extension SealedBackupV2Engine {
     /// (`max(lastSeen, accepted, head) + 1`, persisted only on commit, §5.4), a fresh set tag and
     /// salt, then classifies and seals every chunk IN MEMORY — G re-checked (the live hub key re-read)
     /// before every chunk's decrypt, a yield after each. Suffix chunks first and the head last, so the
-    /// head's `total` is the number of records the set really carries. Any undecided row fails, any
+    /// head's `total` is the number of records the set really carries; the head also carries the
+    /// adapter's passport (``SealedBackupV2Adapter/headPassport()``: the journal's World passport),
+    /// and a passport that can't be read now fails the prepare. Any undecided row fails, any
     /// row a newer build wrote stops, any dead row pauses — all before a single save.
     func prepare<A: SealedBackupV2Adapter>(
         _ adapter: A,
@@ -52,7 +54,13 @@ extension SealedBackupV2Engine {
             let page = try adapter.classifiedChunk(slice, hubKey: key)
             tally.absorb(page)
             if tally.isClean {
-                let envelope = SealedBackupV2Envelope(writer: writer, set: set.setTag, total: index == 0 ? tally.records : nil, records: page.records)
+                // The head alone carries the passport (the journal's; nil for the others), read right
+                // before it is sealed so it is as new as the records (round 7).
+                let passport = try index == 0 ? adapter.headPassport() : nil
+                let envelope = SealedBackupV2Envelope(
+                    writer: writer, set: set.setTag, total: index == 0 ? tally.records : nil,
+                    records: page.records, passport: passport
+                )
                 let record = try service.sealChunk(
                     try SealedBackupV2Format.encode(envelope), payloadType: payload,
                     chunkIndex: index, chunkCount: count, generation: set.generation, keySalt: set.keySalt
