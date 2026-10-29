@@ -2,8 +2,9 @@ import FernletUI
 import SwiftUI
 
 /// The plate that names the map's state, under the status plate (the design kit's `.ntc`: paper in a
-/// 3-pt ink frame, a small pixel sprite, a bold line and a line under it): first day, loading, offline
-/// and approximate location (`b1-home-first`, `b1-home-loading`, `b1-home-offline`, `b1-home-approx`).
+/// 3-pt ink frame, a small pixel sprite, a bold line and a line under it): first day, loading, offline,
+/// approximate location and riding along (`b1-home-first`, `b1-home-loading`, `b1-home-offline`,
+/// `b1-home-approx`, `b1-home-car`).
 ///
 /// It is a status: announced once when it appears (loading only after two seconds), then left in the
 /// reading order after the status plate.
@@ -81,7 +82,7 @@ struct WorldMapNotice: View {
 
     private var sprite: WorldSprite {
         switch kind {
-        case .offline, .approximate: WorldSprites.pin
+        case .offline, .approximate, .ridingAlong: WorldSprites.pin
         case .loading: WorldSprites.photo
         case .firstDay: WorldSprites.leaf
         }
@@ -89,6 +90,7 @@ struct WorldMapNotice: View {
 
     private var title: LocalizedStringResource {
         switch kind {
+        case .ridingAlong: WorldNoticeCopy.ridingAlong
         case .offline: WorldNoticeCopy.offline
         case .approximate: WorldNoticeCopy.approximate
         case .loading: WorldNoticeCopy.loading
@@ -98,6 +100,7 @@ struct WorldMapNotice: View {
 
     private var detail: LocalizedStringResource? {
         switch kind {
+        case .ridingAlong: WorldNoticeCopy.ridingAlongDetail
         case .offline: WorldNoticeCopy.offlineDetail
         case .approximate: WorldNoticeCopy.approximateDetail
         case .loading: nil
@@ -108,6 +111,7 @@ struct WorldMapNotice: View {
     /// A stable identifier per notice (a frozen token).
     static func identifier(_ kind: WorldMapNoticeKind) -> String {
         switch kind {
+        case .ridingAlong: "ridingAlong"
         case .offline: "offline"
         case .approximate: "approximate"
         case .loading: "loading"
@@ -206,6 +210,11 @@ nonisolated enum WorldNoticeCopy {
                                                  comment: "World Home notice while Apple's map tiles load")
     static let firstDay = LocalizedStringResource("worldNotice.firstDay", defaultValue: "Your map starts here",
                                                   comment: "World Home notice on the first days, before the first walk")
+    static let ridingAlong = LocalizedStringResource("worldNotice.ridingAlong", defaultValue: "Riding along",
+                                                     comment: "World Home notice while Fernlet sees the person driving or riding in a car or bus")
+    static let ridingAlongDetail = LocalizedStringResource("worldNotice.ridingAlong.detail",
+                                                           defaultValue: "Quick starts and banners pause until you're on foot.",
+                                                           comment: "World Home notice under 'Riding along': the blue button and banners wait until the person is walking again")
     static let firstDayDetail = LocalizedStringResource("worldNotice.firstDay.detail", defaultValue: "It uncovers as you go, on this iPhone only.",
                                                         comment: "World Home notice under 'Your map starts here'")
 }
