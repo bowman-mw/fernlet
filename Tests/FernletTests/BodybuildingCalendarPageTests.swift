@@ -79,7 +79,8 @@ struct BodybuildingCalendarPageTests {
         let rows = BodybuildingCalendarGrid.rows(layout: Self.october, extraWeek: Self.week("2026-10-26"))
         #expect(rows.count == Self.october.rows.count)
         #expect(rows.last?.last == "2026-11-01", "the Sunday after the 31st is drawn for that week")
-        #expect(rows.first?.first == nil, "blanks of other rows stay blank")
+        let firstCell: String?? = rows.first?.first
+        #expect(firstCell == .some(nil), "blanks of other rows stay blank")
     }
 
     @Test func noExtraWeekLeavesTheMonthAsItIs() {

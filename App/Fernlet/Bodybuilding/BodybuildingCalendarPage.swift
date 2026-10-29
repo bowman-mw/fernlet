@@ -32,7 +32,7 @@ struct BodybuildingCalendarPage: View {
                 }
                 header
                 content
-                MoveLinkCard(title: Text(BodybuildingCalendarText.signalsTitle), sprite: WorldSprites.gear,
+                MoveLinkCard(title: Text(BodybuildingCalendarText.signalsTitle), sprite: WorldSprites.gear, inksSprite: true,
                              identifier: "bodybuilding.calendar.signals", action: onOpenSignals)
             }
             .padding(16)
