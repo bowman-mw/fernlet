@@ -60,6 +60,14 @@ struct WorldViewZoomTests {
         #expect(lines.map(\.2) == [false, false, true, true])
     }
 
+    /// VoiceOver names the country from Country in ("Country, United States") and the plate group from State
+    /// in ("City, Oregon, United States"); World reads the level alone.
+    @Test func voiceOverNamesTheCountryFromCountry() {
+        #expect(AtlasZoomLevel.allCases.map(\.readsCountry) == [false, true, true, true])
+        #expect(AtlasZoomLevel.allCases.map(\.readsRegion) == [false, false, true, true])
+        #expect(AtlasZoomLevel.allCases.allSatisfy { $0.readsRegion == $0.showsPlaceName }, "the plate and the words agree")
+    }
+
     /// A hex is 10 pt across on screen at every level, about 3 km on the ground at City.
     @Test func hexesStayTenPointsAcross() {
         for level in AtlasZoomLevel.allCases {

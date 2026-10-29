@@ -3,9 +3,9 @@ import Foundation
 import Testing
 import WorldMapStore
 
-/// The pack's `ADM1` states and provinces (Docs/World-Atlas-Pack.md): what the reader accepts and refuses, and
-/// the admin-1 lookups behind the world view's lines and plate, on small packs written by
-/// ``WorldAtlasTestPackBuilder``.
+/// The pack's `ADM1` states and provinces and their plate groups (Docs/World-Atlas-Pack.md): what the reader
+/// accepts and refuses, and the admin-1 lookups behind the world view's lines and plate, on small packs
+/// written by ``WorldAtlasTestPackBuilder``.
 @MainActor
 struct WorldAtlasAdmin1Tests {
     /// The refusal a pack's bytes raise, or nil when they open.
@@ -26,19 +26,24 @@ struct WorldAtlasAdmin1Tests {
         try WorldAtlas(data: try WorldAtlasTestPackBuilder.standardWorld().build())
     }
 
-    /// ADM1 parses: tokens, countries, names (a blank Spanish name left blank) and outlines, in table order.
+    /// ADM1 parses: the plate groups, then tokens, countries, names (a blank Spanish name left blank), groups
+    /// and outlines, in table order.
     @Test func theAdmin1TableParses() throws {
         let atlas = try standardAtlas()
         #expect(atlas.admin1s.map(\.token) == ["ne:9", "AA-01", "AA-02", "ne:7"])
+        let south = AtlasAdmin1Group(token: "ne:region:AA:south", countryCode: "AA",
+                                     names: AtlasCityNames(english: "South Region", spanish: "Región Sur"))
+        #expect(atlas.admin1Groups == [south])
         let west = try #require(atlas.admin1(token: "AA-01"))
-        #expect(west.countryCode == "AA")
+        #expect(west.countryCode == "AA" && west.group == south)
         #expect(west.names == AtlasCityNames(english: "West Province", spanish: "Provincia Oeste"))
-        #expect(atlas.admin1(token: "AA-02")?.names.spanish == "")
+        #expect(atlas.admin1(token: "AA-02")?.names.spanish == "" && atlas.admin1(token: "AA-02")?.group == south)
+        let bee = try #require(atlas.admin1(token: "ne:7"))
+        #expect(bee.group == AtlasAdmin1Group(token: "ne:7", countryCode: "BB", names: bee.names), "its own group")
         #expect(atlas.admin1(token: "US-OR") == nil)
         #expect(atlas.admin1s(ofCountry: "AA").map(\.token) == ["AA-01", "AA-02"])
         #expect(atlas.admin1s(ofCountry: "BB").map(\.token) == ["ne:9", "ne:7"])
         #expect(atlas.admin1s(ofCountry: "ZZ").isEmpty)
-        // The outline accessor the screen draws the lines from.
         #expect(west.polygon.ringCount == 1)
         let ring = west.polygon.ring(0)
         #expect(ring.count == 4 && abs(ring[1].longitude - 30) < 1e-9 && abs(ring[1].latitude + 40) < 1e-9)
@@ -51,8 +56,8 @@ struct WorldAtlasAdmin1Tests {
         #expect(refusal(try WorldAtlasTestPackBuilder.assemble(sections)) == .missingSection("ADM1"))
     }
 
-    /// A malformed token, a repeated token, a country CTRY lacks, an empty English name and a bad outline
-    /// are refused, each naming its field.
+    /// A malformed token, a repeated token, a country CTRY lacks, an empty English name, a group past the
+    /// table or in another country, a bad group token, and a bad outline are refused, each naming its field.
     @Test func malformedAdmin1EntriesAreRefused() throws {
         let cases: [(String, (inout WorldAtlasTestPackBuilder) -> Void, WorldAtlasPackError)] = [
             ("lower-case code", { $0.admin1s[1].token = "aa-01" }, .malformed("ADM1", "token")),
@@ -62,6 +67,12 @@ struct WorldAtlasAdmin1Tests {
             ("repeated token", { $0.admin1s[2].token = "AA-01" }, .malformed("ADM1", "token")),
             ("unknown country", { $0.admin1s[1].country = "ZZ" }, .malformed("ADM1", "country")),
             ("empty name", { $0.admin1s[1].name = "" }, .malformed("ADM1", "name")),
+            ("group past the table", { $0.admin1s[1].group = 1 }, .malformed("ADM1", "group")),
+            ("group in another country", { $0.admin1s[3].group = 0 }, .malformed("ADM1", "group")),
+            ("bad group token", { $0.admin1Groups[0].token = "ne:region:AA:South" }, .malformed("ADM1", "groupToken")),
+            ("repeated group token", { $0.admin1Groups.append($0.admin1Groups[0]) }, .malformed("ADM1", "groupToken")),
+            ("group in an unknown country", { $0.admin1Groups[0].country = "ZZ" }, .malformed("ADM1", "country")),
+            ("unnamed group", { $0.admin1Groups[0].name = "" }, .malformed("ADM1", "name")),
             ("two-point ring", { $0.admin1s[1].feature.rings = [[(20, -40), (30, -40)]] }, .malformed("ADM1", "pointCount")),
             ("point off the globe", { $0.admin1s[1].feature.rings = [[(20, -40), (30, -40), (30, -95)]] }, .malformed("ADM1", "point")),
             ("bad box", { $0.admin1s[1].feature.bbox = (30, -40, 20, -20) }, .malformed("ADM1", "bbox")),
@@ -73,28 +84,37 @@ struct WorldAtlasAdmin1Tests {
         }
     }
 
-    /// A count over the cap, a body cut short and trailing bytes are refused.
+    /// Counts over the caps, a body cut short and trailing bytes are refused; empty tables open.
     @Test func aBadAdmin1BodyIsRefused() throws {
         var sections = WorldAtlasTestPackBuilder.standardWorld().rawSections()
         let adm1 = try #require(sections.firstIndex { $0.tag == "ADM1" })
-        sections[adm1].raw = Data([0xFF, 0xFF])
+        sections[adm1].raw = Data([0x01, 0x04])
+        #expect(refusal(try WorldAtlasTestPackBuilder.assemble(sections)) == .malformed("ADM1", "groupCount"))
+        sections[adm1].raw = Data([0, 0, 0xFF, 0xFF])
         #expect(refusal(try WorldAtlasTestPackBuilder.assemble(sections)) == .malformed("ADM1", "count"))
-        sections[adm1].raw = Data([1, 0, 5])
+        sections[adm1].raw = Data([0, 0, 1, 0, 5])
         #expect(refusal(try WorldAtlasTestPackBuilder.assemble(sections)) == .truncated("ADM1"))
         sections = WorldAtlasTestPackBuilder.standardWorld().rawSections()
         sections[adm1].raw.append(0)
         #expect(refusal(try WorldAtlasTestPackBuilder.assemble(sections)) == .malformed("ADM1", "trailingBytes"))
-        sections[adm1].raw = Data([0, 0])
-        #expect(refusal(try WorldAtlasTestPackBuilder.assemble(sections)) == nil, "an empty table opens")
+        sections[adm1].raw = Data([0, 0, 0, 0])
+        #expect(refusal(try WorldAtlasTestPackBuilder.assemble(sections)) == nil, "empty tables open")
     }
 
-    /// The token shapes the reader accepts.
-    @Test func admin1TokenShapes() {
+    /// The token shapes the reader accepts, for entries and for plate groups.
+    @Test func tokenShapes() {
         for good in ["US-OR", "AU-NSW", "FR-75", "GB-WSM", "ne:1159313269", "ne:1"] {
             #expect(AtlasAdmin1.isValidToken(good), "\(good)")
         }
         for bad in ["US-", "US-ORE1", "us-or", "U-OR", "USOR", "ne:", "ne:12a", "ne:1234567890123", "-99-X1~", "Q90"] {
             #expect(!AtlasAdmin1.isValidToken(bad), "\(bad)")
+        }
+        for good in ["GB-ENG", "FR-IDF", "IT-62", "ES-MD", "IE-L", "ne:region:FR:cote-d-or", "ne:region:AA:south"] {
+            #expect(AtlasAdmin1Group.isValidToken(good), "\(good)")
+        }
+        for bad in ["ne:region:fr:x", "ne:region:FR:", "ne:region:FR:Upper", "ne:region:FRA:x", "ne:region:FR-x", "England",
+                    "ne:region:FR:" + String(repeating: "a", count: 41)] {
+            #expect(!AtlasAdmin1Group.isValidToken(bad), "\(bad)")
         }
     }
 
@@ -105,24 +125,49 @@ struct WorldAtlasAdmin1Tests {
         #expect(atlas.admin1(at: GeoPoint(-22, 22))?.token == "AA-01")
         #expect(atlas.admin1(at: GeoPoint(-38, 38))?.token == "AA-02")
         #expect(atlas.admin1(at: GeoPoint(-22, 22), inCountry: "BB")?.token == "ne:9")
-        // AA's hole has no country, so the first entry holding it, BB's stray ring, answers.
         #expect(atlas.country(at: GeoPoint(-30, 27)) == nil)
         #expect(atlas.admin1(at: GeoPoint(-30, 27))?.token == "ne:9")
         #expect(atlas.admin1(at: GeoPoint(-35, 52))?.token == "ne:7")
         #expect(atlas.admin1(at: GeoPoint(-35, 57)) == nil, "BB's east half has no state")
         #expect(atlas.admin1(at: GeoPoint(5, -30)) == nil, "at sea")
         #expect(atlas.admin1(at: GeoPoint(.nan, 0)) == nil)
+        #expect(atlas.admin1Group(at: GeoPoint(-38, 38))?.token == "ne:region:AA:south")
+        #expect(atlas.admin1Group(at: GeoPoint(-35, 52))?.token == "ne:7")
     }
 
-    /// The plate's place: the state and its country, just the country where no state holds the fix, nothing
-    /// at sea.
-    @Test func thePlatesPlace() throws {
+    /// The plate's place is the plate group and its country, just the country where no state holds the fix,
+    /// nothing at sea.
+    @Test func thePlatesPlaceIsTheGroup() throws {
         let atlas = try standardAtlas()
         let west = try #require(atlas.placeName(at: GeoPoint(-22, 22)))
-        #expect(west.countryCode == "AA" && west.admin1Token == "AA-01")
-        #expect(west.admin1Names == AtlasCityNames(english: "West Province", spanish: "Provincia Oeste"))
+        #expect(west.countryCode == "AA" && west.regionToken == "ne:region:AA:south")
+        #expect(west.regionNames == AtlasCityNames(english: "South Region", spanish: "Región Sur"))
+        #expect(atlas.placeName(at: GeoPoint(-38, 38)) == west, "AA-02 is in the same group")
+        #expect(atlas.placeName(at: GeoPoint(-35, 52))?.regionToken == "ne:7")
         #expect(atlas.placeName(at: GeoPoint(-35, 57)) == AtlasPlaceName(countryCode: "BB"))
         #expect(atlas.placeName(at: GeoPoint(5, -30)) == nil)
+    }
+
+    /// Hex edges carry a country line between countries, a state line between plate groups of one country,
+    /// and nothing inside a group, at sea or beside a side with no state; levels draw them in steps.
+    @Test func hexEdgesCarryLinesBetweenGroups() throws {
+        let atlas = try standardAtlas()
+        let west = atlas.placeName(at: GeoPoint(-22, 22)), east = atlas.placeName(at: GeoPoint(-38, 38))
+        let bee = atlas.placeName(at: GeoPoint(-35, 52)), bare = atlas.placeName(at: GeoPoint(-35, 57))
+        #expect(WorldAtlas.border(between: west, and: east) == .none, "one group")
+        #expect(WorldAtlas.border(between: west, and: bee) == .country)
+        #expect(WorldAtlas.border(between: bee, and: bare) == .none, "no state on one side")
+        #expect(WorldAtlas.border(between: west, and: nil) == .none, "the sea")
+        let other = AtlasPlaceName(countryCode: "AA", regionToken: "AA-09", regionNames: AtlasCityNames(english: "North"))
+        #expect(WorldAtlas.border(between: west, and: other) == .region)
+        let levels = AtlasZoomLevel.allCases
+        #expect(levels.map { $0.draws(.region) } == [false, false, true, true])
+        #expect(levels.map { $0.draws(.country) } == [false, true, true, true])
+        #expect(levels.allSatisfy { !$0.draws(.none) })
+        let grid = AtlasZoomLevel.city.hexGrid
+        let hex = grid.cell(containing: GeoPoint(-22, 22))
+        #expect(atlas.placeName(of: hex, in: grid) == atlas.placeName(at: grid.centreGeo(of: hex)))
+        #expect(grid.neighbours(of: hex).count == 6 && Set(grid.neighbours(of: hex)).count == 6)
     }
 
     /// The line accessors return the outlines whose boxes touch a viewport, across the antimeridian too.
@@ -140,51 +185,86 @@ struct WorldAtlasAdmin1Tests {
     }
 }
 
-/// The shipped pack's states and provinces (spot checks, 2026-10-29).
+/// The shipped pack's states, provinces and plate groups (spot checks, 2026-10-29).
 @MainActor
 struct WorldAtlasShippedAdmin1Tests {
-    /// Real places name their state or province and its country.
-    @Test func realPlacesNameTheirStateOrProvince() throws {
+    /// Real places name their plate group (the first-level region where Natural Earth's admin-1 is
+    /// second-level) and its country.
+    @Test func realPlacesNameTheirRegion() throws {
         let atlas = try WorldAtlas(data: Self.shippedPack())
         let places: [(name: String, point: GeoPoint, token: String, english: String, country: String)] = [
             ("Portland", GeoPoint(45.5205, -122.6255), "US-OR", "Oregon", "US"),
             ("Seattle", GeoPoint(47.6062, -122.3321), "US-WA", "Washington", "US"),
             ("Toronto", GeoPoint(43.6532, -79.3832), "CA-ON", "Ontario", "CA"),
-            ("Paris (Natural Earth draws France's départements)", GeoPoint(48.8566, 2.3522), "FR-75", "Paris", "FR"),
             ("Sydney", GeoPoint(-33.8688, 151.2093), "AU-NSW", "New South Wales", "AU"),
             ("Honolulu", GeoPoint(21.307, -157.858), "US-HI", "Hawaii", "US"),
+            ("London (Westminster)", GeoPoint(51.5074, -0.1278), "GB-ENG", "England", "GB"),
+            ("Edinburgh", GeoPoint(55.9533, -3.1883), "GB-SCT", "Scotland", "GB"),
+            ("Paris (the département)", GeoPoint(48.8566, 2.3522), "FR-IDF", "Île-de-France", "FR"),
+            ("Rome", GeoPoint(41.9028, 12.4964), "IT-62", "Lazio", "IT"),
+            ("Madrid", GeoPoint(40.4168, -3.7038), "ES-MD", "Community of Madrid", "ES"),
+            ("Dublin", GeoPoint(53.3498, -6.2603), "IE-L", "Leinster", "IE"),
+            ("Cork", GeoPoint(51.8985, -8.4756), "IE-M", "Munster", "IE"),
+            ("Brussels", GeoPoint(50.8467, 4.3525), "BE-BRU", "Brussels-Capital Region", "BE"),
+            ("Manila", GeoPoint(14.5995, 120.9842), "PH-00", "Metro Manila", "PH"),
         ]
         for place in places {
             let found = atlas.placeName(at: place.point)
-            #expect(found?.admin1Token == place.token, "\(place.name)")
-            #expect(found?.admin1Names?.english == place.english, "\(place.name)")
+            #expect(found?.regionToken == place.token, "\(place.name)")
+            #expect(found?.regionNames?.english == place.english, "\(place.name)")
             #expect(found?.countryCode == place.country, "\(place.name)")
         }
-        #expect(atlas.placeName(at: GeoPoint(45.5205, -122.6255))?.admin1Names?.spanish == "Oregón")
+        #expect(atlas.placeName(at: GeoPoint(45.5205, -122.6255))?.regionNames?.spanish == "Oregón")
+        #expect(atlas.placeName(at: GeoPoint(40.4168, -3.7038))?.regionNames?.spanish == "Comunidad de Madrid")
+        #expect(atlas.placeName(at: GeoPoint(51.5074, -0.1278))?.regionNames?.spanish == "Inglaterra")
         #expect(atlas.placeName(at: GeoPoint(0, -150)) == nil, "mid-Pacific")
         #expect(atlas.admin1(at: GeoPoint(30, -40)) == nil, "mid-Atlantic")
-        // Lord Howe Island shares AU-NSW in the source; New South Wales keeps the code.
+        // The entries keep their own names; only the plate groups them.
+        #expect(atlas.admin1(at: GeoPoint(48.8566, 2.3522))?.token == "FR-75")
         #expect(atlas.admin1(at: GeoPoint(-31.55, 159.08))?.names.english == "Lord Howe Island")
     }
 
-    /// Every admin-1 entry belongs to a country the pack has, and its token is unique.
+    /// Lines on hex edges: none between two London boroughs, a state line between England and Scotland and
+    /// between Oregon and Washington, a country line between Detroit and Windsor.
+    @Test func realLinesFollowTheGroups() throws {
+        let atlas = try WorldAtlas(data: Self.shippedPack())
+        let place = { (lat: Double, lon: Double) in atlas.placeName(at: GeoPoint(lat, lon)) }
+        #expect(WorldAtlas.border(between: place(51.5074, -0.1278), and: place(51.5390, -0.1426)) == .none,
+                "Westminster and Camden")
+        #expect(WorldAtlas.border(between: place(51.5074, -0.1278), and: place(55.9533, -3.1883)) == .region)
+        #expect(WorldAtlas.border(between: place(45.5205, -122.6255), and: place(45.6387, -122.6615)) == .region,
+                "Portland and Vancouver, Washington")
+        #expect(WorldAtlas.border(between: place(42.3314, -83.0458), and: place(42.3149, -83.0364)) == .country,
+                "Detroit and Windsor")
+    }
+
+    /// Every admin-1 entry belongs to a country the pack has, its token is unique, and its group is in its
+    /// own country.
     @Test func everyEntryBelongsToACountry() throws {
         let atlas = try WorldAtlas(data: Self.shippedPack())
         #expect(atlas.admin1s.count > 4_000)
         #expect(atlas.admin1s.allSatisfy { atlas.country(code: $0.countryCode) != nil })
+        #expect(atlas.admin1s.allSatisfy { $0.group.countryCode == $0.countryCode })
         #expect(Set(atlas.admin1s.map(\.token)).count == atlas.admin1s.count)
         #expect(atlas.admin1s(ofCountry: "US").count >= 50)
+        #expect(Set(atlas.admin1s(ofCountry: "GB").map(\.group.token)) == ["GB-ENG", "GB-NIR", "GB-SCT", "GB-WLS"])
+        #expect(Set(atlas.admin1s(ofCountry: "IE").map(\.group.token)) == ["IE-C", "IE-L", "IE-M", "IE-U"])
     }
 
-    /// The zoom control's words: the level, and from State in the place at the centre.
+    /// The zoom control's words: the level alone at World; the country alone at Country; the plate group and
+    /// the country from State in.
     @Test func theZoomControlsWords() throws {
         let atlas = try WorldAtlas(data: Self.shippedPack())
         let portland = GeoPoint(45.5205, -122.6255)
         #expect(atlas.zoomDescription(level: .world, centre: portland).place == nil)
-        #expect(atlas.zoomDescription(level: .country, centre: portland).place == nil)
+        #expect(atlas.zoomDescription(level: .country, centre: portland).place == AtlasPlaceName(countryCode: "US"))
         let city = atlas.zoomDescription(level: .city, centre: portland)
-        #expect(city.level == .city && city.place?.admin1Names?.english == "Oregon" && city.place?.countryCode == "US")
-        #expect(atlas.zoomDescription(level: .state, centre: portland).place?.admin1Token == "US-OR")
+        #expect(city.level == .city && city.place?.regionNames?.english == "Oregon" && city.place?.countryCode == "US")
+        #expect(atlas.zoomDescription(level: .state, centre: portland).place?.regionToken == "US-OR")
+        let london = GeoPoint(51.5074, -0.1278)
+        #expect(atlas.zoomDescription(level: .state, centre: london).place?.regionNames?.english == "England")
+        #expect(atlas.zoomDescription(level: .country, centre: london).place == AtlasPlaceName(countryCode: "GB"))
+        #expect(atlas.zoomDescription(level: .country, centre: GeoPoint(0, -150)).place == nil, "at sea")
     }
 
     /// The bundled pack's bytes.

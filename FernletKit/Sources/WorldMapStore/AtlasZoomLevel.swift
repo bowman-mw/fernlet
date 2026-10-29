@@ -69,6 +69,11 @@ public nonisolated enum AtlasZoomLevel: String, CaseIterable, Codable, Comparabl
     public var showsAdmin1Lines: Bool { self >= .state }
     /// Whether the plate names the place ("Oregon · United States"): from State in.
     public var showsPlaceName: Bool { self >= .state }
+    /// Whether the zoom control's VoiceOver words name the country under the view's centre: from Country in
+    /// ("Country, United States").
+    public var readsCountry: Bool { self >= .country }
+    /// Whether they also name the plate group: from State in ("City, Oregon, United States").
+    public var readsRegion: Bool { self >= .state }
 
     /// The world-view hex grid at this level.
     public var hexGrid: WorldViewHexGrid { WorldViewHexGrid(level: self) }
@@ -155,12 +160,14 @@ public nonisolated struct WorldViewHexGrid: Hashable, Sendable {
 }
 
 /// The parts of the zoom control's VoiceOver words (spec: one adjustable element that reads the level and the
-/// place, "City, Oregon, United States"). Tokens and data only: the screen formats them, naming the level from
-/// its token and the country from its code.
+/// place). At World just the level ("World"); at Country the country alone ("Country, United States"); from
+/// State the plate group and the country ("City, Oregon, United States"). Tokens and data only: the screen
+/// formats them, naming the level from its token and the country from its code.
 public nonisolated struct AtlasZoomDescription: Hashable, Sendable {
     /// The level.
     public let level: AtlasZoomLevel
-    /// The place at the view's centre, only where the level names one (from State in), else nil.
+    /// The place at the view's centre: nil at World or at sea; the country alone (no region) at Country;
+    /// the plate group and the country from State in.
     public let place: AtlasPlaceName?
 
     /// A description with every field given.
@@ -171,9 +178,14 @@ public nonisolated struct AtlasZoomDescription: Hashable, Sendable {
 }
 
 extension WorldAtlas {
-    /// The zoom control's VoiceOver parts at `level` for a view centred on `centre`: the level, and from
-    /// State in the place there (``placeName(at:)``), the same place the plate names.
+    /// The zoom control's VoiceOver parts at `level` for a view centred on `centre`: the level; at Country
+    /// the country there; from State the place the plate names (``placeName(at:)``).
     public func zoomDescription(level: AtlasZoomLevel, centre: GeoPoint) -> AtlasZoomDescription {
-        AtlasZoomDescription(level: level, place: level.showsPlaceName ? placeName(at: centre) : nil)
+        guard level.readsCountry, centre.isValid else { return AtlasZoomDescription(level: level, place: nil) }
+        guard level.readsRegion else {
+            let country = country(at: centre)?.code ?? admin1(at: centre, inCountry: nil)?.countryCode
+            return AtlasZoomDescription(level: level, place: country.map { AtlasPlaceName(countryCode: $0) })
+        }
+        return AtlasZoomDescription(level: level, place: placeName(at: centre))
     }
 }
