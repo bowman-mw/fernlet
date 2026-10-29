@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "about": "Country stamps for the World passport, approved batch by batch on the World Review Country Stamps page (style and plan: ex-pass-country). Each symbol is 14 x 14 rows of 'k' (ink) and '.' (clear).",
+  "about": "All 194 country stamps for the World passport (North Korea is out), approved batch by batch on the World Review Country Stamps page (style and plan: ex-pass-country). Each symbol is 14 x 14 rows of 'k' (ink) and '.' (clear).",
   "style": {
     "postmark": "56 x 44 pt: outer rounded rect x 2.5, y 2.5, 51 x 39, radius 5, stroke 2; inner frame x 6, y 6, 44 x 25, radius 3, stroke 0.8; both in the stamp's ink, no fill.",
     "symbol": "14 x 14 pixels centred at x 28, y 18.5, each pixel min(21 / 14, 2.2) = 1.5 pt. About 7 % of ink pixels are left out, chosen by a seeded generator from the country code, so each stamp looks worn in its own way.",
@@ -4399,6 +4399,685 @@
         ".............."
       ],
       "batch": "af"
+    },
+    "ar": {
+      "en": "Argentina",
+      "es": "Argentina",
+      "label": [
+        "ARGENTINA"
+      ],
+      "symbol": "a mate gourd and its bombilla",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..........k...",
+        "..........k...",
+        ".........k....",
+        "...kkkkkkkk...",
+        "..k......k.k..",
+        ".k.k.k.k.k..k.",
+        ".k.........k..",
+        "..k.......k...",
+        ".k.k.k.k.k.k..",
+        "..k.......k...",
+        "...k.....k....",
+        "....kkkkk.....",
+        "....k...k.....",
+        "...kkkkkkk...."
+      ],
+      "batch": "sa"
+    },
+    "bo": {
+      "en": "Bolivia",
+      "es": "Bolivia",
+      "label": [
+        "BOLIVIA"
+      ],
+      "symbol": "a llama",
+      "ink": "#B3343A",
+      "rows": [
+        "..........kk..",
+        "..........kkk.",
+        "..........kkkk",
+        "..........kk..",
+        "..........kk..",
+        "..........kk..",
+        "..kkkkkkkkkk..",
+        ".kkkkkkkkkkk..",
+        "kkkkkkkkkkkk..",
+        ".kkkkkkkkkk...",
+        "..k.k....k.k..",
+        "..k.k....k.k..",
+        "..k.k....k.k..",
+        ".kk.kk..kk.kk."
+      ],
+      "batch": "sa"
+    },
+    "br": {
+      "en": "Brazil",
+      "es": "Brasil",
+      "label": [
+        "BRASIL"
+      ],
+      "symbol": "Christ the Redeemer on Corcovado",
+      "ink": "#2F6FA3",
+      "rows": [
+        "......kk......",
+        "......kk......",
+        "kkkkkkkkkkkkkk",
+        "kkkkkkkkkkkkkk",
+        ".....kkkk.....",
+        ".....kkkk.....",
+        ".....kkkk.....",
+        "....kkkkkk....",
+        "....kkkkkk....",
+        "....kkkkkk....",
+        "...k......k...",
+        "..k........k..",
+        ".k..........k.",
+        "k............k"
+      ],
+      "batch": "sa"
+    },
+    "cl": {
+      "en": "Chile",
+      "es": "Chile",
+      "label": [
+        "CHILE"
+      ],
+      "symbol": "a moai of Rapa Nui",
+      "ink": "#7B4BA8",
+      "rows": [
+        "....kkkkkk....",
+        "...kkkkkkkk...",
+        "...kkkkkkkk...",
+        "..kk..kkkkk...",
+        "..kkkkkkkkk...",
+        "...kkkkkkkk...",
+        "..kkkkkkkk....",
+        ".kkkkkkkkk....",
+        "..kkkkkkkk....",
+        "...kkkkkkk....",
+        "...kkkkkkk....",
+        "...kkkkkkkk...",
+        "..kkkkkkkkkk..",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "sa"
+    },
+    "co": {
+      "en": "Colombia",
+      "es": "Colombia",
+      "label": [
+        "COLOMBIA"
+      ],
+      "symbol": "the wax palms of the Cocora Valley",
+      "ink": "#2E8B57",
+      "rows": [
+        ".k........k...",
+        "kkk......kkk..",
+        "k.k..k...k.k..",
+        "..k.kkk...k...",
+        "..k.k.k...k...",
+        "..k..k....k...",
+        "..k..k....k...",
+        "..k..k....k...",
+        "..k..k....k...",
+        "..k..k...kk...",
+        "..k..k..k..k..",
+        "kk.k.kk.....kk",
+        "k...k..kk...k.",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "sa"
+    },
+    "ec": {
+      "en": "Ecuador",
+      "es": "Ecuador",
+      "label": [
+        "ECUADOR"
+      ],
+      "symbol": "a Galápagos giant tortoise",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        "..............",
+        "....kkkkkk....",
+        "...k.k..k.k...",
+        "..k.kk..kk.kkk",
+        ".k..k....k.kkk",
+        ".kkkkkkkkkkk.k",
+        "..kk.....kk...",
+        "..kk.....kk...",
+        "..............",
+        "..............",
+        "..............",
+        "..............",
+        ".............."
+      ],
+      "batch": "sa"
+    },
+    "gy": {
+      "en": "Guyana",
+      "es": "Guyana",
+      "label": [
+        "GUYANA"
+      ],
+      "symbol": "a giant water lily",
+      "ink": "#2F6FA3",
+      "rows": [
+        "......k.......",
+        ".....kkk......",
+        "....kk.kk.....",
+        ".....kkk......",
+        "..kkkkkkkkkk..",
+        ".k..........k.",
+        "k.k.k.k.k.k..k",
+        "k............k",
+        ".kkkkkkkkkkkk.",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        "..............",
+        ".............."
+      ],
+      "batch": "sa"
+    },
+    "py": {
+      "en": "Paraguay",
+      "es": "Paraguay",
+      "label": [
+        "PARAGUAY"
+      ],
+      "symbol": "ñandutí lace",
+      "ink": "#B3343A",
+      "rows": [
+        "..............",
+        "....kkk.kk....",
+        "..kk..k...kk..",
+        "..kk..k...kk..",
+        ".k..kk..kk..k.",
+        ".k..k....k..k.",
+        "...k..kk..kkk.",
+        ".kk...kk......",
+        ".k..k....k..k.",
+        ".k..kk..kk..k.",
+        "..kk..k...kk..",
+        "..kk..k...kk..",
+        "....kkk.kk....",
+        ".............."
+      ],
+      "batch": "sa"
+    },
+    "pe": {
+      "en": "Peru",
+      "es": "Perú",
+      "label": [
+        "PERÚ"
+      ],
+      "symbol": "Machu Picchu",
+      "ink": "#B3343A",
+      "rows": [
+        "..........k...",
+        ".........kkk..",
+        "........k...k.",
+        ".......k.....k",
+        "......k......k",
+        "..kk.k........",
+        ".k..k.........",
+        "k...kkkkkkkkkk",
+        "kkk.k.k.k.k.k.",
+        "k.kkkkkkkkkkkk",
+        "kk.k.k.k.k.k.k",
+        "k.kkkkkkkkkkkk",
+        "kk............",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "sa"
+    },
+    "sr": {
+      "en": "Suriname",
+      "es": "Surinam",
+      "label": [
+        "SURINAME"
+      ],
+      "symbol": "a blue poison dart frog",
+      "ink": "#B3343A",
+      "rows": [
+        "..............",
+        ".kk........kk.",
+        "k..k......k..k",
+        ".kkkkkkkkkkkk.",
+        "..kkkkkkkkkk..",
+        ".kkkkkkkkkkkk.",
+        "kk.kkkkkkkk.kk",
+        "k..kkkkkkkk..k",
+        "...kkkkkkkk...",
+        "..kkkkkkkkkk..",
+        ".kk.kkkkkk.kk.",
+        "kk..kk..kk..kk",
+        "k............k",
+        ".............."
+      ],
+      "batch": "sa"
+    },
+    "uy": {
+      "en": "Uruguay",
+      "es": "Uruguay",
+      "label": [
+        "URUGUAY"
+      ],
+      "symbol": "the Palacio Salvo",
+      "ink": "#2E8B57",
+      "rows": [
+        "......kk......",
+        ".....kkkk.....",
+        "......kk......",
+        ".....kkkk.....",
+        ".....k..k.....",
+        "....kkkkkk....",
+        "....k.kk.k....",
+        "..kkkkkkkkkk..",
+        "..k.k.kk.k.k..",
+        "..kkkkkkkkkk..",
+        "..k.k.kk.k.k..",
+        "..kkkkkkkkkk..",
+        "..k.k.kk.k.k..",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "sa"
+    },
+    "ve": {
+      "en": "Venezuela",
+      "es": "Venezuela",
+      "label": [
+        "VENEZUELA"
+      ],
+      "symbol": "Angel Falls from its tepui",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..............",
+        ".kkkkkkkkkkkk.",
+        "k............k",
+        "k......k.....k",
+        "k......k.....k",
+        "k......k.....k",
+        "k......k.....k",
+        "k.....k.k....k",
+        "k......k.....k",
+        "k.....k.k....k",
+        "k....k...k...k",
+        "kk.kk.kk.kk.kk",
+        "k.k..k..k..k.k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "sa"
+    },
+    "au": {
+      "en": "Australia",
+      "es": "Australia",
+      "label": [
+        "AUSTRALIA"
+      ],
+      "symbol": "a kangaroo",
+      "ink": "#2E8B57",
+      "rows": [
+        "..........kk..",
+        ".........kkk..",
+        "........kkkkk.",
+        "........kk....",
+        ".......kkk....",
+        "......kkkk....",
+        ".....kkkkk....",
+        "....kkkkkk....",
+        "....kkkkk.k...",
+        "...kkkkkk.....",
+        "..kk..kkk.....",
+        ".kk....kk.....",
+        "kk....kkkkk...",
+        "k............."
+      ],
+      "batch": "oc"
+    },
+    "nz": {
+      "en": "New Zealand",
+      "es": "Nueva Zelanda",
+      "label": [
+        "NEW ZEALAND"
+      ],
+      "symbol": "a kiwi",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        "..............",
+        "...kkkkk......",
+        "..kkkkkkkk....",
+        ".kkkkkkkkkk...",
+        ".kkkkkkkkkk.k.",
+        ".kkkkkkkkkkk..",
+        "..kkkkkkkk.k..",
+        "...k...k...k..",
+        "...k...k....k.",
+        "..kk..kk.....k",
+        "..............",
+        "..............",
+        ".............."
+      ],
+      "batch": "oc"
+    },
+    "pg": {
+      "en": "Papua New Guinea",
+      "es": "Papúa Nueva Guinea",
+      "label": [
+        "PAPUA NEW",
+        "GUINEA"
+      ],
+      "symbol": "a bird of paradise",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..kk..........",
+        ".kkk..........",
+        "kkkk..........",
+        "..kkk.........",
+        "..kkkk........",
+        "...kkkk.......",
+        "...kk.k.k.....",
+        "...k.k.k.k....",
+        "..k.k.k.k.k...",
+        "..k.k.k.k..k..",
+        ".k.k..k..k..k.",
+        ".k..k..k..k...",
+        "k...k...k...k.",
+        ".............."
+      ],
+      "batch": "oc"
+    },
+    "fj": {
+      "en": "Fiji",
+      "es": "Fiyi",
+      "label": [
+        "FIJI"
+      ],
+      "symbol": "a bure, the thatched house",
+      "ink": "#2F6FA3",
+      "rows": [
+        "......kk......",
+        ".....kkkk.....",
+        "....kk..kk....",
+        "...kk....kk...",
+        "..kk......kk..",
+        ".kk........kk.",
+        "kkkkkkkkkkkkkk",
+        "..k........k..",
+        "..k..kkkk..k..",
+        "..k..k..k..k..",
+        "..k..k..k..k..",
+        "..k..k..k..k..",
+        ".kkkkkkkkkkkk.",
+        ".............."
+      ],
+      "batch": "oc"
+    },
+    "sb": {
+      "en": "Solomon Islands",
+      "es": "Islas Salomón",
+      "label": [
+        "SOLOMON",
+        "ISLANDS"
+      ],
+      "symbol": "a war canoe with its high prow",
+      "ink": "#B3343A",
+      "rows": [
+        "k............k",
+        "k............k",
+        ".k..........k.",
+        ".k..........k.",
+        "..k........k..",
+        "..kk......kk..",
+        "...kkkkkkkk...",
+        "....kkkkkk....",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        "..............",
+        "..............",
+        ".............."
+      ],
+      "batch": "oc"
+    },
+    "vu": {
+      "en": "Vanuatu",
+      "es": "Vanuatu",
+      "label": [
+        "VANUATU"
+      ],
+      "symbol": "Mount Yasur throwing lava",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..k...k...k...",
+        "...k..k..k....",
+        ".k...k.k...k..",
+        "......kk......",
+        ".....k..k.....",
+        "....k....k....",
+        "...k......k...",
+        "..k........k..",
+        ".k..........k.",
+        "k............k",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "oc"
+    },
+    "ws": {
+      "en": "Samoa",
+      "es": "Samoa",
+      "label": [
+        "SAMOA"
+      ],
+      "symbol": "the To Sua ocean trench and its ladder",
+      "ink": "#2E8B57",
+      "rows": [
+        "..kkkkkkkkkk..",
+        ".k....k.k...k.",
+        "k.....kkk....k",
+        "k.....k.k....k",
+        "k.....kkk....k",
+        "k.....k.k....k",
+        "k.....kkk....k",
+        "k.....k.k....k",
+        "k.kk..kk.kk..k",
+        "k...kk...kk..k",
+        ".k..........k.",
+        "..kkkkkkkkkk..",
+        "..............",
+        ".............."
+      ],
+      "batch": "oc"
+    },
+    "to": {
+      "en": "Tonga",
+      "es": "Tonga",
+      "label": [
+        "TONGA"
+      ],
+      "symbol": "the Ha'amonga 'a Maui trilithon",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..............",
+        "kkkkkkkkkkkkkk",
+        "kkkkkkkkkkkkkk",
+        "..kkk....kkk..",
+        "..kkk....kkk..",
+        "..kkk....kkk..",
+        "..kkk....kkk..",
+        "..kkk....kkk..",
+        "..kkk....kkk..",
+        "..kkk....kkk..",
+        "..kkk....kkk..",
+        "..kkk....kkk..",
+        "kkkkkkkkkkkkkk",
+        ".............."
+      ],
+      "batch": "oc"
+    },
+    "ki": {
+      "en": "Kiribati",
+      "es": "Kiribati",
+      "label": [
+        "KIRIBATI"
+      ],
+      "symbol": "an atoll around its lagoon",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        "....kkkkkk....",
+        "...kkkkkkkk...",
+        "..kk......k...",
+        ".kk........kk.",
+        ".kk........kk.",
+        ".kk........kk.",
+        ".kk........kk.",
+        ".kk........kk.",
+        ".kk........kk.",
+        "..kk.......k..",
+        "....kkkkkkk...",
+        "....kkkkkk....",
+        ".............."
+      ],
+      "batch": "oc"
+    },
+    "mh": {
+      "en": "Marshall Islands",
+      "es": "Islas Marshall",
+      "label": [
+        "MARSHALL",
+        "ISLANDS"
+      ],
+      "symbol": "a stick chart",
+      "ink": "#B3343A",
+      "rows": [
+        "k.....k......k",
+        ".k...k.k....k.",
+        "..k.k...k..k..",
+        "...k.....kk...",
+        "..k.k...k..k..",
+        ".k...k.k....k.",
+        "kkkkkkkkkkkkkk",
+        ".k...k.k....k.",
+        "..k.k...k..k..",
+        "...k.....kk...",
+        "..k.k...k..k..",
+        ".k...k.k....k.",
+        "k.....k......k",
+        ".............."
+      ],
+      "batch": "oc"
+    },
+    "fm": {
+      "en": "Micronesia",
+      "es": "Micronesia",
+      "label": [
+        "MICRONESIA"
+      ],
+      "symbol": "a rai stone of Yap",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..............",
+        "....kkkkkk....",
+        "...kkkkkkkk...",
+        "..kkkkkkkkkk..",
+        "..kkkkkkkkkk..",
+        ".kkkkk..kkkkk.",
+        ".kkkk....kkkk.",
+        ".kkkkk..kkkkk.",
+        "..kkkkkkkkkk..",
+        "..kkkkkkkkkk..",
+        "...kkkkkkkk...",
+        "....kkkkkk....",
+        "..............",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "oc"
+    },
+    "nr": {
+      "en": "Nauru",
+      "es": "Nauru",
+      "label": [
+        "NAURU"
+      ],
+      "symbol": "the coral pinnacles",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        "..k.....k.....",
+        "..k....kk...k.",
+        ".kk....kk...k.",
+        ".kk...kkk..kk.",
+        ".kkk..kkk..kk.",
+        "kkkk.kkkkkkkk.",
+        "kkkkkkkkkkkkkk",
+        "k.k.kk.k..kk.k",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        ".............."
+      ],
+      "batch": "oc"
+    },
+    "pw": {
+      "en": "Palau",
+      "es": "Palaos",
+      "label": [
+        "PALAU"
+      ],
+      "symbol": "the Rock Islands",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..............",
+        "..kkkk...kkk..",
+        ".kkkkkk.kkkkk.",
+        ".kkkkkk.kkkkk.",
+        "..kkkk...kkk..",
+        "...kk.....k...",
+        "...kk.....k...",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        "..............",
+        "..............",
+        ".............."
+      ],
+      "batch": "oc"
+    },
+    "tv": {
+      "en": "Tuvalu",
+      "es": "Tuvalu",
+      "label": [
+        "TUVALU"
+      ],
+      "symbol": "a palm on a tiny islet",
+      "ink": "#2E8B57",
+      "rows": [
+        "....kk.kk.....",
+        "..kk..k..kk...",
+        ".k...kkk....k.",
+        "....k.k.k.....",
+        ".......k......",
+        "........k.....",
+        "........k.....",
+        ".......k......",
+        ".....kkkkk....",
+        "...kkkkkkkkk..",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "oc"
     }
   },
   "excluded": {

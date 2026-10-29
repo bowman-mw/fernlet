@@ -22,8 +22,8 @@ public nonisolated struct CountryStamp: Hashable, Sendable {
 
 /// The country stamps approved so far (`World-Country-Stamps.json`, bundled as `WorldCountryStamps.json`): one
 /// rounded-rectangle postmark per country in one of four inks, its name in pixel capitals and a 14 × 14 symbol.
-/// Batches land in the same file (North America first); a country with no stamp yet has none here, and the
-/// passport draws its dashed space.
+/// The batches landed in the same file, continent by continent; since 2026-10-29 every one of the passport's 194
+/// countries has its stamp (`WorldCountryStampsTests` holds that). The not-earned look is the passport's dashed space.
 ///
 /// **The ink rule** (the file's `style.ink`): the stamp's ink is ``inks``[(first letter + second letter of the
 /// code, as ASCII) mod 4]. A stamp whose ink breaks the rule is refused. The postmark geometry, name sizes, wear

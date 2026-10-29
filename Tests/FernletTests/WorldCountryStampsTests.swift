@@ -6,42 +6,10 @@ import WorldMapStore
 @testable import Fernlet
 
 /// The country stamps (World-Exploration-Spec §3, the design session's `World-Country-Stamps.json`, batch by
-/// batch): the bundled file loads, every key is a country of the shipped atlas, every symbol is 14 × 14, every ink
-/// follows the rule, every stamp has its names, a country whose batch hasn't landed has none, and a broken file is
-/// refused.
+/// batch, all 194 approved 2026-10-29): the bundled file loads, its stamps are exactly the passport's countries,
+/// every symbol is 14 × 14, every ink follows the rule, every stamp has its names, and a broken file is refused.
 @MainActor
 struct WorldCountryStampsTests {
-    /// North America's 23, the first approved batch (2026-10-29).
-    static let northAmerica: Set<String> = [
-        "AG", "BB", "BS", "BZ", "CA", "CR", "CU", "DM", "DO", "GD", "GT", "HN", "HT", "JM", "KN", "LC", "MX", "NI",
-        "PA", "SV", "TT", "US", "VC",
-    ]
-
-    /// Europe's first 33 (2026-10-29); the other 11 of board st-eu-2 are being redrawn.
-    static let europeFirst: Set<String> = [
-        "GB", "FR", "IE", "IS", "NO", "SE", "FI", "DK", "EE", "LV", "LT", "IT", "VA", "SM", "MT", "SI", "HR", "BA",
-        "RS", "ME", "AL", "MK", "GR", "BG", "RO", "MD", "HU", "SK", "CZ", "PL", "UA", "BY", "RU",
-    ]
-
-    /// Asia's first 24 (2026-10-29); Japan follows, its sample redrawn.
-    static let asiaFirst: Set<String> = [
-        "BN", "ID", "PH", "TL", "KZ", "KG", "TJ", "TM", "UZ", "NP", "BT", "BD", "IN", "PK", "LK", "MV", "AF", "IR",
-        "IQ", "SY", "LB", "IL", "PS", "JO",
-    ]
-
-    /// Africa's 54 (2026-10-29).
-    static let africa: Set<String> = [
-        "MA", "DZ", "TN", "LY", "EG", "SD", "MR", "SN", "GM", "GW", "GN", "SL", "LR", "CI", "ML", "BF", "GH", "TG",
-        "BJ", "NE", "NG", "CV", "CM", "TD", "CF", "GQ", "GA", "CG", "CD", "ST", "AO", "BI", "RW", "UG", "KE", "TZ",
-        "ET", "ER", "DJ", "SO", "SS", "SC", "KM", "MG", "MU", "MZ", "MW", "ZM", "ZW", "BW", "NA", "ZA", "LS", "SZ",
-    ]
-
-    /// Asia's last 23 (2026-10-29), Japan's Fuji redrawn.
-    static let asiaRest: Set<String> = [
-        "JP", "CN", "MN", "KR", "VN", "LA", "KH", "TH", "MM", "MY", "SG", "SA", "YE", "OM", "AE", "QA", "BH", "KW",
-        "TR", "CY", "GE", "AM", "AZ",
-    ]
-
     /// The file's `excluded` block is the passport's own exclusion: North Korea has no stamp and is not counted, so
     /// the atlas's passport countries are the 195 without exactly the excluded ones, 194 in all.
     @Test func theExcludedBlockKeepsNorthKoreaOut() throws {
@@ -53,7 +21,7 @@ struct WorldCountryStampsTests {
         let counted = Set(atlas.countries.filter(\.countsInPassport).map(\.code))
         #expect(counted.isDisjoint(with: stamps.excluded))
         #expect(counted.count == WorldAtlas.passportCountryTotal && counted.count == 195 - stamps.excluded.count)
-        #expect(Set(stamps.stamps.keys).isSubset(of: counted), "every stamped country counts")
+        #expect(Set(stamps.stamps.keys) == counted, "every passport country, and only they, has a stamp")
         #expect(counted.filter { atlas.country(code: $0)?.continent == .asia }.count == 47)
     }
 
@@ -76,9 +44,6 @@ struct WorldCountryStampsTests {
         }
     }
 
-    /// Europe's last 11, redrawn and approved (2026-10-29).
-    static let europeRest: Set<String> = ["NL", "BE", "LU", "DE", "CH", "AT", "LI", "MC", "PT", "ES", "AD"]
-
     /// Every label character has a glyph in the face the passport draws labels in (design session, 2026-10-29:
     /// the art assumed Pixelify Sans, which has no Ə or Ệ; Fernlet never adds fonts, so the bundled face is the
     /// one to hold). The accented capitals the labels use today are named, so a face swap that drops one fails.
@@ -96,30 +61,29 @@ struct WorldCountryStampsTests {
         }
     }
 
-    @Test func theBundledStampsLoadAndKeepTheirRules() throws {
+    /// Every passport country has its stamp and nothing else does (all 194 approved, 2026-10-29: no placeholder,
+    /// no dashed space); each stamp keeps the file's rules.
+    @Test func everyPassportCountryHasItsStamp() throws {
         let stamps = try #require(WorldCountryStampsLoader.bundled())
-        #expect(Self.northAmerica.isSubset(of: Set(stamps.stamps.keys)))
-        #expect(Self.europeFirst.isSubset(of: Set(stamps.stamps.keys)))
         let url = try #require(Bundle.main.url(forResource: "WorldAtlas", withExtension: "pack"))
         let atlas = try WorldAtlas(data: Data(contentsOf: url))
+        let counted = Set(atlas.countries.filter(\.countsInPassport).map(\.code))
+        #expect(Set(stamps.stamps.keys) == counted, "the stamps are exactly the passport's countries")
+        #expect(stamps.stamps.count == WorldAtlas.passportCountryTotal)
         for (code, stamp) in stamps.stamps {
-            #expect(stamp.code == code && atlas.country(code: code) != nil, "\(code) is an atlas country")
+            #expect(stamp.code == code && !stamps.excluded.contains(code))
             #expect(stamp.symbol.count == 14 && stamp.symbol.allSatisfy { $0.count == 14 }, "\(code) is 14 × 14")
-            #expect(stamp.symbol.joined().contains(true), "\(code) has ink")
+            #expect(stamp.symbol.joined().contains(true), "\(code) is drawn, not a placeholder")
             let index = try #require(WorldCountryStamps.inkIndex(for: code))
             #expect(stamp.ink == stamps.inks[index], "\(code)'s ink follows the rule")
             #expect(!stamp.englishName.isEmpty && !stamp.spanishName.isEmpty && !stamp.label.isEmpty)
         }
         #expect(stamps.stamp(for: "us")?.englishName == "United States")
-        #expect(stamps.stamp(for: "MX")?.label.joined(separator: " ").contains("MÉXICO") == true)
-        #expect(Self.europeRest.isSubset(of: Set(stamps.stamps.keys)), "Europe is complete")
-        #expect(Self.asiaFirst.isSubset(of: Set(stamps.stamps.keys)))
-        #expect(Self.asiaRest.isSubset(of: Set(stamps.stamps.keys)), "Asia is complete")
-        #expect(stamps.stamp(for: "AZ")?.label == ["AZƏRBAYCAN"])
-        #expect(Self.africa.isSubset(of: Set(stamps.stamps.keys)), "Africa is complete")
+        #expect(stamps.stamp(for: "MX")?.label == ["MÉXICO"] && stamps.stamp(for: "AZ")?.label == ["AZƏRBAYCAN"])
         #expect(stamps.stamp(for: "CM")?.label == ["CAMEROUN", "CAMEROON"])
         #expect(stamps.stamp(for: "CG")?.label == ["CONGO"] && stamps.stamp(for: "CD")?.label == ["RD CONGO"])
-        #expect(stamps.stamp(for: "BR") == nil, "South America's batch hasn't landed: no stamp, a dashed space")
+        #expect(stamps.stamp(for: "PG")?.label == ["PAPUA NEW", "GUINEA"])
+        #expect(stamps.stamp(for: "SB")?.label.count == 2 && stamps.stamp(for: "MH")?.label.count == 2)
         #expect(stamps.stamp(for: "VA")?.batch == "eu", "the smallest of the passport's countries has its stamp")
     }
 
