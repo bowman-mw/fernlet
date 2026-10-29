@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import FernletDomainModel
+import DiaryStore
 @testable import Fernlet
 
 /// The Day calendar's view-free logic (World round 7, piece C): the free-meal tag of a deleted meal, the
