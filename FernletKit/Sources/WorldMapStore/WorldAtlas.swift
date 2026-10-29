@@ -219,4 +219,9 @@ public nonisolated final class WorldAtlas: Sendable {
 }
 
 /// The bundled atlas is what the app's passport keeper reads accepted fixes against.
-extension WorldAtlas: AtlasVisitResolving {}
+extension WorldAtlas: AtlasVisitResolving {
+    /// Water where the land mask has none (cheap: no country, city or reach search).
+    public func isWater(at point: GeoPoint) -> Bool {
+        point.isValid && !isLand(at: point)
+    }
+}

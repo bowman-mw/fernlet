@@ -351,4 +351,9 @@ public nonisolated struct AtlasWithLandmarks: AtlasVisitResolving {
         visit.landmarks = landmarks.found(at: point).map(\.token)
         return visit
     }
+
+    /// The atlas's own water answer (landmarks never make water).
+    public func isWater(at point: GeoPoint) -> Bool {
+        atlas.isWater(at: point)
+    }
 }

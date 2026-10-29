@@ -249,6 +249,12 @@ final class WorldAtlasKeeper {
 
     /// The atlas, opened on first use and read together with ``landmarks`` when the list holds any; nil when
     /// the atlas is missing or unreadable (the opener logs that, once).
+    /// Whether the atlas puts water under `cell`'s centre (the weekly corner skips water). False with no
+    /// atlas, so a missing pack never hides every corner.
+    func isWater(_ cell: HexCell) -> Bool {
+        resolver()?.isWater(at: MercatorHexGrid.centreGeo(of: cell)) ?? false
+    }
+
     private func resolver() -> (any AtlasVisitResolving)? {
         switch atlas {
         case .ready(let resolver):

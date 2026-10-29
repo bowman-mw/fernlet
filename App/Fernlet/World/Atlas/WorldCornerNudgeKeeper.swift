@@ -54,7 +54,8 @@ final class WorldCornerNudgeKeeper {
     /// patch within 1 km. `revealed` must be the loaded fog history. A corner kept for a past week, or for a
     /// home since moved more than 1 km away, gives way to a new pick (moving on from last week's when it can).
     @discardableResult
-    func current(home: GeoPoint?, revealed: Set<HexCell>, now: Date = Date()) -> HexCell? {
+    func current(home: GeoPoint?, revealed: Set<HexCell>, now: Date = Date(),
+                 isWater: (HexCell) -> Bool = { _ in false }) -> HexCell? {
         guard !isDecoy, let home, home.isValid, loadState() else {
             corner = nil
             return nil
@@ -70,7 +71,7 @@ final class WorldCornerNudgeKeeper {
         let miss = NoPick(week: week, home: MercatorHexGrid.cell(containing: home))
         guard miss != noPick,
               let cell = FogCornerNudge.pick(home: home, revealed: revealed, weekStart: weekStart,
-                                             avoiding: state?.cell) else {
+                                             avoiding: state?.cell, isWater: isWater) else {
             noPick = miss
             corner = nil
             return nil
