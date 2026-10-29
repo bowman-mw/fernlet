@@ -72,12 +72,35 @@ minor islands; lakes inside land are land (inland water is not an ocean).
 the majority of the source cells inside it; a land or coast cell the source misses takes the nearest class within
 5 cells, else 0.
 
-### `OCEA`: oceans
+### `OCEA`: oceans and seas
 
-`u8 ocean[cols*rows]` for every water or coast cell: 0 none (land, or water not joined to the sea, such as the
-Caspian), 1 Pacific, 2 Atlantic, 3 Indian, 4 Arctic, 5 Southern. Seas take their parent ocean (the Mediterranean
-and the Caribbean are Atlantic, the South China Sea Pacific, the Red Sea Indian, Hudson Bay Arctic); a water cell no
-marine polygon names takes the nearest named cell it is joined to by water.
+`u8 body[cols*rows]` for every water or coast cell: 0 none (land, or water not joined to the sea, such as the
+Caspian and lakes), 1 Pacific, 2 Atlantic, 3 Indian, 4 Arctic, 5 Southern, and `6 + i` for sea `i` of the `SEAS`
+table (at most 250 seas).
+
+**Seas are their own passport entries** (owner, 2026-10-29): being on the Caribbean counts the Caribbean Sea, not
+the Atlantic. Natural Earth draws each sea as its own polygon beside the ocean polygons, which is what tells them
+apart. The labels:
+
+1. A cell inside a marine polygon whose `featurecla` is `ocean` takes that ocean (North and South Pacific are both
+   Pacific, and so on).
+2. A cell inside a polygon whose `featurecla` is `sea`, or one of the large gulfs and bays the generator promotes to
+   seas (its `PROMOTED_SEAS` table: the Gulf of Mexico, Hudson Bay, the Bay of Bengal, the Persian Gulf), takes that
+   sea.
+3. Every other water cell (smaller bays, gulfs, straits, channels, sounds, and water no polygon names) takes the
+   label of the nearest labelled cell joined to it by water, so the Bay of Biscay is Atlantic and the Gulf of
+   Bothnia is the Baltic Sea.
+
+### `SEAS`: the seas
+
+```
+u16 count
+count × {
+  u8 len · bytes    token: the Wikidata ID, else "ne:<ne_id>" (frozen)
+  u8                parent ocean code (1–5), for display only ("a sea of the Atlantic"); it never counts the ocean
+  u8 len · bytes    name (English, UTF-8), then es, fr, de (len 0 = use English)
+}
+```
 
 ### `CONT`: continents
 
@@ -134,9 +157,12 @@ UTF-8 JSON: the generator version, the generation date, and each source's file n
   65 m, "Uncover the map as you go" on), only while the phone is unlocked, and never in a decoy (a decoy keeps
   nothing).
 - **Country:** the fix lies inside the country's rings.
-- **Continent:** the `CONT` cell under a land fix. **Antarctica's lighter rule:** any accepted fix south of
-  `WorldAtlas.antarcticaLatitude` counts, on land or at sea.
-- **Ocean:** a water sub-cell within `WorldAtlas.oceanReachMetres` of the fix; the ocean is that water's `OCEA` code.
+- **Continent:** the `CONT` cell under a land fix, plus Antarctica's lighter rule below
+  (`WorldAtlas.antarcticaLatitude`).
+- **Ocean or sea:** the nearest water sub-cell within `WorldAtlas.oceanReachMetres` (2 km, owner 2026-10-29) of the
+  fix; its `OCEA` code names an ocean or a sea, never both.
+- **Antarctica** (owner 2026-10-29): any accepted fix south of 60°S, the Antarctic Treaty area, on land, on ice or at
+  sea.
 - **City:** inside an urban polygon, the nearest of the cities that share it; a city with no polygon is entered
   within `WorldAtlas.townRadiusMetres` of its point.
 - **Terrain:** water or land from `LAND`, a class from `CLIM` and the latitude, flora from the class, the latitude

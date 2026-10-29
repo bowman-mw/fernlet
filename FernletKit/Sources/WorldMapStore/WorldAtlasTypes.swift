@@ -28,6 +28,24 @@ public nonisolated enum AtlasOcean: String, CaseIterable, Codable, Sendable {
     }
 }
 
+/// A sea from the bundled pack: its own passport entry, never counted toward its parent ocean (owner,
+/// 2026-10-29: the Caribbean counts the Caribbean Sea, not the Atlantic).
+public nonisolated struct AtlasSea: Hashable, Sendable {
+    /// The frozen token: the sea's Wikidata ID, else "ne:<Natural Earth id>".
+    public let token: String
+    /// The ocean it opens onto, for display only ("a sea of the Atlantic").
+    public let parentOcean: AtlasOcean
+    /// Its names, in the same four languages a city's come in.
+    public let names: AtlasCityNames
+
+    /// A sea with every field given.
+    public init(token: String, parentOcean: AtlasOcean, names: AtlasCityNames) {
+        self.token = token
+        self.parentOcean = parentOcean
+        self.names = names
+    }
+}
+
 /// The coarse terrain class of a map cell (the owner's coarse model: a coastline mask plus climate bands).
 public nonisolated enum AtlasTerrain: String, CaseIterable, Codable, Sendable {
     case water, ice, tundra, mountain, borealForest, temperateForest, tropicalForest, savanna, grassland, desert,
@@ -110,8 +128,10 @@ public nonisolated struct AtlasVisit: Hashable, Sendable {
     public var sovereignCode: String?
     /// The continent the fix counts toward, or nil (at sea, unless Antarctica's rule holds).
     public var continent: AtlasContinent?
-    /// The ocean within reach, or nil.
+    /// The ocean within reach, or nil (nil whenever ``sea`` is set: the nearest water is one or the other).
     public var ocean: AtlasOcean?
+    /// The sea within reach, or nil.
+    public var sea: AtlasSea?
     /// The city whose boundary holds the fix, or nil.
     public var city: AtlasCity?
     /// The terrain class under the fix.
@@ -119,11 +139,12 @@ public nonisolated struct AtlasVisit: Hashable, Sendable {
 
     /// A visit with every field given (tests build them by hand).
     public init(countryCode: String? = nil, sovereignCode: String? = nil, continent: AtlasContinent? = nil,
-                ocean: AtlasOcean? = nil, city: AtlasCity? = nil, terrain: AtlasTerrain) {
+                ocean: AtlasOcean? = nil, sea: AtlasSea? = nil, city: AtlasCity? = nil, terrain: AtlasTerrain) {
         self.countryCode = countryCode
         self.sovereignCode = sovereignCode
         self.continent = continent
         self.ocean = ocean
+        self.sea = sea
         self.city = city
         self.terrain = terrain
     }
@@ -131,7 +152,7 @@ public nonisolated struct AtlasVisit: Hashable, Sendable {
 
 /// What kind of place a discovery is (a frozen token).
 public nonisolated enum AtlasDiscoveryKind: String, CaseIterable, Codable, Sendable {
-    case country, continent, ocean, city, terrain
+    case country, continent, ocean, sea, city, terrain
 }
 
 /// One first visit: the passport's record and the event Sprout's lines will hook into (idea B).
@@ -139,7 +160,7 @@ public nonisolated struct AtlasDiscovery: Hashable, Codable, Sendable {
     /// What kind of place.
     public let kind: AtlasDiscoveryKind
     /// The frozen token: an alpha-2 country code, an ``AtlasContinent``, ``AtlasOcean`` or ``AtlasTerrain``
-    /// rawValue, or a city's ``AtlasCity/token``.
+    /// rawValue, or a sea's ``AtlasSea/token`` or a city's ``AtlasCity/token``.
     public let token: String
     /// When it was first visited.
     public let at: Date
