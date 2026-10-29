@@ -356,7 +356,7 @@ struct ExerciseDemonstrationTests {
                        ".accessibilityElement(children: .ignore)"] {
             #expect(media.contains(needle), "the demonstration lost `\(needle)`")
         }
-        let accessStart = try #require(view.range(of: "private struct ExerciseDemonstrationPauseAccess"))
+        let accessStart = try #require(view.range(of: "struct ExerciseDemonstrationPauseAccess: ViewModifier"))
         let access = view[accessStart.lowerBound...]
         for needle in [".accessibilityValue(isPaused ? ExerciseDemonstrationPauseWords.paused : ExerciseDemonstrationPauseWords.playing)",
                        ".accessibilityAction(named: isPaused ? ExerciseDemonstrationPauseWords.play : ExerciseDemonstrationPauseWords.pause)",
