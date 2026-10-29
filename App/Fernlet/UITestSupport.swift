@@ -244,6 +244,18 @@ enum UITestSupport {
         return min(max(count, 1), 10)
     }
 
+    /// `FERNLET_UI_TEST_GOAL=<goal token>` (e.g. `bodybuilding`) — choose that goal AFTER the demo seed
+    /// resets it to Wellness, so a screenshot run can show a goal's own surfaces (Bodybuilding's day
+    /// calendar). A token no goal reads as is ignored. Consumed by `FernletStore.seedDemoContent`.
+    static var uiTestGoal: GoalType? {
+        env["FERNLET_UI_TEST_GOAL"].flatMap(GoalType.init(persistedToken:))
+    }
+
+    /// `FERNLET_UI_TEST_BB_SCENARIO=suggest` — with the Bodybuilding goal hook, seed six hard weeks in a
+    /// row and no deload, so the day calendar's deload suggestion shows; any other value (or none) seeds
+    /// the usual five weeks with one deload week. Consumed by `FernletStore.seedBodybuildingDemoWeeks`.
+    static var bodybuildingScenario: String? { env["FERNLET_UI_TEST_BB_SCENARIO"] }
+
     /// Holds ``seededHeldSessionPhotoCount`` generated JPEGs through the session photos' own capture door
     /// with no session live — so each is held AWAITING in the sealed pending corpus exactly as a
     /// real ended session's photo is, never on the wall — unless a review is already outstanding
@@ -315,6 +327,8 @@ enum UITestSupport {
     static var initialWorldPanel: WorldPanel? { nil }
     static var seededMeshContinuationCard: MeshContinuationCardKind? { nil }
     static var seededHeldSessionPhotoCount: Int? { nil }
+    static var uiTestGoal: GoalType? { nil }
+    static var bodybuildingScenario: String? { nil }
     static func seedHeldSessionPhotosIfRequested(on photos: MeshSessionPhotos) {}
     static var isTestHarnessActive: Bool { false }
     #endif

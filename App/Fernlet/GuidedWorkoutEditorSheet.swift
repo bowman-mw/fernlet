@@ -69,6 +69,7 @@ struct GuidedWorkoutEditorSheet: View {
         case .recovery: Text("Rest defaults come from your recovery goal and the movement — tune any of them here. Changes apply the next time you start this workout.")
         case .exploring: Text("Rest defaults come from your exploring goal and the movement — tune any of them here. Changes apply the next time you start this workout.")
         case .sportsPrep: Text("Rest defaults come from your sports prep goal and the movement — tune any of them here. Changes apply the next time you start this workout.")
+        case .bodybuilding: Text("Rest defaults come from your bodybuilding goal and the movement — tune any of them here. Changes apply the next time you start this workout.")
         }
     }
 

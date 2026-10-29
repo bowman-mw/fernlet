@@ -98,6 +98,16 @@ public nonisolated enum WorkoutRestGuidance {
             case .isolation:     value = 90
             case .core:          value = 60
             }
+        // Bodybuilding: hypertrophy on purpose. Longer rests on the big lifts keep the volume load up
+        // across sets (the >60 s benefit is volume-load driven), so compounds sit between strength's
+        // and the everyday goals'; isolation keeps the 60–90 s band's top.
+        case .bodybuilding:
+            switch demand {
+            case .heavyCompound: value = 150
+            case .compound:      value = 120
+            case .isolation:     value = 90
+            case .core:          value = 60
+            }
         // Hypertrophy-leaning everyday goals: ~2 min on compounds, 60–90 s isolation (updated
         // evidence — the small >60 s benefit is volume-load driven; never default below 60 s).
         case .weightManagement, .wellness, .exploring:

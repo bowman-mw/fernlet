@@ -73,7 +73,7 @@ extension WorkoutPlannerCopy {
                           comment: "Workout session note for a lifter aged 60 or more whose lift has held steady for a long while: holding strength is a good outcome. The argument is the exercise name.")
         }
         switch goal {
-        case .strength, .sportsPrep:
+        case .strength, .sportsPrep, .bodybuilding:
             return String(localized: "workoutNote.plateau.holdingSteady.strength",
                           defaultValue: "\(name) is holding steady, and steady is fine. Keep training it as it is, try a different rep range for a while, or give another lift the spotlight — whichever suits you.",
                           bundle: .module,
