@@ -260,6 +260,18 @@ final class WorldAtlasKeeper {
         resolver()?.isWater(at: MercatorHexGrid.centreGeo(of: cell)) ?? false
     }
 
+    /// The bundled atlas itself, for the screens that draw from it (the terrain under the fog, the world view,
+    /// the city markers): opened on first use like the passport's reader. Nil with no atlas, or when the opener
+    /// answered a stand-in that isn't a `WorldAtlas` (tests). Public data that ships in the app, so a decoy
+    /// draws from it too; only the passport (``book``) is the person's.
+    var openedAtlas: WorldAtlas? {
+        switch resolver() {
+        case let joined as AtlasWithLandmarks: joined.atlas as? WorldAtlas
+        case let atlas as WorldAtlas: atlas
+        default: nil
+        }
+    }
+
     private func resolver() -> (any AtlasVisitResolving)? {
         switch atlas {
         case .ready(let resolver):
