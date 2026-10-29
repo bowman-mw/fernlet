@@ -9,6 +9,7 @@
 //
 
 #if DEBUG && canImport(UIKit)
+import DiaryStore
 import FernletDomainModel
 import Foundation
 
