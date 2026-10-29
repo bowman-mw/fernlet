@@ -9,20 +9,17 @@ import Testing
 /// A test JavaScriptCore context loads the app bundle's approved `movements.js` and `motion-engine.js`
 /// and the approved reference `renderer.js` (Tests/ExerciseAnimationReference, byte-identical to the r12
 /// package), with a two-method canvas stand-in like the package's `jsc-bench.js`. Every one of the 199
-/// exercises is drawn by both characters at the default camera at loop phases 0 and 0.5, and by one
-/// character (alternating with the exercise number) at a third phase spread across the loop by the
-/// number: 995 frames, each drawn once in JavaScript and once in Swift, and the RGBA buffers must be
-/// identical byte for byte: no tolerance.
+/// exercises is drawn by both characters at the default camera at three loop phases (0, 0.5, and one
+/// spread across the loop by the exercise number): 1,194 frames, each drawn once in JavaScript and once
+/// in Swift, and the RGBA buffers must be identical byte for byte: no tolerance.
 struct ExerciseAnimationRendererEquivalenceTests {
     /// The exercises in groups of 25, one test case each, so the cases can run side by side.
     static let groups: [ClosedRange<Int>] = stride(from: 1, through: 199, by: 25).map { $0...min($0 + 24, 199) }
 
-    /// The phases drawn for exercise `number` by `character`: the loop's start and middle, plus (for the
-    /// male character on odd numbers and the female on even ones) a phase spread across the loop by the
-    /// number.
-    static func phases(for number: Int, character: ExerciseAnimationCharacter) -> [Double] {
-        let third = (number % 2 == 1) == (character == .male)
-        return third ? [0, 0.5, Double((number * 61) % 97) / 97] : [0, 0.5]
+    /// The phases drawn for exercise `number`: the loop's start and middle, and one more spread across
+    /// the loop by the number.
+    static func phases(for number: Int) -> [Double] {
+        [0, 0.5, Double((number * 61) % 97) / 97]
     }
 
     @Test(arguments: groups)
@@ -34,7 +31,7 @@ struct ExerciseAnimationRendererEquivalenceTests {
         for number in numbers {
             let id = String(format: "exercise-%03d", number)
             for character in ExerciseAnimationCharacter.allCases {
-                for phase in Self.phases(for: number, character: character) {
+                for phase in Self.phases(for: number) {
                     let start = clock.now
                     let expected = try #require(reference.render(id: id, progress: phase, person: character.rawValue))
                     let middle = clock.now
