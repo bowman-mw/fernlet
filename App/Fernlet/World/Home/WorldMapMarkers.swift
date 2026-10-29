@@ -27,8 +27,10 @@ nonisolated struct WorldMapMarker: Equatable, Identifiable, Sendable {
     enum Kind: Equatable, Sendable {
         /// A workout space of the person's own.
         case space
-        /// A favourite place to eat (Apple's reference, for its name).
+        /// A favourite place to eat (Apple's reference, for its name), or one the person remembered (round 7).
         case eatingPlace(placeID: String)
+        /// A gym the person remembered with "Remember this place" (round 7, `ref-tag-named`).
+        case keptGym
     }
 
     let id: UUID
@@ -79,6 +81,7 @@ extension FernletStore {
                            name: place.label ?? worldPlaces.eatingNames[place.id] ?? "", point: place.point)
         }
         var markers = worldSpaceMarkers(near: nil) + eating
+        markers += worldKeptPlaceMarkers(besides: eating)
         // DEBUG scene `places` (`ref-places-map`): three kept places round the person, display only.
         if WorldPlacesTestScenes.scenes.contains("places") {
             markers += WorldPlacesTestScenes.markers(near: worldLocation.latest?.point ?? WorldPlacesTestScenes.laurelhurst)
@@ -129,7 +132,7 @@ struct WorldMapMarkerView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(verbatim: WorldPlaceIconCopy.spoken(marker, name: name)))
-        .accessibilityIdentifier(marker.kind == .space ? "world.marker.space" : "world.marker.eating")
+        .accessibilityIdentifier(marker.kind.isEatingPlace ? "world.marker.eating" : "world.marker.space")
     }
 
     /// The tag's name: the marker's own, else the one Apple Maps gave again.
@@ -144,7 +147,7 @@ struct WorldPlaceIconTile: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            WorldSpriteView(sprite: marker.kind == .space ? WorldPlaceSprites.dumbbell : WorldPlaceSprites.bowl, scale: 2)
+            WorldSpriteView(sprite: marker.kind.isEatingPlace ? WorldPlaceSprites.bowl : WorldPlaceSprites.dumbbell, scale: 2)
                 .frame(width: 34, height: 34)
                 .background(WorldPalette.paperLight, in: RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(WorldPalette.ink, lineWidth: 3))
@@ -196,8 +199,8 @@ nonisolated enum WorldPlaceIconCopy {
         let name = shown.isEmpty ? String(localized: unnamedPlace) : shown
         let place: String
         switch marker.kind {
-        case .space: place = String(localized: "worldMarker.gym", defaultValue: "\(name), a gym",
-                                    comment: "World Home, VoiceOver: a workout space's icon on the map; its name")
+        case .space, .keptGym: place = String(localized: "worldMarker.gym", defaultValue: "\(name), a gym",
+                                              comment: "World Home, VoiceOver: a workout space's icon on the map; its name")
         case .eatingPlace: place = String(localized: "worldMarker.restaurant", defaultValue: "\(name), a restaurant",
                                           comment: "World Home, VoiceOver: a favourite place to eat on the map; its name")
         }

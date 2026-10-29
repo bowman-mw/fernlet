@@ -105,7 +105,7 @@ struct PrivacyPolicyParityTests {
     /// - `it never receives your map history or your walks` — Apple Maps gets the area on screen, nothing kept;
     /// - `keeps a rolling 30-day timeline of the places` — Where you've been;
     /// - `which holds only a visit count, never dates` — Places you return to;
-    /// - `therapists are never named or kept` — the allowlist's refusal;
+    /// - `therapists are never named for you` — the allowlist's refusal (reworded in round 7, below);
     /// - `so the photo can sit on your map` — a solo photo's place, never at a refused place.
     ///
     /// The two markers added in World build round 5 (owner-approved the same day, word for word) pin:
@@ -114,10 +114,15 @@ struct PrivacyPolicyParityTests {
     ///   you return to keeps of Apple's answer (its name is asked for again when you look).
     ///
     /// The four markers added in World build round 6 (both additions owner-approved word for word) pin:
-    /// - `unless you add one yourself` — a place Fernlet won't name is kept only when the person adds it;
+    /// - `Any other place is kept only if you add it yourself` — a place outside the allowlist is kept only
+    ///   when the person adds it (round 6's `unless you add one yourself`, reworded in round 7, below);
     /// - `You can put a photo on the map yourself.` — a solo photo with no place, placed by hand;
     /// - `If you mark a place as your home (up to two) or as a hotel you stay at` — homes and hotels are kept;
     /// - `it stays until you remove it in Settings › Home map` — and where they go away.
+    ///
+    /// World build round 7 (owner-approved word for word, 2026-10-26, with "Remember this place" anywhere)
+    /// rewords the allowlist sentence: `By itself, Fernlet keeps only everyday places` pins that Fernlet
+    /// keeps nothing else on its own, and the two markers above now read the new wording.
     ///
     /// The three markers added in World build round 6b (both owner-approved word for word, 2026-10-25) pin:
     /// - `encrypted on this iPhone only and never in a backup, to uncover the map around it` — the homes
@@ -135,6 +140,14 @@ struct PrivacyPolicyParityTests {
     /// your journal" goes, word for word in all three copies) pins how the places are kept:
     /// - `All of this is encrypted on this iPhone only: never synced` — Where you've been, Places you
     ///   return to and solo photos' places.
+    ///
+    /// The three markers added with car and bike detection (round 7; the Motion sentence approved by the
+    /// owner 2026-10-25, "Approve both", and the background sentence's replacement 2026-10-26, both word
+    /// for word) pin what driving and cycling detection do:
+    /// - `you're driving, the road you take` — background mapping traces a detected drive in full, so the
+    ///   background sentence no longer says "low-power" (`only during a walk you started` stays pinned);
+    /// - `If you turn on Log my bike rides` — Motion & Fitness is read only behind that switch;
+    /// - `never keeps the motion data itself` — bike rides log as exercise, and the motion data is never kept.
     private static let substanceMarkers = [
         "iOS may refuse or end it at any time",
         "never retroactively repurposed",
@@ -168,11 +181,12 @@ struct PrivacyPolicyParityTests {
         "it never receives your map history or your walks",
         "keeps a rolling 30-day timeline of the places",
         "which holds only a visit count, never dates",
-        "therapists are never named or kept",
+        "therapists are never named for you",
         "so the photo can sit on your map",
         "anywhere else, it keeps no place",
         "keeps only Apple's reference to it, never its details",
-        "unless you add one yourself",
+        "Any other place is kept only if you add it yourself",
+        "By itself, Fernlet keeps only everyday places",
         "You can put a photo on the map yourself.",
         "If you mark a place as your home (up to two) or as a hotel you stay at",
         "it stays until you remove it in Settings › Home map",
@@ -181,7 +195,10 @@ struct PrivacyPolicyParityTests {
         "the widget's copy is deleted whenever you delete your map history",
         "collected while Fernlet is open",
         "only while Fernlet is open",
-        "All of this is encrypted on this iPhone only: never synced"
+        "All of this is encrypted on this iPhone only: never synced",
+        "you're driving, the road you take",
+        "If you turn on Log my bike rides",
+        "never keeps the motion data itself"
     ]
 
     /// Loads each copy's text, keyed by its repo-relative path.

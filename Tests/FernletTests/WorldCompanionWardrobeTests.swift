@@ -104,15 +104,19 @@ struct WorldCompanionWardrobeTests {
     }
 
     /// The one-colour widgets cut the face out: eyes, mouth, blush and the glasses, whatever their
-    /// colour — never the cap, a side item or a drawn piece.
+    /// colour. The cap and a side item are worn pieces, which keep their shape in the one colour
+    /// (phone test W-11; the rest of the rule is `WorldCompanionOneColourTests`).
     @Test func theFaceIsMarkedForTheOneColourCutOut() {
         let look = WorldCompanionLook(body: 0x5E844D, topper: .glasses, topperColor: 0x71808C, cap: 0xB67073, side: .mug)
         let grid = WorldCompanionPainter.paint(state: .thriving, look: look, pose: WorldCompanionPose())
         let frameX = WorldCompanionGrid.frameX, frameY = WorldCompanionGrid.frameY
         #expect(grid.isFace(frameX: 7 + frameX, y: 12 + frameY), "the eye")
         #expect(grid.isFace(frameX: 9 + frameX, y: 12 + frameY), "the glasses' bridge")
-        #expect(!grid.isFace(frameX: 10 + frameX, y: 7 + frameY), "the cap")
-        #expect(!grid.isFace(frameX: 14 + frameX, y: 15 + frameY), "the mug")
+        #expect(!grid.takesOneColour(frameX: 7 + frameX, y: 12 + frameY) && !grid.takesOneColour(frameX: 9 + frameX, y: 12 + frameY))
+        #expect(grid.piece(frameX: 10 + frameX, y: 7 + frameY) == .cap && grid.takesOneColour(frameX: 10 + frameX, y: 7 + frameY),
+                "the cap")
+        #expect(grid.piece(frameX: 14 + frameX, y: 15 + frameY) == .side && grid.takesOneColour(frameX: 14 + frameX, y: 15 + frameY),
+                "the mug")
     }
 
     // MARK: - Creation Studio pieces (W-07, draft 2)

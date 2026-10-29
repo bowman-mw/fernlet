@@ -74,7 +74,8 @@ extension SealedBackupV2Engine {
 
     /// R4–R10: fetch, open, verify and merge; throws ``SealedBackupV2Stop`` at a gate. Without an
     /// escrow key only the head's existence is read (no decrypt): none resolves the restore (R5); one
-    /// waits for the synced key (`.deferredKeyNotSynced`).
+    /// waits for the synced key (`.deferredKeyNotSynced`). A head's passport (the journal's World
+    /// passport, round 7) merges just before the records, under the same gate.
     private func fetchAndMerge<A: SealedBackupV2Adapter>(
         _ adapter: A,
         service: SealedBackupService,
@@ -100,8 +101,12 @@ extension SealedBackupV2Engine {
         let records = try adapter.withOpenSeam {
             try Self.decodingAuthenticated { try openAndVerify(adapter, head: head, suffix: suffix, service: service) }
         }
+        let passport = try Self.decodingAuthenticated { try SealedBackupV2Format.passport(of: head.plaintext) }
         try ensureGate(adapter, epoch: epoch)
         guard let key = liveHubKey else { throw SealedBackupV2Stop.gate(.hubClosed) }
+        // The head's passport (the journal's, round 7) merges first: a merge by token, so a retry after
+        // the records' merge or a skeleton write failed only merges it again.
+        if let passport { try adapter.restorePassport(passport) }
         let merged = try adapter.restoreMerging(records, hubKey: key)
         let followedUp = adapter.didRestore(merged)
         return acceptRestore(adapter, head: head, merged: merged, followedUp: followedUp,

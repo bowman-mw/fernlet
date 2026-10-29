@@ -18,9 +18,13 @@ struct AppPermissionDeclarationsTests {
         "NSNearbyInteractionUsageDescription": "Fernlet uses Ultra Wideband to measure the distance to a nearby friend while you connect.",
         "NSCameraUsageDescription": "Fernlet uses your camera to scan barcodes and nutrition labels, photograph meals, take progress photos, and take photos during sessions with friends.",
         // The World map's location (owner, 2026-10-24; World build step 5c): `b1-loc-prompt`'s purpose
-        // line and the background-mapping text, both approved.
+        // line, approved. The background-mapping text is the car round's (owner, 2026-10-26: a detected
+        // drive is traced in full, so "using little battery" went).
         "NSLocationWhenInUseUsageDescription": "Your companion lives on a map of where you are. The map uncovers as you go, and the history stays on this iPhone.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "With background mapping on, Fernlet uncovers the map from the places you visit during the day, using little battery. It stays on this iPhone."
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "With background mapping on, Fernlet uncovers the map from the places you visit and the roads you drive. It stays on this iPhone.",
+        // Car and bike detection (owner, 2026-10-25: "Approve both"; round 7): asked only when "Log my bike
+        // rides" is turned on.
+        "NSMotionUsageDescription": "Fernlet uses motion to tell when you're riding a bike or in a car, only while \"Log my bike rides\" is on. It stays on this iPhone."
     ]
 
     /// The walk's temporary full-accuracy purpose (owner-approved 2026-10-24; "or run" added with the
@@ -116,9 +120,10 @@ struct AppPermissionDeclarationsTests {
         #expect(source.contains("walkAccuracyPurposeKey = \"\(Self.walkPurposeKey)\""))
     }
 
-    /// The `location` background mode is used only while a walk or run the person started records: the
-    /// one `CLBackgroundActivitySession` and the one `allowsBackgroundLocationUpdates = true` live in the
-    /// World location source, and nowhere else in shipping code.
+    /// The `location` background mode is used only while a walk or run the person started records, or
+    /// (round 7) while a drive is traced with background mapping on: the one `CLBackgroundActivitySession`
+    /// and the one `allowsBackgroundLocationUpdates = true` live in the World location source, and nowhere
+    /// else in shipping code.
     @Test func backgroundLocationIsHeldOnlyForAWalk() throws {
         let modes = try Self.appInfoPlist()["UIBackgroundModes"] as? [String] ?? []
         #expect(modes.contains("location"))

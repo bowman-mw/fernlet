@@ -204,6 +204,10 @@ struct PersistedSurfaceWipeBoundaryTests {
         "fernlet.worldMap.rememberPlaces": .cleared(token: "WorldMapPreferences.clearAll"),
         // Round 6 (2026-10-25): Home map's "Remember places I eat out".
         "fernlet.worldMap.rememberEatingOut": .cleared(token: "WorldMapPreferences.clearAll"),
+        // Round 7 (car and bike detection): Home map's "Log my bike rides", and how far the motion history
+        // was last looked through for bike rides (a time only; no motion data is kept).
+        "fernlet.worldMap.logBikeRides": .cleared(token: "WorldMapPreferences.clearAll"),
+        "fernlet.worldMap.bikeRidesCheckedThrough": .cleared(token: "WorldMapPreferences.clearAll"),
         // World build (2026-10-24): Advanced period tracking's switch (`b3-period-settings`).
         "fernlet.cycle.advancedTracking": .cleared(token: "CyclePreferences.clearAll"),
         "fernlet.barcodeLastServings.v1": .cleared(token: "BarcodeServingMemory.clearAll"),

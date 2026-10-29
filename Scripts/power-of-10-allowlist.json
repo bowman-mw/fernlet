@@ -45,5 +45,28 @@
   "rule": "R9-UNSAFE",
   "path": "FernletKit/Sources/PrivateStoreCore/PrivatePersistenceController.swift",
   "reason": "Core Data seam: `NSPersistentContainer` is not `Sendable`, so the process-wide sealed-store controller cannot be a checked-Sendable global, and real actor isolation is unavailable because all four sealed repositories are deliberately `nonisolated` so keyless deletion works from any executor while the app is locked. Invariant: `shared` is a `let` initialized exactly once by Swift's lazy-static machinery; every use of `container.viewContext` happens inside `NSManagedObjectContext.performAndWait`, which serializes on the context's own queue; and the one piece of mutable state outside that discipline, `didFailToLoad`, is now read and written only under the type's `stateLock` (`NSLock`)."
+ },
+ {
+  "rule": "R9-UNSAFE",
+  "path": "FernletKit/Sources/WorldMapStore/WorldAtlasInflate.swift",
+  "reason": "Compression-framework seam: the World atlas pack's raw DEFLATE section bodies (Docs/World-Atlas-Pack.md) inflate through compression_decode_buffer, a C function that takes typed buffer pointers, so the file's ONE function borrows them with withUnsafeMutableBufferPointer and withUnsafeBufferPointer. Invariant: the destination is an owned [UInt8] of exactly rawLength + 1 bytes, allocated before the call, and the source an owned copy of the stored bytes; both pointers are used only inside the nested closures for the one synchronous call, which is given each buffer's own count so it never writes past the end; no pointer, buffer or index escapes; and the result is accepted only when the written count equals rawLength (a longer stream fills the guard byte and is refused). File-wide because the file holds nothing else."
+ },
+ {
+  "rule": "R9-UNSAFE",
+  "path": "App/Fernlet/ExerciseAnimationRasterFill.swift",
+  "line_contains": "withUnsafeMutableBufferPointer {",
+  "reason": "Exercise-animation raster seam: the approved renderer's per-pixel triangle and capsule loops write the 640 x 480 colour and Float32 depth buffers. Through Array subscripts an unoptimised (Debug) build paid a generic call per element and a frame took 100-450 ms; pointer subscripts are transparent, so the same loops take 7-19 ms with bit-identical output. Invariant: triangle(_:) and segment(_:) first guard that both arrays hold exactly width*height elements and that the job's clamped column/row ranges lie inside the canvas; the base addresses are used only inside the nested with... closures (passed to triangleRows/segmentRows, which never store them), and every index is row*640 + column with row and column inside those ranges. The arrays are the raster's own stored properties, borrowed as two distinct inout stored properties, so nothing else can observe the writes."
+ },
+ {
+  "rule": "R9-UNSAFE",
+  "path": "App/Fernlet/ExerciseAnimationRasterFill.swift",
+  "line_contains": "UnsafeMutablePointer<",
+  "reason": "Exercise-animation raster seam: the parameter types of triangleRows/segmentRows, which receive the base addresses borrowed in triangle(_:)/segment(_:) (see this file's withUnsafeMutableBufferPointer entry). They are called only from inside those closures, never store or return the pointers, and index only row*640 + column for the job's canvas-clamped rows and columns, after the caller has checked both buffers hold exactly 640*480 elements."
+ },
+ {
+  "rule": "R9-UNSAFE",
+  "path": "App/Fernlet/ExerciseAnimationRasterFill.swift",
+  "line_contains": "pixels.withUnsafeBytes { Data($0) }",
+  "reason": "Exercise-animation image seam: hands the finished frame to CGDataProvider as Data. The closure copies the borrowed bytes of the [UInt32] pixel array (0xAABBGGRR values, which little-endian are the canvas's R,G,B,A bytes) into an owned Data INSIDE the callback, so no pointer or buffer escapes withUnsafeBytes; the copy is one memcpy where a per-byte Swift loop cost about 50 ms per frame in a Debug build."
  }
 ]

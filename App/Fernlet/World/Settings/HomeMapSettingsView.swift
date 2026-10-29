@@ -8,19 +8,25 @@ import WorldMapStore
 /// option A): every map setting on one page, reached from the Settings root's Home map section.
 ///
 /// - **Location:** what iOS allows (a tap opens the map intro while iOS hasn't asked, else Fernlet's page in
-///   the Settings app), and background mapping, off by default: Always, in low power. Turning it on asks
-///   iOS to change location to Always (or, once iOS has used its one prompt, opens Fernlet's page in the
-///   Settings app); it runs once Always is allowed, and allowing Always there later turns it on (W-09).
-/// - **The map:** "Uncover the map as you go" and "Save new routes" (both on by default), how many routes
-///   are stored on this iPhone, and Delete all stored routes (the walks and runs stay in Move).
+///   the Settings app), and background mapping, off by default: Always, in low power except while driving
+///   (round 7: a detected drive is traced in full). Turning it on asks iOS to change location to Always (or,
+///   once iOS has used its one prompt, opens Fernlet's page in the Settings app); it runs once Always is
+///   allowed, and allowing Always there later turns it on (W-09).
+/// - **The map:** "Uncover the map as you go" and "Save new routes" (both on by default), "Log my bike
+///   rides" (off by default; round 7), how many routes are stored on this iPhone, and Delete all stored
+///   routes (the walks and runs stay in Move).
+/// - **Log my bike rides** asks for Motion & Fitness only when it is turned on (decided 2026-10-22) and
+///   shows the store's answer: on only while Motion is allowed. Once Motion was declined or is restricted,
+///   iOS won't ask again, so turning it on opens Fernlet's page in the Settings app, and coming back with
+///   Motion allowed turns it on, as the background row does with Always.
 /// - **Places:** "Remember where my workout spaces are", "Remember places I stop at" (on by default; off,
 ///   Where you've been notes nothing new and what it holds stays until deleted; round 5), the kinds of
 ///   place Fernlet can name, how many spaces are pinned, and Forget workout-space locations.
 /// - **Delete map history:** the fog, the walk and run lines, Where you've been and the pins, after a
 ///   confirmation.
 ///
-/// Bike rides stay off this page until the car and bike states exist (owner's option A). A decoy shows the
-/// page with none of the history: no routes, no pins, and its deletes touch nothing real.
+/// A decoy shows the page with none of the history: no routes, no pins, and its deletes touch nothing real;
+/// its bike-ride switch works but logs nothing (the store sees to that).
 struct HomeMapSettingsView: View {
     @Bindable var store: FernletStore
     @State private var uncovers = WorldMapPreferences.uncoverAsYouGo()
@@ -28,6 +34,11 @@ struct HomeMapSettingsView: View {
     @State private var remembersSpaces = WorldMapPreferences.rememberSpaces() == true
     @State private var remembersPlaces = WorldMapPreferences.remembersPlaces()
     @State private var remembersEatingOut = WorldMapPreferences.remembersEatingOut()
+    /// "Log my bike rides" as the store last answered.
+    @State private var logsBikeRides = WorldMapPreferences.logsBikeRides()
+    /// Fernlet's page in the Settings app was opened for Motion & Fitness: coming back with it allowed
+    /// turns "Log my bike rides" on.
+    @State private var awaitsMotion = false
     @State private var routeCount = 0
     @State private var pinCount = 0
     /// Background mapping was turned on while only While Using is allowed: it starts once iOS says Always.
@@ -86,7 +97,7 @@ struct HomeMapSettingsView: View {
             .buttonStyle(FernletRowButtonStyle(showsChevron: true))
             .accessibilityIdentifier("settings.homeMap.location")
             Toggle(isOn: backgroundBinding) {
-                FernletRowLabel("Map the world in the background", detail: "Always, in low power. Fills the fog along your day.")
+                FernletRowLabel("Map the world in the background", detail: "Always. Low power, except while driving.")
                     .padding(.vertical, 7)
             }
             .disabled(store.worldLocation.permission == .notAsked || store.worldLocation.permission == .denied)
@@ -94,7 +105,7 @@ struct HomeMapSettingsView: View {
         }
     }
 
-    /// The map: uncovering, saving routes, the routes stored and their delete.
+    /// The map: uncovering, saving routes, logging bike rides, the routes stored and their delete.
     private var mapSection: some View {
         FernletFramedSection("The map") {
             Toggle(isOn: $uncovers) { FernletRowLabel("Uncover the map as you go").padding(.vertical, 7) }
@@ -105,6 +116,11 @@ struct HomeMapSettingsView: View {
             }
             .onChange(of: savesRoutes) { _, on in WorldMapPreferences.setSaveNewRoutes(on) }
             .accessibilityIdentifier("settings.homeMap.saveRoutes")
+            Toggle(isOn: bikeRidesBinding) {
+                FernletRowLabel("Log my bike rides", detail: "Asks for Motion & Fitness when you turn it on.")
+                    .padding(.vertical, 7)
+            }
+            .accessibilityIdentifier("settings.homeMap.bikeRides")
             FernletRowLabel("Routes stored on this iPhone", value: Text(routeCount, format: .number))
                 .accessibilityElement(children: .combine)
             Button { confirming = .routes } label: {
@@ -221,8 +237,9 @@ extension HomeMapSettingsView {
     }
 
     /// While waiting on iOS's Always prompt: the app leaving active means it showed; coming back with
-    /// While Using kept puts the switch back off.
+    /// While Using kept puts the switch back off. Coming back from the Settings app for Motion is read too.
     private func alwaysPromptPhase(_ phase: ScenePhase) {
+        motionSettingsPhase(phase)
         guard awaitsAlways else { return }
         guard phase == .active else {
             alwaysPromptShown = true
@@ -236,6 +253,35 @@ extension HomeMapSettingsView {
             }
             if store.worldLocation.permission != .always { awaitsAlways = false }
         }
+    }
+
+    /// "Log my bike rides": what the store last answered; a turn asks the store (and, the first time, iOS).
+    private var bikeRidesBinding: Binding<Bool> {
+        Binding(get: { logsBikeRides }, set: { setBikeRides($0) })
+    }
+
+    /// Turns "Log my bike rides" on or off through the store, which asks for Motion & Fitness when it is
+    /// turned on; the switch shows the answer. Once iOS won't ask again, Fernlet's page in the Settings app
+    /// opens instead.
+    private func setBikeRides(_ on: Bool) {
+        let permission = store.worldLocation.rides.motion.permission
+        switch HomeMapBikeRideStep.step(turningOn: on, permission: permission, isDecoy: store.duressSessionActive) {
+        case .openSettings:
+            awaitsMotion = true
+            guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+            openURL(url)
+        case .ask:
+            logsBikeRides = on
+            Task { logsBikeRides = await store.setWorldBikeRides(on) }
+        }
+    }
+
+    /// Back from Fernlet's page in the Settings app: Motion allowed there turns "Log my bike rides" on.
+    private func motionSettingsPhase(_ phase: ScenePhase) {
+        guard awaitsMotion, phase == .active else { return }
+        awaitsMotion = false
+        guard store.worldLocation.rides.motion.permission == .allowed else { return }
+        Task { logsBikeRides = await store.setWorldBikeRides(true) }
     }
 
     /// The Location row: the intro while iOS hasn't asked, else Fernlet's page in the Settings app.
@@ -255,8 +301,9 @@ extension HomeMapSettingsView {
         store.worldLocation.requestWhileUsing()
     }
 
-    /// Reads the counts afresh (none in a decoy).
+    /// Reads the counts afresh (none in a decoy), and the bike-ride switch.
     private func reload() {
+        logsBikeRides = WorldMapPreferences.logsBikeRides()
         routeCount = store.worldStoredRouteCount
         pinCount = store.worldPinnedSpaceCount
     }
@@ -316,6 +363,20 @@ nonisolated enum HomeMapDeletion: String, Identifiable, Sendable {
                                     defaultValue: "The fog, the walk and run lines, Where you've been, your homes and hotels, and the pins on this iPhone go. Your workouts stay in Move.",
                                     comment: "Settings, Home map: what deleting the map history does")
         }
+    }
+}
+
+/// What turning "Log my bike rides" does, decided from the Motion & Fitness answer before the store is asked.
+nonisolated enum HomeMapBikeRideStep: Equatable, Sendable {
+    /// Ask the store (off, or on while iOS may still ask or Motion is allowed; the store answers).
+    case ask
+    /// Open Fernlet's page in the Settings app: Motion was declined or is restricted, so iOS won't ask.
+    case openSettings
+
+    /// The step for a turn of the switch. A decoy always asks the store, which logs nothing there.
+    static func step(turningOn on: Bool, permission: WorldMotionPermission, isDecoy: Bool) -> Self {
+        guard on, !isDecoy, permission == .denied else { return .ask }
+        return .openSettings
     }
 }
 

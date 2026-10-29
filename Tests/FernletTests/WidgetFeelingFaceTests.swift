@@ -29,7 +29,9 @@ struct WidgetFeelingFaceTests {
         #expect(!lock.contains("homeScreen"), "and never the Home Screen's feeling")
     }
 
-    /// Exactly the four feelings the owner named, with their motifs; the painter's twin never names one.
+    /// Exactly the four feelings the owner named, with their motifs. The painter's twin never names the
+    /// widget's feelings: since group 17 it lays out their faces' shapes (`WidgetCompanionFace`), so one rule
+    /// places every face, but its painter only ever draws the band's face.
     @Test func theFourFeelingsAndTheirMotifs() throws {
         let faces = try RepoRoot.source(Self.widgetRoot + "WidgetFeelingFaces.swift")
         #expect(faces.contains("static let drawn: Set<WidgetCompanionEmotion> = [.happy, .sad, .hungry, .thirsty]"))
@@ -38,6 +40,8 @@ struct WidgetFeelingFaceTests {
         }
         let painter = try RepoRoot.source(Self.widgetRoot + "WidgetPixelCompanion.swift")
         let twin = try #require(WidgetWorldTests.twin(in: painter), "the painter's twin markers are gone")
-        #expect(!twin.contains("Feeling") && !twin.contains("Emotion"), "the feelings stay outside the map's twin")
+        #expect(!twin.contains("Feeling") && !twin.contains("Emotion"), "the widget's feelings stay outside the map's twin")
+        #expect(twin.contains("let layout = WidgetCompanionFaceLayout(body: body, face: .state(state, pose: pose))"),
+                "the map's painter lays out and draws the band's face only")
     }
 }

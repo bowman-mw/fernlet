@@ -95,18 +95,14 @@ extension WorldPlacesKeeper {
 
     // MARK: A place the person adds (ref-tag-name, ref-tag-photo)
 
-    /// Adds a place the person named themselves at `point` (a spot Fernlet refused, or the spot of a photo
-    /// they put on the map): it joins their places as any other, with a visit at `date` (they were there),
-    /// known for later visits, in Where you've been, renamed or deleted there. A place already known that
-    /// near gets the visit instead. Never Apple's name; no reference. Whether it was kept.
+    /// Adds a place the person named themselves at `point` (the spot of a photo they put on the map, or a
+    /// spot with no Apple name): it joins their places as any other, with a visit at `date` (they were
+    /// there), known for later visits, in Where you've been, renamed or deleted there, and the button won't
+    /// ask there again. A place already known that near gets the visit instead. Never Apple's name; no
+    /// reference. Whether it was kept.
     @discardableResult
     func remember(_ name: String, at point: GeoPoint, date: Date) -> Bool {
-        guard !isDecoy, point.isValid, let label = PlaceRecord.validLabel(name) else { return false }
-        refusedSpot = nil
-        return update { state in
-            if let known = state.knownPlace(near: point) { return state.recordingVisit(to: known.id, at: date) }
-            return state.learning(PlaceRecord(label: label, point: point), at: date)
-        }
+        remember(WorldRememberSpot(point: point, since: date, kind: .unnamed), named: name, at: point, date: date) != nil
     }
 
     // MARK: Places to eat ("Remember places I eat out")
@@ -180,6 +176,8 @@ extension WorldPlacesKeeper {
             guard !Task.isCancelled, !isDecoy else { return }
             if let name = await lookup.placeName(for: place.placeID)?.name, !isDecoy { eatingNames[place.id] = name }
         }
+        // Round 7: the remembered restaurants and gyms' icons too.
+        await resolveKeptNames()
     }
 
     /// Gives the place to eat `id` the person's own name (a rename in Where you've been). Whether it changed.

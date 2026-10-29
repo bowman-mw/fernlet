@@ -75,8 +75,35 @@ struct WorldWalkToast: View {
     let onUndo: () -> Void
 
     var body: some View {
+        WorldLoggedNote(line: Text(verbatim: WorldWalkCopy.logged(walk)), identifier: .walk, onUndo: onUndo)
+    }
+
+    /// The note's distance off the physical bottom, as the approved note sits (just above the item bar).
+    static let bottomLift = WorldItemBar.height + WorldItemBar.bottomGap + 14
+}
+
+/// The dark note that something was logged, with Undo: the approved `b1-home-bike` note (the kit's
+/// `.toast`), shared by the walk's note (``WorldWalkToast``) and the bike ride's (``WorldRideNote``,
+/// round 7).
+struct WorldLoggedNote: View {
+    /// What was logged ("Walk logged · 0.6 km · 12 min").
+    let line: Text
+    /// Whose note it is, for its automation identifiers.
+    let identifier: Identifier
+    let onUndo: () -> Void
+
+    /// The note's automation identifiers (frozen tokens): the walk's, and the bike ride's.
+    enum Identifier: String {
+        case walk = "world.walkToast"
+        case ride = "world.rideToast"
+
+        /// The Undo button's.
+        var undo: String { rawValue + ".undo" }
+    }
+
+    var body: some View {
         HStack(spacing: 12) {
-            Text(verbatim: WorldWalkCopy.logged(walk))
+            line
                 .font(FernletFramedFont.notice)
                 .foregroundStyle(WorldWalkPalette.toastText)
                 .fernletWrappingText()
@@ -88,17 +115,14 @@ struct WorldWalkToast: View {
                     .frame(minWidth: 44, minHeight: 44)
             }
             .buttonStyle(.plain)
-            .accessibilityIdentifier("world.walkToast.undo")
+            .accessibilityIdentifier(identifier.undo)
         }
         .padding(EdgeInsets(top: 2, leading: 15, bottom: 2, trailing: 11))
         .background(WorldWalkPalette.toast, in: RoundedRectangle(cornerRadius: 16))
         .accessibilityElement(children: .contain)
         .dynamicTypeSize(...DynamicTypeSize.accessibility2)
-        .accessibilityIdentifier("world.walkToast")
+        .accessibilityIdentifier(identifier.rawValue)
     }
-
-    /// The note's distance off the physical bottom, as the approved note sits (just above the item bar).
-    static let bottomLift = WorldItemBar.height + WorldItemBar.bottomGap + 14
 }
 
 /// A walk just logged, for its toast and its Undo.

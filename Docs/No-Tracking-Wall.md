@@ -176,6 +176,15 @@ on the default store would move the tracking channel rather than close it. The r
 written *now*, while the answer is "there are none": the first `WKWebView` to appear must use
 `WKWebsiteDataStore.nonPersistent()` and must edit this document.
 
+**The exercise animations run JavaScript, but not in a web view** (round 7, 2026-10-29). The owner's
+199 approved animations are a procedural engine written in JavaScript; the app runs it in a bare
+JavaScriptCore `JSContext` only to work out each frame's pose, and Swift draws the picture. A bare
+context has no DOM and no network API at all: no `fetch`, no `XMLHttpRequest`, no `WebSocket`, no
+storage jar. It evaluates only the two approved files bundled in `ExerciseAnimations.bundle`.
+`ExerciseAnimationNoNetworkTests` pins both halves: the approved scripts name none of the browser's
+network or module-loading APIs, and a `JSContext` or JavaScriptCore import in shipping Swift exists
+only in the `App/Fernlet/ExerciseAnimation*` files.
+
 **`SFSafariViewController` is the one exception, and it is honest about being one.** `App/Fernlet/FoodView.swift`
 presents one — the "view the source page" affordance on the product-import review sheet, opening the
 page the user is already looking at. It is **not** a surface this app can make ephemeral: it runs out
@@ -345,6 +354,15 @@ same-link address correlation is a layer below this one, and the tunnel's far en
 friend who already knows us. What the rotation removes is correlation by Bonjour name or by
 certificate, which is what survives a change of network and a change of day.
 
+### 4d. Bundled data, never fetched
+
+Data that ships inside the app bundle and adds **no destination**: the app opens no connection for it, so
+it has no row in the §3 allowlist.
+
+| Data | Where | Fetched by |
+|---|---|---|
+| **The World atlas** (round 7): land and water, oceans and seas, countries, cities and their urban areas, from Natural Earth (public domain); climate zones from Beck et al. (2018), CC BY 4.0, credited in Acknowledgments | `App/Fernlet/World/Atlas/WorldAtlas.pack`, at most 6 MiB, its SHA-256 pinned by `WorldAtlasPackTests`; format in [World-Atlas-Pack.md](World-Atlas-Pack.md) | the build machine only, once, with the owner's OK (`Scripts/world-atlas/fetch-sources.sh`, pinned URLs and SHA-256s). The app never fetches it; a missing pack means the passport records nothing. |
+
 ---
 
 ## 5. If you legitimately need a new network destination
@@ -488,6 +506,7 @@ Coverage at the time of writing (2026-08-09; the manifest and plist-family rows 
 | Files constructing a `URLSession` | 1 | exact set | `EphemeralWebSession.swift`, on `.ephemeral`, with all 7 privacy settings present |
 | WebKit web views in shipping code | 0 | forward rule | none exist; the first one must use `WKWebsiteDataStore.nonPersistent()` |
 | Out-of-process in-app browsers | 1 | exact set | `FoodView.swift` (`SFSafariViewController`) |
+| Script runtimes in shipping code (since 2026-10-29, `ExerciseAnimationNoNetworkTests`) | 1 | 300 Swift files scanned; prefix pin | JavaScriptCore in `App/Fernlet/ExerciseAnimation*` only; its 3 approved scripts name no network API |
 | Package manifests | 2 | must be non-empty | 2 dependencies: CryptoSwift and, since plan step A1.3, ProximityKit |
 | `Package.resolved` (since plan step A1.3's review fixes) | 2 | exact set (`CIGateSelectorBoundaryTests`) | 2 pins each, `cryptoswift` and `proximitykit`, one revision of each |
 | `PrivacyInfo.xcprivacy` | 4 | pinned by path | tracking `false`, 0 tracking domains, 0 collected data types |

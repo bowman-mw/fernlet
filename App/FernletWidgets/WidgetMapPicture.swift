@@ -3,7 +3,7 @@
 //
 // The map widget's picture (owner's Q36, `b4-new-map`, round 6b), as the app hands it over in the app
 // group: the map around the person with their marked places and saved trails already drawn on it, light
-// and dark, and when it was taken. The app writes it with complete file protection, never in a backup,
+// and dark, a one-colour drawing of it for the tinted and clear Home Screens (W-11), and when it was taken. The app writes it with complete file protection, never in a backup,
 // and deletes it with the map history and when a decoy opens (World/Widget/WorldWidgetMapFile.swift).
 
 import Foundation
@@ -26,6 +26,9 @@ struct WidgetMapPicture: Codable, Equatable {
     var light: Data
     /// The dark picture, PNG.
     var dark: Data
+    /// The one-colour drawing for the tinted and clear Home Screens (phone test W-11), PNG: white on clear,
+    /// which iOS tints. Nil in a file written before it: the one-colour card then shows the plain ground.
+    var mono: Data?
 }
 
 /// What reading the map widget's picture found.
@@ -46,7 +49,8 @@ enum WidgetMapPictureRead: Equatable {
 struct WidgetMapPictureStore {
     /// The picture's file name (the app's `WorldWidgetMap.fileName`).
     static let fileName = "WidgetMap.plist"
-    /// The largest file read (the app writes about 2 MB, and never more than 8 MB of pictures).
+    /// The largest file read: the app never writes more than 8 MB of pictures (light, dark and the
+    /// one-colour drawing together; about 1 MB in practice), plus the property list's own few bytes.
     static let maxBytes = 8 * 1_024 * 1_024 + 4_096
 
     private let fileURL: URL
