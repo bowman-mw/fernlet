@@ -41,6 +41,14 @@ extension View {
             ExerciseHowToSheet(exerciseName: shown.name, sex: sex, preferences: preferences)
                 .fernletSheet()
         }
+        .onAppear { openHowToForUITest(request) }
+    }
+
+    /// The DEBUG launch hook `FERNLET_UI_TEST_OPEN_HOWTO`: opens the named exercise's how-to sheet
+    /// once this presenter appears. Release builds read nil and do nothing.
+    private func openHowToForUITest(_ request: Binding<ExerciseHowToRequest?>) {
+        guard request.wrappedValue == nil, let name = UITestSupport.initialHowToExercise else { return }
+        request.wrappedValue = ExerciseHowToRequest(name: name)
     }
 }
 
