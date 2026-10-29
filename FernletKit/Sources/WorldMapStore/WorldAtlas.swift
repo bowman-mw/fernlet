@@ -42,6 +42,9 @@ public nonisolated final class WorldAtlas: Sendable {
     /// The states and provinces (`ADM1`), sorted by country then token, for the world view's State and City
     /// zooms: their lines and the plate's place (`WorldAtlasAdmin1.swift`).
     public let admin1s: [AtlasAdmin1]
+    /// The plate groups (`ADM1`'s first table): the first-level regions entries are shown as where Natural
+    /// Earth's admin-1 is second-level (England, Île-de-France). An entry not in a group is its own.
+    public let admin1Groups: [AtlasAdmin1Group]
     /// The generator's provenance JSON (`META`), when the pack carries it.
     public let metaJSON: String?
     /// Every cell's state: 0 water, 1 land, 2 coast.
@@ -98,6 +101,7 @@ public nonisolated final class WorldAtlas: Sendable {
         countryIndex = Self.firstIndices(of: layers.countries.map(\.code))
         seaIndex = Self.firstIndices(of: layers.seas.map(\.token))
         admin1s = layers.admin1s
+        admin1Groups = layers.admin1Groups
         admin1Index = Self.firstIndices(of: layers.admin1s.map(\.token))
         admin1sByCountry = Self.groupedIndices(of: layers.admin1s.map(\.countryCode))
     }

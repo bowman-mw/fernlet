@@ -160,15 +160,25 @@ count × {
 ### `ADM1`: states and provinces
 
 For the world view's State and City zooms (World-Exploration-Spec, "The world view", answer 13): the state and
-province lines and the plate's place ("Oregon · United States"). **No county data, ever.**
+province lines and the plate's place ("Oregon · United States", "England · United Kingdom"). **No county data,
+ever.**
 
 ```
+u16 groupCount                           the plate groups (below)
+groupCount × {
+  u8 len · bytes    token: the region's ISO 3166-2 code ("GB-ENG"), else "ne:region:<country>:<slug>" (frozen;
+                    at most 64 bytes; the slug is the English name in lower-case ASCII letters, digits and hyphens)
+  2 ASCII           country alpha-2: a CTRY code
+  u8 len · bytes    name (English, UTF-8; never empty)
+  u8 len · bytes    Spanish name (len 0 = use English)
+}
 u16 count
 count × {
   u8 len · bytes    token: the ISO 3166-2 code ("US-OR"), else "ne:<ne_id>" (frozen; at most 24 bytes)
   2 ASCII           country alpha-2: a CTRY code (the territory, as CTRY counts it)
   u8 len · bytes    name (English, UTF-8; never empty)
   u8 len · bytes    Spanish name (len 0 = use English)
+  u16      group    index into the plate groups, 0xFFFF: the entry is its own plate group
   i32 × 4  bbox     minLon, minLat, maxLon, maxLat in 1e-5 degrees
   u16      ringCount
   ringCount × { u32 pointCount · first point i32 lon, i32 lat · (pointCount-1) × zigzag-LEB128 deltas lon, lat }
@@ -194,15 +204,42 @@ at City) would make a 6.7 MB pack and 0.005° leave 130 KB under the cap, so the
   is left out: a fix there names only its country.
 - **Names.** English from `NAME_EN`, else `NAME`; Spanish from `NAME_ES`, stored empty when it equals the English.
   France's entries are its départements ("Paris"), as Natural Earth draws it.
+- **Plate groups** (coordinator, 2026-10-29). Where Natural Earth's admin-1 is a second-level unit, the plate and the
+  state lines use the first-level region; the polygons are not dissolved, each entry just names its group. The
+  generator's `PLATE_GROUPS` table gives, per country, the source field naming the region and each value's ISO
+  3166-2 code and English and Spanish names (hand-written; Natural Earth has no Spanish region names); an
+  `iso:<code>` key places a feature by its own code first. Every other country's entries are their own groups.
+  The countries, chosen because ISO 3166-2's first level is the region and Natural Earth's admin-1 sits under it:
+
+  | Country | Natural Earth's admin-1 | Plate group | From |
+  | --- | --- | --- | --- |
+  | GB | 232 council areas | England, Scotland, Wales, Northern Ireland (`GB-ENG`…) | `GEONUNIT` |
+  | FR | 101 départements | 13 metropolitan regions (`FR-IDF`…); the 5 overseas regions and Clipperton stay their own | `REGION_COD` |
+  | IT | 110 provinces | 20 regions (`IT-62` Lazio…) | `REGION_COD` |
+  | ES | 52 provinces | 17 autonomous communities and 2 cities (`ES-MD`…) | `REGION` |
+  | IE | 34 counties and cities | Leinster, Munster, Connacht, Ulster (`IE-L`…) | each county's own code |
+  | BE | 10 provinces and Brussels | Flanders, Wallonia, Brussels-Capital (`BE-VLG`…) | `GEONUNIT` |
+  | PH | 118 provinces and cities | 17 regions (`PH-00` Metro Manila…) | `REGION_COD` |
+  | UG | 112 districts | 4 regions (`UG-C`…) | `REGION` |
+  | LK | 25 districts | 9 provinces (`LK-1`…) | `REGION_COD` |
+  | GN | 34 prefectures | 8 regions (`GN-B`…) | `REGION_COD` |
+  | BF | 45 provinces | 13 regions (`BF-01`…) | `REGION` |
+  | MW | 28 districts | 3 regions (`MW-C`…) | `REGION`, two districts by code |
+
+  Considered and left as they are: Slovenia, North Macedonia, Latvia, Malta and Azerbaijan, whose ISO 3166-2
+  first level is the municipality Natural Earth draws (its `REGION` there is a statistical region); Japan,
+  Russia, Vietnam and India, whose `REGION` groups first-level units into non-administrative regions. A
+  region value the table does not list is logged and the entry stays its own group. The 2026-10-29 pack has
+  117 groups holding 887 entries.
 
 The 2026-10-29 pack has 4,554 entries over 239 countries (4,293 with an ISO token), 8,480 rings and 435,491
-points; `ADM1` stores 2.01 MB of the 5.77 MB pack (5,767,708 bytes, 524 KB under the cap). A reader refuses a
+points; `ADM1` stores 2.02 MB of the 5.77 MB pack (5,774,923 bytes, 517 KB under the cap). A reader refuses a
 count over 8,192, a token of the wrong shape or used twice, a country `CTRY` lacks, an empty English name and any
 malformed outline. `ADM1` is required in version 1 (nothing has shipped).
 
 ### `META`
 
-UTF-8 JSON: the generator version (3 since `ADM1`), the generation date, both simplification tolerances, and each
+UTF-8 JSON: the generator version (3 since `ADM1`, 4 since its plate groups), the generation date, both simplification tolerances, and each
 source's file name, URL, SHA-256 and licence.
 
 ## The rules the reader applies
@@ -237,9 +274,15 @@ source's file name, URL, SHA-256 and licence.
 - **Terrain:** water or land from `LAND`, a class from `CLIM` and the latitude, flora from the class, the latitude
   and (for cacti) the Americas.
 - **Landmark:** within the landmark's find radius of its point (below).
-- **State or province** (`WorldAtlas.admin1(at:)`, the plate's `WorldAtlas.placeName(at:)`): the entry whose rings
-  hold the fix, among only the entries of the country under it when `CTRY` has one there (each box first), else
-  among all. No entry, no state: the plate names just the country, and at sea nothing.
+- **State or province** (`WorldAtlas.admin1(at:)`): the entry whose rings hold the fix, among only the entries of
+  the country under it when `CTRY` has one there (each box first), else among all. The plate's
+  `WorldAtlas.placeName(at:)` names that entry's plate group (`admin1Group(at:)`) and the country. No entry, no
+  state: the plate names just the country, and at sea nothing.
+- **Lines on hex edges** (`WorldAtlas.border(between:and:)`): each world-view hex is named by the place at its
+  centre (`placeName(of:in:)`); an edge carries a country line where the two countries differ and a state line
+  where, in one country, the two plate groups differ (so London's boroughs draw none between them), and nothing
+  beside the sea or a side with no state. `AtlasZoomLevel.draws(_:)` shows country lines from Country and state
+  lines from State.
 
 ## The world view's zoom ladder
 
@@ -265,8 +308,8 @@ cell's centre lies in it (`WorldViewHexGrid.uncovered(by:)`, at most `FogCellSto
 one fog store drives every level.
 
 **VoiceOver.** `WorldAtlas.zoomDescription(level:centre:)` gives the parts of the zoom control's words: the level's
-token and, from State in, the place at the view's centre (the admin-1 names and the country code). The screen
-formats them ("City, Oregon, United States").
+token; at Country the country at the view's centre alone ("Country, United States"); from State the plate group's
+names and the country code ("City, Oregon, United States"). The screen formats them.
 
 ## Landmarks
 
