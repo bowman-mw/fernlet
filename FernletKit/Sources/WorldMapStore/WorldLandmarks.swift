@@ -17,6 +17,12 @@ public nonisolated enum AtlasLandmarkTier: Hashable, Sendable {
     case famous(artID: String)
     /// Every other landmark: one of the generic icons.
     case generic(AtlasLandmarkKind)
+
+    /// The art the map draws now: a drawn famous id, else the generic icon (a placeholder's stand-in).
+    public var drawable: AtlasLandmarkTier {
+        guard case .famous(let artID) = self, let stand = WorldLandmarks.placeholderArtIDs[artID] else { return self }
+        return .generic(stand)
+    }
 }
 
 /// One landmark from the hand-written list. Before it is found the map draws it grey and unnamed through the
@@ -88,9 +94,14 @@ public nonisolated struct WorldLandmarks: Sendable {
     public static let maxNameBytes = 120
     /// A find radius's allowed range, in metres: a tower about 150, a big park 250 to 400 from its centre.
     public static let radiusRange: ClosedRange<Double> = 50...600
-    /// The famous tier's art ids: the only three drawn so far (Eiffel Tower, Empire State Building, Sydney
-    /// Opera House).
-    public static let famousArtIDs: Set<String> = ["eiffel", "empire", "opera"]
+    /// The famous tier's drawn art ids (Eiffel Tower, Empire State Building, Sydney Opera House).
+    public static let drawnArtIDs: Set<String> = ["eiffel", "empire", "opera"]
+    /// Famous art ids the design session has not drawn yet, each with the generic icon the map uses meanwhile
+    /// (owner, 2026-10-29: the Colosseum gets its own art; until it lands it is drawn as a stadium). When an
+    /// art id is drawn it moves to ``drawnArtIDs`` and its token never changes.
+    public static let placeholderArtIDs: [String: AtlasLandmarkKind] = ["colosseum": .stadium]
+    /// Every famous art id a list may name: the drawn ones and the placeholders.
+    public static var famousArtIDs: Set<String> { drawnArtIDs.union(placeholderArtIDs.keys) }
     /// The widest search ``landmarks(near:withinMetres:)`` answers, in metres (the flat-earth distance is
     /// good to well under a percent at this range).
     public static let maxSearchMetres = 50_000.0

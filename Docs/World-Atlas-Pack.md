@@ -210,7 +210,7 @@ World-Exploration-Spec §2 (owner: two tiers, grey and unnamed through the fog b
   | `city` | the city's frozen atlas token, exactly as the shipped pack's `CITY` table has it (`Q90`) |
   | `lat`, `lon` | the landmark's point, in degrees |
   | `radius` | the find radius in metres, 50–600 (a tower about 150, a big park 250–400 from its centre) |
-  | `art` | famous tier only: the art id, one of `eiffel`, `empire`, `opera` (the three drawn) |
+  | `art` | famous tier only: the art id, one of `eiffel`, `empire`, `opera` (drawn) or `colosseum` (a placeholder drawn as a stadium until its art lands, owner 2026-10-29) |
   | `kind` | generic tier only: `park`, `bridge`, `lighthouse`, `stadium`, `castle` or `tower` |
 
   Exactly one of `art` or `kind`. The reader refuses the whole file for an unknown key, a missing field, a second

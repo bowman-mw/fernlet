@@ -4,7 +4,7 @@ import WorldMapStore
 @testable import Fernlet
 
 /// The World's landmarks (round 7, World-Exploration-Spec §2 "Landmarks"): the hand-written bundled list and
-/// its rules (every city in the shipped pack, radii in range, the three famous art ids), the find rule, the
+/// its rules (every city in the shipped pack, radii in range, the famous art ids), the find rule, the
 /// passport keeping each one once in the fixed order, the decoy keeping nothing, and every malformed file
 /// refused whole.
 @MainActor
@@ -38,7 +38,8 @@ struct WorldLandmarkTests {
 
     // MARK: The bundled list
 
-    /// The bundled file decodes; ids are unique; radii are in range; the famous tier is exactly the three drawn.
+    /// The bundled file decodes; ids are unique; radii are in range; the famous tier is the three drawn plus the
+    /// Colosseum (owner 2026-10-29), which the map draws as a stadium until its own art lands.
     @Test func theBundledListDecodesAndKeepsItsRules() throws {
         let list = try WorldLandmarks(data: Self.bundled("WorldLandmarks", "json"))
         #expect(list.all.count >= 60 && list.all.count <= WorldLandmarks.maxLandmarks)
@@ -48,7 +49,12 @@ struct WorldLandmarkTests {
         for landmark in list.all {
             if case .famous(let art) = landmark.tier { arts.append(art) }
         }
-        #expect(arts.sorted() == ["eiffel", "empire", "opera"])
+        #expect(arts.sorted() == ["colosseum", "eiffel", "empire", "opera"])
+        let colosseum = try #require(list.landmark(token: "colosseum"))
+        #expect(colosseum.tier == .famous(artID: "colosseum"))
+        #expect(colosseum.tier.drawable == .generic(.stadium), "a placeholder draws its stand-in")
+        #expect(list.landmark(token: "eiffelTower")?.tier.drawable == .famous(artID: "eiffel"))
+        #expect(WorldLandmarks.drawnArtIDs.isDisjoint(with: WorldLandmarks.placeholderArtIDs.keys))
         #expect(list.landmark(token: "eiffelTower")?.cityToken == "Q90")
         #expect(list.landmark(token: "empireStateBuilding")?.cityToken == "Q60")
         #expect(list.landmark(token: "sydneyOperaHouse")?.cityToken == "Q3130")

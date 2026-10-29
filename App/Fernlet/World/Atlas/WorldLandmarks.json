@@ -53,7 +53,7 @@
     {"id": "luxembourgGardens", "en": "Luxembourg Gardens", "es": "Jardín de Luxemburgo", "city": "Q90", "lat": 48.8462, "lon": 2.3372, "radius": 300, "kind": "park"},
     {"id": "parcDesPrinces", "en": "Parc des Princes", "es": "Parque de los Príncipes", "city": "Q90", "lat": 48.8414, "lon": 2.253, "radius": 150, "kind": "stadium"},
     {"id": "pontNeuf", "en": "Pont Neuf", "es": "Pont Neuf", "city": "Q90", "lat": 48.8572, "lon": 2.3413, "radius": 150, "kind": "bridge"},
-    {"id": "colosseum", "en": "Colosseum", "es": "Coliseo", "city": "Q220", "lat": 41.8902, "lon": 12.4922, "radius": 150, "kind": "stadium"},
+    {"id": "colosseum", "en": "Colosseum", "es": "Coliseo", "city": "Q220", "lat": 41.8902, "lon": 12.4922, "radius": 150, "art": "colosseum"},
     {"id": "castelSantAngelo", "en": "Castel Sant'Angelo", "es": "Castillo de Sant'Angelo", "city": "Q220", "lat": 41.9031, "lon": 12.4663, "radius": 150, "kind": "castle"},
     {"id": "villaBorghese", "en": "Villa Borghese", "es": "Villa Borghese", "city": "Q220", "lat": 41.9142, "lon": 12.4923, "radius": 400, "kind": "park"},
     {"id": "ponteVecchio", "en": "Ponte Vecchio", "es": "Ponte Vecchio", "city": "Q2044", "lat": 43.768, "lon": 11.2531, "radius": 100, "kind": "bridge"},
