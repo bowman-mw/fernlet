@@ -15,9 +15,16 @@ struct WorldCountryStampsTests {
         "PA", "SV", "TT", "US", "VC",
     ]
 
+    /// Europe's first 33 (2026-10-29); the other 11 of board st-eu-2 are being redrawn.
+    static let europeFirst: Set<String> = [
+        "GB", "FR", "IE", "IS", "NO", "SE", "FI", "DK", "EE", "LV", "LT", "IT", "VA", "SM", "MT", "SI", "HR", "BA",
+        "RS", "ME", "AL", "MK", "GR", "BG", "RO", "MD", "HU", "SK", "CZ", "PL", "UA", "BY", "RU",
+    ]
+
     @Test func theBundledStampsLoadAndKeepTheirRules() throws {
         let stamps = try #require(WorldCountryStampsLoader.bundled())
         #expect(Self.northAmerica.isSubset(of: Set(stamps.stamps.keys)))
+        #expect(Self.europeFirst.isSubset(of: Set(stamps.stamps.keys)))
         let url = try #require(Bundle.main.url(forResource: "WorldAtlas", withExtension: "pack"))
         let atlas = try WorldAtlas(data: Data(contentsOf: url))
         for (code, stamp) in stamps.stamps {
@@ -30,7 +37,8 @@ struct WorldCountryStampsTests {
         }
         #expect(stamps.stamp(for: "us")?.englishName == "United States")
         #expect(stamps.stamp(for: "MX")?.label.joined(separator: " ").contains("MÉXICO") == true)
-        #expect(stamps.stamp(for: "FR") == nil, "Europe's batch hasn't landed: no stamp, a dashed space")
+        #expect(stamps.stamp(for: "DE") == nil, "a stamp still being redrawn: none yet, a dashed space")
+        #expect(stamps.stamp(for: "VA")?.batch == "eu", "the smallest of the 195 has its stamp")
     }
 
     /// The rule on its own: (first letter + second letter) mod 4, either case.

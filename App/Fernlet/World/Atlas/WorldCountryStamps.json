@@ -619,6 +619,867 @@
         ".............."
       ],
       "batch": "na"
+    },
+    "gb": {
+      "en": "United Kingdom",
+      "es": "Reino Unido",
+      "label": [
+        "UNITED KINGDOM"
+      ],
+      "symbol": "Big Ben",
+      "ink": "#B3343A",
+      "rows": [
+        "......k.......",
+        ".....kkk......",
+        ".....kkk......",
+        "....kkkkk.....",
+        "....k...k.....",
+        "....k.k.k.....",
+        "....k...k.....",
+        "....kkkkk.....",
+        "....kk.kk.....",
+        "....kk.kk.....",
+        "....kk.kk.....",
+        "....kk.kk.....",
+        "...kkkkkkk....",
+        "..kkkkkkkkk..."
+      ],
+      "batch": "eu"
+    },
+    "fr": {
+      "en": "France",
+      "es": "Francia",
+      "label": [
+        "FRANCE"
+      ],
+      "symbol": "the Eiffel Tower",
+      "ink": "#2F6FA3",
+      "rows": [
+        "......k.......",
+        "......k.......",
+        ".....kkk......",
+        ".....k.k......",
+        ".....kkk......",
+        "....kk.kk.....",
+        "....k...k.....",
+        "...kkkkkkk....",
+        "...k.....k....",
+        "..kk.....kk...",
+        "..k..kkk..k...",
+        ".kk.k...k.kk..",
+        ".k..k...k..k..",
+        "kk..........kk"
+      ],
+      "batch": "eu"
+    },
+    "ie": {
+      "en": "Ireland",
+      "es": "Irlanda",
+      "label": [
+        "ÉIRE"
+      ],
+      "symbol": "a Celtic harp",
+      "ink": "#2E8B57",
+      "rows": [
+        "..............",
+        "...kk.........",
+        ".kkk.kk...kkk.",
+        ".k.k.k.kkk.k.k",
+        ".k.k.k.k.kk.k.",
+        ".k.k.k.k.kkk..",
+        ".k.k.k.k.kk...",
+        ".k.k.k.kkk....",
+        ".k.k.k.kk.....",
+        ".k.k.kk.k.....",
+        ".k.k.k.k......",
+        ".k.k.kk.......",
+        ".k.kkk........",
+        ".kkkk........."
+      ],
+      "batch": "eu"
+    },
+    "is": {
+      "en": "Iceland",
+      "es": "Islandia",
+      "label": [
+        "ÍSLAND"
+      ],
+      "symbol": "Strokkur, the geyser",
+      "ink": "#2F6FA3",
+      "rows": [
+        "......k.......",
+        "....k.k.k.....",
+        ".....kkk......",
+        "...k.kkk.k....",
+        ".....kkk......",
+        "......k.......",
+        ".....kkk......",
+        ".....kkk......",
+        "....kkkkk.....",
+        "...kk...kk....",
+        ".kk.......kk..",
+        "k...........k.",
+        "k..kk...kk...k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "eu"
+    },
+    "no": {
+      "en": "Norway",
+      "es": "Noruega",
+      "label": [
+        "NORGE"
+      ],
+      "symbol": "a Viking ship",
+      "ink": "#B3343A",
+      "rows": [
+        "......k.......",
+        "...kkkkkkk....",
+        "...k.k.k.k....",
+        "...kkkkkkk....",
+        "...k.k.k.k....",
+        "...kkkkkkk....",
+        "kk....k.....kk",
+        "k.k...k....k.k",
+        ".kkkkkkkkkkkk.",
+        ".kk.k.k.k.k.k.",
+        "..kkkkkkkkkk..",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "eu"
+    },
+    "se": {
+      "en": "Sweden",
+      "es": "Suecia",
+      "label": [
+        "SVERIGE"
+      ],
+      "symbol": "a Dala horse",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..........k...",
+        ".........kkk..",
+        "........kkkkk.",
+        "........kk.kkk",
+        "........kk....",
+        ".kkkkkkkkk....",
+        "kkkkkkkkkk....",
+        "kk.k.k.kkk....",
+        ".kkkkkkkkk....",
+        ".kk.....kk....",
+        ".kk.....kk....",
+        ".kk.....kk....",
+        "kkkkkkkkkkkk..",
+        ".............."
+      ],
+      "batch": "eu"
+    },
+    "fi": {
+      "en": "Finland",
+      "es": "Finlandia",
+      "label": [
+        "SUOMI",
+        "FINLAND"
+      ],
+      "symbol": "a reindeer",
+      "ink": "#7B4BA8",
+      "rows": [
+        "k.k.k.k.......",
+        ".kkk.kk.......",
+        "..k.kk........",
+        "..kkk.........",
+        ".kkkk.........",
+        "kk.kkk........",
+        "...kkkkkkkkkk.",
+        "...kkkkkkkkkkk",
+        "...kkkkkkkkkk.",
+        "...kkkkkkkkkk.",
+        "...k.k....k.k.",
+        "...k.k....k.k.",
+        "...k.k....k.k.",
+        "..kk.kk..kk.kk"
+      ],
+      "batch": "eu"
+    },
+    "dk": {
+      "en": "Denmark",
+      "es": "Dinamarca",
+      "label": [
+        "DANMARK"
+      ],
+      "symbol": "Nyhavn's gabled houses and a mast",
+      "ink": "#7B4BA8",
+      "rows": [
+        "k..k...k...k..",
+        "k.kkk.kkk.kkk.",
+        "kk...k...k...k",
+        "kk.k.k.k.k.k.k",
+        "kk...k...k...k",
+        "kk.k.k.k.k.k.k",
+        "kk...k...k...k",
+        "kkkkkkkkkkkkkk",
+        "k.............",
+        "kkkkkk........",
+        ".kkkk.........",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "eu"
+    },
+    "ee": {
+      "en": "Estonia",
+      "es": "Estonia",
+      "label": [
+        "EESTI"
+      ],
+      "symbol": "a barn swallow",
+      "ink": "#2E8B57",
+      "rows": [
+        "..............",
+        "k.............",
+        ".kk...........",
+        "..kkk.....kk..",
+        "...kkkk..kkkk.",
+        "....kkkkkkk.kk",
+        ".....kkkkkk...",
+        "....kkkkkk....",
+        "...kk.kk......",
+        "..kk..k.......",
+        ".kk...k.......",
+        "kk....k.......",
+        "..............",
+        ".............."
+      ],
+      "batch": "eu"
+    },
+    "lv": {
+      "en": "Latvia",
+      "es": "Letonia",
+      "label": [
+        "LATVIJA"
+      ],
+      "symbol": "the Freedom Monument",
+      "ink": "#2E8B57",
+      "rows": [
+        "..k...k...k...",
+        ".kkk.kkk.kkk..",
+        "..k...k...k...",
+        "...k..k..k....",
+        "....k.k.k.....",
+        ".....kkk......",
+        ".....kkk......",
+        ".....kkk......",
+        ".....kkk......",
+        ".....k.k......",
+        ".....k.k......",
+        "....kkkkk.....",
+        "...kkkkkkk....",
+        "..kkkkkkkkk..."
+      ],
+      "batch": "eu"
+    },
+    "lt": {
+      "en": "Lithuania",
+      "es": "Lituania",
+      "label": [
+        "LIETUVA"
+      ],
+      "symbol": "the Hill of Crosses",
+      "ink": "#2F6FA3",
+      "rows": [
+        ".....k........",
+        "....kkk....k..",
+        "..k..k....kkk.",
+        ".kkk.k..k..k..",
+        "..k..k.kkk.k..",
+        "..k.kk..k.kk..",
+        ".kkkkk..kkkk.k",
+        "kkk.kk.kk.kkkk",
+        ".kk.kkkkk.kk.k",
+        ".kk.kk.kk.kk.k",
+        ".kk.kk.kk.kk.k",
+        ".kkkkkkkkkkkk.",
+        "kkkkkkkkkkkkkk",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "eu"
+    },
+    "it": {
+      "en": "Italy",
+      "es": "Italia",
+      "label": [
+        "ITALIA"
+      ],
+      "symbol": "a gondola in Venice",
+      "ink": "#B3343A",
+      "rows": [
+        "..........k...",
+        "..........k...",
+        "..........k...",
+        ".........kk...",
+        ".........k....",
+        ".........k....",
+        "k.......k.....",
+        "kk.....k.....k",
+        ".kkkkkkkkkkkk.",
+        "..kkkkkkkkkk..",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        ".............."
+      ],
+      "batch": "eu"
+    },
+    "va": {
+      "en": "Vatican City",
+      "es": "Ciudad del Vaticano",
+      "label": [
+        "CITTÀ DEL",
+        "VATICANO"
+      ],
+      "symbol": "the dome of St Peter's",
+      "ink": "#7B4BA8",
+      "rows": [
+        "......kk......",
+        "......kk......",
+        ".....kkkk.....",
+        "......kk......",
+        "....kkkkkk....",
+        "...kk....kk...",
+        "..kk.k..k.kk..",
+        "..k..k..k..k..",
+        ".kkkkkkkkkkkk.",
+        ".k.k.k..k.k.k.",
+        ".k.k.k..k.k.k.",
+        ".k.k.k..k.k.k.",
+        "kkkkkkkkkkkkkk",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "eu"
+    },
+    "sm": {
+      "en": "San Marino",
+      "es": "San Marino",
+      "label": [
+        "SAN MARINO"
+      ],
+      "symbol": "the Guaita tower on Monte Titano",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..k.k.k.......",
+        "..kkkkk.......",
+        "..k...k.......",
+        "..k.k.k.......",
+        "..k...k.......",
+        ".kkkkkkk......",
+        ".k.....k......",
+        ".k.k.k.kk.....",
+        "kk......kk....",
+        "k.........kk..",
+        "k...........k.",
+        "k.....k.......",
+        "k...k...k....k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "eu"
+    },
+    "mt": {
+      "en": "Malta",
+      "es": "Malta",
+      "label": [
+        "MALTA"
+      ],
+      "symbol": "a luzzu boat with its eye",
+      "ink": "#B3343A",
+      "rows": [
+        "..............",
+        "..............",
+        "k............k",
+        "k............k",
+        "kk..........kk",
+        "kkkkkkkkkkkkkk",
+        "k.......kkk..k",
+        "k......k.k.k.k",
+        ".k......kkk.k.",
+        "..k........k..",
+        "...kkkkkkkk...",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "eu"
+    },
+    "si": {
+      "en": "Slovenia",
+      "es": "Eslovenia",
+      "label": [
+        "SLOVENIJA"
+      ],
+      "symbol": "the church on the island at Bled",
+      "ink": "#2F6FA3",
+      "rows": [
+        ".........k....",
+        ".........k....",
+        "........kkk...",
+        "........k.k...",
+        "........k.k...",
+        "....kkkkk.k...",
+        "...k....k.k...",
+        "..kkkkkkkkkk..",
+        "..k.k..k...k..",
+        ".kkkkkkkkkkkk.",
+        "kk..........kk",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "eu"
+    },
+    "hr": {
+      "en": "Croatia",
+      "es": "Croacia",
+      "label": [
+        "HRVATSKA"
+      ],
+      "symbol": "Dubrovnik's walls and Minčeta tower",
+      "ink": "#2E8B57",
+      "rows": [
+        "..k.k.k.......",
+        "..kkkkk.......",
+        "..k...k.......",
+        "..k.k.k.......",
+        "..k...k..k.k.k",
+        "..k...kkkkkkkk",
+        "k.k.k.kk...k.k",
+        "kkkkkkkk.k...k",
+        "k......kk...kk",
+        "k..k.k.......k",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "eu"
+    },
+    "ba": {
+      "en": "Bosnia and Herzegovina",
+      "es": "Bosnia y Herzegovina",
+      "label": [
+        "BOSNA I",
+        "HERCEGOVINA"
+      ],
+      "symbol": "Stari Most, Mostar's old bridge",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..............",
+        "k.k........k.k",
+        "kkk........kkk",
+        "kkk...kk...kkk",
+        "k.k..kkkk..k.k",
+        "kkkkkk..kkkkkk",
+        "kkkkk....kkkkk",
+        "k.kk......kk.k",
+        "kkkk......kkkk",
+        "kkkk......kkkk",
+        "kkk........kkk",
+        "kkk........kkk",
+        "kkkkk.kk.kkkkk",
+        "..k..k..k..k.."
+      ],
+      "batch": "eu"
+    },
+    "rs": {
+      "en": "Serbia",
+      "es": "Serbia",
+      "label": [
+        "SRBIJA"
+      ],
+      "symbol": "the house on the rock in the Drina",
+      "ink": "#B3343A",
+      "rows": [
+        "......k.......",
+        ".....kkk......",
+        "....kkkkk.....",
+        "...kkkkkkk....",
+        "....k.k.k.....",
+        "....k...k.....",
+        "....kkkkk.....",
+        "...kkkkkkk....",
+        "..kkkkkkkkk...",
+        ".kkkkkkkkkkk..",
+        "..............",
+        "kk..kk..kk..kk",
+        "..kk..kk..kk..",
+        ".............."
+      ],
+      "batch": "eu"
+    },
+    "me": {
+      "en": "Montenegro",
+      "es": "Montenegro",
+      "label": [
+        "CRNA GORA"
+      ],
+      "symbol": "Ostrog Monastery in the cliff",
+      "ink": "#2E8B57",
+      "rows": [
+        "..kk..kkk..kk.",
+        ".k..kk...kk..k",
+        "k...........k.",
+        ".k..kkkkkk..k.",
+        "k..k......k..k",
+        ".k.k.k..k.k.k.",
+        "k..kkkkkkkk..k",
+        ".k.k.k..k.k.k.",
+        "k..kkkkkkkk..k",
+        ".k..........k.",
+        "k..k......k..k",
+        ".k...k..k...k.",
+        "k..k......k..k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "eu"
+    },
+    "al": {
+      "en": "Albania",
+      "es": "Albania",
+      "label": [
+        "SHQIPËRIA"
+      ],
+      "symbol": "Berat, the town of a thousand windows",
+      "ink": "#B3343A",
+      "rows": [
+        "......kkkkkk..",
+        ".....k......k.",
+        "....kkkkkkkkkk",
+        "....k.k.k.k.kk",
+        ".kkkkkkkkkkkkk",
+        ".k.k.k.k.k.k.k",
+        "kkkkkkkkkkkkkk",
+        "k.k.k.k.k.k..k",
+        "kkkkkkkkkkkkkk",
+        "k.k.k.k.k.k.kk",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "eu"
+    },
+    "mk": {
+      "en": "North Macedonia",
+      "es": "Macedonia del Norte",
+      "label": [
+        "NORTH MACEDONIA"
+      ],
+      "symbol": "St John at Kaneo above Lake Ohrid",
+      "ink": "#2F6FA3",
+      "rows": [
+        "......k.......",
+        ".....kkk......",
+        "....k...k.....",
+        "...kkkkkkk....",
+        "..kk.k.k..k...",
+        "..kkkkkkkkk...",
+        "..k.k...k.k...",
+        ".kkkkkkkkkkkk.",
+        ".k..........kk",
+        "k............k",
+        "k..........kkk",
+        "kkkkkk..kkk...",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "eu"
+    },
+    "gr": {
+      "en": "Greece",
+      "es": "Grecia",
+      "label": [
+        "GREECE"
+      ],
+      "symbol": "a blue dome in Santorini",
+      "ink": "#B3343A",
+      "rows": [
+        "........k.....",
+        ".......kkk....",
+        "......kkkkk...",
+        ".....kkkkkkk..",
+        ".....kkkkkkk..",
+        "kkk..kkkkkkk..",
+        "k.k..k.....k..",
+        "kkkkkk..k..kkk",
+        "k.k..k.k.k.k.k",
+        "kkkkkkkkkkkkkk",
+        "k..k..k..k...k",
+        "kkkkkkkkkkkkkk",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "eu"
+    },
+    "bg": {
+      "en": "Bulgaria",
+      "es": "Bulgaria",
+      "label": [
+        "BULGARIA"
+      ],
+      "symbol": "a Bulgarian rose",
+      "ink": "#B3343A",
+      "rows": [
+        "....kkkkk.....",
+        "...k..k..k....",
+        "..k.kk.kk.k...",
+        "..k.k...k.k...",
+        "..k..kkk..k...",
+        "...k.....k....",
+        "....kkkkk.....",
+        "......k.......",
+        "..kk..k.......",
+        ".k..k.k..kk...",
+        "..kk.kk.k..k..",
+        "......kk.kk...",
+        "......k.......",
+        "......k......."
+      ],
+      "batch": "eu"
+    },
+    "ro": {
+      "en": "Romania",
+      "es": "Rumanía",
+      "label": [
+        "ROMÂNIA"
+      ],
+      "symbol": "the Transfăgărășan road climbing the mountain",
+      "ink": "#B3343A",
+      "rows": [
+        "......k.......",
+        ".....k.k......",
+        "....k...k.....",
+        "...k.kkk.k....",
+        "..k.....k.k...",
+        ".k..kkkk...k..",
+        "k..k........k.",
+        "...kkkkkkk...k",
+        "..........k...",
+        "....kkkkkkk...",
+        "...k..........",
+        "...kkkkkkkk...",
+        "...........k..",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "eu"
+    },
+    "md": {
+      "en": "Moldova",
+      "es": "Moldavia",
+      "label": [
+        "MOLDOVA"
+      ],
+      "symbol": "a bunch of grapes",
+      "ink": "#B3343A",
+      "rows": [
+        "......k.......",
+        ".....k.kkk....",
+        "....k..kkkk...",
+        "..kk.kk.kk....",
+        ".k..k..k..k...",
+        ".k..k..k..k...",
+        "..kk.kk.kk....",
+        "...k..k..k....",
+        "...k..k..k....",
+        "....kk.kk.....",
+        ".....k..k.....",
+        ".....kkk......",
+        "......k.......",
+        ".............."
+      ],
+      "batch": "eu"
+    },
+    "hu": {
+      "en": "Hungary",
+      "es": "Hungría",
+      "label": [
+        "MAGYARORSZÁG"
+      ],
+      "symbol": "the Parliament on the Danube",
+      "ink": "#B3343A",
+      "rows": [
+        "......kk......",
+        ".....kkkk.....",
+        "..k.kkkkkk.k..",
+        ".kkkk.kk.kkkk.",
+        ".k..kkkkkk..k.",
+        "kkkkkkkkkkkkkk",
+        "k.k.k.k.k.k.kk",
+        "k.k.k.k.k.k.kk",
+        "kkkkkkkkkkkkkk",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk.",
+        ".............."
+      ],
+      "batch": "eu"
+    },
+    "sk": {
+      "en": "Slovakia",
+      "es": "Eslovaquia",
+      "label": [
+        "SLOVENSKO"
+      ],
+      "symbol": "Bratislava Castle",
+      "ink": "#2E8B57",
+      "rows": [
+        "..............",
+        ".k..........k.",
+        "kkk........kkk",
+        "kkkkkkkkkkkkkk",
+        "kk..........kk",
+        "kk.k.k.k.k.kkk",
+        "kk..........kk",
+        "kk.k.k.k.k.kkk",
+        "kk..........kk",
+        "kkkkkkkkkkkkkk",
+        "..k........k..",
+        ".k..........k.",
+        "k.....k......k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "eu"
+    },
+    "cz": {
+      "en": "Czechia",
+      "es": "Chequia",
+      "label": [
+        "ČESKO"
+      ],
+      "symbol": "the Prague astronomical clock",
+      "ink": "#B3343A",
+      "rows": [
+        ".....kkkk.....",
+        "...kkk..kkk...",
+        "..kk...k..kk..",
+        ".kk..kkkk..kk.",
+        ".k..k..k.k..k.",
+        "kk.k...k..k.kk",
+        "k..k..kk..k..k",
+        "k..k...kk.k..k",
+        "kk.k.....kk.kk",
+        ".k..k....kk.k.",
+        ".kk..kkkk..kk.",
+        "..kk......kk..",
+        "...kkk..kkk...",
+        ".....kkkk....."
+      ],
+      "batch": "eu"
+    },
+    "pl": {
+      "en": "Poland",
+      "es": "Polonia",
+      "label": [
+        "POLSKA"
+      ],
+      "symbol": "St Mary's Basilica in Kraków",
+      "ink": "#2F6FA3",
+      "rows": [
+        "...k..........",
+        "..kkk.........",
+        "..k.k.....k...",
+        "..kkk....kkk..",
+        ".kk.kk...k.k..",
+        ".k...k...kkk..",
+        ".k.k.k...k.k..",
+        ".k...kkkkk.k..",
+        ".k.k.k...k.k..",
+        ".k...kk.kk.k..",
+        ".k.k.k.k.k.k..",
+        ".k...k.k.k.k..",
+        ".k...k.k.k.k..",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "eu"
+    },
+    "ua": {
+      "en": "Ukraine",
+      "es": "Ucrania",
+      "label": [
+        "UKRAINE"
+      ],
+      "symbol": "a sunflower",
+      "ink": "#2E8B57",
+      "rows": [
+        "..............",
+        "....k.k..k....",
+        "......kk......",
+        "..k.kkkkkk.k..",
+        "....k....k....",
+        "...kk....kk...",
+        "..kkk....kkk..",
+        "....k....k....",
+        "..k.kkkkkk.k..",
+        "......kk......",
+        "...kk.kk.k....",
+        "...kkkkk......",
+        "......kk......",
+        "......kk......"
+      ],
+      "batch": "eu"
+    },
+    "by": {
+      "en": "Belarus",
+      "es": "Bielorrusia",
+      "label": [
+        "BELARUS"
+      ],
+      "symbol": "a European bison",
+      "ink": "#7B4BA8",
+      "rows": [
+        "..............",
+        "..............",
+        ".kk.kkkk......",
+        "kkkkkkkkkkk...",
+        "kk.kkkkkkkkk..",
+        "kkkkkkkkkkkkk.",
+        ".kkkkkkkkkkkkk",
+        ".kkkkkkkkkkkk.",
+        "..kkkkkkkkkkk.",
+        "...k.k...k.k..",
+        "...k.k...k.k..",
+        "...k.k...k.k..",
+        "..kk.kk.kk.kk.",
+        ".............."
+      ],
+      "batch": "eu"
+    },
+    "ru": {
+      "en": "Russia",
+      "es": "Rusia",
+      "label": [
+        "RUSSIA"
+      ],
+      "symbol": "the onion domes of St Basil's",
+      "ink": "#7B4BA8",
+      "rows": [
+        "......k.......",
+        ".....kkk......",
+        "..k.kkkkk.k...",
+        ".kkkk.k.kkkk..",
+        "kk.kkkkk.k.kk.",
+        "kkk.kkk.k.kkk.",
+        ".k...k...k.k..",
+        ".kk.kkk.kk.k..",
+        ".kkkkkkkkkkk..",
+        ".k.k.k.k.k.k..",
+        ".k.k.k.k.k.k..",
+        "kkkkkkkkkkkkk.",
+        "kk.k..k..k.kk.",
+        "kkkkkkkkkkkkk."
+      ],
+      "batch": "eu"
     }
   }
 }
