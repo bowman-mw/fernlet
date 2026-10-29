@@ -1,4 +1,5 @@
 import Foundation
+import WorldMapStore
 
 /// Car and bike detection on the phone (round 7; `b1-home-car`, `b1-home-bike`): the ``WorldRideWatch``
 /// fed with the map's readings and, while "Log my bike rides" is on and Motion & Fitness is allowed, the
@@ -33,6 +34,10 @@ final class WorldRideKeeper {
         if case .cycling = mode { return true }
         return false
     }
+
+    /// The bike ride's line so far, while a ride is under way (Refinements group 19, `ref-ride-line`): the
+    /// readings Home draws behind the bike in the walk line's green, empty on foot or in a car.
+    private(set) var ridePoints: [RoutePoint] = []
 
     /// Called when a drive starts (true) or ends (false).
     @ObservationIgnored var onDrivingChanged: ((Bool) -> Void)?
