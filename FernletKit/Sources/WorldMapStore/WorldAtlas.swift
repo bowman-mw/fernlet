@@ -15,6 +15,14 @@ import Foundation
 public nonisolated final class WorldAtlas: Sendable {
     // MARK: The rules' constants (each one decided once, here)
 
+    /// How many countries the passport counts ("N of 194 countries"): the 193 UN members, the Holy See and
+    /// Palestine, without North Korea (owner, 2026-10-29: "Take north korea out of the passport"). The pack's
+    /// `CTRY` flag marks exactly these (``AtlasCountry/countsInPassport``).
+    public static let passportCountryTotal = 194
+    /// Countries the passport leaves out entirely: a reading inside one earns no country and no city entry, though
+    /// its continent, coast and sea still count (their polygons stay in the pack). North Korea, owner 2026-10-29.
+    public static let excludedFromPassport: Set<String> = ["KP"]
+
     /// How near water must be to count its ocean or sea: 2 km (owner, 2026-10-29).
     public static let oceanReachMetres = 2_000.0
     /// The Antarctic Treaty area's edge, 60°S (owner, 2026-10-29): any accepted fix south of it counts
@@ -191,10 +199,13 @@ public nonisolated final class WorldAtlas: Sendable {
     public func visit(at point: GeoPoint) -> AtlasVisit {
         let terrain = AtlasTerrainClassifier(atlas: self).terrain(at: point)
         guard point.isValid else { return AtlasVisit(terrain: terrain) }
-        let country = country(at: point)
+        let found = country(at: point)
+        let excluded = found.map { Self.excludedFromPassport.contains($0.code)
+            || Self.excludedFromPassport.contains($0.sovereignCode) } ?? false
+        let country = excluded ? nil : found
+        let city = excluded ? nil : city(at: point, inCountry: found?.code)
         var visit = AtlasVisit(countryCode: country?.code, sovereignCode: country?.sovereignCode,
-                               continent: continent(at: point), city: city(at: point, inCountry: country?.code),
-                               terrain: terrain)
+                               continent: continent(at: point), city: city, terrain: terrain)
         switch water(near: point) {
         case .ocean(let ocean): visit.ocean = ocean
         case .sea(let sea): visit.sea = sea

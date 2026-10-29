@@ -135,8 +135,8 @@ struct WorldAtlasPackFormatTests {
     @Test func countriesAndCitiesParse() throws {
         let atlas = try WorldAtlas(data: try WorldAtlasTestPackBuilder.standardWorld().build())
         #expect(atlas.countries.map(\.code) == ["AA", "BB", "DD"])
-        #expect(atlas.countries[1].sovereignCode == "CC" && !atlas.countries[1].isOneOf195)
-        #expect(atlas.countries[0].isOneOf195 && atlas.countries[0].continent == .africa)
+        #expect(atlas.countries[1].sovereignCode == "CC" && !atlas.countries[1].countsInPassport)
+        #expect(atlas.countries[0].countsInPassport && atlas.countries[0].continent == .africa)
         let little = try #require(atlas.cities.first { $0.token == "ne:3" })
         #expect(little.size == .town && little.countryCode == "EE" && little.names.english == "Little Town")
         #expect(abs(little.point.latitude - 15) < 1e-9 && abs(little.point.longitude - 120) < 1e-9)
@@ -166,7 +166,7 @@ struct WorldAtlasPackTests {
         let portland = atlas.visit(at: GeoPoint(45.5205, -122.6255))
         #expect(portland.countryCode == "US" && portland.continent == .northAmerica)
         #expect(portland.city?.names.english == "Portland" && portland.terrain == .temperateForest)
-        // The smallest of the 195 keeps its ring.
+        // The smallest of the passport's countries keeps its ring.
         #expect(atlas.visit(at: GeoPoint(41.9029, 12.4534)).countryCode == "VA")
         // A sea is its own entry, never its ocean.
         let nice = atlas.visit(at: GeoPoint(43.6950, 7.2650))
@@ -221,6 +221,20 @@ struct WorldAtlasPackTests {
         // A beach counts its own sea: Split is the Adriatic, Mykonos the Aegean.
         #expect(atlas.visit(at: GeoPoint(43.5031, 16.4400)).sea?.token == "Q13924")
         #expect(atlas.visit(at: GeoPoint(37.4467, 25.3289)).sea?.token == "Q34575")
+    }
+
+    /// The passport counts 194 countries, Asia 47 (owner, 2026-10-29: North Korea is out): KP's polygon stays,
+    /// so a reading in Pyongyang counts Asia but no country and no city.
+    @Test func thePassportCounts194AndLeavesNorthKoreaOut() throws {
+        let atlas = try WorldAtlas(data: Self.shippedPack())
+        let counted = atlas.countries.filter(\.countsInPassport)
+        #expect(counted.count == WorldAtlas.passportCountryTotal && WorldAtlas.passportCountryTotal == 194)
+        #expect(counted.filter { $0.continent == .asia }.count == 47)
+        #expect(atlas.country(code: "KP")?.countsInPassport == false, "KP's polygon stays, uncounted")
+        let pyongyang = atlas.visit(at: GeoPoint(39.0392, 125.7625))
+        #expect(pyongyang.countryCode == nil && pyongyang.sovereignCode == nil && pyongyang.city == nil)
+        #expect(pyongyang.continent == .asia, "the continent still counts")
+        #expect(atlas.visit(at: GeoPoint(37.5665, 126.9780)).countryCode == "KR", "South Korea counts")
     }
 
     /// The bundled pack's bytes.

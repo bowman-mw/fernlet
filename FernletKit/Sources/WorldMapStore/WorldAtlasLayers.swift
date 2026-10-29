@@ -4,12 +4,13 @@ import Foundation
 public nonisolated struct AtlasCountry: Hashable, Sendable {
     /// The territory's ISO 3166-1 alpha-2 code (Natural Earth `ISO_A2_EH`), the frozen token.
     public let code: String
-    /// The sovereign state's alpha-2 code (a territory counts toward it in "N of 195").
+    /// The sovereign state's alpha-2 code (a territory counts toward it in "N of 194").
     public let sovereignCode: String
     /// The country's own continent, for display, or nil when the pack gives none.
     public let continent: AtlasContinent?
-    /// Whether it is one of the 195 (193 UN members, the Holy See, Palestine).
-    public let isOneOf195: Bool
+    /// Whether it is one of the passport's ``WorldAtlas/passportCountryTotal`` (the 193 UN members, the Holy See
+    /// and Palestine, without North Korea: owner, 2026-10-29).
+    public let countsInPassport: Bool
     /// Its outline.
     public let polygon: AtlasPolygon
 }
@@ -140,7 +141,7 @@ nonisolated struct WorldAtlasLayers: Sendable {
             let polygon = try AtlasPolygon.read(from: &reader)
             countries.append(AtlasCountry(code: code, sovereignCode: sovereign,
                                           continent: AtlasContinent(packCode: continentCode),
-                                          isOneOf195: flags & 1 == 1, polygon: polygon))
+                                          countsInPassport: flags & 1 == 1, polygon: polygon))
         }
         try reader.expectEnd()
         return countries

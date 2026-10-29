@@ -503,7 +503,7 @@ def check_tables(c, atlas):
     c.equal("the hole is LS", inside(countries["LS"]["rings"], 50, -20), True)
     c.equal("lake area still ZA", inside(countries["ZA"]["rings"], 25, 0), True)
     c.equal("territory sovereign", countries["GL"]["sovereign"], "DK")
-    c.equal("one of the 195", (countries["ZA"]["flags"], countries["DK"]["flags"], countries["GL"]["flags"]),
+    c.equal("one of the passport's countries", (countries["ZA"]["flags"], countries["DK"]["flags"], countries["GL"]["flags"]),
             (1, 1, 0))
     c.equal("country continent", countries["GL"]["continent"], 5)
     c.equal("urban polygons kept (one holding Alpha, one in Beta's reach)", len(atlas["urban"]), 2)

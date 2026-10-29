@@ -14,7 +14,7 @@ struct WorldAtlasTestPackBuilder {
         var sovereign: String
         /// Continent code.
         var continent: UInt8 = 1
-        /// Flags (bit 0: one of the 195).
+        /// Flags (bit 0: one of the passport's countries).
         var flags: UInt8 = 1
         /// The outline.
         var feature: Feature

@@ -49,7 +49,7 @@ def _import_numpy_and_pillow():
 
 np, Image = _import_numpy_and_pillow()
 
-GENERATOR_VERSION = 4
+GENERATOR_VERSION = 5
 PACK_VERSION = 1
 MAGIC = b"FWA1"
 SUB = 16
@@ -127,6 +127,11 @@ UN_MEMBERS = (
 ).split()
 THE_195 = frozenset(UN_MEMBERS) | {"VA", "PS"}
 assert len(set(UN_MEMBERS)) == 193 and len(THE_195) == 195, "the 195 table is wrong"
+# The passport's countries (owner, 2026-10-29: "Take north korea out of the passport"): the 195 without North
+# Korea, so 194. Its polygon stays (continent, coast and sea rules still work); the CTRY flag says it doesn't count.
+EXCLUDED_FROM_PASSPORT = frozenset({"KP"})
+PASSPORT_COUNTRIES = THE_195 - EXCLUDED_FROM_PASSPORT
+assert len(PASSPORT_COUNTRIES) == 194, "the passport table is wrong"
 
 ALPHA2 = re.compile(r"^[A-Z]{2}$")
 # A real ISO 3166-2 code (Natural Earth marks its own stand-ins with "~", "-99-" or an "X" and digits).
@@ -761,18 +766,18 @@ def build_ctry(items, report):
         if not rings:
             report.unmap("country %s: no ring survives simplification" % code)
             continue
-        flags = 1 if code in THE_195 else 0
+        flags = 1 if code in PASSPORT_COUNTRIES else 0
         head = struct.pack("<2s2sBB", code.encode("ascii"), primary["sovereign"].encode("ascii"),
                            primary["continent"], flags)
         blobs.append(head + encode_polygon(rings))
         entries.append((code, primary["sovereign"], EdgeSet(rings)))
         ring_total += len(rings)
     report.counts["countries"] = len(entries)
-    report.counts["of the 195"] = sum(1 for e in entries if e[0] in THE_195)
+    report.counts["of the passport's 194"] = sum(1 for e in entries if e[0] in PASSPORT_COUNTRIES)
     report.counts["country rings"] = ring_total
-    missing = sorted(THE_195 - {e[0] for e in entries})
+    missing = sorted(PASSPORT_COUNTRIES - {e[0] for e in entries})
     if missing:
-        report.unmap("the 195 with no polygon: %s" % " ".join(missing))
+        report.unmap("the passport's 194 with no polygon: %s" % " ".join(missing))
     return struct.pack("<H", len(entries)) + b"".join(blobs), entries
 
 

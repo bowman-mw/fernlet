@@ -118,9 +118,9 @@ the reader's, not the grid's.
 u16 count
 count × {
   2 ASCII  code         ISO 3166-1 alpha-2 of the territory (Natural Earth ISO_A2_EH), the frozen token
-  2 ASCII  sovereign    the sovereign state's alpha-2 (a territory counts toward it in "N of 195")
+  2 ASCII  sovereign    the sovereign state's alpha-2 (a territory counts toward it in "N of 194")
   u8       continent    the continent code above (the country's own, for display)
-  u8       flags        bit 0: one of the 195 (193 UN members, the Holy See, Palestine)
+  u8       flags        bit 0: one of the passport's 194 (193 UN members, the Holy See, Palestine, without North Korea: owner 2026-10-29)
   i32 × 4  bbox         minLon, minLat, maxLon, maxLat in 1e-5 degrees
   u16      ringCount
   ringCount × { u32 pointCount · first point i32 lon, i32 lat · (pointCount-1) × zigzag-LEB128 deltas lon, lat }

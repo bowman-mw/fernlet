@@ -68,7 +68,7 @@ struct WorldCountryStampsTests {
         #expect(Self.europeRest.isSubset(of: Set(stamps.stamps.keys)), "Europe is complete")
         #expect(Self.asiaFirst.isSubset(of: Set(stamps.stamps.keys)))
         #expect(stamps.stamp(for: "JP") == nil, "Asia's batch hasn't landed: no stamp, a dashed space")
-        #expect(stamps.stamp(for: "VA")?.batch == "eu", "the smallest of the 195 has its stamp")
+        #expect(stamps.stamp(for: "VA")?.batch == "eu", "the smallest of the passport's countries has its stamp")
     }
 
     /// The rule on its own: (first letter + second letter) mod 4, either case.

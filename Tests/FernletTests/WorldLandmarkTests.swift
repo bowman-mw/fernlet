@@ -82,7 +82,7 @@ struct WorldLandmarkTests {
                     "\(landmark.token): the city rule names \(resolved ?? "no city")")
         }
         #expect(atlas.city(token: "Q6106")?.names.english == "Portland")
-        #expect(atlas.country(code: "VA")?.isOneOf195 == true && atlas.country(code: "ZZ") == nil)
+        #expect(atlas.country(code: "VA")?.countsInPassport == true && atlas.country(code: "ZZ") == nil)
         let sea = try #require(atlas.visit(at: GeoPoint(43.6950, 7.2650)).sea)
         #expect(atlas.sea(token: sea.token) == sea && atlas.sea(token: "nowhere") == nil)
     }
