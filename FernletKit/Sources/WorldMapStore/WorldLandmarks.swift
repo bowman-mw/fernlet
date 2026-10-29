@@ -94,20 +94,19 @@ public nonisolated struct WorldLandmarks: Sendable {
     public static let maxNameBytes = 120
     /// A find radius's allowed range, in metres: a tower about 150, a big park 250 to 400 from its centre.
     public static let radiusRange: ClosedRange<Double> = 50...600
-    /// The famous tier's drawn and approved art ids (Eiffel Tower, Empire State Building, Sydney Opera House,
-    /// and the Colosseum, approved 2026-10-29).
-    public static let drawnArtIDs: Set<String> = ["eiffel", "empire", "opera", "colosseum"]
-    /// Famous art ids not drawn and approved yet, each with the generic icon the map uses meanwhile: the owner's
-    /// 24 more famous landmarks (2026-10-29, "all 24 of those"). When an id's art is approved it moves to
-    /// ``drawnArtIDs``; its token never changes.
-    public static let placeholderArtIDs: [String: AtlasLandmarkKind] = [
-        "bigben": .tower, "goldengate": .bridge, "pisa": .tower, "burjkhalifa": .tower, "spaceneedle": .tower,
-        "liberty": .tower, "tajmahal": .castle, "greatwall": .castle, "redeemer": .tower, "pyramids": .castle,
-        "sagrada": .tower, "acropolis": .castle,
-        "towerbridge": .bridge, "harbourbridge": .bridge, "cntower": .tower, "skytree": .tower, "stbasils": .castle,
-        "brandenburg": .castle, "petronas": .tower, "machupicchu": .castle, "chichenitza": .castle, "petra": .castle,
-        "angkorwat": .castle, "hollywood": .park,
+    /// The famous tier's drawn and approved art ids: the first three, the Colosseum and the owner's 24 more
+    /// (all approved 2026-10-29), each a sprite in `WorldLandmarkArt.json`.
+    public static let drawnArtIDs: Set<String> = [
+        "eiffel", "empire", "opera", "colosseum",
+        "bigben", "goldengate", "pisa", "burjkhalifa", "spaceneedle", "liberty", "tajmahal", "greatwall", "redeemer",
+        "pyramids", "sagrada", "acropolis",
+        "towerbridge", "harbourbridge", "cntower", "skytree", "stbasils", "brandenburg", "petronas", "machupicchu",
+        "chichenitza", "petra", "angkorwat", "hollywood",
     ]
+    /// Famous art ids not drawn and approved yet, each with the generic icon the map uses meanwhile (none
+    /// today). A new famous landmark joins here first; when its art is approved its id moves to
+    /// ``drawnArtIDs``, and its token never changes.
+    public static let placeholderArtIDs: [String: AtlasLandmarkKind] = [:]
     /// Every famous art id a list may name: the drawn ones and the placeholders.
     public static var famousArtIDs: Set<String> { drawnArtIDs.union(placeholderArtIDs.keys) }
     /// The widest search ``landmarks(near:withinMetres:)`` answers, in metres (the flat-earth distance is

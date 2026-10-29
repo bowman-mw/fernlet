@@ -54,11 +54,11 @@ struct WorldLandmarkTests {
         let colosseum = try #require(list.landmark(token: "colosseum"))
         #expect(colosseum.tier.drawable == .famous(artID: "colosseum"), "the Colosseum's art is approved")
         let bigBen = try #require(list.landmark(token: "bigBen"))
-        #expect(bigBen.tier == .famous(artID: "bigben") && bigBen.tier.drawable == .generic(.tower),
-                "a famous landmark waiting for its art keeps its generic icon")
+        #expect(bigBen.tier == .famous(artID: "bigben") && bigBen.tier.drawable == .famous(artID: "bigben"),
+                "the 24 more are drawn too")
         #expect(list.landmark(token: "eiffelTower")?.tier.drawable == .famous(artID: "eiffel"))
         #expect(WorldLandmarks.drawnArtIDs.isDisjoint(with: WorldLandmarks.placeholderArtIDs.keys))
-        #expect(WorldLandmarks.placeholderArtIDs.count == 24)
+        #expect(WorldLandmarks.drawnArtIDs.count == 28 && WorldLandmarks.placeholderArtIDs.isEmpty)
         #expect(list.landmark(token: "eiffelTower")?.cityToken == "Q90")
         #expect(list.landmark(token: "empireStateBuilding")?.cityToken == "Q60")
         #expect(list.landmark(token: "sydneyOperaHouse")?.cityToken == "Q3130")

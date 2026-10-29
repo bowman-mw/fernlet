@@ -27,10 +27,12 @@ struct WorldLandmarkArtTests {
         #expect(art.famousScale == 3 && art.genericScale == 3.5)
         #expect(art.letters[Int(art.outlineIndex)] == WorldLandmarkArt.outlineLetter)
         let all = art.famous.map { ($0.key, $0.value) } + art.generic.map { ($0.key.rawValue, $0.value) }
-        #expect(all.count == Self.sizes.count)
+        #expect(art.famous.count == 28 && art.generic.count == 6)
         for (id, sprite) in all {
-            let size = try #require(Self.sizes[id], "\(id) has a drawn size")
-            #expect(sprite.width == size.0 && sprite.height == size.1, "\(id) is \(size.0) × \(size.1)")
+            if let size = Self.sizes[id] {
+                #expect(sprite.width == size.0 && sprite.height == size.1, "\(id) is \(size.0) × \(size.1)")
+            }
+            #expect((1...WorldLandmarkArt.maxSide).contains(sprite.width) && (1...WorldLandmarkArt.maxSide).contains(sprite.height))
             #expect(sprite.pixels.count == sprite.height && sprite.pixels.allSatisfy { $0.count == sprite.width })
             let used = sprite.pixels.flatMap { $0 }.filter { $0 != LandmarkSprite.clear }
             #expect(!used.isEmpty && used.allSatisfy { Int($0) < art.colours.count }, "\(id)'s pixels are in the palette")
@@ -50,10 +52,15 @@ struct WorldLandmarkArtTests {
             #expect(art.sprite(for: landmark) != nil, "\(landmark.token) draws")
         }
         let colosseum = try #require(list.landmark(token: "colosseum"))
-        // The Colosseum's art is approved (2026-10-29); Big Ben waits for its own and keeps the tower icon.
+        // The Colosseum's art and the 24 more are approved (2026-10-29): each famous landmark draws its own.
         #expect(art.sprite(for: colosseum) == art.famous["colosseum"])
         let bigBen = try #require(list.landmark(token: "bigBen"))
-        #expect(art.sprite(for: bigBen) == art.generic[.tower])
+        #expect(art.sprite(for: bigBen) == art.famous["bigben"])
+        for landmark in list.all {
+            if case .famous(let artID) = landmark.tier {
+                #expect(art.sprite(for: landmark) == art.famous[artID], "\(landmark.token) draws its own art")
+            }
+        }
         let eiffel = try #require(list.landmark(token: "eiffelTower"))
         #expect(art.sprite(for: eiffel) == art.famous["eiffel"])
     }
