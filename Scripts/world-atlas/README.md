@@ -57,4 +57,6 @@ rules: land, water and coast states; coast-mask bits; climate majority and neare
 bay takes its ocean, a sea polygon its own sea, an enclosed lake 0); a country with a hole; cities with and
 without an urban polygon; which urban polygons are kept (one holding a city, one only in a town's reach); the
 admin-1 table (ISO 3166-2 tokens, `ne:<id>` for stand-in or shared codes, pieces merged, the country by
-`ADM0_A3` or `ISO_A2`, a tiny polygon kept); determinism; and the size cap.
+`ADM0_A3` or `ISO_A2`, a tiny polygon kept, plate groups by `GEONUNIT`, `REGION_COD` and a county's own code);
+determinism; and the size cap. The plate groups themselves (the first-level regions shown where Natural Earth's
+admin-1 is second-level) are the hand-written `PLATE_GROUPS` table in the generator.

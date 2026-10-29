@@ -23,6 +23,7 @@ import os
 import re
 import struct
 import sys
+import unicodedata
 import zipfile
 import zlib
 
@@ -48,7 +49,7 @@ def _import_numpy_and_pillow():
 
 np, Image = _import_numpy_and_pillow()
 
-GENERATOR_VERSION = 3
+GENERATOR_VERSION = 4
 PACK_VERSION = 1
 MAGIC = b"FWA1"
 SUB = 16
@@ -1040,6 +1041,167 @@ def names_blob(english, spanish, french, german, report):
 # ADM1: states and provinces (the world view's State zoom: its lines and the plate's place)
 
 
+# ---------------------------------------------------------------------------------------------------------
+# ADM1 plate groups: the first-level region where Natural Earth's admin-1 is a second-level unit
+
+
+# Where Natural Earth's admin-1 is a second-level unit, the plate and the state lines use the first-level
+# region instead (coordinator, 2026-10-29). Per country: the field whose value names the region, and that
+# value -> (ISO 3166-2 code or None, English, Spanish; "" = use English), or SELF to keep the entry as its own
+# group. An "iso:<code>" key, read before the field, places a feature by its own code (Ireland's counties have
+# no province field; two of Malawi's districts have no region). A region with no code gets
+# "ne:region:<country>:<slug>". Countries chosen because ISO 3166-2's first level is the region and Natural
+# Earth's admin-1 sits under it: GB, FR, IT, ES, IE (asked for), BE, PH, UG, LK, GN, BF, MW.
+SELF = "self"
+PLATE_GROUPS = {
+    "GB": ("GEONUNIT", {
+        "England": ("GB-ENG", "England", "Inglaterra"), "Scotland": ("GB-SCT", "Scotland", "Escocia"),
+        "Wales": ("GB-WLS", "Wales", "Gales"), "Northern Ireland": ("GB-NIR", "Northern Ireland", "Irlanda del Norte"),
+    }),
+    "BE": ("GEONUNIT", {
+        "Brussels Capital Region": ("BE-BRU", "Brussels-Capital Region", "Región de Bruselas-Capital"),
+        "Flemish Region": ("BE-VLG", "Flanders", "Flandes"), "Walloon Region": ("BE-WAL", "Wallonia", "Valonia"),
+    }),
+    "FR": ("REGION_COD", {
+        "FR-ARA": ("FR-ARA", "Auvergne-Rhône-Alpes", "Auvernia-Ródano-Alpes"),
+        "FR-BFC": ("FR-BFC", "Bourgogne-Franche-Comté", "Borgoña-Franco Condado"),
+        "FR-BRE": ("FR-BRE", "Brittany", "Bretaña"), "FR-CVL": ("FR-CVL", "Centre-Val de Loire", "Centro-Valle de Loira"),
+        "FR-COR": ("FR-COR", "Corsica", "Córcega"), "FR-GES": ("FR-GES", "Grand Est", "Gran Este"),
+        "FR-HDF": ("FR-HDF", "Hauts-de-France", "Alta Francia"), "FR-IDF": ("FR-IDF", "Île-de-France", "Isla de Francia"),
+        "FR-NOR": ("FR-NOR", "Normandy", "Normandía"), "FR-NAQ": ("FR-NAQ", "Nouvelle-Aquitaine", "Nueva Aquitania"),
+        "FR-OCC": ("FR-OCC", "Occitania", "Occitania"), "FR-PDL": ("FR-PDL", "Pays de la Loire", "Países del Loira"),
+        "FR-PAC": ("FR-PAC", "Provence-Alpes-Côte d'Azur", "Provenza-Alpes-Costa Azul"),
+        # The overseas regions are one department each: the entry is already the region.
+        "FR-GUA": SELF, "FR-GUF": SELF, "FR-MTQ": SELF, "FR-MAY": SELF, "FR-LRE": SELF,
+        "": SELF,  # Clipperton Island, counted as France, has no region
+    }),
+    "IT": ("REGION_COD", {
+        "IT-21": ("IT-21", "Piedmont", "Piamonte"), "IT-23": ("IT-23", "Aosta Valley", "Valle de Aosta"),
+        "IT-25": ("IT-25", "Lombardy", "Lombardía"), "IT-32": ("IT-32", "Trentino-Alto Adige", "Trentino-Alto Adigio"),
+        "IT-34": ("IT-34", "Veneto", "Véneto"), "IT-36": ("IT-36", "Friuli-Venezia Giulia", "Friuli-Venecia Julia"),
+        "IT-42": ("IT-42", "Liguria", "Liguria"), "IT-45": ("IT-45", "Emilia-Romagna", "Emilia-Romaña"),
+        "IT-52": ("IT-52", "Tuscany", "Toscana"), "IT-55": ("IT-55", "Umbria", "Umbría"),
+        "IT-57": ("IT-57", "Marche", "Marcas"), "IT-62": ("IT-62", "Lazio", "Lacio"),
+        "IT-65": ("IT-65", "Abruzzo", "Abruzos"), "IT-67": ("IT-67", "Molise", "Molise"),
+        "IT-72": ("IT-72", "Campania", "Campania"), "IT-75": ("IT-75", "Apulia", "Apulia"),
+        "IT-77": ("IT-77", "Basilicata", "Basilicata"), "IT-78": ("IT-78", "Calabria", "Calabria"),
+        "IT-82": ("IT-82", "Sicily", "Sicilia"), "IT-88": ("IT-88", "Sardinia", "Cerdeña"),
+    }),
+    "ES": ("REGION", {
+        "Andalucía": ("ES-AN", "Andalusia", "Andalucía"), "Aragón": ("ES-AR", "Aragon", "Aragón"),
+        "Asturias": ("ES-AS", "Asturias", "Asturias"), "Canary Is.": ("ES-CN", "Canary Islands", "Canarias"),
+        "Cantabria": ("ES-CB", "Cantabria", "Cantabria"), "Castilla y León": ("ES-CL", "Castile and León", "Castilla y León"),
+        "Castilla-La Mancha": ("ES-CM", "Castilla-La Mancha", "Castilla-La Mancha"),
+        "Cataluña": ("ES-CT", "Catalonia", "Cataluña"), "Ceuta": ("ES-CE", "Ceuta", "Ceuta"),
+        "Extremadura": ("ES-EX", "Extremadura", "Extremadura"), "Foral de Navarra": ("ES-NC", "Navarre", "Navarra"),
+        "Galicia": ("ES-GA", "Galicia", "Galicia"), "Islas Baleares": ("ES-IB", "Balearic Islands", "Islas Baleares"),
+        "La Rioja": ("ES-RI", "La Rioja", "La Rioja"), "Madrid": ("ES-MD", "Community of Madrid", "Comunidad de Madrid"),
+        "Melilla": ("ES-ML", "Melilla", "Melilla"), "Murcia": ("ES-MC", "Region of Murcia", "Región de Murcia"),
+        "País Vasco": ("ES-PV", "Basque Country", "País Vasco"),
+        "Valenciana": ("ES-VC", "Valencian Community", "Comunidad Valenciana"),
+    }),
+    "IE": ("", dict(
+        [("iso:IE-" + c, ("IE-L", "Leinster", "Leinster"))
+         for c in ("CW", "D", "KE", "KK", "LS", "LD", "LH", "MH", "OY", "WH", "WX", "WW")] +
+        [("iso:IE-" + c, ("IE-M", "Munster", "Munster")) for c in ("CE", "CO", "KY", "LK", "TA", "WD")] +
+        [("iso:IE-" + c, ("IE-C", "Connacht", "Connacht")) for c in ("G", "LM", "MO", "RN", "SO")] +
+        [("iso:IE-" + c, ("IE-U", "Ulster", "Úlster")) for c in ("CN", "DL", "MN")])),
+    "PH": ("REGION_COD", {
+        "PH-00": ("PH-00", "Metro Manila", "Gran Manila"), "PH-01": ("PH-01", "Ilocos Region", "Región de Ilocos"),
+        "PH-02": ("PH-02", "Cagayan Valley", "Valle de Cagayán"), "PH-03": ("PH-03", "Central Luzon", "Luzón Central"),
+        "PH-05": ("PH-05", "Bicol Region", "Región de Bicol"), "PH-06": ("PH-06", "Western Visayas", "Bisayas Occidental"),
+        "PH-07": ("PH-07", "Central Visayas", "Bisayas Central"), "PH-08": ("PH-08", "Eastern Visayas", "Bisayas Oriental"),
+        "PH-09": ("PH-09", "Zamboanga Peninsula", "Península de Zamboanga"),
+        "PH-10": ("PH-10", "Northern Mindanao", "Mindanao del Norte"), "PH-11": ("PH-11", "Davao Region", "Región de Davao"),
+        "PH-12": ("PH-12", "Soccsksargen", ""), "PH-13": ("PH-13", "Caraga", ""), "PH-14": ("PH-14", "Bangsamoro", ""),
+        "PH-15": ("PH-15", "Cordillera Administrative Region", "Región Administrativa de La Cordillera"),
+        "PH-40": ("PH-40", "Calabarzon", ""), "PH-41": ("PH-41", "Mimaropa", ""),
+    }),
+    "UG": ("REGION", {
+        "Central": ("UG-C", "Central Region", "Región Central"), "Eastern": ("UG-E", "Eastern Region", "Región Oriental"),
+        "Northern": ("UG-N", "Northern Region", "Región Norte"), "Western": ("UG-W", "Western Region", "Región Occidental"),
+    }),
+    "LK": ("REGION_COD", {
+        "LK-1": ("LK-1", "Western Province", "Provincia Occidental"), "LK-2": ("LK-2", "Central Province", "Provincia Central"),
+        "LK-3": ("LK-3", "Southern Province", "Provincia del Sur"), "LK-4": ("LK-4", "Northern Province", "Provincia del Norte"),
+        "LK-5": ("LK-5", "Eastern Province", "Provincia Oriental"),
+        "LK-6": ("LK-6", "North Western Province", "Provincia Noroccidental"),
+        "LK-7": ("LK-7", "North Central Province", "Provincia Centro-Norte"),
+        "LK-8": ("LK-8", "Uva Province", "Provincia de Uva"), "LK-9": ("LK-9", "Sabaragamuwa Province", "Provincia de Sabaragamuwa"),
+    }),
+    "GN": ("REGION_COD", {
+        "GN.B": ("GN-B", "Boké", ""), "GN.C": ("GN-C", "Conakry", ""), "GN.D": ("GN-D", "Kindia", ""),
+        "GN.F": ("GN-F", "Faranah", ""), "GN.K": ("GN-K", "Kankan", ""), "GN.L": ("GN-L", "Labé", ""),
+        "GN.M": ("GN-M", "Mamou", ""), "GN.N": ("GN-N", "Nzérékoré", ""),
+    }),
+    "BF": ("REGION", {
+        "Boucle du Mouhoun": ("BF-01", "Boucle du Mouhoun", ""), "Cascades": ("BF-02", "Cascades", ""),
+        "Centre": ("BF-03", "Centre", ""), "Centre-Est": ("BF-04", "Centre-Est", ""), "Centre-Nord": ("BF-05", "Centre-Nord", ""),
+        "Centre-Ouest": ("BF-06", "Centre-Ouest", ""), "Centre-Sud": ("BF-07", "Centre-Sud", ""), "Est": ("BF-08", "Est", ""),
+        "Hauts-Bassins": ("BF-09", "Hauts-Bassins", ""), "Nord": ("BF-10", "Nord", ""),
+        "Plateau-Central": ("BF-11", "Plateau-Central", ""), "Sahel": ("BF-12", "Sahel", ""), "Sud-Ouest": ("BF-13", "Sud-Ouest", ""),
+    }),
+    "MW": ("REGION", {
+        "Central": ("MW-C", "Central Region", "Región Central"), "Northern": ("MW-N", "Northern Region", "Región Norte"),
+        "Southern": ("MW-S", "Southern Region", "Región Sur"),
+        "iso:MW-CT": ("MW-N", "Northern Region", "Región Norte"), "iso:MW-MH": ("MW-S", "Southern Region", "Región Sur"),
+    }),
+}
+GROUP_SLUG = re.compile(r"^ne:region:[A-Z]{2}:[a-z0-9-]{1,40}$")
+NO_GROUP = 0xFFFF
+
+
+def region_token(country, code, english):
+    """A plate group's frozen token: its ISO 3166-2 code, else "ne:region:<country>:<slug of the English name>"."""
+    if code:
+        return code
+    plain = unicodedata.normalize("NFKD", english).encode("ascii", "ignore").decode("ascii").lower()
+    return "ne:region:%s:%s" % (country, re.sub(r"[^a-z0-9]+", "-", plain).strip("-")[:40])
+
+
+def plate_group(attrs, country, iso, name, report):
+    """The feature's plate group as (token, English, Spanish), or None where its entry is its own group (a
+    country PLATE_GROUPS does not list, a value mapped to SELF, or an unlisted region, logged)."""
+    rule = PLATE_GROUPS.get(country)
+    if rule is None:
+        return None
+    field, table = rule
+    value = unicodedata.normalize("NFC", text_field(attrs, field)) if field else ""
+    found = table.get("iso:%s" % iso) if iso else None
+    if found is None:
+        found = table.get(value)
+    if found is None:
+        report.unmap("admin-1 %s (%s): region %r not in PLATE_GROUPS; its own plate group" % (name, country, value))
+        return None
+    if found == SELF:
+        return None
+    code, english, spanish = found
+    return (region_token(country, code, english), english, "" if spanish == english else spanish)
+
+
+def build_groups(entries, report):
+    """The plate group table (sorted by country, then token) and each group token's index. A token one
+    country uses for two names, or two countries share, stops the run."""
+    seen = {}
+    for entry in entries:
+        group = entry.get("group")
+        if group is None:
+            continue
+        key = (entry["country"],) + group
+        if group[0] in seen and seen[group[0]] != key:
+            raise SystemExit("error: plate group %s is %r and %r" % (group[0], seen[group[0]], key))
+        if not (ISO_3166_2.match(group[0]) or GROUP_SLUG.match(group[0])):
+            raise SystemExit("error: plate group token %r has the wrong shape" % group[0])
+        seen[group[0]] = key
+    rows = sorted(seen.values())
+    blob = struct.pack("<H", len(rows)) + b"".join(
+        short_text(token, report) + country.encode("ascii") + short_text(english, report) + short_text(spanish, report)
+        for country, token, english, spanish in rows)
+    report.counts["admin-1 plate groups (entries grouped)"] = "%d (%d)" % (
+        len(rows), sum(1 for e in entries if e.get("group") is not None))
+    return blob, {row[1]: index for index, row in enumerate(rows)}
+
+
 def admin1_country(attrs, a3_codes, ctry_codes, report, name):
     """The CTRY code an admin-1 feature belongs to: its ADM0_A3 mapped the way CTRY maps admin-0 (so
     Somaliland is SO and Kosovo XK), else its own ISO_A2 when CTRY has it, else None. Mismatches are logged."""
@@ -1077,7 +1239,8 @@ def admin1_features(features, a3_codes, ctry_codes, report):
         elif iso[:2] != country:
             report.note("admin-1 %s: code %s in country %s" % (name, iso, country))
         items.append({"iso": iso, "ne_id": ne_id, "country": country, "name": name,
-                      "spanish": text_field(attrs, "NAME_ES"), "rings": rings})
+                      "spanish": text_field(attrs, "NAME_ES"), "rings": rings,
+                      "group": plate_group(attrs, country, iso, name, report)})
     return items
 
 
@@ -1124,18 +1287,25 @@ def admin1_entries(items, report):
         for name, same in sorted(names.items()):
             token = code if name == holder else "ne:%d" % same[0]["ne_id"]
             spanish = next((m["spanish"] for m in same if m["spanish"]), "")
+            groups_here = sorted({m["group"] for m in same if m["group"] is not None})
+            if len(groups_here) > 1:
+                report.unmap("admin-1 %s: pieces in plate groups %s; the first is used" % (name, groups_here))
             entries.append({"token": token, "country": country, "name": name, "spanish": spanish,
-                            "rings": [r for m in same for r in m["rings"]], "pieces": len(same)})
+                            "rings": [r for m in same for r in m["rings"]], "pieces": len(same),
+                            "group": groups_here[0] if groups_here else None})
     return entries
 
 
 def build_adm1(items, report):
-    """The ADM1 section: u16 count, then per entry token · country · English · Spanish · polygon (the CTRY
-    encoding at ADMIN1_SIMPLIFY_DEGREES), sorted by country then token."""
+    """The ADM1 section: the plate groups (u16 count, then token · country · English · Spanish), then u16
+    count and per entry token · country · English · Spanish · u16 group (0xFFFF: its own) · polygon (the CTRY
+    encoding at ADMIN1_SIMPLIFY_DEGREES), entries sorted by country then token."""
+    entries = sorted(admin1_entries(items, report), key=lambda e: (e["country"], e["token"]))
+    group_blob, group_index = build_groups(entries, report)
     blobs = []
     used = set()
     ring_total = point_total = 0
-    for entry in sorted(admin1_entries(items, report), key=lambda e: (e["country"], e["token"])):
+    for entry in entries:
         if entry["token"] in used:
             report.unmap("admin-1 %s: token %s used twice; left out" % (entry["name"], entry["token"]))
             continue
@@ -1145,8 +1315,10 @@ def build_adm1(items, report):
             continue
         used.add(entry["token"])
         spanish = "" if entry["spanish"] == entry["name"] else entry["spanish"]
+        group = NO_GROUP if entry["group"] is None else group_index[entry["group"][0]]
         blobs.append(short_text(entry["token"], report) + entry["country"].encode("ascii") +
-                     short_text(entry["name"], report) + short_text(spanish, report) + encode_polygon(rings))
+                     short_text(entry["name"], report) + short_text(spanish, report) + struct.pack("<H", group) +
+                     encode_polygon(rings))
         ring_total += len(rings)
         point_total += sum(len(q) for q in rings)
     if len(blobs) > MAX_ADMIN1:
@@ -1155,7 +1327,7 @@ def build_adm1(items, report):
     report.counts["admin-1 entries with an ISO 3166-2 token"] = sum(1 for t in used if not t.startswith("ne:"))
     report.counts["admin-1 rings / points"] = "%d / %d" % (ring_total, point_total)
     report.counts["admin-1 countries"] = len({b[1 + b[0]:3 + b[0]] for b in blobs})
-    return struct.pack("<H", len(blobs)) + b"".join(blobs)
+    return group_blob + struct.pack("<H", len(blobs)) + b"".join(blobs)
 
 
 # ---------------------------------------------------------------------------------------------------------

@@ -21,8 +21,9 @@ The synthetic world (10° cells, 16×16 sub-cells of 0.625°):
                 ZA-NC in two pieces (merged), two equal, differently named features sharing AU-BAY (each
                 ne:<id>), DK-81 shared by a mainland and an islet a 1,600th its size (the mainland keeps it),
                 stand-in codes "-99-X1~" in LS and "DK-X02" (each ne:<id>), DK-84 0.005° across (kept), GL-QE
-                whose ADM0_A3 is unknown (placed by ISO_A2), and one with no country and one with no name (both
-                left out)
+                whose ADM0_A3 is unknown (placed by ISO_A2), one with no country and one with no name (both left
+                out), and plate groups: GB council areas by GEONUNIT, IE counties by code, FR departments by
+                REGION_COD, an overseas region and an unlisted region each their own group
   urban areas   Alpha's polygon (kept); one with no city anywhere near (dropped); one 2 km east of Beta,
                 inside a town's 5 km reach (kept, holding no point); one 10 km east of Beta (dropped)
   climate       5° pixels: class 7 on lon 0..30, 14 on lon 30..60 (lat -30..30), a 3-to-1 mix of 5 and 9
@@ -192,6 +193,12 @@ def write_sources(folder):
                        "CONTINENT": "Europe"}),
         ([gl_island], {"ISO_A2_EH": "GL", "ADM0_A3": "GRL", "ADMIN": "Greenland", "SOVEREIGNT": "Denmark",
                        "CONTINENT": "North America"}),
+        ([box(-40, 60, -30, 70)], {"ISO_A2_EH": "GB", "ADM0_A3": "GBR", "ADMIN": "United Kingdom",
+                                   "SOVEREIGNT": "United Kingdom", "CONTINENT": "Europe"}),
+        ([box(-30, 60, -20, 70)], {"ISO_A2_EH": "IE", "ADM0_A3": "IRL", "ADMIN": "Ireland",
+                                   "SOVEREIGNT": "Ireland", "CONTINENT": "Europe"}),
+        ([box(-40, 70, -20, 80)], {"ISO_A2_EH": "FR", "ADM0_A3": "FRA", "ADMIN": "France",
+                                   "SOVEREIGNT": "France", "CONTINENT": "Europe"}),
     ]
     write_layer(folder, "ne_10m_admin_0_countries", 5, [c[0] for c in countries], country_fields,
                 [c[1] for c in countries])
@@ -220,7 +227,8 @@ def write_sources(folder):
 def write_admin1(folder):
     """The admin-1 states and provinces (see the module docstring)."""
     fields = [("ISO_3166_2", "C", 10), ("ISO_A2", "C", 4), ("ADM0_A3", "C", 4), ("NAME", "C", 40),
-              ("NAME_EN", "C", 40), ("NAME_ES", "C", 40), ("NE_ID", "N", 10)]
+              ("NAME_EN", "C", 40), ("NAME_ES", "C", 40), ("NE_ID", "N", 10), ("GEONUNIT", "C", 30),
+              ("REGION_COD", "C", 10)]
     rows = [
         ([box(0, -30, 30, 30)], {"ISO_3166_2": "ZA-GT", "ISO_A2": "ZA", "ADM0_A3": "ZAF", "NAME": "Gauteng",
                                  "NAME_ES": "Gauteng", "NE_ID": 11}),
@@ -250,6 +258,22 @@ def write_admin1(folder):
                                    "NE_ID": 92}),
         ([box(-46, 30, -45.9, 30.1)], {"ISO_3166_2": "DK-81", "ISO_A2": "DK", "ADM0_A3": "DNK", "NAME": "Islet",
                                        "NE_ID": 91}),
+        # Plate groups: GB by GEONUNIT, IE by each county's own code, FR by REGION_COD (with Natural Earth's
+        # stray tab), an overseas region kept as its own group, and a region PLATE_GROUPS does not list.
+        ([box(-40, 60, -35, 65)], {"ISO_3166_2": "GB-CMD", "ADM0_A3": "GBR", "NAME": "Camden", "NE_ID": 101,
+                                   "GEONUNIT": "England"}),
+        ([box(-40, 65, -35, 70)], {"ISO_3166_2": "GB-LDS", "ADM0_A3": "GBR", "NAME": "Leeds", "NE_ID": 102,
+                                   "GEONUNIT": "England"}),
+        ([box(-35, 60, -30, 70)], {"ISO_3166_2": "GB-GLG", "ADM0_A3": "GBR", "NAME": "Glasgow", "NE_ID": 103,
+                                   "GEONUNIT": "Scotland"}),
+        ([box(-30, 60, -25, 70)], {"ISO_3166_2": "IE-D", "ADM0_A3": "IRL", "NAME": "Dublin", "NE_ID": 111}),
+        ([box(-25, 60, -20, 70)], {"ISO_3166_2": "IE-CO", "ADM0_A3": "IRL", "NAME": "Cork", "NE_ID": 112}),
+        ([box(-40, 70, -35, 80)], {"ISO_3166_2": "FR-75", "ADM0_A3": "FRA", "NAME": "Paris", "NE_ID": 121,
+                                   "REGION_COD": "FR-IDF\t"}),
+        ([box(-35, 70, -30, 80)], {"ISO_3166_2": "FR-971", "ADM0_A3": "FRA", "NAME": "Guadeloupe", "NE_ID": 122,
+                                   "REGION_COD": "FR-GUA"}),
+        ([box(-30, 70, -20, 80)], {"ISO_3166_2": "FR-99", "ADM0_A3": "FRA", "NAME": "Elsewhere", "NE_ID": 123,
+                                   "REGION_COD": "FR-ZZZ"}),
     ]
     write_layer(folder, "ne_10m_admin_1_states_provinces", 5, [r[0] for r in rows], fields, [r[1] for r in rows])
 
@@ -345,14 +369,20 @@ def decode(sections):
         cities[token] = {"country": country.decode(), "size": size, "population": population, "lon": lon,
                          "lat": lat, "urban": urban_index, "names": [city_cur.text() for _ in range(4)]}
     adm1_cur = Cursor(sections["ADM1"])
+    groups = []
+    for _ in range(adm1_cur.take("H")):
+        groups.append({"token": adm1_cur.text(), "country": adm1_cur.take("2s").decode(),
+                       "names": [adm1_cur.text(), adm1_cur.text()]})
     admin1 = {}
     for _ in range(adm1_cur.take("H")):
         token, country = adm1_cur.text(), adm1_cur.take("2s").decode()
         names = [adm1_cur.text(), adm1_cur.text()]
-        admin1[token] = {"country": country, "names": names, "rings": adm1_cur.polygon()[1]}
+        group = adm1_cur.take("H")
+        admin1[token] = {"country": country, "names": names, "group": None if group == 0xFFFF else groups[group],
+                         "rings": adm1_cur.polygon()[1]}
     return {"cols": cols, "rows": rows, "sub": sub, "state": state, "coast": coast, "clim": sections["CLIM"],
             "ocea": sections["OCEA"], "cont": sections["CONT"], "seas": seas, "countries": countries,
-            "urban": urban, "cities": cities, "admin1": admin1, "ends": (urbn_cur.at == len(urbn_cur.data),
+            "urban": urban, "cities": cities, "admin1": admin1, "groups": groups, "ends": (urbn_cur.at == len(urbn_cur.data),
                                                                        adm1_cur.at == len(adm1_cur.data)),
             "meta": json.loads(sections["META"].decode("utf-8"))}
 
@@ -402,6 +432,15 @@ class Checks:
             self.passed += 1
         else:
             self.failed.append("%s: got %r, want %r" % (label, got, want))
+
+
+def region_token_of(country, code, english):
+    """The generator's region_token, loaded from its file (the one generator function the self-test calls)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("build_world_atlas", GENERATOR)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.region_token(country, code, english)
 
 
 def run_generator(sources, out, *extra):
@@ -458,7 +497,7 @@ def check_tables(c, atlas):
     c.equal("merged sea names", seas.get("Q999", {}).get("names"), ["Test Sea", "", "", ""])
     c.equal("sea parent ocean", seas.get("Q999", {}).get("parent"), 2)
     countries = atlas["countries"]
-    c.equal("country codes", sorted(countries), ["AU", "DK", "GL", "LS", "ZA"])
+    c.equal("country codes", sorted(countries), ["AU", "DK", "FR", "GB", "GL", "IE", "LS", "ZA"])
     c.equal("point in ZA", inside(countries["ZA"]["rings"], 10, 0), True)
     c.equal("ZA's hole is not ZA", inside(countries["ZA"]["rings"], 50, -20), False)
     c.equal("the hole is LS", inside(countries["LS"]["rings"], 50, -20), True)
@@ -490,7 +529,8 @@ def check_admin1(c, atlas):
     """ADM1: tokens, countries, names, merges, the tiny polygon and the even-odd rings."""
     admin1 = atlas["admin1"]
     c.equal("admin-1 tokens (sorted by country, then token)", list(admin1),
-            ["ne:21", "ne:22", "DK-81", "DK-84", "ne:81", "ne:91", "GL-QE", "ne:31", "ZA-GT", "ZA-NC", "ZA-WC"])
+            ["ne:21", "ne:22", "DK-81", "DK-84", "ne:81", "ne:91", "FR-75", "FR-971", "FR-99", "GB-CMD", "GB-GLG",
+             "GB-LDS", "GL-QE", "IE-CO", "IE-D", "ne:31", "ZA-GT", "ZA-NC", "ZA-WC"])
     c.equal("sections end where their counts say", atlas["ends"], (True, True))
     get = lambda token: admin1.get(token, {"country": None, "names": None, "rings": []})  # noqa: E731
     c.equal("Spanish equal to English is stored empty", get("ZA-GT")["names"], ["Gauteng", ""])
@@ -502,6 +542,18 @@ def check_admin1(c, atlas):
     c.equal("a shared code stays with a feature that dwarfs the rest", (get("DK-81")["names"], get("ne:91")["names"]),
             (["Mainland", ""], ["Islet", ""]))
     c.equal("an unknown ADM0_A3 falls back to ISO_A2", get("GL-QE")["country"], "GL")
+    group = lambda token: (admin1.get(token, {}).get("group") or {}).get("token")  # noqa: E731
+    c.equal("GB council areas group by GEONUNIT", (group("GB-CMD"), group("GB-LDS"), group("GB-GLG")),
+            ("GB-ENG", "GB-ENG", "GB-SCT"))
+    c.equal("a plate group's names", (admin1.get("GB-CMD", {}).get("group") or {}).get("names"),
+            ["England", "Inglaterra"])
+    c.equal("IE counties group by their own code", (group("IE-D"), group("IE-CO")), ("IE-L", "IE-M"))
+    c.equal("FR departments group by REGION_COD, tab stripped", group("FR-75"), "FR-IDF")
+    c.equal("an overseas region is its own group", group("FR-971"), None)
+    c.equal("an unlisted region is its own group", group("FR-99"), None)
+    c.equal("ungrouped countries keep their own entries", group("ZA-GT"), None)
+    c.equal("one row per plate group", sorted(g["token"] for g in atlas["groups"]),
+            ["FR-IDF", "GB-ENG", "GB-SCT", "IE-L", "IE-M"])
     c.equal("a tiny polygon keeps its ring", len(get("DK-84")["rings"]), 1)
     c.equal("point in Gauteng", inside(get("ZA-GT")["rings"], 10, 0), True)
     c.equal("point not in Gauteng", inside(get("ZA-GT")["rings"], 40, 0), False)
@@ -529,6 +581,9 @@ def main():
         check_admin1(c, atlas)
         c.equal("summary logs the admin-1 left out", "Nowhere" in log and "left out of ADM1" in log, True)
         c.equal("summary logs the unnamed admin-1", "'' (ne_id 71)" in log, True)
+        c.equal("summary logs the unlisted region", "region 'FR-ZZZ' not in PLATE_GROUPS" in log, True)
+        c.equal("a region without a code gets a slug token", region_token_of("FR", None, "Côte d'Or Région"),
+                "ne:region:FR:cote-d-or-region")
         c.equal("summary names a missing promoted sea", "'Hudson Bay' not found" in log, True)
         c.equal("summary logs the tiny sea", "Tiny Sea" in log and "dropped into its neighbour" in log, True)
         c.equal("summary logs the cut-off sea", "Lake Sea" in log and "not joined" in log, True)
