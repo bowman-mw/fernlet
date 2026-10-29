@@ -115,6 +115,36 @@ public nonisolated struct PlaceLog: Codable, Equatable, Sendable {
         return (next, going.compactMap(\.workoutID), emptied)
     }
 
+    /// This log without place `id` (W-14, `ref-del-confirm`): its record and every visit to it, on any day.
+    /// Every other place keeps its count, and no walk, run, leave or return goes, so no saved line goes
+    /// either. Unchanged when no such place is kept. `removedPlaces` names it, so the device side forgets it.
+    public func deletingPlace(_ id: UUID) -> (log: PlaceLog, workoutIDs: [UUID], removedPlaces: Set<UUID>) {
+        guard places.contains(where: { $0.id == id }) else { return (self, [], []) }
+        var next = self
+        next.places.removeAll { $0.id == id }
+        next.stops.removeAll { $0.kind == .visit && $0.placeID == id }
+        return (next, [], [id])
+    }
+
+    /// This log without stop `id` (W-14, `ref-del-stop`), by ``deletingDay(_:calendar:)``'s count rule: a
+    /// visit takes 1 off its place, and a place left with none goes; a walk's or run's workout id comes
+    /// back, so its saved line can go (the workout stays in Move); a leave or a return goes alone, its
+    /// home or hotel untouched. Unchanged when no such stop is on the timeline.
+    public func deletingStop(_ id: UUID) -> (log: PlaceLog, workoutIDs: [UUID], removedPlaces: Set<UUID>) {
+        guard let stop = stops.first(where: { $0.id == id }) else { return (self, [], []) }
+        var next = self
+        next.stops.removeAll { $0.id == id }
+        var emptied = Set<UUID>()
+        if stop.kind == .visit, let place = stop.placeID, let index = next.places.firstIndex(where: { $0.id == place }) {
+            next.places[index].visits = max(0, next.places[index].visits - 1)
+            if next.places[index].visits == 0 {
+                next.places.remove(at: index)
+                emptied.insert(place)
+            }
+        }
+        return (next, stop.workoutID.map { [$0] } ?? [], emptied)
+    }
+
     /// This log with place `id` given the person's own name `name` (trimmed, at most
     /// ``PlaceRecord/maxNameLength``), its label from now on; an empty name changes nothing.
     public func renaming(_ id: UUID, to name: String) -> PlaceLog {
@@ -296,6 +326,17 @@ public nonisolated struct PlaceDeviceState: Codable, Equatable, Sendable {
         next.newPlaces.removeAll { ids.contains($0.id) }
         next.pending.removeAll { $0.placeID.map(ids.contains) ?? false }
         next.restaurants?.removeAll { ids.contains($0.id) }
+        return next
+    }
+
+    /// This state without the deleted `places` (W-14): forgotten for matching and no longer waiting, and
+    /// the place to eat that is the same place (its id, or Apple's reference) gone with its map icon. The
+    /// meals stay in the food log; the homes and hotel are untouched.
+    public func forgettingPlaces(_ places: [PlaceRecord]) -> PlaceDeviceState {
+        guard !places.isEmpty else { return self }
+        let references = Set(places.compactMap(\.placeID))
+        var next = forgetting(Set(places.map(\.id)))
+        next.restaurants?.removeAll { references.contains($0.placeID) }
         return next
     }
 

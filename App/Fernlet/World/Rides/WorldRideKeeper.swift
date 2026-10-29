@@ -137,6 +137,13 @@ final class WorldRideKeeper {
         followTicks()
     }
 
+    /// The tick loop and a motion query end with the keeper (the memory wall's ML1); both capture it
+    /// weakly, so this only stops a sleeping task outliving it.
+    isolated deinit {
+        ticks?.cancel()
+        motionQuery?.cancel()
+    }
+
     /// Starts the tick loop when a drive or ride begins and stops it when the person is on foot again.
     private func followTicks() {
         guard mode != .onFoot else {

@@ -4,8 +4,8 @@ import UIKit
 import WidgetKit
 
 /// The map widget's picture as the app hands it over (owner's Q36, `b4-new-map`, round 6b): the map
-/// around the person with their marked places and saved trails drawn on it, light and dark, and when it
-/// was taken ("Map from 9:40").
+/// around the person with their marked places and saved trails drawn on it, light and dark, the one-colour
+/// drawing of the same map for the tinted and clear Home Screens (W-11), and when it was taken ("Map from 9:40").
 ///
 /// Byte-format twin of the widget's `WidgetMapPicture` (`App/FernletWidgets/WidgetSharedModels.swift`):
 /// the property-list keys are the contract between the two processes (`WidgetMapTests` pins them). No
@@ -22,6 +22,13 @@ struct WorldWidgetMapPicture: Codable, Equatable {
     var light: Data
     /// The dark picture, PNG.
     var dark: Data
+    /// The one-colour drawing for the tinted and clear Home Screens (phone test W-11), PNG: white on clear,
+    /// which iOS tints (``WorldWidgetMonoCanvas``). Optional and last, so a file written before it decodes
+    /// with none, and a widget built before it ignores the key.
+    var mono: Data? = nil
+
+    /// Every picture's bytes together, which ``WorldWidgetMap/maxBytes`` caps.
+    var pictureBytes: Int { light.count + dark.count + (mono?.count ?? 0) }
 }
 
 /// The map widget's constants: its kind, the file it reads, and the picture's size and zoom.
@@ -31,7 +38,8 @@ enum WorldWidgetMap {
     static let kind = "FernletMap"
     /// The picture's file in the app group's `FernletWidgets/` folder.
     static let fileName = "WidgetMap.plist"
-    /// The largest picture file the widget reads (both PNGs together are about 2 MB).
+    /// The most bytes of pictures one file carries, the three PNGs together (light and dark are about 300 KB
+    /// each, the one-colour drawing less); the widget reads up to this plus the property list's own few bytes.
     static let maxBytes = 8 * 1_024 * 1_024
     /// The picture's size in points: the largest large widget, whose shape every large widget shares, so
     /// the picture fills any of them without cutting Apple's credit off.
@@ -72,7 +80,7 @@ struct WorldWidgetMapFile {
     /// Writes `picture` atomically with complete file protection, kept out of backups. Whether it landed.
     func write(_ picture: WorldWidgetMapPicture) -> Bool {
         guard picture.version == WorldWidgetMapPicture.currentVersion, !picture.light.isEmpty, !picture.dark.isEmpty,
-              picture.light.count + picture.dark.count <= WorldWidgetMap.maxBytes else { return false }
+              picture.mono?.isEmpty != true, picture.pictureBytes <= WorldWidgetMap.maxBytes else { return false }
         let data: Data
         do {
             let encoder = PropertyListEncoder()

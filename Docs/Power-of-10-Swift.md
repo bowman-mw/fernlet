@@ -211,6 +211,11 @@ framework / Core Data / BLE bridging / a documented single-writer static) and th
 keeps it safe. Prefer `Data`, `ContiguousBytes`, `withContiguousStorageIfAvailable`; prefer real
 actor isolation over `nonisolated(unsafe)`.
 
+Round 7 (2026-10-29) added two seams: the exercise animations' raster
+(`App/Fernlet/ExerciseAnimationRasterFill.swift`, three narrowed `line_contains` entries: the pixel and
+depth buffers' pointer loops and the frame's one copy into `Data`) and the World atlas pack's DEFLATE
+inflate (`FernletKit/Sources/WorldMapStore/WorldAtlasInflate.swift`, `compression_decode_buffer`).
+
 The dereference-depth half of the rule becomes: keep optional chains shallow (`a?.b?.c?.d` is a
 sign the type model is wrong), and closures stored in tables keyed by strings are dispatch you
 cannot statically follow — prefer an `enum` switch.

@@ -7,6 +7,9 @@ nonisolated enum WorldPlaceSheetMode: Identifiable, Equatable {
     /// "Remember this place" at a spot Fernlet refused (`ref-tag-home` → `ref-tag-name`), or a home or
     /// hotel set from Settings (`ref-home-settings`), the pin starting at `start` with `kind` picked.
     case remember(start: GeoPoint, kind: WorldTagKind)
+    /// "Remember this place" beside the blue button (round 7, `ref-tag-home` d2): the spot the person stays
+    /// at, refused (`ref-tag-name`), with no Apple name (`ref-tag-unnamed`) or named (`ref-tag-named`).
+    case spot(WorldRememberSpot)
     /// "Put on the map" for a Just you photo that kept no place (`ref-tag-photo`).
     case photo(id: UUID, start: GeoPoint, takenAt: Date)
     /// A home or the hotel from Settings: move, rename or remove it; the hotel checks out.
@@ -15,6 +18,7 @@ nonisolated enum WorldPlaceSheetMode: Identifiable, Equatable {
     var id: String {
         switch self {
         case .remember(let start, let kind): "remember-\(kind.rawValue)-\(start.latitude),\(start.longitude)"
+        case .spot(let spot): "spot-\(spot.id)"
         case .photo(let id, _, _): "photo-\(id)"
         case .edit(let place): "edit-\(place.id)"
         }
@@ -26,6 +30,11 @@ nonisolated enum WorldPlaceSheetMode: Identifiable, Equatable {
 /// `ref-home-set` (its "This is: A place · Home · Hotel" row, "Make it home" or "Check in here"),
 /// `ref-tag-photo` (titled "Put on the map", the pin starting where the map is, the name optional) and
 /// Settings' edits of a home or the hotel (move, rename, remove, check out).
+///
+/// Round 7 (draft 2) gives the spot beside the blue button three cases: a spot Fernlet won't name (blank,
+/// "Name it", the careful note), one with no Apple name (blank, "Name it, like “Our flat”", a nudge toward
+/// Home) and a named place (Apple's name filled in and editable; kept unchanged, only Apple's reference is
+/// stored). Name sits above "This is" in all of them, as the approved page draws it.
 ///
 /// Fernlet never suggests Apple's name for a spot it refused: the name field starts empty (a home starts
 /// as "Home"; a hotel stayed at before, within 150 m, starts with its own name). The pin is the small map's
@@ -55,6 +64,7 @@ struct WorldRememberPlaceSheet: View {
         switch mode {
         case .remember(let point, let picked): (point, picked, picked == .home ? WorldHomeCopy.defaultHomeName : "")
         case .photo(_, let point, _): (point, .place, "")
+        case .spot(let spot): (spot.point, .place, spot.appleName ?? "")
         case .edit(let place): (place.point, place.kind == .home ? .home : .hotel, place.label)
         }
     }
@@ -68,13 +78,8 @@ struct WorldRememberPlaceSheet: View {
                         .font(FernletFramedFont.note)
                         .foregroundStyle(WorldPalette.dim)
                         .fixedSize(horizontal: false, vertical: true)
+                    nameField
                     if mode.offersKind { kindRow }
-                    SectionLabel(verbatim: String(localized: WorldHomeCopy.nameLabel)).padding(.top, 4)
-                    TextField(text: $name, prompt: .fieldPrompt(verbatim: String(localized: mode.isPhoto ? WorldHomeCopy.optional : WorldHomeCopy.nameLabel))) {
-                        Text(WorldHomeCopy.nameLabel)
-                    }
-                    .sheetTextInput()
-                    .accessibilityIdentifier("worldTag.name")
                     FernletNotice(text: Text(verbatim: note)) { FernletIcon(.lock) }
                     if case .edit(let place) = mode { WorldBaseEditActions(store: store, place: place, onDone: onClose) }
                 }
@@ -102,17 +107,40 @@ struct WorldRememberPlaceSheet: View {
         .onChange(of: kind) { _, picked in kindChanged(picked) }
     }
 
-    /// "This is: A place · Home · Hotel", and the line under it.
+    /// The name over its field, and the line under it for the spot's case (round 7).
+    private var nameField: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(verbatim: String(localized: WorldHomeCopy.nameLabel)).padding(.top, 4)
+            // VoiceOver reads the name typed or filled in from Apple Maps as the field's value.
+            TextField(text: $name, prompt: .fieldPrompt(verbatim: String(localized: prompt))) {
+                Text(WorldHomeCopy.nameLabel)
+            }
+            .sheetTextInput()
+            .accessibilityIdentifier("worldTag.name")
+            if let line = nameLine {
+                Text(line)
+                    .font(FernletFramedFont.note)
+                    .foregroundStyle(WorldPalette.dim)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// "This is: A place · Home · Hotel", and the line under it. VoiceOver: "This is, A place, selected,
+    /// 1 of 3."
     private var kindRow: some View {
         VStack(alignment: .leading, spacing: 8) {
             SectionLabel(verbatim: String(localized: WorldHomeCopy.thisIs)).padding(.top, 4)
             HStack(spacing: 8) {
-                ForEach(WorldTagKind.allCases) { option in
+                ForEach(Array(WorldTagKind.allCases.enumerated()), id: \.element) { index, option in
                     Button { kind = option } label: { Text(WorldHomeCopy.kind(option)) }
                         .buttonStyle(ChipButtonStyle(selected: kind == option))
                         .accessibilityAddTraits(kind == option ? .isSelected : [])
+                        .accessibilityValue(Text(verbatim: WorldHomeCopy.kindPosition(index + 1, of: WorldTagKind.allCases.count)))
                 }
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(Text(WorldHomeCopy.thisIs))
             if let line = kindLine {
                 Text(verbatim: line)
                     .font(FernletFramedFont.note)
@@ -138,10 +166,43 @@ extension WorldRememberPlaceSheet {
         }
     }
 
+    /// The empty name field's prompt: "Name it" at a spot Fernlet won't name, "Name it, like “Our flat”" at
+    /// one with no Apple name, "Optional" for a photo, else "Name".
+    private var prompt: LocalizedStringResource {
+        if mode.isPhoto { return WorldHomeCopy.optional }
+        guard case .spot(let spot) = mode, kind == .place else { return WorldHomeCopy.nameLabel }
+        switch spot.kind {
+        case .refused: return WorldHomeCopy.promptRefused
+        case .unnamed, .named: return WorldHomeCopy.promptUnnamed
+        }
+    }
+
+    /// The line under the name for a spot remembered as a place: the nudge toward Home where Apple has no
+    /// name, or where a named place's name came from.
+    private var nameLine: LocalizedStringResource? {
+        guard case .spot(let spot) = mode, kind == .place else { return nil }
+        switch spot.kind {
+        case .refused: return nil
+        case .unnamed: return WorldHomeCopy.unnamedLine
+        case .named: return spot.appleName == nil ? WorldHomeCopy.unnamedLine : WorldHomeCopy.namedLine
+        }
+    }
+
+    /// The lock note for a place: the careful note at a spot Fernlet won't name (and everywhere draft 1
+    /// used it), the icon note at a restaurant, else the kept note.
+    private var placeNote: String {
+        guard case .spot(let spot) = mode else { return String(localized: WorldHomeCopy.tagNote) }
+        switch spot.kind {
+        case .refused: return String(localized: WorldHomeCopy.tagNote)
+        case .unnamed: return String(localized: WorldHomeCopy.keptNote)
+        case .named: return String(localized: spot.category == .foodAndDrink ? WorldHomeCopy.iconNote : WorldHomeCopy.keptNote)
+        }
+    }
+
     /// The lock note for the kind.
     private var note: String {
         switch kind {
-        case .place: String(localized: WorldHomeCopy.tagNote)
+        case .place: placeNote
         case .home: WorldHomeCopy.homeNote(companion: store.worldCompanionName)
         case .hotel: String(localized: WorldHomeCopy.hotelNote)
         }
@@ -166,13 +227,14 @@ extension WorldRememberPlaceSheet {
     /// Picking Home starts the name as "Home"; picking Hotel near a hotel stayed at before starts it with
     /// that hotel's name. A name the person typed stays.
     private func kindChanged(_ picked: WorldTagKind) {
-        let untouched = name.isEmpty || name == WorldHomeCopy.defaultHomeName
+        let start = Self.start(of: mode).name
+        let untouched = name.isEmpty || name == WorldHomeCopy.defaultHomeName || name == start
         guard untouched else { return }
         switch picked {
         case .home: name = WorldHomeCopy.defaultHomeName
         case .hotel:
             name = store.worldHomes.pastHotels.first { $0.point.distance(to: camera.center) <= HomeBook.sameHotelRadius }?.label ?? ""
-        case .place: name = ""
+        case .place: name = start == WorldHomeCopy.defaultHomeName ? "" : start
         }
     }
 
@@ -187,15 +249,21 @@ extension WorldRememberPlaceSheet {
             moved.label = PlaceRecord.validLabel(name) ?? place.label
             moved.point = point
             finish(place.kind == .home ? store.saveWorldHome(moved) : store.checkInWorldHotel(moved))
+        case (.spot(let spot), .place): finish(store.rememberWorldSpot(spot, named: name, at: point))
         case (_, .place): finish(store.rememberWorldPlace(named: name, at: point))
         case (_, .home):
-            guard store.worldHomes.homes.count < HomeBook.maxHomes else {
+            guard !Self.asksWhichHomeToReplace(store.worldHomes) else {
                 choosesReplacement = true
                 return
             }
             saveHome(replacing: nil)
         case (_, .hotel): finish(store.checkInWorldHotel(HomePlace(kind: .hotel, label: name, point: point)))
         }
+    }
+
+    /// Whether making a new home asks which one it replaces (`ref-home-set`): two are kept already.
+    static func asksWhichHomeToReplace(_ book: HomeBook) -> Bool {
+        book.homes.count >= HomeBook.maxHomes
     }
 
     /// Makes the spot a home, in place of `replacing` when two are kept.
@@ -219,8 +287,10 @@ extension WorldPlaceSheetMode {
 
     /// Whether the "This is" row shows: only while remembering a spot.
     var offersKind: Bool {
-        if case .remember = self { return true }
-        return false
+        switch self {
+        case .remember, .spot: true
+        case .photo, .edit: false
+        }
     }
 }
 

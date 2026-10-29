@@ -111,25 +111,23 @@ struct WorldWidgetMapCanvas: View {
                 }
                 context.stroke(path, with: .color(trailColor), style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
             }
-            NatureFogPicturePainter(viewport: viewport, clearing: NatureFogClearing(lifted: ringOpening, uncovered: uncovered),
+            NatureFogPicturePainter(viewport: viewport, clearing: Self.clearing(viewport: viewport, size: size, content: content),
                                     palette: NatureFogPalette(dark: dark, highContrast: false))
                 .paint(&context, size: canvasSize)
         }
         .frame(width: size.width, height: size.height)
     }
 
-    /// The clear middle: a disc round the person reaching most of the way to the picture's nearer edge.
-    private var ringOpening: Set<HexCell> {
+    /// The fog ring's clearing, shared with the one-colour picture (``WorldWidgetMonoCanvas``): the clear
+    /// middle, a disc round the person reaching most of the way to the picture's nearer edge, and the cells
+    /// drawn clear round the homes, the hotel and the kept places, as Home's map draws them.
+    static func clearing(viewport: MapViewport, size: CGSize, content: WorldWidgetMapContent) -> NatureFogClearing {
         let radius = Double(min(size.width, size.height)) * 0.44 * WorldWidgetMap.metresPerPoint
-        return Set(MercatorHexGrid.disc(around: viewport.center, radius: radius))
-    }
-
-    /// Drawn clear round the homes, the hotel and the kept places, as Home's map draws them.
-    private var uncovered: Set<HexCell> {
-        var cells = Set<HexCell>()
-        for home in content.homes { cells.formUnion(MercatorHexGrid.disc(around: home.point, radius: HomeBook.uncoverRadius)) }
-        for place in content.places { cells.formUnion(MercatorHexGrid.disc(around: place.point, radius: WorldMapMarker.uncoverRadius)) }
-        return cells
+        let opening = Set(MercatorHexGrid.disc(around: viewport.center, radius: radius))
+        var uncovered = Set<HexCell>()
+        for home in content.homes { uncovered.formUnion(MercatorHexGrid.disc(around: home.point, radius: HomeBook.uncoverRadius)) }
+        for place in content.places { uncovered.formUnion(MercatorHexGrid.disc(around: place.point, radius: WorldMapMarker.uncoverRadius)) }
+        return NatureFogClearing(lifted: opening, uncovered: uncovered)
     }
 
     /// The picture as PNG at `scale`, or nil when it can't be drawn.

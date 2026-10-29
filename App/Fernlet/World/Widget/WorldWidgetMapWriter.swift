@@ -99,7 +99,8 @@ final class WorldWidgetMapWriter {
         return fix.point
     }
 
-    /// Both pictures of the area round `center`, or nil when Apple's map can't be had (offline).
+    /// Both pictures of the area round `center` and the one-colour drawing, or nil when Apple's map can't be
+    /// had (offline).
     private static func render(store: FernletStore, center: GeoPoint, now: Date) async -> WorldWidgetMapPicture? {
         let size = WorldWidgetMap.pictureSize, scale = WorldWidgetMap.pictureScale
         let viewport = MapViewport.around(center, heightMetres: Double(size.height) * WorldWidgetMap.metresPerPoint, size: size)
@@ -109,7 +110,10 @@ final class WorldWidgetMapWriter {
               let light = WorldWidgetMapCanvas.png(base: lightBase, viewport: viewport, content: content, dark: false, size: size, scale: scale),
               let dark = WorldWidgetMapCanvas.png(base: darkBase, viewport: viewport, content: content, dark: true, size: size, scale: scale)
         else { return nil }
-        return WorldWidgetMapPicture(version: WorldWidgetMapPicture.currentVersion, takenAt: now, light: light, dark: dark)
+        // The one-colour drawing comes from the same light map: no third request to Apple. Without it the
+        // tinted and clear Home Screens show the plain ground, and the colour pictures still go.
+        let mono = WorldWidgetMonoCanvas.png(base: lightBase, viewport: viewport, content: content, size: size, scale: scale)
+        return WorldWidgetMapPicture(version: WorldWidgetMapPicture.currentVersion, takenAt: now, light: light, dark: dark, mono: mono)
     }
 
     /// The person removed the map widget: its picture goes too.

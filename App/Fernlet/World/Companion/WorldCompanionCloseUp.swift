@@ -2,6 +2,7 @@ import FernletDomainModel
 import FernletScoring
 import FernletUI
 import SwiftUI
+import WorldMapStore
 
 /// The companion up close (World Review Refinements `ref-comp-close`, `ref-comp-react`, `ref-comp-dark`,
 /// approved by the owner on 2026-10-24): tapping the companion on the map fills the view with it, at ten
@@ -10,7 +11,9 @@ import SwiftUI
 ///
 /// Tap to pet: it squishes, blushes, sends up three pixel hearts and says "That tickles!", with a soft
 /// haptic. Petting is a reaction only: it changes no score (``WorldCompanionPet``). Hold it, or the
-/// Customize button, for Customize; ✕ top right goes back to the map. It breathes with a one-pixel bob
+/// Customize button, for Customize; ✕ top right goes back to the map. Round 7 (`ref-comp-home-add`,
+/// `ref-comp-home-at`): away from a home, "This is home" sits beside Customize; at a home or the hotel,
+/// its line and Manage sit over it (``WorldCloseUpActions``). It breathes with a one-pixel bob
 /// every two seconds and hops once on a thriving day; with Reduce Motion nothing moves and the hearts
 /// fade in place.
 ///
@@ -22,6 +25,10 @@ struct WorldCompanionCloseUp: View {
     var bodySignal: CompanionBodySignal?
     let onClose: () -> Void
     let onCustomize: () -> Void
+    /// "This is home" (round 7): the Remember this place sheet with Home picked, the pin at this point.
+    var onThisIsHome: (GeoPoint) -> Void = { _ in }
+    /// Manage, at a home or the hotel (round 7): Settings › Home map.
+    var onManage: () -> Void = {}
     @State private var governor = PetInteractionGovernor()
     @State private var reaction = WorldCloseUpReaction.none
     @State private var petCount = 0
@@ -45,7 +52,10 @@ struct WorldCompanionCloseUp: View {
                     WorldCloseUpBubble(text: reaction.line ?? store.companionAmbientThought(addressing: termOfAddress))
                     stage(now: now, date: context.date)
                     Spacer(minLength: 12)
-                    WorldCloseUpFooter(status: WorldStatus.current(store: store, date: context.date), onCustomize: onCustomize)
+                    WorldCloseUpFooter(status: WorldStatus.current(store: store, date: context.date)) {
+                        WorldCloseUpActions(place: WorldCloseUpPlace.current(store: store), companion: name, onCustomize: onCustomize,
+                                            onThisIsHome: onThisIsHome, onManage: onManage)
+                    }
                 }
                 .padding(.horizontal, 18)
                 .padding(.top, 8)
