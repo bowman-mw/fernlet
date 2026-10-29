@@ -229,7 +229,8 @@ final class WorldLocationSource: NSObject {
     }
 
     /// Starts tracing a drive when ``tracesDrive(permission:backgroundMapping:declaresBackground:walking:)``
-    /// allows; a no-op when already tracing. `showsBackgroundLocationIndicator` stays at iOS's default.
+    /// allows; a no-op when already tracing. iOS's blue location pill shows while the trace runs (owner
+    /// 2026-10-29), so the person can see the road is being noted.
     private func startDriveTrace() {
         guard !isTracingDrive,
               Self.tracesDrive(permission: permission, backgroundMapping: WorldMapPreferences.alwaysLowPower(),
@@ -239,6 +240,7 @@ final class WorldLocationSource: NSObject {
         manager.allowsBackgroundLocationUpdates = true
         manager.activityType = .automotiveNavigation
         manager.pausesLocationUpdatesAutomatically = true
+        manager.showsBackgroundLocationIndicator = true
         manager.startUpdatingLocation()
     }
 
@@ -253,6 +255,7 @@ final class WorldLocationSource: NSObject {
             manager.pausesLocationUpdatesAutomatically = beforeTrace.pauses
         }
         beforeTrace = nil
+        manager.showsBackgroundLocationIndicator = false
         if isUpdating { manager.startUpdatingLocation() } else { manager.stopUpdatingLocation() }
         if walkSession == nil { manager.allowsBackgroundLocationUpdates = false }
     }

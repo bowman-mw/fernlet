@@ -41,11 +41,15 @@ struct WorldRideCar: ViewModifier {
 /// with Undo, the walk's note in every other way (``WorldLoggedNote``). It shows while the store's
 /// ``WorldRideKeeper/loggedRide`` is set, and only counts down while Home is in front: a ride that ended
 /// under a panel or with the app away waits there until Home is seen. VoiceOver hears the line as the
-/// note's window begins, as it hears the walk's; Undo removes the ride's workout.
+/// note's window begins, as it hears the walk's; Undo removes the ride's workout. The first time a ride's
+/// note is seen it plays ``FernletFeedbackEvent/done`` (owner 2026-10-29), a logged meal's haptic, through
+/// the app's Haptics setting; it carries no sound.
 struct WorldRideNote: View {
     var store: FernletStore
     /// Whether Home is what the person sees, with the app active.
     let isFrontmost: Bool
+    /// The ride whose haptic has played, so Home coming back to the front doesn't play it again.
+    @State private var feltRide: UUID?
 
     var body: some View {
         if let ride = store.worldLocation.rides.loggedRide {
@@ -68,6 +72,10 @@ struct WorldRideNote: View {
     private func hold(_ ride: WorldLoggedRide) async {
         guard isFrontmost else { return }
         FernletAnnouncer.system.announce(.success, resolved: WorldRideCopy.logged(ride))
+        if feltRide != ride.id {
+            feltRide = ride.id
+            FernletFeedback.system.play(.done)
+        }
         // DEBUG screenshots (`bike`) keep the note up; the scene list is empty in release builds.
         guard !WorldRideTestScenes.holdsNote else { return }
         let window = FernletDismissalWindow.system.window(standard: .seconds(4), assistive: FernletDismissalWindow.assistiveActionWindow)

@@ -13,7 +13,8 @@ struct HomeMapBikeRidesSettingsTests {
     }
 
     /// Off always asks the store; on asks it unless Motion was declined or is restricted, when iOS won't
-    /// ask again and Fernlet's page in the Settings app opens instead. A decoy always asks the store.
+    /// ask again and Fernlet's page in the Settings app opens instead. On an iPhone without motion activity
+    /// it stays off and says why (owner 2026-10-29). A decoy always asks the store.
     @Test func aTurnAsksTheStoreUnlessIOSWontAskAgain() {
         let all: [WorldMotionPermission] = [.notAsked, .denied, .allowed, .unavailable]
         for permission in all {
@@ -22,7 +23,7 @@ struct HomeMapBikeRidesSettingsTests {
         }
         #expect(HomeMapBikeRideStep.step(turningOn: true, permission: .notAsked, isDecoy: false) == .ask)
         #expect(HomeMapBikeRideStep.step(turningOn: true, permission: .allowed, isDecoy: false) == .ask)
-        #expect(HomeMapBikeRideStep.step(turningOn: true, permission: .unavailable, isDecoy: false) == .ask)
+        #expect(HomeMapBikeRideStep.step(turningOn: true, permission: .unavailable, isDecoy: false) == .staysOff)
         #expect(HomeMapBikeRideStep.step(turningOn: true, permission: .denied, isDecoy: false) == .openSettings)
     }
 

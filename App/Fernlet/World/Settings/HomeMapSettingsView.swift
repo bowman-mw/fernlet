@@ -117,8 +117,7 @@ struct HomeMapSettingsView: View {
             .onChange(of: savesRoutes) { _, on in WorldMapPreferences.setSaveNewRoutes(on) }
             .accessibilityIdentifier("settings.homeMap.saveRoutes")
             Toggle(isOn: bikeRidesBinding) {
-                FernletRowLabel("Log my bike rides", detail: "Asks for Motion & Fitness when you turn it on.")
-                    .padding(.vertical, 7)
+                bikeRidesLabel.padding(.vertical, 7)
             }
             .accessibilityIdentifier("settings.homeMap.bikeRides")
             FernletRowLabel("Routes stored on this iPhone", value: Text(routeCount, format: .number))
@@ -255,6 +254,17 @@ extension HomeMapSettingsView {
         }
     }
 
+    /// "Log my bike rides" and its line: what turning it on asks for or, on an iPhone without motion
+    /// activity, why it stays off (owner 2026-10-29: something witty about not going anywhere).
+    @ViewBuilder private var bikeRidesLabel: some View {
+        if store.worldLocation.rides.motion.permission == .unavailable {
+            FernletRowLabel(title: Text("Log my bike rides"),
+                            detail: Text(HomeMapCopy.noMotion(companion: WorldRecenterCopy.companionName(store))))
+        } else {
+            FernletRowLabel("Log my bike rides", detail: "Asks for Motion & Fitness when you turn it on.")
+        }
+    }
+
     /// "Log my bike rides": what the store last answered; a turn asks the store (and, the first time, iOS).
     private var bikeRidesBinding: Binding<Bool> {
         Binding(get: { logsBikeRides }, set: { setBikeRides($0) })
@@ -266,6 +276,10 @@ extension HomeMapSettingsView {
     private func setBikeRides(_ on: Bool) {
         let permission = store.worldLocation.rides.motion.permission
         switch HomeMapBikeRideStep.step(turningOn: on, permission: permission, isDecoy: store.duressSessionActive) {
+        case .staysOff:
+            logsBikeRides = false
+            let line = HomeMapCopy.noMotion(companion: WorldRecenterCopy.companionName(store))
+            FernletAnnouncer.system.announce(.status, resolved: String(localized: line))
         case .openSettings:
             awaitsMotion = true
             guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
@@ -372,16 +386,30 @@ nonisolated enum HomeMapBikeRideStep: Equatable, Sendable {
     case ask
     /// Open Fernlet's page in the Settings app: Motion was declined or is restricted, so iOS won't ask.
     case openSettings
+    /// Stay off and say why: this iPhone has no motion activity to ask for.
+    case staysOff
 
     /// The step for a turn of the switch. A decoy always asks the store, which logs nothing there.
     static func step(turningOn on: Bool, permission: WorldMotionPermission, isDecoy: Bool) -> Self {
-        guard on, !isDecoy, permission == .denied else { return .ask }
-        return .openSettings
+        guard on, !isDecoy else { return .ask }
+        switch permission {
+        case .denied: return .openSettings
+        case .unavailable: return .staysOff
+        case .notAsked, .allowed: return .ask
+        }
     }
 }
 
 /// Home map's words that carry a value.
 nonisolated enum HomeMapCopy {
+    /// "Log my bike rides" on an iPhone without motion activity: the first of the three lines proposed to the
+    /// owner (2026-10-29; the others are in the lane ledger, `r7-carbike`). The companion's name.
+    static func noMotion(companion: String) -> LocalizedStringResource {
+        LocalizedStringResource("homeMap.bikeRides.noMotion",
+                                defaultValue: "This iPhone can't tell a bike from a bench. \(companion) is staying put.",
+                                comment: "Settings, Home map: under Log my bike rides on an iPhone without motion activity, so it stays off; the companion's name")
+    }
+
     /// The Location section's label and row name: its own key, because the catalog's bare "Location" is a workout
     /// space's name field (Spanish "Lugar"), and here it is the iPhone's location (Spanish "Ubicación").
     static var location: LocalizedStringResource {
