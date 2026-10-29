@@ -37,6 +37,19 @@ public nonisolated struct PlaceLog: Codable, Equatable, Sendable {
         self.stops = stops
     }
 
+    /// The field names at rest (frozen).
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion, places, stops
+    }
+
+    /// A sealed log, read with any stop this build can't read skipped (`LossyStops`), never failing whole.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        places = try container.decode([PlaceRecord].self, forKey: .places)
+        stops = try container.decode(LossyStops.self, forKey: .stops).stops
+    }
+
     /// This log with the device side's captures folded in at `now`: new places added (up to the cap), each
     /// stop added once (a stop already here, from a fold cut short, is skipped and not counted again), each
     /// visit counted on its place, then stops older than ``keptDays`` days dropped. A stop that waited longer
@@ -145,6 +158,14 @@ public nonisolated struct PlaceLog: Codable, Equatable, Sendable {
         return (next, stop.workoutID.map { [$0] } ?? [], emptied)
     }
 
+    /// This log without the walk, run or bike ride whose workout is `workoutID` (a bike ride's note's Undo,
+    /// Refinements group 19): every outing stop that names it goes; places, visits, leaves and returns stay.
+    public func deletingOuting(workoutID: UUID) -> PlaceLog {
+        var next = self
+        next.stops.removeAll { $0.isOuting && $0.workoutID == workoutID }
+        return next
+    }
+
     /// This log with place `id` given the person's own name `name` (trimmed, at most
     /// ``PlaceRecord/maxNameLength``), its label from now on; an empty name changes nothing.
     public func renaming(_ id: UUID, to name: String) -> PlaceLog {
@@ -174,7 +195,7 @@ public nonisolated struct PlaceLog: Codable, Equatable, Sendable {
             case .cameHome:
                 if let leftAt, stop.at > leftAt { total += stop.at.timeIntervalSince(leftAt) }
                 leftAt = nil
-            case .visit, .walk, .run: continue
+            case .visit, .walk, .run, .ride: continue
             }
         }
         return total > 0 ? total : nil
@@ -230,6 +251,23 @@ public nonisolated struct PlaceDeviceState: Codable, Equatable, Sendable {
         self.newPlaces = newPlaces
         self.homes = homes
         self.restaurants = restaurants
+    }
+
+    /// The field names at rest (frozen).
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion, known, pending, newPlaces, homes, restaurants
+    }
+
+    /// A sealed device side, read with any waiting stop this build can't read skipped (`LossyStops`),
+    /// never failing whole.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion)
+        known = try container.decode([KnownPlace].self, forKey: .known)
+        pending = try container.decode(LossyStops.self, forKey: .pending).stops
+        newPlaces = try container.decode([PlaceRecord].self, forKey: .newPlaces)
+        homes = try container.decodeIfPresent(HomeBook.self, forKey: .homes)
+        restaurants = try container.decodeIfPresent([EatingPlace].self, forKey: .restaurants)
     }
 
     /// The homes and hotel (empty when none was ever marked).
@@ -310,6 +348,14 @@ public nonisolated struct PlaceDeviceState: Codable, Equatable, Sendable {
         var next = self
         next.pending.append(stop)
         if next.pending.count > Self.maxPending { next.pending.removeFirst(next.pending.count - Self.maxPending) }
+        return next
+    }
+
+    /// This state without the waiting walk, run or bike ride whose workout is `workoutID` (a bike ride's
+    /// note's Undo, Refinements group 19); everything else stays.
+    public func removingOuting(workoutID: UUID) -> PlaceDeviceState {
+        var next = self
+        next.pending.removeAll { $0.isOuting && $0.workoutID == workoutID }
         return next
     }
 

@@ -1,4 +1,5 @@
 import Foundation
+import WorldMapStore
 
 /// What the motion coprocessor says the person is doing, in plain values: no CoreMotion type leaves
 /// `WorldMotionSource.swift` (round 7, car and bike detection). Read only while "Log my bike rides" is on
@@ -39,6 +40,9 @@ nonisolated struct WorldBikeRide: Equatable, Sendable {
     /// The distance from the location readings during the ride, in metres; nil when there were too few
     /// readings to say (a ride found afterwards in the motion history, with the app closed).
     let metres: Double?
+    /// The ride's line, from the same readings (Refinements group 19, `ref-ride-line`); empty for a ride
+    /// found afterwards in the motion history, which had no readings to draw.
+    var points: [RoutePoint] = []
 
     /// The ride's length in whole minutes, at least one.
     var minutes: Int { max(1, Int((ended.timeIntervalSince(started) / 60).rounded())) }

@@ -57,7 +57,7 @@ struct WorldPlacesDayCard: View {
     /// One stop: with ``onDeleteStop``, a button that asks to delete it, with the same VoiceOver action.
     @ViewBuilder
     private func stopRow(_ stop: PlaceStop) -> some View {
-        let row = WorldPlaceStopRow(stop: stop, title: title(of: stop), detail: detail(of: stop))
+        let row = WorldPlaceStopRow(stop: stop, title: title(of: stop), detail: detail(of: stop), spoken: spoken(of: stop))
         if onDeleteStop != nil {
             Button { deletingStop = stop } label: { row.contentShape(Rectangle()) }
                 .buttonStyle(.plain)
@@ -93,10 +93,17 @@ struct WorldPlacesDayCard: View {
         return WorldPlacesCopy.stopTitle(stop, place: place, name: place.flatMap { names[$0.id] })
     }
 
-    /// The line under it.
+    /// The line under it (a bike ride's minutes from its cycling workout, `ref-ride-timeline`).
     private func detail(of stop: PlaceStop) -> String {
         let place = places.first { $0.id == stop.placeID }
-        return WorldPlacesCopy.stopDetail(stop, name: place.flatMap { names[$0.id] })
+        return WorldPlacesCopy.stopDetail(stop, name: place.flatMap { names[$0.id] }, minutes: store.worldRideMinutes(for: stop))
+    }
+
+    /// What VoiceOver reads for a bike ride's row, in words; nil for every other stop (its parts combined).
+    private func spoken(of stop: PlaceStop) -> String? {
+        guard stop.kind == .ride else { return nil }
+        return WorldPlacesCopy.spokenRide(at: stop.at, title: title(of: stop), metres: stop.metres,
+                                          minutes: store.worldRideMinutes(for: stop))
     }
 }
 
@@ -125,8 +132,10 @@ struct WorldPlaceStopRow: View {
     let stop: PlaceStop
     /// The bold line (``WorldPlacesCopy/stopTitle(_:place:name:)``).
     let title: String
-    /// The line under it, or empty for none (``WorldPlacesCopy/stopDetail(_:name:)``).
+    /// The line under it, or empty for none (``WorldPlacesCopy/stopDetail(_:name:minutes:)``).
     let detail: String
+    /// What VoiceOver reads instead of the parts combined (a bike ride's, in words); nil for the parts.
+    var spoken: String? = nil
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 14) {
@@ -149,6 +158,21 @@ struct WorldPlaceStopRow: View {
             Spacer(minLength: 0)
         }
         .accessibilityElement(children: .combine)
+        .modifier(WorldSpokenOverride(spoken: spoken))
+    }
+}
+
+/// Replaces a combined element's label with `spoken` when there is one (a bike ride's row reads its distance
+/// and minutes in words), else leaves the combined parts.
+private struct WorldSpokenOverride: ViewModifier {
+    let spoken: String?
+
+    func body(content: Content) -> some View {
+        if let spoken {
+            content.accessibilityLabel(Text(verbatim: spoken))
+        } else {
+            content
+        }
     }
 }
 
@@ -395,21 +419,52 @@ nonisolated enum WorldPlacesCopy {
             ?? String(localized: "privatePlaces.placeGone", defaultValue: "A place", comment: "Private, Places: a stop whose place was removed")
         case .walk: return String(localized: "privatePlaces.walk", defaultValue: "A walk", comment: "Private, Places: a walk on the timeline")
         case .run: return String(localized: "privatePlaces.run", defaultValue: "A run", comment: "Private, Places: a run on the timeline")
+        case .ride: return String(localized: "privatePlaces.ride", defaultValue: "A bike ride",
+                                  comment: "Private, Places: a bike ride Fernlet logged, on the timeline, beside 'A walk' and 'A run' (Spanish draft: Un paseo en bici)")
         case .leftHome, .cameHome: return WorldHomeCopy.defaultHomeName
         }
     }
 
     /// The line under it: the place's kind as Apple Maps gave it again (empty when it didn't), the walk's or
-    /// run's length, or "you left" / "you got back" at a home or the hotel (`ref-home-where`).
-    static func stopDetail(_ stop: PlaceStop, name: WorldPlaceName?) -> String {
+    /// run's length, a bike ride's distance and minutes (``rideDetail(metres:minutes:)``), or "you left" /
+    /// "you got back" at a home or the hotel (`ref-home-where`). `minutes` is a ride's, from its workout.
+    static func stopDetail(_ stop: PlaceStop, name: WorldPlaceName?, minutes: Int? = nil) -> String {
         switch stop.kind {
         case .visit: return name?.category.map(kind) ?? ""
         case .walk, .run: return WorldWalkCopy.distance(stop.metres ?? 0)
+        case .ride: return rideDetail(metres: stop.metres, minutes: minutes)
         case .leftHome: return String(localized: "privatePlaces.leftHome", defaultValue: "you left",
                                       comment: "Private, Places: under a home's (or the hotel's) name on the timeline, when the person left")
         case .cameHome: return String(localized: "privatePlaces.cameHome", defaultValue: "you got back",
                                       comment: "Private, Places: under a home's (or the hotel's) name on the timeline, when the person got back")
         }
+    }
+
+    /// A bike ride's line on the timeline (`ref-ride-timeline`): "4.2 km · 18 min" in the person's units,
+    /// "18 min" with no distance (a ride logged later), the distance alone when its workout is gone, or empty
+    /// with neither.
+    static func rideDetail(metres: Double?, minutes: Int?) -> String {
+        let distance = metres.map(WorldWalkCopy.distance)
+        let time = minutes.map { rideMinutes($0, width: .abbreviated) }
+        guard let distance, let time else { return distance ?? time ?? "" }
+        return String(localized: "privatePlaces.ride.detail", defaultValue: "\(distance) · \(time)",
+                      comment: "Private, Places: under 'A bike ride' on the timeline: its distance, a middle dot, its minutes (e.g. '4.2 km · 18 min'; Spanish draft keeps the order: '4,2 km · 18 min')")
+    }
+
+    /// What VoiceOver reads for a bike ride's row (`ref-ride-timeline`): "15:40, A bike ride, 4.2 kilometres,
+    /// 18 minutes", the parts it has, in words.
+    static func spokenRide(at date: Date, title: String, metres: Double?, minutes: Int?) -> String {
+        let distance = metres.map {
+            Measurement(value: max(0, $0), unit: UnitLength.meters)
+                .formatted(.measurement(width: .wide, usage: .road, numberFormatStyle: .number.precision(.significantDigits(1...2))))
+        }
+        let parts = [date.formatted(.dateTime.hour().minute()), title, distance, minutes.map { rideMinutes($0, width: .wide) }]
+        return parts.compactMap { $0 }.joined(separator: ", ")
+    }
+
+    /// A ride's minutes in the person's language: "18 min" (abbreviated) or "18 minutes" (wide).
+    static func rideMinutes(_ minutes: Int, width: Duration.UnitsFormatStyle.UnitWidth) -> String {
+        Duration.seconds(max(0, minutes) * 60).formatted(.units(allowed: [.minutes], width: width))
     }
 
     /// "Out and about 9 h 40 min" (abbreviated) or "Out and about 9 hours 40 minutes" (VoiceOver).

@@ -18,6 +18,10 @@ import WorldMapStore
 ///   shorter), or at once when the coprocessor says car. A ride of at least ``minRideTime`` whose distance
 ///   is unknown or at least ``minRideMetres`` ends as ``WorldRideEvent/rideEnded(_:)``, its distance from
 ///   the precise readings taken during it.
+/// - **The ride's line** (Refinements group 19, `ref-ride-line`): the same good readings that measure the
+///   distance draw it, one kept per ``lineStep`` moved (``ridePoints`` while the ride is on; the finished
+///   ride carries them). Like the odometer it reaches back ``markLookBack`` while not cycling, because a
+///   ride's start sample arrives late; bounded at ``maxLinePoints``.
 ///
 /// A reading's speed is CoreLocation's own when it gave one, otherwise the pace from the last good reading
 /// (unknown across a gap longer than ``maxGap``). Low-confidence samples decide nothing. Samples arrive
@@ -56,11 +60,22 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
     static let markLookBack: TimeInterval = 10 * 60
     /// The most samples one call takes (a bound; a day of activity is far fewer).
     static let maxSamples = 2_000
+    /// The least distance between two kept points of a ride's line, in metres (the saved line's codec then
+    /// thins it at 2.5 m, as a walk's).
+    static let lineStep = 5.0
+    /// The most points a ride's line keeps (the saved line's own cap).
+    static let maxLinePoints = WorldRouteCodec.maxPoints
 
     /// The ride's odometer at one moment: how far the good readings had covered by `at`.
     nonisolated struct Mark: Equatable, Sendable {
         let at: Date
         let metres: Double
+    }
+
+    /// One kept point of the line, with when it was read (a ride takes the points from its start on).
+    nonisolated struct LinePoint: Equatable, Sendable {
+        let at: Date
+        let point: GeoPoint
     }
 
     /// How the person is moving now.
@@ -82,6 +97,12 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
     var isCycling: Bool {
         if case .cycling = mode { return true }
         return false
+    }
+
+    /// The ride's line so far while cycling (`ref-ride-line`), oldest first; empty on foot or driving.
+    var ridePoints: [RoutePoint] {
+        guard case .cycling(let since) = mode else { return [] }
+        return linePoints(from: since, to: nil)
     }
 
     // Readings.
@@ -107,6 +128,8 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
     // The odometer.
     private var odometer = 0.0
     private var marks: [Mark] = []
+    // The line.
+    private var line: [LinePoint] = []
 
     /// Takes a location reading; what changed. A reading older than the last one is passed by.
     mutating func observe(_ fix: WorldFix) -> [WorldRideEvent] {
@@ -279,7 +302,8 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
         guard isCycling else { return [] }
         mode = .onFoot
         endedAt = ended
-        let ride = WorldBikeRide(started: started, ended: ended, metres: metres(from: started, to: ended))
+        let ride = WorldBikeRide(started: started, ended: ended, metres: metres(from: started, to: ended),
+                                 points: linePoints(from: started, to: ended))
         guard ended.timeIntervalSince(started) >= Self.minRideTime else { return [] }
         guard (ride.metres ?? Self.minRideMetres) >= Self.minRideMetres else { return [] }
         return [.rideEnded(ride)]
@@ -332,6 +356,25 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
             marks.removeAll { $0.at < cutoff }
         }
         if marks.count > Self.maxMarks { marks.removeFirst(marks.count - Self.maxMarks) }
+        noteLine(fix)
+    }
+
+    /// Keeps a good reading on the line when it is at least ``lineStep`` from the last kept point, dropping
+    /// points no ride can need (older than ``markLookBack`` while not cycling, or past ``maxLinePoints``).
+    private mutating func noteLine(_ fix: WorldFix) {
+        guard line.last.map({ $0.point.distance(to: fix.point) >= Self.lineStep }) ?? true else { return }
+        line.append(LinePoint(at: fix.at, point: fix.point))
+        if !isCycling {
+            let cutoff = fix.at.addingTimeInterval(-Self.markLookBack)
+            line.removeAll { $0.at < cutoff }
+        }
+        if line.count > Self.maxLinePoints { line.removeFirst(line.count - Self.maxLinePoints) }
+    }
+
+    /// The line's points read from `start` on (through `end` when given), oldest first.
+    private func linePoints(from start: Date, to end: Date?) -> [RoutePoint] {
+        let last = end ?? .distantFuture
+        return line.filter { $0.at >= start && $0.at <= last }.map { RoutePoint($0.point) }
     }
 
     /// The distance the good readings covered from `start` to `end`; nil with fewer than two of them.

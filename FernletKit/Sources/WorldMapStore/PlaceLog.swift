@@ -226,15 +226,21 @@ public nonisolated struct PlaceRecord: Codable, Equatable, Identifiable, Sendabl
     }
 }
 
-/// One entry on the 30-day timeline: a stop at a place, or a walk or run the person recorded.
+/// One entry on the 30-day timeline: a stop at a place, a walk or run the person recorded, or a bike ride
+/// Fernlet logged.
 ///
-/// Frozen at rest: the field names and ``Kind``'s raw values.
+/// Frozen at rest: the field names and ``Kind``'s raw values. A kind this build doesn't know (written by a
+/// newer one, then read back from a restore) can't be read; the logs that hold stops skip such a stop
+/// rather than fail whole (`LossyStops`).
 public nonisolated struct PlaceStop: Codable, Equatable, Identifiable, Sendable {
     /// What the stop was.
     public enum Kind: String, Codable, Sendable {
         case visit
         case walk
         case run
+        /// A bike ride Fernlet logged (Refinements group 19, `ref-ride-timeline`): `at` is when it started,
+        /// `metres` its distance when known, `workoutID` its cycling workout. Added in round 7.
+        case ride
         /// The person left a home or their hotel (round 6, `ref-home-where`: "Home · you left").
         case leftHome
         /// The person got back to it ("Home · you got back").
@@ -248,10 +254,18 @@ public nonisolated struct PlaceStop: Codable, Equatable, Identifiable, Sendable 
     /// The place visited (``PlaceRecord/id``), for a visit; the home or hotel (``HomePlace/id``) for a
     /// leave or a return.
     public let placeID: UUID?
-    /// A walk's or run's length, in metres.
+    /// A walk's, run's or ride's length, in metres (nil for a ride whose distance is unknown).
     public let metres: Double?
-    /// The walk's or run's workout, whose saved line (if any) the day's map draws.
+    /// The walk's, run's or ride's workout, whose saved line (if any) the day's map draws.
     public let workoutID: UUID?
+
+    /// Whether it is an outing the person made (a walk, a run or a bike ride), with a workout and a line.
+    public var isOuting: Bool {
+        switch kind {
+        case .walk, .run, .ride: true
+        case .visit, .leftHome, .cameHome: false
+        }
+    }
 
     /// Whether this stop and `other` are visits to the same place within
     /// ``PlaceDeviceState/sameVisitWindow`` of each other: one visit, noted twice.
@@ -287,5 +301,38 @@ public nonisolated struct KnownPlace: Codable, Equatable, Sendable {
         self.id = id
         self.point = point
         self.placeID = placeID
+    }
+}
+
+/// A sealed list of timeline stops read one by one (Refinements group 19): a stop this build can't read (a
+/// kind a newer build wrote, then restored here) is skipped, never failing the whole log with it. Bounded:
+/// at most ``maxRead`` entries are looked at, well over either log's own cap.
+nonisolated struct LossyStops: Decodable {
+    /// The most entries one list is read for.
+    static let maxRead = 10_000
+
+    /// The stops that could be read, in their order.
+    let stops: [PlaceStop]
+
+    /// Reads each entry as a stop, stepping over one that isn't (the unkeyed container moves on only when
+    /// an entry is read, so a skipped one is read as ``Skipped``).
+    init(from decoder: any Decoder) throws {
+        var container = try decoder.unkeyedContainer()
+        var read: [PlaceStop] = []
+        for _ in 0..<min(container.count ?? Self.maxRead, Self.maxRead) {
+            guard !container.isAtEnd else { break }
+            if let stop = try? container.decode(PlaceStop.self) {
+                read.append(stop)
+            } else {
+                _ = try container.decode(Skipped.self)
+            }
+        }
+        stops = read
+    }
+
+    /// Any one entry, read as nothing.
+    private struct Skipped: Decodable {
+        /// Reads nothing of the entry.
+        init(from decoder: any Decoder) throws {}
     }
 }

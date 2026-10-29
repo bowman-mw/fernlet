@@ -58,7 +58,8 @@ enum WorldPlacesTestScenes {
         ]
     }
 
-    /// A Friday-like day of Where you've been: Home left at 8:40, a place at 12:10, a walk at 17:30, Home
+    /// A Friday-like day of Where you've been: Home left at 8:40, a place at 12:10, a 4.2 km bike ride at
+    /// 15:40 (`ref-ride-timeline`; no workout, so its row shows the distance alone), a walk at 17:30, Home
     /// again at 18:20, on today's date.
     static func log(home: UUID, now: Date, calendar: Calendar = .current) -> PlaceLog {
         let day = calendar.startOfDay(for: now)
@@ -67,6 +68,7 @@ enum WorldPlacesTestScenes {
         let hoshi = PlaceRecord(label: "Hoshi Noodle Bar", placeID: "I-hoshi", point: GeoPoint(45.5203, -122.6273), visits: 4)
         let park = PlaceRecord(label: "Oak Park", point: GeoPoint(45.5190, -122.6380), visits: 3)
         let stops = [PlaceStop(kind: .leftHome, at: at(8, 40), placeID: home), PlaceStop(kind: .visit, at: at(12, 10), placeID: hoshi.id),
+                     PlaceStop(kind: .ride, at: at(15, 40), metres: 4_200),
                      PlaceStop(kind: .walk, at: at(17, 30), metres: 1_000), PlaceStop(kind: .cameHome, at: at(18, 20), placeID: home)]
         return PlaceLog(places: [hoshi, park], stops: stops)
     }
