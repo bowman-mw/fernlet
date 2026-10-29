@@ -130,6 +130,20 @@ count × {
 Rings use the even-odd rule (holes are rings too). Coordinates are in 1e-5 degrees, simplified (Douglas-Peucker)
 at 0.001°.
 
+**Territory override: Crimea counts as Ukraine** (owner, 2026-10-29). Natural Earth's default admin-0 draws
+Crimea, Sevastopol with it, as Russia's: a separate part of RU's multipolygon (one 424-point ring, its northern
+border with Kherson 46 vertices that Ukraine's ring shares exactly), and files Crimea's two admin-1 rows (`UA-43`,
+`UA-40`) under `ADM0_A3` RUS. The generator's `TERRITORY_OVERRIDES` has one entry for it: every RU ring lying
+wholly inside lon 32.3..36.75, lat 44.2..46.3 moves to UA and is stitched into the Ukrainian ring it shares that
+border with (the shared run dropped, one ring left), before simplification, so the coast and the isthmus are
+simplified once and no sliver between two outlines exists. The run stops unless a ring moves and Simferopol,
+Sevastopol (44.60, 33.52) and Yalta then lie in UA and in no RU ring. Measured on a 0.005° lattice over Crimea's
+source admin-1 outlines (124,328 points): 124,322 UA, 0 RU, 6 in no country (coast where the admin-1 and admin-0
+outlines differ); over the isthmus band (lat 45.9..46.3, on the source's land, 28,604 points) 28,602 UA, 0 RU,
+2 none, the same 2 as before. `CONT` is byte-for-byte unchanged (Europe either way). Sevastopol's listed centre
+(44.6166, 33.5254) and Kherson's (46.6354, 32.6169) fall in water the 10m land leaves open (Sevastopol Bay, the
+Dnieper), before and after: no country there, the Black Sea, still the city.
+
 ### `URBN`: urban boundaries
 
 `u32 count`, then per polygon: the same `bbox · ringCount · rings` encoding as `CTRY`. A polygon is kept when at
@@ -197,18 +211,40 @@ at City) would make a 6.7 MB pack and 0.005° leave 130 KB under the cap, so the
   (`AU-NSW` stays New South Wales', not Lord Howe Island's; `CO-CUN` Cundinamarca's, not Bogotá's); otherwise it
   names none of them (Bosnia's nine cantons all say `BA-BIH`). Each name without the code is its own entry,
   `ne:<its smallest ne_id>`, as is every feature without a real code.
-- **Country.** The feature's `ADM0_A3` mapped exactly as `CTRY` maps admin-0 (so Somaliland is SO and Kosovo XK),
+- **Country.** A territory override's country for the codes it lists (Crimea `UA-43` and Sevastopol `UA-40` are
+  UA), else the feature's `ADM0_A3` mapped exactly as `CTRY` maps admin-0 (so Somaliland is SO and Kosovo XK),
   else its own `ISO_A2` when `CTRY` has it; the generator logs every disagreement. Each entry's label point lies in
   its own country's `CTRY` rings (checked 2026-10-29: none in another country). A feature with no `CTRY`
   country (Dhekelia, Akrotiri, Guantánamo Bay, Kashmir, the Spratlys), no rings or no name (seven unnamed islets)
   is left out: a fix there names only its country.
 - **Names.** English from `NAME_EN`, else `NAME`; Spanish from `NAME_ES`, stored empty when it equals the English.
   France's entries are its départements ("Paris"), as Natural Earth draws it.
+- **Everyday names** (owner, 2026-10-29). Regions are named the way people say them in everyday English: "Madrid ·
+  Spain", "Bavaria · Germany", never the official long form ("Community of Madrid", "Free State of Bavaria"). A
+  designation ("Community of", "Region of", "Republic of", "Emirate of", "Prefecture", "State", "Krai", ...) goes
+  only where an everyday name exists without it, and stays where the rest would be an adjective ("Silesian
+  Voivodeship", "Western Province", "Nenets Autonomous Okrug"), a common word ("Free State", "Rivers State") or
+  another place's name ("State of Mexico", "Niger State", "Mali Prefecture", "Davao Region"). No name is invented:
+  each short form is the feature's own `NAME`, `NAME_ALT` or `NAME_ES`, or a hand-written entry. Spanish follows the
+  same style ("Madrid", "Baviera", "Cataluña", "Escocia"). The rule is written at the top of the generator's
+  hand-written names (`PLATE_GROUPS`) and covers them all, and Natural Earth's own names through
+  `EVERYDAY_AFFIXES` (per country: AE "Emirate of", RU "Republic of" and "Krai", JP, GN and CF "Prefecture", NG,
+  MM, FM and VE "State", SG "Community Development Council"; a trailing one only when the rest is the feature's
+  own short name) and `EVERYDAY_NAMES` (by code: Madrid, Bremen, Crimea, Chechnya, Chuvashia, Udmurtia, Yakutia
+  and others, plus four of Natural Earth's broken names repaired from the feature's own fields: "Jewish", "of
+  Bougainville", "Archipelago of Saint Andréws", and "Altai Republic" on Altai Krai). A Spanish name that is a
+  designation and then the English name ("Municipio de Wandsworth", "Krai de Krasnodar") becomes the name alone.
+  The 2026-10-29 pack shortens 172 English and 360 Spanish entry names.
 - **Plate groups** (coordinator, 2026-10-29). Where Natural Earth's admin-1 is a second-level unit, the plate and the
   state lines use the first-level region; the polygons are not dissolved, each entry just names its group. The
   generator's `PLATE_GROUPS` table gives, per country, the source field naming the region and each value's ISO
   3166-2 code and English and Spanish names (hand-written; Natural Earth has no Spanish region names); an
   `iso:<code>` key places a feature by its own code first. Every other country's entries are their own groups.
+  Its names follow the everyday-names rule ("Brussels", "Madrid", "Murcia", "Valencia", "Ilocos", "Bicol",
+  "Cordillera", "Uva"; "Bisayas Occidentales" in Spanish). The Philippine codes and members match Natural Earth's
+  `REGION_COD` (its `REGION` text still says "ARMM" for Bangsamoro and "Dinagat Islands" for Caraga); Burkina
+  Faso's `REGION_COD` is empty, so its `BF-01`..`BF-13` codes are ISO 3166-2's, not the source's, and neither
+  country's 2024–2025 changes (the Negros Island Region, Burkina's new regions) are in the source.
   The countries, chosen because ISO 3166-2's first level is the region and Natural Earth's admin-1 sits under it:
 
   | Country | Natural Earth's admin-1 | Plate group | From |
@@ -218,7 +254,7 @@ at City) would make a 6.7 MB pack and 0.005° leave 130 KB under the cap, so the
   | IT | 110 provinces | 20 regions (`IT-62` Lazio…) | `REGION_COD` |
   | ES | 52 provinces | 17 autonomous communities and 2 cities (`ES-MD`…) | `REGION` |
   | IE | 34 counties and cities | Leinster, Munster, Connacht, Ulster (`IE-L`…) | each county's own code |
-  | BE | 10 provinces and Brussels | Flanders, Wallonia, Brussels-Capital (`BE-VLG`…) | `GEONUNIT` |
+  | BE | 10 provinces and Brussels | Flanders, Wallonia, Brussels (`BE-VLG`…) | `GEONUNIT` |
   | PH | 118 provinces and cities | 17 regions (`PH-00` Metro Manila…) | `REGION_COD` |
   | UG | 112 districts | 4 regions (`UG-C`…) | `REGION` |
   | LK | 25 districts | 9 provinces (`LK-1`…) | `REGION_COD` |
@@ -233,13 +269,13 @@ at City) would make a 6.7 MB pack and 0.005° leave 130 KB under the cap, so the
   117 groups holding 887 entries.
 
 The 2026-10-29 pack has 4,554 entries over 239 countries (4,293 with an ISO token), 8,480 rings and 435,491
-points; `ADM1` stores 2.02 MB of the 5.77 MB pack (5,774,923 bytes, 517 KB under the cap). A reader refuses a
+points; `ADM1` stores 2.02 MB of the 5.77 MB pack (5,771,019 bytes, 520 KB under the cap). A reader refuses a
 count over 8,192, a token of the wrong shape or used twice, a country `CTRY` lacks, an empty English name and any
 malformed outline. `ADM1` is required in version 1 (nothing has shipped).
 
 ### `META`
 
-UTF-8 JSON: the generator version (3 since `ADM1`, 4 since its plate groups), the generation date, both simplification tolerances, and each
+UTF-8 JSON: the generator version (3 since `ADM1`, 4 since its plate groups, 6 since the territory override and everyday names), the generation date, both simplification tolerances, and each
 source's file name, URL, SHA-256 and licence.
 
 ## The rules the reader applies
@@ -247,7 +283,9 @@ source's file name, URL, SHA-256 and licence.
 - **Accepted fixes only.** The keeper reads a fix only after `WorldFogKeeper` accepts it (precise, accurate to
   65 m, "Uncover the map as you go" on), only while the phone is unlocked, and never in a decoy (a decoy keeps
   nothing).
-- **Country:** the fix lies inside the country's rings.
+- **Country:** the fix lies inside the country's rings. **Crimea counts as Ukraine** (owner, 2026-10-29): a fix in
+  Simferopol, Sevastopol or Yalta earns UA, and its plate reads Crimea's own admin-1 · Ukraine (`CTRY`, "Territory
+  override").
 - **Continent:** the `CONT` cell under a land fix, plus Antarctica's lighter rule below
   (`WorldAtlas.antarcticaLatitude`).
 - **Ocean or sea:** the nearest water sub-cell within `WorldAtlas.oceanReachMetres` (2 km, owner 2026-10-29) of the
