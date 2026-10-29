@@ -23,7 +23,7 @@ public nonisolated struct WorldAtlasPack: Sendable {
     /// The shipped `WorldAtlas.pack`'s SHA-256, in lowercase hex (generated 2026-10-29 by
     /// `Scripts/world-atlas/build_world_atlas.py`). Regenerating the pack changes it on purpose, in the same
     /// commit.
-    public static let expectedSHA256 = "3fdfb9f7255a76636d1d37c4dcbb55200658dadcd7def1098e5f67c83cddd765"
+    public static let expectedSHA256 = "e618645d07afa5126fa61fbd720cf9e5786f350f198d88f7de852c8a3c202d36"
     /// The sections every pack must carry (`META`, the generator's provenance, is optional).
     public static let requiredTags = ["LAND", "CLIM", "OCEA", "CONT", "SEAS", "CTRY", "URBN", "CITY", "ADM1"]
     /// Bytes in the fixed header (magic, version, section count).

@@ -202,10 +202,10 @@ struct WorldAtlasShippedAdmin1Tests {
             ("Edinburgh", GeoPoint(55.9533, -3.1883), "GB-SCT", "Scotland", "GB"),
             ("Paris (the département)", GeoPoint(48.8566, 2.3522), "FR-IDF", "Île-de-France", "FR"),
             ("Rome", GeoPoint(41.9028, 12.4964), "IT-62", "Lazio", "IT"),
-            ("Madrid", GeoPoint(40.4168, -3.7038), "ES-MD", "Community of Madrid", "ES"),
+            ("Madrid", GeoPoint(40.4168, -3.7038), "ES-MD", "Madrid", "ES"),
             ("Dublin", GeoPoint(53.3498, -6.2603), "IE-L", "Leinster", "IE"),
             ("Cork", GeoPoint(51.8985, -8.4756), "IE-M", "Munster", "IE"),
-            ("Brussels", GeoPoint(50.8467, 4.3525), "BE-BRU", "Brussels-Capital Region", "BE"),
+            ("Brussels", GeoPoint(50.8467, 4.3525), "BE-BRU", "Brussels", "BE"),
             ("Manila", GeoPoint(14.5995, 120.9842), "PH-00", "Metro Manila", "PH"),
         ]
         for place in places {
@@ -215,13 +215,50 @@ struct WorldAtlasShippedAdmin1Tests {
             #expect(found?.countryCode == place.country, "\(place.name)")
         }
         #expect(atlas.placeName(at: GeoPoint(45.5205, -122.6255))?.regionNames?.spanish == "Oregón")
-        #expect(atlas.placeName(at: GeoPoint(40.4168, -3.7038))?.regionNames?.spanish == "Comunidad de Madrid")
+        #expect(atlas.placeName(at: GeoPoint(40.4168, -3.7038))?.regionNames?.spanish == "", "Madrid: stored empty")
         #expect(atlas.placeName(at: GeoPoint(51.5074, -0.1278))?.regionNames?.spanish == "Inglaterra")
         #expect(atlas.placeName(at: GeoPoint(0, -150)) == nil, "mid-Pacific")
         #expect(atlas.admin1(at: GeoPoint(30, -40)) == nil, "mid-Atlantic")
         // The entries keep their own names; only the plate groups them.
         #expect(atlas.admin1(at: GeoPoint(48.8566, 2.3522))?.token == "FR-75")
         #expect(atlas.admin1(at: GeoPoint(-31.55, 159.08))?.names.english == "Lord Howe Island")
+    }
+
+    /// Region names are the everyday English and Spanish ones (owner, 2026-10-29): "Madrid · Spain", "Bavaria ·
+    /// Germany", never the official long forms. Natural Earth's own long forms lose their designation where an
+    /// everyday name exists, and keep it where the rest would be an adjective, a common word or another place.
+    @Test func regionNamesAreEveryday() throws {
+        let atlas = try WorldAtlas(data: Self.shippedPack())
+        let places: [(name: String, point: GeoPoint, english: String, spanish: String)] = [
+            ("London", GeoPoint(51.5074, -0.1278), "England", "Inglaterra"),
+            ("Madrid", GeoPoint(40.4168, -3.7038), "Madrid", "Madrid"),
+            ("Munich", GeoPoint(48.1351, 11.5820), "Bavaria", "Baviera"),
+            ("Barcelona", GeoPoint(41.3874, 2.1686), "Catalonia", "Cataluña"),
+            ("Paris", GeoPoint(48.8566, 2.3522), "Île-de-France", "Isla de Francia"),
+            ("Manila", GeoPoint(14.5995, 120.9842), "Metro Manila", "Gran Manila"),
+            ("Edinburgh", GeoPoint(55.9533, -3.1883), "Scotland", "Escocia"),
+            ("Brussels", GeoPoint(50.8467, 4.3525), "Brussels", "Bruselas"),
+        ]
+        for place in places {
+            let names = try #require(atlas.placeName(at: place.point)?.regionNames, "\(place.name)")
+            #expect(names.english == place.english, "\(place.name)")
+            #expect((names.spanish.isEmpty ? names.english : names.spanish) == place.spanish, "\(place.name)")
+        }
+        let entries: [(token: String, english: String)] = [
+            ("ES-M", "Madrid"), ("DE-HB", "Bremen"), ("AE-DU", "Dubai"), ("JP-26", "Kyōto"), ("RU-TA", "Tatarstan"),
+            ("RU-KDA", "Krasnodar"), ("NG-KN", "Kano"), ("UA-43", "Crimea"), ("PG-NSB", "Bougainville"),
+            ("MX-MEX", "State of Mexico"), ("NG-NI", "Niger State"), ("PL-SL", "Silesian Voivodeship"),
+            ("ZA-FS", "Free State"), ("RU-PRI", "Primorsky Krai"),
+        ]
+        for entry in entries {
+            #expect(atlas.admin1(token: entry.token)?.names.english == entry.english, "\(entry.token)")
+        }
+        #expect(atlas.admin1(token: "RU-KDA")?.names.spanish == "", "Krai de Krasnodar: stored empty")
+        #expect(atlas.admin1(token: "MX-MEX")?.names.spanish == "Estado de México")
+        let groups = Dictionary(atlas.admin1Groups.map { ($0.token, $0.names.english) }, uniquingKeysWith: { a, _ in a })
+        #expect(groups["ES-MC"] == "Murcia" && groups["PH-15"] == "Cordillera" && groups["PH-13"] == "Caraga")
+        #expect(groups["PH-14"] == "Bangsamoro" && groups["PH-03"] == "Central Luzon" && groups["BF-09"] == "Hauts-Bassins")
+        #expect(groups["BF-03"] == "Centre")
     }
 
     /// Lines on hex edges: none between two London boroughs, a state line between England and Scotland and

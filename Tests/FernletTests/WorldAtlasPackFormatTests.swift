@@ -237,6 +237,39 @@ struct WorldAtlasPackTests {
         #expect(atlas.visit(at: GeoPoint(37.5665, 126.9780)).countryCode == "KR", "South Korea counts")
     }
 
+    /// Crimea counts as Ukraine (owner, 2026-10-29; the generator's TERRITORY_OVERRIDES): Simferopol, Sevastopol
+    /// and Yalta earn Ukraine and read Crimea's own admin-1 under it, and Russia's admin-1 has no Ukrainian code
+    /// left. Krasnodar stays Russia and Kherson Ukraine; the continent is Europe either way.
+    @Test func crimeaCountsAsUkraine() throws {
+        let atlas = try WorldAtlas(data: Self.shippedPack())
+        let crimea: [(name: String, point: GeoPoint, region: String)] = [
+            ("Simferopol", GeoPoint(44.9521, 34.1024), "UA-43"),
+            ("Sevastopol, south of the bay", GeoPoint(44.60, 33.52), "UA-40"),
+            ("Yalta", GeoPoint(44.4952, 34.1663), "UA-43"),
+        ]
+        for place in crimea {
+            let visit = atlas.visit(at: place.point)
+            #expect(visit.countryCode == "UA" && visit.sovereignCode == "UA", "\(place.name)")
+            #expect(visit.continent == .europe, "\(place.name)")
+            let plate = atlas.placeName(at: place.point)
+            #expect(plate?.regionToken == place.region && plate?.countryCode == "UA", "\(place.name)")
+        }
+        #expect(atlas.admin1(token: "UA-43")?.names.english == "Crimea")
+        #expect(atlas.admin1(token: "UA-43")?.countryCode == "UA" && atlas.admin1(token: "UA-40")?.countryCode == "UA")
+        #expect(!atlas.admin1s(ofCountry: "RU").contains { $0.token.hasPrefix("UA-") })
+        let krasnodar = atlas.visit(at: GeoPoint(45.0355, 38.9753))
+        #expect(krasnodar.countryCode == "RU" && krasnodar.continent == .europe)
+        let kherson = atlas.visit(at: GeoPoint(46.64, 32.60))
+        #expect(kherson.countryCode == "UA" && atlas.placeName(at: GeoPoint(46.64, 32.60))?.regionToken == "UA-65")
+        // Sevastopol's and Kherson's listed centres lie where Natural Earth's 10m land leaves water (Sevastopol
+        // Bay, the Dnieper), in this pack and the one before it: no country, the Black Sea, but still the city.
+        for (name, centre) in [("Sevastopol", GeoPoint(44.6166, 33.5254)), ("Kherson", GeoPoint(46.6354, 32.6169))] {
+            let visit = atlas.visit(at: centre)
+            #expect(visit.countryCode == nil && visit.sea?.names.english == "Black Sea", "\(name)")
+            #expect(visit.city?.names.english == name)
+        }
+    }
+
     /// The bundled pack's bytes.
     private static func shippedPack() throws -> Data {
         let url = try #require(Bundle.main.url(forResource: "WorldAtlas", withExtension: "pack"))
