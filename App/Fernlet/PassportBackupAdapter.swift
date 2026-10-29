@@ -19,7 +19,7 @@ struct PassportBackupSeamClosedError: Error, Equatable {}
 /// kept on the iPhone. A restore merges by kind and token, never by id. `kind` is kept as its raw
 /// spelling, so a kind this build does not know still decodes and the restore can refuse the set as
 /// one a newer Fernlet wrote.
-struct PassportBackupRecord: Codable, Equatable {
+nonisolated struct PassportBackupRecord: Codable, Equatable {
     /// The record's id within its set.
     var id: UUID
     /// The kind's frozen rawValue (`AtlasDiscoveryKind`).
