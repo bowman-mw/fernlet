@@ -94,12 +94,20 @@ public nonisolated struct WorldLandmarks: Sendable {
     public static let maxNameBytes = 120
     /// A find radius's allowed range, in metres: a tower about 150, a big park 250 to 400 from its centre.
     public static let radiusRange: ClosedRange<Double> = 50...600
-    /// The famous tier's drawn art ids (Eiffel Tower, Empire State Building, Sydney Opera House).
-    public static let drawnArtIDs: Set<String> = ["eiffel", "empire", "opera"]
-    /// Famous art ids the design session has not drawn yet, each with the generic icon the map uses meanwhile
-    /// (owner, 2026-10-29: the Colosseum gets its own art; until it lands it is drawn as a stadium). When an
-    /// art id is drawn it moves to ``drawnArtIDs`` and its token never changes.
-    public static let placeholderArtIDs: [String: AtlasLandmarkKind] = ["colosseum": .stadium]
+    /// The famous tier's drawn and approved art ids (Eiffel Tower, Empire State Building, Sydney Opera House,
+    /// and the Colosseum, approved 2026-10-29).
+    public static let drawnArtIDs: Set<String> = ["eiffel", "empire", "opera", "colosseum"]
+    /// Famous art ids not drawn and approved yet, each with the generic icon the map uses meanwhile: the owner's
+    /// 24 more famous landmarks (2026-10-29, "all 24 of those"). When an id's art is approved it moves to
+    /// ``drawnArtIDs``; its token never changes.
+    public static let placeholderArtIDs: [String: AtlasLandmarkKind] = [
+        "bigben": .tower, "goldengate": .bridge, "pisa": .tower, "burjkhalifa": .tower, "spaceneedle": .tower,
+        "liberty": .tower, "tajmahal": .castle, "greatwall": .castle, "redeemer": .tower, "pyramids": .castle,
+        "sagrada": .tower, "acropolis": .castle,
+        "towerbridge": .bridge, "harbourbridge": .bridge, "cntower": .tower, "skytree": .tower, "stbasils": .castle,
+        "brandenburg": .castle, "petronas": .tower, "machupicchu": .castle, "chichenitza": .castle, "petra": .castle,
+        "angkorwat": .castle, "hollywood": .park,
+    ]
     /// Every famous art id a list may name: the drawn ones and the placeholders.
     public static var famousArtIDs: Set<String> { drawnArtIDs.union(placeholderArtIDs.keys) }
     /// The widest search ``landmarks(near:withinMetres:)`` answers, in metres (the flat-earth distance is
