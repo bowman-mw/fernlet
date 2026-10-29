@@ -22,8 +22,10 @@ import SwiftUI
 /// whatever the shape. With glasses on, the eyes stay inside the lenses. Both faces sit where the twin's
 /// ``WidgetCompanionFaceLayout`` puts them on the body's shape (group 17): a row lower on Pear, a row
 /// higher on Puddle, clear of the outline, with the cheeks and the tear stepping inward. A sick day's
-/// feeling keeps its mouth a row up, clear of the blanket. Every drawn cell is part of the face, so a
-/// one-colour rendering cuts the feeling out of the silhouette, as it cuts the state's face.
+/// feeling keeps its mouth a row up, clear of the blanket. Each cell is tagged as the twin's painter tags
+/// a face (an erased one as body; a drawn one as an eye, the mouth, blush or the tear), so the one-colour
+/// rule cuts the feeling out of the silhouette, as it cuts the state's face, and a motif's placement
+/// counts it as the bare body.
 enum WidgetFeelingFace {
     /// The feelings drawn on the face; the others (tired, sleepy, asleep) keep the state's face or the
     /// night's, as before.
@@ -60,21 +62,23 @@ enum WidgetFeelingFace {
             guard let bare = body.pixelColor(x, y, sick: sick),
                   grid.isFace(frameX: x + WidgetCompanionGrid.frameX, y: y + WidgetCompanionGrid.frameY)
                     || grid.color(x: x, y: y) == body.dark else { continue }
-            grid.put(x, y, bare)
+            grid.put(x, y, bare, as: .body)
         }
         let layout = WidgetCompanionFaceLayout(body: body, face: face)
         for cell in cells(for: emotion, layout: layout, mouth: layout.mouth - (sick ? 1 : 0)) {
             guard let bare = body.pixelColor(cell.x, cell.y, sick: sick),
                   grid.color(x: cell.x, y: cell.y) == bare else { continue }
-            grid.put(cell.x, cell.y, cell.hex, face: true)
+            grid.put(cell.x, cell.y, cell.hex, as: cell.piece)
         }
     }
 
-    /// One drawn cell: where, and its colour.
+    /// One drawn cell: where, its colour, and the part of the face it is (the eyes and brows, the mouth,
+    /// the blush or the tear), as the twin's grid records it.
     struct Cell: Equatable {
         let x: Int
         let y: Int
         let hex: UInt32
+        let piece: WidgetCompanionPiece
     }
 
     /// `emotion`'s face at `layout`, its mouth on row `mouth` (the layout's, or a row up on a sick day), at
@@ -82,17 +86,19 @@ enum WidgetFeelingFace {
     /// sad face's tear in the layout's column.
     static func cells(for emotion: WidgetCompanionEmotion, layout: WidgetCompanionFaceLayout, mouth: Int) -> [Cell] {
         guard let face = layoutFace(for: emotion) else { return [] }
+        // The eyes and brows sit on the eye rows and above; the mouth below them, a sick day's included.
         let ink = face.cells(eye: layout.eye, mouth: mouth, lowered: layout.lowered)
-            .map { Cell(x: $0.0, y: $0.1, hex: WidgetCompanionPainter.ink) }
+            .map { Cell(x: $0.0, y: $0.1, hex: WidgetCompanionPainter.ink, piece: $0.1 <= layout.eye + 1 ? .eye : .mouth) }
         switch face {
         case .happy:
             // Eyes bowed up like "^", a wide smile, a blush.
             guard let cheeks = layout.cheeks else { return ink }
-            return ink + [Cell(x: cheeks.left, y: mouth + cheeks.rowOffset, hex: WidgetCompanionPainter.blush),
-                          Cell(x: cheeks.right, y: mouth + cheeks.rowOffset, hex: WidgetCompanionPainter.blush)]
+            return ink + [Cell(x: cheeks.left, y: mouth + cheeks.rowOffset, hex: WidgetCompanionPainter.blush, piece: .blush),
+                          Cell(x: cheeks.right, y: mouth + cheeks.rowOffset, hex: WidgetCompanionPainter.blush, piece: .blush)]
         case .sad:
             // Brows lifted at the inner ends (sad with the person, never disappointed), a soft frown and a tear.
-            return ink + [Cell(x: layout.tear, y: layout.eye + 2, hex: tear.top), Cell(x: layout.tear, y: layout.eye + 3, hex: tear.bottom)]
+            return ink + [Cell(x: layout.tear, y: layout.eye + 2, hex: tear.top, piece: .tear),
+                          Cell(x: layout.tear, y: layout.eye + 3, hex: tear.bottom, piece: .tear)]
         case .hungry, .thirsty, .thriving, .okay, .tired, .resting, .sick:
             // Eyes raised toward the thought bubble (level where there's no room); an open "o".
             return ink

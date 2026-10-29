@@ -17,12 +17,19 @@ typealias WorldCompanionMood = CompanionState
 // `WorldCompanionWardrobeTests` diffs this painter pixel for pixel against the design session's
 // reference painter (`Docs/World-Companion-Reference-Grids.txt`). Since Refinements group 17
 // (2026-10-26) each face and the highlight fit the body's shape (`WorldCompanionFaceLayout`, pinned by
-// `WorldCompanionBodyShapeTests`); the widget's feeling faces use the same layout.
+// `WorldCompanionBodyShapeTests`); the widget's feeling faces use the same layout. Each cell also records the
+// piece that painted it (`WorldCompanionPiece`), for the one-colour rule (phone test W-11,
+// `WorldCompanionGrid.takesOneColour`) and where a motif goes beside a worn piece (Refinements group 16,
+// `WorldCompanionMotifPlacement`), both pinned by `WorldCompanionOneColourTests` against
+// `Docs/World-Companion-OneColour-Grids.txt`.
 
 // MARK: - Twin: begin
 
 /// One frame of the companion: the 24 × 24 item frame round the 20 × 22 body, each cell an opaque
-/// colour or clear (nil). Paint at body coordinates; the frame keeps the body at (2, 1).
+/// colour or clear (nil), and the piece that painted it. Paint at body coordinates; the frame keeps the
+/// body at (2, 1). Read in frame coordinates, it says which cells take the one colour
+/// (``takesOneColour(frameX:y:)``) and whether a picture beside it touches it
+/// (``touches(_:frameX:y:wornOnly:)``).
 nonisolated struct WorldCompanionGrid: Equatable, Sendable {
     /// The body's columns: every built-in piece stays inside them.
     static let width = 20
@@ -37,8 +44,11 @@ nonisolated struct WorldCompanionGrid: Equatable, Sendable {
     /// Where the body's top row sits in the frame.
     static let frameY = 1
     private(set) var cells = [UInt32?](repeating: nil, count: frameWidth * frameHeight)
-    /// The face's cells (eyes, mouth, blush, glasses), which a one-colour rendering cuts out.
-    private(set) var faceCells = [Bool](repeating: false, count: frameWidth * frameHeight)
+    /// Which piece painted each cell (nil where clear): the one-colour rule and a motif's placement read it.
+    private(set) var pieces = [WorldCompanionPiece?](repeating: nil, count: frameWidth * frameHeight)
+
+    /// A cell's left, right, upper and lower neighbours, as (dx, dy).
+    static let sides = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 
     /// The colour at body coordinates (x, y), or nil when clear or outside the frame.
     func color(x: Int, y: Int) -> UInt32? {
@@ -51,19 +61,194 @@ nonisolated struct WorldCompanionGrid: Equatable, Sendable {
         return cells[y * Self.frameWidth + x]
     }
 
-    /// Whether the cell at frame coordinates (x, y) is part of the face.
-    func isFace(frameX x: Int, y: Int) -> Bool {
-        guard x >= 0, x < Self.frameWidth, y >= 0, y < Self.frameHeight else { return false }
-        return faceCells[y * Self.frameWidth + x]
+    /// The piece that painted the cell at frame coordinates (x, y), or nil when clear or out of range.
+    func piece(frameX x: Int, y: Int) -> WorldCompanionPiece? {
+        guard x >= 0, x < Self.frameWidth, y >= 0, y < Self.frameHeight else { return nil }
+        return pieces[y * Self.frameWidth + x]
     }
 
-    /// Paints one pixel at body coordinates; anything outside the frame is ignored. `face` marks it
-    /// as part of the face; a later paint over it clears the mark.
-    mutating func put(_ x: Int, _ y: Int, _ hex: UInt32, face: Bool = false) {
+    /// Whether the cell at frame coordinates (x, y) is part of the face (eyes, mouth, blush, the tear,
+    /// the glasses).
+    func isFace(frameX x: Int, y: Int) -> Bool {
+        piece(frameX: x, y: y)?.isFace ?? false
+    }
+
+    /// Paints one pixel at body coordinates, painted by `piece`; anything outside the frame is ignored.
+    /// A later paint over it takes the cell, piece and all.
+    mutating func put(_ x: Int, _ y: Int, _ hex: UInt32, as piece: WorldCompanionPiece) {
         let fx = x + Self.frameX, fy = y + Self.frameY
         guard fx >= 0, fx < Self.frameWidth, fy >= 0, fy < Self.frameHeight else { return }
         cells[fy * Self.frameWidth + fx] = hex
-        faceCells[fy * Self.frameWidth + fx] = face
+        pieces[fy * Self.frameWidth + fx] = piece
+    }
+
+    // MARK: The one-colour rule (phone test W-11, approved 2026-10-26)
+
+    /// Whether the cell at frame coordinates (x, y) takes the one colour on the Lock Screen and the
+    /// tinted and clear Home Screens. It doesn't when it is clear (holes stay open), cut out (the face,
+    /// the glasses with the eyes behind them, the flower's centre), or a cell of a lower-ranked piece
+    /// beside (left, right, above or below) a higher-ranked one: a 1-pixel cut line wherever a piece
+    /// meets the body or a piece worn under it, which stays filled when any of its 8 neighbours is cut
+    /// out, so a line never runs into the face.
+    func takesOneColour(frameX x: Int, y: Int) -> Bool {
+        guard let cell = piece(frameX: x, y: y), !cell.isCutOut else { return false }
+        guard let rank = cell.rank, !isNearCutOut(frameX: x, y: y) else { return true }
+        for (dx, dy) in Self.sides {
+            if let other = piece(frameX: x + dx, y: y + dy)?.rank, other > rank { return false }
+        }
+        return true
+    }
+
+    /// Whether the cell at frame coordinates (x, y), or one of its 8 neighbours, is cut out.
+    private func isNearCutOut(frameX x: Int, y: Int) -> Bool {
+        for dy in -1...1 {
+            for dx in -1...1 where piece(frameX: x + dx, y: y + dy)?.isCutOut == true {
+                return true
+            }
+        }
+        return false
+    }
+
+    // MARK: Touching (Refinements group 16, approved 2026-10-26)
+
+    /// Whether the cell at frame coordinates (x, y), or its left, right, upper or lower neighbour, is
+    /// painted; with `wornOnly`, painted by a worn piece (``WorldCompanionPiece/isWorn``).
+    func touchesCell(frameX x: Int, y: Int, wornOnly: Bool) -> Bool {
+        let counts = { (cell: WorldCompanionPiece?) in cell.map { !wornOnly || $0.isWorn } ?? false }
+        guard !counts(piece(frameX: x, y: y)) else { return true }
+        return Self.sides.contains { counts(piece(frameX: x + $0.0, y: y + $0.1)) }
+    }
+
+    /// Whether a picture's drawn cells (`rows`, `.` clear), its top-left at frame coordinates (x, y),
+    /// touch the companion: lie on a painted cell, or side by side or above or below one (corner to
+    /// corner doesn't count); with `wornOnly`, a cell of a worn piece.
+    func touches(_ rows: [String], frameX x: Int, y: Int, wornOnly: Bool) -> Bool {
+        for (j, row) in rows.enumerated() {
+            for (i, key) in row.enumerated() where key != "." {
+                if touchesCell(frameX: x + i, y: y + j, wornOnly: wornOnly) { return true }
+            }
+        }
+        return false
+    }
+}
+
+/// Which piece painted a frame cell (phone test W-11): the one-colour rule cuts out the face and a
+/// 1-pixel line where a piece meets one ranked under it, and a motif beside the head steps aside for
+/// a worn piece (Refinements group 16).
+nonisolated enum WorldCompanionPiece: Equatable, Sendable {
+    /// The body, its outline, highlight and blanket.
+    case body
+    /// The sprout's stem and leaves.
+    case sprout
+    /// The flower's stem, leaf and petals.
+    case flower
+    /// The flower's sun centre.
+    case flowerCentre
+    /// An eye (open, half-lidded or closed), or a brow.
+    case eye
+    /// The mouth.
+    case mouth
+    /// A cheek's blush.
+    case blush
+    /// A sad face's tear.
+    case tear
+    /// The glasses' frames.
+    case glasses
+    /// The scarf.
+    case scarf
+    /// The sleep cap, brim and pompom.
+    case cap
+    /// The Creation Studio piece at this index of the look's pieces, in paint order.
+    case studio(Int)
+    /// The side item.
+    case side
+
+    /// Part of the face: eyes, mouth, blush, the tear and the glasses.
+    var isFace: Bool {
+        switch self {
+        case .eye, .mouth, .blush, .tear, .glasses: true
+        case .body, .sprout, .flower, .flowerCentre, .scarf, .cap, .studio, .side: false
+        }
+    }
+
+    /// Cut out of the one colour: the face (the glasses with it) and the flower's centre.
+    var isCutOut: Bool { isFace || self == .flowerCentre }
+
+    /// Its place from the bottom in the one-colour rule: the body, sprout and flower 0, the scarf 2, the
+    /// cap 3, Studio piece *i* 4 + *i*, the side item 9; nil for a cut-out, which takes no line.
+    var rank: Int? {
+        switch self {
+        case .body, .sprout, .flower: 0
+        case .scarf: 2
+        case .cap: 3
+        case .studio(let index): 4 + index
+        case .side: 9
+        case .flowerCentre, .eye, .mouth, .blush, .tear, .glasses: nil
+        }
+    }
+
+    /// Worn: anything but the bare body and its face. The sprout, the flower and the glasses count.
+    var isWorn: Bool {
+        switch self {
+        case .body, .eye, .mouth, .blush, .tear: false
+        case .sprout, .flower, .flowerCentre, .glasses, .scarf, .cap, .studio, .side: true
+        }
+    }
+}
+
+/// Where a small picture beside the companion's head goes (Refinements group 16, approved
+/// 2026-10-26): top right, 3 pixels past the frame, as before; at the top-left corner, mirrored, when
+/// a cell of it would touch a worn piece there; or, when the left corner touches too, at the top right
+/// behind the companion.
+nonisolated struct WorldCompanionMotifPlacement: Equatable, Sendable {
+    /// The three spots.
+    nonisolated enum Spot: Equatable, Sendable {
+        /// Top right, over the companion: the spot it always had.
+        case topRight
+        /// Top left, mirrored so its tail points down-right at the head.
+        case topLeft
+        /// Top right, behind the companion: its painted cells hide the picture's.
+        case behind
+    }
+
+    /// Its spot.
+    let spot: Spot
+    /// Its left column, at frame coordinates (negative left of the frame).
+    let x: Int
+    /// Its rows as drawn: mirrored at the left; behind, with each cell a painted one hides cleared.
+    let rows: [String]
+
+    /// How far past the frame's right edge the top-right spot reaches.
+    static let rightOverhang = 3
+    /// The top-left spot's columns, tried in turn: from 3 pixels left of the frame outward.
+    static let leftColumns = [-3, -4, -5, -6]
+
+    /// Places `rows` (`.` clear) beside the head of the companion painted in `grid`. A picture that
+    /// isn't `movable` stays top right. It moves only when a cell would lie on, or side by side or above
+    /// or below, a cell of a worn piece (the bare body never counts, so bare shapes keep the spot): then
+    /// to the first left column where no cell touches any painted cell (the tail's tip may meet the
+    /// companion corner to corner), else behind. Behind, a painted cell hides the cell over it, and in
+    /// `oneColour` so does one side by side or above or below it: a 1-pixel cut line.
+    init(rows: [String], on grid: WorldCompanionGrid, movable: Bool, oneColour: Bool) {
+        let width = rows.first?.count ?? 0
+        let right = WorldCompanionGrid.frameWidth + Self.rightOverhang - width
+        guard movable, grid.touches(rows, frameX: right, y: 0, wornOnly: true) else {
+            (spot, x, self.rows) = (.topRight, right, rows)
+            return
+        }
+        let mirrored = rows.map { String($0.reversed()) }
+        if let left = Self.leftColumns.first(where: { !grid.touches(mirrored, frameX: $0, y: 0, wornOnly: false) }) {
+            (spot, x, self.rows) = (.topLeft, left, mirrored)
+            return
+        }
+        let hidden = rows.enumerated().map { j, row in
+            String(row.enumerated().map { i, key -> Character in
+                let covered = oneColour ? grid.touchesCell(frameX: right + i, y: j, wornOnly: false)
+                    : grid.frameColor(x: right + i, y: j) != nil
+                return covered ? "." : key
+            })
+        }
+        (spot, x, self.rows) = (.behind, right, hidden)
     }
 }
 
@@ -493,7 +678,7 @@ nonisolated enum WorldCompanionPainter {
         }
         if let scarf = look.scarf { paintScarf(&grid, body: body, color: scarf) }
         if let cap = look.cap { paintCap(&grid, body: body, color: cap) }
-        for item in look.items { paintItem(&grid, item) }
+        for (index, item) in look.items.enumerated() { paintItem(&grid, item, as: .studio(index)) }
         if look.side != .none { paintSide(&grid, body: body, item: look.side, color: look.sideColor, asleep: pose.asleep) }
         return grid
     }
@@ -510,7 +695,7 @@ nonisolated enum WorldCompanionPainter {
         for py in 0..<WorldCompanionGrid.height {
             for px in 0..<WorldCompanionGrid.width {
                 guard let hex = body.pixelColor(px, py, sick: sick) else { continue }
-                grid.put(px, py, hex)
+                grid.put(px, py, hex, as: .body)
             }
         }
     }
@@ -519,9 +704,9 @@ nonisolated enum WorldCompanionPainter {
     private static func paintSprout(_ grid: inout WorldCompanionGrid, top: Int, leaf: UInt32?) {
         let leafColor = leaf ?? WorldCompanionLook.leaf
         let stem = mix(leafColor, shade, 0.3)
-        grid.put(10, top - 1, stem)
-        grid.put(10, top - 2, stem)
-        for (x, y) in [(11, top - 3), (12, top - 3), (12, top - 4), (9, top - 3), (8, top - 3)] { grid.put(x, y, leafColor) }
+        grid.put(10, top - 1, stem, as: .sprout)
+        grid.put(10, top - 2, stem, as: .sprout)
+        for (x, y) in [(11, top - 3), (12, top - 3), (12, top - 4), (9, top - 3), (8, top - 3)] { grid.put(x, y, leafColor, as: .sprout) }
     }
 
     /// The flower: a fern stem and leaf where the sprout grows, petals in the accessory colour (a soft
@@ -529,13 +714,13 @@ nonisolated enum WorldCompanionPainter {
     private static func paintFlower(_ grid: inout WorldCompanionGrid, top: Int, petal: UInt32?) {
         let petals = petal ?? mix(rose, 0xFFFFFF, 0.3)
         let corners = mix(petals, shade, 0.25), stem = mix(WorldCompanionLook.leaf, shade, 0.3)
-        grid.put(10, top - 1, stem)
-        grid.put(10, top - 2, stem)
-        grid.put(11, top - 2, WorldCompanionLook.leaf)
-        grid.put(12, top - 3, WorldCompanionLook.leaf)
-        for (x, y) in [(10, top - 5), (9, top - 4), (11, top - 4), (10, top - 3)] { grid.put(x, y, petals) }
-        for (x, y) in [(9, top - 5), (11, top - 5), (9, top - 3), (11, top - 3)] { grid.put(x, y, corners) }
-        grid.put(10, top - 4, sun)
+        grid.put(10, top - 1, stem, as: .flower)
+        grid.put(10, top - 2, stem, as: .flower)
+        grid.put(11, top - 2, WorldCompanionLook.leaf, as: .flower)
+        grid.put(12, top - 3, WorldCompanionLook.leaf, as: .flower)
+        for (x, y) in [(10, top - 5), (9, top - 4), (11, top - 4), (10, top - 3)] { grid.put(x, y, petals, as: .flower) }
+        for (x, y) in [(9, top - 5), (11, top - 5), (9, top - 3), (11, top - 3)] { grid.put(x, y, corners, as: .flower) }
+        grid.put(10, top - 4, sun, as: .flowerCentre)
     }
 
     /// Eyes, mouth and blush, by the band (the design's table) or the settled pose, on the rows and
@@ -548,26 +733,26 @@ nonisolated enum WorldCompanionPainter {
             return
         }
         if closesEyes(state: state, pose: pose) {
-            for x in [6, 7, 12, 13] { grid.put(x, eyeRow + 1, ink, face: true) }
+            for x in [6, 7, 12, 13] { grid.put(x, eyeRow + 1, ink, as: .eye) }
         } else {
             for x in [7, 12] {
-                grid.put(x, eyeRow, state == .tired ? body.dark : ink, face: state != .tired)
-                grid.put(x, eyeRow + 1, ink, face: true)
+                grid.put(x, eyeRow, state == .tired ? body.dark : ink, as: .eye)
+                grid.put(x, eyeRow + 1, ink, as: .eye)
             }
         }
         let row = state == .sick ? mouthRow - 1 : mouthRow
         // Winding down (`b1-home-night`) draws the sleepy face whatever the band: the resting mouth, no
         // blush. A sick day keeps its own face.
         let face = pose.drowsy && state != .sick ? WorldCompanionMood.resting : state
-        for (x, dy) in mouth(for: face) { grid.put(x, row + dy, ink, face: true) }
+        for (x, dy) in mouth(for: face) { grid.put(x, row + dy, ink, as: .mouth) }
         if face == .thriving { paintCheeks(&grid, layout: layout) }
     }
 
     /// The blush, where the layout found room for it (none when no pair fits).
     private static func paintCheeks(_ grid: inout WorldCompanionGrid, layout: WorldCompanionFaceLayout) {
         guard let cheeks = layout.cheeks else { return }
-        grid.put(cheeks.left, layout.mouth + cheeks.rowOffset, blush, face: true)
-        grid.put(cheeks.right, layout.mouth + cheeks.rowOffset, blush, face: true)
+        grid.put(cheeks.left, layout.mouth + cheeks.rowOffset, blush, as: .blush)
+        grid.put(cheeks.right, layout.mouth + cheeks.rowOffset, blush, as: .blush)
     }
 
     /// The band's mouth, as (column, row offset) pixels.
@@ -584,11 +769,11 @@ nonisolated enum WorldCompanionPainter {
     private static func paintSettledFace(_ grid: inout WorldCompanionGrid, layout: WorldCompanionFaceLayout, closed: Bool) {
         let eyeRow = layout.eye, mouthRow = layout.mouth
         for x in [7, 12] {
-            grid.put(x - 1, eyeRow + 1, ink, face: true)
-            grid.put(x, closed ? eyeRow + 1 : eyeRow, ink, face: true)
-            if !closed { grid.put(x + 1, eyeRow + 1, ink, face: true) }
+            grid.put(x - 1, eyeRow + 1, ink, as: .eye)
+            grid.put(x, closed ? eyeRow + 1 : eyeRow, ink, as: .eye)
+            if !closed { grid.put(x + 1, eyeRow + 1, ink, as: .eye) }
         }
-        for (x, dy) in [(8, 0), (9, 1), (10, 1), (11, 0)] { grid.put(x, mouthRow + dy, ink, face: true) }
+        for (x, dy) in [(8, 0), (9, 1), (10, 1), (11, 0)] { grid.put(x, mouthRow + dy, ink, as: .mouth) }
         paintCheeks(&grid, layout: layout)
     }
 
@@ -610,37 +795,37 @@ nonisolated enum WorldCompanionPainter {
     private static func paintGlasses(_ grid: inout WorldCompanionGrid, eyeRow: Int, color: UInt32) {
         for ex in [7, 12] {
             for gx in (ex - 1)...(ex + 1) {
-                grid.put(gx, eyeRow - 1, color, face: true)
-                grid.put(gx, eyeRow + 2, color, face: true)
+                grid.put(gx, eyeRow - 1, color, as: .glasses)
+                grid.put(gx, eyeRow + 2, color, as: .glasses)
             }
             for gy in [eyeRow, eyeRow + 1] {
-                grid.put(ex - 1, gy, color, face: true)
-                grid.put(ex + 1, gy, color, face: true)
+                grid.put(ex - 1, gy, color, as: .glasses)
+                grid.put(ex + 1, gy, color, as: .glasses)
             }
         }
-        grid.put(9, eyeRow, color, face: true)
-        grid.put(10, eyeRow, color, face: true)
+        grid.put(9, eyeRow, color, as: .glasses)
+        grid.put(10, eyeRow, color, as: .glasses)
     }
 
     /// A scarf wrapped low on the body, with a tail.
     private static func paintScarf(_ grid: inout WorldCompanionGrid, body: WorldCompanionBody, color: UInt32) {
         let row = Int((body.cy + 3.5).rounded())
-        for x in 4...15 where body.contains(x, row) { grid.put(x, row, color) }
-        grid.put(13, row + 1, color)
-        grid.put(13, row + 2, mix(color, shade, 0.25))
+        for x in 4...15 where body.contains(x, row) { grid.put(x, row, color, as: .scarf) }
+        grid.put(13, row + 1, color, as: .scarf)
+        grid.put(13, row + 2, mix(color, shade, 0.25), as: .scarf)
     }
 
     /// The sleep cap: a cream brim on the head's top row + 1, a cone drooping to the right with its
     /// darker edge, and a cream 2 × 2 pompom at columns 16–17.
     private static func paintCap(_ grid: inout WorldCompanionGrid, body: WorldCompanionBody, color: UInt32) {
         let top = body.top, edge = mix(color, shade, 0.25)
-        for x in 4...15 where body.contains(x, top + 1) { grid.put(x, top + 1, cream) }
+        for x in 4...15 where body.contains(x, top + 1) { grid.put(x, top + 1, cream, as: .cap) }
         for (row, from, to) in [(top, 6, 13), (top - 1, 7, 13), (top - 2, 8, 13), (top - 3, 10, 14), (top - 4, 12, 15)] {
-            for x in from...to { grid.put(x, row, x == to ? edge : color) }
+            for x in from...to { grid.put(x, row, x == to ? edge : color, as: .cap) }
         }
-        grid.put(16, top - 3, edge)
-        grid.put(16, top - 2, edge)
-        for (x, y) in [(16, top - 1), (17, top - 1), (16, top), (17, top)] { grid.put(x, y, cream) }
+        grid.put(16, top - 3, edge, as: .cap)
+        grid.put(16, top - 2, edge, as: .cap)
+        for (x, y) in [(16, top - 1), (17, top - 1), (16, top), (17, top)] { grid.put(x, y, cream, as: .cap) }
     }
 
     /// A side item's 6 × 8 picture, row by row: `k` ink, `c` its colour, `l` lighter, `d` darker,
@@ -666,17 +851,17 @@ nonisolated enum WorldCompanionPainter {
         for (dy, row) in sideRows(item).enumerated() {
             for (dx, key) in row.enumerated() {
                 guard let hex = palette[key] else { continue }
-                grid.put(x0 + dx, y0 + dy, hex)
+                grid.put(x0 + dx, y0 + dy, hex, as: .side)
             }
         }
     }
 
-    /// A Creation Studio piece, cell for cell in its place.
-    private static func paintItem(_ grid: inout WorldCompanionGrid, _ item: WorldCompanionItemArt) {
+    /// A Creation Studio piece, cell for cell in its place, painted as `piece` (its place in the look).
+    private static func paintItem(_ grid: inout WorldCompanionGrid, _ item: WorldCompanionItemArt, as piece: WorldCompanionPiece) {
         for y in 0..<max(0, item.height) {
             for x in 0..<max(0, item.width) {
                 guard let hex = item.color(x: x, y: y) else { continue }
-                grid.put(item.x + x, item.y + y, hex)
+                grid.put(item.x + x, item.y + y, hex, as: piece)
             }
         }
     }
