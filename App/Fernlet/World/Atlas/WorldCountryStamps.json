@@ -4,12 +4,12 @@
   "style": {
     "postmark": "56 x 44 pt: outer rounded rect x 2.5, y 2.5, 51 x 39, radius 5, stroke 2; inner frame x 6, y 6, 44 x 25, radius 3, stroke 0.8; both in the stamp's ink, no fill.",
     "symbol": "14 x 14 pixels centred at x 28, y 18.5, each pixel min(21 / 14, 2.2) = 1.5 pt. About 7 % of ink pixels are left out, chosen by a seeded generator from the country code, so each stamp looks worn in its own way.",
-    "face": "Approved as pixel capitals. The app adds no fonts and draws names in DM Sans Bold; the owner is choosing between DM Sans Bold and pixel letters drawn as art (Country Stamps page, st-face). The labels use only characters DM Sans Bold has (no Ệ, Ơ, Ư).",
-    "name": "Pixel capitals (Pixelify Sans), centred at x 28. One line: baseline 38.6, 5.6 pt (4.6 pt over 10 letters). Two lines: baselines 35.2 and 39.6, 4.4 pt (3.9 pt when a line is over 14 letters). Letter-spacing 0.2.",
+    "face": "DM Sans Bold, the stamp book's label face (owner approved it over pixel capitals, Country Stamps page st-face, 2026-10-29). Labels use only characters DM Sans Bold has: it has Ə, not Ệ, Ơ or Ư.",
+    "name": "DM Sans Bold capitals in the stamp's ink, centred at x 28, letter-spacing 0.15. Size: the smaller of 5.6 pt (one line) or 4.6 pt (two lines) and 44 / (0.7 x the longest line's letter count). One line: baseline 38.6. Two lines: baselines 35.3 and 39.7.",
     "ink": "One of four inks, #2F6FA3, #B3343A, #2E8B57, #7B4BA8, picked by (first code letter + second code letter) mod 4. Dark mode lightens it 38 % toward white.",
     "tilt": "-6 to +6 degrees, from the same seed.",
     "notEarned": "A dashed rounded rect with a '?' and no name.",
-    "names": "The country's own name in Latin letters (MÉXICO, PANAMÁ); English where its script isn't Latin (JAPAN)."
+    "names": "The country's own name in Latin letters (MÉXICO, PANAMÁ, AZƏRBAYCAN); English where its script isn't Latin (JAPAN); VIET NAM because the face has no Ệ."
   },
   "inks": [
     "#2F6FA3",
@@ -1769,6 +1769,292 @@
       ],
       "batch": "eu"
     },
+    "jp": {
+      "en": "Japan",
+      "es": "Japón",
+      "label": [
+        "JAPAN"
+      ],
+      "symbol": "Mount Fuji",
+      "ink": "#2E8B57",
+      "rows": [
+        "..............",
+        "..............",
+        ".....kkkk.....",
+        "....kkkkkk....",
+        "....kkkkkk....",
+        "...kk.kk.kk...",
+        "...k......k...",
+        "..k........k..",
+        "..k........k..",
+        ".k..........k.",
+        "k............k",
+        "kkkkkkkkkkkkkk",
+        ".kk..k..k..kk.",
+        "k..kk.kk.kk..k"
+      ],
+      "batch": "as"
+    },
+    "cn": {
+      "en": "China",
+      "es": "China",
+      "label": [
+        "CHINA"
+      ],
+      "symbol": "a giant panda",
+      "ink": "#B3343A",
+      "rows": [
+        ".kkk......kkk.",
+        "kkkkk....kkkkk",
+        "kkkk.kkkk.kkkk",
+        ".k..........k.",
+        "k..kkk..kkk..k",
+        "k.kkkk..kkkk.k",
+        "k.kk.k..k.kk.k",
+        "k..kk....kk..k",
+        "k.....kk.....k",
+        "k....k..k....k",
+        ".k...kkkk...k.",
+        "..k........k..",
+        "...kkkkkkkk...",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "mn": {
+      "en": "Mongolia",
+      "es": "Mongolia",
+      "label": [
+        "MONGOLIA"
+      ],
+      "symbol": "a ger, the felt tent",
+      "ink": "#7B4BA8",
+      "rows": [
+        "......kk......",
+        ".....kkkk.....",
+        "...kkkkkkkk...",
+        ".kkk......kkk.",
+        "kk..........kk",
+        "kkkkkkkkkkkkkk",
+        "k.k.k.kk.k.k.k",
+        "k.k.kk..kk.k.k",
+        "k.k.k....k.k.k",
+        "k.k.k....k.k.k",
+        "k.k.k....k.k.k",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "kr": {
+      "en": "South Korea",
+      "es": "Corea del Sur",
+      "label": [
+        "SOUTH KOREA"
+      ],
+      "symbol": "Gwanghwamun, the palace gate",
+      "ink": "#B3343A",
+      "rows": [
+        "...kkkkkkkk...",
+        "k.kkkkkkkkkk.k",
+        ".k..........k.",
+        "..k.k.kk.k.k..",
+        "k.kkkkkkkkkk.k",
+        ".k..........k.",
+        "..k.k.kk.k.k..",
+        "..kkkkkkkkkk..",
+        ".kkkkkkkkkkkk.",
+        ".kkk......kkk.",
+        ".kk........kk.",
+        ".kk........kk.",
+        ".kk........kk.",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "vn": {
+      "en": "Vietnam",
+      "es": "Vietnam",
+      "label": [
+        "VIET NAM"
+      ],
+      "symbol": "a junk under its battened sails",
+      "ink": "#2F6FA3",
+      "rows": [
+        "...kk....kk...",
+        "..kkkk..kkkk..",
+        "..k..k..k..k..",
+        "..kkkk..kkkk..",
+        "..k..k..k..k..",
+        "..kkkk..kkkk..",
+        "..k..k..k..k..",
+        "..kkkk..kkkk..",
+        "....k.....k...",
+        "k...k.....k...",
+        "kkkkkkkkkkkkkk",
+        ".kkkkkkkkkkkk.",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "as"
+    },
+    "la": {
+      "en": "Laos",
+      "es": "Laos",
+      "label": [
+        "LAOS"
+      ],
+      "symbol": "an elephant, for the land of a million elephants",
+      "ink": "#B3343A",
+      "rows": [
+        "..............",
+        ".....kkkkkk...",
+        "...kkkkkkkkkk.",
+        "..kk.kkkkkkkkk",
+        ".kkkkk.kkkkkkk",
+        ".kkkkk.kkkkkkk",
+        "kkk.kk.kkkkkkk",
+        "kk..kkkkkkkkkk",
+        "kk..kkkkkkkkk.",
+        "k...kk..kk.kk.",
+        "k...kk..kk.kk.",
+        "kk..kk..kk.kk.",
+        "..............",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "kh": {
+      "en": "Cambodia",
+      "es": "Camboya",
+      "label": [
+        "CAMBODIA"
+      ],
+      "symbol": "the towers of Angkor Wat",
+      "ink": "#7B4BA8",
+      "rows": [
+        "......kk......",
+        ".....kkkk.....",
+        ".....k..k.....",
+        ".k...kkkk...k.",
+        "kkk..k..k..kkk",
+        "k.k..kkkk..k.k",
+        "kkk.kk..kk.kkk",
+        "k.k.k....k.k.k",
+        "kkkkkkkkkkkkkk",
+        "k..k..kk..k..k",
+        "kkkkkkkkkkkkkk",
+        "k.k.k.kk.k.k.k",
+        "kkkkkkkkkkkkkk",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "th": {
+      "en": "Thailand",
+      "es": "Tailandia",
+      "label": [
+        "THAILAND"
+      ],
+      "symbol": "a temple roof with its chofa",
+      "ink": "#2F6FA3",
+      "rows": [
+        "......kk......",
+        "......kk......",
+        "k....kkkk....k",
+        ".k..kk..kk..k.",
+        "..kkk....kkk..",
+        "k..k.kkkk.k..k",
+        ".kk.kk..kk.kk.",
+        "..kk......kk..",
+        "..kkkkkkkkkk..",
+        "..k.k.kk.k.k..",
+        "..k.k.kk.k.k..",
+        "..k.k....k.k..",
+        ".kkkkkkkkkkkk.",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "mm": {
+      "en": "Myanmar",
+      "es": "Myanmar",
+      "label": [
+        "MYANMAR"
+      ],
+      "symbol": "the Shwedagon Pagoda",
+      "ink": "#2E8B57",
+      "rows": [
+        "......kk......",
+        "......kk......",
+        ".....kkkk.....",
+        "......kk......",
+        ".....kkkk.....",
+        ".....kkkk.....",
+        "....kkkkkk....",
+        "....k....k....",
+        "...k......k...",
+        "..k........k..",
+        ".k..........k.",
+        "kkkkkkkkkkkkkk",
+        "k.k.k.kk.k.k.k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "my": {
+      "en": "Malaysia",
+      "es": "Malasia",
+      "label": [
+        "MALAYSIA"
+      ],
+      "symbol": "the Petronas Towers",
+      "ink": "#2E8B57",
+      "rows": [
+        "...k......k...",
+        "...k......k...",
+        "..kkk....kkk..",
+        "..k.k....k.k..",
+        ".kkkkk..kkkkk.",
+        ".k.k.k..k.k.k.",
+        ".kkkkkkkkkkkk.",
+        ".k.k.k..k.k.k.",
+        "kkkkkk..kkkkkk",
+        "k.k..k..k..k.k",
+        "k.k..k..k..k.k",
+        "k.k..k..k..k.k",
+        "k.k..k..k..k.k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "sg": {
+      "en": "Singapore",
+      "es": "Singapur",
+      "label": [
+        "SINGAPORE"
+      ],
+      "symbol": "an orchid, Vanda Miss Joaquim",
+      "ink": "#2E8B57",
+      "rows": [
+        "......kk......",
+        ".....k..k.....",
+        ".kk..k..k..kk.",
+        "k..k.k..k.k..k",
+        "k...kkkkkk...k",
+        ".k..k.kk.k..k.",
+        "..kkk.kk.kkk..",
+        "....k....k....",
+        "...k..kk..k...",
+        "...k.k..k.k...",
+        "....k....k....",
+        ".....kkkk.....",
+        "......k.......",
+        "......k......."
+      ],
+      "batch": "as"
+    },
     "bn": {
       "en": "Brunei",
       "es": "Brunéi",
@@ -2392,6 +2678,322 @@
         ".kkkkkkkkkkkk."
       ],
       "batch": "as"
+    },
+    "sa": {
+      "en": "Saudi Arabia",
+      "es": "Arabia Saudí",
+      "label": [
+        "SAUDI ARABIA"
+      ],
+      "symbol": "a camel in the desert",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        ".kk...kk......",
+        "kkk..kkkk.....",
+        "..k.kkkkkk....",
+        "..kkkkkkkkk...",
+        "...kkkkkkkkkk.",
+        "...kkkkkkkkk.k",
+        "....kkkkkkkk..",
+        "....k.k..k.k..",
+        "....k.k..k.k..",
+        "....k.k..k.k..",
+        "...kk.kk.kk.kk",
+        "..............",
+        "kk..kkk..kk..k"
+      ],
+      "batch": "as"
+    },
+    "ye": {
+      "en": "Yemen",
+      "es": "Yemen",
+      "label": [
+        "YEMEN"
+      ],
+      "symbol": "the tower houses of Shibam",
+      "ink": "#2E8B57",
+      "rows": [
+        "...k..........",
+        "..kkk....k....",
+        "..k.k...kkk...",
+        "..kkk.k.k.k...",
+        ".kk.k.kkkkk.k.",
+        ".kkkkkk.k.kkkk",
+        ".k.kk.kkkkkk.k",
+        "kkkkkk.k.kkkkk",
+        "k.k.kkkkkk.k.k",
+        "kkkkkk.k.kkkkk",
+        "k.k.kkkkkk.k.k",
+        "kkkkkkkkkkkkkk",
+        "k............k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "om": {
+      "en": "Oman",
+      "es": "Omán",
+      "label": [
+        "OMAN"
+      ],
+      "symbol": "a dhow under sail",
+      "ink": "#2F6FA3",
+      "rows": [
+        ".k............",
+        "..kk..........",
+        "...kkk........",
+        "....kkkk......",
+        "...k.kkkkk....",
+        "...k..kkkkkk..",
+        "...k...kkkkkkk",
+        "...k..........",
+        "kkkkkkkkkkkk..",
+        ".kkkkkkkkkkk..",
+        "..kkkkkkkk....",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "as"
+    },
+    "ae": {
+      "en": "United Arab Emirates",
+      "es": "Emiratos Árabes Unidos",
+      "label": [
+        "UNITED ARAB",
+        "EMIRATES"
+      ],
+      "symbol": "a falcon on its perch",
+      "ink": "#2E8B57",
+      "rows": [
+        "..............",
+        ".....kkk......",
+        "....kkkkk.....",
+        "...kk.kkkk....",
+        "..kkk.kkkk....",
+        "...k.kkkkk....",
+        ".....kkkkkk...",
+        ".....kkkkkkk..",
+        ".....kkkkkkk..",
+        "......kkkkkkk.",
+        ".......kkkk.kk",
+        "......k.k....k",
+        "kkkkkkkkkkkkkk",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "qa": {
+      "en": "Qatar",
+      "es": "Catar",
+      "label": [
+        "QATAR"
+      ],
+      "symbol": "an Arabian oryx",
+      "ink": "#2E8B57",
+      "rows": [
+        "k............k",
+        ".k..........k.",
+        "..k........k..",
+        "...k......k...",
+        "....k....k....",
+        "...kkkkkkkk...",
+        "kk.kkkkkkkk.kk",
+        "...k......k...",
+        "...k.k..k.k...",
+        "....k....k....",
+        "....k....k....",
+        ".....k..k.....",
+        ".....kkkk.....",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "bh": {
+      "en": "Bahrain",
+      "es": "Baréin",
+      "label": [
+        "BAHRAIN"
+      ],
+      "symbol": "an open pearl oyster",
+      "ink": "#2E8B57",
+      "rows": [
+        "..............",
+        "..kkkkkkkk....",
+        ".k.k.k.k..kk..",
+        "k.k.k.k.k...k.",
+        "kkkkkkkkkkk..k",
+        "............kk",
+        "....kkk.....k.",
+        "...kkkkk...k..",
+        "k...kkk....k..",
+        "kk.........k..",
+        "k.kkkkkkkkk..k",
+        ".k.k.k.k.k.kk.",
+        "..kkkkkkkkk...",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "kw": {
+      "en": "Kuwait",
+      "es": "Kuwait",
+      "label": [
+        "KUWAIT"
+      ],
+      "symbol": "the Kuwait Towers",
+      "ink": "#2E8B57",
+      "rows": [
+        "...k..........",
+        "..kkk.........",
+        "..kkk.........",
+        "...k......k..k",
+        "..kkk.....k..k",
+        ".kkkkk....k..k",
+        "kkkkkkk..kkk.k",
+        "kkkkkkk.kkkkkk",
+        ".kkkkk..kkkkkk",
+        "..kkk....kkk.k",
+        "...k......k..k",
+        "...k......k..k",
+        "...k......k..k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "tr": {
+      "en": "Türkiye",
+      "es": "Turquía",
+      "label": [
+        "TÜRKİYE"
+      ],
+      "symbol": "balloons over Cappadocia's fairy chimneys",
+      "ink": "#2E8B57",
+      "rows": [
+        "..kkkk........",
+        ".k.kk.k...kk..",
+        "k..kk..k.k..k.",
+        "k..kk..k.k..k.",
+        ".k.kk.k...kk..",
+        "..k..k.....k..",
+        "..kkkk....kk..",
+        "..............",
+        "..k......k....",
+        ".kkk....kkk...",
+        ".k.k...kk.k.k.",
+        ".k.k...k..kkkk",
+        "kk.kk.kk..k..k",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "cy": {
+      "en": "Cyprus",
+      "es": "Chipre",
+      "label": [
+        "CYPRUS"
+      ],
+      "symbol": "Petra tou Romiou, Aphrodite's rock",
+      "ink": "#2F6FA3",
+      "rows": [
+        "..............",
+        "..........kk..",
+        ".........k..k.",
+        "....kkk...kk..",
+        "...k...k......",
+        "..k....k......",
+        "..k.....k.....",
+        ".k......k..kk.",
+        ".k.......kk..k",
+        "k............k",
+        "kkkkkkkkkkkkkk",
+        "..............",
+        ".kk..kk..kk...",
+        "k..kk..kk..kk."
+      ],
+      "batch": "as"
+    },
+    "ge": {
+      "en": "Georgia",
+      "es": "Georgia",
+      "label": [
+        "GEORGIA"
+      ],
+      "symbol": "Gergeti Trinity Church below Mount Kazbek",
+      "ink": "#2F6FA3",
+      "rows": [
+        ".......k......",
+        "......k.k.....",
+        ".....k...k....",
+        "....k.....k...",
+        "...k...k...k..",
+        "..k...kkk...k.",
+        ".k....k.k....k",
+        "k....kkkkk...k",
+        ".....k.k.k....",
+        "...kkkkkkkk...",
+        "...k.k.k..k...",
+        "...kkkkkkkk...",
+        "..k........k..",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
+    },
+    "am": {
+      "en": "Armenia",
+      "es": "Armenia",
+      "label": [
+        "ARMENIA"
+      ],
+      "symbol": "a pomegranate",
+      "ink": "#2E8B57",
+      "rows": [
+        ".....k.k......",
+        ".....kkk......",
+        "...kkkkkkk....",
+        "..k.......k...",
+        ".k..k.k....k..",
+        "k..k.k.k....k.",
+        "k...k.k.k...k.",
+        "k..k.k.k....k.",
+        "k...k.k.....k.",
+        ".k.........k..",
+        "..k.......k...",
+        "...kkkkkkk....",
+        "..............",
+        ".............."
+      ],
+      "batch": "as"
+    },
+    "az": {
+      "en": "Azerbaijan",
+      "es": "Azerbaiyán",
+      "label": [
+        "AZƏRBAYCAN"
+      ],
+      "symbol": "the Flame Towers of Baku",
+      "ink": "#7B4BA8",
+      "rows": [
+        "......k.......",
+        ".....kk.......",
+        ".....kk....k..",
+        ".k..kkk...kk..",
+        ".k..k.k...kk..",
+        "kk..k.k..kkk..",
+        "kk.kk.kk.k.k..",
+        "k.kk..kk.k.kk.",
+        "k.k...k..k..k.",
+        "kkk...k.kk..k.",
+        "k.k..kk.k...k.",
+        "k.k..k..k...k.",
+        "k.k..k..k...k.",
+        "kkkkkkkkkkkkkk"
+      ],
+      "batch": "as"
     }
+  },
+  "excluded": {
+    "kp": "North Korea is out of the passport (owner, 2026-10-29): no stamp, not counted; the passport counts 194."
   }
 }

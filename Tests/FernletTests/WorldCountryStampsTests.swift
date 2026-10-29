@@ -29,6 +29,46 @@ struct WorldCountryStampsTests {
         "IQ", "SY", "LB", "IL", "PS", "JO",
     ]
 
+    /// Asia's last 23 (2026-10-29), Japan's Fuji redrawn.
+    static let asiaRest: Set<String> = [
+        "JP", "CN", "MN", "KR", "VN", "LA", "KH", "TH", "MM", "MY", "SG", "SA", "YE", "OM", "AE", "QA", "BH", "KW",
+        "TR", "CY", "GE", "AM", "AZ",
+    ]
+
+    /// The file's `excluded` block is the passport's own exclusion: North Korea has no stamp and is not counted, so
+    /// the atlas's passport countries are the 195 without exactly the excluded ones, 194 in all.
+    @Test func theExcludedBlockKeepsNorthKoreaOut() throws {
+        let stamps = try #require(WorldCountryStampsLoader.bundled())
+        #expect(stamps.excluded == ["KP"] && stamps.excluded == WorldAtlas.excludedFromPassport)
+        #expect(stamps.stamp(for: "KP") == nil)
+        let url = try #require(Bundle.main.url(forResource: "WorldAtlas", withExtension: "pack"))
+        let atlas = try WorldAtlas(data: Data(contentsOf: url))
+        let counted = Set(atlas.countries.filter(\.countsInPassport).map(\.code))
+        #expect(counted.isDisjoint(with: stamps.excluded))
+        #expect(counted.count == WorldAtlas.passportCountryTotal && counted.count == 195 - stamps.excluded.count)
+        #expect(Set(stamps.stamps.keys).isSubset(of: counted), "every stamped country counts")
+        #expect(counted.filter { atlas.country(code: $0)?.continent == .asia }.count == 47)
+    }
+
+    /// The label's size (the file's `style.name`, DM Sans Bold approved): the smaller of 5.6 pt for one line or
+    /// 4.6 pt for two, and 44 / (0.7 × the longest line's letters).
+    @Test func theLabelSizingRule() throws {
+        #expect(WorldCountryStamps.labelPointSize(for: ["MÉXICO"]) == 5.6)
+        let unitedStates = try #require(WorldCountryStamps.labelPointSize(for: ["UNITED STATES"]))
+        #expect(abs(unitedStates - 44 / (0.7 * 13)) < 1e-9 && unitedStates < 5.6)
+        #expect(WorldCountryStamps.labelPointSize(for: ["ANTIGUA AND", "BARBUDA"]) == 4.6)
+        let long = try #require(WorldCountryStamps.labelPointSize(for: ["SAINT VINCENT AND", "THE GRENADINES"]))
+        #expect(abs(long - 44 / (0.7 * 17)) < 1e-9)
+        #expect(WorldCountryStamps.labelPointSize(for: []) == nil)
+        #expect(WorldCountryStamps.labelLetterSpacing == 0.15 && WorldCountryStamps.oneLineBaseline == 38.6)
+        #expect(WorldCountryStamps.twoLineBaselines.first == 35.3 && WorldCountryStamps.twoLineBaselines.second == 39.7)
+        let stamps = try #require(WorldCountryStampsLoader.bundled())
+        for stamp in stamps.stamps.values {
+            let size = try #require(WorldCountryStamps.labelPointSize(for: stamp.label), "\(stamp.code) sizes")
+            #expect(size > 0 && size <= 5.6)
+        }
+    }
+
     /// Europe's last 11, redrawn and approved (2026-10-29).
     static let europeRest: Set<String> = ["NL", "BE", "LU", "DE", "CH", "AT", "LI", "MC", "PT", "ES", "AD"]
 
@@ -67,7 +107,9 @@ struct WorldCountryStampsTests {
         #expect(stamps.stamp(for: "MX")?.label.joined(separator: " ").contains("MÉXICO") == true)
         #expect(Self.europeRest.isSubset(of: Set(stamps.stamps.keys)), "Europe is complete")
         #expect(Self.asiaFirst.isSubset(of: Set(stamps.stamps.keys)))
-        #expect(stamps.stamp(for: "JP") == nil, "Asia's batch hasn't landed: no stamp, a dashed space")
+        #expect(Self.asiaRest.isSubset(of: Set(stamps.stamps.keys)), "Asia is complete")
+        #expect(stamps.stamp(for: "AZ")?.label == ["AZƏRBAYCAN"])
+        #expect(stamps.stamp(for: "NG") == nil, "Africa's batch hasn't landed: no stamp, a dashed space")
         #expect(stamps.stamp(for: "VA")?.batch == "eu", "the smallest of the passport's countries has its stamp")
     }
 
