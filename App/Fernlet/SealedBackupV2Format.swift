@@ -35,6 +35,12 @@ struct SealedBackupHeadStamp: Equatable, Hashable, Sendable {
 /// chunk names its writer and set, so a restore can prove each chunk belongs to the head's set (§5.3)
 /// and a chunk spliced in from another set at the same generation fails closed. `R` is the payload's
 /// own `Codable` record, whose coding keys are frozen tokens too.
+///
+/// **The body tallies** (round 7 piece B2, owner: "inside the sealed iCloud backup"). The JOURNAL
+/// set's head may also carry `"bodyTally"`: ``SealedBackupBodyTallies`` (`{"v":1,"days":[…]}`), so the
+/// bathroom counts and free-meal tags are sealed by exactly the journal chunks' content-key path and
+/// ride the journal's switch, owner hold, compare-and-swap and deletes. Absent on every other chunk,
+/// on every other payload's set, and while there is no tally. An earlier build ignores the key.
 struct SealedBackupV2Envelope<Record: Codable>: Codable {
     /// The envelope format this build writes.
     static var formatVersion: Int { 2 }
@@ -47,19 +53,23 @@ struct SealedBackupV2Envelope<Record: Codable>: Codable {
     var total: Int?
     /// The chunk's records.
     var records: [Record]
+    /// The body tallies (the journal head only); nil everywhere else.
+    var bodyTally: SealedBackupBodyTallies?
 
     /// FROZEN keys.
     enum CodingKeys: String, CodingKey {
         case version = "v"
         case writer, set, total, records
+        case bodyTally
     }
 
     /// Creates an envelope.
-    init(writer: String, set: String, total: Int?, records: [Record]) {
+    init(writer: String, set: String, total: Int?, records: [Record], bodyTally: SealedBackupBodyTallies? = nil) {
         self.writer = writer
         self.set = set
         self.total = total
         self.records = records
+        self.bodyTally = bodyTally
     }
 
     /// Decodes an envelope. A `v` other than ``formatVersion`` throws
@@ -72,6 +82,7 @@ struct SealedBackupV2Envelope<Record: Codable>: Codable {
         set = header.set
         total = header.total
         records = try container.decode([Record].self, forKey: .records)
+        bodyTally = try container.decodeIfPresent(SealedBackupBodyTallies.self, forKey: .bodyTally)
     }
 
     /// Encodes the frozen shape.
@@ -82,6 +93,7 @@ struct SealedBackupV2Envelope<Record: Codable>: Codable {
         try container.encode(set, forKey: .set)
         try container.encodeIfPresent(total, forKey: .total)
         try container.encode(records, forKey: .records)
+        try container.encodeIfPresent(bodyTally, forKey: .bodyTally)
     }
 }
 

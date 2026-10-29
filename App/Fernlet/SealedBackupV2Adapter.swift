@@ -44,6 +44,15 @@ protocol SealedBackupV2Adapter: AnyObject {
     /// "Remove them": re-classifies `ids` under every key this iPhone holds and deletes only those
     /// still dead (R2-F12). Returns how many went.
     func removeStillDead(_ ids: [UUID], hubKey: SymmetricKey) throws -> Int
+    /// The body tallies this payload's head carries beside its records (round 7 piece B2), or nil for
+    /// none. Only the journal's carries them (``JournalBackupAdapter``); every other payload answers nil
+    /// (the default in `SealedBackupV2BodyTallies.swift`). Gated like a decrypt, and it THROWS — never
+    /// nil — when the tallies can't be read right now, so a head never drops them.
+    func headBodyTallies() throws -> SealedBackupBodyTallies?
+    /// Merges the body tallies a restored head carried, BEFORE its records merge (an idempotent merge,
+    /// so a retry after a later step failed is harmless). Throws for a failure a later pass retries.
+    /// Gated; never in a decoy.
+    func restoreBodyTallies(_ tallies: SealedBackupBodyTallies) throws
 }
 
 /// One export chunk's records, classified (§4.1).

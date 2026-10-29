@@ -873,7 +873,8 @@ struct SealedBackupJournalV2Tests {
         JournalBackupAdapter(
             repository: { narratives }, isOpen: { true },
             references: { store.sealedBackupJournalReferences },
-            deviceKey: { .absent }, reinstate: { _ in true }
+            deviceKey: { .absent }, reinstate: { _ in true },
+            bodyTallies: SealedBackupBodyTallyBridge(export: { [] }, merge: { _ in })
         )
     }
 

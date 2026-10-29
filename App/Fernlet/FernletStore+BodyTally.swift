@@ -11,6 +11,11 @@ import PrivateHealthStore
 /// observable — they register on the funnel's change token, so a view that shows a count redraws
 /// when a tally changes. Day keys are `yyyy-MM-dd` (``todayKey``'s shape); a malformed key reads as
 /// empty and its writes fail with ``BodyTallyWriteFailure/invalidDay``.
+///
+/// **Sealed iCloud backup** (piece B2). The tallies ride on the head of the journal's Sealed backup
+/// set, so every write here that lands marks the JOURNAL's upload owed
+/// (``noteBodyTallyWrite(_:)`` → `markSealedBackupDirty(.journalNarratives)`), and the next journal
+/// export carries the change. The backup's own two members are in `FernletStore+BodyTallyBackup.swift`.
 extension FernletStore {
     /// The sealed body-tally funnel every call below goes through.
     var bodyTallyStore: BodyTallyStore { BodyTallyStore.shared }
@@ -30,13 +35,13 @@ extension FernletStore {
     /// Adds one bathroom visit to the day — the Bathroom tile's tap.
     @discardableResult
     func addBathroomVisit(on dateKey: String) -> BodyTallyWriteResult {
-        bodyTallyStore.addBathroomVisit(on: dateKey, isDecoy: duressSessionActive)
+        noteBodyTallyWrite(bodyTallyStore.addBathroomVisit(on: dateKey, isDecoy: duressSessionActive))
     }
 
     /// Sets the day's bathroom visits — the tile's hold-to-fix — clamped to `0...30`.
     @discardableResult
     func setBathroomVisits(_ count: Int, on dateKey: String) -> BodyTallyWriteResult {
-        bodyTallyStore.setBathroomVisits(count, on: dateKey, isDecoy: duressSessionActive)
+        noteBodyTallyWrite(bodyTallyStore.setBathroomVisits(count, on: dateKey, isDecoy: duressSessionActive))
     }
 
     /// Whether the meal is tagged as a free meal on the day (false in a decoy).
@@ -47,7 +52,7 @@ extension FernletStore {
     /// Tags or untags the meal as a free meal on the day — the Free meal chip.
     @discardableResult
     func setFreeMeal(_ isFree: Bool, mealID: UUID, on dateKey: String) -> BodyTallyWriteResult {
-        bodyTallyStore.setFreeMeal(isFree, mealID: mealID, on: dateKey, isDecoy: duressSessionActive)
+        noteBodyTallyWrite(bodyTallyStore.setFreeMeal(isFree, mealID: mealID, on: dateKey, isDecoy: duressSessionActive))
     }
 
     /// The tallies of the days `startKey...endKey` inclusive, by day key — the Day calendar's month
@@ -59,7 +64,7 @@ extension FernletStore {
     /// Clears the day's tally (both its visits and its free-meal tags).
     @discardableResult
     func deleteBodyTally(on dateKey: String) -> BodyTallyWriteResult {
-        bodyTallyStore.deleteTally(on: dateKey, isDecoy: duressSessionActive)
+        noteBodyTallyWrite(bodyTallyStore.deleteTally(on: dateKey, isDecoy: duressSessionActive))
     }
 
     /// Drops every tally row without decrypting — ungated, for a wipe hook. Delete everything, Reset

@@ -2,6 +2,7 @@ import CloudKitSync
 import CryptoKit
 import FernletFoundation
 import Foundation
+import PrivateHealthStore
 import PrivateMemoryStore
 
 /// A sealed-content DEVICE key (journal, Worry Box) read WITHOUT minting — the one helper the "entries
@@ -101,7 +102,18 @@ struct SealedBackupJournalReferences: Equatable {
 ///   idempotent merge re-adds the missing ones.
 /// - A v1 chunk is a bare `[JournalNarrative]` array.
 ///
-/// No tier-two memory, Core Memory note or summary is carried (§7.5): exactly `JournalNarrative` rows.
+/// No tier-two memory, Core Memory note or summary is carried (§7.5): exactly `JournalNarrative` rows,
+/// plus the body tallies on the head.
+///
+/// **The body tallies** (World bodybuilding round 7 piece B2; owner: "inside the sealed iCloud
+/// backup"). The head of every journal set carries every bathroom count and free-meal tag
+/// (``headBodyTallies()``; `"bodyTally"` in ``SealedBackupV2Envelope``), sealed by the journal chunks'
+/// own content-key path, so nothing of them reaches CloudKit in the clear. They ride the journal's
+/// switch (`sealedBackupJournalEnabled`), owner hold, compare-and-swap, spacing and deletes. A restore
+/// merges them per day — the higher bathroom count, the union of the tags, never a delete
+/// (``restoreBodyTallies(_:)``) — before the records. Tallies that can't be read right now (the
+/// keychain not answering, a decoy) fail the export rather than write a head without them, and a
+/// failed merge keeps the restore unresolved for a later pass. With no tally they are left off.
 @MainActor
 final class JournalBackupAdapter: SealedBackupV2Adapter {
     /// Answers the sealed journal store — read on first use, so an adapter whose payload never runs
@@ -119,6 +131,8 @@ final class JournalBackupAdapter: SealedBackupV2Adapter {
     let deviceKey: @MainActor () -> SealedDeviceKeyRead
     /// Rebuilds the day skeletons of restored entries; false when a day write failed.
     let reinstate: @MainActor ([JournalNarrativeSkeleton]) -> Bool
+    /// Reads and merges the body tallies the head carries (round 7 piece B2).
+    let bodyTallies: SealedBackupBodyTallyBridge
 
     /// Creates the adapter.
     ///
@@ -129,18 +143,21 @@ final class JournalBackupAdapter: SealedBackupV2Adapter {
     ///     every row.
     ///   - deviceKey: The journal device key, read without minting.
     ///   - reinstate: Rebuilds day skeletons; false when a write failed.
+    ///   - bodyTallies: Reads every body tally now and merges restored ones; both throw when they can't.
     init(
         repository: @escaping @MainActor () -> JournalNarrativeRepository,
         isOpen: @escaping @MainActor () -> Bool,
         references: @escaping @MainActor () -> SealedBackupJournalReferences?,
         deviceKey: @escaping @MainActor () -> SealedDeviceKeyRead,
-        reinstate: @escaping @MainActor ([JournalNarrativeSkeleton]) -> Bool
+        reinstate: @escaping @MainActor ([JournalNarrativeSkeleton]) -> Bool,
+        bodyTallies: SealedBackupBodyTallyBridge
     ) {
         self.repositoryProvider = repository
         self.isOpen = isOpen
         self.references = references
         self.deviceKey = deviceKey
         self.reinstate = reinstate
+        self.bodyTallies = bodyTallies
     }
 
     /// The sealed journal store (resolved once).
@@ -236,6 +253,24 @@ final class JournalBackupAdapter: SealedBackupV2Adapter {
                 try repository.delete(ids: Array(stillDead[start..<min(start + batch, stillDead.count)]))
             }
             return stillDead.count
+        }
+    }
+
+    /// Every body tally for the head, or nil while there is none. Throws while the seam is shut or the
+    /// tallies can't be read right now, so no head is written without them.
+    func headBodyTallies() throws -> SealedBackupBodyTallies? {
+        try withOpenSeam {
+            let days = try bodyTallies.export()
+            return days.isEmpty ? nil : SealedBackupBodyTallies(days: days)
+        }
+    }
+
+    /// Merges the head's body tallies into this iPhone's (per day: the higher count, the union of the
+    /// tags, nothing removed). A failed merge is rethrown, so the restore stays unresolved and a later
+    /// pass merges again.
+    func restoreBodyTallies(_ tallies: SealedBackupBodyTallies) throws {
+        try withOpenSeam {
+            try bodyTallies.merge(tallies.days)
         }
     }
 }

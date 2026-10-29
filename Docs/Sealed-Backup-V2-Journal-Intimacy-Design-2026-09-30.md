@@ -849,6 +849,32 @@ The journal backup carries exactly `JournalNarrative` rows. Nothing else is carr
   the session.
 - Silent wipe: delete-all (§4.7). Recovery-lock: no hub key, so nothing runs.
 
+### 7.7 Body tallies on the journal head (added 2026-10-29, World bodybuilding round 7 piece B2)
+The owner's answer for the Bodybuilding bathroom counts and free-meal tags: "Store them encrypted like the
+journal, inside the sealed iCloud backup" — never plain in CloudKit. They are not a payload of their own:
+- **Format.** The JOURNAL head (chunk 0) may also carry `"bodyTally":{"v":1,"days":[…]}`, each day a
+  `BodyDayTally` under its frozen keys `dayKey, bathroomVisits, freeMealIDs, updatedAt`, in day order
+  (`SealedBackupBodyTallies`, `SealedBackupV2BodyTallies.swift`). It is inside the head's sealed plaintext,
+  so it shares the journal's content-key path, switch (`sealedBackupJournalEnabled`), owner hold, E1/E2,
+  spacing and deletes. Left off while there is no tally, and on every other chunk and payload (the
+  adapter defaults answer nil and ignore one). The §5.1 envelope's frozen keys gain `bodyTally`.
+- **Export.** The prepare reads every tally just before sealing the head (`headBodyTallies()`,
+  `BodyTallyStore.tallyBackupExport`) and FAILS when they can't be read — the journal device key unreadable,
+  an undecided row, a decoy — never a head that drops days. Rows that open under no key here are left out.
+- **Restore.** Before the records, a MERGE per day (`BodyDayTally.merged(with:)`): the higher bathroom count
+  (two iPhones counting the same visits never add up), the union of the free-meal tags (local first, capped
+  at 20), the later stamp. One scan, one save (`BodyTallyRepository.mergeRestored`), never a delete,
+  idempotent; a full store (4,000 days) keeps the newest days. The tallies are re-sealed under THIS
+  iPhone's journal device key (they are shown outside the Private tab). A failed merge keeps the restore
+  unresolved; a `v` this build does not read is `unreadableRecords` (`needsNewerFernlet`).
+- **Earlier builds** ignore the key (they decode only the keys they know), so their journal restore is
+  unchanged; their next journal export writes a head without it, and this build's next export puts every
+  tally back.
+- **Dirty.** Every tally write that lands marks the journal's upload owed
+  (`FernletStore.noteBodyTallyWrite` → `markSealedBackupDirty(.journalNarratives)`); the restore's
+  follow-through export marks itself.
+- **Duress.** The journal seam and the funnel's own decoy gate both refuse: nothing is handed out or merged.
+
 ## 8. Intimacy specifics
 
 ### 8.1 Gates at the decrypt seam (16+ age gate, visibility, duress)
