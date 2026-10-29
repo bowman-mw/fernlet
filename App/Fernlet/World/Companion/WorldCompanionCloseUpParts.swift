@@ -1,6 +1,7 @@
 import FernletScoring
 import FernletUI
 import SwiftUI
+import WorldMapStore
 
 // The pieces of the companion's close-up (`ref-comp-close`, `kit-ref.css` `.cu*`): the veil over the
 // map, the name and ✕, the bubble, the patch of grass, the pet's hearts, the hearts and Customize, and
@@ -23,7 +24,11 @@ struct WorldCompanionCloseUpPresenter: ViewModifier {
     var store: FernletStore
     var bodySignal: CompanionBodySignal?
     let onCustomize: () -> Void
-    @State private var customizesAfterClose = false
+    /// What waits for the close-up to go: Customize, the Remember this place sheet with Home picked, or
+    /// Settings › Home map (round 7).
+    @State private var afterClose: WorldCloseUpAfterClose?
+    @State private var placeSheet: WorldPlaceSheetMode?
+    @State private var managesHomes = false
 
     /// A transaction that presents or dismisses the close-up without the cover's slide.
     static var instant: Transaction {
@@ -33,23 +38,43 @@ struct WorldCompanionCloseUpPresenter: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        content.fullScreenCover(isPresented: $isPresented, onDismiss: customizeIfAsked) {
-            WorldCompanionCloseUp(store: store, bodySignal: bodySignal, onClose: close) {
-                customizesAfterClose = true
-                close()
+        content
+            .fullScreenCover(isPresented: $isPresented, onDismiss: openAfterClose) {
+                WorldCompanionCloseUp(store: store, bodySignal: bodySignal, onClose: close,
+                                      onCustomize: { close(then: .customize) },
+                                      onThisIsHome: { close(then: .thisIsHome($0)) },
+                                      onManage: { close(then: .manage) })
+                    .presentationBackground(.clear)
             }
-            .presentationBackground(.clear)
-        }
+            .sheet(item: $placeSheet) { mode in
+                WorldRememberPlaceSheet(store: store, mode: mode) { placeSheet = nil }
+            }
+            .sheet(isPresented: $managesHomes) {
+                WorldHomesManageSheet(store: store) { managesHomes = false }
+            }
     }
 
     private func close() {
         withTransaction(Self.instant) { isPresented = false }
     }
 
-    private func customizeIfAsked() {
-        guard customizesAfterClose else { return }
-        customizesAfterClose = false
-        onCustomize()
+    /// Closes the close-up, with `next` to open once it has gone.
+    private func close(then next: WorldCloseUpAfterClose) {
+        afterClose = next
+        close()
+    }
+
+    /// Opens what waited for the close-up to go.
+    private func openAfterClose() {
+        guard let next = afterClose else { return }
+        afterClose = nil
+        switch next {
+        case .customize: onCustomize()
+        // ref-comp-home-add: Home picked, the pin where the person stands; with 2 homes the sheet asks
+        // which to replace (ref-home-set).
+        case .thisIsHome: placeSheet = next.placeSheet
+        case .manage: managesHomes = true
+        }
     }
 }
 
@@ -156,11 +181,25 @@ struct WorldCloseUpHearts: View {
     }
 }
 
+/// What the close-up opens once it has gone (round 7).
+nonisolated enum WorldCloseUpAfterClose: Equatable {
+    case customize
+    case thisIsHome(GeoPoint)
+    case manage
+
+    /// The Remember this place sheet "This is home" opens: Home picked, the pin at the person's point
+    /// (`ref-comp-home-add`). Nil for the others.
+    var placeSheet: WorldPlaceSheetMode? {
+        guard case .thisIsHome(let point) = self else { return nil }
+        return .remember(start: point, kind: .home)
+    }
+}
+
 /// The hearts with any gold ones (four bigger hearts at the largest sizes, as on Home), how to pet it,
-/// and Customize.
-struct WorldCloseUpFooter: View {
+/// and the bottom row (`actions`: Customize, with round 7's This is home or a home's line).
+struct WorldCloseUpFooter<Actions: View>: View {
     let status: WorldStatus
-    let onCustomize: () -> Void
+    @ViewBuilder let actions: () -> Actions
     @Environment(\.worldTheme) private var theme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -175,16 +214,7 @@ struct WorldCloseUpFooter: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityHidden(true)
-            Button(action: onCustomize) {
-                HStack(spacing: 8) {
-                    WorldSpriteView(sprite: WorldSprites.pen, scale: 2)
-                    Text("Customize")
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(ActionPillButtonStyle(.secondary))
-            .accessibilityHint("Change how your companion looks")
-            .accessibilityIdentifier("world.closeUp.customize")
+            actions()
         }
     }
 }
