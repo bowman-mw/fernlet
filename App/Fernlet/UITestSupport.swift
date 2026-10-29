@@ -94,9 +94,9 @@ enum UITestSupport {
         return FernletSheet(uiTestID: id)
     }
 
-    /// `FERNLET_UI_TEST_OPEN_HOWTO=<catalog exercise name>` — the first how-to presenter that appears
-    /// (with `FERNLET_UI_TEST_OPEN_SHEET=workoutSuggestion`, the plan sheet's) opens that exercise's
-    /// how-to sheet, so the demonstration tile can be screenshotted without tapping through a plan.
+    /// `FERNLET_UI_TEST_OPEN_HOWTO=<catalog exercise name>` — with `FERNLET_UI_TEST_OPEN_SHEET=workoutSuggestion`,
+    /// the suggestion sheet opens that exercise's how-to sheet over itself (`exerciseHowToUITestPresenter`),
+    /// so the demonstration tile can be screenshotted without tapping through a plan.
     static var initialHowToExercise: String? { env["FERNLET_UI_TEST_OPEN_HOWTO"] }
 
     /// `FERNLET_UI_TEST_OPEN_CUSTOMIZE=1` — open the companion customization sheet on Home launch.

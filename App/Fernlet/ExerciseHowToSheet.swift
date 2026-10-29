@@ -42,16 +42,40 @@ extension View {
             ExerciseHowToSheet(exerciseName: shown.name, sex: sex, preferences: preferences)
                 .fernletSheet()
         }
-        .onAppear { openHowToForUITest(request) }
     }
 
-    /// The DEBUG launch hook `FERNLET_UI_TEST_OPEN_HOWTO`: opens the named exercise's how-to sheet
-    /// once this presenter appears. Release builds read nil and do nothing.
-    private func openHowToForUITest(_ request: Binding<ExerciseHowToRequest?>) {
-        guard request.wrappedValue == nil, let name = UITestSupport.initialHowToExercise else { return }
-        request.wrappedValue = ExerciseHowToRequest(name: name)
+    /// The DEBUG launch hook `FERNLET_UI_TEST_OPEN_HOWTO`: a presenter of its own that opens the named
+    /// exercise's how-to sheet a moment after this view appears, so the tile can be screenshotted
+    /// without a committed plan. Release builds attach nothing.
+    @ViewBuilder
+    func exerciseHowToUITestPresenter(sex: BiologicalSex) -> some View {
+        #if DEBUG
+        modifier(ExerciseHowToUITestPresenter(sex: sex))
+        #else
+        self
+        #endif
     }
 }
+
+#if DEBUG
+/// Opens `UITestSupport.initialHowToExercise`'s how-to sheet once, after the presenting sheet has
+/// finished its own entrance (a sheet asked for mid-presentation is dropped).
+private struct ExerciseHowToUITestPresenter: ViewModifier {
+    let sex: BiologicalSex
+    @State private var request: ExerciseHowToRequest?
+
+    func body(content: Content) -> some View {
+        content
+            .exerciseHowToSheet($request, sex: sex)
+            .task {
+                guard let name = UITestSupport.initialHowToExercise else { return }
+                // A cancelled wait (the sheet closed) opens nothing.
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
+                request = ExerciseHowToRequest(name: name)
+            }
+    }
+}
+#endif
 
 /// The small info button beside an exercise's name that opens its how-to sheet.
 ///
