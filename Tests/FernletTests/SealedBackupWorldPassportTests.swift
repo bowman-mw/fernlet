@@ -14,6 +14,7 @@ import CloudKit
 import CloudKitSync
 import FernletFoundation
 import Foundation
+import PrivateMemoryStore
 import Testing
 import WorldMapStore
 @testable import Fernlet
