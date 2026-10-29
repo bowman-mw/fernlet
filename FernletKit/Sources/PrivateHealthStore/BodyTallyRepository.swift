@@ -6,8 +6,9 @@ import Foundation
 import PrivateStoreCore
 
 // BodyTallyRepository.swift — sealed at-rest CRUD for `BodyTally` (World bodybuilding spec §7, the
-// owner's answer 2: "Sealed (Recommended). Store them encrypted like the journal"). Round 7 piece B1:
-// the store only — the Sealed iCloud backup of these rows is a later piece.
+// owner's answer 2: "Sealed (Recommended). Store them encrypted like the journal"). Round 7 piece B1
+// built the store; piece B2 added the restore's one-scan merge (`mergeRestored(_:key:)`) for the
+// Sealed iCloud backup, which carries the tallies on the journal set's head.
 
 /// Every stored body tally that opened, keyed by day, plus how many rows did not.
 ///
@@ -192,6 +193,38 @@ public nonisolated final class BodyTallyRepository: Sendable {
             return rows.count
         }
     }
+
+    /// Merges tallies a Sealed iCloud backup restore carried into the stored ones (round 7 piece B2),
+    /// in ONE scan and ONE save: per day, ``BodyDayTally/merged(with:)`` — the higher bathroom count,
+    /// the union of the free-meal tags — re-sealed in place when it changes anything, a day with no
+    /// row inserted, duplicate rows of a day folded into one. NEVER a delete of a day, and idempotent:
+    /// merging the same tallies again changes nothing. Incoming tallies that are empty or whose day key
+    /// is not a calendar day are skipped. Rows that do not open are left alone (they might be any day).
+    /// A store at ``maxStoredRows`` keeps the newest incoming days that fit and skips the rest (an
+    /// audit line counts them), so a restore can always land.
+    ///
+    /// - Returns: How many days changed on disk.
+    /// - Throws: `FernletLockError.locked` without a key;
+    ///   ``BodyTallyRepositoryError/undecidedRows(count:)`` (nothing written, retryable); a seal or
+    ///   save error (rolled back).
+    @discardableResult
+    public func mergeRestored(_ incoming: [BodyDayTally], key: SymmetricKey?) throws -> Int {
+        guard let key else { throw FernletLockError.locked }
+        let byDay = Self.foldedByDay(incoming)
+        guard !byDay.isEmpty else { return 0 }
+        return try context.performAndWait {
+            let changed: Int
+            do {
+                changed = try applyMerge(byDay, key: key)
+                if context.hasChanges { try context.saveSealed() }
+            } catch {
+                context.rollback()
+                throw error
+            }
+            if changed > 0 { PrivatePersistentHistoryPruner.pruneBestEffort(context: context, site: "BodyTally.merge") }
+            return changed
+        }
+    }
 }
 
 // MARK: - Internals
@@ -231,6 +264,62 @@ nonisolated extension BodyTallyRepository {
         }
         guard rows.count < Self.maxStoredRows else { throw BodyTallyRepositoryError.storeFull(limit: Self.maxStoredRows) }
         try seal(tally, into: NSEntityDescription.insertNewObject(forEntityName: Self.entityName, into: context), key: key)
+        return true
+    }
+
+    /// `incoming` reduced to one non-empty tally per valid day key (copies of one day merged).
+    static func foldedByDay(_ incoming: [BodyDayTally]) -> [String: BodyDayTally] {
+        var byDay: [String: BodyDayTally] = [:]
+        for tally in incoming where !tally.isEmpty && BodyDayTally.isValidDayKey(tally.dayKey) {  // R2: bounded by `incoming`.
+            byDay[tally.dayKey] = byDay[tally.dayKey].map { $0.merged(with: tally) } ?? tally
+        }
+        return byDay
+    }
+
+    /// The body of ``mergeRestored(_:key:)`` inside `performAndWait`, unsaved: scan, refuse on an
+    /// undecided row, then fold each incoming day into its stored rows (newest days first, so a full
+    /// store keeps the recent ones).
+    private func applyMerge(_ byDay: [String: BodyDayTally], key: SymmetricKey) throws -> Int {
+        let rows = try fetchAllRows()
+        let scan = scanRows(rows, key: key)
+        guard scan.undecided == 0 else { throw BodyTallyRepositoryError.undecidedRows(count: scan.undecided) }
+        let stored = Dictionary(grouping: scan.opened, by: { $0.tally.dayKey })
+        var rowCount = rows.count
+        var changed = 0
+        var skipped = 0
+        for dayKey in byDay.keys.sorted(by: >) {  // R2: bounded by `byDay` (≤ the incoming count).
+            guard let incoming = byDay[dayKey] else { continue }
+            if let matching = stored[dayKey], !matching.isEmpty {
+                rowCount -= matching.count - 1
+                if try mergeInto(matching, incoming, key: key) { changed += 1 }
+            } else if rowCount < Self.maxStoredRows {
+                try seal(incoming, into: NSEntityDescription.insertNewObject(forEntityName: Self.entityName, into: context), key: key)
+                rowCount += 1
+                changed += 1
+            } else {
+                skipped += 1
+            }
+        }
+        if skipped > 0 {
+            FernletAuditLog.log("bodyTally.merge.storeFull", context: ["skipped": "\(skipped)"])
+        }
+        return changed
+    }
+
+    /// Folds `incoming` and every stored row of its day into the first row, deleting the others.
+    /// Whether anything changed (a row deleted or the first row re-sealed).
+    private func mergeInto(
+        _ matching: [(row: NSManagedObject, tally: BodyDayTally)],
+        _ incoming: BodyDayTally,
+        key: SymmetricKey
+    ) throws -> Bool {
+        guard let first = matching.first else { return false }
+        let duplicates = matching.dropFirst()
+        let local = duplicates.reduce(first.tally) { $0.merged(with: $1.tally) }
+        let merged = local.merged(with: incoming)
+        duplicates.forEach { context.delete($0.row) }
+        guard !duplicates.isEmpty || !first.tally.hasSameContent(as: merged) else { return false }
+        try seal(merged, into: first.row, key: key)
         return true
     }
 

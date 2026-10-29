@@ -94,6 +94,22 @@ public nonisolated struct BodyDayTally: Codable, Equatable, Sendable {
         return copy
     }
 
+    /// This tally merged with another copy of the same day — the Sealed iCloud backup's restore rule
+    /// (round 7 piece B2): the bathroom visits are the HIGHER of the two counts (two iPhones counting
+    /// the same visits must not add them up), the free-meal tags are the union (this copy's first, in
+    /// order, then the other's new ones, capped at ``maxFreeMeals``), and the stamp is the later one.
+    /// Commutative in content, idempotent (`a.merged(with: a)` has `a`'s content), and it never removes
+    /// anything this copy holds below the caps. A tally of another day is returned unchanged.
+    public func merged(with other: BodyDayTally) -> BodyDayTally {
+        guard other.dayKey == dayKey else { return self }
+        return BodyDayTally(
+            dayKey: dayKey,
+            bathroomVisits: max(bathroomVisits, other.bathroomVisits),
+            freeMealIDs: freeMealIDs + other.freeMealIDs,
+            updatedAt: max(updatedAt, other.updatedAt)
+        )
+    }
+
     /// Whether `key` is a `yyyy-MM-dd` calendar day key: ten characters, digits around two dashes,
     /// month `01...12`, day `01...31`. Pure; no calendar lookup.
     public static func isValidDayKey(_ key: String) -> Bool {

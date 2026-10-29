@@ -58,8 +58,12 @@ enum BodyTallyWriteResult: Equatable {
 /// read registers a dependency on it, so a SwiftUI view that reads a tally redraws when one changes.
 /// The decrypted cache is in memory only and re-validated on every read against the device key and
 /// the keyless row count, so a wipe that emptied the store or destroyed the key underneath it is
-/// never shown from the cache. A writer outside this funnel (the later Sealed backup restore) calls
-/// ``noteExternalChange()``.
+/// never shown from the cache. A writer outside this funnel calls ``noteExternalChange()``.
+///
+/// **Sealed iCloud backup** (piece B2). The tallies ride, sealed, on the head of the journal's Sealed
+/// backup set: ``tallyBackupExport(isDecoy:)`` hands every tally to the export and
+/// ``mergeRestoredTallies(_:isDecoy:)`` merges a restored set back (never a delete). Both are gated
+/// like every other call and throw rather than answer empty.
 @MainActor
 @Observable
 final class BodyTallyStore {
@@ -201,6 +205,77 @@ final class BodyTallyStore {
         cache = nil
         changeToken &+= 1
     }
+
+    // MARK: - Sealed iCloud backup (gated; round 7 piece B2)
+
+    /// Every tally to carry on the journal Sealed backup set's head, in day order — read straight from
+    /// the store, never the cache. Empty when this iPhone has no journal device key (no row can open).
+    /// Rows that can never open are left out (they are lost to every key here already).
+    ///
+    /// - Throws: ``BodyTallyBackupError`` — in a decoy, while the keychain does not answer, while a row
+    ///   cannot be decided, or when the store cannot be read — never an empty or partial list in place
+    ///   of the real one, so the export fails (and retries) rather than write a head that drops days.
+    func tallyBackupExport(isDecoy: Bool) throws -> [BodyDayTally] {
+        guard !isDecoy else { throw BodyTallyBackupError.decoy }
+        let keyData: Data
+        switch readDeviceKey() {
+        case .found(let data): keyData = data
+        case .absent: return []
+        case .unreadable: throw BodyTallyBackupError.keyUnavailable
+        }
+        let page: BodyTallyPage
+        do {
+            page = try repository.allTallies(key: SymmetricKey(data: keyData))
+        } catch {
+            FernletAuditLog.log("bodyTally.backupExport.failed")
+            throw BodyTallyBackupError.storeError
+        }
+        guard page.transientCount == 0 else { throw BodyTallyBackupError.undecidedRows }
+        return page.tallies.keys.sorted().compactMap { page.tallies[$0] }
+    }
+
+    /// Merges the tallies a Sealed iCloud backup restore carried into this iPhone's, sealed under its
+    /// journal device key (minted as a tap would mint it): per day the higher bathroom count and the
+    /// union of the free-meal tags (`BodyTallyRepository.mergeRestored`), never a delete, idempotent.
+    /// Moves ``changeToken`` when anything changed, so an open Log tile or calendar redraws.
+    ///
+    /// - Returns: How many days changed.
+    /// - Throws: ``BodyTallyBackupError`` — in a decoy, with no key to seal under, while a row cannot
+    ///   be decided, or when the save failed — so the restore stays unresolved and a later pass merges
+    ///   again.
+    @discardableResult
+    func mergeRestoredTallies(_ incoming: [BodyDayTally], isDecoy: Bool) throws -> Int {
+        guard !isDecoy else { throw BodyTallyBackupError.decoy }
+        guard incoming.contains(where: { !$0.isEmpty }) else { return 0 }
+        guard let keyData = writeKeyData() else { throw BodyTallyBackupError.keyUnavailable }
+        let changed: Int
+        do {
+            changed = try repository.mergeRestored(incoming, key: SymmetricKey(data: keyData))
+        } catch BodyTallyRepositoryError.undecidedRows(_) {
+            cache = nil
+            throw BodyTallyBackupError.undecidedRows
+        } catch {
+            cache = nil
+            FernletAuditLog.log("bodyTally.backupMerge.failed")
+            throw BodyTallyBackupError.storeError
+        }
+        if changed > 0 { noteExternalChange() }
+        return changed
+    }
+}
+
+/// Why the Sealed iCloud backup could not read or merge the body tallies right now (round 7 piece
+/// B2). Each one fails the journal export or keeps the journal restore unresolved for a later pass;
+/// none is ever answered with an empty list.
+enum BodyTallyBackupError: Error, Equatable {
+    /// A decoy (duress) session: nothing real is handed out or written.
+    case decoy
+    /// The journal device key could not be read (or, for a merge, created) this instant.
+    case keyUnavailable
+    /// A stored row could not be decided this attempt.
+    case undecidedRows
+    /// The sealed store refused the read or the save.
+    case storeError
 }
 
 // MARK: - Internals
