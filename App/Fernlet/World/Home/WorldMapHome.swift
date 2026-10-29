@@ -145,8 +145,8 @@ struct WorldMapHome: View {
         .task(id: camera) { await refollowWhenIdle() }
         .onChange(of: notice) { _, kind in announce(kind) }
         .onChange(of: holdsRootBanners, initial: true) { _, held in isCameraOpen.wrappedValue = held }
-        // Riding along (`b1-home-car`): an open quick-start card goes with the blue button.
-        .onChange(of: isDriving) { _, driving in if driving { cardContext = nil } }
+        // Riding along (`b1-home-car`, `ref-ride-home`): an open quick-start card goes with the blue button.
+        .onChange(of: isRiding) { _, riding in if riding { cardContext = nil } }
         // A permission given (or taken back) in iOS's prompt or in Settings: start or stop following.
         .onChange(of: store.worldLocation.permission) { updateLocation() }
     }
@@ -218,7 +218,7 @@ struct WorldMapHome: View {
     /// The companion with its bubble, its feet on `point`.
     private func companion(at point: CGPoint) -> some View {
         WorldMapCompanion(store: store, bodySignal: bodySignal, isActive: isFrontmost && !isCustomizing, mapLine: mapLine,
-                          isQuiet: isBubbleQuiet, isNight: phase(at: Date()) == .night, hint: isHintShowing, isRiding: isDriving,
+                          isQuiet: isBubbleQuiet, isNight: phase(at: Date()) == .night, hint: isHintShowing, ride: rideVehicle,
                           onHintEnded: endHint) {
             isCustomizing = true
         }
@@ -270,13 +270,13 @@ struct WorldMapHome: View {
                 }
                 HStack(alignment: .bottom, spacing: 10) {
                     // Round 7 (`ref-tag-home` d2): beside the blue button anywhere the person stays.
-                    if cardContext == nil, !isDriving, let spot = store.worldRememberSpot(near: store.worldLocation.latest) {
+                    if cardContext == nil, !isRiding, let spot = store.worldRememberSpot(near: store.worldLocation.latest) {
                         // Above the blue button's label, which slides out over it for 30 s (form answer 28).
                         WorldTagPlaceButton(onRemember: { placeSheet = .spot(spot) }, onNotHere: store.dismissWorldRememberSpot)
                             .zIndex(1)
                     }
-                    // Riding along (`b1-home-car`): quick starts pause until the person is on foot.
-                    if !isDriving, let glyph = WorldQuickStart.glyph(for: buttonContext) {
+                    // Riding along (`b1-home-car`, `ref-ride-home`): quick starts pause until the person is on foot.
+                    if !isRiding, let glyph = WorldQuickStart.glyph(for: buttonContext) {
                         WorldQuickStartButton(glyph: glyph, spokenStatus: WorldQuickStartCopy.spokenStatus(WorldQuickStart.card(for: buttonContext)),
                                               action: toggleCard)
                     }
@@ -333,7 +333,7 @@ struct WorldMapHome: View {
         return WorldMapNoticeKind.make(presence: presence, tiles: isOffline ? .failed : tiles.state, loadingLong: loadingLong,
                                        liftedCells: store.worldFog.visibleCells.count,
                                        uncovers: WorldMapPreferences.uncoverAsYouGo(), isDecoy: store.duressSessionActive,
-                                       isWalking: isWalking, isDriving: isDriving)
+                                       isWalking: isWalking, isDriving: isDriving, isCycling: isCycling)
     }
 
     /// The map's own line for the companion, if it has one.
@@ -352,11 +352,20 @@ struct WorldMapHome: View {
         return WorldRideCopy.bubbleLine(noteShowing: store.worldLocation.rides.loggedRide != nil) ?? WorldMapLine.line(facts)
     }
 
-    /// What the ground draws: the lifted fog, and the walk's line while it records.
+    /// What the ground draws: the lifted fog, the walk's line while it records, and a bike ride's line so
+    /// far in the walk line's green (``WorldRideLine``; DEBUG `cycling` stages one, its fog drawn clear).
     private var ground: WorldGround {
         let trace = isWalking ? store.worldWalk.points.map(\.point) : []
-        return WorldGround(lifted: store.worldFog.visibleCells, uncovered: uncovered,
-                           trails: isWalking && guideLine.count >= 2 ? [guideLine] : [], traces: trace.count >= 2 ? [trace] : [])
+        let ride = WorldRideLine.drawn(isCycling: isCycling, readings: rideReadings, isDecoy: store.duressSessionActive)
+        return WorldGround(lifted: store.worldFog.visibleCells, uncovered: uncovered.union(WorldRideTestScenes.clearing(along: ride)),
+                           trails: (isWalking && guideLine.count >= 2 ? [guideLine] : []) + (ride.isEmpty ? [] : [ride]),
+                           traces: trace.count >= 2 ? [trace] : [])
+    }
+
+    /// The bike ride's readings so far (``WorldRideKeeper/ridePoints``; DEBUG `cycling` stages a short ride).
+    private var rideReadings: [RoutePoint] {
+        let here = store.worldLocation.latest?.point ?? WorldPlacesTestScenes.laurelhurst
+        return WorldRideTestScenes.stagedRide(endingAt: here) ?? store.worldLocation.rides.ridePoints
     }
 
     /// Whether a walk is recording.
@@ -365,15 +374,25 @@ struct WorldMapHome: View {
     /// Whether the person is driving (round 7's car detection; DEBUG `car` stages it): riding along.
     private var isDriving: Bool { store.worldLocation.rides.isDriving || WorldRideTestScenes.drives }
 
+    /// Whether the person is on a bike ride (the ride engine's; DEBUG `cycling` stages it): riding along on
+    /// the bike (`ref-ride-home`).
+    private var isCycling: Bool { store.worldLocation.rides.isCycling || WorldRideTestScenes.cycles }
+
+    /// What the companion rides along in, if anything.
+    private var rideVehicle: WorldRideVehicle? { WorldRideVehicle.current(isDriving: isDriving, isCycling: isCycling) }
+
+    /// Whether the person is riding along, in the car or on the bike: the same things wait either way.
+    private var isRiding: Bool { rideVehicle != nil }
+
     /// Whether the root's banners wait: the disposable camera or the map intro is up, or the person is
     /// riding along.
-    private var holdsRootBanners: Bool { cameraMode != nil || isLocationIntroUp || isDriving }
+    private var holdsRootBanners: Bool { cameraMode != nil || isLocationIntroUp || isRiding }
 
     /// Whether the companion's bubble stays down: under the open quick-start card, while riding along (as
-    /// `b1-home-car` draws it), and at accessibility sizes while a notice, the walk bar or a stamp's banner
-    /// fills the top, so the large bubble never runs into them.
+    /// `b1-home-car` and `ref-ride-home` draw it), and at accessibility sizes while a notice, the walk bar or
+    /// a stamp's banner fills the top, so the large bubble never runs into them.
     private var isBubbleQuiet: Bool {
-        cardContext != nil || isDriving
+        cardContext != nil || isRiding
             || (dynamicTypeSize.isAccessibilitySize && (notice != nil || isWalking || stampBannerShowing))
     }
 
@@ -750,7 +769,7 @@ extension WorldMapHome {
         return WorldCompanionHint.isDue(alreadyShown: WorldMapPreferences.companionHintShown(),
                                         introAnswered: WorldMapPreferences.locationIntroAnswered() || asked,
                                         permission: store.worldLocation.permission, isAsking: store.worldLocation.isAsking,
-                                        stampBannerShowing: stampBannerShowing || isDriving,
+                                        stampBannerShowing: stampBannerShowing || isRiding,
                                         isFrontmost: isFrontmost && scenePhase == .active && !isLocationIntroUp,
                                         isDecoy: store.duressSessionActive)
     }

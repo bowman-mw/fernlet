@@ -27,4 +27,24 @@ extension WorldSprites {
         palette["R"] = dark ? 0xD8634A : 0xB0412B
         return WorldSprite(rows: rideCar.rows, palette: palette)
     }
+
+    /// The red bike the companion rides on a bike ride (Refinements group 19, `ref-ride-home`), drawn key for
+    /// key from the approved mockup's `BIKE`: a 20 × 11 bike in the car's red frame, ink tyres and saddle,
+    /// grey spokes, the companion on the saddle (``WorldRideBike``). Light and dark Home draw it the same, as
+    /// the car.
+    nonisolated static let rideBike = WorldSprite(
+        rows: ["....................", "..............kkk...", ".....kkk......k.....", "......RRRRRRRRR.....",
+               "..kkkRR......RRkkk..", ".k...R.R....R.kR..k.", "k..gR.kR..RR.k.Rg..k", "k.gkRRRRkR...k.gkg.k",
+               "k..g..k.k....k..g..k", ".k...k...k....k...k.", "..kkk..........kkk.."],
+        palette: ["k": 0x4A2E1C, "R": 0xC8553D, "g": 0x9C9A92])
+
+    /// The bike under Increase Contrast, as the car: a deeper outline and red on the light map, a cream
+    /// outline on the dark map; the spokes keep their grey.
+    nonisolated static func rideBike(dark: Bool, increasedContrast: Bool) -> WorldSprite {
+        guard increasedContrast else { return rideBike }
+        var palette = rideBike.palette
+        palette["k"] = dark ? 0xF5EFE0 : 0x24140B
+        palette["R"] = dark ? 0xD8634A : 0xB0412B
+        return WorldSprite(rows: rideBike.rows, palette: palette)
+    }
 }
