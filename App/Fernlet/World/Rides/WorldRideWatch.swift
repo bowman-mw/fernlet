@@ -18,8 +18,9 @@ import WorldMapStore
 ///   shorter), or at once when the coprocessor says car. A ride of at least ``minRideTime`` whose distance
 ///   is unknown or at least ``minRideMetres`` ends as ``WorldRideEvent/rideEnded(_:)``, its distance from
 ///   the precise readings taken during it.
-/// - **The ride's line** (Refinements group 19, `ref-ride-line`): the same good readings that measure the
-///   distance draw it, one kept per ``lineStep`` moved (``ridePoints`` while the ride is on; the finished
+/// - **The ride's line** (Refinements group 19, `ref-ride-line`): the good readings that measure the
+///   distance draw it when they are within ``lineAccuracy`` (the walk line's 25 m; owner 2026-10-29, the
+///   65 m rule is the distance's and the fog's), one kept per ``lineStep`` moved (``ridePoints`` while the ride is on; the finished
 ///   ride carries them). Like the odometer it reaches back ``markLookBack`` while not cycling, because a
 ///   ride's start sample arrives late; bounded at ``maxLinePoints``.
 ///
@@ -63,6 +64,9 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
     /// The least distance between two kept points of a ride's line, in metres (the saved line's codec then
     /// thins it at 2.5 m, as a walk's).
     static let lineStep = 5.0
+    /// The worst accuracy a reading may have to join a ride's line, in metres: the walk line's own
+    /// (`WorldWalkRecorder.maxAccuracy`), so a ride's line is as clean as a walk's (owner 2026-10-29).
+    static let lineAccuracy = 25.0
     /// The most points a ride's line keeps (the saved line's own cap).
     static let maxLinePoints = WorldRouteCodec.maxPoints
 
@@ -359,10 +363,11 @@ nonisolated struct WorldRideWatch: Equatable, Sendable {
         noteLine(fix)
     }
 
-    /// Keeps a good reading on the line when it is at least ``lineStep`` from the last kept point, dropping
+    /// Keeps a good reading within ``lineAccuracy`` on the line when it is at least ``lineStep`` from the last kept point, dropping
     /// points no ride can need (older than ``markLookBack`` while not cycling, or past ``maxLinePoints``).
     private mutating func noteLine(_ fix: WorldFix) {
-        guard line.last.map({ $0.point.distance(to: fix.point) >= Self.lineStep }) ?? true else { return }
+        guard fix.accuracy <= Self.lineAccuracy,
+              line.last.map({ $0.point.distance(to: fix.point) >= Self.lineStep }) ?? true else { return }
         line.append(LinePoint(at: fix.at, point: fix.point))
         if !isCycling {
             let cutoff = fix.at.addingTimeInterval(-Self.markLookBack)

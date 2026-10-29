@@ -19,7 +19,8 @@ import WorldMapStore
 ///   logged ride joins Where you've been's timeline at its start, and its line is kept with its workout when
 ///   "Save new routes" is on, exactly as a walk's; a ride the catch-up found has no line. A decoy keeps
 ///   neither (it logs nothing).
-/// - **Undo** removes the workout, its line and its timeline stop (``undoWorldBikeRide(_:)``).
+/// - **Undo** removes the workout, its line and its timeline stop (``undoWorldBikeRide(_:)``); with Private
+///   locked, a stop it already folded leaves at its next fold.
 /// - **Car rides never log as exercise.**
 extension FernletStore {
     /// How far back a catch-up looks through the motion history (iOS keeps a week).
@@ -132,15 +133,20 @@ extension FernletStore {
         return removed
     }
 
-    /// Takes a ride's stop off the folded timeline when Private is open (its hub key is at hand); nothing
-    /// otherwise, or in a decoy.
+    /// Takes a ride's stop off the folded timeline when Private is open (its hub key is at hand); while it is
+    /// locked, queues the removal for Private's next fold (owner 2026-10-29). Nothing in a decoy.
     private func removeFoldedWorldRide(workoutID: UUID) {
-        guard !duressSessionActive, let key = hubContentKeyProvider?() else { return }
+        guard !duressSessionActive else { return }
+        guard let key = hubContentKeyProvider?() else {
+            worldPlaces.queueOutingRemoval(workoutID: workoutID)
+            return
+        }
         do {
             let log = try worldPlaces.store.log(hubKey: key)
             let next = log.deletingOuting(workoutID: workoutID)
             if next != log { try worldPlaces.store.saveLog(next, hubKey: key) }
         } catch {
+            worldPlaces.queueOutingRemoval(workoutID: workoutID)
             FernletAuditLog.log("worldMap.places.undoRideDeferred")
         }
     }

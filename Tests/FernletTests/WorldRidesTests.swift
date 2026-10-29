@@ -262,7 +262,8 @@ struct WorldRidesTests {
     // MARK: The ride's line (Refinements group 19, ref-ride-line)
 
     /// A ride's line is its good readings from its start on, one per 5 m moved: the readings before its late
-    /// start sample that fall inside it count, jitter of 2 m and a reading 100 m out don't, and the finished
+    /// start sample that fall inside it count, jitter of 2 m, a reading 100 m out and one 40 m out (good for the
+    /// distance, past the walk line's 25 m) don't, and the finished
     /// ride carries exactly the line drawn live. Off the bike the line is empty.
     @Test func aRidesLineIsItsGoodReadingsFromItsStart() throws {
         var stream = Stream(usesMotion: true)
@@ -280,6 +281,9 @@ struct WorldRidesTests {
         #expect(live.last == RoutePoint(Stream.here.offset(east: 3_000, north: 0)))
         stream.read(3_400, 605, accuracy: 100)
         #expect(stream.watch.ridePoints == live, "a reading 100 m out never joins the line")
+        stream.read(3_200, 606, accuracy: 40)
+        #expect(stream.watch.ridePoints == live, "a reading 40 m out counts for the distance, not the line")
+        #expect(WorldRideWatch.lineAccuracy == WorldWalkRecorder.maxAccuracy, "the walk line's own limit")
         stream.motion(.walking, 610)
         stream.tick(810)
         let ride = try #require(stream.rides.first)
@@ -497,6 +501,58 @@ struct WorldBikeRideLoggingTests {
         store.duressSessionActive = false
         #expect(store.worldPlaceLog()?.stops.count == 2, "a decoy put nothing on the timeline")
         #expect(try store.worldPlaces.store.deviceState().pending.isEmpty)
+    }
+
+    /// Undo while Private is locked (owner 2026-10-29): a stop Private already folded in can't be reached, so
+    /// its removal waits on the device side and the next fold, at the next unlock, takes it off and forgets
+    /// it. A decoy queues nothing.
+    @Test func undoWhilePrivateIsLockedTakesTheStopAtTheNextUnlock() throws {
+        let (store, defaults) = try Self.loggingStore()
+        let key = try #require(store.hubContentKeyProvider?())
+        let logged = try #require(store.logWorldBikeRide(Self.ride(points: 40), defaults: defaults))
+        #expect(store.worldPlaceLog()?.stops.contains { $0.workoutID == logged.id } == true, "folded at an unlock")
+        store.hubContentKeyProvider = nil
+        #expect(store.undoWorldBikeRide(logged))
+        #expect(try store.worldPlaces.store.deviceState().undoneOutings == [logged.id], "queued for the next fold")
+        store.hubContentKeyProvider = { key }
+        #expect(store.worldPlaceLog()?.stops.contains { $0.workoutID == logged.id } == false, "gone at the next unlock")
+        #expect(try store.worldPlaces.store.deviceState().undoneOutings == nil, "and forgotten")
+
+        store.duressSessionActive = true
+        #expect(!store.worldPlaces.queueOutingRemoval(workoutID: logged.id))
+        store.duressSessionActive = false
+        #expect(try store.worldPlaces.store.deviceState().undoneOutings == nil)
+    }
+
+    /// Home's saved lines (`b1-home-bike`): the kept walks' and rides' lines, newest first, while Save new
+    /// routes is on; a hand-logged ride without a line adds none, Undo takes its line off, and a decoy or
+    /// Save new routes off draws none.
+    @Test func homeDrawsTheSavedWalkAndRideLines() throws {
+        let (store, defaults) = try Self.loggingStore()
+        #expect(store.worldHomeSavedLines(defaults: defaults).isEmpty)
+        let here = WorldRidesTests.Stream.here
+        let walk = Workout(name: "Walk", type: .cardio, mode: .activity, activityType: .walking, exercises: "", rpe: nil,
+                           notes: "", duration: 20, distanceMiles: 1, intensity: .moderate,
+                           completedAt: Date().addingTimeInterval(-3 * 60 * 60), loggedAt: Date().addingTimeInterval(-3 * 60 * 60))
+        store.addWorkout(walk, date: store.todayKey)
+        let walkLine = (0..<10).map { RoutePoint(here.offset(east: 0, north: Double($0) * 30)) }
+        #expect(try store.worldRoutes.save(walkLine, for: walk.id))
+        let ride = try #require(store.logWorldBikeRide(Self.ride(points: 40, minutesAgo: 30), defaults: defaults))
+        store.addWorkout(FernletStore.bikeRideWorkout(Self.ride(points: 0, minutesAgo: 120)), date: store.todayKey)
+        let lines = store.worldHomeSavedLines(defaults: defaults)
+        #expect(lines.count == 2, "the walk's and the followed ride's; the ride without a line adds none")
+        #expect(lines.first?.count == store.worldRoute(for: ride.id)?.count, "newest first")
+        let keptWalk = try #require(store.worldRoute(for: walk.id)).map(\.point)
+        #expect(lines.last == keptWalk)
+
+        store.duressSessionActive = true
+        #expect(store.worldHomeSavedLines(defaults: defaults).isEmpty, "none in a decoy")
+        store.duressSessionActive = false
+        WorldMapPreferences.setSaveNewRoutes(false, in: defaults)
+        #expect(store.worldHomeSavedLines(defaults: defaults).isEmpty, "none while Save new routes is off")
+        WorldMapPreferences.setSaveNewRoutes(true, in: defaults)
+        #expect(store.undoWorldBikeRide(ride))
+        #expect(store.worldHomeSavedLines(defaults: defaults) == [keptWalk], "Undo took the ride's line")
     }
 }
 

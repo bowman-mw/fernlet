@@ -199,6 +199,14 @@ final class WorldPlacesKeeper {
         return update { $0.removingOuting(workoutID: workoutID) }
     }
 
+    /// Queues workout `workoutID`'s outing stop to leave the timeline at Private's next fold (an Undo while
+    /// Private is locked, so its folded log can't be opened). Nothing in a decoy; whether it was queued.
+    @discardableResult
+    func queueOutingRemoval(workoutID: UUID) -> Bool {
+        guard !isDecoy else { return false }
+        return update { $0.queuingOutingRemoval(workoutID: workoutID) }
+    }
+
     /// A verdict's audit token: its kind alone (never the place's kind, name or reference).
     static func token(_ verdict: PlaceVerdict?) -> String {
         switch verdict {

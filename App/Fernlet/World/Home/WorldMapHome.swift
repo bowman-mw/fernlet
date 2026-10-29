@@ -74,6 +74,9 @@ struct WorldMapHome: View {
     @State private var savedLine: WorldSavedLine?
     /// The saved line being walked again, drawn to follow.
     @State private var guideLine: [GeoPoint] = []
+    /// The saved walk, run and ride lines Home draws (``FernletStore/worldHomeSavedLines(now:defaults:)``),
+    /// read at each front edge and when a walk's or ride's note comes or goes.
+    @State private var savedLines: [[GeoPoint]] = []
     /// Whether the map intro is up (`b1-loc-intro`, ``WorldLocationIntroPresenter``).
     @State private var isLocationIntroUp = false
     /// Where the person's shown solo photos were taken (``WorldPhotoPlace``), read when the map comes to
@@ -147,6 +150,8 @@ struct WorldMapHome: View {
         .onChange(of: holdsRootBanners, initial: true) { _, held in isCameraOpen.wrappedValue = held }
         // Riding along (`b1-home-car`, `ref-ride-home`): an open quick-start card goes with the blue button.
         .onChange(of: isRiding) { _, riding in if riding { cardContext = nil } }
+        .onChange(of: loggedWalk?.id) { if isFrontmost { readSavedLines() } }
+        .onChange(of: store.worldLocation.rides.loggedRide?.id) { if isFrontmost { readSavedLines() } }
         // A permission given (or taken back) in iOS's prompt or in Settings: start or stop following.
         .onChange(of: store.worldLocation.permission) { updateLocation() }
     }
@@ -352,14 +357,22 @@ struct WorldMapHome: View {
         return WorldRideCopy.bubbleLine(noteShowing: store.worldLocation.rides.loggedRide != nil) ?? WorldMapLine.line(facts)
     }
 
-    /// What the ground draws: the lifted fog, the walk's line while it records, and a bike ride's line so
-    /// far in the walk line's green (``WorldRideLine``; DEBUG `cycling` stages one, its fog drawn clear).
+    /// What the ground draws: the lifted fog, the saved walk, run and ride lines (`b1-home-bike`), the walk's
+    /// line while it records, and a bike ride's line so far in the walk line's green (``WorldRideLine``; DEBUG
+    /// `cycling` stages one and `keptride` a kept one, their fog drawn clear).
     private var ground: WorldGround {
         let trace = isWalking ? store.worldWalk.points.map(\.point) : []
         let ride = WorldRideLine.drawn(isCycling: isCycling, readings: rideReadings, isDecoy: store.duressSessionActive)
-        return WorldGround(lifted: store.worldFog.visibleCells, uncovered: uncovered.union(WorldRideTestScenes.clearing(along: ride)),
-                           trails: (isWalking && guideLine.count >= 2 ? [guideLine] : []) + (ride.isEmpty ? [] : [ride]),
+        let staged = WorldRideTestScenes.clearing(along: ride + (WorldRideTestScenes.keepsRide ? savedLines.flatMap { $0 } : []))
+        return WorldGround(lifted: store.worldFog.visibleCells, uncovered: uncovered.union(staged),
+                           trails: savedLines + (isWalking && guideLine.count >= 2 ? [guideLine] : []) + (ride.isEmpty ? [] : [ride]),
                            traces: trace.count >= 2 ? [trace] : [])
+    }
+
+    /// Reads Home's saved lines again (DEBUG `keptride` stands the finished ride's kept line in).
+    private func readSavedLines() {
+        let here = store.worldLocation.latest?.point ?? WorldPlacesTestScenes.laurelhurst
+        savedLines = WorldRideTestScenes.keptRideLines(around: here) ?? store.worldHomeSavedLines()
     }
 
     /// The bike ride's readings so far (``WorldRideKeeper/ridePoints``; DEBUG `cycling` stages a short ride).
@@ -626,6 +639,7 @@ extension WorldMapHome {
         if isFrontmost {
             readPlaces()
             readSavedLine()
+            readSavedLines()
         }
         location.startForeground()
         follow(location.latest)

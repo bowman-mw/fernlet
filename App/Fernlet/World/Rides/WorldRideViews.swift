@@ -213,6 +213,8 @@ nonisolated enum WorldRideCopy {
 ///   drawn clear along it, as a ride's readings would lift it (`ref-ride-home`); nothing is written.
 /// - `bike`: the bike note for 4.2 km in 18 min, held on screen (`b1-home-bike`); with `nodistance`, 18 min
 ///   only. Its Undo only closes it.
+/// - `keptride`: Home's saved lines are the finished ride's kept line through the person (`ref-ride-line`),
+///   its fog drawn clear; display only, nothing saved.
 enum WorldRideTestScenes {
     /// The scenes asked for (none in release builds).
     static var scenes: Set<String> { UITestSupport.worldHomeScenes }
@@ -252,8 +254,23 @@ enum WorldRideTestScenes {
     /// The fog the staged line's readings would have lifted (`cycling`), drawn clear and never written: the
     /// walk's clearing round each one. Empty when the scene isn't asked for.
     static func clearing(along line: [GeoPoint]) -> Set<HexCell> {
-        guard cycles else { return [] }
+        guard cycles || keepsRide else { return [] }
         return Set(line.prefix(200).flatMap { MercatorHexGrid.cells(around: $0, within: WorldFogKeeper.liftRadius) })
+    }
+
+    /// Whether Home's saved lines are staged as the finished ride's kept line.
+    static var keepsRide: Bool { scenes.contains("keptride") }
+
+    /// The mockup's finished ride (`ref-ride-line`), east and north of the person in metres: the ride so far,
+    /// then on up the street and back across, so the person stands on it.
+    private static let keptCorners: [(east: Double, north: Double)] = [(-143, 145), (-143, -106), (0, -106), (0, 167), (-143, 167)]
+
+    /// The staged saved lines (`keptride`): the finished ride's kept line through `here`. Nil when the scene
+    /// isn't asked for.
+    static func keptRideLines(around here: GeoPoint) -> [[GeoPoint]]? {
+        guard keepsRide, let last = keptCorners.last else { return nil }
+        let line = stagedRide(endingAt: here, corners: keptCorners).dropLast().map(\.point)
+        return [line + [here.offset(east: last.east, north: last.north)]]
     }
 
     /// Whether the bike note stays up for the shot.
