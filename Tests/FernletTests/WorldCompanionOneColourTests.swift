@@ -19,6 +19,25 @@ struct WorldCompanionOneColourTests {
                         ".kkkkkkk.", ".k.......", "k........"]
     static let twinkle = ["...y...", "...y...", "..yhy..", "yyhhhyy", "..yhy..", "...y...", "...y..."]
 
+    /// The face's cut-outs are today's: a tired day's dark upper lid stays filled in one colour, so the eye
+    /// still reads half-lidded; the ink below it is cut out.
+    @Test func theTiredLidStaysFilled() {
+        let grid = WorldCompanionPainter.paint(state: .tired, look: WorldCompanionLook(body: 0xB67073), pose: WorldCompanionPose())
+        for x in [7, 12] {
+            #expect(grid.takesOneColour(frameX: x + Self.frameX, y: 12 + Self.frameY), "the lid at (\(x), 12)")
+            #expect(!grid.takesOneColour(frameX: x + Self.frameX, y: 13 + Self.frameY), "the eye at (\(x), 13)")
+        }
+    }
+
+    /// The bubble and twinkle rows these tests place are the widget's own sprites.
+    @Test func theTestBubblesAreTheWidgetsSprites() throws {
+        let faces = try RepoRoot.source("App/FernletWidgets/WidgetFeelingFaces.swift")
+        for rows in [Self.apple, Self.twinkle] {
+            let literal = rows.map { "\"\($0)\"" }
+            #expect(literal.allSatisfy { faces.contains($0) }, "a sprite row drifted from WidgetFeelingSprites")
+        }
+    }
+
     // MARK: - Every cell against the reference painter
 
     /// The reference cases (`tint()` and the lane's placement rule in the mockup) mask cell for cell the

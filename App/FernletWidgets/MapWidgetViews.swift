@@ -69,7 +69,8 @@ struct MapWidgetCard: View {
                         MapWidgetHoleMask(holes: mono ? holes.map { (rect: proxy[$0.bounds], shape: $0.shape) } : [],
                                           // The grid the sprite draws, so the ring is round what shows.
                                           grid: entry.companion.homeScreenGrid(increasedContrast: contrast == .increased),
-                                          spriteScale: Self.spriteScale)
+                                          spriteScale: Self.spriteScale, motif: entry.companion.homeScreenMotif,
+                                          showsZee: entry.companion.hidesTheDay)
                     }
             }
         }

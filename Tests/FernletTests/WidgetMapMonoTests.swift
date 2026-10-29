@@ -179,4 +179,18 @@ struct WidgetMapMonoTests {
         #expect(writer.contains("WorldWidgetMonoCanvas.png(base: lightBase"))
         #expect(writer.components(separatedBy: "AppleMapSnapshot.image(").count == 3, "still two requests to Apple, no third")
     }
+
+    /// Sprout's clear ring also rings what it draws beside its head: the feeling's bubble where group 16 puts
+    /// it (left, mirrored, or behind; its paper included) and the asleep "z", so no line runs through them.
+    @Test func theClearRingTakesTheBubbleAndTheZee() throws {
+        let views = try RepoRoot.source("App/FernletWidgets/MapWidgetViews.swift")
+        #expect(views.contains("motif: entry.companion.homeScreenMotif,\n                                          showsZee: entry.companion.hidesTheDay)"))
+        let mono = try RepoRoot.source("App/FernletWidgets/MapWidgetMono.swift")
+        #expect(mono.contains("WidgetCompanionMotifPlacement(rows: motif.sprite.rows, on: grid, movable: motif != .twinkle,"),
+                "the ring follows the sprite's own placement")
+        #expect(mono.contains("Self.ring(around: Self.besideCells(grid: grid, motif: motif, showsZee: showsZee),"))
+        let sprite = try RepoRoot.source("App/FernletWidgets/WidgetPixelCompanion.swift")
+        #expect(sprite.contains(".offset(x: scale * 2.5, y: scale)"), "the z sits where the ring expects it")
+        #expect(mono.contains("CGFloat(WidgetCompanionGrid.frameWidth) + 2.5 - CGFloat(zee.width)"))
+    }
 }

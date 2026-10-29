@@ -736,7 +736,8 @@ nonisolated enum WorldCompanionPainter {
             for x in [6, 7, 12, 13] { grid.put(x, eyeRow + 1, ink, as: .eye) }
         } else {
             for x in [7, 12] {
-                grid.put(x, eyeRow, state == .tired ? body.dark : ink, as: .eye)
+                // A tired day's upper lid is body, so one colour keeps it filled and the eye half-lidded (W-11).
+                grid.put(x, eyeRow, state == .tired ? body.dark : ink, as: state == .tired ? .body : .eye)
                 grid.put(x, eyeRow + 1, ink, as: .eye)
             }
         }

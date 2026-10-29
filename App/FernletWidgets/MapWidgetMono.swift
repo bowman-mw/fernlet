@@ -79,6 +79,10 @@ struct MapWidgetHoleMask: View {
     let grid: WidgetCompanionGrid
     /// Points per sprite pixel.
     let spriteScale: CGFloat
+    /// The feeling's motif the sprite draws beside the head, if any: its cells get the ring too.
+    var motif: WidgetFeelingMotif? = nil
+    /// Whether the sprite draws the asleep "z" (then no motif): its cells get the ring too.
+    var showsZee = false
 
     var body: some View {
         Canvas { context, size in
@@ -90,6 +94,8 @@ struct MapWidgetHoleMask: View {
                     context.fill(Path(roundedRect: hole.rect, cornerRadius: radius), with: .color(.black))
                 case .companion:
                     context.fill(Self.ring(of: grid, at: hole.rect.origin, scale: spriteScale), with: .color(.black))
+                    context.fill(Self.ring(around: Self.besideCells(grid: grid, motif: motif, showsZee: showsZee),
+                                           at: hole.rect.origin, scale: spriteScale), with: .color(.black))
                 }
             }
         }
@@ -111,4 +117,40 @@ struct MapWidgetHoleMask: View {
         }
         return path
     }
+
+    /// The cells, at frame coordinates (a "z" sits half a pixel off the grid), of what the sprite draws
+    /// beside the head: the asleep "z" where it sits, or the motif where ``WidgetCompanionMotifPlacement``
+    /// puts it (Refinements group 16), its bubble's paper included so no street shows inside it.
+    static func besideCells(grid: WidgetCompanionGrid, motif: WidgetFeelingMotif?, showsZee: Bool) -> [CGPoint] {
+        if showsZee {
+            let zee = WidgetSprites.zee
+            let left = CGFloat(WidgetCompanionGrid.frameWidth) + 2.5 - CGFloat(zee.width)
+            return cells(of: zee.rows).map { CGPoint(x: left + $0.x, y: 1 + $0.y) }
+        }
+        guard let motif else { return [] }
+        let placement = WidgetCompanionMotifPlacement(rows: motif.sprite.rows, on: grid, movable: motif != .twinkle,
+                                                      oneColour: true)
+        return cells(of: placement.rows).map { CGPoint(x: CGFloat(placement.x) + $0.x, y: $0.y) }
+    }
+
+    /// The drawn (non-`.`) cells of `rows`, column and row.
+    static func cells(of rows: [String]) -> [CGPoint] {
+        rows.prefix(WidgetCompanionGrid.frameHeight).enumerated().flatMap { y, row in
+            row.prefix(WidgetCompanionGrid.frameWidth).enumerated().compactMap { x, key in
+                key == "." ? nil : CGPoint(x: CGFloat(x), y: CGFloat(y))
+            }
+        }
+    }
+
+    /// A one-cell ring round each of `cells` (the 8-neighbour dilation, as ``MapClearRing``), over a frame
+    /// whose top left is `origin`.
+    static func ring(around cells: [CGPoint], at origin: CGPoint, scale: CGFloat) -> Path {
+        var path = Path()
+        for cell in cells {
+            path.addRect(CGRect(x: origin.x + (cell.x - 1) * scale, y: origin.y + (cell.y - 1) * scale,
+                                width: 3 * scale, height: 3 * scale))
+        }
+        return path
+    }
+
 }
