@@ -66,6 +66,9 @@ struct WorldLandmarkTests {
             let city = try #require(atlas.city(token: landmark.cityToken), "\(landmark.token): no city")
             #expect(landmark.point.distance(to: city.point) <= 30_000, "\(landmark.token) is far from its city")
             #expect(Self.country(near: landmark.point, in: atlas) == city.countryCode, "\(landmark.token)'s country")
+            let resolved = atlas.city(at: landmark.point)?.token
+            #expect(resolved == landmark.cityToken || Self.citedElsewhere.contains(landmark.token),
+                    "\(landmark.token): the city rule names \(resolved ?? "no city")")
         }
         #expect(atlas.city(token: "Q6106")?.names.english == "Portland")
         #expect(atlas.country(code: "VA")?.isOneOf195 == true && atlas.country(code: "ZZ") == nil)
@@ -238,6 +241,13 @@ struct WorldLandmarkTests {
             return .malformed
         }
     }
+
+    /// The landmarks whose own fix the city rule does not put in their listed city (checked 2026-10-29): Portland
+    /// Head Light (Cape Elizabeth, 6 km from Portland, Maine's point), the Tower of Hercules (6 km from A
+    /// Coruña's point) and Tsing Ma Bridge (12 km from Hong Kong's) lie outside every urban boundary and past
+    /// the core; Castel Sant'Angelo is nearer the Vatican's point than Rome's, so the rule names Vatican City.
+    /// Every other landmark resolves to its own city.
+    static let citedElsewhere: Set<String> = ["portlandHeadLight", "towerOfHercules", "tsingMaBridge", "castelSantAngelo"]
 
     /// The country under `point`, else the single country found within 2 km of it (nil for none or several).
     static func country(near point: GeoPoint, in atlas: WorldAtlas) -> String? {

@@ -17,6 +17,8 @@ The synthetic world (10° cells, 16×16 sub-cells of 0.625°):
                 "Tiny Sea" (one cell, dropped into its neighbour)
   countries     ZA = L with a hole that is LS; AU = the bay land; DK, GL
   cities        Alpha (Q1, 2M, inside an urban polygon), Beta (ne:123, 50k, no polygon), Gamma (Q3, in LS)
+  urban areas   Alpha's polygon (kept); one with no city anywhere near (dropped); one 2 km east of Beta,
+                inside a town's 5 km reach (kept, holding no point); one 10 km east of Beta (dropped)
   climate       5° pixels: class 7 on lon 0..30, 14 on lon 30..60 (lat -30..30), a 3-to-1 mix of 5 and 9
                 in the cell lon 10..20, lat 20..30, nothing east of lon 60
 """
@@ -197,8 +199,10 @@ def write_sources(folder):
                          "POP_MAX": 150000, "ISO_A2": "LS"}),
     ]
     write_layer(folder, "ne_10m_populated_places", 1, [p[0] for p in places], place_fields, [p[1] for p in places])
-    write_layer(folder, "ne_10m_urban_areas", 5, [[box(9, 9, 12, 12)], [box(30, 0, 33, 3)]],
-                [("AREA_SQKM", "N", 10)], [{"AREA_SQKM": 1}, {"AREA_SQKM": 2}])
+    urban_areas = [[box(9, 9, 12, 12)], [box(30, 0, 33, 3)], [box(12.02, -20.02, 12.1, -19.98)],
+                   [box(12.1, -20.02, 12.2, -19.98)]]
+    write_layer(folder, "ne_10m_urban_areas", 5, urban_areas, [("AREA_SQKM", "N", 10)],
+                [{"AREA_SQKM": n} for n in range(1, len(urban_areas) + 1)])
     os.makedirs(os.path.join(folder, "Beck_KG_V1"))
     with zipfile.ZipFile(os.path.join(folder, "Beck_KG_V1", "Beck_KG_V1.zip"), "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("Beck_KG_V1_future_0p083.tif", climate_tif(False))
@@ -411,7 +415,9 @@ def check_tables(c, atlas):
     c.equal("one of the 195", (countries["ZA"]["flags"], countries["DK"]["flags"], countries["GL"]["flags"]),
             (1, 1, 0))
     c.equal("country continent", countries["GL"]["continent"], 5)
-    c.equal("urban polygons kept", len(atlas["urban"]), 1)
+    c.equal("urban polygons kept (one holding Alpha, one in Beta's reach)", len(atlas["urban"]), 2)
+    c.equal("the reached polygon holds no city point", inside(atlas["urban"][1], 12.0, -20.0), False)
+    c.equal("the reached polygon is the one 2 km from Beta", inside(atlas["urban"][1], 12.05, -20.0), True)
     cities = atlas["cities"]
     c.equal("city tokens", sorted(cities), ["Q1", "Q3", "ne:123"])
     alpha, beta, gamma = cities.get("Q1", {}), cities.get("ne:123", {}), cities.get("Q3", {})

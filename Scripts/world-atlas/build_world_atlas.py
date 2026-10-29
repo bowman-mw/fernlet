@@ -48,7 +48,7 @@ def _import_numpy_and_pillow():
 
 np, Image = _import_numpy_and_pillow()
 
-GENERATOR_VERSION = 1
+GENERATOR_VERSION = 2
 PACK_VERSION = 1
 MAGIC = b"FWA1"
 SUB = 16
@@ -61,6 +61,10 @@ FILL_RADIUS = 5
 MIN_SEA_CELLS = 3
 MAX_SEAS = 250
 SEA_CODE_BASE = 6
+# How far a city's pull reaches inside urban boundaries, by size class (town, city, large, mega), in metres:
+# the reader's WorldAtlas.cityReachMetres (Docs/World-Atlas-Pack.md, "City").
+CITY_REACH_METRES = (5_000, 10_000, 20_000, 35_000)
+METRES_PER_DEGREE = 111_320.0
 
 SOURCE_LICENCES = {
     "ne_10m_land": "public domain (Natural Earth)",
@@ -1038,7 +1042,7 @@ def city_size(population):
 
 
 def build_cities(place_features, urban_features, countries, report):
-    """The URBN and CITY sections: urban polygons holding a city, and every populated place."""
+    """The URBN and CITY sections: the urban polygons some city reaches, and every populated place."""
     urban = []
     for geom, _ in urban_features:
         rings = encoded_rings(polygon_rings(geom), report, "urban areas")
@@ -1058,7 +1062,8 @@ def build_cities(place_features, urban_features, countries, report):
         if city["urban"] >= 0:
             holding.add(city["urban"])
         cities.append(city)
-    kept = sorted(holding)
+    reached = polygons_in_reach(boxes, cities)
+    kept = sorted(holding | reached)
     new_index = {old: new for new, old in enumerate(kept)}
     urbn = struct.pack("<I", len(kept)) + b"".join(encode_polygon(urban[i][0]) for i in kept)
     blobs = [struct.pack("<I", len(cities))]
@@ -1068,9 +1073,38 @@ def build_cities(place_features, urban_features, countries, report):
             "<2sBIiii", city["country"].encode("ascii"), city_size(city["population"]), city["population"],
             city["lon"], city["lat"], index) + names_blob(*city["names"], report=report))
     report.counts["urban polygons (kept / read)"] = "%d / %d" % (len(kept), len(urban))
+    report.counts["urban polygons kept with no city point inside (a city in reach)"] = len(reached - holding)
     report.counts["cities"] = len(cities)
     report.counts["cities inside an urban polygon"] = sum(1 for c in cities if c["urban"] >= 0)
     return urbn, b"".join(blobs)
+
+
+def polygons_in_reach(boxes, cities):
+    """The indices of the urban polygons whose bounding box lies within some city's reach of its point
+    (CITY_REACH_METRES by size class). Conservative: a degree of longitude is measured at the most poleward
+    latitude of the box and the city, so the distance is never overstated and no polygon the reader could
+    need is dropped. A fix inside a polygon lies inside its box, so a city within reach of the fix is within
+    reach of the box."""
+    if not cities or not len(boxes):
+        return set()
+    lons = np.array([c["lon"] for c in cities], dtype=np.float64) / SCALE
+    lats = np.array([c["lat"] for c in cities], dtype=np.float64) / SCALE
+    reach = np.array([CITY_REACH_METRES[city_size(c["population"])] for c in cities], dtype=np.float64)
+    band = max(CITY_REACH_METRES) / METRES_PER_DEGREE
+    reached = set()
+    for index, (west, south, east, north) in enumerate(boxes / SCALE):
+        rows = np.nonzero((lats >= south - band) & (lats <= north + band))[0]
+        if not len(rows):
+            continue
+        x, y = lons[rows], lats[rows]
+        dx = np.maximum(np.maximum(west - x, x - east), 0.0)
+        dy = np.maximum(np.maximum(south - y, y - north), 0.0)
+        poleward = np.maximum(np.abs(y), max(abs(south), abs(north)))
+        east_metres = dx * METRES_PER_DEGREE * np.cos(np.radians(np.minimum(poleward, 89.9)))
+        north_metres = dy * METRES_PER_DEGREE
+        if bool(np.any(east_metres * east_metres + north_metres * north_metres <= reach[rows] * reach[rows])):
+            reached.add(index)
+    return reached
 
 
 def city_record(geom, attrs, used, countries, report):

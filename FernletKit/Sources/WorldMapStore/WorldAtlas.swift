@@ -7,9 +7,10 @@ import Foundation
 /// Immutable once built, so one instance is shared freely across tasks. Pure lookups on bundled data: it
 /// opens no connection and writes nothing (the keeper decides which fixes reach it). Every query is bounded:
 /// a raster lookup is one index; the coast mask lookup a binary search of at most 64 steps; the reach search
-/// at most `(2 × maxReachSpan + 1)²` cells of 256 sub-cells each; the country and city searches one pass over
-/// the decoded tables, whose sizes the decoder caps; a lookup by token (``city(token:)``, ``country(code:)``,
-/// ``sea(token:)``) one dictionary read, the dictionaries built once at init.
+/// at most `(2 × maxReachSpan + 1)²` cells of 256 sub-cells each; the country search one pass over the decoded
+/// table, whose size the decoder caps; the city search at most 51 one-degree cells of `AtlasCityIndex` and at
+/// most one pass over the urban boundaries (`WorldAtlasCities.swift`); a lookup by token (``city(token:)``,
+/// ``country(code:)``, ``sea(token:)``) one dictionary read, the dictionaries built once at init.
 public nonisolated final class WorldAtlas: Sendable {
     // MARK: The rules' constants (each one decided once, here)
 
@@ -24,18 +25,6 @@ public nonisolated final class WorldAtlas: Sendable {
     public static let maxReachSpan = 4
     /// Bytes in one coast cell's 16 × 16 bit mask.
     static let maskBytes = 32
-
-    /// How near a city with no urban boundary a fix must be to enter it, by its size class (Fernlet's
-    /// proposal, 2026-10-29): a town 2 km, a city 4 km, a large city 8 km, a megacity 12 km. Natural Earth
-    /// draws boundaries for nearly every large and mega city, so the bigger radii are a fallback.
-    public static func townRadiusMetres(for size: AtlasCitySize) -> Double {
-        switch size {
-        case .town: 2_000
-        case .city: 4_000
-        case .large: 8_000
-        case .mega: 12_000
-        }
-    }
 
     // MARK: The layers
 
@@ -63,10 +52,11 @@ public nonisolated final class WorldAtlas: Sendable {
     let oceans: [UInt8]
     /// Every cell's continent code (0 none).
     let continents: [UInt8]
-    /// Each urban boundary's cities, as indices into ``cities``.
-    let citiesByArea: [[Int]]
-    /// The cities with no urban boundary, as indices into ``cities``.
-    let looseCities: [Int]
+    /// Each city's urban boundary (the one holding its point, an index into ``urbanAreas``), -1 for none; in
+    /// ``cities`` order. For the screens (``urbanArea(of:)``); the city rule does not read it.
+    let cityPolygons: [Int]
+    /// The cities bucketed by one-degree cell, for the city rule's search.
+    let cityGrid: AtlasCityIndex
     /// Each city token's index into ``cities`` (the first, should a token repeat).
     let cityIndex: [String: Int]
     /// Each country code's index into ``countries`` (the first, should a code repeat).
@@ -94,14 +84,8 @@ public nonisolated final class WorldAtlas: Sendable {
         climate = layers.climate
         oceans = layers.oceans
         continents = layers.continents
-        var byArea = Array(repeating: [Int](), count: layers.urbanAreas.count)
-        var loose: [Int] = []
-        // Bounded: one pass over the cities (decoder-capped); each polygon index was checked in range.
-        for (index, polygon) in layers.cityPolygons.enumerated() {
-            if polygon >= 0, polygon < byArea.count { byArea[polygon].append(index) } else { loose.append(index) }
-        }
-        citiesByArea = byArea
-        looseCities = loose
+        cityPolygons = layers.cityPolygons
+        cityGrid = AtlasCityIndex(cities: layers.cities)
         cityIndex = Self.firstIndices(of: layers.cities.map(\.token))
         countryIndex = Self.firstIndices(of: layers.countries.map(\.code))
         seaIndex = Self.firstIndices(of: layers.seas.map(\.token))
@@ -173,31 +157,6 @@ public nonisolated final class WorldAtlas: Sendable {
         guard point.isValid else { return nil }
         // Bounded: one pass over the countries (at most WorldAtlasLayers.maxCountries).
         return countries.first { $0.polygon.contains(point) }
-    }
-
-    /// The city `point` is in: inside an urban boundary, the nearest of the cities sharing it; otherwise the
-    /// nearest city with no boundary within ``townRadiusMetres(for:)`` of its point; else nil.
-    public func city(at point: GeoPoint) -> AtlasCity? {
-        guard point.isValid else { return nil }
-        // Bounded: one pass over the urban boundaries, then over one boundary's cities or the loose ones.
-        if let area = urbanAreas.firstIndex(where: { $0.contains(point) }),
-           let index = nearest(of: citiesByArea[area], to: point, radius: { _ in .infinity }) {
-            return cities[index]
-        }
-        guard let index = nearest(of: looseCities, to: point, radius: Self.townRadiusMetres(for:)) else { return nil }
-        return cities[index]
-    }
-
-    /// The nearest of `candidates` to `point` that lies within its own `radius`.
-    private func nearest(of candidates: [Int], to point: GeoPoint, radius: (AtlasCitySize) -> Double) -> Int? {
-        guard !candidates.isEmpty else { return nil }
-        var best: (index: Int, metres: Double)?
-        for index in candidates where index >= 0 && index < cities.count {
-            let metres = Self.separation(point, cities[index].point)
-            guard metres <= radius(cities[index].size), metres < (best?.metres ?? .infinity) else { continue }
-            best = (index, metres)
-        }
-        return best?.index
     }
 
     // MARK: The visit

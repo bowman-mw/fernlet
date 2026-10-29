@@ -131,8 +131,14 @@ at 0.001°.
 
 ### `URBN`: urban boundaries
 
-`u32 count`, then per polygon: the same `bbox · ringCount · rings` encoding as `CTRY`. Only polygons holding at least
-one city are kept.
+`u32 count`, then per polygon: the same `bbox · ringCount · rings` encoding as `CTRY`. A polygon is kept when at
+least one city's point lies within that city's **reach** (below, "City") of the polygon's bounding box, measured
+flat-earth with a degree of longitude taken at the most poleward latitude of the box and the point, so the distance
+is never overstated; a polygon holding a city's point is always kept. Natural Earth cuts a metro area into
+fragments that do not follow its cities (New York's Brooklyn and Queens fragment holds no city's point), so keeping
+only the polygons that hold a point lost whole boroughs. A fix inside a polygon lies inside its box, so every city
+the reader could find in reach of such a fix is in reach of the box. The 2026-10-29 pack keeps 4,393 of 11,878
+polygons (1,056 of them for a city in reach only); `URBN` stores 0.62 MB of the 3.75 MB pack.
 
 ### `CITY`: cities
 
@@ -144,7 +150,8 @@ count × {
   u8                size class: 0 town, 1 city (≥ 100k), 2 large (≥ 1M), 3 mega (≥ 10M)
   u32               population (POP_MAX)
   i32 · i32         lon, lat in 1e-5 degrees
-  i32               urban polygon index, -1 for none
+  i32               urban polygon index: the kept polygon holding the city's own point, -1 for none (for the
+                    screens to draw; the city rule does not read it)
   u8 len · bytes    name (English, UTF-8), then the same for es, fr, de (len 0 = use English)
 }
 ```
@@ -165,8 +172,22 @@ UTF-8 JSON: the generator version, the generation date, and each source's file n
   fix; its `OCEA` code names an ocean or a sea, never both.
 - **Antarctica** (owner 2026-10-29): any accepted fix south of 60°S, the Antarctic Treaty area, on land, on ice or at
   sea.
-- **City:** inside an urban polygon, the nearest of the cities that share it; a city with no polygon is entered
-  within `WorldAtlas.townRadiusMetres` of its point.
+- **City** (owner's rule, 2026-10-29): each city has a **reach** and a **core** by its size class,
+  `WorldAtlas.cityReachMetres` (town 5 km, city 10 km, large 20 km, mega 35 km) and
+  `WorldAtlas.cityCoreRadiusMetres` (town 2 km, city 4 km, large 8 km, mega 12 km, the earlier "town radius"
+  values, unchanged). A fix is in a city when either (a) it lies inside **any** urban polygon and the city's point
+  lies within the city's reach of it, or (b) it lies within the city's core of its point, wherever the polygons
+  are. The nearest candidate of both kinds wins (plain flat-earth distance, the longitude difference taken the
+  short way round); no candidate, no city. Which polygon holds which city's point plays no part: the polygons only
+  say "built-up". So Yankee Stadium (in the fragment holding Stamford's point) and Brooklyn (in one holding none)
+  are New York, the CN Tower and central Copenhagen (in gaps between polygons) are Toronto and København by their
+  cores, and the Bosphorus Bridge is Istanbul, not İzmit 90 km off. Nearest means nearest: a small town whose
+  point is closer than a megacity's wins (Versailles stays Versailles), and a fix nearer the Vatican's point than
+  Rome's names Vatican City. Bounded: the reader buckets the cities by one-degree cell once
+  (`AtlasCityIndex`); a fix reads its own row and the rows either side, and as many columns either side as
+  35 km spans half a degree poleward of it, at most 8 (so 51 cells; the cap covers the whole reach to about
+  87°), and only when the nearest city in reach lies outside its own core does it make one pass over the urban
+  polygons (each box tested before its rings). About 0.03 ms a fix, 0.1 ms a whole visit, on a Mac.
 - **Terrain:** water or land from `LAND`, a class from `CLIM` and the latitude, flora from the class, the latitude
   and (for cacti) the Americas.
 - **Landmark:** within the landmark's find radius of its point (below).

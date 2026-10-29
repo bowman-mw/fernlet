@@ -54,4 +54,4 @@ The self-test writes tiny synthetic sources (shapefiles, dBASE tables and a GeoT
 ones) and builds a 10° pack from them. It decodes the pack with its own independent reader and checks these
 rules: land, water and coast states; coast-mask bits; climate majority and nearest fill; the ocean flood (a
 bay takes its ocean, a sea polygon its own sea, an enclosed lake 0); a country with a hole; cities with and
-without an urban polygon; determinism; and the size cap.
+without an urban polygon; which urban polygons are kept (one holding a city, one only in a town's reach); determinism; and the size cap.

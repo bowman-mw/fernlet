@@ -287,8 +287,10 @@ extension WorldAtlasTestPackBuilder {
     /// - a coast cell at 20–30°N, 20–30°E, all water but one land sub-cell (sx 5, sy 3);
     /// - country AA (20–40°E, 20–40°S) with a hole (25–35°E, 25–35°S); territory BB of CC (50–60°E,
     ///   30–40°S); DD (70–80°E, 30–40°S) whose box wrongly sits at 0–1°, so the prefilter skips it;
-    /// - an urban boundary (100–102°E, 10–12°N) holding cities Q1 and Q2; a loose town ne:3 at 15°N 120°E and
-    ///   a loose city Q4 at 15°N 130°E.
+    /// - a metro area cut the way Natural Earth cuts one: an urban boundary (100–100.35°E, 10–10.22°N) holding
+    ///   city Q1 (10.1°N 100.1°E) and large city Q2 (10.2°N 100.3°E), and a fragment beside it
+    ///   (100.4–100.6°E, 10.1–10.3°N) holding no city's point; town ne:5 (10.05°N 100.38°E) in the gap between
+    ///   them; a loose town ne:3 at 15°N 120°E and a loose city Q4 at 15°N 130°E.
     static func standardWorld(rows: Int = 18) -> WorldAtlasTestPackBuilder {
         var world = WorldAtlasTestPackBuilder(rows: rows)
         world.seas = [Sea(token: "Q1247", parent: 2, name: "Caribbean Sea", spanish: "Mar Caribe")]
@@ -306,12 +308,16 @@ extension WorldAtlasTestPackBuilder {
             Country(code: "DD", sovereign: "DD",
                     feature: Feature(bbox: (0, 0, 1, 1), rings: [Feature.box(70, -40, 80, -30)])),
         ]
-        world.urban = [Feature(bbox: (100, 10, 102, 12), rings: [Feature.box(100, 10, 102, 12)])]
+        world.urban = [
+            Feature(bbox: (100, 10, 100.35, 10.22), rings: [Feature.box(100, 10, 100.35, 10.22)]),
+            Feature(bbox: (100.4, 10.1, 100.6, 10.3), rings: [Feature.box(100.4, 10.1, 100.6, 10.3)]),
+        ]
         world.cities = [
-            City(token: "Q1", country: "EE", size: 1, lat: 10.5, lon: 100.5, polygon: 0, name: "West Town"),
-            City(token: "Q2", country: "EE", size: 2, lat: 11.5, lon: 101.5, polygon: 0, name: "East Town"),
+            City(token: "Q1", country: "EE", size: 1, lat: 10.1, lon: 100.1, polygon: 0, name: "West Town"),
+            City(token: "Q2", country: "EE", size: 2, lat: 10.2, lon: 100.3, polygon: 0, name: "East Town"),
             City(token: "ne:3", country: "EE", size: 0, lat: 15, lon: 120, name: "Little Town"),
             City(token: "Q4", country: "EE", size: 1, lat: 15, lon: 130, name: "Middle City"),
+            City(token: "ne:5", country: "EE", size: 0, lat: 10.05, lon: 100.38, name: "Gap Town"),
         ]
         return world
     }

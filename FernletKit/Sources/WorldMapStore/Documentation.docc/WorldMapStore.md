@@ -47,7 +47,7 @@ Round 7 (ideas 1, 2, 4, 7, A and B; contract in `Docs/World-Atlas-Pack.md`). The
 
 - the ocean or sea within 2 km, never both, since a sea is its own passport entry;
 - Antarctica anywhere south of ``WorldAtlas/antarcticaLatitude`` (60°S, on land, ice or sea);
-- the nearest city sharing an urban boundary, or a city with no boundary within ``WorldAtlas/townRadiusMetres(for:)``.
+- the nearest city whose point lies within its ``WorldAtlas/cityReachMetres(for:)`` of a fix inside any urban boundary, or within its ``WorldAtlas/cityCoreRadiusMetres(for:)`` of any fix (``WorldAtlas/isUrban(_:)``; ``WorldAtlas/urbanArea(of:)`` gives the boundary holding a city's own point, for the screens).
 
 ``WorldAtlas/city(token:)``, ``WorldAtlas/country(code:)`` and ``WorldAtlas/sea(token:)`` turn a passport's frozen tokens back into the pack's entries (one dictionary read each, built once when the atlas opens).
 
@@ -59,7 +59,8 @@ Bounded throughout:
 
 - at most 250 seas, 512 countries, 16,384 urban boundaries and 16,384 cities;
 - at most 10,000 rings a feature and 200,000 points a ring, with every varint capped at ten bytes;
-- the reach search walks at most 81 cells of 256 sub-cells each.
+- the reach search walks at most 81 cells of 256 sub-cells each;
+- the city search reads at most 51 one-degree cells of the city index, then at most one pass over the urban boundaries.
 
 ### Its place on the walls
 

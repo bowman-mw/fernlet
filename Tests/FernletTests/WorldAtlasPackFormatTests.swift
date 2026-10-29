@@ -26,7 +26,10 @@ struct WorldAtlasPackFormatTests {
         #expect(Set(pack.sections.keys) == Set(WorldAtlasPack.requiredTags + ["META"]))
         let atlas = try WorldAtlas(pack: pack)
         #expect(atlas.metaJSON == #"{"generator":"tests"}"#)
-        #expect(atlas.countries.count == 3 && atlas.urbanAreas.count == 1 && atlas.cities.count == 4)
+        #expect(atlas.countries.count == 3 && atlas.urbanAreas.count == 2 && atlas.cities.count == 5)
+        // The CITY polygon field survives for the screens: the boundary holding a city's own point, or none.
+        let west = try #require(atlas.city(token: "Q1")), gap = try #require(atlas.city(token: "ne:5"))
+        #expect(atlas.urbanArea(of: west) == atlas.urbanAreas.first && atlas.urbanArea(of: gap) == nil)
     }
 
     /// The grid size comes from the LAND header: an 18-row and a 36-row pack both open, each its own size.
@@ -178,6 +181,24 @@ struct WorldAtlasPackTests {
         #expect(atlas.visit(at: GeoPoint(43.12, 131.89)).continent == .asia)
         #expect(atlas.visit(at: GeoPoint(21.307, -157.858)).continent == .oceania)
         #expect(atlas.visit(at: GeoPoint(23.4, 12.0)).terrain == .desert)
+        // Big cities whose urban boundaries Natural Earth cuts into fragments that do not follow the city
+        // (owner's city rule, 2026-10-29): each fix names its own city, never a neighbour sharing the fragment.
+        let places: [(name: String, point: GeoPoint, city: String)] = [
+            ("Yankee Stadium, in the fragment holding Stamford's point", GeoPoint(40.8296, -73.9262), "Q60"),
+            ("Brooklyn, in a fragment holding no city's point", GeoPoint(40.6782, -73.9442), "Q60"),
+            ("CN Tower, which no boundary held a city for", GeoPoint(43.6426, -79.3871), "Q172"),
+            ("Stanley Park, which no boundary held a city for", GeoPoint(49.3043, -123.1443), "Q24639"),
+            ("Central Copenhagen, which no boundary held a city for", GeoPoint(55.6761, 12.5683), "Q1748"),
+            ("Bosphorus Bridge, in the fragment holding İzmit's point", GeoPoint(41.0451, 29.0340), "Q406"),
+            ("Shinjuku", GeoPoint(35.6896, 139.6917), "Q1490"),
+            ("Versailles, a city of its own", GeoPoint(48.8049, 2.1204), "Q621"),
+            ("Oakland, a city of its own", GeoPoint(37.8044, -122.2712), "Q17042"),
+        ]
+        for place in places {
+            #expect(atlas.city(at: place.point)?.token == place.city, "\(place.name)")
+        }
+        #expect(atlas.city(at: GeoPoint(30.0, -40.0)) == nil, "mid-Atlantic")
+        #expect(atlas.city(at: GeoPoint(42.0, -93.5)) == nil, "rural Iowa")
     }
 
     /// The bundled pack's bytes.

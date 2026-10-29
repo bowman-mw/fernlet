@@ -128,24 +128,60 @@ struct WorldAtlasEngineTests {
 
     // MARK: Cities
 
-    /// Inside an urban boundary, the nearest of the cities sharing it.
-    @Test func aSharedBoundaryGivesTheNearestCity() throws {
+    /// Inside an urban boundary, every city whose reach holds the fix is a candidate and the nearest wins,
+    /// whichever polygon holds its point (Q1 city 10 km, Q2 large 20 km).
+    @Test func insideABoundaryTheNearestCityInReachWins() throws {
         let atlas = try Self.atlas()
-        #expect(atlas.city(at: GeoPoint(10.6, 100.6))?.token == "Q1")
-        #expect(atlas.city(at: GeoPoint(11.4, 101.4))?.token == "Q2")
-        #expect(atlas.city(at: GeoPoint(11.0, 100.1))?.token == "Q1", "nearer Q1, still inside")
-        #expect(atlas.city(at: GeoPoint(12.5, 101.5)) == nil, "outside the boundary, no loose city near")
+        #expect(WorldAtlas.cityReachMetres(for: .town) == 5_000 && WorldAtlas.cityReachMetres(for: .city) == 10_000)
+        #expect(WorldAtlas.cityReachMetres(for: .large) == 20_000 && WorldAtlas.cityReachMetres(for: .mega) == 35_000)
+        #expect(atlas.isUrban(GeoPoint(10.1, 100.16)) && !atlas.isUrban(GeoPoint(10.25, 100.3)))
+        #expect(atlas.city(at: GeoPoint(10.1, 100.16))?.token == "Q1", "6.6 km from Q1, 18.9 km from Q2: both reach")
+        #expect(atlas.city(at: GeoPoint(10.15, 100.22))?.token == "Q2", "10.4 km from Q2, past Q1's 10 km reach")
+        // The fragment holds no city's point (Brooklyn's case): Q2's reach still names it, up to 20 km.
+        #expect(atlas.city(at: GeoPoint(10.2, 100.45))?.token == "Q2", "16.4 km from Q2, in the fragment")
+        #expect(atlas.city(at: GeoPoint(10.2, 100.55)) == nil, "in the fragment, 27 km from Q2: nobody reaches")
     }
 
-    /// A city with no boundary is entered within its size's radius: a town 2 km, a city 4 km.
-    @Test func aCityWithNoBoundaryUsesItsRadius() throws {
+    /// Outside every boundary only a city's core counts (Q2's 8 km), and the nearest candidate of either kind
+    /// wins: a town in reach inside a boundary beats a large city farther off.
+    @Test func outsideABoundaryOnlyTheCoreCounts() throws {
         let atlas = try Self.atlas()
-        #expect(WorldAtlas.townRadiusMetres(for: .town) == 2_000 && WorldAtlas.townRadiusMetres(for: .city) == 4_000)
+        let metre = 1 / GeoPoint.metresPerDegree
+        #expect(atlas.city(at: GeoPoint(10.2 + 6_000 * metre, 100.3))?.token == "Q2", "6 km north, in the core")
+        #expect(atlas.city(at: GeoPoint(10.2 + 9_000 * metre, 100.3)) == nil, "9 km north: in reach, not urban")
+        #expect(atlas.city(at: GeoPoint(10.05, 100.34))?.token == "ne:5", "4.4 km from the town, 17 km from Q2")
+        #expect(atlas.city(at: GeoPoint(10.05, 100.375))?.token == "ne:5", "outside, in the town's 2 km core")
+        #expect(atlas.city(at: GeoPoint(10.05, 100.4074)) == nil, "outside, 3 km from the town: in reach only")
+    }
+
+    /// A city with no boundary near is entered within its core radius: a town 2 km, a city 4 km.
+    @Test func aCityWithNoBoundaryUsesItsCore() throws {
+        let atlas = try Self.atlas()
+        #expect(WorldAtlas.cityCoreRadiusMetres(for: .town) == 2_000 && WorldAtlas.cityCoreRadiusMetres(for: .city) == 4_000)
+        #expect(WorldAtlas.cityCoreRadiusMetres(for: .large) == 8_000 && WorldAtlas.cityCoreRadiusMetres(for: .mega) == 12_000)
         let metre = 1 / GeoPoint.metresPerDegree
         #expect(atlas.city(at: GeoPoint(15 + 1_500 * metre, 120))?.token == "ne:3")
         #expect(atlas.city(at: GeoPoint(15 + 2_500 * metre, 120)) == nil)
         #expect(atlas.city(at: GeoPoint(15 + 3_000 * metre, 130))?.token == "Q4")
         #expect(atlas.city(at: GeoPoint(15 + 4_500 * metre, 130)) == nil)
+        #expect(atlas.city(at: GeoPoint(.nan, 130)) == nil && !atlas.isUrban(GeoPoint(.nan, 100)))
+    }
+
+    /// The city search reaches across the antimeridian, and widens poleward to every column 35 km spans: at
+    /// 80°N a megacity two one-degree columns east (1.4° of longitude, 27 km) of a fix inside a boundary still
+    /// names it; outside the boundary, 31 km off, it does not.
+    @Test func theCitySearchWrapsAndWidensPoleward() throws {
+        typealias Builder = WorldAtlasTestPackBuilder
+        var world = Builder.standardWorld()
+        world.urban.append(Builder.Feature(bbox: (0.5, 79.8, 1.2, 80.2), rings: [Builder.Feature.box(0.5, 79.8, 1.2, 80.2)]))
+        world.cities += [
+            Builder.City(token: "Q10", country: "EE", size: 3, lat: 0, lon: 179.95, name: "Date Line City"),
+            Builder.City(token: "Q11", country: "EE", size: 3, lat: 80, lon: 2.3, name: "Polar City"),
+        ]
+        let atlas = try WorldAtlas(data: try world.build())
+        #expect(atlas.city(at: GeoPoint(0, -179.97))?.token == "Q10", "8.9 km across the antimeridian, in the core")
+        #expect(atlas.city(at: GeoPoint(80, 0.9))?.token == "Q11", "27 km east, inside a boundary, in reach")
+        #expect(atlas.city(at: GeoPoint(80.25, 1.6)) == nil, "outside the boundary, 31 km off, past the core")
     }
 
     // MARK: The visit
@@ -158,7 +194,7 @@ struct WorldAtlasEngineTests {
         let territory = atlas.visit(at: GeoPoint(-35, 55))
         #expect(territory.countryCode == "BB" && territory.sovereignCode == "CC" && territory.terrain == .water)
         #expect(atlas.visit(at: GeoPoint(.nan, 0)) == AtlasVisit(terrain: .water))
-        #expect(atlas.visit(at: GeoPoint(10.6, 100.6)).city?.token == "Q1")
+        #expect(atlas.visit(at: GeoPoint(10.1, 100.16)).city?.token == "Q1")
     }
 
     // MARK: Terrain and flora
