@@ -73,6 +73,8 @@ This module holds location history (the lifted fog cells, saved walk and run lin
 
 - ``MercatorHexGrid``
 - ``HexCell``
+- ``FogGapCloser``
+- ``FogGapScan``
 
 ### The sealed history
 
