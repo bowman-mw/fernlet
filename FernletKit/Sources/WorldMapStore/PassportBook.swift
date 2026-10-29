@@ -1,16 +1,20 @@
 import Foundation
 
 /// The World passport's contents (round 7, idea 4; owner 2026-10-29): every country or territory, continent,
-/// ocean, sea, city and terrain class the person has been to, each by its frozen token
-/// (``AtlasDiscovery/token``) with the date of the first visit. A value type with no display strings.
+/// ocean, sea, city, landmark and terrain class the person has been to, each by its frozen token
+/// (``AtlasDiscovery/token``) with the date of the first visit. A value type with no display strings. A found
+/// landmark is kept by its token alone; its city comes from the bundled list (``WorldLandmarks``), so the
+/// city card counts it with ``foundLandmarkCount(inCity:of:)``.
 ///
 /// **Versioned bytes.** ``encoded()`` and ``init(data:)`` are the one format, used both for the sealed file on
 /// the iPhone (``PassportStore``) and for the passport's part of Fernlet's sealed iCloud backup: JSON with a
 /// `version` field (``currentVersion``) and one object per kind, token to first date in seconds since 1970.
 /// A version this build does not know, a kind over its cap, or a token that is not a token is refused whole.
+/// Landmarks joined version 1 as one more kind key (`landmark`); a build from before them reads such a book
+/// with that key left out.
 ///
 /// **Bounded** (Power of 10): at most ``cap(for:)`` entries per kind (300 countries and territories,
-/// 7 continents, 5 oceans, 250 seas, 20,000 cities, 20 terrain classes), tokens of at most
+/// 7 continents, 5 oceans, 250 seas, 20,000 cities, 5,000 landmarks, 20 terrain classes), tokens of at most
 /// ``maxTokenBytes`` bytes, and at most ``maxEncodedBytes`` of encoding. Past a cap a new entry is refused and
 /// counted (``refusedCount``), never an eviction of an earlier one.
 public nonisolated struct PassportBook: Codable, Equatable, Sendable {
@@ -18,8 +22,11 @@ public nonisolated struct PassportBook: Codable, Equatable, Sendable {
     public static let currentVersion = 1
     /// The longest token kept, in UTF-8 bytes.
     public static let maxTokenBytes = 64
-    /// The largest encoding read (a full book is about 1 MB).
+    /// The largest encoding read (a full book is about 1.2 MB).
     public static let maxEncodedBytes = 4 * 1_024 * 1_024
+    /// The most first visits one visit can add: one of each kind but landmarks, plus up to
+    /// ``AtlasVisit/maxLandmarks`` landmarks.
+    public static let maxDiscoveriesPerVisit = AtlasDiscoveryKind.allCases.count - 1 + AtlasVisit.maxLandmarks
 
     /// Why bytes were refused as a passport.
     public enum BookError: Error, Equatable {
@@ -57,6 +64,7 @@ public nonisolated struct PassportBook: Codable, Equatable, Sendable {
         case .ocean: 5
         case .sea: 250
         case .city: 20_000
+        case .landmark: 5_000
         case .terrain: 20
         }
     }
@@ -96,31 +104,42 @@ public nonisolated struct PassportBook: Codable, Equatable, Sendable {
     // MARK: First visits
 
     /// The kind and token of each place `visit` names, in the fixed order of ``AtlasDiscoveryKind``
-    /// (country, continent, ocean, sea, city, terrain); at most one of each kind, tokens unchecked.
+    /// (country, continent, ocean, sea, city, landmark, terrain): one of each kind but landmarks, of which the
+    /// first ``AtlasVisit/maxLandmarks`` are taken in the visit's order. Tokens unchecked.
     public static func places(in visit: AtlasVisit) -> [(kind: AtlasDiscoveryKind, token: String)] {
-        let named: [(AtlasDiscoveryKind, String?)] = [
+        let before: [(AtlasDiscoveryKind, String?)] = [
             (.country, visit.countryCode), (.continent, visit.continent?.rawValue), (.ocean, visit.ocean?.rawValue),
-            (.sea, visit.sea?.token), (.city, visit.city?.token), (.terrain, visit.terrain.rawValue)
+            (.sea, visit.sea?.token), (.city, visit.city?.token)
         ]
+        let landmarks: [(AtlasDiscoveryKind, String?)] = visit.landmarks.prefix(AtlasVisit.maxLandmarks)
+            .map { (.landmark, $0) }
+        let named = before + landmarks + [(.terrain, visit.terrain.rawValue)]
         return named.compactMap { kind, token in token.map { (kind: kind, token: $0) } }
     }
 
     /// The first visits `visit` would add at `date`, in the fixed order, without changing the book: the places
-    /// it names with a valid token that the book does not hold yet (caps are applied by ``record(_:at:)``).
+    /// it names with a valid token that the book does not hold yet, each once even when the visit names it
+    /// twice (caps are applied by ``record(_:at:)``). At most ``maxDiscoveriesPerVisit``.
     public func newDiscoveries(in visit: AtlasVisit, at date: Date) -> [AtlasDiscovery] {
         guard date.timeIntervalSince1970.isFinite else { return [] }
-        return Self.places(in: visit)
-            .filter { Self.isValidToken($0.token, of: $0.kind) && firstVisit($0.kind, token: $0.token) == nil }
-            .map { AtlasDiscovery(kind: $0.kind, token: $0.token, at: date) }
+        var seen = Set<String>(), found: [AtlasDiscovery] = []
+        // Bounded: places(in:) names at most maxDiscoveriesPerVisit places.
+        for place in Self.places(in: visit).prefix(Self.maxDiscoveriesPerVisit)
+        where Self.isValidToken(place.token, of: place.kind) && firstVisit(place.kind, token: place.token) == nil {
+            guard seen.insert(place.kind.rawValue + "/" + place.token).inserted else { continue }
+            found.append(AtlasDiscovery(kind: place.kind, token: place.token, at: date))
+        }
+        return found
     }
 
     /// Records `visit` at `date` and returns only its first visits, in the fixed order (country, continent,
-    /// ocean, sea, city, terrain). A first visit past its kind's cap is refused and counted. At most six.
+    /// ocean, sea, city, landmark, terrain). A first visit past its kind's cap is refused and counted. At most
+    /// ``maxDiscoveriesPerVisit``.
     public mutating func record(_ visit: AtlasVisit, at date: Date) -> [AtlasDiscovery] {
         let candidates = newDiscoveries(in: visit, at: date)
         guard !candidates.isEmpty else { return [] }
         var kept: [AtlasDiscovery] = []
-        for discovery in candidates.prefix(AtlasDiscoveryKind.allCases.count) {
+        for discovery in candidates.prefix(Self.maxDiscoveriesPerVisit) {
             guard count(of: discovery.kind) < Self.cap(for: discovery.kind) else {
                 refusedCount += 1
                 continue
@@ -129,6 +148,26 @@ public nonisolated struct PassportBook: Codable, Equatable, Sendable {
             kept.append(discovery)
         }
         return kept
+    }
+
+    // MARK: Landmarks
+
+    /// Whether `landmark` has been found.
+    public func isFound(_ landmark: AtlasLandmark) -> Bool {
+        firstVisit(.landmark, token: landmark.token) != nil
+    }
+
+    /// The landmarks of the city whose atlas token is `cityToken` that have been found, in `list`'s order
+    /// (the city card's icons with names; the rest stay question marks).
+    public func foundLandmarks(inCity cityToken: String, of list: WorldLandmarks) -> [AtlasLandmark] {
+        guard count(of: .landmark) > 0 else { return [] }
+        return list.landmarks(inCity: cityToken).filter { isFound($0) }
+    }
+
+    /// How many of the city's landmarks have been found ("2 of 6 found": the 6 is
+    /// `list.landmarks(inCity:).count`).
+    public func foundLandmarkCount(inCity cityToken: String, of list: WorldLandmarks) -> Int {
+        foundLandmarks(inCity: cityToken, of: list).count
     }
 
     // MARK: Restoring
@@ -228,13 +267,15 @@ public nonisolated struct PassportBook: Codable, Equatable, Sendable {
     // MARK: Rules
 
     /// Whether `token` may be kept as a `kind`: not empty, at most ``maxTokenBytes``, a known rawValue for a
-    /// continent, ocean or terrain, and printable ASCII without spaces for a country, sea or city.
+    /// continent, ocean or terrain, lowerCamel ASCII for a landmark (``AtlasLandmark/isValidToken(_:)``), and
+    /// printable ASCII without spaces for a country, sea or city.
     public static func isValidToken(_ token: String, of kind: AtlasDiscoveryKind) -> Bool {
         guard !token.isEmpty, token.utf8.count <= maxTokenBytes else { return false }
         switch kind {
         case .continent: return AtlasContinent(rawValue: token) != nil
         case .ocean: return AtlasOcean(rawValue: token) != nil
         case .terrain: return AtlasTerrain(rawValue: token) != nil
+        case .landmark: return AtlasLandmark.isValidToken(token)
         case .country, .sea, .city: return token.utf8.allSatisfy { $0 > 0x20 && $0 < 0x7F }
         }
     }

@@ -65,7 +65,8 @@ final class WorldFogKeeper {
          isProtectedDataAvailable: (@MainActor () -> Bool)? = nil) {
         self.vault = vault
         self.store = FogCellStore(vault: vault)
-        self.atlas = WorldAtlasKeeper(vault: vault, openAtlas: WorldAtlasKeeper.bundledPack { try WorldAtlas(data: $0) })
+        self.atlas = WorldAtlasKeeper(vault: vault, openAtlas: WorldAtlasKeeper.bundledPack { try WorldAtlas(data: $0) },
+                                      openLandmarks: WorldAtlasKeeper.bundledLandmarks())
         self.defaults = defaults
         self.isProtectedDataAvailable = isProtectedDataAvailable ?? { UIApplication.shared.isProtectedDataAvailable }
         self.widgetMap = WorldWidgetMapFile()

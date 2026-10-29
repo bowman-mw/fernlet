@@ -169,3 +169,34 @@ UTF-8 JSON: the generator version, the generation date, and each source's file n
   within `WorldAtlas.townRadiusMetres` of its point.
 - **Terrain:** water or land from `LAND`, a class from `CLIM` and the latitude, flora from the class, the latitude
   and (for cacti) the Americas.
+- **Landmark:** within the landmark's find radius of its point (below).
+
+## Landmarks
+
+World-Exploration-Spec §2 (owner: two tiers, grey and unnamed through the fog before found, named once found).
+
+- **Hand-written and bundled beside the pack, not in it.** `App/Fernlet/World/Atlas/WorldLandmarks.json` is a short
+  list written by hand (never an OpenStreetMap import, never fetched), read by `WorldLandmarks` in `WorldMapStore`.
+  The generator does not touch it; regenerating the pack leaves it as it is. A missing or refused file means no
+  landmarks; the atlas and the passport carry on.
+- **Format** (frozen keys): `{"version": 1, "landmarks": [...]}`, each entry:
+
+  | Key | Meaning |
+  | --- | --- |
+  | `id` | the frozen token, lowerCamel ASCII, at most 64 bytes (`eiffelTower`); what the passport stores |
+  | `en`, `es` | the English and Spanish names (the usual Spanish name, else the English one) |
+  | `city` | the city's frozen atlas token, exactly as the shipped pack's `CITY` table has it (`Q90`) |
+  | `lat`, `lon` | the landmark's point, in degrees |
+  | `radius` | the find radius in metres, 50–600 (a tower about 150, a big park 250–400 from its centre) |
+  | `art` | famous tier only: the art id, one of `eiffel`, `empire`, `opera` (the three drawn) |
+  | `kind` | generic tier only: `park`, `bridge`, `lighthouse`, `stadium`, `castle` or `tower` |
+
+  Exactly one of `art` or `kind`. The reader refuses the whole file for an unknown key, a missing field, a second
+  use of an `id`, a bad name, token, point or radius, an unknown art id or kind, a version it does not read, more
+  than 5,000 entries or more than 2 MiB. `WorldLandmarkTests` checks the shipped list against the shipped pack:
+  every `city` is in `CITY`, and every point lies within 30 km of its city's point and in its city's country.
+- **The find rule.** An accepted fix (the same fixes the rest of the passport reads) within a landmark's `radius` of
+  its point finds it, measured flat-earth and the short way round the antimeridian; one fix finds at most 16. The
+  passport keeps each landmark once, by its `id`, with the date of the first fix, reported after the city and before
+  the terrain. Its city comes from the list, so the city card's "2 of 6 found" needs no second record. A decoy finds
+  nothing.

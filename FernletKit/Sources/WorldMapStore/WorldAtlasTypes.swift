@@ -136,10 +136,18 @@ public nonisolated struct AtlasVisit: Hashable, Sendable {
     public var city: AtlasCity?
     /// The terrain class under the fix.
     public var terrain: AtlasTerrain
+    /// The tokens (``AtlasLandmark/token``) of the landmarks whose find radius holds the fix, in the list's
+    /// order; empty when none does or no landmark list is open. At most ``maxLandmarks`` are read.
+    public var landmarks: [String]
 
-    /// A visit with every field given (tests build them by hand).
+    /// The most landmarks one visit counts (a fix within more find radii than this is not a real place).
+    public static let maxLandmarks = 16
+
+    /// A visit with every field given (tests build them by hand). `landmarks` comes last and defaults to none,
+    /// so a visit written before landmarks existed reads the same.
     public init(countryCode: String? = nil, sovereignCode: String? = nil, continent: AtlasContinent? = nil,
-                ocean: AtlasOcean? = nil, sea: AtlasSea? = nil, city: AtlasCity? = nil, terrain: AtlasTerrain) {
+                ocean: AtlasOcean? = nil, sea: AtlasSea? = nil, city: AtlasCity? = nil, terrain: AtlasTerrain,
+                landmarks: [String] = []) {
         self.countryCode = countryCode
         self.sovereignCode = sovereignCode
         self.continent = continent
@@ -147,12 +155,14 @@ public nonisolated struct AtlasVisit: Hashable, Sendable {
         self.sea = sea
         self.city = city
         self.terrain = terrain
+        self.landmarks = landmarks
     }
 }
 
-/// What kind of place a discovery is (a frozen token).
+/// What kind of place a discovery is (a frozen token). The cases' order is the fixed order a visit's first
+/// visits are reported in: country, continent, ocean, sea, city, landmark, terrain.
 public nonisolated enum AtlasDiscoveryKind: String, CaseIterable, Codable, Sendable {
-    case country, continent, ocean, sea, city, terrain
+    case country, continent, ocean, sea, city, landmark, terrain
 }
 
 /// One first visit: the passport's record and the event Sprout's lines will hook into (idea B).
@@ -160,7 +170,8 @@ public nonisolated struct AtlasDiscovery: Hashable, Codable, Sendable {
     /// What kind of place.
     public let kind: AtlasDiscoveryKind
     /// The frozen token: an alpha-2 country code, an ``AtlasContinent``, ``AtlasOcean`` or ``AtlasTerrain``
-    /// rawValue, or a sea's ``AtlasSea/token`` or a city's ``AtlasCity/token``.
+    /// rawValue, or a sea's ``AtlasSea/token``, a city's ``AtlasCity/token`` or a landmark's
+    /// ``AtlasLandmark/token``.
     public let token: String
     /// When it was first visited.
     public let at: Date

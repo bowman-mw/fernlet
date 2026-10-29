@@ -62,7 +62,7 @@ struct WorldPassportTests {
         #expect(book.record(Self.pacific, at: Self.t3) == [AtlasDiscovery(kind: .ocean, token: "pacific", at: Self.t3)])
         #expect(book.record(Self.antarctica, at: Self.t3).map(\.token) == ["antarctica", "southern", "ice"])
         let everything = AtlasVisit(countryCode: "PT", continent: .europe, ocean: .atlantic, sea: Self.caribbeanSea,
-                                    city: Self.portlandCity, terrain: .shrubland)
+                                    city: Self.portlandCity, terrain: .shrubland, landmarks: ["laurelhurstPark"])
         #expect(PassportBook().newDiscoveries(in: everything, at: Self.t1).map(\.kind) == AtlasDiscoveryKind.allCases)
         #expect(book.count(of: .terrain) == 3 && book.count(of: .ocean) == 2 && book.count(of: .sea) == 1)
         #expect(book.discoveries.first?.kind == .country && book.discoveries.count == 10)

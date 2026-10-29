@@ -8,7 +8,8 @@ import Foundation
 /// opens no connection and writes nothing (the keeper decides which fixes reach it). Every query is bounded:
 /// a raster lookup is one index; the coast mask lookup a binary search of at most 64 steps; the reach search
 /// at most `(2 × maxReachSpan + 1)²` cells of 256 sub-cells each; the country and city searches one pass over
-/// the decoded tables, whose sizes the decoder caps.
+/// the decoded tables, whose sizes the decoder caps; a lookup by token (``city(token:)``, ``country(code:)``,
+/// ``sea(token:)``) one dictionary read, the dictionaries built once at init.
 public nonisolated final class WorldAtlas: Sendable {
     // MARK: The rules' constants (each one decided once, here)
 
@@ -66,6 +67,12 @@ public nonisolated final class WorldAtlas: Sendable {
     let citiesByArea: [[Int]]
     /// The cities with no urban boundary, as indices into ``cities``.
     let looseCities: [Int]
+    /// Each city token's index into ``cities`` (the first, should a token repeat).
+    let cityIndex: [String: Int]
+    /// Each country code's index into ``countries`` (the first, should a code repeat).
+    let countryIndex: [String: Int]
+    /// Each sea token's index into ``seas`` (the first, should a token repeat).
+    let seaIndex: [String: Int]
 
     /// The atlas in `data` (a whole pack file), or the reason it is refused.
     public convenience init(data: Data) throws {
@@ -95,6 +102,41 @@ public nonisolated final class WorldAtlas: Sendable {
         }
         citiesByArea = byArea
         looseCities = loose
+        cityIndex = Self.firstIndices(of: layers.cities.map(\.token))
+        countryIndex = Self.firstIndices(of: layers.countries.map(\.code))
+        seaIndex = Self.firstIndices(of: layers.seas.map(\.token))
+    }
+
+    // MARK: Lookups by token
+
+    /// The city whose frozen token is `token` (a passport entry, a landmark's city), or nil. A dictionary
+    /// lookup.
+    public func city(token: String) -> AtlasCity? {
+        guard let index = cityIndex[token], cities.indices.contains(index) else { return nil }
+        return cities[index]
+    }
+
+    /// The country or territory whose alpha-2 code is `code`, or nil. A dictionary lookup.
+    public func country(code: String) -> AtlasCountry? {
+        guard let index = countryIndex[code], countries.indices.contains(index) else { return nil }
+        return countries[index]
+    }
+
+    /// The sea whose frozen token is `token`, or nil. A dictionary lookup.
+    public func sea(token: String) -> AtlasSea? {
+        guard let index = seaIndex[token], seas.indices.contains(index) else { return nil }
+        return seas[index]
+    }
+
+    /// Each key's first position in `keys`. Bounded: one pass over a decoder-capped table.
+    private static func firstIndices(of keys: [String]) -> [String: Int] {
+        guard !keys.isEmpty else { return [:] }
+        var index: [String: Int] = [:]
+        index.reserveCapacity(keys.count)
+        for (position, key) in keys.enumerated() where index[key] == nil {
+            index[key] = position
+        }
+        return index
     }
 
     // MARK: What lies under a point

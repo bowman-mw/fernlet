@@ -14,6 +14,14 @@ import WorldMapStore
 /// (``bundledPack(in:open:)``). A missing or unreadable pack means the passport records nothing this session
 /// and `FernletAuditLog` notes it once; the map and the fog carry on.
 ///
+/// **Landmarks** (World-Exploration-Spec §2). The hand-written `WorldLandmarks.json` beside the pack is opened
+/// once, on first use (``bundledLandmarks(in:)``); a missing or malformed file is logged once and means no
+/// landmarks, and the atlas still works. With a list open, each fix is read through `AtlasWithLandmarks`, so a
+/// fix within a landmark's find radius records it (kind `landmark`) like any other first visit, announced once.
+/// ``landmarks`` is the whole list, for drawing the unfound ones grey and unnamed through the fog; whether
+/// one is found comes from ``book`` (``isFound(_:)``). In a decoy the book is empty, so nothing is found, but
+/// the grey art may still be drawn: the list is public data that ships in the app, not the person's.
+///
 /// **Duress.** A decoy (``setDecoy(_:)``) shows an empty passport and keeps nothing: no fix is read, nothing
 /// is written and no discovery is announced. Every wipe reaches ``clearAll()`` through
 /// `WorldFogKeeper.clearAll()` (Delete everything and the silent wipe via `FernletStore.resetAll()`, the
@@ -36,6 +44,10 @@ final class WorldAtlasKeeper {
     static let packResource = "WorldAtlas"
     /// The bundled pack's file extension.
     static let packExtension = "pack"
+    /// The bundled landmark list's resource name (a frozen file name: `WorldLandmarks.json`).
+    static let landmarksResource = "WorldLandmarks"
+    /// The bundled landmark list's file extension.
+    static let landmarksExtension = "json"
     /// The least distance from the last fix read before another is read, in metres.
     static let minimumSpacing = 50.0
     /// The most discoveries a stream holds for a reader that hasn't caught up (the newest kept).
@@ -58,7 +70,9 @@ final class WorldAtlasKeeper {
 
     @ObservationIgnored private let store: PassportStore
     @ObservationIgnored private let openAtlas: @MainActor () -> (any AtlasVisitResolving)?
+    @ObservationIgnored private let openLandmarks: @MainActor () -> WorldLandmarks
     @ObservationIgnored private var atlas: AtlasState = .notOpened
+    @ObservationIgnored private var openedLandmarks: WorldLandmarks?
     @ObservationIgnored private var lastRead: GeoPoint?
     @ObservationIgnored private var subscriber: AsyncStream<AtlasDiscovery>.Continuation?
     /// Runs after the passport on disk changed for the sealed backup's sake: a first visit was saved, or
@@ -70,9 +84,46 @@ final class WorldAtlasKeeper {
 
     /// A keeper over `vault`, opening the atlas with `openAtlas` when the first fix arrives (the app passes
     /// ``bundledPack(in:open:)``; tests pass a fake). `openAtlas` returns nil when there is no atlas.
-    init(vault: WorldMapVault, openAtlas: @escaping @MainActor () -> (any AtlasVisitResolving)?) {
+    /// `openLandmarks` opens the landmark list on first use (the app passes ``bundledLandmarks(in:)``); the
+    /// default is no landmarks.
+    init(vault: WorldMapVault, openAtlas: @escaping @MainActor () -> (any AtlasVisitResolving)?,
+         openLandmarks: @escaping @MainActor () -> WorldLandmarks = { .empty }) {
         self.store = PassportStore(vault: vault)
         self.openAtlas = openAtlas
+        self.openLandmarks = openLandmarks
+    }
+
+    /// The opener for the landmark list bundled in `bundle`: reads `WorldLandmarks.json`. A missing file or
+    /// one ``WorldLandmarks`` refuses is logged and answers an empty list (the keeper opens it once).
+    static func bundledLandmarks(in bundle: Bundle = .main) -> @MainActor () -> WorldLandmarks {
+        {
+            guard let url = bundle.url(forResource: landmarksResource, withExtension: landmarksExtension) else {
+                FernletAuditLog.log("worldMap.landmarks.fileMissing")
+                return .empty
+            }
+            do {
+                return try WorldLandmarks(data: Data(contentsOf: url))
+            } catch {
+                FernletAuditLog.log("worldMap.landmarks.fileUnreadable")
+                return .empty
+            }
+        }
+    }
+
+    // MARK: Landmarks
+
+    /// Every bundled landmark, opened on first use (empty when the file is missing or refused). The screens
+    /// draw the unfound ones grey and unnamed through the fog, also in a decoy: the list is public data.
+    var landmarks: WorldLandmarks {
+        if let openedLandmarks { return openedLandmarks }
+        let opened = openLandmarks()
+        openedLandmarks = opened
+        return opened
+    }
+
+    /// Whether `landmark` is found in the passport the screens show (never in a decoy, whose book is empty).
+    func isFound(_ landmark: AtlasLandmark) -> Bool {
+        book.isFound(landmark)
     }
 
     /// The opener for the pack bundled in `bundle`: reads `WorldAtlas.pack` and hands its bytes to `open`
@@ -196,7 +247,8 @@ final class WorldAtlasKeeper {
 
     // MARK: Helpers
 
-    /// The atlas, opened on first use; nil when it is missing or unreadable (the opener logs that, once).
+    /// The atlas, opened on first use and read together with ``landmarks`` when the list holds any; nil when
+    /// the atlas is missing or unreadable (the opener logs that, once).
     private func resolver() -> (any AtlasVisitResolving)? {
         switch atlas {
         case .ready(let resolver):
@@ -208,8 +260,11 @@ final class WorldAtlasKeeper {
                 atlas = .unavailable
                 return nil
             }
-            atlas = .ready(opened)
-            return opened
+            let list = landmarks
+            let resolver: any AtlasVisitResolving = list.isEmpty
+                ? opened : AtlasWithLandmarks(atlas: opened, landmarks: list)
+            atlas = .ready(resolver)
+            return resolver
         }
     }
 
@@ -229,7 +284,7 @@ final class WorldAtlasKeeper {
     /// Announces `found` to the current reader, in order.
     private func announce(_ found: [AtlasDiscovery]) {
         guard let subscriber else { return }
-        for discovery in found.prefix(AtlasDiscoveryKind.allCases.count) {
+        for discovery in found.prefix(PassportBook.maxDiscoveriesPerVisit) {
             subscriber.yield(discovery)
         }
     }
