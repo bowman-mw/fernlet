@@ -1,4 +1,5 @@
 import CloudKitSync
+import FernletFoundation
 import Foundation
 import WorldMapStore
 
