@@ -11,6 +11,7 @@
 
 import CloudKit
 import CloudKitSync
+import FernletFoundation
 import Foundation
 import Testing
 import WorldMapStore
