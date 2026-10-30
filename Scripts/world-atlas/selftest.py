@@ -162,7 +162,7 @@ def climate_tif(fill):
 
 
 def write_sources(folder, crimea_in_russia=True):
-    """All eleven sources (the coastline too, though only META lists it); without Crimea's part of RU when
+    """All fourteen sources (the coastline too, though only META lists it); without Crimea's part of RU when
     crimea_in_russia is False (the territory override must then stop the run)."""
     l_outer = box(0, -30, 65, 30)
     lake = box(20, -10, 40, 10)[::-1]
@@ -178,6 +178,12 @@ def write_sources(folder, crimea_in_russia=True):
     # A lake over two land cells (30-50°E, 10-20°N) with an island (42-48°E, 12-18°N) in its east cell.
     write_layer(folder, "ne_10m_lakes", 5, [[box(30, 10, 50, 20), box(42, 12, 48, 18)[::-1]]], plain,
                 [{"FEATURECLA": "Lake"}])
+    # The regional supplements: Europe's repeats the main lake (a lake in two files stays water); North
+    # America's adds a lake over the cell 0-10°E, 20-30°N, which Australia's repeats too.
+    write_layer(folder, "ne_10m_lakes_europe", 5, [[box(30, 10, 50, 20), box(42, 12, 48, 18)[::-1]]], plain,
+                [{"FEATURECLA": "Lake"}])
+    write_layer(folder, "ne_10m_lakes_north_america", 5, [[box(0, 20, 10, 30)]], plain, [{"FEATURECLA": "Lake"}])
+    write_layer(folder, "ne_10m_lakes_australia", 5, [[box(0, 20, 10, 30)]], plain, [{"FEATURECLA": "Lake"}])
     marine_fields = [("featurecla", "C", 16), ("name", "C", 40), ("name_en", "C", 40), ("name_es", "C", 40),
                      ("name_fr", "C", 40), ("name_de", "C", 40), ("wikidataid", "C", 12), ("ne_id", "N", 10)]
     marine = [
@@ -247,16 +253,19 @@ def write_sources(folder, crimea_in_russia=True):
 # The synthetic roads, by record number: 0 and 1 one named route that touches (one road, two lines); 2 the same
 # name at another level, with a bend under the tolerance (its own main road, two points); 3 and 4 unnamed, meeting
 # where only they do (one road); 5, 6 and 4 meeting at a junction (5 and 6 their own); 7 a minor road, 8 a ferry
-# and 9 a track (left out); 10 an expressway of a low rank (a highway); 11 one feature in two parts (one road).
+# and 9 a track (left out); 10 an expressway of a low rank (a highway); 11 one feature in two parts (one road);
+# 12 Natural Earth's misnamed Banfield (UIDENT 20905, "Interstate 5" touching 1's end): its override makes it
+# Interstate 84, its own road (the second override, UIDENT 23805, is met by 13); 14, 15 and 16 one named route
+# branching three ways at (61, 0): 14 and 15 run straight on (one road), 16 turns off (its own).
 ROAD_FIELDS = [("FEATURECLA", "C", 10), ("TYPE", "C", 20), ("SCALERANK", "N", 4), ("EXPRESSWAY", "N", 2),
-               ("PREFIX", "C", 4), ("NAME", "C", 10), ("LABEL", "C", 10), ("LEVEL", "C", 12)]
+               ("PREFIX", "C", 4), ("NAME", "C", 10), ("LABEL", "C", 10), ("LEVEL", "C", 12), ("UIDENT", "N", 8)]
 
 
 def write_roads(folder):
-    """ne_10m_roads: the twelve pieces above."""
-    def road(kind="Major Highway", rank=3, name="", level="", cla="Road", express=0):
+    """ne_10m_roads: the seventeen pieces above."""
+    def road(kind="Major Highway", rank=3, name="", level="", cla="Road", express=0, uident=0):
         return {"FEATURECLA": cla, "TYPE": kind, "SCALERANK": rank, "EXPRESSWAY": express, "NAME": name,
-                "LEVEL": level}
+                "LEVEL": level, "UIDENT": uident}
     pieces = [
         ([[(0, 0), (1, 0)]], road(name="5", level="Interstate")),
         ([[(1, 0), (2, 0)]], road(name="5", level="Interstate")),
@@ -270,6 +279,11 @@ def write_roads(folder):
         ([[(24, 20), (25, 20)]], road("Track", 3)),
         ([[(30, 30), (31, 30)]], road("Road", 6, express=1)),
         ([[(40, 40), (41, 40)], [(42, 40), (43, 40)]], road()),
+        ([[(2, 0), (2, 1)]], road(name="5", level="Interstate", uident=20905)),
+        ([[(2, 1), (2, 2)]], road(name="5", level="Interstate", uident=23805)),
+        ([[(60, 0), (61, 0)]], road(name="9", level="Interstate")),
+        ([[(62, 0.1), (61, 0)]], road(name="9", level="Interstate")),
+        ([[(61, 0), (61, 1)]], road(name="9", level="Interstate")),
     ]
     write_layer(folder, "ne_10m_roads", 3, [p[0] for p in pieces], ROAD_FIELDS, [p[1] for p in pieces])
 
@@ -512,13 +526,35 @@ class Checks:
             self.failed.append("%s: got %r, want %r" % (label, got, want))
 
 
-def region_token_of(country, code, english):
-    """The generator's region_token, loaded from its file (the one generator function the self-test calls)."""
+def generator_module():
+    """The generator, loaded from its file (for the few functions the self-test calls)."""
     import importlib.util
     spec = importlib.util.spec_from_file_location("build_world_atlas", GENERATOR)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.region_token(country, code, english)
+    return module
+
+
+def region_token_of(country, code, english):
+    """The generator's region_token."""
+    return generator_module().region_token(country, code, english)
+
+
+def road_override_refuses_a_changed_name():
+    """True when a road override whose record no longer carries its old name stops the run."""
+    gen = generator_module()
+
+    class Quiet:
+        counts = {}
+
+    line = ("line", [np.array([(0.0, 0.0), (1.0, 0.0)])])
+    features = [(line, {"FEATURECLA": "Road", "TYPE": "Major Highway", "LEVEL": "Interstate", "NAME": "7",
+                        "UIDENT": rule["uident"]}) for rule in gen.ROAD_NAME_OVERRIDES]
+    try:
+        gen.road_pieces(features, Quiet())
+    except SystemExit:
+        return True
+    return False
 
 
 def run_generator(sources, out, *extra):
@@ -573,6 +609,10 @@ def check_grids(c, atlas):
     c.equal("a cell with an island in a lake is coast", state(45, 15), 2)
     c.equal("the island in the lake stays land", is_land(atlas, 45.0, 15.0), True)
     c.equal("the lake around it is water", is_land(atlas, 41.0, 11.0), False)
+    c.equal("a regional supplement's lake is water", state(5, 25), 0)
+    c.equal("a lake in two supplements is water", is_land(atlas, 5.0, 25.0), False)
+    c.equal("a supplement's lake keeps its continent", cont(5, 25), 1)
+    c.equal("a lake beside the ocean names no ocean", ocea(5, 25), 0)
 
 
 def check_tables(c, atlas):
@@ -613,7 +653,7 @@ def check_tables(c, atlas):
     c.equal("city country in a hole", gamma.get("country"), "LS")
     c.equal("city population", beta.get("population"), 50000)
     c.equal("meta date", atlas["meta"].get("date"), "2026-10-29")
-    c.equal("meta sources", len(atlas["meta"].get("sources", [])), 11)
+    c.equal("meta sources", len(atlas["meta"].get("sources", [])), 14)
     c.equal("meta admin-1 tolerance", atlas["meta"].get("admin1SimplifyDegrees"), 0.008)
 
 
@@ -666,9 +706,14 @@ def check_admin1(c, atlas):
 def check_roads(c, atlas):
     """ROAD: which pieces count, how they join into roads, their kinds and lines."""
     roads = atlas["roads"]
-    c.equal("road numbers", sorted(roads), [0, 2, 3, 5, 6, 10, 11])
-    c.equal("road kinds", [roads[n]["kind"] for n in sorted(roads)], [1, 2, 2, 2, 2, 1, 1])
+    c.equal("road numbers", sorted(roads), [0, 2, 3, 5, 6, 10, 11, 12, 14, 16])
+    c.equal("road kinds", [roads[n]["kind"] for n in sorted(roads)], [1, 2, 2, 2, 2, 1, 1, 1, 1, 1])
+    c.equal("a branching route joins its straightest pair", len(roads.get(14, {}).get("lines", [])), 2)
+    c.equal("the branch that turns off is its own road", roads.get(16, {}).get("lines"),
+            [[(6100000, 0), (6100000, 100000)]])
     c.equal("a named route that touches is one road", len(roads.get(0, {}).get("lines", [])), 2)
+    c.equal("corrected names are their own road", roads.get(12, {}).get("lines"),
+            [[(200000, 0), (200000, 100000)], [(200000, 100000), (200000, 200000)]])
     c.equal("unnamed pieces where only two meet join", len(roads.get(3, {}).get("lines", [])), 2)
     c.equal("a feature's parts are one road", len(roads.get(11, {}).get("lines", [])), 2)
     c.equal("a bend under the tolerance goes", roads.get(2, {}).get("lines"), [[(200000, 0), (300000, 0)]])
@@ -695,6 +740,7 @@ def main():
         check_tables(c, atlas)
         check_admin1(c, atlas)
         check_roads(c, atlas)
+        c.equal("a road override whose name changed stops the run", road_override_refuses_a_changed_name(), True)
         c.equal("summary logs the admin-1 left out", "Nowhere" in log and "left out of ADM1" in log, True)
         c.equal("summary logs the unnamed admin-1", "'' (ne_id 71)" in log, True)
         c.equal("summary logs the unlisted region", "region 'FR-ZZZ' not in PLATE_GROUPS" in log, True)

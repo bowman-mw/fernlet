@@ -19,6 +19,7 @@ import argparse
 import hashlib
 import io
 import json
+import math
 import os
 import re
 import struct
@@ -49,7 +50,7 @@ def _import_numpy_and_pillow():
 
 np, Image = _import_numpy_and_pillow()
 
-GENERATOR_VERSION = 8
+GENERATOR_VERSION = 9
 PACK_VERSION = 1
 MAGIC = b"FWA1"
 SUB = 16
@@ -79,6 +80,9 @@ SOURCE_LICENCES = {
     "ne_10m_land": "public domain (Natural Earth)",
     "ne_10m_minor_islands": "public domain (Natural Earth)",
     "ne_10m_lakes": "public domain (Natural Earth)",
+    "ne_10m_lakes_north_america": "public domain (Natural Earth)",
+    "ne_10m_lakes_europe": "public domain (Natural Earth)",
+    "ne_10m_lakes_australia": "public domain (Natural Earth)",
     "ne_10m_coastline": "public domain (Natural Earth)",
     "ne_10m_geography_marine_polys": "public domain (Natural Earth)",
     "ne_10m_admin_0_countries": "public domain (Natural Earth)",
@@ -89,6 +93,10 @@ SOURCE_LICENCES = {
     "Beck_KG_V1": "CC BY 4.0 (Beck et al. 2018, Scientific Data 5:180214)",
 }
 BECK_MEMBER = "Beck_KG_V1_present_0p083.tif"
+# The lakes: Natural Earth's main file and its regional supplements of smaller lakes (Lake Washington is only in
+# North America's; owner 2026-10-30 "go ahead and download them"). The historic and pluvial files hold former
+# and Ice Age lakes, not water there today, and are left out.
+LAKE_LAYERS = ("ne_10m_lakes", "ne_10m_lakes_north_america", "ne_10m_lakes_europe", "ne_10m_lakes_australia")
 
 OCEAN_KEYWORDS = (("pacific", 1), ("atlantic", 2), ("indian", 3), ("arctic", 4), ("southern", 5))
 OCEAN_TOKENS = {1: "pacific", 2: "atlantic", 3: "indian", 4: "arctic", 5: "southern"}
@@ -196,8 +204,8 @@ def read_source_table(script_dir):
             if len(parts) != 6:
                 raise SystemExit("error: bad source table line in fetch-sources.sh: %r" % line)
             rows.append(dict(zip(("subdir", "file", "bytes", "need", "sha", "url"), parts)))
-    if len(rows) != 11:
-        raise SystemExit("error: fetch-sources.sh lists %d sources, not 11" % len(rows))
+    if len(rows) != 14:
+        raise SystemExit("error: fetch-sources.sh lists %d sources, not 14" % len(rows))
     return rows
 
 
@@ -524,25 +532,31 @@ def cell_centres(rows, cols, flat_index):
 # LAND
 
 
-def build_land(land_rings, island_rings, lake_rings, rows, cols, report):
-    """The state grid (0 water, 1 land, 2 coast), the coast cells' 16×16 masks in index order, and which cells
-    hold lake water. Lakes (owner, 2026-10-30: "water in the fog only where real water is") are cut out of the
-    land, and the minor islands put back on top (an island in a lake stays land)."""
+def build_land(land_rings, island_rings, lake_layers, rows, cols, report):
+    """The state grid (0 water, 1 land, 2 coast), the coast cells' 16×16 masks in index order, which cells hold
+    lake water, and which are lake cells for OCEA (lake sub-cells at least half the cell's water). Lakes (owner, 2026-10-30: "water in the fog only where real water is") are cut out of the
+    land, and the minor islands put back on top (an island in a lake stays land). Each lake layer (the main
+    file and Natural Earth's regional supplements, which repeat some of its lakes) is rasterized on its own and
+    the results joined, so a lake in two files is never cancelled by the even-odd fill."""
     land = StripRasterizer(land_rings, rows, cols)
     islands = StripRasterizer(island_rings, rows, cols)
-    lakes = StripRasterizer(lake_rings, rows, cols) if lake_rings else None
+    lake_masks = [StripRasterizer(rings, rows, cols) for rings in lake_layers if rings]
     state = np.zeros((rows, cols), dtype=np.uint8)
     lake_cells = np.zeros((rows, cols), dtype=bool)
+    lake_water = np.zeros((rows, cols), dtype=bool)
     masks = []
     for row in range(rows):
         ground = land.strip(row)
-        if lakes is not None:
-            lake = lakes.strip(row) & ground
+        lake = np.zeros_like(ground)
+        if lake_masks:
+            lake = np.logical_or.reduce([mask.strip(row) for mask in lake_masks]) & ground
             lake_cells[row] = lake.reshape(SUB, cols, SUB).any(axis=(0, 2))
             ground = ground & ~lake
         fine = ground | islands.strip(row)
         blocks = fine.reshape(SUB, cols, SUB)
         filled = blocks.sum(axis=(0, 2))
+        lake_count = (lake & ~fine).reshape(SUB, cols, SUB).sum(axis=(0, 2))
+        lake_water[row] = (lake_count > 0) & (2 * lake_count >= SUB * SUB - filled)
         state[row] = np.where(filled == 0, 0, np.where(filled == SUB * SUB, 1, 2))
         coast = np.nonzero(state[row] == 2)[0]
         if coast.size:
@@ -552,8 +566,9 @@ def build_land(land_rings, island_rings, lake_rings, rows, cols, report):
     report.counts["coast cells"] = coast_count
     report.counts["land cells"] = int((state == 1).sum())
     report.counts["cells holding lake water"] = int(lake_cells.sum())
+    report.counts["lake cells kept out of OCEA"] = int(lake_water.sum())
     body = struct.pack("<IIH", cols, rows, SUB) + state.tobytes() + struct.pack("<I", coast_count)
-    return state, body + b"".join(masks), lake_cells
+    return state, body + b"".join(masks), lake_cells, lake_water
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -1067,9 +1082,11 @@ def label_distances(label, dist, rows, cols, count):
     return weight, big
 
 
-def build_oceans(features, state, rows, cols, report):
-    """The OCEA grid and the SEAS section (Docs/World-Atlas-Pack.md rules 1-3)."""
-    water = (state != 1).ravel()
+def build_oceans(features, state, lake_water, rows, cols, report):
+    """The OCEA grid and the SEAS section (Docs/World-Atlas-Pack.md rules 1-3). A lake cell is never painted or
+    flooded, so a lake that touches the sea on the grid (Lake Washington by Puget Sound) names no sea and keeps
+    its continent."""
+    water = (state != 1).ravel() & ~lake_water.ravel()
     label = np.zeros(rows * cols, dtype=np.int32)
     grid = label.reshape(rows, cols)
     where = water.reshape(rows, cols)
@@ -1763,6 +1780,16 @@ ROAD_MAIN = 2
 ROAD_HIGHWAY_TYPES = {"Major Highway", "Beltway", "Bypass"}
 ROAD_MAIN_MAX_SCALERANK = 5
 ROAD_SIMPLIFY_DEGREES = 0.001
+# Route names Natural Earth has wrong, by its UIDENT, the name it gives ("was") and the right one. The run stops
+# unless each rule meets exactly one record with that UIDENT still named "was" at "level", so a new source version
+# is looked at again rather than silently re-joined.
+# - Portland's Banfield Freeway (I-84 from downtown east to Natural Earth's own two-point I-84 piece) is named
+#   "5": left so, it joins Interstate 5 and crossing either turns both (explore-ui, owner 2026-10-30).
+#   Its eastward run from I-205 to Troutdale (UIDENT 23805) carries the same "5".
+ROAD_NAME_OVERRIDES = (
+    {"uident": 20905, "level": "Interstate", "was": "5", "name": "84"},
+    {"uident": 23805, "level": "Interstate", "was": "5", "name": "84"},
+)
 MAX_ROADS = 65_536
 MAX_ROAD_LINES = 8_192
 MAX_ROAD_POINTS = 65_535
@@ -1785,30 +1812,65 @@ def road_name_key(attrs):
     return text_field(attrs, "LEVEL").strip() + "|" + name if name else ""
 
 
+def road_name_override(attrs, used):
+    """The ROAD_NAME_OVERRIDES name key for a piece, or None; counts each rule's matches in `used` (UIDENT alone
+    is not unique in Natural Earth, so a rule meets only a record with its UIDENT, level and old name)."""
+    for index, rule in enumerate(ROAD_NAME_OVERRIDES):
+        if (attrs.get("UIDENT") == rule["uident"] and text_field(attrs, "LEVEL") == rule["level"]
+                and text_field(attrs, "NAME") == rule["was"]):
+            used[index] += 1
+            return rule["level"] + "|" + rule["name"]
+    return None
+
+
 def road_pieces(features, report):
     """Each major-road line as (record number, kind, name key, int64 (n, 2) points at 1e-5°), repeated points
     dropped."""
     pieces = []
+    used = [0] * len(ROAD_NAME_OVERRIDES)
     for record, (geom, attrs) in enumerate(features):
         kind = road_kind(attrs)
         if kind is None or not geom or geom[0] != "line":
             continue
         uident = record
+        name_key = road_name_override(attrs, used) or road_name_key(attrs)
         for line in geom[1]:
             q = np.round(simplify_open_line(line, ROAD_SIMPLIFY_DEGREES) * SCALE).astype(np.int64)
             moved = np.any(np.diff(q, axis=0) != 0, axis=1)
             q = np.concatenate([q[:1], q[1:][moved]])
             if len(q) >= 2:
-                pieces.append((uident, kind, road_name_key(attrs), q))
+                pieces.append((uident, kind, name_key, q))
+    for rule, count in zip(ROAD_NAME_OVERRIDES, used):
+        if count != 1:
+            raise SystemExit("error: the override for road UIDENT %d (%s %s) met %d records, not 1; look at it again"
+                             % (rule["uident"], rule["level"], rule["was"], count))
+    report.counts["road names corrected"] = sum(used)
     report.counts["road pieces (highway / main)"] = "%d / %d" % (
         sum(1 for p in pieces if p[1] == ROAD_HIGHWAY), sum(1 for p in pieces if p[1] == ROAD_MAIN))
     return pieces
 
 
-def road_groups(pieces):
+def straightest_pair(entries):
+    """Of the piece ends meeting at one point, the two whose lines leave it most nearly opposite (the route going
+    straight on), as indexes into `entries`; each entry is (piece index, the line's next point from the end)."""
+    best, pair = None, (0, 1)
+    for a in range(len(entries)):
+        for b in range(a + 1, len(entries)):
+            (i, da), (j, db) = entries[a], entries[b]
+            if i == j:
+                continue
+            norm = math.hypot(*da) * math.hypot(*db)
+            turn = (da[0] * db[0] + da[1] * db[1]) / norm if norm else 1.0
+            if best is None or turn < best:
+                best, pair = turn, (a, b)
+    return pair
+
+
+def road_groups(pieces, report=None):
     """The pieces joined into roads (union-find; each union is one of at most 2n end matches): the parts of one
     source feature always, named pieces of one route that touch, and unnamed pieces through a point exactly two
-    piece ends share."""
+    piece ends share. Where three or more ends of one named route meet (it branches, so a name is wrong or a spur
+    shares it: Natural Earth's I-84 was "5"), only the straightest pair joins (owner 2026-10-30)."""
     parent = list(range(len(pieces)))
 
     def find(i):
@@ -1827,15 +1889,28 @@ def road_groups(pieces):
             first_part[piece[0]] = index
     ends = {}
     for index, (_, _, _, q) in enumerate(pieces):
-        for point in (q[0], q[-1]):
-            ends.setdefault((int(point[0]), int(point[1])), []).append(index)
+        for point, toward in ((q[0], q[1]), (q[-1], q[-2])):
+            key = (int(point[0]), int(point[1]))
+            direction = (int(toward[0]) - key[0], int(toward[1]) - key[1])
+            ends.setdefault(key, []).append((index, direction))
+    branches = 0
     for members in ends.values():
-        for a in range(len(members)):
-            for b in range(a + 1, len(members)):
-                i, j = members[a], members[b]
-                name_i, name_j = pieces[i][2], pieces[j][2]
-                if (name_i and name_i == name_j) or (not name_i and not name_j and len(members) == 2):
-                    parent[find(i)] = find(j)
+        if len(members) == 2 and not pieces[members[0][0]][2] and not pieces[members[1][0]][2]:
+            parent[find(members[0][0])] = find(members[1][0])
+        named = {}
+        for entry in members:
+            if pieces[entry[0]][2]:
+                named.setdefault(pieces[entry[0]][2], []).append(entry)
+        for entries in named.values():
+            if len(entries) > 2:
+                branches += 1
+                a, b = straightest_pair(entries)
+                entries = [entries[a], entries[b]]
+            for a in range(len(entries)):
+                for b in range(a + 1, len(entries)):
+                    parent[find(entries[a][0])] = find(entries[b][0])
+    if report is not None:
+        report.counts["named-route branch points (straightest pair joined)"] = branches
     groups = {}
     for index in range(len(pieces)):
         groups.setdefault(find(index), []).append(index)
@@ -1847,7 +1922,7 @@ def build_roads(features, report):
     lines (u16 pointCount · first point i32 lon, i32 lat · zigzag-LEB128 deltas)."""
     pieces = road_pieces(features, report)
     roads = []
-    for members in road_groups(pieces):
+    for members in road_groups(pieces, report):
         uident = min(pieces[i][0] for i in members)
         kind = ROAD_HIGHWAY if any(pieces[i][1] == ROAD_HIGHWAY for i in members) else ROAD_MAIN
         lines = [pieces[i][3] for i in sorted(members, key=lambda i: (pieces[i][0], int(pieces[i][3][0, 0])))]
@@ -1965,10 +2040,10 @@ def main(argv):
     layer = lambda subdir: read_layer(sources[subdir]["path"], report)  # noqa: E731
     land_rings = [r for g, _ in layer("ne_10m_land") for r in polygon_rings(g)]
     island_rings = [r for g, _ in layer("ne_10m_minor_islands") for r in polygon_rings(g)]
-    lake_rings = [r for g, _ in layer("ne_10m_lakes") for r in polygon_rings(g)]
-    state, land, lake_cells = build_land(land_rings, island_rings, lake_rings, rows, cols, report)
+    lake_layers = [[r for g, _ in layer(name) for r in polygon_rings(g)] for name in LAKE_LAYERS]
+    state, land, lake_cells, lake_water = build_land(land_rings, island_rings, lake_layers, rows, cols, report)
     clim = build_climate(sources["Beck_KG_V1"]["path"], state, rows, cols, report)
-    ocea, seas = build_oceans(layer("ne_10m_geography_marine_polys"), state, rows, cols, report)
+    ocea, seas = build_oceans(layer("ne_10m_geography_marine_polys"), state, lake_water, rows, cols, report)
     items = country_features(layer("ne_10m_admin_0_countries"), report)
     apply_territory_overrides(items, report)
     cont = build_cont(items, state, lake_cells, rows, cols, report)

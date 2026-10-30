@@ -23,6 +23,7 @@ approves those first. This file is the contract between the generator (`Scripts/
 | --- | --- | --- | --- |
 | Land, minor islands | Natural Earth 1:10m `ne_10m_land`, `ne_10m_minor_islands` | public domain | none required (Fernlet credits it anyway) |
 | Lakes | Natural Earth 1:10m `ne_10m_lakes` (owner's OK 2026-10-30) | public domain | none required |
+| Smaller lakes | Natural Earth 1:10m regional supplements `ne_10m_lakes_north_america`, `ne_10m_lakes_europe`, `ne_10m_lakes_australia` (owner's OK 2026-10-30) | public domain | none required |
 | Oceans | Natural Earth 1:10m `ne_10m_geography_marine_polys` | public domain | none required |
 | Countries | Natural Earth 1:10m `ne_10m_admin_0_countries` | public domain | none required |
 | States and provinces | Natural Earth 1:10m `ne_10m_admin_1_states_provinces` (owner's OK 2026-10-29) | public domain | none required |
@@ -68,10 +69,23 @@ coastCount × 32 bytes         a 16×16 bit mask per coast cell, coast cells in 
 Inside a coast cell: `sx = floor(fracCol * 16)`, `sy = floor(fracRow * 16)` with both fractions measured from the
 cell's north-west corner; `bit = sy * 16 + sx`; byte `bit >> 3`, bit `bit & 7` (least significant first);
 1 = land. A sub-cell is about 700 m at the equator, the source's own precision. Land is Natural Earth land with
-its lakes (`ne_10m_lakes`) cut out, plus minor islands on top (an island in a lake stays land). **Lakes are water**
-(owner, 2026-10-30: "water in the fog only where real water is"), so the terrain reads water there, but a lake is no
-ocean or sea: its `OCEA` code is 0, like the Caspian's, and its cells keep their continent (`CONT`). The 2026-10-30
-pack has 31,981 cells holding lake water; lakes add about 196 KB to `LAND`.
+its lakes cut out, plus minor islands on top (an island in a lake stays land). The lakes are `ne_10m_lakes` and
+Natural Earth's regional supplements of smaller lakes for North America, Europe and Australia (Lake Washington is
+only in North America's; owner 2026-10-30 "go ahead and download them"); each file is rasterized on its own and
+the results joined, so a lake two files repeat stays water. The historic and pluvial supplements (former and Ice
+Age lakes) are left out. **Lakes are water** (owner, 2026-10-30: "water in the fog only where real water is"), so
+the terrain reads water there, but a lake is no ocean or sea: a cell whose lake sub-cells are at least half its
+water is a **lake cell**, never painted or flooded for `OCEA`, so its code is 0 like the Caspian's even where the
+lake touches the sea on the grid (Lake Washington beside Puget Sound), and its cells keep their continent (`CONT`).
+The 2026-10-30 pack has 42,839 cells holding lake water (42,690 of them lake cells); lakes add about 280 KB to
+`LAND`.
+
+Known edges: the lakes are only as fine as Natural Earth's 1:10m outlines. Lake Geneva's north shore at Lausanne
+runs as a straight chord about 1.1 km inland of the real Ouchy waterfront (the whole lake is 39 points), so the
+fog draws water over lakefront streets there. Lakes neither file has (Lake Sammamish, Lake Burley Griffin) stay
+land, and an island neither file cuts out or `ne_10m_minor_islands` holds (Mercer Island) reads as water. Salt
+lakes the files carry count as water even when dry (Lake Eyre). A lake joined to the sea by water cells that are
+mostly sea, not lake, still floods (Maracaibo counts the Caribbean).
 
 ### `CLIM`: climate
 
@@ -285,7 +299,7 @@ at City) would make a 6.7 MB pack and 0.005° leave 130 KB under the cap, so the
   117 groups holding 887 entries.
 
 The 2026-10-29 pack has 4,554 entries over 239 countries (4,293 with an ISO token), 8,480 rings and 435,491
-points; `ADM1` stores 2.02 MB of the pack (6,737,415 bytes since the roads and lakes, 0.6 MB under the 7 MiB cap). A reader refuses a
+points; `ADM1` stores 2.02 MB of the pack (6,818,962 bytes since the roads, lakes and regional lake supplements, 0.5 MB under the 7 MiB cap). A reader refuses a
 count over 8,192, a token of the wrong shape or used twice, a country `CTRY` lacks, an empty English name and any
 malformed outline. `ADM1` is required in version 1 (nothing has shipped).
 
@@ -309,7 +323,15 @@ roadCount × { u32 number · u8 kind (1 highway, 2 main road) · u16 lineCount �
 - **What a road is.** It is what turns amber "whole" once crossed: the touching pieces of one named route
   (`PREFIX` + `NAME`, else `LABEL`, at one `LEVEL`: Interstate 5 and a state's route 5 stay apart), or, unnamed, the
   pieces chained through every point where exactly two meet (a stretch between junctions). A source feature's parts
-  are always one road. Its kind is highway when any piece is.
+  are always one road. Its kind is highway when any piece is. Where three or more ends of one named route meet (it
+  branches: a wrong name, or a spur sharing it), only the two whose lines leave most nearly opposite join, the
+  route going straight on; the others go on as their own roads (owner 2026-10-30). The 2026-10-30 pack has 28 such
+  points (Portland's, the 29th, is fixed by its name override below) and 9,026 roads.
+- **Name overrides.** Where Natural Earth has a route's name wrong, `ROAD_NAME_OVERRIDES` in the generator gives
+  the right one, by `UIDENT`, level and the old name (`UIDENT` alone repeats); the run stops unless each rule meets
+  exactly one record, so a new source version is looked at again. Portland's Banfield Freeway and its run east to
+  Troutdale (`UIDENT` 20905 and 23805) are named "5"; left so, they joined Interstate 5 and crossing either turned
+  both (explore-ui, owner 2026-10-30). They are Interstate 84, road `ne:road:1233`, apart from I-5's `ne:road:53`.
 - **The token** is "ne:road:" and the road's number, the smallest record number among its pieces in the pinned
   source file (Natural Earth's own `UIDENT` is 0 for most pieces). The tokens hold while the source's SHA-256 pin
   does; a new source version re-mints them. Numbers ascend and never repeat.
@@ -324,7 +346,7 @@ roadCount × { u32 number · u8 kind (1 highway, 2 main road) · u16 lineCount �
 
 ### `META`
 
-UTF-8 JSON: the generator version (3 since `ADM1`, 4 since its plate groups, 6 since the territory override and everyday names, 7 since Kyiv's pair, plain spelling and `ROAD`, 8 since lakes are water), the generation date, both simplification tolerances, and each
+UTF-8 JSON: the generator version (3 since `ADM1`, 4 since its plate groups, 6 since the territory override and everyday names, 7 since Kyiv's pair, plain spelling and `ROAD`, 8 since lakes are water, 9 since the regional lake supplements and the road-name override), the generation date, both simplification tolerances, and each
 source's file name, URL, SHA-256 and licence.
 
 ## The rules the reader applies
