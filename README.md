@@ -9,7 +9,8 @@ yourself — not how optimized you have been. No streaks. No calorie targets. No
 No servers anyone operates.
 
 [fernlet.com](https://fernlet.com) · [Privacy policy](Docs/Privacy-Policy.md) ·
-[Verifiability](Docs/Verifiability.md) · [Specification](Docs/FernletSpecificationV3.md)
+[Verifiability](Docs/Verifiability.md) · [Specification](Docs/FernletSpecificationV3.md) ·
+[Accessibility](ACCESSIBILITY.md)
 
 </div>
 
@@ -150,6 +151,13 @@ the in-app view (`App/Fernlet/PrivacyPolicyView.swift`), and the hosted page. Th
 That is the most valuable bug report this project can receive — traffic that is not in the published
 egress inventory, a cross-wall data path, anything that contradicts the policy. Email
 **fernletapp@gmail.com** with "privacy" in the subject.
+
+## Accessibility
+
+[ACCESSIBILITY.md](ACCESSIBILITY.md) says what Fernlet supports today, how it is checked, which
+device checks are still pending, and the known gaps. If something in the app is hard or impossible
+to use with VoiceOver, Voice Control, a larger text size or any other accessibility feature, email
+**fernletapp@gmail.com** with "accessibility" in the subject, or open an issue.
 
 ## License
 
