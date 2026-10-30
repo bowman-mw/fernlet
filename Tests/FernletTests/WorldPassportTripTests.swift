@@ -94,7 +94,7 @@ struct WorldPassportTripTests {
             visits.append((AtlasVisit(continent: continent, terrain: .grassland), Self.at(60 + Double(index))))
         }
         let book = Self.book(visits)
-        #expect(book.count(of: .country) == 2 && book.count(of: .continent) == 7)
+        #expect(book.discoveries(of: .country) == 2 && book.discoveries(of: .continent) == 7)
         #expect(book.trips(inCountry: "US").count == 3 && book.trips(inCountry: "FR").count == 1)
         let stamps = book.stamps
         #expect(stamps.filter { $0.kind == .country }.count == 4)
@@ -266,7 +266,7 @@ struct WorldPassportTripTests {
         #expect(phone.trips(inCountry: "US") == [Self.t0, Self.at(10), Self.at(20), Self.at(30), Self.at(45)],
                 "the day-10 trip both had is kept once")
         #expect(phone.merge(old) == 0, "merging twice adds nothing")
-        #expect(phone.count(of: .country) == 1, "still one country")
+        #expect(phone.discoveries(of: .country) == 1, "still one country")
         var newPhone = Self.book([(Self.us, Self.at(33))])
         _ = newPhone.merge(old)
         #expect(newPhone.trips(inCountry: "US") == [Self.t0, Self.at(10), Self.at(30)],
