@@ -729,23 +729,27 @@ struct CycleTrackerView: View {
                 if events.isEmpty {
                     EmptyState(text: "No cycle events in the last 90 days.")
                 } else {
-                    ForEach(Array(events.enumerated()), id: \.element.id) { index, entry in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(entry.date.formatted(.dateTime.month(.abbreviated).day()))
-                                .font(.fernlet(.label))
-                                .foregroundStyle(Color.bark)
-                            HStack(spacing: 6) {
-                                Text(verbatim: entry.flowDisplayName)
-                                ForEach(entry.symptomFlags) { symptom in
-                                    Text(verbatim: symptom.displayName)
+                    // One stack, so the card frames the whole list: a bare ForEach here hands the
+                    // card one child per row and divider, and each was framed as its own card.
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(events.enumerated()), id: \.element.id) { index, entry in
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(entry.date.formatted(.dateTime.month(.abbreviated).day()))
+                                    .font(.fernlet(.label))
+                                    .foregroundStyle(Color.bark)
+                                HStack(spacing: 6) {
+                                    Text(verbatim: entry.flowDisplayName)
+                                    ForEach(entry.symptomFlags) { symptom in
+                                        Text(verbatim: symptom.displayName)
+                                    }
                                 }
+                                .font(.fernlet(.labelSmall))
+                                .foregroundStyle(Color.slate)
+                                .lineLimit(2)
                             }
-                            .font(.fernlet(.labelSmall))
-                            .foregroundStyle(Color.slate)
-                            .lineLimit(2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            if index < events.count - 1 { FernletRowDivider() }
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        if index < events.count - 1 { FernletRowDivider() }
                     }
                 }
             }
