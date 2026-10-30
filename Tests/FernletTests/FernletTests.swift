@@ -72,9 +72,11 @@ struct FernletTests {
         })
         let roundedScores = Set(scores.values.map { ($0 * 10_000).rounded() / 10_000 })
 
-        // 7 GoalTypes with wellness==exploring colliding → 6 distinct scores (sportsPrep added a
-        // distinct goal after this test was written for 6 goals / 5 distinct).
-        #expect(roundedScores.count == 6)
+        // 8 GoalTypes with wellness==exploring colliding → 7 distinct scores (sportsPrep, then
+        // bodybuilding in World round 7, each added a distinct goal after this test was written for
+        // 6 goals / 5 distinct).
+        #expect(roundedScores.count == 7)
+        #expect(scores[.bodybuilding] != scores[.strength])
         #expect(scores[.wellness] == scores[.exploring])
         #expect(scores[.wellness] != scores[.strength])
         #expect(scores[.strength] != scores[.weightManagement])

@@ -1802,7 +1802,8 @@ struct LocalizationBoundaryTests {
 
         #expect(
             GoalType.allCases.map(\.rawValue) == [
-                "wellness", "strength", "weightManagement", "mentalHealth", "recovery", "exploring", "sportsPrep"
+                "wellness", "strength", "weightManagement", "mentalHealth", "recovery", "exploring", "sportsPrep",
+                "bodybuilding"
             ],
             """
             GoalType raw values changed. They are the CURRENT persisted tokens (exported to the coach \
@@ -4027,7 +4028,14 @@ struct LocalizationBoundaryTests {
     /// absent key passes and a PRESENT key without an English `one`/`other` block is red, so that
     /// sync cannot land without the hand-authored block. The catalog commit that authors the block
     /// moves the row into ``pluralRuledKeys``, where absence is red too.
-    static let pluralRuledKeysAwaitingTheirCatalog: [HarvestedKey] = []
+    static let pluralRuledKeysAwaitingTheirCatalog: [HarvestedKey] = [
+        // World round 7, Bodybuilding piece C (2026-10-29): the Day calendar's spoken counts, which would
+        // read "1 bathroom visits" and "1 steps".
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "bodybuilding.bathroom.spoken",
+                     source: "Day calendar, spoken: a day's bathroom visits ('1 bathroom visit')"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "bodybuilding.steps.spoken",
+                     source: "Day calendar, spoken: a day's steps ('1 step')"),
+    ]
 
     /// Whether a catalog's `strings` table carries `key` with an English `one` AND `other` plural form.
     ///

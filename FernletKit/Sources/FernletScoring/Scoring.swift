@@ -84,7 +84,7 @@ extension ScoringWeights {
 ///
 /// Each `GoalType` gets a hand-tuned `ScoringWeights` mix — `.mentalHealth` weighs journaling
 /// highest, `.recovery` weighs sleep highest, `.strength`/`.sportsPrep` lean into meals and
-/// workouts — and every vector sums to 1 (debug-asserted). `DiaryStore` and the app's
+/// workouts, `.bodybuilding` moves a little of that toward sleep — and every vector sums to 1 (debug-asserted). `DiaryStore` and the app's
 /// `FernletStore` fetch the vector here on every daily-score computation, before the sickness and
 /// period adjustments are layered on.
 public enum GoalWeights {
@@ -109,6 +109,9 @@ public enum GoalWeights {
             weights = ScoringWeights(journalWeight: 0.18, mealWeight: 0.22, workoutWeight: 0.18, sleepWeight: 0.22, hydrationWeight: 0.12, hygieneWeight: 0.08)
         case .sportsPrep:
             weights = ScoringWeights(journalWeight: 0.10, mealWeight: 0.26, workoutWeight: 0.30, sleepWeight: 0.18, hydrationWeight: 0.12, hygieneWeight: 0.04)
+        case .bodybuilding:
+            // Strength's shape with a little of the workout weight moved to sleep: rest on purpose.
+            weights = ScoringWeights(journalWeight: 0.10, mealWeight: 0.28, workoutWeight: 0.26, sleepWeight: 0.20, hydrationWeight: 0.12, hygieneWeight: 0.04)
         }
         assert(abs(weights.total - 1.0) < 0.000_001, "scoring weights must sum to 1")
         return weights
@@ -862,6 +865,12 @@ public struct WorkoutSuggestionLibrary {
             .exploring: [
                 (.light, template(.trySomethingSmall, "Walk a new route - 15 min\nPick one mobility drill - 5 min")),
                 (.hard, template(.curiousChallenge, "Choose one main lift - 4 x 6\nChoose one carry - 4 rounds\nCooldown - 5 min"))
+            ],
+            // Bodybuilding reuses Strength's two frozen names (no new persisted spelling) with
+            // hypertrophy rep ranges: a press, a pull and legs in the moderate base.
+            .bodybuilding: [
+                (.moderate, template(.strengthBase, "Squat or leg press - 4 x 10\nBench or push-up - 4 x 10\nRow - 4 x 12")),
+                (.hard, template(.hardStrengthDay, "Main lift - 4 x 8\nAccessory push - 3 x 12\nAccessory pull - 3 x 12"))
             ]
         ]
     }

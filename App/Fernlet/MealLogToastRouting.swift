@@ -80,6 +80,17 @@ struct MealLogReporter {
             after()
         }
     }
+
+    /// This reporter, with `before` handed the meals and their day key (`nil` for today) first.
+    ///
+    /// Log meal uses it to seal the Bodybuilding goal's Free meal tag for exactly the meals it logged,
+    /// on the day they landed, before the toast reports them (`bb-free`).
+    func first(_ before: @escaping ([Meal], String?) -> Void) -> MealLogReporter {
+        MealLogReporter { meals, dayKey, landedWithCaveat in
+            before(meals, dayKey)
+            report(meals, dayKey, landedWithCaveat)
+        }
+    }
 }
 
 /// The meal a cooking cover logged, held until the cover has finished leaving.

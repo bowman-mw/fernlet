@@ -35,6 +35,9 @@ struct HealthKitLifecycleBoundaryTests {
         /// Built for a single awaited write and discarded. Cheap and correct: the alternative is
         /// threading the app's instance through a sheet that needs it once.
         case transientWrite
+        /// Built for a single awaited read under an authorization the person already granted, and
+        /// discarded. It starts no observer and requests nothing, so it is as cheap as a transient write.
+        case transientRead
         /// A `?? HealthKitService()` default behind an injectable parameter. The risk class — it is
         /// correct only while every call site remembers to inject.
         case injectionFallback
@@ -72,6 +75,16 @@ struct HealthKitLifecycleBoundaryTests {
             path: "App/Fernlet/LogIntimacySheet.swift",
             role: .transientWrite,
             note: "One awaited `saveIntimacyEvent` when the sheet saves, then discarded."
+        ),
+        ConstructionSite(
+            path: "App/Fernlet/Bodybuilding/BodyWeightReader.swift",
+            role: .transientRead,
+            note: """
+                `HealthBodyWeightSource` builds one per Day calendar load for one daily body-mass \
+                statistics read under the existing body-profile read grant, then drops it. No observer, \
+                no authorization request, no write. MoveView is not handed the app's instance, and the \
+                store keeps its own private.
+                """
         ),
         ConstructionSite(
             path: "App/Fernlet/HealthAccessSettingsView.swift",

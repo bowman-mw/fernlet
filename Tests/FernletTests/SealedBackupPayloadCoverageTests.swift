@@ -233,6 +233,37 @@ final class FakeSealedBackupHost: SealedBackupContext {
         }
         return true
     }
+
+    // MARK: Body tallies (round 7 piece B2)
+
+    /// The keychain service standing in for `com.fernlet.journal` for this iPhone's body tallies
+    /// (``tearDownBodyTallies()`` deletes it).
+    let bodyTallyKeyService = "com.fernlet.journal.test.bodyTallyBackup.\(UUID().uuidString)"
+    /// The in-memory sealed store the body tallies live in (made on first use).
+    lazy var bodyTalliesController = PrivatePersistenceController(inMemory: true)
+    /// The body-tally funnel the journal's head reads and merges into — production's
+    /// `BodyTallyStore`, over ``bodyTalliesController`` and ``bodyTallyKeyService``.
+    lazy var bodyTallies = BodyTallyStore(controller: bodyTalliesController, deviceKeyService: bodyTallyKeyService)
+
+    /// Whether the tallies can't be read right now (a test's stand-in for a keychain that does not
+    /// answer): the export throws `BodyTallyBackupError.keyUnavailable`.
+    var bodyTalliesUnreadable = false
+
+    /// Mirrors `FernletStore.sealedBackupBodyTallies()`: the funnel's export, refused in a decoy.
+    func sealedBackupBodyTallies() throws -> [BodyDayTally] {
+        guard !bodyTalliesUnreadable else { throw BodyTallyBackupError.keyUnavailable }
+        return try bodyTallies.tallyBackupExport(isDecoy: duressSessionActive)
+    }
+
+    /// Mirrors `FernletStore.restoreSealedBackupBodyTallies(_:)`: the funnel's merge, refused in a decoy.
+    func restoreSealedBackupBodyTallies(_ tallies: [BodyDayTally]) throws {
+        try bodyTallies.mergeRestoredTallies(tallies, isDecoy: duressSessionActive)
+    }
+
+    /// Deletes the body tallies' keychain service.
+    func tearDownBodyTallies() {
+        KeychainItem.deleteAll(service: bodyTallyKeyService)
+    }
 }
 
 @MainActor
@@ -1090,6 +1121,22 @@ struct SealedBackupPayloadCoverageTests {
         let count = try coordinator.applyRestoredChunks(chunks, payloadType: .intimacyLogs, intimacyStore: store)
         #expect(count == 3)
         #expect(try store.backupLogCount() == 3)
+    }
+
+    // MARK: - Body tallies (round 7 piece B2)
+
+    /// The body tallies are carried by the JOURNAL set's head alone: the period and intimacy adapters
+    /// put none on their heads and ignore any a head carries (the defaults), so no payload type is
+    /// added and no other set ever holds them. `SealedBackupBodyTallyTests` drives the journal's.
+    @Test func onlyTheJournalHeadCarriesTheBodyTallies() throws {
+        let tallies = SealedBackupBodyTallies(days: [BodyDayTally(dayKey: "2026-10-29", bathroomVisits: 2)])
+        let period = CycleRecordBackupAdapter(store: PeriodBackupDevice.makeRecordStore())
+        let intimacy = IntimacyBackupAdapter(storeProvider: { nil })
+        #expect(try period.headBodyTallies() == nil)
+        #expect(try intimacy.headBodyTallies() == nil)
+        try period.restoreBodyTallies(tallies)
+        try intimacy.restoreBodyTallies(tallies)
+        #expect(SealedBackupPayloadType.allCases.allSatisfy { $0.rawValue != "bodyTally" }, "no payload type of its own")
     }
 }
 
