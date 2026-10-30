@@ -125,3 +125,49 @@ Judged against `baseline-2026-10-29.json`:
 
 Retrieval must stay bounded under the 600-row cap once the brand field is searchable. Check this with the probe's
 `brandedTruncated` and `acceptableInGate` against `acceptableInPool`.
+
+## After the targeted fixes (2026-10-30, branch `claude/food-brand-fixes`)
+
+All three fixes are typed-surface only. `scoredResults`, the resolver's `candidates`, and every confidence gate rank
+exactly as before.
+
+1. **Brand-field route.** A typed query with no presented rows reads itself as brand + product and fetches rows
+   whose `brand_source` has a word starting with the brand word. The fetch is a `LIKE` over the product words' FTS
+   gate, never a table scan, and is capped at 400 rows per source and reading. The scorer then checks the whole
+   brand run against the brand field and the product words against the NAME. The leave-one-out fallback runs only
+   after this route finds nothing. Because the route only fires on zero results, the 600-row cap question above
+   never arises.
+2. **Typed brand first, above history** (`FoodBrandAgreement`). A brand counts in two cases:
+   - a lexicon chain named in the row's name or brand field;
+   - a LEADING run of the query's words that at least two matched rows, and a fifth of them, state in their brand
+     field.
+
+   A USDA reference row ("USDA FDC …" in the brand field) agrees through its name. A row naming another brand in
+   its brand field never does.
+3. **Spelling suggestion** (`FoodCatalog.spellingSuggestion(for:)`). It reads the index's own word list through
+   `fts5vocab` and returns, for example, "chobanni yogurt" → "chobani yogurt" and "chickfila" → "chick fil a". It
+   is never applied by the catalog. **The visible "Did you mean" line is not built yet.** It needs `FoodView` and
+   new strings, which the round 7 bodybuilding lane is changing, so it follows that lane's merge.
+
+| Configuration | Profile | Split | Top-1 | Top-6 | Zero results | Brand mismatch |
+| --- | --- | --- | --- | --- | --- | --- |
+| base + branded | cold | tuning, brand intents | 0.762 → **0.952** | 0.952 → 0.952 | 0.091 → 0.091 | 0.143 → **0.051** |
+| base + branded | warm | tuning, brand intents | 0.714 → **0.952** | 0.952 → 0.952 | 0.091 → 0.091 | 0.153 → **0.051** |
+| base + branded | cold | all 64 | 0.710 → **0.790** | 0.871 → 0.871 | 0.109 → 0.109 | 0.070 → **0.039** |
+| base (no branded file) | cold | all 64 | 0.710 → **0.790** | 0.823 → **0.855** | 0.172 → **0.141** | 0.075 → **0.037** |
+| any | any | generic intents | unchanged | unchanged | unchanged | 0 |
+
+What changed, by query:
+- **Now right:** quest protein bar, protein bar quest, chick-fil-a sandwich (both spellings), heinz ketchup,
+  kind bar (warm), and häagen-dazs on the base catalog.
+- **Regressions:** none, in any configuration or profile.
+- **Still wrong:**
+  - doritos nacho cheese: an owner-only brand, the documented limit.
+  - The typo queries: waiting on the suggestion UI.
+  - Spanish, generic head-noun ranking, and 5 hour energy (not in the data): out of scope.
+
+Existing corpus pins all hold, with one deliberate change. `FoodSearchCorpusTests`'s live typed-vs-resolver
+divergence count went from 15 to 16, because typed "quest protein bar" now answers with Quest's own bars.
+
+Timing: on the branded pass, per-query times stayed near baseline. The base pass ran at load average 20–28, where
+even the untouched SQLite retrieval slowed by the same factor. Device timing is still owed.
