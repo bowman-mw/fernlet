@@ -10,7 +10,7 @@ import WorldMapStore
 /// hex's kind depends only on its own (col, row) and its neighbours: any area lays out the same pieces as
 /// its neighbours do where they overlap, which is what lets tiles meet seamlessly. Cell states are kept
 /// while the clearing stays the same (at most ``memoLimit``, then forgotten).
-final class NatureFogGrower {
+nonisolated final class NatureFogGrower {
     let scale: NatureFogScale
     let clearing: NatureFogClearing
     let atlas: NatureFogAtlas
