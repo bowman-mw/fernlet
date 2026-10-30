@@ -5,72 +5,140 @@ import WorldMapStore
 /// Draws a ``NatureFogLayout`` into a y-down `CGContext` whose top-left sits at `origin` (global points).
 /// Coordinates are made local before Core Graphics sees them, so the map's large global positions never
 /// lose precision.
+///
+/// Each land hex paints in its terrain look's palette (``NatureFogPalette/with(_:)``), the approved look first;
+/// a layout of the approved look alone makes exactly the calls the nature fog made before the terrain.
 enum NatureFogDrawer {
-    /// The ground, back to front: every hex filled (one path a colour) with its seam, the specks, then the
-    /// water (R + 0.5, covering the seams), its shores, ripples, lilies and far-off flowers.
+    /// The ground, back to front: every land hex filled (one path a colour, look by look) with its seam, the
+    /// sea's hexes (R + 0.4, no seam), the specks and terrain marks, then the water (R + 0.5, covering the
+    /// seams), its shores, the sand line along the coast, ripples, lilies and far-off flowers.
     static func drawGround(_ layout: NatureFogLayout, scale: NatureFogScale, palette: NatureFogPalette,
                            in context: CGContext, origin: CGPoint) {
-        guard !layout.hexes.isEmpty else { return }
+        guard !layout.hexes.isEmpty || !layout.seas.isEmpty else { return }
+        var palettes = NatureFogPalettes(base: palette)
+        let looks = order(layout.hexes.map(\.look))
+        var seams: [(TerrainLook, CGMutablePath)] = []
+        for look in looks {
+            var fills: [NaturePaint: CGMutablePath] = [:]
+            let seam = CGMutablePath()
+            for hex in layout.hexes where hex.look == look {
+                let path = hexPath(local(hex.centre, origin), radius: scale.radius)
+                let fill = fills[hex.paint] ?? CGMutablePath()
+                fill.addPath(path)
+                fills[hex.paint] = fill
+                seam.addPath(path)
+            }
+            let colours = palettes[look]
+            for paint in NaturePaint.allCases {
+                guard let path = fills[paint] else { continue }
+                context.addPath(path)
+                context.setFillColor(colours.color(paint))
+                context.fillPath()
+            }
+            seams.append((look, seam))
+        }
+        for (look, seam) in seams {
+            context.addPath(seam)
+            context.setStrokeColor(palettes[look].color(.seam))
+            context.setLineWidth(palette.seamWidth)
+            context.strokePath()
+        }
+        drawSeas(layout, scale: scale, palettes: &palettes, in: context, origin: origin)
+        fill(layout.specks, palettes: &palettes, in: context, origin: origin)
+        mark(layout.marks, palettes: &palettes, in: context, origin: origin)
+        drawWater(layout, scale: scale, palettes: &palettes, in: context, origin: origin)
+    }
+
+    /// `looks` without repeats, the approved look first, the rest in the order they first appear.
+    private static func order(_ looks: [TerrainLook]) -> [TerrainLook] {
+        var seen = Set<TerrainLook>(), ordered: [TerrainLook] = []
+        if looks.contains(.approved) {
+            seen.insert(.approved)
+            ordered.append(.approved)
+        }
+        for look in looks where seen.insert(look).inserted { ordered.append(look) }
+        return ordered
+    }
+
+    /// The sea's hexes, a little larger than a hex so no seam shows between them.
+    private static func drawSeas(_ layout: NatureFogLayout, scale: NatureFogScale, palettes: inout NatureFogPalettes,
+                                 in context: CGContext, origin: CGPoint) {
+        guard !layout.seas.isEmpty else { return }
+        let colours = palettes[TerrainLook(set: .water, season: .summer)]
         var fills: [NaturePaint: CGMutablePath] = [:]
-        let seams = CGMutablePath()
-        for hex in layout.hexes {
-            let path = hexPath(local(hex.centre, origin), radius: scale.radius)
+        for hex in layout.seas {
             let fill = fills[hex.paint] ?? CGMutablePath()
-            fill.addPath(path)
+            fill.addPath(hexPath(local(hex.centre, origin), radius: scale.radius + 0.4))
             fills[hex.paint] = fill
-            seams.addPath(path)
         }
         for paint in NaturePaint.allCases {
             guard let path = fills[paint] else { continue }
             context.addPath(path)
-            context.setFillColor(palette.color(paint))
+            context.setFillColor(colours.color(paint))
             context.fillPath()
         }
-        context.addPath(seams)
-        context.setStrokeColor(palette.color(.seam))
-        context.setLineWidth(palette.seamWidth)
-        context.strokePath()
-        fill(layout.specks, palette: palette, in: context, origin: origin)
-        drawWater(layout, scale: scale, palette: palette, in: context, origin: origin)
     }
 
-    /// Water, shores, then ripples, lilies and far-off flowers.
-    private static func drawWater(_ layout: NatureFogLayout, scale: NatureFogScale, palette: NatureFogPalette,
+    /// Water, shores, the coast's sand line, then ripples, lilies and far-off flowers.
+    private static func drawWater(_ layout: NatureFogLayout, scale: NatureFogScale, palettes: inout NatureFogPalettes,
                                   in context: CGContext, origin: CGPoint) {
+        let palette = palettes[.approved]
         let water = CGMutablePath()
         for centre in layout.ponds { water.addPath(hexPath(local(centre, origin), radius: scale.radius + 0.5)) }
         context.addPath(water)
         context.setFillColor(palette.color(.water))
         context.fillPath()
-        let shore = CGMutablePath()
-        for line in layout.shores {
-            shore.move(to: local(line.from, origin))
-            shore.addLine(to: local(line.to, origin))
+        stroke(layout.shores, colour: palette.color(.shore), width: scale.unit * 0.9, in: context, origin: origin)
+        if !layout.coasts.isEmpty {
+            let sand = palettes[TerrainLook(set: .water, season: .summer)].color(.shore)
+            stroke(layout.coasts, colour: sand, width: scale.unit * 1.4, in: context, origin: origin)
         }
-        context.addPath(shore)
-        context.setStrokeColor(palette.color(.shore))
-        context.setLineWidth(scale.unit * 0.9)
+        fill(layout.waterMarks, palettes: &palettes, in: context, origin: origin)
+    }
+
+    /// Straight round-capped lines.
+    private static func stroke(_ lines: [(from: CGPoint, to: CGPoint)], colour: CGColor, width: Double, in context: CGContext,
+                               origin: CGPoint) {
+        let path = CGMutablePath()
+        for line in lines {
+            path.move(to: local(line.from, origin))
+            path.addLine(to: local(line.to, origin))
+        }
+        context.addPath(path)
+        context.setStrokeColor(colour)
+        context.setLineWidth(width)
         context.setLineCap(.round)
         context.strokePath()
-        fill(layout.waterMarks, palette: palette, in: context, origin: origin)
     }
 
     /// The growing pieces in their sorted order (reduced-detail tiles and the widget's picture bake them in).
     static func drawPieces(_ layout: NatureFogLayout, atlas: NatureFogAtlas, in context: CGContext, origin: CGPoint) {
         for piece in layout.pieces {
-            guard let sprite = atlas.sprite(piece.sprite) else { continue }
+            guard let sprite = atlas.sprite(piece.sprite, look: piece.look) else { continue }
             NatureFogAtlas.draw(sprite, in: context, rect: piece.frame.offsetBy(dx: -origin.x, dy: -origin.y))
         }
     }
 
-    /// Solid blocks, crisp (no antialiasing, so they land on whole pixels).
-    private static func fill(_ blocks: [NatureFogBlock], palette: NatureFogPalette, in context: CGContext, origin: CGPoint) {
+    /// Solid blocks in their looks' colours, crisp (no antialiasing, so they land on whole pixels).
+    private static func fill(_ blocks: [NatureFogBlock], palettes: inout NatureFogPalettes, in context: CGContext, origin: CGPoint) {
         guard !blocks.isEmpty else { return }
         context.saveGState()
         context.setShouldAntialias(false)
         for block in blocks {
-            context.setFillColor(palette.color(block.paint))
+            context.setFillColor(palettes[block.look].color(block.paint))
             context.fill(block.rect.offsetBy(dx: -origin.x, dy: -origin.y))
+        }
+        context.restoreGState()
+    }
+
+    /// Terrain marks, crisp like the specks.
+    private static func mark(_ marks: [NatureFogMark], palettes: inout NatureFogPalettes, in context: CGContext, origin: CGPoint) {
+        guard !marks.isEmpty else { return }
+        context.saveGState()
+        context.setShouldAntialias(false)
+        for mark in marks {
+            context.setFillColor(palettes[mark.look].color(mark.ink))
+            context.fill(mark.rect.offsetBy(dx: -origin.x, dy: -origin.y))
         }
         context.restoreGState()
     }
@@ -86,6 +154,28 @@ enum NatureFogDrawer {
         path.addLines(between: (0..<6).map { NatureFogGrower.corner(centre, radius, $0) })
         path.closeSubpath()
         return path
+    }
+}
+
+/// One appearance's palettes by terrain look, made on first use while one picture draws.
+nonisolated struct NatureFogPalettes {
+    let base: NatureFogPalette
+    private var made: [TerrainLook: NatureFogPalette] = [:]
+
+    /// Palettes in `base`'s appearance.
+    init(base: NatureFogPalette) {
+        self.base = base
+    }
+
+    /// The palette for `look`.
+    subscript(look: TerrainLook) -> NatureFogPalette {
+        mutating get {
+            if look == base.look { return base }
+            if let known = made[look] { return known }
+            let palette = base.with(look)
+            made[look] = palette
+            return palette
+        }
     }
 }
 

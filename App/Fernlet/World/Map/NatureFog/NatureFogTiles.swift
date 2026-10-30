@@ -35,6 +35,10 @@ struct NatureFogChange {
 /// A cleared hex can change everything within about 6 R of it: its neighbours become plain edges, a pond's
 /// shore moves, and a tree whose wild ring it was in lifts whole — so ``keys(touching:scale:)`` dirties every
 /// tile within 6 R.
+///
+/// With a ``NatureFogTerrain`` snapshot each grower gets its own ``NatureTerrainMemo``, so a hex's land is read
+/// from the atlas once per grower however many tiles it draws (World-Exploration-Spec §1); with none, every tile
+/// is today's nature fog.
 final class NatureFogTileBook {
     /// A tile's side, in points.
     static let tileSize = 256.0
@@ -46,19 +50,24 @@ final class NatureFogTileBook {
     let scale: NatureFogScale
     let palette: NatureFogPalette
     let atlas: NatureFogAtlas
+    /// The land under the fog; nil for today's nature fog.
+    let terrain: NatureFogTerrain?
     private(set) var clearing: NatureFogClearing
     private var grower: NatureFogGrower
     private var tiles: [NatureTileKey: NatureFogTile] = [:]
     private let pixelScale: CGFloat
 
-    /// A book drawing `clearing` at `scale` in `palette`, its pictures at `pixelScale` pixels a point.
-    init(scale: NatureFogScale, palette: NatureFogPalette, clearing: NatureFogClearing, pixelScale: CGFloat) {
+    /// A book drawing `clearing` at `scale` in `palette` over `terrain`'s land, its pictures at `pixelScale`
+    /// pixels a point.
+    init(scale: NatureFogScale, palette: NatureFogPalette, clearing: NatureFogClearing, pixelScale: CGFloat,
+         terrain: NatureFogTerrain? = nil) {
         self.scale = scale
         self.palette = palette
         self.clearing = clearing
+        self.terrain = terrain
         self.pixelScale = max(1, min(pixelScale, 3))
         atlas = NatureFogAtlas(palette: palette)
-        grower = NatureFogGrower(scale: scale, clearing: clearing, atlas: atlas)
+        grower = NatureFogGrower(scale: scale, clearing: clearing, atlas: atlas, terrain: terrain.map(NatureTerrainMemo.init(terrain:)))
     }
 
     /// The tiles held now.
@@ -103,7 +112,7 @@ final class NatureFogTileBook {
         guard next != clearing else { return NatureFogChange() }
         let changed = Array(clearing.lifted.symmetricDifference(next.lifted).union(clearing.uncovered.symmetricDifference(next.uncovered)))
         clearing = next
-        grower = NatureFogGrower(scale: scale, clearing: next, atlas: atlas)
+        grower = NatureFogGrower(scale: scale, clearing: next, atlas: atlas, terrain: terrain.map(NatureTerrainMemo.init(terrain:)))
         guard changed.count <= Self.resetThreshold else {
             tiles.removeAll()
             return NatureFogChange(reset: true)
@@ -155,7 +164,7 @@ final class NatureFogTileBook {
             NatureFogDrawer.drawGround(layout, scale: scale, palette: palette, in: drawing.cgContext, origin: area.origin)
             if scale.reduced { NatureFogDrawer.drawPieces(layout, atlas: atlas, in: drawing.cgContext, origin: area.origin) }
         }
-        return NatureFogTile(key: key, ground: layout.hexes.isEmpty ? nil : picture.cgImage,
+        return NatureFogTile(key: key, ground: layout.hexes.isEmpty && layout.seas.isEmpty ? nil : picture.cgImage,
                              pieces: scale.reduced ? [] : layout.pieces, trees: layout.trees)
     }
 }

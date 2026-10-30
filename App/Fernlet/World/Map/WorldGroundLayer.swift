@@ -33,6 +33,9 @@ struct WorldGroundLayer: View {
     let viewport: MapViewport
     let ground: WorldGround
     let darkStyle: Bool
+    /// The land under the fog (World-Exploration-Spec §1: the sea, desert, mountains, roofs, the seasons…), from
+    /// the bundled atlas; nil, or no atlas, draws today's nature fog everywhere.
+    var terrain: NatureFogTerrain? = nil
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -48,7 +51,7 @@ struct WorldGroundLayer: View {
             NatureFogLayer(scene: NatureFogScene(viewport: viewport,
                                                  clearing: NatureFogClearing(lifted: ground.lifted, uncovered: ground.uncovered),
                                                  palette: NatureFogPalette(dark: darkStyle, highContrast: contrast == .increased),
-                                                 motion: NatureFogMotion(reduceMotion: reduceMotion)))
+                                                 motion: NatureFogMotion(reduceMotion: reduceMotion), terrain: terrain))
             traces
         }
         .allowsHitTesting(false)

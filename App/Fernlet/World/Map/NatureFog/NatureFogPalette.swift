@@ -29,19 +29,28 @@ nonisolated enum NaturePaint: Int, CaseIterable {
 
 /// The nature fog's colours for one appearance (spec "Colours"): the light palette, Dark Mode's mix toward
 /// `#141C12`, and Increase Contrast's darker seams (1.8 pt) and tree outlines.
+///
+/// A terrain ``TerrainLook`` lays its set's and season's light colours over the approved ones first
+/// (``TerrainPalettes``), then Dark Mode mixes with the same shares and Increase Contrast darkens the same roles,
+/// as the mockup's `palFor` does; the approved look (the meadow and forest in summer) is today's palette exactly.
 nonisolated struct NatureFogPalette: Equatable, Hashable {
     /// Dark Mode.
     let dark: Bool
     /// Increase Contrast.
     let highContrast: Bool
+    /// The terrain set and season painted.
+    let look: TerrainLook
     private let values: [UInt32]
 
-    /// The palette for an appearance.
-    init(dark: Bool, highContrast: Bool) {
+    /// The palette for an appearance, in `look`'s colours (by default the approved nature fog's).
+    init(dark: Bool, highContrast: Bool, look: TerrainLook = .approved) {
         self.dark = dark
         self.highContrast = highContrast
+        self.look = look
+        let overrides = look == .approved ? [:] : TerrainPalettes.overrides(look)
         var values = NaturePaint.allCases.map { paint in
-            dark ? Self.mix(Self.light[paint.rawValue], toward: Self.night, by: paint.darkShare) : Self.light[paint.rawValue]
+            let light = overrides[paint] ?? Self.light[paint.rawValue]
+            return dark ? Self.mix(light, toward: Self.night, by: paint.darkShare) : light
         }
         if highContrast {
             values[NaturePaint.seam.rawValue] = dark ? 0xD7E8C4 : 0x2F4A24
@@ -58,9 +67,33 @@ nonisolated struct NatureFogPalette: Equatable, Hashable {
 
     /// The colour of `paint`, opaque sRGB.
     func color(_ paint: NaturePaint) -> CGColor {
-        let value = rgb(paint)
-        return CGColor(srgbRed: CGFloat((value >> 16) & 0xFF) / 255, green: CGFloat((value >> 8) & 0xFF) / 255,
-                       blue: CGFloat(value & 0xFF) / 255, alpha: 1)
+        Self.color(rgb: rgb(paint))
+    }
+
+    /// The colour of `ink` as 0xRRGGBB: a role from this palette, or a fixed colour (mixed 30 % toward the night
+    /// ground in Dark Mode), or the light or dark one of a pair.
+    func rgb(_ ink: NatureInk) -> UInt32 {
+        switch ink {
+        case .paint(let paint): rgb(paint)
+        case .fixed(let value): dark ? Self.mix(value, toward: Self.night, by: NatureInk.fixedDarkShare) : value
+        case .pair(let light, let night): dark ? night : light
+        }
+    }
+
+    /// The colour of `ink`, opaque sRGB.
+    func color(_ ink: NatureInk) -> CGColor {
+        Self.color(rgb: rgb(ink))
+    }
+
+    /// The same appearance in `look`'s colours.
+    func with(_ look: TerrainLook) -> NatureFogPalette {
+        look == self.look ? self : NatureFogPalette(dark: dark, highContrast: highContrast, look: look)
+    }
+
+    /// `value` (0xRRGGBB) as an opaque sRGB colour.
+    static func color(rgb value: UInt32) -> CGColor {
+        CGColor(srgbRed: CGFloat((value >> 16) & 0xFF) / 255, green: CGFloat((value >> 8) & 0xFF) / 255,
+                blue: CGFloat(value & 0xFF) / 255, alpha: 1)
     }
 
     /// The seam between hexes: 1 pt, 1.8 pt with Increase Contrast.

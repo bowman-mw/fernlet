@@ -8,6 +8,8 @@ struct NatureFogScene {
     let clearing: NatureFogClearing
     let palette: NatureFogPalette
     let motion: NatureFogMotion
+    /// The land under the fog (World-Exploration-Spec §1); nil for today's nature fog.
+    var terrain: NatureFogTerrain? = nil
 }
 
 /// The nature fog on the live map, in the fog's old place in the stack (``WorldGroundLayer``: over the saved
@@ -118,14 +120,14 @@ final class NatureFogMapView: UIView {
 
     /// Matches the book to the scene: a new scale or palette starts afresh; a new clearing dirties tiles.
     private func sync(scale: NatureFogScale, scene: NatureFogScene) -> NatureFogChange? {
-        if let book, book.scale == scale, book.palette == scene.palette {
+        if let book, book.scale == scale, book.palette == scene.palette, book.terrain == scene.terrain {
             let change = book.change(to: scene.clearing)
             if change.reset { dropAll() }
             return change.reset || change.dirty.isEmpty ? nil : change
         }
         dropAll()
         book = NatureFogTileBook(scale: scale, palette: scene.palette, clearing: scene.clearing,
-                                 pixelScale: min(traitCollection.displayScale, 2))
+                                 pixelScale: min(traitCollection.displayScale, 2), terrain: scene.terrain)
         return nil
     }
 
@@ -187,7 +189,7 @@ final class NatureFogMapView: UIView {
         rejections.note(culled.rejected == 0, at: .fogPiece)
         var swaying: [(layer: CALayer, group: Int)] = []
         for (piece, frame) in culled.kept {
-            guard let sprite = book.atlas.sprite(piece.sprite) else { continue }
+            guard let sprite = book.atlas.sprite(piece.sprite, look: piece.look) else { continue }
             let sprout = CALayer()
             sprout.contents = sprite.image
             sprout.magnificationFilter = .nearest
