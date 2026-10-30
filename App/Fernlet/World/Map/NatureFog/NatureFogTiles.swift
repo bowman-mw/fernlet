@@ -115,6 +115,10 @@ final class NatureFogTileBook {
     /// Whether a tile is drawing.
     var isDrawing: Bool { !drawing.isEmpty }
 
+    /// Whether every wanted tile is ready and none is on its way (between two arrivals ``isDrawing`` can read
+    /// false while wanted tiles still wait for a painter).
+    var isCaughtUp: Bool { drawing.isEmpty && !wanted.contains { tiles[$0] == nil } }
+
     /// A tile's area in global points.
     nonisolated static func area(of key: NatureTileKey) -> CGRect {
         CGRect(x: Double(key.x) * tileSize, y: Double(key.y) * tileSize, width: tileSize, height: tileSize)
