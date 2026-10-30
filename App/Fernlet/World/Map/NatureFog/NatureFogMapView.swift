@@ -145,6 +145,8 @@ final class NatureFogMapView: UIView {
         if let book, book.scale == scale, book.palette == scene.palette {
             let change = book.change(to: scene.clearing)
             if change.reset { dropAll() }
+            // Fog coming back: the old scale's tiles were drawn from the history and go at once.
+            if change.covers { dropOutgoing() }
             return change.reset || change.dirty.isEmpty ? nil : change
         }
         if let book, book.clearing == scene.clearing { keepOutgoing(scale: book.scale) } else { dropAll() }

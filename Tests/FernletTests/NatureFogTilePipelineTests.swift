@@ -104,4 +104,16 @@ struct NatureFogTilePipelineTests {
         await view.finishDrawing()
         #expect(view.waitingTileCount == 0 && view.outgoingTileCount == 0, "they go once the new scale's are in")
     }
+
+    @Test func fogComingBackMidZoomDropsTheOldTilesAtOnce() async {
+        let view = NatureFogMapView(frame: CGRect(origin: .zero, size: Self.size))
+        view.show(scene())
+        await view.finishDrawing()
+        view.show(scene(heightMetres: 1_700 * 0.57 / 1.5))
+        #expect(view.outgoingTileCount > 0)
+        let zoomed = MapViewport.around(Self.park, heightMetres: 1_700 * 0.57 / 1.5, size: Self.size)
+        view.show(NatureFogScene(viewport: zoomed, clearing: NatureFogClearing(), palette: Self.light,
+                                 motion: NatureFogMotion(reduceMotion: true)))
+        #expect(view.outgoingTileCount == 0, "a decoy's map never shows the history through the old scale's tiles")
+    }
 }
