@@ -95,6 +95,8 @@ struct WorldMapHome: View {
     @State private var menuSearch: WorldMenuSearch?
     /// The map's last viewport, read back to tell when Sprout walks off the visible map (`ref-recenter-auto`).
     @State private var geometry = WorldMapGeometry()
+    /// The land under the fog (round 7, World-Exploration-Spec §1), once the bundled atlas is open; nil: nature fog.
+    @State private var terrain: WorldTerrain?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -128,6 +130,7 @@ struct WorldMapHome: View {
         .modifier(WorldPlacesPresenter(store: store, placeSheet: $placeSheet, menuSearch: $menuSearch, onMealsLogged: onMealsLogged))
         .environment(\.worldTileStatus, tiles)
         .task { await applyTestScenes() }
+        .task { terrain = terrain ?? WorldTerrain.home(store.worldFog.atlas.openedAtlas) }
         .task(id: isHintDue) { if isHintDue { isHintShowing = true } }
         .task(id: isFrontmost) { await refreshWeather() }
         .task(id: tiles.state) { await watchLoading() }
@@ -177,7 +180,7 @@ struct WorldMapHome: View {
         ZStack(alignment: .topLeading) {
             WorldMapStack(kind: hasPlace ? .appleMuted : .plain, camera: $camera, ground: ground, phase: phase(at: date),
                           darkMode: colorScheme == .dark, creditInset: Self.creditInset,
-                          veiled: isOffline, overlay: { viewport, size in
+                          veiled: isOffline, terrain: terrain, overlay: { viewport, size in
                 onMap(viewport: viewport, size: size)
             }, geometry: geometry)
             if let sky, sky == .rain || sky == .snow {
