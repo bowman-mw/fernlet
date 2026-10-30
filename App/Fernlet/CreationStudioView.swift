@@ -404,6 +404,10 @@ struct CreationStudioView: View {
             onStrokeCancelled: { cancelStroke() },
             onPaintCell: { x, y in paintCell(x: x, y: y) }
         )
+        // "Drawing canvas, 18 by 11" (`comp-studio-hat`), on the canvas itself, so the hint over it keeps its own
+        // element and id.
+        .accessibilityLabel(Text(verbatim: Self.canvasSpokenName(for: slot)))
+        .accessibilityIdentifier("studio.canvas")
         // Fitted into whatever slot `body` gives it — the full width, or the height the layout
         // left, whichever binds first — so the card hugs the grid rather than the slot.
         .aspectRatio(CGFloat(Self.canvasSize(for: slot).cols) / CGFloat(Self.canvasSize(for: slot).rows), contentMode: .fit)
@@ -428,18 +432,17 @@ struct CreationStudioView: View {
                     .multilineTextAlignment(.center)
                     .minimumScaleFactor(0.5)
                     .padding(8)
-                    .foregroundStyle(WorldPalette.dim)
+                    // Full-strength ink: over the paper and the companion's ghost the dim ink read 4.47:1.
+                    .foregroundStyle(WorldPalette.ink)
                     .allowsHitTesting(false)
-                    // Decorative; hidden from a11y so it doesn't also carry the canvas's `studio.canvas` id.
-                    .accessibilityHidden(true)
+                    // Words on screen, so VoiceOver can read them (hidden, they were the editor's "Potentially
+                    // inaccessible text" audit finding); its own id, never the canvas's `studio.canvas`.
+                    .accessibilityIdentifier("studio.canvasHint")
             }
         }
         .background {
             RoundedRectangle(cornerRadius: 12, style: .continuous).fill(WorldPalette.ink.opacity(0.22)).offset(y: 3)
         }
-        // "Drawing canvas, 18 by 11" (`comp-studio-hat`).
-        .accessibilityLabel(Text(verbatim: Self.canvasSpokenName(for: slot)))
-        .accessibilityIdentifier("studio.canvas")
     }
 
     /// True while every cell is still transparent — drives the "Drag to paint" hint.

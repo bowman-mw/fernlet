@@ -85,7 +85,7 @@ final class ItemCreationFlowUITests: XCTestCase {
 
         saveFromTheEditor(in: app)
 
-        // Back in the closet — the sheet is still up (the Wardrobe only exists inside it) and the
+        // Back in the closet — the passport is still open (the Wardrobe is pushed inside it) and the
         // studio is gone. (The coin balance moved to the customize sheet's header in the
         // 2026-08-21 redesign, so the Wardrobe's own chrome is its navigation bar now.)
         let designNew = waitForButton(in: app, labelContaining: "Design a new item", timeout: 10)
@@ -126,8 +126,8 @@ final class ItemCreationFlowUITests: XCTestCase {
         save.tap()
     }
 
-    /// Drives customization sheet → Wardrobe row (at the sheet root since the 2026-08-21
-    /// redesign, HOME-30) → "Design a new item".
+    /// Drives page 1 of Sprout's passport (opened by the launch hook; round 7 replaced the customization sheet with
+    /// it) → What Sprout's wearing's Wardrobe button → "Design a new item".
     @MainActor
     private func launchToStudioEditor(seedCanvas: Bool) -> XCUIApplication {
         UXTestApp.forcePortrait()
@@ -137,12 +137,10 @@ final class ItemCreationFlowUITests: XCTestCase {
         app.launchEnvironment["FERNLET_UI_TEST_OPEN_CUSTOMIZE"] = "1"
         if seedCanvas { app.launchEnvironment["FERNLET_UI_TEST_SEED_STUDIO_CANVAS"] = "1" }
         app.launch()
-        expandSheetToFullHeight(in: app)
 
-        // The Wardrobe is a named row at the sheet root now (it used to be reachable only from
-        // inside a slot picker's custom-items section).
-        let wardrobe = app.buttons["companion.wardrobe"]
-        XCTAssertTrue(wardrobe.waitForExistence(timeout: 30), "customization sheet did not open with a Wardrobe row")
+        // The Wardrobe is a button on the passport's page 1 (the book is full height: no sheet to expand).
+        let wardrobe = app.buttons["passport.sprout.wardrobe"]
+        XCTAssertTrue(wardrobe.waitForExistence(timeout: 30), "the passport did not open on page 1 with a Wardrobe button")
         for _ in 0..<6 where !wardrobe.isHittable { app.swipeUp() }
         wardrobe.tap()
 
@@ -157,29 +155,6 @@ final class ItemCreationFlowUITests: XCTestCase {
         _ = app.descendants(matching: .any)["studio.canvas"].waitForExistence(timeout: 20)
 
         return app
-    }
-
-    /// Drags the customization sheet up to its large detent.
-    ///
-    /// The sheet is `[.medium, .large]` and opens at medium about half the time. At medium its lower
-    /// content sits over the presentation's dismiss region, so a tap aimed at a control near the bottom
-    /// of the sheet — the shop toggle, in particular — falls through and dismisses the whole sheet
-    /// instead of hitting the control. Interacting only at the large detent removes that entire class of
-    /// flake (and matches how the screen is actually used).
-    @MainActor
-    private func expandSheetToFullHeight(in app: XCUIApplication) {
-        let deadline = Date().addingTimeInterval(30)
-        repeat {
-            let grabber = app.buttons["Sheet Grabber"].firstMatch
-            if grabber.exists {
-                if (grabber.value as? String)?.localizedCaseInsensitiveContains("half") != true { return }
-                grabber.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-                    .press(forDuration: 0.05,
-                           thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.03)))
-                return
-            }
-            usleep(200_000)
-        } while Date() < deadline
     }
 
     /// Blocks until the software keyboard is gone, plus a beat for the layout to settle behind it.

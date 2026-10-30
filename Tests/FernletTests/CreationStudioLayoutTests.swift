@@ -95,6 +95,17 @@ struct CreationStudioLayoutTests {
         }
     }
 
+    /// Landscape with the previews measured (W-07, round 7's passport stack: a 174pt page on an iPhone
+    /// 17): the canvas keeps its whole-on-screen minimum, and the 144pt previews give way, since,
+    /// scrolled to the bottom, they would push the canvas off the top of the screen.
+    @Test func inLandscapeThePreviewsGiveWayToAWholeCanvas() {
+        let result = CreationStudioLayout(viewportHeight: 174, headerHeight: 88, toolsHeight: 44,
+                                          previewsHeight: 144, spacing: spacing, padding: padding)
+        #expect(!result.fits && !result.showsPreviews)
+        #expect(result.canvasHeight == CreationStudioLayout.minimumCanvasHeight)
+        #expect(2 * padding + result.canvasHeight <= 174)
+    }
+
     /// The threshold is inclusive, and a fraction of a point short of it scrolls.
     @Test func theMinimumCanvasHeightIsTheInclusiveThreshold() {
         let minimum = CreationStudioLayout.minimumCanvasHeight
