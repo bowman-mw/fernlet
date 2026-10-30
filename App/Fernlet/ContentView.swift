@@ -283,6 +283,8 @@ struct ContentView: View {
     /// makes the app's appearance depend on which preference write SwiftUI resolves last.
     private var rootSheetHost: some View {
         launchRoot
+            // Round 7 world map: FERNLET_UI_TEST_WORLD_VIEW's DEBUG host; a no-op in Release.
+            .worldAtlasMapHook(store: store)
             .sheet(item: $activeSheet, onDismiss: handleActiveSheetDismiss) { sheet in
                 sheetContent(for: sheet)
             }
