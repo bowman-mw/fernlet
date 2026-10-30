@@ -33,7 +33,7 @@ nonisolated enum NatureSprite: Hashable {
 }
 
 /// A sprite drawn at one pixel per unit, with where its top-left unit sits from its anchor.
-struct NatureSpriteImage {
+nonisolated struct NatureSpriteImage {
     /// The pixels, one per unit, opaque where painted.
     let image: CGImage
     /// The top-left unit, from the anchor.
@@ -62,7 +62,7 @@ struct NatureSpriteImage {
 /// One atlas belongs to one map view (or one widget picture); nothing is shared globally. The terrain's other
 /// looks (``TerrainLook``) each get an atlas of their own inside this one, made on first use and drawn only as
 /// their pieces are asked for (at most ``lookLimit``).
-final class NatureFogAtlas {
+nonisolated final class NatureFogAtlas {
     /// How many long-grass, flower and reed variants there are.
     static let grassVariants = 6
     static let flowerVariants = 6

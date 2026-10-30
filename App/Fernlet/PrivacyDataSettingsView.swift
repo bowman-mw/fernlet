@@ -2625,6 +2625,13 @@ struct PrivacyDataSettingsView: View {
     }
 
     private func enableICloudSync() {
+        // R8: the App Review demo's sample data never reaches iCloud (`ReviewDemo`).
+        #if FERNLET_DEMO
+        guard !ReviewDemo.blocksCloudAndHealth else {
+            setOperationError(ReviewDemo.cloudAndHealthBlockedMessage, scope: .iCloud)
+            return
+        }
+        #endif
         FernletAuditLog.log("privacy.icloud.syncEnabled")
         var updated = storagePreferencesStore.preferences
         updated.iCloudSyncEnabled = true

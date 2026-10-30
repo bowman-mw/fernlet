@@ -15,7 +15,7 @@ import WorldMapStore
 /// terrain set and season (the mockup's `terra()`): the sea, desert, mountain, tropical, boreal, urban, tundra and
 /// ice sets swap the ground and what grows, on the same hexes and in the same back-to-front order. Grassland and
 /// temperate forest in summer grow exactly what the approved fog grows; with no memo every hex is that.
-final class NatureFogGrower {
+nonisolated final class NatureFogGrower {
     let scale: NatureFogScale
     let clearing: NatureFogClearing
     let atlas: NatureFogAtlas

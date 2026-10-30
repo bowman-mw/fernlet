@@ -14,8 +14,8 @@ import Foundation
 /// With sync off there is no merge path between a user's own devices, so day history and the
 /// per-row stores drift apart silently. `classify` turns three already-available signals —
 /// account presence, the sync preference, and ``CloudKitDataService``'s existing-data
-/// detection — into one of three warning cases, or `nil` when sync is on and no warning is
-/// warranted. Deliberately free of FileManager and view state so the three-way decision is
+/// detection — into one of four warning cases, or `nil` when sync is on with an account signed in
+/// and no warning is warranted. Deliberately free of FileManager and view state so the three-way decision is
 /// trivially unit-testable; the settings banner and disable-sync sheet render `message` as-is.
 public nonisolated enum MultiDeviceSyncWarning: Equatable, Sendable {
     /// An iCloud account is present and another device signed into it already wrote Fernlet data, but
@@ -26,9 +26,14 @@ public nonisolated enum MultiDeviceSyncWarning: Equatable, Sendable {
     case syncOffWithAccount
     /// No iCloud account on this device — local-only by necessity; nothing can sync or merge.
     case noICloudAccount
+    /// Sync is chosen but no iCloud account is signed in: the switch reads "on" while the store loads
+    /// without CloudKit (`Persistence` attaches it only with an account), so nothing syncs until the
+    /// user signs in. Without this case the page showed no warning at all — "selected" passed for
+    /// "working" (simulator log review 2026-10-29).
+    case syncOnWithoutAccount
 
-    /// Classify the multi-device state. Returns `nil` when no warning is warranted (sync is on, so the
-    /// devices stay merged through CloudKit).
+    /// Classify the multi-device state. Returns `nil` when no warning is warranted (sync is on and an
+    /// account is signed in, so the devices stay merged through CloudKit).
     ///
     /// - Parameters:
     ///   - iCloudAccountPresent: an iCloud account is signed in on this device
@@ -41,8 +46,8 @@ public nonisolated enum MultiDeviceSyncWarning: Equatable, Sendable {
         syncEnabled: Bool,
         otherDeviceHasData: Bool
     ) -> MultiDeviceSyncWarning? {
+        guard iCloudAccountPresent else { return syncEnabled ? .syncOnWithoutAccount : .noICloudAccount }
         guard !syncEnabled else { return nil }
-        guard iCloudAccountPresent else { return .noICloudAccount }
         return otherDeviceHasData ? .anotherDeviceHasData : .syncOffWithAccount
     }
 
@@ -62,6 +67,12 @@ public nonisolated enum MultiDeviceSyncWarning: Equatable, Sendable {
         case .noICloudAccount:
             return "Without iCloud, this device's logs stay here only — they won't sync to or merge "
                 + "with another device."
+        case .syncOnWithoutAccount:
+            // Package source: `bundle: .module`, or the lookup goes to `Bundle.main` and renders English forever.
+            return String(localized: "multiDevice.syncOnWithoutAccount",
+                          defaultValue: "iCloud sync is on, but this iPhone isn't signed in to iCloud, so nothing is syncing yet. Your logs are safe on this iPhone and start syncing once you sign in to iCloud in the Settings app.",
+                          bundle: .module,
+                          comment: "Privacy & Data, multiple-devices note: the user chose iCloud sync but no iCloud account is signed in on this device.")
         }
     }
 }

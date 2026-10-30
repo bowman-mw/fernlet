@@ -535,12 +535,33 @@ struct PersistedSurfaceWipeBoundaryTests {
         ),
         "pastDayJournalScrubAttempts": .openGap(
             reason: "The scrub's retry-budget counter: how many launches sealed at least one day badly. Usually absent (it is removed at every terminal state), but when present it is a trace of app use that the wipe does not reach."
-        )
+        ),
         // `FernletMessages.lastRecipeID` (the iMessage composer's last-picked recipe) left this
         // table on 2026-09-23 by leaving the tree: it lived in the extension's OWN defaults domain,
         // which the funnel cannot open, so the gap was closed by deleting the write rather than by
         // inventing an App Group defaults suite to hold one UUID. The extension stays a scan root,
         // so a new write there needs a row here before it can ship.
+
+        // ── The App Review demo build (`#if FERNLET_DEMO`, 2026-10-29) ───────────────────────────
+        // Compiled only into the `Demo` configuration, but scanned like any shipping source.
+        "reviewDemo.isActive": .kept(
+            reason: "Demo build only: one boolean saying this install is running the App Review demo. The demo's own exit, Settings → Demo → Leave (ReviewDemo.leave), removes it; Delete everything keeps it exactly as it keeps hasCompletedOnboarding, so a person who erases from the Danger zone instead stays in the demo shell and can still leave it from Settings."
+        ),
+        "reviewDemo.friendSigningKey": .kept(
+            reason: "Demo build only: the PUBLIC signing key of Juniper, the demo's pretend friend, whose private half was discarded at creation — no content, no person. Only removeReviewDemoFriend reads it, to find exactly the vault row it planted; it removes the key too, and Delete everything already clears the vault the key points into."
+        ),
+        "reviewDemo.intimacyPending": .kept(
+            reason: "Demo build only: one boolean saying the demo's sample intimacy entries are still owed until the Private hub first opens. The first unlock writes them and removes it, and the demo's exit removes it; it holds no entry and no date."
+        ),
+        "unresolved:OnboardingDefaults.hasCompletedOnboardingKey@App/Fernlet/ReviewDemo/ReviewDemo.swift": .unreachableByDesign(
+            reason: "Demo build only: ReviewDemo.leave REMOVES the kept `hasCompletedOnboarding` bit so the app returns to Welcome. A removal of a key that carries its own kept row, not a new surface."
+        ),
+        "unresolved:OnboardingDefaults.lockSetupDeferredKey@App/Fernlet/ReviewDemo/ReviewDemo.swift": .unreachableByDesign(
+            reason: "Demo build only: ReviewDemo.leave REMOVES the kept `lockSetupDeferred` bit along with the demo passcode. A removal of a key that carries its own kept row, not a new surface."
+        ),
+        "unresolved:Self.reviewDemoIntimacyPendingKey@App/Fernlet/ReviewDemo/FernletStore+ReviewDemoFriend.swift": .unreachableByDesign(
+            reason: "Demo build only: removeReviewDemoFriend REMOVES `reviewDemo.intimacyPending`, a constant declared in FernletStore+ReviewDemoSeed.swift, which carries its own kept row. A removal, not a new surface."
+        ),
     ]
 
     /// How many CALL SITES each `unresolved:` seam accounts for today.
@@ -569,6 +590,9 @@ struct PersistedSurfaceWipeBoundaryTests {
         "unresolved:FernletThemeDefaults.customLightBackgroundKey@App/Fernlet/World/Customize/AppColorsPage.swift": 2,
         "unresolved:OnboardingDefaults.hasCompletedOnboardingKey@App/Fernlet/BackupExclusionLaunchGate.swift": 1,
         "unresolved:OnboardingDefaults.hasCompletedOnboardingKey@App/Fernlet/FernletApp.swift": 1,
+        "unresolved:OnboardingDefaults.hasCompletedOnboardingKey@App/Fernlet/ReviewDemo/ReviewDemo.swift": 1,
+        "unresolved:OnboardingDefaults.lockSetupDeferredKey@App/Fernlet/ReviewDemo/ReviewDemo.swift": 1,
+        "unresolved:Self.reviewDemoIntimacyPendingKey@App/Fernlet/ReviewDemo/FernletStore+ReviewDemoFriend.swift": 1,
         "unresolved:key@App/Fernlet/PetInteractionGovernor.swift": 2,
         "unresolved:key@FernletKit/Sources/FernletUI/FernletTheme.swift": 1,
         "unresolved:key@FernletKit/Sources/LocalPersistence/LocalFernletRepository.swift": 1

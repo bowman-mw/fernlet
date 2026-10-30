@@ -145,14 +145,16 @@ struct WorldTerrainTests {
         }
     }
 
-    @Test func aTileOfRealTemperateForestIsTheApprovedTile() throws {
+    @Test func aTileOfRealTemperateForestIsTheApprovedTile() async throws {
         let atlas = try Self.shippedAtlas()
         let terrain = Self.terrain(atlas, month: 7)
         let cell = MercatorHexGrid.cell(containing: GeoPoint(45.60, -123.40))
         let key = NatureFogTileBook.key(at: Self.full.centre(of: cell))
         let real = NatureFogTileBook(scale: Self.full, palette: Self.light, clearing: NatureFogClearing(), pixelScale: 1, terrain: terrain)
         let plain = NatureFogTileBook(scale: Self.full, palette: Self.light, clearing: NatureFogClearing(), pixelScale: 1)
-        let a = real.tile(key), b = plain.tile(key)
+        // Through map-perf P1's painters, off the main thread: the content seam draws the same picture.
+        let a = await real.tile(key)
+        let b = await plain.tile(key)
         let bytes = { (image: CGImage?) in image?.dataProvider?.data.map { $0 as Data } }
         #expect(bytes(a.ground) != nil && bytes(a.ground) == bytes(b.ground), "the ground picture is pixel for pixel today's")
         #expect(a.pieces.map { "\($0.sprite)\($0.frame)\($0.look)" } == b.pieces.map { "\($0.sprite)\($0.frame)\($0.look)" })
@@ -293,7 +295,7 @@ struct WorldTerrainTests {
 
     // MARK: Decoration, and the layer guards
 
-    @Test func terrainIsDecorationAndKeepsTheLayerGuards() throws {
+    @Test func terrainIsDecorationAndKeepsTheLayerGuards() async throws {
         let atlas = try Self.shippedAtlas()
         let size = CGSize(width: 402, height: 874)
         let view = NatureFogMapView(frame: CGRect(origin: .zero, size: size))
@@ -306,7 +308,7 @@ struct WorldTerrainTests {
         let book = NatureFogTileBook(scale: Self.full, palette: Self.light, clearing: NatureFogClearing(), pixelScale: 1,
                                      terrain: Self.terrain(atlas, month: 7))
         let key = NatureFogTileBook.key(at: Self.full.centre(of: MercatorHexGrid.cell(containing: coast)))
-        let tile = book.tile(key)
+        let tile = await book.tile(key)
         #expect(NatureFogTileBook.visible(tile.pieces, in: key).rejected == 0, "every terrain sprite passes the W-20 guard")
     }
 }

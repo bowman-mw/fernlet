@@ -154,10 +154,11 @@ An iMessage app must ship an iMessage App Icon set — App Store Connect otherwi
 (ITMS-90644 and relatives). `Assets.xcassets/iMessage App Icon.stickersiconset` carries Xcode's
 twelve slots, including the 1024×768 Messages App Store image, and is wired through
 `ASSETCATALOG_COMPILER_APPICON_NAME`. The art (owner-approved 2026-09-24, replacing the 2026-09-23
-placeholder) is the Home Screen icon's fern sprig re-framed for 4:3: turned onto the 4:3 diagonal and
+placeholder) is the smooth fern sprig the Home Screen icon carried until 2026-10-29, re-framed for 4:3: turned onto the 4:3 diagonal and
 fitted, with 6% clearance, inside the superellipse the Messages "+" menu clips it to (36 × 27 pt on
 iOS 26.5; Apple's own items there are circles). `Scripts/render-imessage-icon.py` renders all twelve
-slots from the Home Screen icon and is the set's source of truth — never hand-edit the PNGs.
+slots from that fern, kept as `Scripts/art/fern-sprig-icon-1024.png` now that the Home Screen icon is
+pixel Sprout, and is the set's source of truth — never hand-edit the PNGs.
 
 ### Localization and accessibility
 

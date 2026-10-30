@@ -1057,8 +1057,10 @@ struct FoodSearchCorpusTests {
             return searchTop != resolverTop
         }
         // 15 since the ingredient-search round's F6: `apple`'s two surfaces agreed only on the
-        // misfiled "Apple & Cheese Tray", which left the generic tier for both.
-        #expect(stillDiverging.count == 15, "divergences: \(stillDiverging.map(\.query))")
+        // misfiled "Apple & Cheese Tray", which left the generic tier for both. 16 since the 2026-10-29
+        // brand fixes: typed `quest protein bar` now answers with Quest's own bars through the brand-field
+        // route, while the resolver — deliberately untouched — still pools "Formulated Bar, SOUTH BEACH".
+        #expect(stillDiverging.count == 16, "divergences: \(stillDiverging.map(\.query))")
     }
 
     // MARK: - Catalog composition (the vintage proxy)

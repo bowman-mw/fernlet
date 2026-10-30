@@ -86,8 +86,17 @@ final class WorldFogKeeper {
 
     /// Reads the lifted history (and merges the locked-phone buffer) when the phone is unlocked and no
     /// decoy is showing. Safe to call on every foreground.
+    ///
+    /// The history is read once. Each later call keeps the cells in memory: it saves any not yet written
+    /// and merges the buffer. Cells lifted under a panel are therefore never thrown back to the disk copy
+    /// (location keeps running under panels, W-09), and Home coming to the front decrypts nothing.
     func load() {
         guard !isDecoy, isProtectedDataAvailable() else { return }
+        guard !store.isLoaded else {
+            mergeWhileLoaded()
+            atlas.load()
+            return
+        }
         do {
             try store.load()
         } catch {
@@ -191,6 +200,18 @@ final class WorldFogKeeper {
         let removed = widgetMap.delete()
         widgetMapReload()
         return removed
+    }
+
+    /// ``load()`` once the history is read: saves the unsaved cells, merges the locked-phone buffer, and
+    /// shows what it added.
+    private func mergeWhileLoaded() {
+        flush()
+        do {
+            guard try store.drainPending() > 0 else { return }
+            visibleCells = store.cells
+        } catch {
+            FernletAuditLog.log("worldMap.fog.loadDeferred")
+        }
     }
 
     /// Puts cells lifted while the phone is locked into the buffer for the next unlock.

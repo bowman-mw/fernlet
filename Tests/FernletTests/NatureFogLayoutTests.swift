@@ -1,6 +1,7 @@
 import CoreGraphics
 import QuartzCore
 import Testing
+import UIKit
 import WorldMapStore
 @testable import Fernlet
 
@@ -110,14 +111,14 @@ struct NatureFogLayoutTests {
         #expect(atlas.fullDetailBytes > 10_000 && atlas.fullDetailBytes < 40_960, "atlas \(atlas.fullDetailBytes) bytes")
     }
 
-    @Test func clearingAHexRedrawsOnlyTheTilesItReaches() {
+    @Test func clearingAHexRedrawsOnlyTheTilesItReaches() async {
         let book = NatureFogTileBook(scale: Self.full, palette: Self.light, clearing: NatureFogClearing(), pixelScale: 1)
         let cell = NatureFogRules.cell(col: 523_420, row: 761_220)
         let home = NatureFogTileBook.key(at: Self.full.centre(of: cell))
         let far = NatureTileKey(x: home.x + 4, y: home.y + 1)
-        let before = book.tile(home)
+        let before = await book.tile(home)
         #expect(before.ground != nil)
-        #expect(book.tile(far).key == far)
+        #expect(await book.tile(far).key == far)
         let change = book.change(to: NatureFogClearing(lifted: [cell]))
         #expect(!change.reset && change.dirty.contains(home) && !change.dirty.contains(far))
         #expect(change.cleared == [cell])
@@ -141,28 +142,52 @@ struct NatureFogLayoutTests {
         return (start, next)
     }
 
-    @Test func grassSwaysWhenTheMapIsStillAndBladesScatterAsAHexClears() {
-        let view = NatureFogMapView(frame: CGRect(x: 0, y: 0, width: 402, height: 874))
-        let (start, next) = clearings()
-        view.show(scene(start, reduceMotion: false))
-        #expect(view.shownTileCount > 0)
-        #expect(view.swayingSpriteCount == 0, "the map just moved: no sway yet")
-        view.settle(now: CACurrentMediaTime() + 60)
-        #expect(view.isSwaying && view.swayingSpriteCount > 0)
-        view.show(scene(next, reduceMotion: false))
-        #expect(view.fadingTileCount > 0, "the cleared grass fades")
-        #expect(view.scatteringCount > 0, "its blades scatter")
-        #expect(view.swayingSpriteCount > 0, "the map didn't move: the grass keeps swaying")
+    /// Puts `view` in a window, as on the map: outside one, Core Animation drops its animations once they're
+    /// committed, and the view's own settle timer may commit the sway while the test waits for tiles.
+    private func hosted(_ view: UIView) -> UIWindow? {
+        guard let scene = UIApplication.shared.connectedScenes.lazy.compactMap({ $0 as? UIWindowScene }).first else { return nil }
+        let window = UIWindow(windowScene: scene)
+        window.frame = view.frame
+        window.addSubview(view)
+        window.isHidden = false
+        return window
     }
 
-    @Test func reduceMotionOnlyFades() {
+    @Test func grassSwaysWhenTheMapIsStillAndBladesScatterAsAHexClears() async throws {
+        let view = NatureFogMapView(frame: CGRect(x: 0, y: 0, width: 402, height: 874))
+        let window = try #require(hosted(view))
+        defer { window.isHidden = true }
+        let (start, next) = clearings()
+        view.show(scene(start, reduceMotion: false))
+        #expect(!view.isSwaying, "the map just moved: no sway yet")
+        await view.finishDrawing()
+        #expect(view.shownTileCount > 0 && view.waitingTileCount == 0)
+        view.settle(now: CACurrentMediaTime() + 60)
+        #expect(view.isSwaying && view.swayingSpriteCount > 0)
+        var fading = 0, swaying = 0
+        view.onTileArrived = { [unowned view] in
+            fading = max(fading, view.fadingTileCount)
+            swaying = max(swaying, view.swayingSpriteCount)
+        }
+        view.show(scene(next, reduceMotion: false))
+        #expect(view.scatteringCount > 0, "its blades scatter")
+        await view.finishDrawing()
+        #expect(fading > 0, "the cleared grass fades as its new picture arrives")
+        #expect(swaying > 0, "the map didn't move: the grass keeps swaying")
+    }
+
+    @Test func reduceMotionOnlyFades() async {
         let view = NatureFogMapView(frame: CGRect(x: 0, y: 0, width: 402, height: 874))
         let (start, next) = clearings()
         view.show(scene(start, reduceMotion: true))
+        await view.finishDrawing()
         view.settle(now: CACurrentMediaTime() + 60)
         #expect(!view.isSwaying && view.swayingSpriteCount == 0, "no sway")
+        var fading = 0
+        view.onTileArrived = { [unowned view] in fading = max(fading, view.fadingTileCount) }
         view.show(scene(next, reduceMotion: true))
-        #expect(view.fadingTileCount > 0, "a clearing hex simply fades out")
+        await view.finishDrawing()
+        #expect(fading > 0, "a clearing hex simply fades out")
         #expect(view.scatteringCount == 0, "no scatter")
     }
 

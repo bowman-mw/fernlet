@@ -9,7 +9,8 @@ yourself — not how optimized you have been. No streaks. No calorie targets. No
 No servers anyone operates.
 
 [fernlet.com](https://fernlet.com) · [Privacy policy](Docs/Privacy-Policy.md) ·
-[Verifiability](Docs/Verifiability.md) · [Specification](Docs/FernletSpecificationV3.md)
+[Verifiability](Docs/Verifiability.md) · [Specification](Docs/FernletSpecificationV3.md) ·
+[Accessibility](ACCESSIBILITY.md)
 
 </div>
 
@@ -34,6 +35,9 @@ purchases and no ads, and its full source — including every line of the crypto
 here under Apache-2.0. These are commitments rather than launch pricing: they are load-bearing for
 the app's US export-control position, where being a free, publicly available app is what keeps the
 shipped binary outside the EAR. See [Docs/Export-Compliance-Encryption.md](Docs/Export-Compliance-Encryption.md) §6A.
+
+**The code is open; the name is not.** Fernlet™ is a trademark of Michael Bowman Olay. Forks are
+welcome under Apache-2.0, but they ship under their own name and icon — see [TRADEMARKS.md](TRADEMARKS.md).
 
 **Requires:** iOS 26 or later. iPhone 15 Pro or newer for the full on-device AI features; the 15 cm
 handshake needs a phone with precise ranging (U1/UWB), with an on-screen confirm as the fallback.
@@ -150,6 +154,13 @@ the in-app view (`App/Fernlet/PrivacyPolicyView.swift`), and the hosted page. Th
 That is the most valuable bug report this project can receive — traffic that is not in the published
 egress inventory, a cross-wall data path, anything that contradicts the policy. Email
 **fernletapp@gmail.com** with "privacy" in the subject.
+
+## Accessibility
+
+[ACCESSIBILITY.md](ACCESSIBILITY.md) says what Fernlet supports today, how it is checked, which
+device checks are still pending, and the known gaps. If something in the app is hard or impossible
+to use with VoiceOver, Voice Control, a larger text size or any other accessibility feature, email
+**fernletapp@gmail.com** with "accessibility" in the subject, or open an issue.
 
 ## License
 

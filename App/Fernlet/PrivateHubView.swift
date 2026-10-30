@@ -152,6 +152,10 @@ struct PrivateHubView: View {
         // `.privateHub` is the scope that owns the sealed content key — unlocking the progress-photo
         // strip or App-lock settings does NOT open this tab (and vice versa).
         .fernletLockGate(scope: .privateHub, active: lockGateIsActive, privateHubOpener: privateHubOpener)
+        // R8: the App Review demo build's passcode, over the passcode screen (`ReviewDemo`).
+        #if FERNLET_DEMO
+        .overlay(alignment: .top) { ReviewDemoPasscodeHint(isLocked: lockOverlayUp) }
+        #endif
         .onAppear {
             #if DEBUG
             if let requested = UITestSupport.initialPrivateHubSection { section = requested }

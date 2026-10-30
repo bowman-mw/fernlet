@@ -33,6 +33,8 @@ struct WorldGroundLayer: View {
     let viewport: MapViewport
     let ground: WorldGround
     let darkStyle: Bool
+    /// Fernlet's camera request, so the fog draws a glide's end before the map gets there.
+    var camera: WorldCamera?
     /// The land under the fog (World-Exploration-Spec §1: the sea, desert, mountains, roofs, the seasons…), from
     /// the bundled atlas; nil, or no atlas, draws today's nature fog everywhere.
     var terrain: NatureFogTerrain? = nil
@@ -51,7 +53,7 @@ struct WorldGroundLayer: View {
             NatureFogLayer(scene: NatureFogScene(viewport: viewport,
                                                  clearing: NatureFogClearing(lifted: ground.lifted, uncovered: ground.uncovered),
                                                  palette: NatureFogPalette(dark: darkStyle, highContrast: contrast == .increased),
-                                                 motion: NatureFogMotion(reduceMotion: reduceMotion), terrain: terrain))
+                                                 motion: NatureFogMotion(reduceMotion: reduceMotion), camera: camera, terrain: terrain))
             traces
         }
         .allowsHitTesting(false)

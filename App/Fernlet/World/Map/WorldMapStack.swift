@@ -48,7 +48,7 @@ struct WorldMapStack<Overlay: View>: View {
                 }
                 if let viewport {
                     Group {
-                        WorldGroundLayer(viewport: viewport, ground: ground, darkStyle: isDark, terrain: terrain)
+                        WorldGroundLayer(viewport: viewport, ground: ground, darkStyle: isDark, camera: camera, terrain: terrain)
                         WorldSkyWash(phase: phase, darkMode: isDark)
                     }
                     .mask { WorldMapCreditClearance(bottomInset: creditInset, active: kind == .appleMuted && !veiled) }

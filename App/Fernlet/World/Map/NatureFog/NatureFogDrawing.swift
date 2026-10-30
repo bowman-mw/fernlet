@@ -8,7 +8,7 @@ import WorldMapStore
 ///
 /// Each land hex paints in its terrain look's palette (``NatureFogPalette/with(_:)``), the approved look first;
 /// a layout of the approved look alone makes exactly the calls the nature fog made before the terrain.
-enum NatureFogDrawer {
+nonisolated enum NatureFogDrawer {
     /// The ground, back to front: every land hex filled (one path a colour, look by look) with its seam, the
     /// sea's hexes (R + 0.4, no seam), the specks and terrain marks, then the water (R + 0.5, covering the
     /// seams), its shores, the sand line along the coast, ripples, lilies and far-off flowers.

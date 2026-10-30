@@ -1209,11 +1209,13 @@ struct DisposableCameraView: View {
     }
 
     /// The glyph inside a shutter that cannot fire: a camera that cannot keep a shot here, the film
-    /// to wind, the film used up, or the camera off.
+    /// to wind, the film used up, or the camera off. SF Symbols has no `camera.slash` or `film.slash`
+    /// (the lookup logged "No symbol named" and drew nothing), so the off states wear `video.slash`
+    /// and the spent roll a terracotta `film`; the caption underneath names each state in words.
     @ViewBuilder
     private var shutterGlyph: some View {
         if !canShootHere {
-            Image(systemName: "camera.slash")
+            Image(systemName: "video.slash")
                 .font(.system(size: 18))
                 .foregroundStyle(Self.cream.opacity(0.6))
         } else if !camera.isArmed && filmRemaining > 0 {
@@ -1221,11 +1223,11 @@ struct DisposableCameraView: View {
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(Self.cream.opacity(0.6))
         } else if filmRemaining == 0 {
-            Image(systemName: "film.slash")
+            Image(systemName: "film")
                 .font(.system(size: 18))
                 .foregroundStyle(Color.terracotta)
         } else if !camera.canCapturePhoto {
-            Image(systemName: "camera.slash")
+            Image(systemName: "video.slash")
                 .font(.system(size: 18))
                 .foregroundStyle(Self.cream.opacity(0.6))
         }

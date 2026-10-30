@@ -860,6 +860,10 @@ struct ContentView: View {
             }
         }
         .background(sceneBackground)
+        // R8: the App Review demo build's two launch hooks (`ReviewDemoLaunchHooks`).
+        #if FERNLET_DEMO
+        .modifier(ReviewDemoLaunchHooks(store: store, intimacyStore: intimacyStore, isLaunchDone: launcher.isDone))
+        #endif
     }
 
     private var mainInterface: some View {
