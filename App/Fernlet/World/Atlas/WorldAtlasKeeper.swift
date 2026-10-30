@@ -3,12 +3,15 @@ import Foundation
 import WorldMapStore
 
 /// Keeps the World passport (round 7, idea 4; owner 2026-10-29): reads each fix the fog keeper accepted
-/// against the bundled atlas and records the first visits in the sealed ``PassportStore``.
+/// against the bundled atlas and records the first visits and each country's trips in the sealed
+/// ``PassportStore``.
 ///
 /// **Which fixes.** `WorldFogKeeper` owns this keeper and calls ``observe(point:at:)`` only for fixes it
 /// accepted (precise, accurate to 65 m, "Uncover the map as you go" on), only while the phone is unlocked,
-/// and never in a decoy. Fixes closer than ``minimumSpacing`` to the last one read are skipped, since a
-/// border, a coast or a city edge is never that close to two answers.
+/// and never in a decoy. A fix closer than ``minimumSpacing`` to the last one read is not read against the atlas
+/// again, since a border, a coast or a city edge is never that close to two answers: it counts as the same visit
+/// at its own time, so a week at home still keeps home's trip clock going (owner 2026-10-29, "Stamp each trip":
+/// a new country stamp needs 7 days away from it).
 ///
 /// **The atlas** is the bundled `WorldAtlas.pack`, opened once, the first time a fix arrives
 /// (``bundledPack(in:open:)``). A missing or unreadable pack means the passport records nothing this session
@@ -32,7 +35,8 @@ import WorldMapStore
 /// The passport is a Sealed backup payload of its own (`.worldPassport`, `PassportBackupAdapter`), sealed
 /// like the journal's text and behind its own switch (`sealedBackupPassportEnabled`): ``bookForBackup()``
 /// hands it out (never in a decoy, never an empty stand-in for one that can't be read), ``restore(_:)``
-/// merges a restored one by token keeping the earliest date, and ``onPassportChanged`` tells the store
+/// merges a restored one by token keeping the earliest date (a country's trips each once), and
+/// ``onPassportChanged`` tells the store
 /// the passport's backup owes an upload.
 ///
 /// **Discoveries for Sprout** (idea B). ``discoveries()`` is a stream of each first visit, announced only
@@ -75,9 +79,12 @@ final class WorldAtlasKeeper {
     @ObservationIgnored private var atlas: AtlasState = .notOpened
     @ObservationIgnored private var openedLandmarks: WorldLandmarks?
     @ObservationIgnored private var lastRead: GeoPoint?
+    /// What the atlas said about ``lastRead``.
+    @ObservationIgnored private var lastVisit: AtlasVisit?
     @ObservationIgnored private var subscriber: AsyncStream<AtlasDiscovery>.Continuation?
-    /// Runs after the passport on disk changed for the sealed backup's sake: a first visit was saved, or
-    /// ``clearAll()`` removed it. The store sets it to mark the passport's own backup owed
+    /// Runs after the passport on disk changed for the sealed backup's sake: a first visit or a trip was saved,
+    /// or ``clearAll()`` removed it (a fix that only moved a country's clock on does not run it; the backup
+    /// carries the clock with the next change). The store sets it to mark the passport's own backup owed
     /// (`markSealedBackupDirty(.worldPassport)`), so the next export writes the new passport, or an empty
     /// one over a deleted one. A restore does not run it (the restore marks the payload owed itself). Nil
     /// (tests) does nothing.
@@ -156,21 +163,28 @@ final class WorldAtlasKeeper {
         book = store.book
     }
 
-    /// Reads one accepted fix at `point`, taken at `date`, and records its first visits; each is announced
-    /// on ``discoveries()`` once saved. Nothing in a decoy, before the passport can be read, or without an atlas.
+    /// Reads one accepted fix at `point`, taken at `date`, and records its first visits and any trip it starts;
+    /// each first visit is announced on ``discoveries()`` once saved. A fix within ``minimumSpacing`` of the last
+    /// one read records that visit again at `date` without asking the atlas. Nothing in a decoy, before the
+    /// passport can be read, or without an atlas.
     func observe(point: GeoPoint, at date: Date) {
         guard !isDecoy, point.isValid else { return }
-        if let last = lastRead, last.distance(to: point) < Self.minimumSpacing { return }
+        let nearby = lastRead.map { $0.distance(to: point) < Self.minimumSpacing } ?? false
         guard let resolver = resolver(), loadStore() else { return }
+        let visit = nearby ? (lastVisit ?? resolver.visit(at: point)) : resolver.visit(at: point)
+        let tripsBefore = store.book.returnCount
         let found: [AtlasDiscovery]
         do {
-            found = try store.record(resolver.visit(at: point), at: date)
+            found = try store.record(visit, at: date)
         } catch {
             FernletAuditLog.log("worldMap.passport.saveDeferred")
             return
         }
-        lastRead = point
-        guard !found.isEmpty else { return }
+        if !nearby {
+            lastRead = point
+            lastVisit = visit
+        }
+        guard !found.isEmpty || store.book.returnCount != tripsBefore else { return }
         book = store.book
         onPassportChanged?()
         announce(found)
@@ -181,6 +195,7 @@ final class WorldAtlasKeeper {
         guard on != isDecoy else { return }
         isDecoy = on
         lastRead = nil
+        lastVisit = nil
         book = on ? PassportBook() : store.book
     }
 
@@ -189,6 +204,7 @@ final class WorldAtlasKeeper {
     /// nothing: the store's dirty mark is a no-op during Delete everything). Whether the file is gone.
     func clearAll() -> Bool {
         lastRead = nil
+        lastVisit = nil
         book = PassportBook()
         let removed = store.removeAll()
         onPassportChanged?()
