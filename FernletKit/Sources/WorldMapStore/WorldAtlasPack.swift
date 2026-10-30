@@ -14,8 +14,9 @@ public nonisolated struct WorldAtlasPack: Sendable {
     public static let magic: [UInt8] = Array("FWA1".utf8)
     /// The one format version this reader knows.
     public static let version: UInt16 = 1
-    /// The whole file's cap: 6 MiB (the generator refuses to write more, `WorldAtlasPackTests` fails more).
-    public static let maxPackBytes = 6_291_456
+    /// The whole file's cap: 7 MiB since the major roads (owner, 2026-10-30: one file, one pin). The generator
+    /// refuses to write more, `WorldAtlasPackTests` fails more.
+    public static let maxPackBytes = 7_340_032
     /// One section's inflated cap: 64 MiB (the shipped grid's largest section is 6.5 MB).
     public static let maxRawSectionBytes = 67_108_864
     /// The most sections a table may list (the format has ten).
@@ -23,7 +24,7 @@ public nonisolated struct WorldAtlasPack: Sendable {
     /// The shipped `WorldAtlas.pack`'s SHA-256, in lowercase hex (generated 2026-10-30 by
     /// `Scripts/world-atlas/build_world_atlas.py`). Regenerating the pack changes it on purpose, in the same
     /// commit.
-    public static let expectedSHA256 = "650281bbe4637ec160aca06f7954cf4f783a30df8572d4542e23a69006b456c5"
+    public static let expectedSHA256 = "38b1d0f487401aa5d241804c1813b7b2079a85a976a3748a09a8b8f232f9c3fc"
     /// The sections every pack must carry (`META`, the generator's provenance, is optional).
     public static let requiredTags = ["LAND", "CLIM", "OCEA", "CONT", "SEAS", "CTRY", "URBN", "CITY", "ADM1", "ROAD"]
     /// Bytes in the fixed header (magic, version, section count).

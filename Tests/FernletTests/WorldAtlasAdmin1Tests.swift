@@ -224,6 +224,25 @@ struct WorldAtlasShippedAdmin1Tests {
         #expect(atlas.admin1(at: GeoPoint(-31.55, 159.08))?.names.english == "Lord Howe Island")
     }
 
+    /// Names are written plain (owner, 2026-10-30): no transliteration macrons, under-dots or ayn marks in any
+    /// language, a translation left with other marks falling back to English; kept where they are the place's own
+    /// letters (Latvian, Māori).
+    @Test func namesAreWrittenPlain() throws {
+        let atlas = try WorldAtlas(data: Self.shippedPack())
+        let herat = try #require(atlas.placeName(at: GeoPoint(34.3482, 62.1997))?.regionNames)
+        #expect(herat.english == "Herat" && herat.spanish == "", "Spanish Herāt is plain Herat, stored empty")
+        #expect(atlas.placeName(at: GeoPoint(36.18, 8.71))?.regionNames?.spanish == "Al-Kaf")
+        #expect(atlas.city(token: "Q208863")?.names.english == "Hachioji")
+        let chaghcharan = try #require(atlas.city(token: "Q958621"))
+        #expect(chaghcharan.names.spanish == "", "Spanish Čaġčarān falls back to the English name")
+        #expect(atlas.admin1(token: "LV-JUR")?.names.english == "Jūrmala", "a Latvian letter stays")
+        #expect(atlas.admin1(token: "NZ-MWT")?.names.english == "Manawatū-Whanganui", "a Māori letter stays")
+        let marks = Set("āēīōūĀĒĪŌŪṭṇḍḥṣẓʿʾ")
+        let marked = atlas.cities.filter { !["LV", "NZ", "US"].contains($0.countryCode) }
+            .filter { [$0.names.english, $0.names.spanish, $0.names.french, $0.names.german].contains { !marks.isDisjoint(with: $0) } }
+        #expect(marked.isEmpty, "no city outside Latvia, New Zealand and Hawaiʻi keeps a mark: \(marked.map(\.token))")
+    }
+
     /// Region names are the everyday English and Spanish ones (owner, 2026-10-29): "Madrid · Spain", "Bavaria ·
     /// Germany", never the official long forms. Natural Earth's own long forms lose their designation where an
     /// everyday name exists, and keep it where the rest would be an adjective, a common word or another place.

@@ -54,11 +54,12 @@ PACK_VERSION = 1
 MAGIC = b"FWA1"
 SUB = 16
 DEFAULT_ROWS = 1800
-SIZE_CAP = 6_291_456
+# 7 MiB since the major roads (owner, 2026-10-30: "raise the pack cap to 7 MiB", one file, one pin).
+SIZE_CAP = 7_340_032
 RAW_SECTION_CAP = 64 * 1024 * 1024
 SIMPLIFY_DEGREES = 0.001
 # ADM1's Douglas-Peucker tolerance: about 890 m, under 3 pt at the world view's City zoom (360 pt a degree of
-# latitude) and under a third of its 10-pt hex. 0.003° (1 pt) and 0.005° do not leave the 6 MiB cap any margin.
+# latitude) and under a third of its 10-pt hex. 0.003° (1 pt) and 0.005° did not leave the old 6 MiB cap any margin.
 ADMIN1_SIMPLIFY_DEGREES = 0.008
 MAX_ADMIN1 = 8192
 # A code differently named admin-1 features share stays with the largest only when it is this many times the
@@ -1329,11 +1330,36 @@ EVERYDAY_NAMES = {
     "UA-32": ("Kyiv Oblast", "Óblast de Kiev"),
 }
 
-# American everyday spelling (owner, 2026-10-30): Japanese names are written without the Hepburn macrons
-# ("Kyoto", "Osaka", "Hokkaido", not "Kyōto"), in English and Spanish. Only Japan's: elsewhere a macron is a
-# letter of the place's own language (Latvian "Jūrmala", Māori "Manawatū-Whanganui") and stays.
-MACRONS_DROPPED = {"JP"}
-MACRON_LETTERS = str.maketrans("ĀāĒēĪīŌōŪū", "AaEeIiOoUu")
+# PLAIN SPELLING (owner, 2026-10-30): names are written without transliteration marks, the American everyday way,
+# in every language the pack stores ("Kyoto", "Osaka", "Hokkaido", not "Kyōto"; Spanish "Herat", not "Herāt";
+# "Tarabulus", not "Ṭarābulus"): the macrons, the scholars' under-dots and the ayn and hamza marks go, in the
+# states and provinces and in the cities. A translation that still holds a letter beyond Latin-1 once they are
+# gone (Spanish "Čaġčarān") uses the plain English name instead. Kept where the marks are letters of the
+# place's own language: Latvia ("Jūrmala"), New Zealand's Māori names ("Manawatū-Whanganui", "Taupō") and
+# Hawaiʻi's ("Līhuʻe", the only marked US name).
+TRANSLITERATION_KEPT = {"LV", "NZ", "US"}
+TRANSLITERATION_MARKS = str.maketrans({
+    "Ā": "A", "ā": "a", "Ē": "E", "ē": "e", "Ī": "I", "ī": "i", "Ō": "O", "ō": "o", "Ū": "U", "ū": "u",
+    "Ḍ": "D", "ḍ": "d", "Ḥ": "H", "ḥ": "h", "Ṇ": "N", "ṇ": "n", "Ṣ": "S", "ṣ": "s", "Ṭ": "T", "ṭ": "t",
+    "Ẓ": "Z", "ẓ": "z", "ʿ": "", "ʾ": "",
+})
+
+
+def plain_names(names, country, report):
+    """`names` (English first, then its translations) under the plain-spelling rule; each change is counted."""
+    if country in TRANSLITERATION_KEPT:
+        return tuple(names)
+    english = names[0].translate(TRANSLITERATION_MARKS)
+    out = [english]
+    for other in names[1:]:
+        plain = other.translate(TRANSLITERATION_MARKS)
+        if plain != other and any(ord(letter) > 0xFF for letter in plain):
+            plain = english
+        out.append(plain)
+    if tuple(out) != tuple(names):
+        key = "names written plain (transliteration marks dropped)"
+        report.counts[key] = report.counts.get(key, 0) + 1
+    return tuple(out)
 
 # The Spanish half of the rule: a NAME_ES that is one of these designations and then the English name ("Municipio
 # de Wandsworth", "Krai de Krasnodar", "República autónoma de Crimea") becomes the name alone (and is then stored
@@ -1388,8 +1414,7 @@ def everyday_names(attrs, country, iso, report):
     spanish = text_field(attrs, "NAME_ES")
     short = everyday_english(attrs, country, iso, english)
     short_spanish = everyday_spanish(iso, spanish, short)
-    if country in MACRONS_DROPPED:
-        short, short_spanish = short.translate(MACRON_LETTERS), short_spanish.translate(MACRON_LETTERS)
+    short, short_spanish = plain_names((short, short_spanish), country, report)
     if short != english:
         key = "admin-1 English names made everyday"
         report.counts[key] = report.counts.get(key, 0) + 1
@@ -1695,7 +1720,8 @@ def city_record(geom, attrs, used, countries, report):
             report.counts.get("cities placed by ISO_A2 (outside the simplified rings)", 0) + 1
     population = attrs.get("POP_MAX")
     population = max(0, min(int(population), 0xFFFFFFFF)) if isinstance(population, (int, float)) else 0
-    names = (name, text_field(attrs, "NAME_ES"), text_field(attrs, "NAME_FR"), text_field(attrs, "NAME_DE"))
+    names = plain_names((name, text_field(attrs, "NAME_ES"), text_field(attrs, "NAME_FR"),
+                         text_field(attrs, "NAME_DE")), country, report)
     return {"token": token, "country": country, "population": population, "lon": lon, "lat": lat,
             "names": names}
 
@@ -1906,7 +1932,7 @@ def parse_args(argv):
     parser.add_argument("--out", required=True, help="where to write the pack")
     parser.add_argument("--date", default="unset", help="the generation date written into META")
     parser.add_argument("--rows", type=int, default=DEFAULT_ROWS, help="grid rows (cols = 2 x rows)")
-    parser.add_argument("--size-cap", type=int, default=SIZE_CAP, help="refuse a bigger pack (≤ 6 MiB)")
+    parser.add_argument("--size-cap", type=int, default=SIZE_CAP, help="refuse a bigger pack (≤ 7 MiB)")
     parser.add_argument("--unverified-sources", action="store_true",
                         help="allow sources that differ from their pins (self-test only)")
     args = parser.parse_args(argv)

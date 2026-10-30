@@ -78,8 +78,9 @@ struct WorldAtlasPackFormatTests {
         #expect(refusal(try world.build()) == nil)
     }
 
-    /// A file over 6 MiB is refused before anything is read.
+    /// A file over 7 MiB (the owner's cap since the major roads, 2026-10-30) is refused before anything is read.
     @Test func anOversizedFileIsRefused() {
+        #expect(WorldAtlasPack.maxPackBytes == 7_340_032)
         #expect(refusal(Data(count: WorldAtlasPack.maxPackBytes + 1)) == .tooLarge)
     }
 
@@ -149,7 +150,7 @@ struct WorldAtlasPackFormatTests {
     }
 }
 
-/// The shipped `WorldAtlas.pack`: inside the 6 MiB cap and the very file `WorldAtlasPack.expectedSHA256` pins.
+/// The shipped `WorldAtlas.pack`: inside the 7 MiB cap and the very file `WorldAtlasPack.expectedSHA256` pins.
 @MainActor
 struct WorldAtlasPackTests {
     /// The bundled pack's size and checksum.
@@ -158,6 +159,20 @@ struct WorldAtlasPackTests {
         #expect(data.count <= WorldAtlasPack.maxPackBytes)
         #expect(WorldAtlasPack.sha256Hex(data) == WorldAtlasPack.expectedSHA256)
         _ = try WorldAtlas(data: data)
+    }
+
+    /// The shipped pack carries Natural Earth's major roads (owner, 2026-10-30) and the crossing rule finds them:
+    /// a walk across Portland meets I-5 going west to east and I-84 going north, each a highway; the Sahara has none.
+    @Test func theShippedPackKnowsMajorRoads() throws {
+        let atlas = try WorldAtlas(data: Self.shippedPack())
+        #expect(atlas.roads.count > 8_000 && atlas.roads.filter { $0.kind == .highway }.count > 5_000)
+        #expect(atlas.roads.allSatisfy { AtlasRoad.isValidToken($0.token) })
+        #expect(Set(atlas.roads.map(\.token)).count == atlas.roads.count, "tokens never repeat")
+        let west = atlas.roadsCrossed(from: GeoPoint(45.50, -122.70), to: GeoPoint(45.50, -122.65))
+        #expect(west.count == 1 && west.first?.kind == .highway, "I-5 through Portland")
+        let north = atlas.roadsCrossed(from: GeoPoint(45.52, -122.62), to: GeoPoint(45.56, -122.62))
+        #expect(north.count == 1 && north.first?.kind == .highway, "I-84 through Portland")
+        #expect(atlas.roadsCrossed(from: GeoPoint(23.0, 10.0), to: GeoPoint(23.03, 10.0)).isEmpty, "the Sahara")
     }
 
     /// The shipped pack answers real places the way the owner's rules say (spot checks, 2026-10-29).

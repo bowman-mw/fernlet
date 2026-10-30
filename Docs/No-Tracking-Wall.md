@@ -352,7 +352,7 @@ it has no row in the §3 allowlist.
 
 | Data | Where | Fetched by |
 |---|---|---|
-| **The World atlas** (round 7): land and water, oceans and seas, countries, cities and their urban areas, from Natural Earth (public domain); climate zones from Beck et al. (2018), CC BY 4.0, credited in Acknowledgments | `App/Fernlet/World/Atlas/WorldAtlas.pack`, at most 6 MiB, its SHA-256 pinned by `WorldAtlasPackTests`; format in [World-Atlas-Pack.md](World-Atlas-Pack.md) | the build machine only, once, with the owner's OK (`Scripts/world-atlas/fetch-sources.sh`, pinned URLs and SHA-256s). The app never fetches it; a missing pack means the passport records nothing. |
+| **The World atlas** (round 7): land and water, oceans and seas, countries, states and provinces, cities and their urban areas, and major roads, from Natural Earth (public domain); climate zones from Beck et al. (2018), CC BY 4.0, credited in Acknowledgments | `App/Fernlet/World/Atlas/WorldAtlas.pack`, at most 7 MiB, its SHA-256 pinned by `WorldAtlasPackTests`; format in [World-Atlas-Pack.md](World-Atlas-Pack.md) | the build machine only, once, with the owner's OK (`Scripts/world-atlas/fetch-sources.sh`, pinned URLs and SHA-256s). The app never fetches it; a missing pack means the passport records nothing. |
 
 ---
 

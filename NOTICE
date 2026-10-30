@@ -72,7 +72,7 @@ The atlas is built on the build machine by Scripts/world-atlas/ and ships
 inside the app; the app never downloads map data.
 
 Land, minor islands, marine areas, countries, states and provinces,
-populated places and urban areas: Natural Earth (https://www.naturalearthdata.com/), 1:10m, in the
+populated places, urban areas and major roads: Natural Earth (https://www.naturalearthdata.com/), 1:10m, in the
 public domain. No credit is required; Fernlet gives it anyway.
 
 Climate zones: Beck, H. E., Zimmermann, N. E., McVicar, T. R., Vergopolan,

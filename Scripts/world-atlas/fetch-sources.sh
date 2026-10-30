@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# fetch-sources.sh — download the World atlas pack's nine sources onto the build machine, once, with the
+# fetch-sources.sh — download the World atlas pack's ten sources onto the build machine, once, with the
 # owner's OK (Docs/World-Atlas-Pack.md). The app never fetches any of this: only
 # Scripts/world-atlas/build_world_atlas.py reads these files, and only the pack it writes ships.
 #
