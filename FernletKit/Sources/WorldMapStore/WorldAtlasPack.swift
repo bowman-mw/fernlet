@@ -25,7 +25,7 @@ public nonisolated struct WorldAtlasPack: Sendable {
     /// commit.
     public static let expectedSHA256 = "e618645d07afa5126fa61fbd720cf9e5786f350f198d88f7de852c8a3c202d36"
     /// The sections every pack must carry (`META`, the generator's provenance, is optional).
-    public static let requiredTags = ["LAND", "CLIM", "OCEA", "CONT", "SEAS", "CTRY", "URBN", "CITY", "ADM1"]
+    public static let requiredTags = ["LAND", "CLIM", "OCEA", "CONT", "SEAS", "CTRY", "URBN", "CITY", "ADM1", "ROAD"]
     /// Bytes in the fixed header (magic, version, section count).
     static let headerBytes = 8
     /// Bytes in one table entry (tag, offset, stored length, raw length).
