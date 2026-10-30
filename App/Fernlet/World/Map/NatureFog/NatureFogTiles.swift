@@ -198,13 +198,14 @@ final class NatureFogTileBook {
         return (kept, rejected)
     }
 
-    /// Forgets the tiles farthest from `centre` (tile units: the middle of the screen) once more than
-    /// ``cacheLimit`` are held, never one in `keep`.
-    func evict(around centre: CGPoint, keeping keep: Set<NatureTileKey>) {
-        guard tiles.count > Self.cacheLimit else { return }
+    /// Forgets the tiles farthest from `centre` (tile units: the middle of the screen) once more than `limit`
+    /// (at most ``cacheLimit``) are held, never one in `keep`.
+    func evict(around centre: CGPoint, keeping keep: Set<NatureTileKey>, limit: Int = cacheLimit) {
+        let limit = max(0, min(limit, Self.cacheLimit))
+        guard tiles.count > limit else { return }
         let spare = tiles.keys.filter { !keep.contains($0) }
             .sorted { NatureFogRing.distance($0, centre) > NatureFogRing.distance($1, centre) }
-        for key in spare.prefix(tiles.count - Self.cacheLimit) { tiles[key] = nil }
+        for key in spare.prefix(tiles.count - limit) { tiles[key] = nil }
     }
 
     /// Starts drawing the most wanted tiles that are neither ready nor on their way, up to ``painterCount``.

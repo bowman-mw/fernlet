@@ -7,7 +7,8 @@ import WorldMapStore
 /// The fog's tiles drawn off the main thread (owner's go 2026-10-29, map-perf P1): the screen never waits on
 /// a tile, a ring of tiles round the screen is drawn ahead (further the way the map moves), the cache keeps
 /// what's nearest the middle, a tile drawn from a clearing that changed meanwhile is thrown away, fog coming
-/// back blanks the tiles it reaches at once, and a zoom step keeps the old scale's tiles until the new ones are in.
+/// back blanks the tiles it reaches at once, a zoom step keeps the old scale's tiles until the new ones are in,
+/// zooming back finds the scale it left still drawn (P2), and a glide draws its end first (P3).
 @MainActor
 struct NatureFogTilePipelineTests {
     static let full = NatureFogScale(radius: 19, reduced: false)
@@ -91,6 +92,59 @@ struct NatureFogTilePipelineTests {
         #expect(view.waitingTileCount > 0, "a decoy's empty map never shows the history while its tiles redraw")
         await view.finishDrawing()
         #expect(view.waitingTileCount == 0)
+    }
+
+    @Test func zoomingBackFindsTheScaleItLeftStillDrawn() async {
+        let view = NatureFogMapView(frame: CGRect(origin: .zero, size: Self.size))
+        view.show(scene())
+        await view.finishDrawing()
+        let firstScreen = view.shownTileCount
+        view.show(scene(heightMetres: 1_700 * 0.57 / 1.5))
+        await view.finishDrawing()
+        let bound = max(NatureFogMapView.spareTileLimit, firstScreen) + NatureFogTileBook.painterCount
+        #expect(view.spareTileCounts == view.spareTileCounts.filter { $0 <= bound } && view.spareTileCounts.count == 1,
+                "the scale it left is kept, with only its screen and nearest tiles")
+        view.show(scene())
+        #expect(view.waitingTileCount == 0, "every tile on screen is there at once")
+        #expect(view.outgoingTileCount == 0, "so nothing needs holding over")
+    }
+
+    @Test func aGlideDrawsItsEndFirst() async {
+        let view = NatureFogMapView(frame: CGRect(origin: .zero, size: Self.size))
+        let away = Self.park.offset(east: 15_000, north: 0)
+        func scene(at point: GeoPoint, camera: GeoPoint, revision: Int) -> NatureFogScene {
+            NatureFogScene(viewport: MapViewport.around(point, heightMetres: 1_700 * PlainBaseMap.heightPerDistance, size: Self.size),
+                           clearing: NatureFogClearing(lifted: Set(MercatorHexGrid.cells(around: Self.park, within: 60))),
+                           palette: Self.light, motion: NatureFogMotion(reduceMotion: true),
+                           camera: WorldCamera(center: camera, distance: 1_700, revision: revision))
+        }
+        view.show(scene(at: Self.park, camera: Self.park, revision: 1))
+        await view.finishDrawing()
+        view.show(scene(at: Self.park, camera: away, revision: 2))
+        await view.finishDrawing()
+        view.show(scene(at: away, camera: away, revision: 2))
+        #expect(view.shownTileCount > 0)
+        #expect(view.waitingTileCount == 0, "Back to Sprout's end was drawn before the map got there")
+    }
+
+    @Test func followingAndPanningAreNoGlide() {
+        let view = NatureFogMapView(frame: CGRect(origin: .zero, size: Self.size))
+        let height = 1_700 * PlainBaseMap.heightPerDistance
+        func scene(at point: GeoPoint, camera: GeoPoint, revision: Int) -> NatureFogScene {
+            NatureFogScene(viewport: MapViewport.around(point, heightMetres: height, size: Self.size), clearing: NatureFogClearing(),
+                           palette: Self.light, motion: NatureFogMotion(reduceMotion: true),
+                           camera: WorldCamera(center: camera, distance: 1_700, revision: revision))
+        }
+        view.show(scene(at: Self.park, camera: Self.park, revision: 1))
+        #expect(!view.isGliding)
+        let step = Self.park.offset(east: 30, north: 0)
+        view.show(scene(at: Self.park, camera: step, revision: 2))
+        #expect(!view.isGliding, "following moves the camera a little at a time")
+        let away = Self.park.offset(east: 3_000, north: 0)
+        view.show(scene(at: Self.park, camera: away, revision: 3))
+        #expect(view.isGliding, "Back to Sprout from three kilometres off glides")
+        view.show(scene(at: Self.park.offset(east: -2_000, north: 0), camera: away, revision: 3))
+        #expect(!view.isGliding, "the person took the map the other way: the glide is over")
     }
 
     @Test func aZoomStepKeepsTheOldTilesUntilTheNewOnesAreIn() async {

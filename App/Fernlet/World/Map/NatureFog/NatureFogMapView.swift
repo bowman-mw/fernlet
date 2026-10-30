@@ -2,12 +2,15 @@ import SwiftUI
 import UIKit
 import WorldMapStore
 
-/// What the fog layer shows: where the map looks, what's uncovered, its colours and the motion setting.
+/// What the fog layer shows: where the map looks, what's uncovered, its colours and the motion setting,
+/// and Fernlet's camera request, so a glide's end is drawn before the map gets there (map-perf P3).
 struct NatureFogScene {
     let viewport: MapViewport
     let clearing: NatureFogClearing
     let palette: NatureFogPalette
     let motion: NatureFogMotion
+    /// Where Fernlet last asked the camera to go (following, Back to Sprout); nil when the caller has none.
+    var camera: WorldCamera?
 }
 
 /// The nature fog on the live map, in the fog's old place in the stack (``WorldGroundLayer``: over the saved
@@ -50,6 +53,13 @@ final class NatureFogMapView: UIView {
         }
     }
 
+    /// How many scales the map keeps after leaving them.
+    static let spareBookLimit = 2
+    /// How many tiles a scale left behind keeps (its nearest to where the screen was).
+    static let spareTileLimit = 16
+    /// How long after a camera request its end keeps the first claim on the painters, in seconds (a glide).
+    static let glideWindow = 6.0
+
     private static let swayKey = "nf.sway"
     /// Core Animation files every transition under `kCATransition`, whatever key it is added with.
     private static let clearKey = kCATransition
@@ -68,6 +78,16 @@ final class NatureFogMapView: UIView {
     /// Where the outgoing tiles cover the screen now; a waiting tile wholly inside shows them, not the fog's colour.
     private var outgoingBounds: CGRect?
     private var lastMap: Mapping?
+    /// The scales the map just left, most recent first, each keeping its nearest tiles (map-perf P2): zooming
+    /// back finds them drawn. At most ``spareBookLimit``, all in the current palette, each holding the tiles
+    /// that were on its screen or ``spareTileLimit``, whichever is more, plus the ``NatureFogTileBook/painterCount``
+    /// still drawing when it was left.
+    private var spareBooks: [NatureFogTileBook] = []
+    /// The last camera request, when it came, whether it's still a glide under way (its end lay more than a
+    /// screen away when it came, and the map hasn't since come near it or turned away from it: following the
+    /// person moves the camera a little at a time and is no glide, and a pan ends one), and how far off its
+    /// end was last frame, in tiles (map-perf P3).
+    private var heading: (revision: Int, since: CFTimeInterval, gliding: Bool, gap: Double)?
     /// The middle of the screen last frame, in tiles, for which way the map is moving.
     private var lastCentre: CGPoint?
     private let effects = CALayer()
@@ -138,24 +158,58 @@ final class NatureFogMapView: UIView {
                        stretchX: Double(size.width) / viewport.width / perUnit, stretchY: Double(size.height) / viewport.height / perUnit)
     }
 
-    /// Matches the book to the scene: a new clearing dirties tiles. A new scale or palette starts a new book,
-    /// the old tiles staying on screen until the new ones are in, unless the clearing changed with it (then
-    /// they go at once, so a decoy session never shows the history even for a moment).
+    /// Matches the book to the scene: a new clearing dirties tiles. A new scale or palette brings back the
+    /// spare book at that scale or starts a new one, the old tiles staying on screen until the new ones are
+    /// in, unless the clearing changed with it (then they go at once, so a decoy session never shows the
+    /// history even for a moment); the old book becomes a spare. Fog coming back forgets every spare.
     private func sync(scale: NatureFogScale, scene: NatureFogScene) -> NatureFogChange? {
         if let book, book.scale == scale, book.palette == scene.palette {
             let change = book.change(to: scene.clearing)
             if change.reset { dropAll() }
             // Fog coming back: the old scale's tiles were drawn from the history and go at once.
-            if change.covers { dropOutgoing() }
+            if change.covers {
+                dropOutgoing()
+                spareBooks.removeAll()
+            }
             return change.reset || change.dirty.isEmpty ? nil : change
         }
+        let onScreen = Set(shown.keys)
         if let book, book.clearing == scene.clearing { keepOutgoing(scale: book.scale) } else { dropAll() }
-        let next = NatureFogTileBook(scale: scale, palette: scene.palette, clearing: scene.clearing,
-                                     pixelScale: min(traitCollection.displayScale, 2))
-        next.onReady = { [weak self] tile in self?.arrived(tile) }
-        book = next
+        if let book { retire(book, palette: scene.palette, keeping: onScreen) }
+        book = reuse(scale, scene: scene) ?? fresh(scale, scene: scene)
         lastCentre = nil
         return nil
+    }
+
+    /// Keeps `old` as a spare scale when the palette stays, drawing nothing more: the tiles that were on
+    /// screen (`onScreen`) and the nearest others up to ``spareTileLimit``. A new palette forgets every spare.
+    private func retire(_ old: NatureFogTileBook, palette: NatureFogPalette, keeping onScreen: Set<NatureTileKey>) {
+        guard old.palette == palette else {
+            spareBooks.removeAll()
+            return
+        }
+        old.want([])
+        old.evict(around: lastCentre ?? .zero, keeping: onScreen, limit: Self.spareTileLimit)
+        spareBooks = Array(([old] + spareBooks.filter { $0 !== old }).prefix(Self.spareBookLimit))
+    }
+
+    /// The spare book at `scale`, brought up to the scene's clearing (dropping the tiles a change reached).
+    private func reuse(_ scale: NatureFogScale, scene: NatureFogScene) -> NatureFogTileBook? {
+        guard let index = spareBooks.firstIndex(where: { $0.scale == scale && $0.palette == scene.palette }) else { return nil }
+        let spare = spareBooks.remove(at: index)
+        _ = spare.change(to: scene.clearing)
+        return spare
+    }
+
+    /// A new book at `scale` whose tiles reach the screen only while it's the current one.
+    private func fresh(_ scale: NatureFogScale, scene: NatureFogScene) -> NatureFogTileBook {
+        let next = NatureFogTileBook(scale: scale, palette: scene.palette, clearing: scene.clearing,
+                                     pixelScale: min(traitCollection.displayScale, 2))
+        next.onReady = { [weak self, weak next] tile in
+            guard let self, let next, self.book === next else { return }
+            self.arrived(tile)
+        }
+        return next
     }
 
     /// Shows the tiles on screen (only the ones the visible rect reaches) and drops the ones that left it, then
@@ -195,16 +249,58 @@ final class NatureFogMapView: UIView {
     }
 
     /// Asks for the screen's tiles and the ring round them, reaching further the way the map is moving
-    /// (``NatureFogRing``), and lets the farthest cached tiles go.
+    /// (``NatureFogRing``), and lets the farthest cached tiles go. While a glide is far from its end, the
+    /// end's screen and ring come first and the screen's own tiles after, with no ring: the frames between
+    /// show the fog's colour rather than tiles that would scroll away before they're drawn (map-perf P3).
     private func prefetch(low: NatureTileKey, high: NatureTileKey, map: Mapping, size: CGSize, book: NatureFogTileBook) {
         let centre = CGPoint(x: (map.originX + Double(size.width) / map.stretchX / 2) / NatureFogTileBook.tileSize,
                              y: (map.originY + Double(size.height) / map.stretchY / 2) / NatureFogTileBook.tileSize)
         let motion = lastCentre.map { CGVector(dx: centre.x - $0.x, dy: centre.y - $0.y) } ?? .zero
         lastCentre = centre
-        let ring = NatureFogRing.keys(low: low, high: high, centre: centre, motion: motion, limit: NatureFogTileBook.cacheLimit)
-        book.want(ring)
-        book.evict(around: centre, keeping: Set(ring))
+        let limit = NatureFogTileBook.cacheLimit
+        let wanted: [NatureTileKey]
+        if let end = glideEnd(from: centre, low: low, high: high, size: size, book: book) {
+            let screen = NatureFogRing.keys(low: low, high: high, centre: centre, motion: .zero, limit: limit)
+                .filter { (low.x...high.x).contains($0.x) && (low.y...high.y).contains($0.y) }
+            let ahead = NatureFogRing.keys(low: end.low, high: end.high, centre: end.centre, motion: .zero, limit: limit)
+            wanted = ahead.isEmpty ? NatureFogRing.keys(low: low, high: high, centre: centre, motion: motion, limit: limit)
+                : Array((ahead + screen.filter { !ahead.contains($0) }).prefix(limit))
+        } else {
+            wanted = NatureFogRing.keys(low: low, high: high, centre: centre, motion: motion, limit: limit)
+        }
+        book.want(wanted)
+        book.evict(around: centre, keeping: Set(wanted))
         if waiting.isEmpty { dropOutgoing() }
+    }
+
+    /// The tiles where a glide will end at `book`'s scale, while one is under way: Fernlet asked the camera
+    /// to move within ``glideWindow``, to an end more than a screen from where the map was then, and it's
+    /// still that far from `centre` (tile units). Nil otherwise, and for an end whose frame or size fails
+    /// ``WorldLayerGuard`` (W-20).
+    private func glideEnd(from centre: CGPoint, low: NatureTileKey, high: NatureTileKey, size: CGSize,
+                          book: NatureFogTileBook) -> (low: NatureTileKey, high: NatureTileKey, centre: CGPoint)? {
+        guard let camera = scene?.camera, camera.center.isValid else { return nil }
+        let end = MapViewport.around(camera.center, heightMetres: camera.distance * PlainBaseMap.heightPerDistance, size: size)
+        guard end.isUsable else { return nil }
+        let map = Self.mapping(end, size: size, scale: book.scale)
+        guard WorldLayerGuard.accepts(stretchX: map.stretchX, stretchY: map.stretchY) else { return nil }
+        let endLow = NatureFogTileBook.key(at: CGPoint(x: map.originX, y: map.originY))
+        let endHigh = NatureFogTileBook.key(at: CGPoint(x: map.originX + Double(size.width) / map.stretchX,
+                                                        y: map.originY + Double(size.height) / map.stretchY))
+        let endCentre = CGPoint(x: (map.originX + Double(size.width) / map.stretchX / 2) / NatureFogTileBook.tileSize,
+                                y: (map.originY + Double(size.height) / map.stretchY / 2) / NatureFogTileBook.tileSize)
+        let far = abs(endCentre.x - centre.x) > Double(high.x - low.x + 1) || abs(endCentre.y - centre.y) > Double(high.y - low.y + 1)
+        let gap = Double(hypot(endCentre.x - centre.x, endCentre.y - centre.y))
+        let now = CACurrentMediaTime()
+        guard var current = heading, current.revision == camera.revision else {
+            heading = (camera.revision, now, far, gap)
+            return far ? (endLow, endHigh, endCentre) : nil
+        }
+        // Near the end, or moving away from it (the person took the map): the glide is over.
+        current.gliding = current.gliding && far && gap <= current.gap + 0.05 && now - current.since < Self.glideWindow
+        current.gap = gap
+        heading = current
+        return current.gliding ? (endLow, endHigh, endCentre) : nil
     }
 
     /// Moves the old scale's tiles with the map; a stretch or a frame out of proportion drops them (W-20).
@@ -320,6 +416,7 @@ final class NatureFogMapView: UIView {
     }
 
     private func dropAll() {
+        spareBooks.removeAll()
         for tile in shown.values { tile.container.removeFromSuperlayer() }
         shown.removeAll()
         waiting.removeAll()
@@ -361,6 +458,12 @@ extension NatureFogMapView {
 
     /// How many tiles the book holds ready (the screen's and the ring's).
     var cachedTileCount: Int { book?.cachedKeys.count ?? 0 }
+
+    /// Whether a glide's end has the first claim on the painters now.
+    var isGliding: Bool { heading?.gliding ?? false }
+
+    /// How many scales the map left are kept, and their tiles.
+    var spareTileCounts: [Int] { spareBooks.map(\.cachedKeys.count) }
 
     /// How many of the last scale's tiles are still on screen after a zoom step.
     var outgoingTileCount: Int { outgoing.count }

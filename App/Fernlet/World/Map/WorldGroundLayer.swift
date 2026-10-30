@@ -29,6 +29,8 @@ struct WorldGroundLayer: View {
     let viewport: MapViewport
     let ground: WorldGround
     let darkStyle: Bool
+    /// Fernlet's camera request, so the fog draws a glide's end before the map gets there.
+    var camera: WorldCamera?
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -44,7 +46,7 @@ struct WorldGroundLayer: View {
             NatureFogLayer(scene: NatureFogScene(viewport: viewport,
                                                  clearing: NatureFogClearing(lifted: ground.lifted, uncovered: ground.uncovered),
                                                  palette: NatureFogPalette(dark: darkStyle, highContrast: contrast == .increased),
-                                                 motion: NatureFogMotion(reduceMotion: reduceMotion)))
+                                                 motion: NatureFogMotion(reduceMotion: reduceMotion), camera: camera))
             traces
         }
         .allowsHitTesting(false)
