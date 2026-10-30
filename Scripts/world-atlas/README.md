@@ -12,9 +12,9 @@ Scripts/world-atlas/fetch-sources.sh            # into ~/Library/Caches/Fernlet/
 Scripts/world-atlas/fetch-sources.sh <dir>      # or anywhere else
 ```
 
-The script downloads nine files (eight Natural Earth 1:10m zips, among them the admin-1 states and
-provinces added 2026-10-29 for the world view's State zoom, and Beck et al.'s Köppen-Geiger zip, about 114 MB in
-all), each into its own new, empty subdirectory, with `curl -fL`. It then checks every file's size and
+The script downloads ten files (nine Natural Earth 1:10m zips, among them the admin-1 states and
+provinces added 2026-10-29 for the world view's State zoom and the major roads added 2026-10-30, and Beck et al.'s
+Köppen-Geiger zip, about 123 MB in all), each into its own new, empty subdirectory, with `curl -fL`. It then checks every file's size and
 SHA-256 against the pinned table in the script. A file already in place is only checked again.
 
 The hashes are not pinned yet: every entry reads `UNPINNED`, so a first run prints each computed hash and
@@ -27,7 +27,7 @@ build. The coastline zip is for reference and QA only: the generator does not ne
 ```sh
 python3 -I Scripts/world-atlas/build_world_atlas.py \
     --sources ~/Library/Caches/Fernlet/atlas-sources \
-    --out App/Fernlet/World/Atlas/WorldAtlas.pack --date 2026-10-29
+    --out App/Fernlet/World/Atlas/WorldAtlas.pack --date 2026-10-30
 ```
 
 - Python 3.9 standard library, numpy and Pillow only. Under `-I`, the scripts add the user site-packages
@@ -36,7 +36,7 @@ python3 -I Scripts/world-atlas/build_world_atlas.py \
   pin, and an `UNPINNED` source only gets a note in the summary.
 - It runs in minutes and keeps memory well under 4 GB. The fine 1/160° land raster is made one 0.1° row-strip
   at a time.
-- **Size cap: 6 MiB** (6,291,456 bytes). An over-size pack is refused and nothing is written.
+- **Size cap: 7 MiB** (7,340,032 bytes; 6 MiB until the major roads, owner 2026-10-30). An over-size pack is refused and nothing is written.
   `WorldAtlasPackTests` fails one too.
 - Output is deterministic for one zlib build: the same sources and options give the same bytes. The only
   date inside is `--date`, which defaults to `unset`.

@@ -53,6 +53,9 @@ public nonisolated final class WorldAtlas: Sendable {
     /// The plate groups (`ADM1`'s first table): the first-level regions entries are shown as where Natural
     /// Earth's admin-1 is second-level (England, Île-de-France). An entry not in a group is its own.
     public let admin1Groups: [AtlasAdmin1Group]
+    /// The major roads (`ROAD`), in number order, for the approved major-road style and the crossing rule
+    /// (`WorldAtlasRoads.swift`).
+    public let roads: [AtlasRoad]
     /// The generator's provenance JSON (`META`), when the pack carries it.
     public let metaJSON: String?
     /// Every cell's state: 0 water, 1 land, 2 coast.
@@ -82,6 +85,10 @@ public nonisolated final class WorldAtlas: Sendable {
     let admin1Index: [String: Int]
     /// Each country code's admin-1 entries, as indices into ``admin1s`` in table order.
     let admin1sByCountry: [String: [Int]]
+    /// Each road token's index into ``roads`` (numbers are unique: the decoder refuses a repeat).
+    let roadIndex: [String: Int]
+    /// The roads' segments by one-degree cell, for ``roadsCrossed(from:to:)``.
+    let roadGrid: AtlasRoadIndex
 
     /// The atlas in `data` (a whole pack file), or the reason it is refused.
     public convenience init(data: Data) throws {
@@ -112,6 +119,9 @@ public nonisolated final class WorldAtlas: Sendable {
         admin1Groups = layers.admin1Groups
         admin1Index = Self.firstIndices(of: layers.admin1s.map(\.token))
         admin1sByCountry = Self.groupedIndices(of: layers.admin1s.map(\.countryCode))
+        roads = layers.roads
+        roadIndex = Self.firstIndices(of: layers.roads.map(\.token))
+        roadGrid = try AtlasRoadIndex(roads: layers.roads)
     }
 
     // MARK: Lookups by token

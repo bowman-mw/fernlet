@@ -55,6 +55,7 @@ nonisolated struct WorldAtlasLayers: Sendable {
     let cityPolygons: [Int]
     let admin1s: [AtlasAdmin1]
     let admin1Groups: [AtlasAdmin1Group]
+    let roads: [AtlasRoad]
     let metaJSON: String?
 
     /// Every layer of `pack`, or the reason one is refused.
@@ -77,6 +78,7 @@ nonisolated struct WorldAtlasLayers: Sendable {
         let admin1 = try Self.admin1s(try pack.section("ADM1"), countryCodes: Set(countries.map(\.code)))
         admin1s = admin1.entries
         admin1Groups = admin1.groups
+        roads = try Self.roads(try pack.section("ROAD"))
         metaJSON = pack.sections["META"].flatMap { String(bytes: $0, encoding: .utf8) }
     }
 
