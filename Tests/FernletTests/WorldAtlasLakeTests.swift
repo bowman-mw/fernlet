@@ -19,13 +19,17 @@ struct WorldAtlasLakeTests {
     }
 
     /// The shipped pack: Lake Geneva, Lake Superior and Titicaca are water with their continent and country and no
-    /// ocean or sea; Isle Royale and Manitoulin stay land; the Caspian still counts no continent; Portland is land.
+    /// ocean or sea, and so are the regional supplements' lakes (Lake Washington beside Puget Sound, Lake
+    /// Constance, Lake Tahoe); Isle Royale and Manitoulin stay land; the Caspian still counts no continent;
+    /// Portland is land.
     @Test func theShippedPackKnowsLakes() throws {
         let url = try #require(Bundle.main.url(forResource: "WorldAtlas", withExtension: "pack"))
         let atlas = try WorldAtlas(data: Data(contentsOf: url))
         let lakes: [(String, GeoPoint, AtlasContinent)] = [
             ("Lake Geneva", GeoPoint(46.45, 6.55), .europe), ("Lake Superior", GeoPoint(47.7, -87.5), .northAmerica),
             ("Lake Titicaca", GeoPoint(-15.8, -69.4), .southAmerica), ("Lake Victoria", GeoPoint(-1.0, 33.0), .africa),
+            ("Lake Washington", GeoPoint(47.62, -122.26), .northAmerica), ("Lake Constance", GeoPoint(47.6, 9.4), .europe),
+            ("Lake Tahoe", GeoPoint(39.1, -120.04), .northAmerica),
         ]
         for (name, point, continent) in lakes {
             let visit = atlas.visit(at: point)
