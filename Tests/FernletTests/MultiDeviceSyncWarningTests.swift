@@ -2,11 +2,18 @@ import Testing
 import CloudKitSync
 
 struct MultiDeviceSyncWarningTests {
-    @Test func syncOnNeverWarns() {
-        // Sync on → CloudKit keeps the devices merged, so no warning regardless of the other inputs.
+    @Test func syncOnWithAccountNeverWarns() {
+        // Sync on with an account → CloudKit keeps the devices merged, so no warning regardless of data.
         #expect(MultiDeviceSyncWarning.classify(iCloudAccountPresent: true, syncEnabled: true, otherDeviceHasData: true) == nil)
         #expect(MultiDeviceSyncWarning.classify(iCloudAccountPresent: true, syncEnabled: true, otherDeviceHasData: false) == nil)
-        #expect(MultiDeviceSyncWarning.classify(iCloudAccountPresent: false, syncEnabled: true, otherDeviceHasData: false) == nil)
+    }
+
+    @Test func syncOnWithoutAccountSaysNothingIsSyncing() {
+        // Chosen is not working: with no account the store loads without CloudKit, so the page must say so.
+        #expect(
+            MultiDeviceSyncWarning.classify(iCloudAccountPresent: false, syncEnabled: true, otherDeviceHasData: false)
+                == .syncOnWithoutAccount
+        )
     }
 
     @Test func syncOffWithAccountAndOtherDeviceData() {
@@ -36,7 +43,7 @@ struct MultiDeviceSyncWarningTests {
     }
 
     @Test func everyCaseHasNonEmptyMessage() {
-        for warning in [MultiDeviceSyncWarning.anotherDeviceHasData, .syncOffWithAccount, .noICloudAccount] {
+        for warning in [MultiDeviceSyncWarning.anotherDeviceHasData, .syncOffWithAccount, .noICloudAccount, .syncOnWithoutAccount] {
             #expect(!warning.message.isEmpty)
         }
     }

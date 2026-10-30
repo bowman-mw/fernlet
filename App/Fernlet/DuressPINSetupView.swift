@@ -876,20 +876,13 @@ private struct DuressPINEntrySheet: View {
     /// into a `SecureField` with the system keyboard instead.
     @ViewBuilder private var numericPadInset: some View {
         if (lockService.credentialKind ?? .pin6) != .alphanumeric {
-            FernletNumericPad(value: activeEntry, maxLength: pinLength)
+            // Advances from the tap that fills the active step's entry (`onFilled`), not from three
+            // `onChange`s, which a busy main thread can coalesce away and strand a full pad.
+            FernletNumericPad(value: activeEntry, maxLength: pinLength) { advance() }
                 .dynamicTypeSize(...Self.padTypeSizeCap)
                 .padding(.horizontal, 24)
                 .padding(.bottom, 12)
                 .background(look?.paper ?? Color.parchment)
-                .onChange(of: current) { _, new in
-                    if step == .verify, new.count == pinLength { advance() }
-                }
-                .onChange(of: entry) { _, new in
-                    if step == .enter, new.count == pinLength { advance() }
-                }
-                .onChange(of: confirmation) { _, new in
-                    if step == .confirm, new.count == pinLength { advance() }
-                }
         }
     }
 

@@ -27410,6 +27410,17 @@
         }
       }
     },
+    "This iPhone isn't signed in to iCloud, so nothing can sync yet. If you choose Sync to iCloud, your logs stay on this iPhone and start syncing once you sign in to iCloud in the Settings app." : {
+      "comment" : "Onboarding storage step: shown when no iCloud account is signed in on this device.",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Este iPhone no tiene una sesión de iCloud iniciada, así que todavía no se puede sincronizar nada. Si eliges Sincronizar con iCloud, tus registros se quedan en este iPhone y empiezan a sincronizarse cuando inicies sesión en iCloud en la app Ajustes."
+          }
+        }
+      }
+    },
     "This is a wellbeing reflection, not a medical measurement, diagnosis, or advice. If you're worried about how you feel, please talk to a health professional you trust." : {
       "localizations" : {
         "es" : {

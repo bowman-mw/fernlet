@@ -55,6 +55,24 @@
         }
       }
     },
+    "multiDevice.syncOnWithoutAccount" : {
+      "comment" : "Privacy & Data, multiple-devices note: the user chose iCloud sync but no iCloud account is signed in on this device.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "iCloud sync is on, but this iPhone isn't signed in to iCloud, so nothing is syncing yet. Your logs are safe on this iPhone and start syncing once you sign in to iCloud in the Settings app."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La sincronización con iCloud está activada, pero este iPhone no tiene una sesión de iCloud iniciada, así que todavía no se sincroniza nada. Tus registros están a salvo en este iPhone y empiezan a sincronizarse cuando inicies sesión en iCloud en la app Ajustes."
+          }
+        }
+      }
+    },
     "persistence.error.primaryStoreUnavailable" : {
       "comment" : "Shown at startup when the local Core Data store will not open. The second sentence is the reassurance and is the most important half — keep it early and unambiguous; the third lists the two usual causes.",
       "extractionState" : "extracted_with_value",

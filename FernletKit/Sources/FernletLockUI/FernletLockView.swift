@@ -593,8 +593,11 @@ public struct FernletLockSetupView: View {
             } else {
                 pinDotsRow(current: passcode, total: selectedKind == .pin4 ? 4 : 6)
                     .frame(maxWidth: .infinity)
-                FernletNumericPad(value: $passcode, maxLength: selectedKind == .pin4 ? 4 : 6)
-                    .frame(maxWidth: .infinity)
+                FernletNumericPad(value: $passcode, maxLength: selectedKind == .pin4 ? 4 : 6) {
+                    errorMessage = nil
+                    step = .confirm
+                }
+                .frame(maxWidth: .infinity)
             }
 
             Spacer()
@@ -604,13 +607,6 @@ public struct FernletLockSetupView: View {
                     errorMessage = nil
                     step = .confirm
                 }
-            }
-        }
-        .onChange(of: passcode) { _, new in
-            let limit = selectedKind == .pin4 ? 4 : 6
-            if selectedKind != .alphanumeric && new.count == limit {
-                errorMessage = nil
-                step = .confirm
             }
         }
     }
@@ -638,8 +634,10 @@ public struct FernletLockSetupView: View {
             } else {
                 pinDotsRow(current: confirmation, total: selectedKind == .pin4 ? 4 : 6)
                     .frame(maxWidth: .infinity)
-                FernletNumericPad(value: $confirmation, maxLength: selectedKind == .pin4 ? 4 : 6)
-                    .frame(maxWidth: .infinity)
+                FernletNumericPad(value: $confirmation, maxLength: selectedKind == .pin4 ? 4 : 6) {
+                    validateAndAdvanceFromConfirm()
+                }
+                .frame(maxWidth: .infinity)
             }
 
             Spacer()
@@ -648,12 +646,6 @@ public struct FernletLockSetupView: View {
                 actionButton(FernletLockCopy.Action.continueButton, disabled: confirmation.isEmpty) {
                     validateAndAdvanceFromConfirm()
                 }
-            }
-        }
-        .onChange(of: confirmation) { _, new in
-            let limit = selectedKind == .pin4 ? 4 : 6
-            if selectedKind != .alphanumeric && new.count == limit {
-                validateAndAdvanceFromConfirm()
             }
         }
     }
@@ -1599,19 +1591,23 @@ public struct FernletLockView: View {
         }
     }
 
+    /// Reads the credential kind once per render — each read is a keychain query, and this screen
+    /// re-renders on every key press.
     private var inputSection: some View {
-        Group {
-            if lockService.credentialKind == .alphanumeric {
+        let kind = lockService.credentialKind
+        return Group {
+            if kind == .alphanumeric {
                 alphanumericInput
             } else {
-                pinInput
+                pinInput(total: kind == .pin4 ? 4 : 6)
             }
         }
     }
 
-    private var pinInput: some View {
-        let total = lockService.credentialKind == .pin4 ? 4 : 6
-        return VStack(spacing: 24) {
+    /// The dots and the pad. The pad submits from the tap that fills it (``FernletNumericPad/onFilled``),
+    /// never from an `onChange` on the passcode, which a busy first unlock could coalesce away.
+    private func pinInput(total: Int) -> some View {
+        VStack(spacing: 24) {
             if isUnlocking {
                 ProgressView()
                     .progressViewStyle(.circular)
@@ -1622,12 +1618,9 @@ public struct FernletLockView: View {
             } else {
                 pinDotsRow(current: passcode, total: total)
             }
-            FernletNumericPad(value: $passcode, maxLength: total)
+            FernletNumericPad(value: $passcode, maxLength: total, onFilled: attemptUnlock)
                 .opacity(isUnlocking ? 0.35 : 1)
                 .allowsHitTesting(!isUnlocking)
-        }
-        .onChange(of: passcode) { _, new in
-            if new.count == total { attemptUnlock() }
         }
         .animation(.easeInOut(duration: 0.15), value: isUnlocking)
     }
@@ -1998,6 +1991,15 @@ public struct FernletNumericPad: View {
     @Binding var value: String
     /// Maximum digit count (4 or 6 in practice); key presses beyond it are ignored.
     var maxLength: Int
+    /// Called from the key press that fills the value to ``maxLength`` — the host's submit or advance.
+    ///
+    /// Called from the tap itself rather than left to the host's `onChange(of:)`: SwiftUI coalesces
+    /// value changes that land in one frame, and when it does it logs "onChange(of: String) action
+    /// tried to update multiple times per frame" and can skip the call. That is what stranded a
+    /// first Private unlock — a busy main thread bunched the last taps, the full-length change was
+    /// never seen, and the pad sat full and inert, every further digit ignored (owner's report
+    /// 2026-10-29). A tap is a discrete event; it cannot be coalesced away.
+    var onFilled: (() -> Void)?
 
     /// The delete key's own token. Internal vocabulary, never spoken and never persisted — the glyph
     /// is what `padKey` draws for it and ``FernletLockCopy/Pad/backspace`` is what VoiceOver says.
@@ -2024,9 +2026,10 @@ public struct FernletNumericPad: View {
     /// wider apart, with the pixel delete glyph.
     @Environment(\.fernletFramedLook) private var look
 
-    public init(value: Binding<String>, maxLength: Int) {
+    public init(value: Binding<String>, maxLength: Int, onFilled: (() -> Void)? = nil) {
         self._value = value
         self.maxLength = maxLength
+        self.onFilled = onFilled
     }
 
     public var body: some View {
@@ -2099,7 +2102,7 @@ public struct FernletNumericPad: View {
     }
 
     private func handleKey(_ key: String) {
-        Self.press(key, into: &value, maxLength: maxLength)
+        if Self.press(key, into: &value, maxLength: maxLength) { onFilled?() }
     }
 
     /// One key press, on whichever pad: unlock, passcode setup, change-passcode, duress-code setup.
@@ -2117,19 +2120,24 @@ public struct FernletNumericPad: View {
     ///   - maxLength: The pad's digit count; digits past it are ignored.
     ///   - feedback: Test seam. `nil` (production) resolves in the body to the shared player.
     ///   - preferences: Test seam. `nil` (production) reads the app-wide Haptics level now.
+    /// - Returns: `true` when this press filled `value` to `maxLength` — a digit that took it from one
+    ///   short to full. A digit past the limit, a backspace, or the gap never does.
+    @discardableResult
     static func press(
         _ key: String,
         into value: inout String,
         maxLength: Int,
         feedback: FernletFeedback? = nil,
         preferences: FernletFeedbackPreferences? = nil
-    ) {
+    ) -> Bool {
         (feedback ?? .system).play(.tick, preferences: preferences ?? .resolved())
         if key == backspaceKey {
             if !value.isEmpty { value.removeLast() }
         } else if key != gapKey, value.count < maxLength {
             value.append(key)
+            return value.count == maxLength
         }
+        return false
     }
 }
 
