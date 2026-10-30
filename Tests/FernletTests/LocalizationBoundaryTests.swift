@@ -744,7 +744,7 @@ struct LocalizationBoundaryTests {
         #expect(defaults.string(forKey: SealedBackupBookkeeping.passportAcceptedHeadKey) == "me:w3:9:0c0d")
         #expect(defaults.string(forKey: SealedBackupBookkeeping.passportObservedHeadKey) == "me:w3:9")
         #expect(defaults.string(forKey: SealedBackupBookkeeping.passportInFlightKey) == "me:9")
-        let record = PassportBackupRecord(id: UUID(), kind: "country", token: "US", firstVisit: Date(timeIntervalSince1970: 12))
+        let record = PassportBackupRecord(id: UUID(), kind: "country", token: "US", date: Date(timeIntervalSince1970: 12))
         let object = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(record)) as? [String: Any])
         #expect(Set(object.keys) == ["id", "kind", "token", "first"])
         #expect(object["first"] as? Double == 12, "seconds since 1970")
