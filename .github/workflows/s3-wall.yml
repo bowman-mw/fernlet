@@ -59,6 +59,10 @@ on:
   pull_request:
     branches: ["main"]
 
+# Least privilege: the job only checks the tree out, so the token reads contents and nothing else.
+permissions:
+  contents: read
+
 # One in-flight run per ref; newer pushes cancel older ones.
 concurrency:
   group: s3-wall-${{ github.ref }}
