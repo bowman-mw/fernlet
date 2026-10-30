@@ -144,7 +144,7 @@ struct PassportLandingStamp: View {
         guard let kind = entry.stampKind else { return }
         let words = String(localized: PassportBookCopy.newStampAnnouncement(library.name(of: kind, onPage: true),
                                                                              on: PassportDates.long(entry.date)))
-        AccessibilityNotification.Announcement(words).post()
+        FernletAnnouncer.system.announce(.status, resolved: words)
     }
 }
 
