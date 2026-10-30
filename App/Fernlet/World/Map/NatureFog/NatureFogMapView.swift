@@ -9,7 +9,7 @@ struct NatureFogScene {
     let palette: NatureFogPalette
     let motion: NatureFogMotion
     /// The land under the fog (World-Exploration-Spec §1); nil for today's nature fog.
-    var terrain: WorldTerrain? = nil
+    var terrain: NatureFogTerrain? = nil
 }
 
 /// The nature fog on the live map, in the fog's old place in the stack (``WorldGroundLayer``: over the saved
@@ -120,7 +120,7 @@ final class NatureFogMapView: UIView {
 
     /// Matches the book to the scene: a new scale or palette starts afresh; a new clearing dirties tiles.
     private func sync(scale: NatureFogScale, scene: NatureFogScene) -> NatureFogChange? {
-        if let book, book.scale == scale, book.palette == scene.palette, book.terrain === scene.terrain {
+        if let book, book.scale == scale, book.palette == scene.palette, book.terrain == scene.terrain {
             let change = book.change(to: scene.clearing)
             if change.reset { dropAll() }
             return change.reset || change.dirty.isEmpty ? nil : change

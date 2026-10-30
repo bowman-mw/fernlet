@@ -83,7 +83,7 @@ struct NatureFogBlock {
 
 /// A terrain mark on the ground (sea waves, sand ripples, scree, lichen, ice cracks, snow, a desert or tundra
 /// speck), in a palette role of its hex's look or a fixed colour.
-struct NatureFogMark {
+nonisolated struct NatureFogMark {
     let rect: CGRect
     let ink: NatureInk
     let look: TerrainLook
@@ -119,7 +119,7 @@ struct NatureFogLayout {
 }
 
 /// A tree (or palm, cactus or peak) a hex may stand: its sprite, root and canopy, before the wildness check.
-struct NatureTreePlan {
+nonisolated struct NatureTreePlan {
     let anchor: HexCell
     let sprite: NatureSprite
     /// Where the sprite's anchor sits (the snapped hex centre, 3 units down), in global points.

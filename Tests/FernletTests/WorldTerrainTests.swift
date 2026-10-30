@@ -28,9 +28,9 @@ struct WorldTerrainTests {
         return (date, calendar)
     }
 
-    private static func terrain(_ atlas: WorldAtlas, month: Int, override: AtlasSeason? = nil) -> WorldTerrain {
+    private static func terrain(_ atlas: WorldAtlas, month: Int, override: AtlasSeason? = nil) -> NatureFogTerrain {
         let (date, calendar) = day(month: month)
-        return WorldTerrain(atlas: atlas, date: date, calendar: calendar, seasonOverride: override)
+        return NatureFogTerrain(atlas: atlas, date: date, calendar: calendar, seasonOverride: override)
     }
 
     /// A grower over a field whose every hex is `answer`'s.
@@ -159,7 +159,7 @@ struct WorldTerrainTests {
     }
 
     @Test func withNoAtlasTheFogIsTodaysNatureFog() {
-        #expect(WorldTerrain.home(nil) == nil)
+        #expect(NatureFogTerrain.home(nil) == nil)
         let plain = NatureFogGrower(scale: Self.full, clearing: NatureFogClearing(), atlas: NatureFogAtlas(palette: Self.light))
         #expect(plain.terrain == nil && plain.land(MercatorHexGrid.cell(containing: GeoPoint(0, -150))) == .approved)
         let book = NatureFogTileBook(scale: Self.full, palette: Self.light, clearing: NatureFogClearing(), pixelScale: 1)
@@ -195,7 +195,11 @@ struct WorldTerrainTests {
         #expect(winter.pieces.contains { if case .bare = $0.sprite { true } else { false } })
         #expect(winter.pieces.contains { if case .snowyPine = $0.sprite { true } else { false } })
         #expect(!winter.pieces.contains { if case .flowers = $0.sprite { true } else { false } }, "no flowers in winter")
-        #expect(winter.trees.map(\.anchor) == summer.trees.map(\.anchor), "the same hexes stand trees all year")
+        #expect(winter.trees.allSatisfy { tree in
+            let at = NatureFogRules.offset(of: tree.anchor)
+            return NatureFogRules.tree(at.col, at.row) != nil
+        }, "a winter tree stands only where the approved field has one (bare trees are smaller, so a few more fit)")
+        #expect(!summer.trees.isEmpty && abs(winter.trees.count - summer.trees.count) < summer.trees.count / 10)
         let snow = NatureFogPalette(dark: false, highContrast: false, look: TerrainLook(set: .meadow, season: .winter))
         #expect(snow.rgb(.grassA) == 0xEEF2F2, "snow on the ground")
     }

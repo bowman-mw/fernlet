@@ -8,7 +8,7 @@ extension UITestSupport {
     #if DEBUG
     /// `FERNLET_UI_TEST_TERRAIN_SEASON=spring|summer|autumn|winter` — every seasonal hex of Home's terrain
     /// (grassland, temperate forest, cropland) shows that season instead of today's in its hemisphere, for the
-    /// `ex-home-winter` screenshot. Consumed by `WorldTerrain.home(_:)`.
+    /// `ex-home-winter` screenshot. Consumed by `NatureFogTerrain.home(_:)`.
     static var terrainSeasonOverride: AtlasSeason? {
         ProcessInfo.processInfo.environment["FERNLET_UI_TEST_TERRAIN_SEASON"].flatMap(AtlasSeason.init(rawValue:))
     }

@@ -134,7 +134,7 @@ final class NatureFogGrower {
 /// Sizes a stand's sprite and canopy at one scale, as the mockup's `terra()` does (pines, round trees and the
 /// approved sizes exactly as ``NatureFogGrower`` placed them before the terrain): the season turns a temperate
 /// round tree bare (winter) or into blossom (spring, 2 in 5 by `hash(col+77, row+77)`), and snows its pines.
-struct TerrainStandPlanner {
+nonisolated struct TerrainStandPlanner {
     let scale: NatureFogScale
 
     /// The plan for `stand` on `anchor`, rooted at `root`, on `land`.

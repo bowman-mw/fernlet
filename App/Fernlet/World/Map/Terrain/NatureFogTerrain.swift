@@ -5,34 +5,47 @@ import WorldMapStore
 /// bundled atlas's coastline mask, climate bands and urban boundaries, and the season it shows today in its own
 /// hemisphere (``AtlasSeason``).
 ///
-/// The atlas is public data that ships in the app, so a decoy draws the same terrain; nothing here reads the
-/// person's passport or history. With no atlas (the pack missing or unreadable) there is no `WorldTerrain` and
-/// the fog is today's nature fog everywhere. The season is read from ``date``, fixed when the terrain is made
-/// (Home makes it once a launch), unless the DEBUG screenshot override names one.
+/// An immutable, `Sendable` snapshot made on the main actor (``home(_:)``) and read anywhere after: classifying a
+/// hex is a pure function of the snapshot, so tile drawing may run off the main actor. The atlas is public data
+/// that ships in the app, so a decoy draws the same terrain; nothing here reads the person's passport or history.
+/// With no atlas (the pack missing or unreadable) there is no snapshot and the fog is today's nature fog. The
+/// season is read from ``date`` in ``calendar``, both fixed when the snapshot is made (Home makes it once a
+/// launch), unless the DEBUG screenshot override names one. ``generation`` tells two snapshots apart.
 ///
 /// Decoration only: nothing here is shown to VoiceOver, and it never changes which hexes are clear.
-final class WorldTerrain {
+nonisolated struct NatureFogTerrain: Sendable, Equatable {
     let atlas: WorldAtlas
+    let classifier: AtlasTerrainClassifier
     /// The day whose season the map shows.
     let date: Date
     let calendar: Calendar
     /// A season every seasonal hex shows instead (DEBUG screenshots only; nil in a shipping build).
     let seasonOverride: AtlasSeason?
-    private let classifier: AtlasTerrainClassifier
+    /// Which snapshot this is: a new one is a new generation, and the fog's tiles redraw.
+    let generation: Int
 
     /// Terrain from `atlas` showing `date`'s season (read in `calendar`), or `seasonOverride` everywhere.
-    init(atlas: WorldAtlas, date: Date = Date(), calendar: Calendar = .current, seasonOverride: AtlasSeason? = nil) {
+    init(atlas: WorldAtlas, date: Date = Date(), calendar: Calendar = .current, seasonOverride: AtlasSeason? = nil,
+         generation: Int = 1) {
         self.atlas = atlas
+        classifier = AtlasTerrainClassifier(atlas: atlas)
         self.date = date
         self.calendar = calendar
         self.seasonOverride = seasonOverride
-        classifier = AtlasTerrainClassifier(atlas: atlas)
+        self.generation = generation
     }
 
     /// Home's terrain from the opened atlas, or nil with none (the fog stays today's nature fog). The DEBUG season
     /// hook (`FERNLET_UI_TEST_TERRAIN_SEASON`) fixes the season for screenshots.
-    static func home(_ atlas: WorldAtlas?) -> WorldTerrain? {
-        atlas.map { WorldTerrain(atlas: $0, seasonOverride: UITestSupport.terrainSeasonOverride) }
+    @MainActor
+    static func home(_ atlas: WorldAtlas?) -> NatureFogTerrain? {
+        atlas.map { NatureFogTerrain(atlas: $0, seasonOverride: UITestSupport.terrainSeasonOverride) }
+    }
+
+    /// Two snapshots are the same terrain when they are the same generation showing the same season.
+    static func == (lhs: NatureFogTerrain, rhs: NatureFogTerrain) -> Bool {
+        lhs.generation == rhs.generation && lhs.date == rhs.date && lhs.calendar == rhs.calendar
+            && lhs.seasonOverride == rhs.seasonOverride
     }
 
     /// The hex for fog cell `cell`, read from the atlas now; `urban` says whether its centre is in an urban
@@ -48,11 +61,13 @@ final class WorldTerrain {
     }
 }
 
-/// One tile book's terrain answers (World-Exploration-Spec §1, "classify each hex once"): every hex is read from
-/// the atlas once and kept (at most ``memoLimit``, then forgotten), so pans and redrawn tiles never ask again.
-/// The urban test keeps, per 0.1° atlas cell, the short list of urban boundaries whose box meets that cell
-/// (at most ``bucketLimit`` cells), instead of passing over every boundary for every hex.
-final class NatureTerrainMemo {
+/// One grower's terrain answers (World-Exploration-Spec §1, "classify each hex once"): every hex is read from the
+/// snapshot once and kept (at most ``memoLimit``, then forgotten), so a grower's tiles never ask again. The urban
+/// test keeps, per 0.1° atlas cell, the short list of urban boundaries whose box meets that cell (at most
+/// ``bucketLimit`` cells), instead of passing over every boundary for every hex.
+///
+/// Local state only: each ``NatureFogGrower`` owns its own memo and nothing shares one, so it needs no actor.
+nonisolated final class NatureTerrainMemo {
     /// The most hexes kept before the memo starts again.
     static let memoLimit = 60_000
     /// The most atlas cells whose urban short list is kept.
@@ -65,7 +80,7 @@ final class NatureTerrainMemo {
     private var buckets: [Int: [Int]] = [:]
 
     /// A memo over `terrain`.
-    init(terrain: WorldTerrain) {
+    init(terrain: NatureFogTerrain) {
         urbanAreas = terrain.atlas.urbanAreas
         grid = terrain.atlas.grid
         classify = { cell, memo in terrain.classify(cell, urban: memo.isUrban) }

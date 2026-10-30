@@ -22,8 +22,8 @@ struct WorldMapStack<Overlay: View>: View {
     /// layers draw on that (`b1-home-offline`). The map stays underneath, so it can come back with signal
     /// and pans still reach it.
     var veiled = false
-    /// The land under the fog (``WorldTerrain``); nil draws today's nature fog.
-    var terrain: WorldTerrain? = nil
+    /// The land under the fog (``NatureFogTerrain``); nil draws today's nature fog.
+    var terrain: NatureFogTerrain? = nil
     /// Drawn over the map in the same coordinate space; receives the current viewport.
     @ViewBuilder let overlay: (MapViewport, CGSize) -> Overlay
     /// Where the caller reads the last viewport back without redrawing (Home: whether Sprout left the

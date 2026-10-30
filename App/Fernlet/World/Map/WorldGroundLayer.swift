@@ -35,7 +35,7 @@ struct WorldGroundLayer: View {
     let darkStyle: Bool
     /// The land under the fog (World-Exploration-Spec §1: the sea, desert, mountains, roofs, the seasons…), from
     /// the bundled atlas; nil, or no atlas, draws today's nature fog everywhere.
-    var terrain: WorldTerrain? = nil
+    var terrain: NatureFogTerrain? = nil
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 

@@ -158,7 +158,7 @@ enum NatureFogDrawer {
 }
 
 /// One appearance's palettes by terrain look, made on first use while one picture draws.
-struct NatureFogPalettes {
+nonisolated struct NatureFogPalettes {
     let base: NatureFogPalette
     private var made: [TerrainLook: NatureFogPalette] = [:]
 

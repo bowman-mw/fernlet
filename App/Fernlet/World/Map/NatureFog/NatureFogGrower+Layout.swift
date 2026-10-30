@@ -156,7 +156,7 @@ extension NatureFogGrower {
 }
 
 /// One hex being grown: its cell, centre, snapped anchor and hash, its look, and the area being laid out.
-struct NatureFogSpot {
+nonisolated struct NatureFogSpot {
     let cell: HexCell
     let centre: CGPoint
     let anchor: CGPoint
