@@ -212,6 +212,37 @@ struct WorldMapVaultAndFogTests {
         #expect(keeper.visibleCells.contains(MercatorHexGrid.cell(containing: Self.park)))
     }
 
+    /// Location keeps running under a panel (W-09), so cells lift there without reaching the 40-cell save.
+    /// Closing the panel calls `load()` again, which must neither drop them for the disk copy nor lose the
+    /// buffer a locked phone filled meanwhile.
+    @Test func cellsLiftedUnderAPanelSurviveTheMapComingBack() throws {
+        let defaults = Self.freshDefaults()
+        let vault = WorldMapVault.ephemeral()
+        defer { _ = vault.clearAll() }
+        let phone = PhoneLockState()
+        phone.unlocked = true
+        let keeper = WorldFogKeeper(vault: vault, defaults: defaults, isProtectedDataAvailable: { phone.unlocked })
+        keeper.load()
+        keeper.handle(Self.fix())
+        keeper.flush()
+        let underPanel = Self.park.offset(east: 300, north: 0)
+        #expect((1..<WorldFogKeeper.saveEvery).contains(keeper.handle(Self.fix(underPanel))), "too few for a save of their own")
+        keeper.load()
+        #expect(keeper.visibleCells.contains(MercatorHexGrid.cell(containing: underPanel)), "the panel's cells stay")
+        let reopened = FogCellStore(vault: vault)
+        try reopened.load()
+        #expect(reopened.cells.contains(MercatorHexGrid.cell(containing: underPanel)), "and they were written")
+
+        phone.unlocked = false
+        let whileLocked = Self.park.offset(east: 600, north: 0)
+        #expect(keeper.handle(Self.fix(whileLocked)) == 0, "a locked phone buffers")
+        phone.unlocked = true
+        keeper.load()
+        #expect(keeper.visibleCells.contains(MercatorHexGrid.cell(containing: whileLocked)), "the next unlock merges")
+        #expect(keeper.visibleCells.contains(MercatorHexGrid.cell(containing: underPanel)))
+        #expect(try vault.read(.pendingFog) == nil, "the buffer is emptied")
+    }
+
     @Test func theWipeRemovesEveryFileAndForgetsTheCells() throws {
         let defaults = Self.freshDefaults()
         let (keeper, vault) = Self.keeper(defaults: defaults)
