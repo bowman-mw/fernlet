@@ -44,8 +44,9 @@ nonisolated struct CreationStudioLayout: Equatable {
     /// can be on screen at once.
     let canvasHeight: CGFloat
     /// Whether the up-close and on-the-map previews show under the canvas. They give way (the
-    /// preview beside the chips stays) only where they alone would turn scrolling on; where the page
-    /// scrolls anyway, they show.
+    /// preview beside the chips stays) where they alone would turn scrolling on, and on a scrolling
+    /// page where, scrolled to the bottom, they would push the canvas off screen (landscape);
+    /// otherwise, where the page scrolls anyway, they show.
     let showsPreviews: Bool
 
     /// - Parameters:
@@ -79,12 +80,14 @@ nonisolated struct CreationStudioLayout: Equatable {
             // Scrolled to the bottom, the tool row, the canvas and what is under it fill one screen:
             // the header is the only thing that scrolls away. Where that screenful is under the
             // minimum (a short landscape page), the canvas gets the minimum — but never more than the
-            // page shows in one piece, since a canvas cannot be scrolled from the canvas itself.
+            // page shows in one piece, since a canvas cannot be scrolled from the canvas itself — and
+            // then the previews show only if, scrolled to the bottom, the canvas is still whole on
+            // screen above them (in landscape they pushed it off the top).
             fits = false
-            showsPreviews = true
             let screenful = (viewportHeight - toolsHeight - note - previews - spacing - 2 * padding).rounded(.down)
             let wholeOnScreen = max(0, (viewportHeight - 2 * padding).rounded(.down))
             canvasHeight = screenful >= minimum ? screenful : min(minimum, wholeOnScreen)
+            showsPreviews = screenful >= minimum || canvasHeight + note + previews <= wholeOnScreen
         }
     }
 }

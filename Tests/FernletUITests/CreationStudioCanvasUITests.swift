@@ -220,7 +220,8 @@ final class CreationStudioCanvasUITests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// Customization sheet (opened by the launch hook) → its Creation Studio row → the editor.
+    /// Page 1 of Sprout's passport (opened by the launch hook, round 7: it replaced the customization sheet) →
+    /// What Sprout's wearing's Creation Studio button → the editor.
     ///
     /// Launched by hand rather than through `UXTestApp.launch`, whose handover check waits for the
     /// Home tab to be hittable — which the customization sheet, open from the first frame, covers.
@@ -238,9 +239,17 @@ final class CreationStudioCanvasUITests: XCTestCase {
         app.launchEnvironment["FERNLET_UI_TEST_SEED_DEMO"] = "1"
         app.launchEnvironment["FERNLET_UI_TEST_OPEN_CUSTOMIZE"] = "1"
         app.launch()
-        UXTestApp.waitForLaunchHandover(app, openSheet: "companion.customize")
-        let studioRow = app.buttons["companion.studio"]
-        XCTAssertTrue(studioRow.waitForExistence(timeout: 30), "customization sheet did not open with a Creation Studio row")
+        UXTestApp.waitForLaunchHandover(app, openSheet: "passport.sprout.photo")
+        let studioRow = app.buttons["passport.sprout.studio"]
+        // At the largest text page 1 scrolls inside the book and its button grids are lazy: the button is
+        // built only once scrolled near. Slow drags held at the end (no fling past it), at most eight.
+        _ = studioRow.waitForExistence(timeout: 5)
+        for _ in 0..<8 where !(studioRow.exists && studioRow.isHittable) {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
+                .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)),
+                       withVelocity: XCUIGestureVelocity(400), thenHoldForDuration: 0.3)
+        }
+        XCTAssertTrue(studioRow.waitForExistence(timeout: 30), "the passport did not open on page 1 with a Creation Studio button")
         XCTAssertTrue(studioRow.isHittable || studioRow.wait(for: \.isHittable, toEqual: true, timeout: 10),
                       "the Creation Studio row never became tappable")
         studioRow.tap()
