@@ -33,8 +33,10 @@ import WorldMapStore
 /// (§4, ``WorldDiscoveryRouter``, the passport's one discovery reader), and once a week a dashed gold hex marks a new
 /// corner near home, which Sprout mentions once (§5, ``WorldCornerLayer``).
 ///
-/// **The companion** (``WorldMapCompanion``) is Home's: tap to pet, hold (or VoiceOver's "Edit your
-/// companion") for the customize sheet. Its line is the map's own when it has one (``WorldMapLine``).
+/// **The companion** (``WorldMapCompanion``) is Home's: a tap or a hold opens Sprout's passport on page 1, the book
+/// rising from where Sprout stands (World-Passport-Spec §1); a new stamp's banner opens it on the stamp's page, and
+/// the world view's city tap brings Home's camera to that city (``WorldHomePassportHook``). Its line is the map's
+/// own when it has one (``WorldMapLine``).
 ///
 /// **The blue button** (``WorldQuickStart``) quick-starts what the person does where they stand; Walk
 /// together puts the walk bar under the status plate, and End logs the walk with a note that has Undo.
@@ -65,8 +67,9 @@ struct WorldMapHome: View {
     var onMealsLogged: MealLogReporter = .none
     @State private var camera = WorldCamera(center: GeoPoint(0, 0), distance: 1_700)
     @State private var hasPlace = false
-    @State private var isCustomizing = false
-    @State private var customizePetCount = 0
+    /// A city the world view sent Home to (``WorldHomePassportHook``): the camera there, held from the ten
+    /// seconds' re-follow until the person moves the map or goes Back to Sprout.
+    @State private var cityVisit: WorldCamera?
     @State private var tiles = WorldTileStatus()
     @State private var loadingLong = false
     @State private var cardContext: WorldQuickStartContext?
@@ -126,11 +129,8 @@ struct WorldMapHome: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .sheet(isPresented: $isCustomizing) {
-            // The sheet applies `fernletSheet()` itself (full height, the wooden grabber); a second one
-            // here would draw a second band.
-            CompanionCustomizationSheet(store: store, petCount: $customizePetCount)
-        }
+        // Round 7: Sprout's passport's new stamps and the world view's city tap (World-Passport-Spec §1, §6).
+        .modifier(WorldHomePassportHook(store: store, passport: passport, router: discoveries, camera: $camera, cityVisit: $cityVisit))
         // The runner is a focused flow (`b3-runner-*`), presented full screen with no grabber as Move
         // presents it; its ✕ ends it.
         .fullScreenCover(item: $guidedSession) { session in
@@ -185,11 +185,10 @@ struct WorldMapHome: View {
     private func offHome(date: Date) -> some View {
         WorldOffMapHome(store: store, date: date, status: WorldStatus.current(store: store, date: date), onOpen: onOpen,
                         onOpenPrint: openPrint) {
-            WorldMapCompanion(store: store, bodySignal: bodySignal, isActive: isFrontmost && !isCustomizing,
+            WorldMapCompanion(store: store, bodySignal: bodySignal, isActive: isCompanionActive,
                               mapLine: mapLine, pixelScale: dynamicTypeSize.isAccessibilitySize ? 6 : 7,
-                              isNight: phase(at: date) == .night, hint: isHintShowing, onHintEnded: endHint) {
-                isCustomizing = true
-            }
+                              isNight: phase(at: date) == .night, hint: isHintShowing, onHintEnded: endHint,
+                              onOpenPassport: openPassport)
         }
     }
 
@@ -218,7 +217,7 @@ struct WorldMapHome: View {
         return ZStack(alignment: .topLeading) {
             WorldHomesLayer(store: store, viewport: viewport, size: size, isNight: phase(at: Date()) == .night)
             WorldExploreLayer(store: store, explore: explore, viewport: viewport, size: size,
-                              showsCityPlate: !isWalking && loggedWalk == nil)
+                              showsCityPlate: !isWalking && loggedWalk == nil, companion: point)
             if let corner = shownCorner, let home = cornerHome {
                 WorldCornerLayer(cell: corner, home: home, viewport: viewport, size: size) { panToCorner(corner) }
             }
@@ -250,11 +249,9 @@ struct WorldMapHome: View {
 
     /// The companion with its bubble, its feet on `point`.
     private func companion(at point: CGPoint) -> some View {
-        WorldMapCompanion(store: store, bodySignal: bodySignal, isActive: isFrontmost && !isCustomizing, mapLine: mapLine,
+        WorldMapCompanion(store: store, bodySignal: bodySignal, isActive: isCompanionActive, mapLine: mapLine,
                           isQuiet: isBubbleQuiet, isNight: phase(at: Date()) == .night, hint: isHintShowing, ride: rideVehicle,
-                          onHintEnded: endHint) {
-            isCustomizing = true
-        }
+                          onHintEnded: endHint, onOpenPassport: openPassport)
         // Measured at the bubble's own wrap width, so a line of two or three rows is measured as it is
         // drawn and the feet stay on `point` (an unbounded measure took one row and pushed the sprite
         // down by the rest, off the house, the z's and the suitcase that stand at `point`).
@@ -681,7 +678,8 @@ extension WorldMapHome {
     /// The map came to the front (a panel or sheet closed: following again, `ref-recenter-auto`) or went
     /// behind one.
     private func frontmostChanged(_ front: Bool) {
-        if front { refollow(announce: true) }
+        // A city the world view just sent the map to stays (its panel closing with the passport, round 7).
+        if front, cityVisit == nil { refollow(announce: true) }
         updateLocation()
     }
 
@@ -701,6 +699,7 @@ extension WorldMapHome {
     /// the base map's rule). By itself, VoiceOver hears "Following Sprout again" once, politely.
     private func refollow(announce: Bool) {
         guard !camera.follows, hasPlace else { return }
+        cityVisit = nil
         camera.follows = true
         follow(store.worldLocation.latest)
         guard announce, isFrontmost else { return }
@@ -710,7 +709,8 @@ extension WorldMapHome {
     /// Ten seconds after the person last moved the map (each move changes the camera and restarts this),
     /// following comes back while the map is in front.
     private func refollowWhenIdle() async {
-        guard !camera.follows, hasPlace else { return }
+        // A world-view city visit waits for the person: it holds until they move the map or go Back to Sprout.
+        guard !camera.follows, hasPlace, !WorldHomePassportHook.isStillVisiting(cityVisit, camera: camera) else { return }
         do {
             try await Task.sleep(for: Self.idleRefollow)
         } catch {
@@ -822,6 +822,15 @@ extension WorldMapHome {
                                         isDecoy: store.duressSessionActive)
     }
 
+    /// Whether the companion is live: the map in front and Sprout's passport not open over it.
+    private var isCompanionActive: Bool { isFrontmost && passport?.isPresented != true }
+
+    /// A tap or hold on Sprout (World-Passport-Spec §1): the passport on page 1 (or, the first open after a new
+    /// stamp, that stamp's page), the book rising from `anchor`, where Sprout stands.
+    private func openPassport(from anchor: CGPoint?) {
+        passport?.open(page: 1, from: anchor)
+    }
+
     /// The hint ended (a tap, or its 12 seconds): it never shows again on this iPhone (a decoy keeps nothing).
     private func endHint() {
         isHintShowing = false
@@ -839,7 +848,8 @@ extension WorldMapHome {
     /// DEBUG screenshots: opens customize, marks today unwell, starts a walk or opens the card, as the
     /// scene list asks (nothing in release builds).
     private func applyTestScenes() async {
-        if UITestSupport.shouldOpenCustomize { isCustomizing = true }
+        // Customize is page 1 of Sprout's passport now (World-Passport-Spec §4).
+        if UITestSupport.shouldOpenCustomize { passport?.open(page: 1) }
         // The camera on your own, as the blue button opens it (`FERNLET_UI_TEST_SOLO_CAMERA`).
         if FriendsUITestHooks.opensSoloCamera, !store.meshNetworkManager.isInSession { cameraMode = .solo(placeName: nil) }
         if let distance = UITestSupport.exploreCameraDistance { camera.distance = distance }

@@ -254,7 +254,8 @@ struct WorldCompanionWardrobeTests {
 
     /// Every World picture reads the one helper with the live state (a friend's gold heart lifts it).
     @Test func everyPictureReadsTheSharedHelper() throws {
-        let sources = ["App/Fernlet/World/Home/WorldMapCompanion.swift", "App/Fernlet/World/Companion/WorldCompanionCloseUp.swift",
+        // Round 7: the close-up retired; page 1 of Sprout's passport is the big picture now.
+        let sources = ["App/Fernlet/World/Home/WorldMapCompanion.swift", "App/Fernlet/World/Passport/Sprout/PassportSproutPage.swift",
                        "App/Fernlet/World/Today/TodayCards.swift", "App/Fernlet/World/Customize/CustomizePreviews.swift",
                        "App/Fernlet/World/Customize/CreationStudioPixelPieces.swift"]
         for path in sources {
