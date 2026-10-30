@@ -142,7 +142,8 @@ private final class SpokenLog {
     }
 
     /// Every pad host that advances on a full entry hands the pad its `onFilled`, and none watches its
-    /// own value with `onChange` to do it: the unlock screen, passcode setup and the duress setup.
+    /// own value with `onChange` to do it: the unlock screen, passcode setup, the duress setup and
+    /// Settings' verify and change-passcode steps.
     @Test func theLockPadsSubmitFromTheFillingTap() throws {
         let lock = try RepoRoot.source("FernletKit/Sources/FernletLockUI/FernletLockView.swift")
         #expect(lock.contains("FernletNumericPad(value: $passcode, maxLength: total, onFilled: attemptUnlock)"))
@@ -153,6 +154,20 @@ private final class SpokenLog {
         #expect(duress.contains("FernletNumericPad(value: activeEntry, maxLength: pinLength) { advance() }"))
         for watched in ["onChange(of: current)", "onChange(of: entry)", "onChange(of: confirmation)"] {
             #expect(!duress.contains(watched), "\(watched) submitting a pad is the coalescible path")
+        }
+        let settings = try RepoRoot.source("App/Fernlet/SettingsSheet.swift")
+        for filled in [
+            "FernletNumericPad(value: $verifyCurrentPasscode, maxLength: total, onFilled: commitPasscodeVerify)",
+            "FernletNumericPad(value: $currentPasscode, maxLength: total, onFilled: advanceFromVerifyOld)",
+            "FernletNumericPad(value: $newPasscode, maxLength: total) { step = .confirmNew }",
+            "FernletNumericPad(value: $confirmPasscode, maxLength: total, onFilled: commitChange)",
+        ] {
+            #expect(settings.contains(filled), "change-passcode pad submits from the filling tap: \(filled)")
+        }
+        #expect(settings.components(separatedBy: "FernletNumericPad(").count - 1 == 4, "a new pad here needs pinning above")
+        for watched in ["onChange(of: verifyCurrentPasscode)", "onChange(of: currentPasscode)",
+                        "onChange(of: newPasscode)", "onChange(of: confirmPasscode)"] {
+            #expect(!settings.contains(watched), "\(watched) submitting a pad is the coalescible path")
         }
     }
 
