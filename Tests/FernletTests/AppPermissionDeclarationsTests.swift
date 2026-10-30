@@ -6,7 +6,7 @@ import Testing
 /// settings link.
 ///
 /// A permission text lives in two places that must agree — the app target's `INFOPLIST_KEY_*` build
-/// settings (Debug and Release) and `App/Fernlet/InfoPlist.xcstrings`, whose `en` value is what users
+/// settings (Debug, Release and Demo) and `App/Fernlet/InfoPlist.xcstrings`, whose `en` value is what users
 /// see — and the Local Network one in a third, `App/Fernlet/Info.plist`. Nothing else compares them,
 /// so a reworded copy in one place shipped beside the old copy in another.
 @Suite
@@ -48,7 +48,7 @@ struct AppPermissionDeclarationsTests {
 
     @Test func bothConfigurationsDeclareTheSamePermissionTexts() throws {
         let configurations = try Self.appTargetInfoPlistKeys()
-        #expect(configurations.count == 2, "expected the app target's Debug and Release configurations")
+        #expect(configurations.count == 3, "expected the app target's Debug, Release and Demo configurations")
         let usage = configurations.map { $0.filter { $0.key.hasSuffix("UsageDescription") } }
         #expect(usage.first?.isEmpty == false)
         #expect(usage.dropFirst().allSatisfy { $0 == usage.first })

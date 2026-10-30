@@ -82,7 +82,7 @@ struct PowerOfTenBoundaryTests {
     static let densityKinds = ["func", "init", "deinit", "subscript"]
 
     /// The only identifiers an `#if` condition may name. Mirrors the scanner's `ALLOWED_IF_TOKENS`.
-    static let allowedIfTokens = ["DEBUG", "canImport", "os", "targetEnvironment", "swift", "compiler", "arch"]
+    static let allowedIfTokens = ["DEBUG", "FERNLET_DEMO", "canImport", "os", "targetEnvironment", "swift", "compiler", "arch"]
 
     /// Signature-continuation prefixes: a pending head whose parentheses are balanced stays pending only
     /// while the next code line starts with one of these. Mirrors the scanner's `SIGNATURE_CONTINUATION`.
@@ -496,7 +496,7 @@ struct PowerOfTenBoundaryTests {
 
     /// R8: `#if` only over the allowed conditions, never nested.
     @Test func r8PreprocessorDiscipline() {
-        expectNoViolations(of: ["R8-IF-COND", "R8-IF-NEST"], hint: "allowed: DEBUG, canImport, os, targetEnvironment, swift, compiler, arch; flatten nested `#if`s (Docs/Power-of-10-Swift.md §R8)")
+        expectNoViolations(of: ["R8-IF-COND", "R8-IF-NEST"], hint: "allowed: DEBUG, FERNLET_DEMO, canImport, os, targetEnvironment, swift, compiler, arch; flatten nested `#if`s (Docs/Power-of-10-Swift.md §R8)")
     }
 
     /// R9: no unsafe pointer / bit cast / `Unmanaged` / `unowned(unsafe)` / `nonisolated(unsafe)`

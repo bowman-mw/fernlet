@@ -282,6 +282,10 @@ wall and not a review checklist.
 | `Fernlet/App/Fernlet/OnboardingPermissionsView.swift` | Onboarding step for requesting HealthKit and notification permissions. |
 | `Fernlet/App/Fernlet/OnboardingStorageChoiceView.swift` | Onboarding step for choosing local vs. iCloud storage, with existing cloud data detection and migration summary; says when the account holds a Sealed backup or photo backup and how to restore it (bug confirmation 2026-10-15 §2). |
 | `Fernlet/App/Fernlet/OnboardingLockSetupView.swift` | Onboarding step for setting up a passcode or biometrics-only lock, with a skip/defer path. |
+| `Fernlet/App/Fernlet/ReviewDemo/ReviewDemo.swift` | `ReviewDemo` (2026-10-29) — the App Review demo mode, compiled only into the `Demo` build configuration (`#if FERNLET_DEMO`, Power-of-10 §R8's one custom condition): the fixed demo passcode, the demo persona, starting (lock configured, seed, friend) and leaving (friend removed, delete-everything funnel, lock reset, back to Welcome), and the switch that holds iCloud sync and Apple Health off while the demo runs. See `Docs/App-Review-Demo-Mode.md`. |
+| `Fernlet/App/Fernlet/ReviewDemo/ReviewDemoViews.swift` | Demo-build only: Welcome's "Look around with sample data" link, the Settings "Demo" section with "Leave demo and start fresh", the passcode hint over the Private hub's lock screen, and `ReviewDemoLaunchHooks` (owed intimacy entries on the first hub unlock; the pretend friend's shop reopened at launch). |
+| `Fernlet/App/Fernlet/ReviewDemo/FernletStore+ReviewDemoSeed.swift` | Demo-build only: two weeks of sample meals, workouts, sleep, water, care, journals, recipes, progress and solo-album photos, four sealed periods and two owed intimacy entries — never written to Apple Health. |
+| `Fernlet/App/Fernlet/ReviewDemo/FernletStore+ReviewDemoFriend.swift` | Demo-build only: Juniper, the pretend friend — a friends-list row over throwaway keys, three album-wall photos, one golden heart and a two-item shop — and its full removal. Display-side only; nothing goes over the radio. |
 | `Fernlet/App/Fernlet/OnboardingIntimacyChoiceScreen.swift` | `OnboardingIntimacyChoiceScreen` (2026-09-23) — the personal-details step's second page, shown only to a user the 16+ intimacy gate admits: a neutral "Keep intimacy tracking" (pre-selected, because it is what the setting already says) or "Turn it off", under the step's own "N of 8" caption and swapped in rather than presented as a sheet. Draft state until Continue; the answer lands through `FernletStore.setIntimacyTrackingVisible(_:)`, the Settings toggle's setter, and off hides — never deletes. |
 
 ## Lock And Privacy
@@ -1389,6 +1393,7 @@ layer and live in-source at `Documentation.docc/`; the tables below are the plan
 | File | Purpose |
 | --- | --- |
 | `Docs/CloudKit-Schema-Deploy.md` | Runbook for pushing the Core Data model to CloudKit's server-side schema — a manual, developer-run ritual. Record types added since the last deploy are listed in the persistence sections of the store index. |
+| `Docs/App-Review-Demo-Mode.md` | The App Review demo build: why it exists (Guideline 2.1(a), 2026-10-27), the `Demo` configuration and `Fernlet Demo` scheme, how to archive it, the review notes to paste, what is seeded and its known limits. |
 | `Docs/Friend-Shop-Real-Device-Validation.md` | Two-device validation script for the in-person friend shop. |
 | `Docs/Recipe-P2P-Real-Device-Validation.md` | Two-device validation script for recipe sharing. |
 | `Docs/Mesh-Network-Feasibility-Runbook.md` | Required physical-device validation gate before production background mesh transport work. |

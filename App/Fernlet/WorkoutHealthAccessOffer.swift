@@ -100,6 +100,10 @@ final class WorkoutHealthAccessOffer {
     ///
     /// - Returns: Whether the caller should now run ``present()``.
     func claimFirstUse() -> Bool {
+        // R8: the App Review demo's sample workouts never reach Apple Health (`ReviewDemo`).
+        #if FERNLET_DEMO
+        guard !ReviewDemo.blocksCloudAndHealth else { return false }
+        #endif
         guard service.isHealthDataAvailable(), !isResolved else { return false }
         let requested = HealthCapabilityRequestLedger.requestedCapabilities(
             keychainService: ledgerKeychainService,

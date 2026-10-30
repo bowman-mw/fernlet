@@ -29,8 +29,9 @@ Checks (IDs match Docs/Power-of-10-Swift.md and PowerOfTenBoundaryTests):
     R6-STATIC-VAR  enforced: STORED `static var` (a mutable global in a namespace) — allowlist.
     R7-SWALLOW     enforced: bare-statement `try?` / `_ = try?` (error swallowed, result unused).
     R7-DISCARD     advisory: `_ = <expr>` result discards, and every @discardableResult declaration.
-    R8-IF-COND     enforced: `#if` conditions outside the allowed set (DEBUG, canImport, os,
-                   targetEnvironment, swift, compiler, arch — optionally negated / combined).
+    R8-IF-COND     enforced: `#if` conditions outside the allowed set (DEBUG, FERNLET_DEMO, canImport,
+                   os, targetEnvironment, swift, compiler, arch — optionally negated / combined).
+                   FERNLET_DEMO is the one custom condition: the App Review demo build (§R8).
     R8-IF-NEST     enforced: `#if` nested inside another `#if`.
     R9-UNSAFE      enforced: Unsafe*Pointer / withUnsafe* / unsafeBitCast / Unmanaged /
                    unowned(unsafe) / nonisolated(unsafe) — allowlist per file with a reason.
@@ -54,7 +55,7 @@ MAX_BODY_LINES = 60           # NASA rule 4: one printed page
 
 SHIPPING_ROOTS = ("FernletKit/Sources", "App/Fernlet", "App/FernletWidgets", "App/FernletShareExtension", "App/FernletMessagesExtension")  # noqa: E501 — one line: PowerOfTenBoundaryTests.pythonStringTuple parses a single-line tuple
 
-ALLOWED_IF_TOKENS = ("DEBUG", "canImport", "os", "targetEnvironment", "swift", "compiler", "arch")
+ALLOWED_IF_TOKENS = ("DEBUG", "FERNLET_DEMO", "canImport", "os", "targetEnvironment", "swift", "compiler", "arch")
 
 DECL_HEAD_RE = re.compile(
     r"^\s*(?:@\w[\w.]*(?:\([^)]*\))?\s+)*"

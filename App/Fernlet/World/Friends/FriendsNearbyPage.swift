@@ -56,7 +56,7 @@ struct FriendsNearbyPage: View {
     /// nearby phone, or the looking row.
     @ViewBuilder
     private var people: some View {
-        if FriendsUITestHooks.nearbyDemo {
+        if showsDemoCards {
             FriendsNearbyDemoCards()
         } else if manager.isInSession {
             FriendsNearbyNote(sprite: FriendsSprites.people, text: Text(sessionLine))
@@ -70,6 +70,16 @@ struct FriendsNearbyPage: View {
             // Not `person.2`: the face says who, the line says the radio is listening.
             FriendsNearbyNote(sprite: WorldSprites.face, text: Text("Looking for nearby friends…"))
         }
+    }
+
+    /// Whether the page draws its three stand-in cards: for the screenshot hook, and in the App
+    /// Review demo while no real phone is nearby (a reviewer has no second iPhone in the room).
+    private var showsDemoCards: Bool {
+        // R8: the App Review demo build only (`ReviewDemo`).
+        #if FERNLET_DEMO
+        if ReviewDemo.isActive, !manager.isInSession, manager.slots.isEmpty { return true }
+        #endif
+        return FriendsUITestHooks.nearbyDemo
     }
 
     /// "You're in a session with Sam and Rae." — first names only, never an identifier.

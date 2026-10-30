@@ -32,7 +32,8 @@ struct WorldIdentityBoundaryTests {
     static let urlScheme = "fernlet"
     static let displayName = "Fernlet"
 
-    /// The four installable targets' bundle IDs, each set in both build configurations, exactly as main
+    /// The four installable targets' bundle IDs, each set in all three build configurations (Debug,
+    /// Release, and Demo — the App Review build, which ships under the same identity), exactly as main
     /// has them.
     static let installableBundleIDs: Set<String> = [
         "MBO.Fernlet",
@@ -55,7 +56,7 @@ struct WorldIdentityBoundaryTests {
         "App/FernletMessagesExtension", "FernletKit/Sources",
     ]
 
-    /// Every installable target carries its shipping bundle ID, in both configurations, and the app
+    /// Every installable target carries its shipping bundle ID, in every configuration, and the app
     /// keeps its product name as its display name.
     @Test func everyInstallableTargetHasTheShippingBundleID() throws {
         let project = try RepoRoot.source("App/Fernlet.xcodeproj/project.pbxproj")
@@ -66,7 +67,7 @@ struct WorldIdentityBoundaryTests {
         }
         let installable = ids.filter { !$0.hasPrefix("MBO.FernletTests") && !$0.hasPrefix("MBO.FernletUITests") }
         #expect(Set(installable) == Self.installableBundleIDs, "installable bundle IDs drifted: \(Set(installable))")
-        #expect(installable.count == 2 * Self.installableBundleIDs.count, "each installable target needs its ID in Debug and Release")
+        #expect(installable.count == 3 * Self.installableBundleIDs.count, "each installable target needs its ID in Debug, Release and Demo")
         #expect(!project.contains("Fernlet World"), "the project still names the app Fernlet World")
         #expect(Self.values(of: "INFOPLIST_KEY_CFBundleDisplayName", in: project).isEmpty,
                 "the app's name comes from its product name, Fernlet, as on main")
