@@ -107,3 +107,18 @@ nonisolated enum BodybuildingCalendarGrid {
         Array(Set(rows.flatMap { $0.compactMap { $0 } } + weekKeys)).sorted()
     }
 }
+
+/// How far the Day calendar pages (owner's answer 6, 2026-10-30: back and forth through months and weeks):
+/// ten years back, and one year ahead so a deload week can be marked before it comes. 0 is the month or
+/// week holding today.
+nonisolated enum BodybuildingCalendarPaging {
+    /// Month offsets the page reaches.
+    static let months = -120...12
+    /// Week offsets the page reaches.
+    static let weeks = -520...52
+
+    /// `offset` moved by `delta`, held inside `range`.
+    static func step(_ offset: Int, by delta: Int, in range: ClosedRange<Int>) -> Int {
+        min(max(offset + delta, range.lowerBound), range.upperBound)
+    }
+}

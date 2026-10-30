@@ -254,6 +254,7 @@ enum UITestSupport {
     /// `FERNLET_UI_TEST_BB_SCENARIO=suggest` — with the Bodybuilding goal hook, seed six hard weeks in a
     /// row and no deload, so the day calendar's deload suggestion shows; any other value (or none) seeds
     /// the usual five weeks with one deload week. Consumed by `FernletStore.seedBodybuildingDemoWeeks`.
+    /// `paged` opens the Day calendar one month and one week back (the paging shots).
     static var bodybuildingScenario: String? { env["FERNLET_UI_TEST_BB_SCENARIO"] }
 
     /// `FERNLET_UI_TEST_MOVE_PAGE=bb-month|bb-week|bb-signals|bb-day` — push that Day calendar page when the

@@ -48,9 +48,22 @@ nonisolated enum BodybuildingCalendarCopy {
     }
 
     /// "October": the month's name over the grid.
-    static func monthTitle(_ layout: BodybuildingMonthLayout, calendar: Calendar) -> String {
+    static func monthTitle(_ layout: BodybuildingMonthLayout, calendar: Calendar, todayKey: String? = nil) -> String {
         guard let date = BodybuildingWeeks.date(fromDayKey: layout.firstDayKey, calendar: calendar) else { return "" }
-        return date.formatted(Date.FormatStyle(calendar: calendar, timeZone: calendar.timeZone).month(.wide))
+        let style = Date.FormatStyle(calendar: calendar, timeZone: calendar.timeZone).month(.wide)
+        let sameYear = todayKey.map { $0.prefix(4) == layout.firstDayKey.prefix(4) } ?? true
+        return date.formatted(sameYear ? style : style.year())
+    }
+
+    /// A paged week's heading: its first and last days ("Oct 5 – 11"), with the year when it is not
+    /// this year's; empty for a week without seven keys.
+    static func weekRangeTitle(_ weekKeys: [String], calendar: Calendar, todayKey: String) -> String {
+        guard weekKeys.count == 7, let first = weekKeys.first, let last = weekKeys.last,
+              let start = BodybuildingWeeks.date(fromDayKey: first, calendar: calendar),
+              let end = BodybuildingWeeks.date(fromDayKey: last, calendar: calendar) else { return "" }
+        var style = Date.IntervalFormatStyle(calendar: calendar, timeZone: calendar.timeZone).month(.abbreviated).day()
+        if first.prefix(4) != todayKey.prefix(4) || last.prefix(4) != todayKey.prefix(4) { style = style.year() }
+        return (start..<end).formatted(style)
     }
 
     /// The seven short weekday names over the grid, Monday first, in the reader's language.

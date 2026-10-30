@@ -7,17 +7,23 @@ import PrivateHealthStore
 /// (``calendarDays(for:inputs:)``). No stored property; a decoy session reads only what the decoy store
 /// holds (its tallies read empty, and the page reads no weight).
 extension FernletStore {
-    /// One load of the calendar for the month and week holding today, with `weights` (kilograms by day
-    /// key, from ``BodyWeightReader``). Next week joins the grid when it is a deload or the suggested week.
-    func bodybuildingCalendarSnapshot(weights: [String: Double]) -> BodybuildingCalendarSnapshot {
+    /// One load of the calendar for the month `monthOffset` months from the one holding today and the week
+    /// `weekOffset` weeks from this one (both clamped to ``BodybuildingCalendarPaging``), with `weights`
+    /// (kilograms by day key, from ``BodyWeightReader``). On this month, next week joins the grid when it
+    /// is a deload or the suggested week.
+    func bodybuildingCalendarSnapshot(weights: [String: Double], monthOffset: Int = 0,
+                                      weekOffset: Int = 0) -> BodybuildingCalendarSnapshot {
         let calendar = bodybuildingWeekCalendar
+        let months = BodybuildingCalendarPaging.step(monthOffset, by: 0, in: BodybuildingCalendarPaging.months)
+        let weeks = BodybuildingCalendarPaging.step(weekOffset, by: 0, in: BodybuildingCalendarPaging.weeks)
         let today = BodybuildingWeeks.date(fromDayKey: todayKey, calendar: calendar) ?? Date()
-        let layout = bodybuildingMonthLayout(containing: today)
-        guard let thisWeek = bodybuildingWeekStart() else { return .empty }
-        let weekKeys = BodybuildingWeeks.weekDayKeys(weekStart: thisWeek, calendar: calendar)
+        let layout = bodybuildingMonthLayout(containing: calendar.date(byAdding: .month, value: months, to: today) ?? today)
+        guard let thisWeek = bodybuildingWeekStart(),
+              let shownWeek = BodybuildingWeeks.dayKey(thisWeek, addingDays: 7 * weeks, calendar: calendar) else { return .empty }
+        let weekKeys = BodybuildingWeeks.weekDayKeys(weekStart: shownWeek, calendar: calendar)
         let suggested = deloadSuggestion()
         var nextWeek: [String] = []
-        if let next = BodybuildingWeeks.dayKey(thisWeek, addingDays: 7, calendar: calendar),
+        if months == 0, let next = BodybuildingWeeks.dayKey(thisWeek, addingDays: 7, calendar: calendar),
            suggested == next || bodybuildingCalendarSettings.isDeload(weekStart: next) {
             nextWeek = BodybuildingWeeks.weekDayKeys(weekStart: next, calendar: calendar)
         }

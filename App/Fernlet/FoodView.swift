@@ -4550,6 +4550,8 @@ nonisolated struct MealComponentCorrectionInput: Identifiable {
 /// a real field, or added to via the same debounced catalog typeahead the recipe editor uses.
 /// Persists through `FernletStore.updateMealCorrection` with totals recomputed from the corrected
 /// snapshots; template chrome — Cancel + pinned title via the draft guard, Save bottom-right.
+/// With the Bodybuilding goal chosen it also carries Log meal's Free meal tag (owner's answer 10,
+/// 2026-10-30), sealed for the meal on today's tallies when Save lands.
 struct MealCorrectionSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -4560,6 +4562,8 @@ struct MealCorrectionSheet: View {
     @State private var carbs: Int
     @State private var fat: Int
     @State private var components: [MealComponentCorrectionInput]
+    /// The Bodybuilding goal's Free meal tag, read from today's sealed tallies at open.
+    @State private var isFreeMeal: Bool
     /// Research §26 fix 1.10: the search-text → chosen-food pairs this sheet's Replace picks have
     /// produced, held until Save. Held rather than written at the pick because a correction the user
     /// CANCELS out of must teach the app nothing — see ``FoodSearchCorrectionDraft``.
@@ -4577,6 +4581,7 @@ struct MealCorrectionSheet: View {
         _carbs = State(initialValue: meal.macros.carbs)
         _fat = State(initialValue: meal.macros.fat)
         _components = State(initialValue: meal.componentSnapshots.map(MealComponentCorrectionInput.init(snapshot:)))
+        _isFreeMeal = State(initialValue: store.isFreeMeal(meal.id, on: store.todayKey))
         lowConfidenceComponentIDs = Self.lowConfidenceComponentIDs(for: meal)
     }
 
@@ -4593,6 +4598,10 @@ struct MealCorrectionSheet: View {
 
                     FernletDropdown("Meal type", selection: $mealType, options: MealType.allCases) {
                         Text(verbatim: $0.displayName)
+                    }
+
+                    if store.isBathroomTileAvailable {
+                        FreeMealTagRow(isFreeMeal: $isFreeMeal)
                     }
 
                     if components.isEmpty {
@@ -4632,6 +4641,9 @@ struct MealCorrectionSheet: View {
                 // remembered on THIS device only, so the same search answers with the user's own pick
                 // first next time. A no-op when nothing was replaced.
                 store.rememberFoodSearchCorrections(correctionDraft.corrections)
+                if store.isBathroomTileAvailable, isFreeMeal != store.isFreeMeal(meal.id, on: store.todayKey) {
+                    store.setFreeMeal(isFreeMeal, mealID: meal.id, on: store.todayKey)
+                }
                 dismiss()
             }
         }
@@ -4652,6 +4664,7 @@ struct MealCorrectionSheet: View {
     /// prompt in the template chrome.
     private var isDirty: Bool {
         if name != meal.name || mealType != meal.mealType { return true }
+        if store.isBathroomTileAvailable, isFreeMeal != store.isFreeMeal(meal.id, on: store.todayKey) { return true }
         if components.isEmpty {
             // Remove-all (FOOD-05): every matched item was removed — an unsaved edit in itself,
             // even though the macro fields still hold the values they were seeded with at init.

@@ -243,6 +243,28 @@ struct BodybuildingCalendarPageTests {
             [(key: "2026-10-01", kilograms: 80), (key: "2026-10-31", kilograms: 82)], dayKeys: Self.october.dayKeys)
         #expect(points == [CGPoint(x: 0, y: 1), CGPoint(x: 1, y: 0)])
     }
+
+    // MARK: Paging (owner's answer 6)
+
+    @Test func pagingStepsAndStopsAtItsLimits() {
+        let months = BodybuildingCalendarPaging.months
+        #expect(BodybuildingCalendarPaging.step(0, by: -1, in: months) == -1)
+        #expect(BodybuildingCalendarPaging.step(months.upperBound, by: 1, in: months) == months.upperBound)
+        #expect(BodybuildingCalendarPaging.step(months.lowerBound, by: -1, in: months) == months.lowerBound)
+        #expect(BodybuildingCalendarPaging.weeks.contains(-52) && BodybuildingCalendarPaging.weeks.contains(52))
+    }
+
+    @Test func aPagedHeadingNamesTheYearOnlyWhenItIsNotThisYears() {
+        let today = "2026-10-29"
+        #expect(!BodybuildingCalendarCopy.monthTitle(Self.october, calendar: Self.calendar, todayKey: today).contains("2026"))
+        let lastDecember = BodybuildingWeeks.monthLayout(
+            containing: BodybuildingWeeks.date(fromDayKey: "2025-12-10", calendar: Self.calendar) ?? Date(), calendar: Self.calendar)
+        #expect(BodybuildingCalendarCopy.monthTitle(lastDecember, calendar: Self.calendar, todayKey: today).contains("2025"))
+        let thisYear = BodybuildingCalendarCopy.weekRangeTitle(Self.week("2026-10-05"), calendar: Self.calendar, todayKey: today)
+        #expect(!thisYear.isEmpty && !thisYear.contains("2026"))
+        #expect(BodybuildingCalendarCopy.weekRangeTitle(Self.week("2025-12-08"), calendar: Self.calendar, todayKey: today).contains("2025"))
+        #expect(BodybuildingCalendarCopy.weekRangeTitle([], calendar: Self.calendar, todayKey: today).isEmpty)
+    }
 }
 
 /// A weight source with fixed readings.

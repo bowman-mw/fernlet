@@ -23,7 +23,8 @@ struct FreeMealMark: View {
 
 /// Log meal's Tag row (`bb-free`), shown only while the Bodybuilding goal is chosen: the section label
 /// "Tag" and one "Free meal" chip with the small F. The chip toggles `isFreeMeal`; Log meal seals the tag
-/// for the meals it logs when Save lands. It reads "Free meal, tag" and says when it is selected. The
+/// for the meals it logs when Save lands, and Adjust meal (``MealCorrectionSheet``) tags or untags the
+/// meal it edits. It reads "Free meal, tag" and says when it is selected. The
 /// word is always "Free meal" (owner's answer 3), never "cheat".
 struct FreeMealTagRow: View {
     @Binding var isFreeMeal: Bool

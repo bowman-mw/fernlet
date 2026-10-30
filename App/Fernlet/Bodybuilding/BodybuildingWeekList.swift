@@ -73,6 +73,7 @@ struct BodybuildingWeekRowCard: View {
     let settings: BodybuildingCalendarSettings
     let calendar: Calendar
     @Environment(\.fernletFramedLook) private var look
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -87,31 +88,65 @@ struct BodybuildingWeekRowCard: View {
         .contentShape(RoundedRectangle(cornerRadius: 10))
     }
 
-    /// "Tue 27  Push · Free meal" with the weight at the end, or "Fri 30  Still to come".
+    /// "Tue 27  Push · Free meal" with the weight at the end, or "Fri 30  Still to come". At the
+    /// accessibility text sizes (where this list stands in for the month) the training goes on its own
+    /// line under the day and the weight, so a long workout name wraps by words.
+    @ViewBuilder
     private var heading: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(verbatim: BodybuildingCalendarCopy.shortDayTitle(day.dateKey, calendar: calendar))
-                .font(FernletFramedFont.rowValueBold)
-                .foregroundStyle(day.isFuture ? (look?.dim ?? Color.slate) : (look?.text ?? Color.bark))
-            if day.isFuture {
-                Text("Still to come", comment: "Day calendar week list: a day that has not happened yet")
-                    .font(FernletFramedFont.rowValue)
-                    .foregroundStyle(look?.dim ?? Color.slate)
-            } else {
-                trainingLine
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    dayTitle
+                    Spacer(minLength: 0)
+                    weightText
+                }
+                dayLine
             }
-            Spacer(minLength: 0)
-            if settings.isOn(.weight), !day.isFuture, let kilograms = day.weightKilograms {
-                Text(verbatim: BodybuildingCalendarCopy.weight(kilograms))
-                    .font(FernletFramedFont.rowValue)
-                    .foregroundStyle(look?.text ?? Color.bark)
+        } else {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                dayTitle
+                dayLine
+                Spacer(minLength: 0)
+                weightText
             }
         }
     }
 
-    /// The training and the free-meal tag, as far as they are on.
+    /// "Tue 27".
+    private var dayTitle: some View {
+        Text(verbatim: BodybuildingCalendarCopy.shortDayTitle(day.dateKey, calendar: calendar))
+            .font(FernletFramedFont.rowValueBold)
+            .foregroundStyle(day.isFuture ? (look?.dim ?? Color.slate) : (look?.text ?? Color.bark))
+    }
+
+    /// The training line, or "Still to come".
+    @ViewBuilder
+    private var dayLine: some View {
+        if day.isFuture {
+            Text("Still to come", comment: "Day calendar week list: a day that has not happened yet")
+                .font(FernletFramedFont.rowValue)
+                .foregroundStyle(look?.dim ?? Color.slate)
+        } else {
+            trainingLine
+        }
+    }
+
+    /// The day's weight, while Weight is on and the day has one.
+    @ViewBuilder
+    private var weightText: some View {
+        if settings.isOn(.weight), !day.isFuture, let kilograms = day.weightKilograms {
+            Text(verbatim: BodybuildingCalendarCopy.weight(kilograms))
+                .font(FernletFramedFont.rowValue)
+                .foregroundStyle(look?.text ?? Color.bark)
+        }
+    }
+
+    /// The training and the free-meal tag, as far as they are on (stacked at the accessibility sizes).
     private var trainingLine: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 6))
+        return layout {
             if settings.isOn(.training) {
                 Text(verbatim: BodybuildingCalendarCopy.training(day))
                     .font(FernletFramedFont.rowValue)

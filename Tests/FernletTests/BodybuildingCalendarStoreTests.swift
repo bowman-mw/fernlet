@@ -103,4 +103,25 @@ struct BodybuildingCalendarStoreTests {
         #expect(days[7...].allSatisfy { $0.isSuggestedDeload && $0.isFuture })
         #expect(days[0].macroTargets != nil)
     }
+
+    @Test func theSnapshotPagesThroughMonthsAndWeeks() {
+        let store = makeStore()
+        store.markDeloadWeek(start: "2026-11-02", isDeload: true)
+        let now = store.bodybuildingCalendarSnapshot(weights: [:])
+        #expect(now.layout.firstDayKey == "2026-10-01")
+        #expect(now.weekKeys.first == "2026-10-26")
+        #expect(now.gridRows.joined().contains("2026-11-08"), "next week's deload joins this month's grid")
+        let back = store.bodybuildingCalendarSnapshot(weights: [:], monthOffset: -2, weekOffset: -1)
+        #expect(back.layout.firstDayKey == "2026-08-01")
+        #expect(back.weekKeys.first == "2026-10-19")
+        #expect(back.days["2026-08-15"] != nil && back.days["2026-10-19"] != nil)
+        let ahead = store.bodybuildingCalendarSnapshot(weights: [:], monthOffset: 1, weekOffset: 1)
+        #expect(ahead.layout.firstDayKey == "2026-11-01")
+        #expect(ahead.weekKeys.first == "2026-11-02")
+        #expect(ahead.days["2026-11-02"]?.isDeload == true && ahead.days["2026-11-02"]?.isFuture == true)
+        #expect(!ahead.gridRows.joined().contains("2026-12-07"), "only this month draws next week in")
+        let clamped = store.bodybuildingCalendarSnapshot(weights: [:], monthOffset: 500)
+        #expect(clamped.layout.firstDayKey == "2027-10-01", "a year ahead at most")
+    }
+
 }

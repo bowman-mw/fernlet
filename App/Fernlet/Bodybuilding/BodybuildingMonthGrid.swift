@@ -4,8 +4,9 @@
 //
 //  The Day calendar's month (World round 7, `bb-month`, `bb-deload`, `bb-deload-suggest`; spec §2, §8,
 //  §9): a Monday-first grid of day cells under the weekday names, a legend naming each mark, and the
-//  weight line under it. At the largest text sizes the grid keeps its seven columns at a readable width
-//  and scrolls sideways instead of squeezing. Holding a day offers "Deload week" for its week.
+//  weight line under it. At the accessibility text sizes the page shows the week list instead (owner's
+//  answer 8, 2026-10-30); below them, a grid too wide for the screen keeps its seven columns at a readable
+//  width and scrolls sideways instead of squeezing. Holding a day offers "Deload week" for its week.
 //
 
 import FernletDomainModel
