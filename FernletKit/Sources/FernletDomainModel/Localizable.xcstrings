@@ -1279,6 +1279,330 @@
         }
       }
     },
+    "bodybuilding.mode.month" : {
+      "comment" : "Day calendar: the month view, one cell per day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Month"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mes"
+          }
+        }
+      }
+    },
+    "bodybuilding.mode.week" : {
+      "comment" : "Day calendar: the week view, one row per day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Week"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Semana"
+          }
+        }
+      }
+    },
+    "bodybuilding.signal.bathroom" : {
+      "comment" : "Day calendar signal: how many times the person went to the bathroom (a bowel-movement count)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bathroom visits"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Idas al baño"
+          }
+        }
+      }
+    },
+    "bodybuilding.signal.bathroom.source" : {
+      "comment" : "Calendar signals: what the Bathroom visits signal is (a simple count for each day)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A count per day"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Una cuenta por día"
+          }
+        }
+      }
+    },
+    "bodybuilding.signal.dayFelt" : {
+      "comment" : "Day calendar signal: how the day felt, from the person's mood or care score",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "How the day felt"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cómo fue el día"
+          }
+        }
+      }
+    },
+    "bodybuilding.signal.dayFelt.source" : {
+      "comment" : "Calendar signals: where the How the day felt signal comes from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "From your care score"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De tu puntuación de cuidado"
+          }
+        }
+      }
+    },
+    "bodybuilding.signal.freeMeals" : {
+      "comment" : "Day calendar signal: meals the person tagged as a free meal (a planned, relaxed meal; never 'cheat')",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Free meals"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Comidas libres"
+          }
+        }
+      }
+    },
+    "bodybuilding.signal.freeMeals.source" : {
+      "comment" : "Calendar signals: where the Free meals signal comes from (meals the person tags as free meals)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Meals you tag"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Comidas que etiquetas"
+          }
+        }
+      }
+    },
+    "bodybuilding.signal.macros" : {
+      "comment" : "Day calendar signal: protein, carbs and fat eaten",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Macros"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Macros"
+          }
+        }
+      }
+    },
+    "bodybuilding.signal.macros.source" : {
+      "comment" : "Calendar signals: where the Macros signal comes from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "From your meals"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De tus comidas"
+          }
+        }
+      }
+    },
+    "bodybuilding.signal.sleep" : {
+      "comment" : "Day calendar signal: hours of sleep",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sleep"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sueño"
+          }
+        }
+      }
+    },
+    "bodybuilding.signal.sleep.source" : {
+      "comment" : "Calendar signals: where the Sleep signal comes from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "From your sleep log"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De tu registro de sueño"
+          }
+        }
+      }
+    },
+    "bodybuilding.signal.steps" : {
+      "comment" : "Day calendar signal: steps walked",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Steps"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pasos"
+          }
+        }
+      }
+    },
+    "bodybuilding.signal.steps.source" : {
+      "comment" : "Calendar signals: the Steps signal comes from Apple Health",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "From Health"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De Salud"
+          }
+        }
+      }
+    },
+    "bodybuilding.signal.training" : {
+      "comment" : "Day calendar signal: whether the person trained that day",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Training"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Entrenamiento"
+          }
+        }
+      }
+    },
+    "bodybuilding.signal.training.source" : {
+      "comment" : "Calendar signals: where the Training signal comes from",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "From your workouts"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De tus entrenamientos"
+          }
+        }
+      }
+    },
+    "bodybuilding.signal.weight" : {
+      "comment" : "Day calendar signal: body weight",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Weight"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Peso"
+          }
+        }
+      }
+    },
+    "bodybuilding.signal.weight.source" : {
+      "comment" : "Calendar signals: the Weight signal comes from Apple Health",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "From Health"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "De Salud"
+          }
+        }
+      }
+    },
     "care.group.anytime" : {
       "comment" : "Personal-care checklist section for tasks with no fixed time of day",
       "extractionState" : "extracted_with_value",
@@ -49152,6 +49476,96 @@
         }
       }
     },
+    "goal.bodybuilding.calendar" : {
+      "comment" : "Goal card: the Bodybuilding goal's third line. Choosing it shows a calendar of days on the Move tab",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Turns on the day calendar in Move."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Activa el calendario de días en Moverse."
+          }
+        }
+      }
+    },
+    "goal.bodybuilding.name" : {
+      "comment" : "Goal preset name: building muscle on purpose, with planned lighter (deload) weeks",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bodybuilding"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Culturismo"
+          }
+        }
+      }
+    },
+    "goal.bodybuilding.nutrition" : {
+      "comment" : "Goal card: how the Bodybuilding goal sets daily nutrition (a few more calories than maintenance, high protein)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A small surplus · high protein"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Un pequeño superávit · proteína alta"
+          }
+        }
+      }
+    },
+    "goal.bodybuilding.tagline" : {
+      "comment" : "Goal preset card: one-line description of the Bodybuilding goal",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Build on purpose, rest on purpose."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Construir a propósito, descansar a propósito."
+          }
+        }
+      }
+    },
+    "goal.bodybuilding.training" : {
+      "comment" : "Goal card and Move tab: the training split the Bodybuilding goal recommends. A deload week is a planned lighter week",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Push, pull and legs, with deload weeks."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Empuje, tirón y piernas, con semanas de descarga."
+          }
+        }
+      }
+    },
     "goal.exploring.name" : {
       "comment" : "Goal preset name: trying things out to learn what helps",
       "extractionState" : "extracted_with_value",
@@ -52136,6 +52550,24 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%@: no se pudo leer como número."
+          }
+        }
+      }
+    },
+    "quickLog.bathroom" : {
+      "comment" : "Log panel tile and the quick-log editor, Bodybuilding goal only: a count of today's bathroom visits",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bathroom"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Baño"
           }
         }
       }
