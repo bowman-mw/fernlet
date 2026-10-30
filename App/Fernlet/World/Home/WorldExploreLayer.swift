@@ -77,6 +77,9 @@ struct WorldExploreLayer: View {
     let size: CGSize
     /// Whether the city view's plate may show (nothing else at the bottom centre: no walk bar or note).
     var showsCityPlate = true
+    /// Where Sprout's feet stand on the screen: a found landmark's name plate that Sprout would cover moves below
+    /// Sprout's feet (``WorldLandmarkPlateRule``), clear of the bubble above. Nil leaves every plate under its art.
+    var companion: CGPoint? = nil
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -85,13 +88,23 @@ struct WorldExploreLayer: View {
         let zoomedOut = WorldExploreSelection.isZoomedOut(viewport)
         ZStack(alignment: .topLeading) {
             ForEach(placedLandmarks(book: book)) { placed in
+                let aside = placed.look.found
+                    && companion.map { WorldLandmarkPlateRule.sproutCovers(plate: placed.name, at: placed.point, feet: $0) } == true
                 WorldBigLandmarkView(placed: placed, image: explore.images.image(for: placed.landmark, look: placed.look),
-                                     scale: explore.images.mapScale(for: placed.landmark)) {
+                                     scale: explore.images.mapScale(for: placed.landmark), showsPlate: !aside) {
                     open(placed.landmark, book: book, atlas: atlas)
                 }
                 .fixedSize()
                 .frame(width: 0, height: 0, alignment: .bottom)
                 .position(placed.point)
+                if aside, let feet = companion {
+                    // The name, readable below Sprout's feet (the button above still names it to VoiceOver).
+                    WorldGoldPlate(text: placed.name)
+                        .fixedSize()
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                        .position(WorldLandmarkPlateRule.belowFeet(feet, landmark: placed.point, size: size))
+                }
             }
             if zoomedOut, let atlas {
                 WorldCityMarkersLayer(explore: explore, cities: explore.memo.cities(in: book, atlas: atlas, near: viewport, size: size),
@@ -152,6 +165,8 @@ struct WorldBigLandmarkView: View {
     let placed: WorldPlacedLandmark
     let image: CGImage?
     let scale: CGFloat
+    /// Whether the found name plate sits under the art (false: the layer draws it below Sprout's feet instead).
+    var showsPlate = true
     let onOpen: () -> Void
 
     var body: some View {
@@ -176,8 +191,53 @@ struct WorldBigLandmarkView: View {
                 WorldLandmarkArtView(image: image, scale: scale)
                     .shadow(color: WorldPalette.rgb(0x281408).opacity(0.3), radius: 0, x: 0, y: 2)
             }
-            if placed.look.found { WorldGoldPlate(text: placed.name) }
+            if placed.look.found { WorldGoldPlate(text: placed.name).opacity(showsPlate ? 1 : 0) }
         }
+    }
+}
+
+/// Where a found landmark's name plate goes when Sprout stands on the landmark (shots: Laurelhurst Park's plate hid
+/// behind Sprout). The plate normally sits under the art, its bottom on the landmark's point; Sprout's sprite stands
+/// with its feet on the person's point and its bubble above. When the two overlap, the plate moves below Sprout's
+/// feet (under its shadow), where neither the sprite nor the bubble reaches. Estimates in points, from the map's
+/// sprite (about 44 pt square at the map's scale) and the plate's DM Sans bold 12.
+nonisolated enum WorldLandmarkPlateRule {
+    /// Half Sprout's width round its feet, with a little room.
+    static let sproutHalfWidth: CGFloat = 28
+    /// How far Sprout's sprite reaches above its feet.
+    static let sproutHeight: CGFloat = 52
+    /// How far its shadow reaches below its feet.
+    static let shadowDrop: CGFloat = 8
+    /// The plate's height (12 pt type, its padding, the gold rim).
+    static let plateHeight: CGFloat = 24
+    /// The gap between Sprout's shadow and the moved plate's top.
+    static let gapBelow: CGFloat = 4
+
+    /// The plate's estimated width for `name`: about 7 pt a character plus its padding and rims.
+    static func plateWidth(_ name: String) -> CGFloat {
+        CGFloat(min(name.count, 60)) * 7 + 18
+    }
+
+    /// The plate's rectangle under its art: centred on the landmark's x, its bottom on the landmark's point.
+    static func plateRect(name: String, at point: CGPoint) -> CGRect {
+        let width = plateWidth(name)
+        return CGRect(x: point.x - width / 2, y: point.y - plateHeight, width: width, height: plateHeight)
+    }
+
+    /// Sprout's rectangle: the sprite above its feet and the shadow under them.
+    static func sproutRect(feet: CGPoint) -> CGRect {
+        CGRect(x: feet.x - sproutHalfWidth, y: feet.y - sproutHeight, width: sproutHalfWidth * 2, height: sproutHeight + shadowDrop)
+    }
+
+    /// Whether Sprout, standing at `feet`, covers the plate `name` of the landmark at `point`.
+    static func sproutCovers(plate name: String, at point: CGPoint, feet: CGPoint) -> Bool {
+        plateRect(name: name, at: point).intersects(sproutRect(feet: feet))
+    }
+
+    /// The moved plate's centre: the landmark's x (kept on the screen), just under Sprout's shadow.
+    static func belowFeet(_ feet: CGPoint, landmark: CGPoint, size: CGSize) -> CGPoint {
+        let y = feet.y + shadowDrop + gapBelow + plateHeight / 2
+        return CGPoint(x: min(max(landmark.x, 60), max(size.width - 60, 60)), y: y)
     }
 }
 

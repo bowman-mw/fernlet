@@ -289,6 +289,8 @@ struct ContentView: View {
             .worldAtlasMapHook(store: store)
             // Round 7: Sprout's passport over the root, opened through the environment.
             .worldPassportBook(passportPresenter, store: store)
+            // The world view's city tap shows the city on Home: any panel over Home closes.
+            .onChange(of: passportPresenter.cityRequest) { _, request in if request != nil { closeWorldPanel() } }
             .sheet(item: $activeSheet, onDismiss: handleActiveSheetDismiss) { sheet in
                 sheetContent(for: sheet)
             }
@@ -886,9 +888,12 @@ struct ContentView: View {
             // cookie's log raises at the bottom.
             .overlay { worldOverlayPanel }
             .overlay(alignment: .top) { sillyStampBannerOverlay }
+            // Round 7: a passport stamp earned just now, in the same slot and by the same rules (World-Passport-Spec §6).
+            .overlay(alignment: .top) { passportStampBannerOverlay }
             // DEBUG screenshots of Sprout's passport, page 1 (round 7); nothing in Release.
             .overlay { PassportSproutHarnessHost(store: store) }
             .animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.36, dampingFraction: 0.86), value: shownStampBanner)
+            .animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.36, dampingFraction: 0.86), value: shownPassportBanner)
             .fernletKeyboardOverlap($keyboardOverlap)
             .tint(Color.moss)
             .background(sceneBackground.ignoresSafeArea())
@@ -953,7 +958,7 @@ struct ContentView: View {
                          onFriends: openFriends,
                          // The quick start's "Suggest today's workout" opens Move's suggestion sheet.
                          onSheet: { activeSheet = $0 },
-                         stampBannerShowing: shownStampBanner != nil,
+                         stampBannerShowing: shownStampBanner != nil || shownPassportBanner != nil,
                          isCameraOpen: $isWorldCameraOpen,
                          onMealsLogged: mealLogReporter)
                 .tabPage(.home)
@@ -1963,6 +1968,28 @@ struct ContentView: View {
     private var shownStampBanner: SillyStatKind? {
         guard launcher.isDone, !rootSheetIsCoveringTabs, !isWorldCameraOpen else { return nil }
         return store.sillyStats.pendingStampBanners.first
+    }
+
+    /// The passport's new-stamp banner on screen (round 7): held back as the silly stamp's is, and behind it (one
+    /// banner at a time), and never while the passport is open or in a decoy.
+    private var shownPassportBanner: PassportStampEntry? {
+        guard shownStampBanner == nil, launcher.isDone, !rootSheetIsCoveringTabs, !isWorldCameraOpen,
+              !passportPresenter.isPresented, !store.duressSessionActive else { return nil }
+        return passportPresenter.bannerStamp
+    }
+
+    /// The passport's new-stamp banner (``PassportNewStampBanner``), in the silly stamp's slot and motion.
+    @ViewBuilder
+    private var passportStampBannerOverlay: some View {
+        if let entry = shownPassportBanner {
+            PassportNewStampBanner(presenter: passportPresenter, store: store, entry: entry)
+                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                .frame(maxWidth: 352)
+                .padding(.horizontal, 16)
+                .padding(.top, stampBannerTop)
+                .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                .id(entry)
+        }
     }
 
     /// The top banner slot for a stamp earned just now (``SillyStampBanner``). Slides down from the

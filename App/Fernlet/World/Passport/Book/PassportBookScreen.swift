@@ -59,7 +59,8 @@ struct PassportBookScreen: View {
         .overlay {
             if showsWorld {
                 WorldYourWorldPage(source: worldSource, onBack: { showsWorld = false },
-                                   onClose: { showsWorld = false; presenter.close() })
+                                   onClose: { showsWorld = false; presenter.close() },
+                                   onOpenCity: { showsWorld = false; presenter.openCity($0) })
                     .background(WorldPalette.page.ignoresSafeArea())
                     .transition(.opacity)
             }
@@ -191,7 +192,7 @@ struct PassportBookScreen: View {
     /// Page 1, Sprout's own page (`PassportSproutPage`). No body signal: the book has none of Home's stress
     /// reading, so Sprout shows without it here.
     private var sproutPage: some View {
-        PassportSproutPage(store: store, bodySignal: nil, isStudioDraftDirty: $isStudioDraftDirty)
+        PassportSproutPage(store: store, bodySignal: nil, isStudioDraftDirty: $isStudioDraftDirty, onTop: { pageOnTop = $0 })
     }
 
     // MARK: Reading

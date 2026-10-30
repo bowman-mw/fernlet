@@ -89,6 +89,8 @@ struct HomeView: View {
     @State private var isCompanionThoughtVisible = true
     @State private var companionTapThought: String?
     @State private var isCompanionSheetPresented = false
+    /// Sprout's passport (round 7): Customize from Today opens it on page 1 (World-Passport-Spec §4).
+    @Environment(WorldPassportPresenter.self) private var passport: WorldPassportPresenter?
     /// Arrange Today, open over the Today panel (World build).
     @State private var isArrangingToday = false
     /// World Today panel: Trends (`b2-trends`) and Body signals (`b2-stress`) push under the plate.
@@ -270,7 +272,9 @@ struct HomeView: View {
     /// The Today panel's top: the companion card, then the gold hearts card while one lasts.
     @ViewBuilder
     private var todayHead: some View {
-        TodayCompanionCard(store: store, isActive: isActive) { isCompanionSheetPresented = true }
+        TodayCompanionCard(store: store, isActive: isActive) {
+            if let passport { passport.open(page: 1) } else { isCompanionSheetPresented = true }
+        }
         if store.goldHeartCount() > 0, let until = store.goldHeartsEnd() {
             TodayGoldHeartsCard(status: WorldStatus.current(store: store, date: Date()), until: until)
         }

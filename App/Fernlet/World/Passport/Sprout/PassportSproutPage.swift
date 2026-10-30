@@ -31,6 +31,8 @@ struct PassportSproutPage: View {
     var bodySignal: CompanionBodySignal?
     /// Raised while a Creation Studio pushed from this page holds unsaved paint.
     @Binding var isStudioDraftDirty: Bool
+    /// Reports whether the page is scrolled to its top, so the book's swipe down closes it only then (§1).
+    var onTop: (Bool) -> Void = { _ in }
     @State private var route: PassportSproutRoute?
     @State private var peek = CustomizePeek()
     @State private var placeSheet: WorldPlaceSheetMode?
@@ -50,9 +52,11 @@ struct PassportSproutPage: View {
     /// side (over the gutter shade), 30 at the foot for the page number.
     static let contentInsets = EdgeInsets(top: 12, leading: 23, bottom: 30, trailing: 12)
 
-    init(store: FernletStore, bodySignal: CompanionBodySignal? = nil, isStudioDraftDirty: Binding<Bool> = .constant(false)) {
+    init(store: FernletStore, bodySignal: CompanionBodySignal? = nil, isStudioDraftDirty: Binding<Bool> = .constant(false),
+         onTop: @escaping (Bool) -> Void = { _ in }) {
         self.store = store
         self.bodySignal = bodySignal
+        self.onTop = onTop
         _isStudioDraftDirty = isStudioDraftDirty
         _library = State(initialValue: PassportLibrary(openAtlas: { [store] in store.worldFog.atlas.openedAtlas }))
     }
@@ -72,6 +76,10 @@ struct PassportSproutPage: View {
                 geometry.contentSize.height - geometry.contentOffset.y - geometry.containerSize.height > 4
             } action: { _, hasMore in
                 showsFade = hasMore
+            }
+            // The book's swipe down closes only from the top, so it never fights the page's own scroll.
+            .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y <= $0.contentInsets.top * -1 + 2 } action: { _, top in
+                onTop(top)
             }
             .overlay(alignment: .bottom) { if showsFade { PassportSproutFade() } }
         }

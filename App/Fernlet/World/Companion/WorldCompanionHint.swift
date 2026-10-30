@@ -3,7 +3,7 @@ import SwiftUI
 
 /// The one-time hint to tap the companion (refinement `ref-hint`, approved 2026-10-24; World build step
 /// 5c): the first time Home appears, the companion's bubble says "Tap me to say hi!" and a dashed ring
-/// pulses gently round it. It ends on the first tap (which opens the companion up close) or after 12
+/// pulses gently round it. It ends on the first tap (which opens Sprout's passport) or after 12
 /// seconds on Home, and never shows again on this iPhone (``WorldMapPreferences/companionHintShown(in:)``,
 /// cleared only by the wipes).
 ///
@@ -32,9 +32,11 @@ nonisolated enum WorldCompanionHint {
                comment: "World Home, VoiceOver: the one-time hint; the companion's name (Spanish: Toca dos veces a Sprout para saludar)")
     }
 
-    /// The companion's VoiceOver hint, always (`ref-hint`'s accessibility note).
-    static let companionHint = LocalizedStringResource("worldHint.companionHint", defaultValue: "Double-tap to say hi. Hold for Customize.",
-                                                       comment: "World Home, VoiceOver: what the companion does when activated or held")
+    /// The companion's VoiceOver hint, always (World-Passport-Spec §1): "Opens Sprout's passport."
+    static func opensPassport(name: String) -> LocalizedStringResource {
+        LocalizedStringResource("worldHint.opensPassport", defaultValue: "Opens \(name)'s passport.",
+                                comment: "World Home, VoiceOver: what tapping or holding the companion does; the companion's name (Spanish: Abre el pasaporte de Sprout.)")
+    }
 }
 
 /// The hint's dashed ring round the companion (the kit's `.hring`: 92 pt, a 3-pt dashed moss-ink ring
