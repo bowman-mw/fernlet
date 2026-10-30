@@ -29,7 +29,9 @@ import WorldMapStore
 /// day's tint (`CompanionDayPhase`; night dims the light map under a navy tint, and only Dark Mode turns it dark).
 /// Round 7 (World-Exploration-Spec §2, ``WorldExploreLayer``): the atlas's landmarks stand big over the fog, grey
 /// and unnamed until the passport finds them; zoomed out a step, the passport's cities get skyline markers; zoomed
-/// in on a found city, the city view's plate.
+/// in on a found city, the city view's plate. Sprout says a line the first time the person finds a new kind of place
+/// (§4, ``WorldDiscoveryRouter``, the passport's one discovery reader), and once a week a dashed gold hex marks a new
+/// corner near home, which Sprout mentions once (§5, ``WorldCornerLayer``).
 ///
 /// **The companion** (``WorldMapCompanion``) is Home's: tap to pet, hold (or VoiceOver's "Edit your
 /// companion") for the customize sheet. Its line is the map's own when it has one (``WorldMapLine``).
@@ -102,6 +104,12 @@ struct WorldMapHome: View {
     @State private var terrain: NatureFogTerrain?
     /// Cities and landmarks (round 7, World-Exploration-Spec §2): the open cards, the viewport's memo, the art.
     @State private var explore = WorldExploreState()
+    /// Sprout's discovery lines and the new-stamp hook (round 7, World-Exploration-Spec §4): the one discovery reader.
+    @State private var discoveries = WorldDiscoveryRouter()
+    /// Sprout's mention of the week's new corner (§5), said once; nil once Home goes behind a panel.
+    @State private var cornerLine: String?
+    /// DEBUG `FERNLET_UI_TEST_CORNER`: a corner stood in where the person stands (display only).
+    @State private var testCorner: HexCell?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -135,6 +143,9 @@ struct WorldMapHome: View {
         .modifier(WorldPlacesPresenter(store: store, placeSheet: $placeSheet, menuSearch: $menuSearch, onMealsLogged: onMealsLogged))
         // Round 7: a found landmark's card and a found city's card (World-Exploration-Spec §2).
         .modifier(WorldExplorePresenter(store: store, explore: explore))
+        // Round 7: Sprout's lines on finding somewhere new (World-Exploration-Spec §4).
+        .modifier(WorldDiscoveryLinesDriver(store: store, router: discoveries, isSaying: isFrontmost && !isBubbleQuiet))
+        .task(id: cornerLine) { await letCornerLineStand() }
         .environment(\.worldTileStatus, tiles)
         .task { await applyTestScenes() }
         .task { terrain = terrain ?? NatureFogTerrain.home(store.worldFog.atlas.openedAtlas) }
@@ -206,6 +217,9 @@ struct WorldMapHome: View {
             WorldHomesLayer(store: store, viewport: viewport, size: size, isNight: phase(at: Date()) == .night)
             WorldExploreLayer(store: store, explore: explore, viewport: viewport, size: size,
                               showsCityPlate: !isWalking && loggedWalk == nil)
+            if let corner = shownCorner, let home = cornerHome {
+                WorldCornerLayer(cell: corner, home: home, viewport: viewport, size: size) { panToCorner(corner) }
+            }
             ForEach(shownMarkers) { marker in
                 WorldMapMarkerView(marker: marker, resolvedName: store.worldPlaces.eatingNames[marker.id]) { open(marker) }
                     .fixedSize()
@@ -365,6 +379,8 @@ struct WorldMapHome: View {
         let now = Date()
         facts.isNight = phase(at: now) == .night || WorldMapCompanion.isPastBedtime(store: store, at: now)
         facts.homeGreeting = homeGreeting
+        facts.discovery = store.duressSessionActive ? nil : discoveries.line?.text
+        facts.cornerNudge = store.duressSessionActive ? nil : cornerLine
         // While a bike ride's note shows: "Wheee! That was a ride." (`b1-home-bike`).
         return WorldRideCopy.bubbleLine(noteShowing: store.worldLocation.rides.loggedRide != nil) ?? WorldMapLine.line(facts)
     }
@@ -641,6 +657,7 @@ extension WorldMapHome {
             store.worldFog.flush()
             if !isFrontmost { cardContext = nil }
             homeGreeting = nil
+            cornerLine = nil
         }
         guard isLaunched, scenePhase != .background else {
             location.stopForeground()
@@ -652,6 +669,7 @@ extension WorldMapHome {
             readPlaces()
             readSavedLine()
             readSavedLines()
+            readCorner()
         }
         location.startForeground()
         follow(location.latest)
@@ -672,6 +690,7 @@ extension WorldMapHome {
             return
         }
         follow(fix)
+        mentionCorner()
     }
 
     /// Following again: Back to Sprout's tap, or by itself (`ref-recenter-auto`: ten seconds without a
@@ -821,6 +840,7 @@ extension WorldMapHome {
         // The camera on your own, as the blue button opens it (`FERNLET_UI_TEST_SOLO_CAMERA`).
         if FriendsUITestHooks.opensSoloCamera, !store.meshNetworkManager.isInSession { cameraMode = .solo(placeName: nil) }
         if let distance = UITestSupport.exploreCameraDistance { camera.distance = distance }
+        if UITestSupport.stagesCorner { Task { await stageTestCorner() } }
         let scenes = testScenes
         guard !scenes.isEmpty else { return }
         if scenes.contains("sick") != store.isSick(on: store.todayKey) { store.setSick(scenes.contains("sick"), on: store.todayKey) }
@@ -885,5 +905,77 @@ extension WorldMapHome {
         let nearby = await store.worldPlaceLookup.nearbyPlaces(around: fix.point)
         testPhotoKept = PlaceClassifier.photoMayKeepPlace(nearby)
         FernletAuditLog.log("worldMap.photoPlace.testScene", context: ["kept": testPhotoKept ? "yes" : "no"])
+    }
+}
+
+extension WorldMapHome {
+    // MARK: The week's new corner (round 7, World-Exploration-Spec §5)
+
+    /// The home the week's corner is picked near: the person's first home, never the hotel (DEBUG: where they stand).
+    private var cornerHome: GeoPoint? {
+        if testCorner != nil { return store.worldLocation.latest?.point }
+        return store.worldHomes.homes.first?.point
+    }
+
+    /// The corner Home draws: this week's, until it is walked into or the week ends; none in a decoy or with no home.
+    private var shownCorner: HexCell? {
+        guard !store.duressSessionActive else { return nil }
+        return testCorner ?? store.worldFog.cornerNudge.corner
+    }
+
+    /// How near the corner the person must stand for Sprout to call it "nearby", in metres.
+    static let cornerNearMetres = 1_500.0
+
+    /// Asks for this week's corner each time the map comes to the front (a new week picks again), then lets Sprout
+    /// mention a new pick. No home, a decoy, or no fogged patch near home: nothing.
+    private func readCorner() {
+        guard !store.duressSessionActive, !UITestSupport.stagesCorner else { return }
+        _ = store.worldFog.currentCorner(home: store.worldHomes.homes.first?.point)
+        mentionCorner()
+    }
+
+    /// Sprout mentions a corner picked this session once: while the map is in front, the person within
+    /// ``cornerNearMetres`` of it, and the map has no other line (so never at night, in rain or snow, or over a
+    /// greeting or a discovery).
+    private func mentionCorner() {
+        let keeper = store.worldFog.cornerNudge
+        guard cornerLine == nil, isFrontmost, !store.duressSessionActive, let cell = keeper.unannounced,
+              let fix = store.worldLocation.latest,
+              fix.point.distance(to: MercatorHexGrid.centreGeo(of: cell)) <= Self.cornerNearMetres,
+              mapLine == nil, keeper.takeUnannounced() != nil else { return }
+        cornerLine = String(localized: WorldCornerCopy.bubble)
+    }
+
+    /// Once said, the corner's mention stands ``WorldDiscoveryLinesDriver/standing`` and goes (Sprout says it once;
+    /// the hex stays). DEBUG staging keeps it up for the screenshot.
+    private func letCornerLineStand() async {
+        guard cornerLine != nil, testCorner == nil else { return }
+        do {
+            try await Task.sleep(for: WorldDiscoveryLinesDriver.standing)
+        } catch {
+            return
+        }
+        cornerLine = nil
+    }
+
+    /// The hex's tap: the map pans to the corner (off following; Back to Sprout, or ten seconds, brings it back).
+    private func panToCorner(_ cell: HexCell) {
+        camera.move(to: MercatorHexGrid.centreGeo(of: cell), follows: false)
+    }
+
+    /// DEBUG `FERNLET_UI_TEST_CORNER`: once a reading arrives (at most 15 s), stands this week's pick round where
+    /// the person stands in, as if it were home, and Sprout mentions it. Display only: nothing is picked or kept.
+    private func stageTestCorner() async {
+        for _ in 0..<15 where store.worldLocation.latest == nil {
+            do {
+                try await Task.sleep(for: .seconds(1))
+            } catch {
+                return
+            }
+        }
+        guard !store.duressSessionActive, let fix = store.worldLocation.latest else { return }
+        let week = FogCornerNudge.weekStart(for: Date(), calendar: .current)
+        testCorner = FogCornerNudge.pick(home: fix.point, revealed: store.worldFog.visibleCells, weekStart: week)
+        if testCorner != nil { cornerLine = String(localized: WorldCornerCopy.bubble) }
     }
 }
