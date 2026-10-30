@@ -1025,7 +1025,7 @@ struct ContentView: View {
     /// touches and is no element, so the map under it stays reachable.
     @ViewBuilder
     private var worldItemBarOverlay: some View {
-        if selectedTab == .home && worldOverlay == nil {
+        if selectedTab == .home && worldOverlay == nil && !passportPresenter.isPresented {
             ZStack(alignment: .bottom) {
                 Color.clear
                 // The session on Home (b3-home-session): the green session button bottom left, the

@@ -106,6 +106,8 @@ struct WorldMapHome: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.openURL) private var openURL
+    /// Sprout's passport: while it is open only the map shows behind it (World-Passport-Spec §2).
+    @Environment(WorldPassportPresenter.self) private var passport: WorldPassportPresenter?
 
     var body: some View {
         TimelineView(.everyMinute) { timeline in
@@ -193,9 +195,9 @@ struct WorldMapHome: View {
             if let sky, sky == .rain || sky == .snow {
                 WorldWeatherLayer(sky: sky, isActive: isFrontmost).ignoresSafeArea()
             }
-            plates(date: date)
+            plates(date: date).opacity(passport?.isPresented == true ? 0 : 1)
         }
-        .overlay { bottomControls }
+        .overlay { bottomControls.opacity(passport?.isPresented == true ? 0 : 1) }
     }
 
     /// What stands on the map, placed from the viewport: the space markers, the companion and any friend

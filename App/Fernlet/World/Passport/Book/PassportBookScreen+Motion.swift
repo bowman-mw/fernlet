@@ -104,6 +104,7 @@ extension PassportBookScreen {
         let target = book.clamped(number)
         guard target != page, turn == nil else { return }
         detail = nil
+        pageOnTop = true
         FernletFeedback.system.play(.tick)
         if reduceMotion {
             withAnimation(.easeInOut(duration: 0.15)) { page = target }
@@ -167,7 +168,7 @@ extension PassportBookScreen {
             if abs(across) > 60, abs(across) > abs(down) {
                 step(across < 0 ? 1 : -1, in: book)
             } else if down > 120, down > abs(across) * 1.5, pageOnTop {
-                presenter.close()
+                requestClose()
             }
         }
     }

@@ -22,6 +22,8 @@ struct PassportBookScreen: View {
     @State var landing: PassportStampEntry?
     @State var pageOnTop = true
     @State var motion = PassportBookMotion()
+    /// Whether the Creation Studio, pushed from page 1, holds an unsaved drawing: the book won't close then.
+    @State var isStudioDraftDirty = false
     @AccessibilityFocusState var pageFocused: Bool
     @Environment(\.accessibilityReduceMotion) var reduceMotion
 
@@ -50,7 +52,7 @@ struct PassportBookScreen: View {
                 }
                 .opacity(motion.fade)
             }
-            .navigationTitle(Text(PassportBookCopy.passport))
+            // Page 1 names the stack "Passport" itself (its pushed pages' Back); the root's bar stays hidden.
             .toolbar(.hidden, for: .navigationBar)
             .containerBackground(.clear, for: .navigation)
         }
@@ -81,8 +83,10 @@ struct PassportBookScreen: View {
         presenter.demo?.world.map { .content($0) } ?? .store(store)
     }
 
-    private var isDecoy: Bool {
-        presenter.demo?.isDecoy ?? store.worldFog.atlas.isDecoy
+    /// Closes the book unless the Studio holds an unsaved drawing (the ✕ and the swipe down).
+    func requestClose() {
+        guard !isStudioDraftDirty else { return }
+        presenter.close()
     }
 
     // MARK: Parts
@@ -105,14 +109,19 @@ struct PassportBookScreen: View {
                 .accessibilityElement(children: .combine)
             }
             Spacer(minLength: 0)
-            PassportCloseButton { presenter.close() }
+            PassportCloseButton { requestClose() }
         }
     }
 
     private func stage(_ book: PassportBookModel) -> some View {
         PassportBookStage(shown: page, turn: turn, ribbonPage: book.ribbonPage, coverAngle: motion.cover,
                           onRibbon: { go(to: $0, in: book) }) { number in
-            PassportPageScroll(number: number, content: { content(number, in: book) }, onTop: { pageOnTop = $0 })
+            if book.page(at: number) == .sprout {
+                // Page 1 scrolls itself and draws its own insets; the book adds only the page number.
+                PassportPageNumber(number: number) { sproutPage }
+            } else {
+                PassportPageScroll(number: number, content: { content(number, in: book) }, onTop: { pageOnTop = $0 })
+            }
         }
         .id(reduceMotion ? "\(page)-\(detail.map { "\($0)" } ?? "")" : "book")
         .transition(.opacity)
@@ -160,8 +169,7 @@ struct PassportBookScreen: View {
     private func content(_ number: Int, in book: PassportBookModel) -> some View {
         switch book.page(at: number) {
         case .sprout:
-            WorldPassportPresenter.sproutPage(PassportSproutPageContext(store: store, isDecoy: isDecoy,
-                                                                        progress: progress(book), pageCount: book.pageCount))
+            sproutPage
         case .world:
             PassportWorldPage(book: book, progress: progress(book), world: worldSource) { showsWorld = true }
         case .stamps(let index):
@@ -178,6 +186,12 @@ struct PassportBookScreen: View {
                 }, onOpen: { stepDetail($0) })
             }
         }
+    }
+
+    /// Page 1, Sprout's own page (`PassportSproutPage`). No body signal: the book has none of Home's stress
+    /// reading, so Sprout shows without it here.
+    private var sproutPage: some View {
+        PassportSproutPage(store: store, bodySignal: nil, isStudioDraftDirty: $isStudioDraftDirty)
     }
 
     // MARK: Reading
