@@ -162,7 +162,7 @@ def climate_tif(fill):
 
 
 def write_sources(folder, crimea_in_russia=True):
-    """All ten sources (the coastline too, though only META lists it); without Crimea's part of RU when
+    """All eleven sources (the coastline too, though only META lists it); without Crimea's part of RU when
     crimea_in_russia is False (the territory override must then stop the run)."""
     l_outer = box(0, -30, 65, 30)
     lake = box(20, -10, 40, 10)[::-1]
@@ -175,6 +175,9 @@ def write_sources(folder, crimea_in_russia=True):
     write_layer(folder, "ne_10m_minor_islands", 5, [[gl_island], [dk_island]], plain,
                 [{"FEATURECLA": "Minor island"}, {"FEATURECLA": "Minor island"}])
     write_layer(folder, "ne_10m_coastline", 5, [[l_outer]], plain, [{"FEATURECLA": "Coastline"}])
+    # A lake over two land cells (30-50°E, 10-20°N) with an island (42-48°E, 12-18°N) in its east cell.
+    write_layer(folder, "ne_10m_lakes", 5, [[box(30, 10, 50, 20), box(42, 12, 48, 18)[::-1]]], plain,
+                [{"FEATURECLA": "Lake"}])
     marine_fields = [("featurecla", "C", 16), ("name", "C", 40), ("name_en", "C", 40), ("name_es", "C", 40),
                      ("name_fr", "C", 40), ("name_de", "C", 40), ("wikidataid", "C", 12), ("ne_id", "N", 10)]
     marine = [
@@ -563,6 +566,13 @@ def check_grids(c, atlas):
     c.equal("continent from the nearest country on a coast cell", cont(65, 5), 1)
     c.equal("continent Oceania", cont(115, 30), 6)
     c.equal("continent 0 at sea", cont(-30, 5), 0)
+    c.equal("a lake cell is water", state(35, 15), 0)
+    c.equal("a lake keeps its continent", cont(35, 15), 1)
+    c.equal("a lake names no ocean or sea", ocea(35, 15), 0)
+    c.equal("a lake has no climate", clim(35, 15), 0)
+    c.equal("a cell with an island in a lake is coast", state(45, 15), 2)
+    c.equal("the island in the lake stays land", is_land(atlas, 45.0, 15.0), True)
+    c.equal("the lake around it is water", is_land(atlas, 41.0, 11.0), False)
 
 
 def check_tables(c, atlas):
@@ -603,7 +613,7 @@ def check_tables(c, atlas):
     c.equal("city country in a hole", gamma.get("country"), "LS")
     c.equal("city population", beta.get("population"), 50000)
     c.equal("meta date", atlas["meta"].get("date"), "2026-10-29")
-    c.equal("meta sources", len(atlas["meta"].get("sources", [])), 10)
+    c.equal("meta sources", len(atlas["meta"].get("sources", [])), 11)
     c.equal("meta admin-1 tolerance", atlas["meta"].get("admin1SimplifyDegrees"), 0.008)
 
 

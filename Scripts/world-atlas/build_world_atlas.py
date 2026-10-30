@@ -49,7 +49,7 @@ def _import_numpy_and_pillow():
 
 np, Image = _import_numpy_and_pillow()
 
-GENERATOR_VERSION = 7
+GENERATOR_VERSION = 8
 PACK_VERSION = 1
 MAGIC = b"FWA1"
 SUB = 16
@@ -78,6 +78,7 @@ METRES_PER_DEGREE = 111_320.0
 SOURCE_LICENCES = {
     "ne_10m_land": "public domain (Natural Earth)",
     "ne_10m_minor_islands": "public domain (Natural Earth)",
+    "ne_10m_lakes": "public domain (Natural Earth)",
     "ne_10m_coastline": "public domain (Natural Earth)",
     "ne_10m_geography_marine_polys": "public domain (Natural Earth)",
     "ne_10m_admin_0_countries": "public domain (Natural Earth)",
@@ -195,8 +196,8 @@ def read_source_table(script_dir):
             if len(parts) != 6:
                 raise SystemExit("error: bad source table line in fetch-sources.sh: %r" % line)
             rows.append(dict(zip(("subdir", "file", "bytes", "need", "sha", "url"), parts)))
-    if len(rows) != 10:
-        raise SystemExit("error: fetch-sources.sh lists %d sources, not 10" % len(rows))
+    if len(rows) != 11:
+        raise SystemExit("error: fetch-sources.sh lists %d sources, not 11" % len(rows))
     return rows
 
 
@@ -523,14 +524,23 @@ def cell_centres(rows, cols, flat_index):
 # LAND
 
 
-def build_land(land_rings, island_rings, rows, cols, report):
-    """The state grid (0 water, 1 land, 2 coast) and the coast cells' 16×16 masks, in index order."""
+def build_land(land_rings, island_rings, lake_rings, rows, cols, report):
+    """The state grid (0 water, 1 land, 2 coast), the coast cells' 16×16 masks in index order, and which cells
+    hold lake water. Lakes (owner, 2026-10-30: "water in the fog only where real water is") are cut out of the
+    land, and the minor islands put back on top (an island in a lake stays land)."""
     land = StripRasterizer(land_rings, rows, cols)
     islands = StripRasterizer(island_rings, rows, cols)
+    lakes = StripRasterizer(lake_rings, rows, cols) if lake_rings else None
     state = np.zeros((rows, cols), dtype=np.uint8)
+    lake_cells = np.zeros((rows, cols), dtype=bool)
     masks = []
     for row in range(rows):
-        fine = land.strip(row) | islands.strip(row)
+        ground = land.strip(row)
+        if lakes is not None:
+            lake = lakes.strip(row) & ground
+            lake_cells[row] = lake.reshape(SUB, cols, SUB).any(axis=(0, 2))
+            ground = ground & ~lake
+        fine = ground | islands.strip(row)
         blocks = fine.reshape(SUB, cols, SUB)
         filled = blocks.sum(axis=(0, 2))
         state[row] = np.where(filled == 0, 0, np.where(filled == SUB * SUB, 1, 2))
@@ -541,8 +551,9 @@ def build_land(land_rings, island_rings, rows, cols, report):
     coast_count = int((state == 2).sum())
     report.counts["coast cells"] = coast_count
     report.counts["land cells"] = int((state == 1).sum())
+    report.counts["cells holding lake water"] = int(lake_cells.sum())
     body = struct.pack("<IIH", cols, rows, SUB) + state.tobytes() + struct.pack("<I", coast_count)
-    return state, body + b"".join(masks)
+    return state, body + b"".join(masks), lake_cells
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -885,13 +896,14 @@ def build_ctry(items, report):
     return struct.pack("<H", len(entries)) + b"".join(blobs), entries
 
 
-def build_cont(items, state, rows, cols, report):
-    """The CONT grid from the country under each land or coast cell (nearest within 5 cells for a coast
-    cell whose centre is at sea), with the landmass overrides."""
+def build_cont(items, state, lake_cells, rows, cols, report):
+    """The CONT grid from the country under each land, coast or lake cell (nearest within 5 cells for a coast
+    cell whose centre is at sea), with the landmass overrides. A lake keeps its continent: a fix on Lake Geneva
+    is in Europe."""
     owner = np.full((rows, cols), -1, dtype=np.int32)
     for index, item in enumerate(items):
         paint(owner, item["rings"], rows, cols, index, where=owner < 0)
-    owner, _ = nearest_fill(owner, owner >= 0, state != 0, FILL_RADIUS, rows, cols)
+    owner, _ = nearest_fill(owner, owner >= 0, (state != 0) | lake_cells, FILL_RADIUS, rows, cols)
     continents = np.array([item["continent"] for item in items] + [0], dtype=np.uint8)
     codes = np.array([item["code"] or "" for item in items] + [""])
     flat = owner.ravel()
@@ -899,7 +911,7 @@ def build_cont(items, state, rows, cols, report):
     cont = continents[flat].copy()
     cell_codes = codes[flat]
     apply_landmass_overrides(cont, cell_codes, rows, cols)
-    cont[state.ravel() == 0] = 0
+    cont[(state.ravel() == 0) & ~lake_cells.ravel()] = 0
     report.counts["land/coast cells with no continent"] = int(((state.ravel() != 0) & (cont == 0)).sum())
     return cont.reshape(rows, cols)
 
@@ -1953,12 +1965,13 @@ def main(argv):
     layer = lambda subdir: read_layer(sources[subdir]["path"], report)  # noqa: E731
     land_rings = [r for g, _ in layer("ne_10m_land") for r in polygon_rings(g)]
     island_rings = [r for g, _ in layer("ne_10m_minor_islands") for r in polygon_rings(g)]
-    state, land = build_land(land_rings, island_rings, rows, cols, report)
+    lake_rings = [r for g, _ in layer("ne_10m_lakes") for r in polygon_rings(g)]
+    state, land, lake_cells = build_land(land_rings, island_rings, lake_rings, rows, cols, report)
     clim = build_climate(sources["Beck_KG_V1"]["path"], state, rows, cols, report)
     ocea, seas = build_oceans(layer("ne_10m_geography_marine_polys"), state, rows, cols, report)
     items = country_features(layer("ne_10m_admin_0_countries"), report)
     apply_territory_overrides(items, report)
-    cont = build_cont(items, state, rows, cols, report)
+    cont = build_cont(items, state, lake_cells, rows, cols, report)
     ctry, countries = build_ctry(items, report)
     urbn, city = build_cities(layer("ne_10m_populated_places"), layer("ne_10m_urban_areas"), countries, report)
     ctry_codes = {code for code, _, _ in countries}
