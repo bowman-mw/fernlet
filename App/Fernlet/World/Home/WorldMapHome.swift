@@ -377,7 +377,8 @@ struct WorldMapHome: View {
         facts.presence = presence
         facts.isOffline = isOffline
         let now = Date()
-        facts.isNight = phase(at: now) == .night || WorldMapCompanion.isPastBedtime(store: store, at: now)
+        // DEBUG `FERNLET_UI_TEST_CORNER` (`ex-nudge`, a day scene) holds the night line back; nil in release builds.
+        facts.isNight = testCorner == nil && (phase(at: now) == .night || WorldMapCompanion.isPastBedtime(store: store, at: now))
         facts.homeGreeting = homeGreeting
         facts.discovery = store.duressSessionActive ? nil : discoveries.line?.text
         facts.cornerNudge = store.duressSessionActive ? nil : cornerLine

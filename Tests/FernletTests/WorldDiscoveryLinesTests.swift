@@ -188,7 +188,7 @@ struct WorldDiscoveryLinesTests {
 
     @Test func theCornersVoiceOverWords() {
         #expect(WorldCornerCopy.spoken(FogCornerBearing(metres: 304, compass: .ne)) == "A new corner, 300 metres north-east")
-        #expect(WorldCornerCopy.spoken(FogCornerBearing(metres: 980, compass: .sw)) == "A new corner, 1000 metres south-west")
+        #expect(WorldCornerCopy.spoken(FogCornerBearing(metres: 980, compass: .sw)) == "A new corner, 1,000 metres south-west")
         #expect(WorldCornerCopy.rounded(126) == 150 && WorldCornerCopy.rounded(74) == 70 && WorldCornerCopy.rounded(.nan) == 0)
         #expect(Set(CompassPoint.allCases.map { String(localized: WorldCornerCopy.compass($0)) }).count == 8)
         #expect(String(localized: WorldCornerCopy.bubble) == "There's a new corner nearby. Fancy a look?")
