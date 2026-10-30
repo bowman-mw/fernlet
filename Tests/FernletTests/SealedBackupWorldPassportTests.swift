@@ -180,6 +180,25 @@ struct SealedBackupWorldPassportTests {
         #expect(try await Self.cloudPassport(cloud) == local)
     }
 
+    /// Every trip comes back on a new iPhone (owner 2026-10-29, "Stamp each trip"): the set holds a record per
+    /// trip, the latest with the country's clock, and the restored passport has the same trips and clock.
+    @Test func everyTripComesBackOnANewPhone() async throws {
+        let cloud = try PeriodBackupDevice.makeCloud()
+        defer { cloud.tearDown() }
+        let week = 8 * 86_400.0
+        let travelled = Self.book([(Self.us, Self.t1), (Self.france, Self.t2), (Self.us, Self.t2.addingTimeInterval(week)),
+                                   (Self.us, Self.t2.addingTimeInterval(week + 3_600))])
+        #expect(travelled.trips(inCountry: "US").count == 2)
+        try await Self.writeOldBackup(cloud, passport: travelled)
+        #expect(try await Self.cloudPassport(cloud) == travelled)
+        let phone = JournalBackupDevice(cloud: cloud, writer: "phone", preferences: Self.passportOn)
+        defer { phone.host.tearDownWorldPassport() }
+        await phone.coordinator.settleV2Backup(.worldPassport)
+        #expect(phone.host.worldPassport.book == travelled)
+        #expect(phone.host.worldPassport.book.lastSeen(inCountry: "US") == Self.t2.addingTimeInterval(week + 3_600))
+        #expect(phone.host.worldPassport.book.count(of: .country) == 2, "the counts count each country once")
+    }
+
     // MARK: - What it never does
 
     /// A decoy session exports nothing real and restores nothing: the passport's duress gate stops both
@@ -240,8 +259,8 @@ struct SealedBackupWorldPassportTests {
         defer { cloud.tearDown() }
         let tag = PeriodBackupDevice.tag("newer")
         let records = [
-            PassportBackupRecord(id: UUID(), kind: "country", token: "US", firstVisit: Self.t1),
-            PassportBackupRecord(id: UUID(), kind: "galaxy", token: "milkyWay", firstVisit: Self.t1)
+            PassportBackupRecord(id: UUID(), kind: "country", token: "US", date: Self.t1),
+            PassportBackupRecord(id: UUID(), kind: "galaxy", token: "milkyWay", date: Self.t1)
         ]
         let envelope = SealedBackupV2Envelope(writer: tag, set: tag, total: records.count, records: records)
         try await Self.plant(try SealedBackupV2Format.encode(envelope), payload: .worldPassport, tag: tag, in: cloud)
