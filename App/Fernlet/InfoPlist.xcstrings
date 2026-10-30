@@ -124,13 +124,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "With background mapping on, Fernlet uncovers the map from the places you visit and the roads you drive. It stays on this iPhone."
+            "value" : "With background mapping on, Fernlet uncovers the map from the places you visit and the roads you drive or ride. It stays on this iPhone."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Con el mapeo en segundo plano activado, Fernlet descubre el mapa con los lugares que visitas y las carreteras por las que conduces. Todo se queda en este iPhone."
+            "value" : "Con el mapeo en segundo plano activado, Fernlet descubre el mapa con los lugares que visitas y las carreteras por las que conduces o vas en bici. Todo se queda en este iPhone."
           }
         }
       }
