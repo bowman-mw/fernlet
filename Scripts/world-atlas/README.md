@@ -12,9 +12,9 @@ Scripts/world-atlas/fetch-sources.sh            # into ~/Library/Caches/Fernlet/
 Scripts/world-atlas/fetch-sources.sh <dir>      # or anywhere else
 ```
 
-The script downloads ten files (nine Natural Earth 1:10m zips, among them the admin-1 states and
-provinces added 2026-10-29 for the world view's State zoom and the major roads added 2026-10-30, and Beck et al.'s
-Köppen-Geiger zip, about 123 MB in all), each into its own new, empty subdirectory, with `curl -fL`. It then checks every file's size and
+The script downloads eleven files (ten Natural Earth 1:10m zips, among them the admin-1 states and
+provinces added 2026-10-29 for the world view's State zoom and the major roads and lakes added 2026-10-30, and Beck
+et al.'s Köppen-Geiger zip, about 125 MB in all), each into its own new, empty subdirectory, with `curl -fL`. It then checks every file's size and
 SHA-256 against the pinned table in the script. A file already in place is only checked again.
 
 The hashes are not pinned yet: every entry reads `UNPINNED`, so a first run prints each computed hash and

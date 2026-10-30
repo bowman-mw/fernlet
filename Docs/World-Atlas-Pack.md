@@ -22,6 +22,7 @@ approves those first. This file is the contract between the generator (`Scripts/
 | Layer | Source | Licence | Credit |
 | --- | --- | --- | --- |
 | Land, minor islands | Natural Earth 1:10m `ne_10m_land`, `ne_10m_minor_islands` | public domain | none required (Fernlet credits it anyway) |
+| Lakes | Natural Earth 1:10m `ne_10m_lakes` (owner's OK 2026-10-30) | public domain | none required |
 | Oceans | Natural Earth 1:10m `ne_10m_geography_marine_polys` | public domain | none required |
 | Countries | Natural Earth 1:10m `ne_10m_admin_0_countries` | public domain | none required |
 | States and provinces | Natural Earth 1:10m `ne_10m_admin_1_states_provinces` (owner's OK 2026-10-29) | public domain | none required |
@@ -66,8 +67,11 @@ coastCount × 32 bytes         a 16×16 bit mask per coast cell, coast cells in 
 
 Inside a coast cell: `sx = floor(fracCol * 16)`, `sy = floor(fracRow * 16)` with both fractions measured from the
 cell's north-west corner; `bit = sy * 16 + sx`; byte `bit >> 3`, bit `bit & 7` (least significant first);
-1 = land. A sub-cell is about 700 m at the equator, the source's own precision. Land is Natural Earth land plus
-minor islands; lakes inside land are land (inland water is not an ocean).
+1 = land. A sub-cell is about 700 m at the equator, the source's own precision. Land is Natural Earth land with
+its lakes (`ne_10m_lakes`) cut out, plus minor islands on top (an island in a lake stays land). **Lakes are water**
+(owner, 2026-10-30: "water in the fog only where real water is"), so the terrain reads water there, but a lake is no
+ocean or sea: its `OCEA` code is 0, like the Caspian's, and its cells keep their continent (`CONT`). The 2026-10-30
+pack has 31,981 cells holding lake water; lakes add about 196 KB to `LAND`.
 
 ### `CLIM`: climate
 
@@ -109,7 +113,7 @@ count × {
 
 ### `CONT`: continents
 
-`u8 continent[cols*rows]` for every land or coast cell: 0 none, 1 Africa, 2 Antarctica, 3 Asia, 4 Europe,
+`u8 continent[cols*rows]` for every land, coast or lake cell: 0 none, 1 Africa, 2 Antarctica, 3 Asia, 4 Europe,
 5 North America, 6 Oceania, 7 South America. From the country under the cell, with the landmass overrides the
 generator lists (Russia east of 60°E, Anatolia and Sinai are Asia; Hawaii is Oceania). Antarctica's lighter rule is
 the reader's, not the grid's.
@@ -281,7 +285,7 @@ at City) would make a 6.7 MB pack and 0.005° leave 130 KB under the cap, so the
   117 groups holding 887 entries.
 
 The 2026-10-29 pack has 4,554 entries over 239 countries (4,293 with an ISO token), 8,480 rings and 435,491
-points; `ADM1` stores 2.02 MB of the pack (6,538,454 bytes since the roads, 0.8 MB under the 7 MiB cap). A reader refuses a
+points; `ADM1` stores 2.02 MB of the pack (6,737,415 bytes since the roads and lakes, 0.6 MB under the 7 MiB cap). A reader refuses a
 count over 8,192, a token of the wrong shape or used twice, a country `CTRY` lacks, an empty English name and any
 malformed outline. `ADM1` is required in version 1 (nothing has shipped).
 
@@ -320,7 +324,7 @@ roadCount × { u32 number · u8 kind (1 highway, 2 main road) · u16 lineCount �
 
 ### `META`
 
-UTF-8 JSON: the generator version (3 since `ADM1`, 4 since its plate groups, 6 since the territory override and everyday names, 7 since Kyiv's pair, plain spelling and `ROAD`), the generation date, both simplification tolerances, and each
+UTF-8 JSON: the generator version (3 since `ADM1`, 4 since its plate groups, 6 since the territory override and everyday names, 7 since Kyiv's pair, plain spelling and `ROAD`, 8 since lakes are water), the generation date, both simplification tolerances, and each
 source's file name, URL, SHA-256 and licence.
 
 ## The rules the reader applies
@@ -331,7 +335,8 @@ source's file name, URL, SHA-256 and licence.
 - **Country:** the fix lies inside the country's rings. **Crimea counts as Ukraine** (owner, 2026-10-29): a fix in
   Simferopol, Sevastopol or Yalta earns UA, and its plate reads Crimea's own admin-1 · Ukraine (`CTRY`, "Territory
   override").
-- **Continent:** the `CONT` cell under a land fix, plus Antarctica's lighter rule below
+- **Continent:** the `CONT` cell under a land fix or a lake (water no ocean or sea names: a fix on Lake Geneva is
+  in Europe; the Caspian's `CONT` is 0, so it counts none), plus Antarctica's lighter rule below
   (`WorldAtlas.antarcticaLatitude`).
 - **Ocean or sea:** the nearest water sub-cell within `WorldAtlas.oceanReachMetres` (2 km, owner 2026-10-29) of the
   fix; its `OCEA` code names an ocean or a sea, never both.
