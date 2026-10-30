@@ -4,7 +4,7 @@ import WorldMapStore
 
 /// Presents Home's city and landmark cards (World-Exploration-Spec §2) and watches the passport for new finds:
 /// the landmark card floats over the dimmed map, the city card is a full-height sheet, and each landmark found
-/// while Home is up reaches ``WorldExploreState/onLandmarkFound`` (the seam for Sprout's landmark line). DEBUG
+/// while Home is up reaches ``WorldExploreState/onLandmarkFound`` (left unattached: Sprout's lines read the discovery stream). DEBUG
 /// screenshots open a card or the gallery (``UITestSupport/exploreScene``).
 struct WorldExplorePresenter: ViewModifier {
     let store: FernletStore

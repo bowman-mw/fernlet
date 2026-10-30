@@ -18,8 +18,9 @@ final class WorldExploreState {
     @ObservationIgnored let images = WorldLandmarkImages()
     /// Each city's uncovered share, worked out off the main actor and kept (``WorldCityUncovered``).
     @ObservationIgnored let uncovered = WorldCityUncoveredCache()
-    /// **Seam for Sprout's landmark line** (World-Exploration-Spec §4, lines 46–48; wave 3 builds the lines):
-    /// called once for each landmark the passport finds while Home is up, with the landmark. Nothing today.
+    /// Called once for each landmark the passport finds while Home is up, with the landmark. **Unattached on
+    /// purpose:** Sprout's landmark line (World-Exploration-Spec §4, lines 46–48) comes from the passport's discovery
+    /// stream through ``WorldDiscoveryRouter``, the one source, so a landmark's line plays once; nothing listens here.
     @ObservationIgnored var onLandmarkFound: (AtlasLandmark) -> Void = { _ in }
     /// The landmark tokens found when Home last looked, so a new find is told apart (nil before the first look).
     @ObservationIgnored var knownFound: Set<String>?
