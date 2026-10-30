@@ -7,7 +7,8 @@ pixel marks to match, mixed by place (review page "Fernlet Pixel Icon", options 
 
   * App icon (A) and the site's apple-touch-icon: Sprout at its happiest on parchment, the World page's
     faint dot grid behind it and a soft ground shadow under it. Default, Dark and Tinted variants.
-  * Website tab (D): the fern sprig redrawn on the pixel grid, with no background.
+  * Website tab (D): the fern sprig redrawn on the pixel grid, with no background. The site's header
+    and footer mark is the same 16-pixel fern, cropped to its 15 x 15 bounds (owner, 2026-10-29).
   * LinkedIn (D): the same fern, 24-pixel drawing, with no background.
   * Instagram (C): Sprout up close on sage, the face filling the circle and the body running off the
     bottom edge.
@@ -25,10 +26,13 @@ palette (`App/Fernlet/World/Theme/WorldPalette.swift`) and the companion's own i
 PIXELS STAY PIXELS. Every image is drawn as solid squares at whole-pixel positions, never resampled.
 The app icon stays a flat PNG set rather than an Icon Composer file, so Liquid Glass does not soften
 the edges. App icon PNGs are 8-bit RGB with no alpha, which App Store Connect requires; the tab icons
-and the LinkedIn logo keep their transparency. `favicon.svg` keeps the bark-brown stem in a light
-browser and lifts it to a pale wood in a dark one, where brown vanishes on the tab strip.
+and the LinkedIn logo keep their transparency. In the dark the bark-brown stem vanishes, so it turns
+pale sage there, the treatment the smooth mark used: `favicon.svg` switches by itself with
+`prefers-color-scheme`, and the header mark ships as `fernlet-mark-header.svg` and `-dark.svg`, which
+the pages pick between with `<picture>`. The header is drawn at 30 and 22.5 CSS pixels (style.css),
+whole device pixels per fern pixel on a 2x screen.
 
-RUN:   python3 Scripts/render-pixel-icons.py                 # rewrite the app icon set and the site icons
+RUN:   python3 Scripts/render-pixel-icons.py                 # rewrite the app icon set and the site's icons
        python3 Scripts/render-pixel-icons.py --social DIR    # also write the Instagram and LinkedIn images
 NEEDS: Pillow (python3 -m pip install pillow).
 """
@@ -55,7 +59,7 @@ SAGE = "#E6ECD2"
 DOT = {"light": ("#4A2E1C", 18), "dark": ("#FFF1CF", 14)}  # the page's dot grid: ink 7 %, cream 5 %
 GROUND_SHADOW = {"light": "#E6DDC8", "dark": "#141513"}
 FERN_INKS = {"O": "#3B4427", "D": "#5A7A52", "G": "#8AAD7E", "T": "#4A2E1C"}
-DARK_STEM = "#C9A27E"  # the stem on a dark tab strip, where bark brown vanishes
+DARK_STEM = "#C8DBC2"  # the stem on a dark ground, where bark brown vanishes: pale sage
 
 # --- the ferns, a pixel at a time ----------------------------------------------------------------
 # O outline, D leaf, G young leaf, T stem. The stem runs corner to corner like the smooth mark's.
@@ -211,9 +215,11 @@ def tab_fern(scale):
     return image
 
 
-def tab_fern_svg():
+def fern_rects(width):
+    """FERN_16 as one <rect> per run of one ink, classed by ink; rows are cropped to `width`."""
     rects = []
     for y, row in enumerate(FERN_16.strip("\n").split("\n")):
+        row = row[:width]
         x = 0
         while x < len(row):
             ch = row[x]
@@ -225,10 +231,27 @@ def tab_fern_svg():
                 end += 1
             rects.append(f'<rect class="{ch}" x="{x}" y="{y}" width="{end - x}" height="1"/>')
             x = end
+    return "".join(rects)
+
+
+def header_mark_svg(dark):
+    """The header and footer mark: the tab fern, cropped to its 15 x 15 bounds (the 16th row and column
+    are empty)."""
+    stem = DARK_STEM if dark else FERN_INKS["T"]
+    style = f".D{{fill:{FERN_INKS['D']}}}.G{{fill:{FERN_INKS['G']}}}.T{{fill:{stem}}}"
+    rows = FERN_16.strip("\n").split("\n")
+    if any(ch != "." for ch in rows[15] + "".join(row[15] for row in rows)):
+        sys.exit("render-pixel-icons: FERN_16 now uses its last row or column; widen the header crop")
+    return ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 15 15" width="15" height="15" '
+            f'shape-rendering="crispEdges"><title>Fernlet header mark</title><style>{style}</style>'
+            f"{fern_rects(15)}</svg>\n")
+
+
+def tab_fern_svg():
     style = (f".D{{fill:{FERN_INKS['D']}}}.G{{fill:{FERN_INKS['G']}}}.T{{fill:{FERN_INKS['T']}}}"
              f"@media (prefers-color-scheme:dark){{.T{{fill:{DARK_STEM}}}}}")
     return ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">'
-            f"<title>Fernlet</title><style>{style}</style>{''.join(rects)}</svg>\n")
+            f"<title>Fernlet</title><style>{style}</style>{fern_rects(16)}</svg>\n")
 
 
 def save_rgb(image, path):
@@ -246,9 +269,11 @@ def main():
     save_rgb(sprout_on_parchment(180, "light"), os.path.join(SITE_ASSETS, "apple-touch-icon.png"))
     tab_fern(1).save(os.path.join(SITE_ASSETS, "favicon-16.png"), optimize=True)
     tab_fern(2).save(os.path.join(SITE_ASSETS, "favicon-32.png"), optimize=True)
-    with open(os.path.join(SITE_ASSETS, "favicon.svg"), "w", encoding="utf-8") as svg:
-        svg.write(tab_fern_svg())
-    print("wrote the app icon set and the site's tab and touch icons")
+    for name, text in (("favicon.svg", tab_fern_svg()), ("fernlet-mark-header.svg", header_mark_svg(False)),
+                       ("fernlet-mark-header-dark.svg", header_mark_svg(True))):
+        with open(os.path.join(SITE_ASSETS, name), "w", encoding="utf-8") as svg:
+            svg.write(text)
+    print("wrote the app icon set and the site's tab, touch and header icons")
 
     if args.social:
         os.makedirs(args.social, exist_ok=True)
