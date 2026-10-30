@@ -113,6 +113,19 @@ struct EnhancedSecurityConfigurationTests {
         }
     }
 
+    /// The `arm64e` slice launches on an Apple silicon Mac only from macOS 26.5, and App Store
+    /// validation warns (ITMS-91305) unless the bundle says so. The key lives in the app's own
+    /// `Info.plist`: Xcode drops `INFOPLIST_KEY_LSMinimumSystemVersion` from an iOS target's generated
+    /// plist, so #70's build setting never reached a build (build 375 still warned, 2026-10-30).
+    @Test func theAppDeclaresMacOS26Point5AsItsMacMinimum() throws {
+        let data = try Data(contentsOf: RepoRoot.url("App/Fernlet/Info.plist"))
+        let plist = try #require(try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any])
+        let minimum = try #require(plist["LSMinimumSystemVersion"] as? String, "App/Fernlet/Info.plist has no LSMinimumSystemVersion")
+        #expect(minimum.compare("26.5", options: .numeric) != .orderedAscending, "LSMinimumSystemVersion \(minimum) is below the arm64e floor 26.5")
+        let project = try RepoRoot.source("App/Fernlet.xcodeproj/project.pbxproj")
+        #expect(!project.contains("INFOPLIST_KEY_LSMinimumSystemVersion"), "an iOS target's generated plist drops this setting; keep the key in Info.plist")
+    }
+
     // MARK: - Readers
 
     /// Every distinct `CODE_SIGN_ENTITLEMENTS` path in the project, relative to `App/`.
