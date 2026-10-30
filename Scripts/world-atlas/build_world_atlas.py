@@ -83,6 +83,7 @@ SOURCE_LICENCES = {
     "ne_10m_admin_1_states_provinces": "public domain (Natural Earth)",
     "ne_10m_populated_places": "public domain (Natural Earth)",
     "ne_10m_urban_areas": "public domain (Natural Earth)",
+    "ne_10m_roads": "public domain (Natural Earth)",
     "Beck_KG_V1": "CC BY 4.0 (Beck et al. 2018, Scientific Data 5:180214)",
 }
 BECK_MEMBER = "Beck_KG_V1_present_0p083.tif"
@@ -193,8 +194,8 @@ def read_source_table(script_dir):
             if len(parts) != 6:
                 raise SystemExit("error: bad source table line in fetch-sources.sh: %r" % line)
             rows.append(dict(zip(("subdir", "file", "bytes", "need", "sha", "url"), parts)))
-    if len(rows) != 9:
-        raise SystemExit("error: fetch-sources.sh lists %d sources, not 9" % len(rows))
+    if len(rows) != 10:
+        raise SystemExit("error: fetch-sources.sh lists %d sources, not 10" % len(rows))
     return rows
 
 
@@ -242,7 +243,8 @@ def zip_member(names, suffix):
 
 
 def parse_shp(data):
-    """Geometries in record order: None, ("point", x, y) or ("polygon", [rings as (n, 2) float64])."""
+    """Geometries in record order: None, ("point", x, y), ("polygon", [rings as (n, 2) float64]) or
+    ("line", [parts as (n, 2) float64])."""
     if len(data) < 100 or struct.unpack(">i", data[0:4])[0] != 9994:
         raise SystemExit("error: not a shapefile (.shp header)")
     end = min(len(data), struct.unpack(">i", data[24:28])[0] * 2)
@@ -261,19 +263,22 @@ def parse_shp(data):
 
 
 def parse_shape(body):
-    """One shapefile record's geometry (points and polygons, with or without Z/M)."""
+    """One shapefile record's geometry (points, polylines and polygons, with or without Z/M)."""
     shape_type = struct.unpack("<i", body[:4])[0]
     if shape_type == 0:
         return None
     if shape_type in (1, 11, 21):
         x, y = struct.unpack("<dd", body[4:20])
         return ("point", x, y)
-    if shape_type not in (5, 15, 25):
+    if shape_type not in (3, 13, 23, 5, 15, 25):
         raise SystemExit("error: unsupported shape type %d" % shape_type)
     parts_count, points_count = struct.unpack("<ii", body[36:44])
     parts = np.frombuffer(body, "<i4", parts_count, 44).astype(np.int64)
     points = np.frombuffer(body, "<f8", points_count * 2, 44 + 4 * parts_count).reshape(points_count, 2)
     bounds = list(parts) + [points_count]
+    if shape_type in (3, 13, 23):
+        lines = [np.array(points[bounds[i]:bounds[i + 1]], dtype=np.float64) for i in range(parts_count)]
+        return ("line", [line for line in lines if len(line) >= 2])
     rings = []
     for i in range(parts_count):
         ring = np.array(points[bounds[i]:bounds[i + 1]], dtype=np.float64)
@@ -610,7 +615,22 @@ def simplify_closed_ring(points, epsilon):
     if far in (0, n - 1):
         return points[keep]
     keep[far] = True
-    stack = [(0, far), (far, n - 1)]
+    return douglas_peucker(points, epsilon, keep, [(0, far), (far, n - 1)])
+
+
+def simplify_open_line(points, epsilon):
+    """The open line (a road) thinned by Douglas-Peucker, its two ends kept."""
+    n = len(points)
+    if n <= 2:
+        return points
+    keep = np.zeros(n, dtype=bool)
+    keep[0] = keep[n - 1] = True
+    return douglas_peucker(points, epsilon, keep, [(0, n - 1)])
+
+
+def douglas_peucker(points, epsilon, keep, stack):
+    """Douglas-Peucker over the spans on `stack`, marking `keep` (iterative; at most 2n + 4 pops)."""
+    n = len(points)
     for _ in range(2 * n + 4):
         if not stack:
             break
@@ -1684,6 +1704,140 @@ def city_record(geom, attrs, used, countries, report):
 # The pack
 
 
+# ---------------------------------------------------------------------------------------------------------
+# ROAD: the major roads (World-Exploration-Spec §2, ex-roads: "Only motorway, trunk and primary roads")
+#
+# Natural Earth's roads carry no OSM classes. Its own importance stands in for them: a HIGHWAY (motorway and
+# trunk) is a piece Natural Earth types "Major Highway", "Beltway" or "Bypass" or marks as an expressway; a MAIN
+# ROAD (primary) is any other road piece of SCALERANK 5 or less (Natural Earth's ranking, the same the world
+# over: its "Secondary Highway" is North American only and most of Asia's roads are typed "Unknown"). Ferries
+# and tracks are never roads here. Each line is thinned by Douglas-Peucker at ROAD_SIMPLIFY_DEGREES (about 110 m,
+# well inside the source's own 1:10m accuracy; it keeps under a quarter of the points) and kept in the pack's 1e-5°
+# integers.
+#
+# A ROAD is what turns amber "whole" once crossed: the pieces of one named route that touch end to end (Natural
+# Earth's PREFIX + NAME, else its LABEL, at one LEVEL: "Interstate 80", "E3"), or, unnamed, the pieces chained
+# through every point where exactly two meet (a stretch between junctions). Its frozen token is "ne:road:" and the smallest record number
+# among its pieces in the pinned ne_10m_roads (Natural Earth's own UIDENT is 0 for most pieces): the tokens hold
+# while the source's SHA-256 pin does, and a new source version re-mints them.
+ROAD_HIGHWAY = 1
+ROAD_MAIN = 2
+ROAD_HIGHWAY_TYPES = {"Major Highway", "Beltway", "Bypass"}
+ROAD_MAIN_MAX_SCALERANK = 5
+ROAD_SIMPLIFY_DEGREES = 0.001
+MAX_ROADS = 65_536
+MAX_ROAD_LINES = 8_192
+MAX_ROAD_POINTS = 65_535
+
+
+def road_kind(attrs):
+    """ROAD_HIGHWAY, ROAD_MAIN, or None for a piece that is not a major road (a ferry, a track, a minor road)."""
+    if text_field(attrs, "FEATURECLA") != "Road" or text_field(attrs, "TYPE") == "Track":
+        return None
+    if text_field(attrs, "TYPE") in ROAD_HIGHWAY_TYPES or attrs.get("EXPRESSWAY") == 1:
+        return ROAD_HIGHWAY
+    rank = attrs.get("SCALERANK")
+    return ROAD_MAIN if isinstance(rank, int) and rank <= ROAD_MAIN_MAX_SCALERANK else None
+
+
+def road_name_key(attrs):
+    """The named route a piece belongs to, with its level so Interstate 5 and a state's route 5 stay apart
+    ("Interstate|80", else the label "|E3"), or "" when it has none."""
+    name = (text_field(attrs, "PREFIX") + text_field(attrs, "NAME")).strip() or text_field(attrs, "LABEL").strip()
+    return text_field(attrs, "LEVEL").strip() + "|" + name if name else ""
+
+
+def road_pieces(features, report):
+    """Each major-road line as (record number, kind, name key, int64 (n, 2) points at 1e-5°), repeated points
+    dropped."""
+    pieces = []
+    for record, (geom, attrs) in enumerate(features):
+        kind = road_kind(attrs)
+        if kind is None or not geom or geom[0] != "line":
+            continue
+        uident = record
+        for line in geom[1]:
+            q = np.round(simplify_open_line(line, ROAD_SIMPLIFY_DEGREES) * SCALE).astype(np.int64)
+            moved = np.any(np.diff(q, axis=0) != 0, axis=1)
+            q = np.concatenate([q[:1], q[1:][moved]])
+            if len(q) >= 2:
+                pieces.append((uident, kind, road_name_key(attrs), q))
+    report.counts["road pieces (highway / main)"] = "%d / %d" % (
+        sum(1 for p in pieces if p[1] == ROAD_HIGHWAY), sum(1 for p in pieces if p[1] == ROAD_MAIN))
+    return pieces
+
+
+def road_groups(pieces):
+    """The pieces joined into roads (union-find; each union is one of at most 2n end matches): the parts of one
+    source feature always, named pieces of one route that touch, and unnamed pieces through a point exactly two
+    piece ends share."""
+    parent = list(range(len(pieces)))
+
+    def find(i):
+        for _ in range(len(pieces)):
+            if parent[i] == i:
+                return i
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    first_part = {}
+    for index, piece in enumerate(pieces):
+        if piece[0] in first_part:
+            parent[find(index)] = find(first_part[piece[0]])
+        else:
+            first_part[piece[0]] = index
+    ends = {}
+    for index, (_, _, _, q) in enumerate(pieces):
+        for point in (q[0], q[-1]):
+            ends.setdefault((int(point[0]), int(point[1])), []).append(index)
+    for members in ends.values():
+        for a in range(len(members)):
+            for b in range(a + 1, len(members)):
+                i, j = members[a], members[b]
+                name_i, name_j = pieces[i][2], pieces[j][2]
+                if (name_i and name_i == name_j) or (not name_i and not name_j and len(members) == 2):
+                    parent[find(i)] = find(j)
+    groups = {}
+    for index in range(len(pieces)):
+        groups.setdefault(find(index), []).append(index)
+    return list(groups.values())
+
+
+def build_roads(features, report):
+    """The ROAD section: u32 roadCount, then per road (by token) u32 uident · u8 kind · u16 lineCount ·
+    lines (u16 pointCount · first point i32 lon, i32 lat · zigzag-LEB128 deltas)."""
+    pieces = road_pieces(features, report)
+    roads = []
+    for members in road_groups(pieces):
+        uident = min(pieces[i][0] for i in members)
+        kind = ROAD_HIGHWAY if any(pieces[i][1] == ROAD_HIGHWAY for i in members) else ROAD_MAIN
+        lines = [pieces[i][3] for i in sorted(members, key=lambda i: (pieces[i][0], int(pieces[i][3][0, 0])))]
+        roads.append((uident, kind, lines))
+    roads.sort(key=lambda road: road[0])
+    if len({road[0] for road in roads}) != len(roads):
+        raise SystemExit("error: two roads share a number")
+    if len(roads) > MAX_ROADS:
+        raise SystemExit("error: %d roads, over the %d cap" % (len(roads), MAX_ROADS))
+    out = [struct.pack("<I", len(roads))]
+    points = 0
+    for uident, kind, lines in roads:
+        if len(lines) > MAX_ROAD_LINES:
+            raise SystemExit("error: road %d has %d lines, over the %d cap" % (uident, len(lines), MAX_ROAD_LINES))
+        out.append(struct.pack("<IBH", uident, kind, len(lines)))
+        for q in lines:
+            if len(q) > MAX_ROAD_POINTS:
+                raise SystemExit("error: a line of road %d has %d points" % (uident, len(q)))
+            deltas = np.diff(q, axis=0).ravel()
+            zigzag = ((deltas << 1) ^ (deltas >> 63)).astype(np.uint64)
+            out.append(struct.pack("<Hii", len(q), int(q[0, 0]), int(q[0, 1])) + leb128(zigzag))
+            points += len(q)
+    report.counts["roads (highway / main), lines, points"] = "%d (%d / %d), %d, %d" % (
+        len(roads), sum(1 for r in roads if r[1] == ROAD_HIGHWAY), sum(1 for r in roads if r[1] == ROAD_MAIN),
+        sum(len(r[2]) for r in roads), points)
+    return b"".join(out)
+
+
 def deflate(raw):
     """Raw DEFLATE (RFC 1951, no zlib header), level 9."""
     packer = zlib.compressobj(9, zlib.DEFLATED, -15, 9)
@@ -1785,9 +1939,10 @@ def main(argv):
     a3_codes = {item["a3"]: item["code"] for item in items if item["code"] is not None and item["a3"]}
     adm1 = build_adm1(admin1_features(layer("ne_10m_admin_1_states_provinces"), a3_codes, ctry_codes, report),
                       report)
+    road = build_roads(layer("ne_10m_roads"), report)
     sections = [("LAND", land), ("CLIM", clim.tobytes()), ("OCEA", ocea.tobytes()), ("SEAS", seas),
                 ("CONT", cont.tobytes()), ("CTRY", ctry), ("URBN", urbn), ("CITY", city), ("ADM1", adm1),
-                ("META", meta_json(args, rows, cols, sources))]
+                ("ROAD", road), ("META", meta_json(args, rows, cols, sources))]
     pack = assemble(sections, report)
     print_summary(report, pack, args.out)
     if len(pack) > args.size_cap:

@@ -279,10 +279,15 @@ nonisolated struct AtlasGeoBox: Sendable {
 
     /// Whether `polygon`'s box touches this one, trying the box a turn east and west too.
     func overlaps(_ polygon: AtlasPolygon) -> Bool {
-        guard Double(polygon.maxLat) >= south, Double(polygon.minLat) <= north else { return false }
+        overlaps(minLon: polygon.minLon, minLat: polygon.minLat, maxLon: polygon.maxLon, maxLat: polygon.maxLat)
+    }
+
+    /// Whether the box with these edges (1e-5 degrees) touches this one, trying it a turn east and west too.
+    func overlaps(minLon: Int32, minLat: Int32, maxLon: Int32, maxLat: Int32) -> Bool {
+        guard Double(maxLat) >= south, Double(minLat) <= north else { return false }
         let turn = 360 * AtlasPolygon.unitsPerDegree
         return [-turn, 0, turn].contains { shift in
-            Double(polygon.maxLon) + shift >= west && Double(polygon.minLon) + shift <= east
+            Double(maxLon) + shift >= west && Double(minLon) + shift <= east
         }
     }
 }
