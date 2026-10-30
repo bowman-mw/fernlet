@@ -157,22 +157,28 @@ struct WorldCloseUpGround: View {
 /// The pet's three pixel hearts: they rise and fade, or, with Reduce Motion, fade where they appear.
 struct WorldCloseUpHearts: View {
     let count: Int
+    /// The passport photo's size (page 1 of Sprout's passport): hearts at two points a pixel, rising half as far.
+    var compact = false
     @State private var isGone = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Where each heart starts over the companion's head (x, y), and its pixel scale.
     private static let placements: [(x: CGFloat, y: CGFloat, scale: CGFloat)] = [(-36, 6, 3), (34, -6, 3), (0, -18, 4)]
+    /// The same at photo size.
+    private static let compactPlacements: [(x: CGFloat, y: CGFloat, scale: CGFloat)] = [(-26, 4, 2), (24, -2, 2), (0, -10, 2)]
 
     var body: some View {
         ZStack {
-            ForEach(0..<min(count, Self.placements.count), id: \.self) { index in
-                let place = Self.placements[index]
+            let placements = compact ? Self.compactPlacements : Self.placements
+            let rise = WorldCloseUpMotion.heartsRise(reduceMotion: reduceMotion) * (compact ? 0.5 : 1)
+            ForEach(0..<min(count, placements.count), id: \.self) { index in
+                let place = placements[index]
                 WorldSpriteView(sprite: WorldSprites.heartSm, scale: place.scale)
-                    .offset(x: place.x, y: place.y - (isGone ? WorldCloseUpMotion.heartsRise(reduceMotion: reduceMotion) : 0))
+                    .offset(x: place.x, y: place.y - (isGone ? rise : 0))
             }
         }
         .opacity(isGone ? 0 : 1)
-        .offset(y: -30)
+        .offset(y: compact ? -8 : -30)
         .onAppear {
             withAnimation(.easeOut(duration: WorldCloseUpMotion.heartsDuration)) { isGone = true }
         }

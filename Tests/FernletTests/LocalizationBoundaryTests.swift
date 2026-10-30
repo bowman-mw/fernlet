@@ -3243,8 +3243,8 @@ struct LocalizationBoundaryTests {
         ForkedMember(path: "App/Fernlet/DestructiveConfirmation.swift",
                      declaration: "let label: LocalizedStringKey",
                      role: "the second destructive outcome's button"),
-        ForkedMember(path: "App/Fernlet/CompanionCustomizationSheet.swift",
-                     declaration: "colorTitle: LocalizedStringKey,",
+        ForkedMember(path: "App/Fernlet/World/Customize/CustomizeSlotPages.swift",
+                     declaration: "var colorTitle: LocalizedStringKey",
                      role: "a slot page's colour caption (the slot rows' captions are `Text(\"Body\")` literals since `b2-customize`)"),
         // Spanish round step 2, Home lane (2026-10-20): the same T2-1 class on Home and the calm
         // tools — `String` members drawn with `Text(x)`, so none of their literals reached a catalog.
