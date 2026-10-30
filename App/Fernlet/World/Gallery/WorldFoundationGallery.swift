@@ -12,7 +12,8 @@ import SwiftUI
 /// stepper, notice, key-value rows, tags, ring, tiles), `sheet` (a full-height sheet), `legacySheet` (a
 /// sheet whose presenter still asks for the system grabber and the half detent, which win),
 /// `toolbarSheet` (a NavigationStack sheet), `keyboard` (a sheet
-/// with the keyboard up) and `focus` (a focused flow). Its words are verbatim: DEBUG copy, never
+/// with the keyboard up) and `focus` (a focused flow); the passport's stamp scenes go to ``PassportStampGallery``.
+/// Its words are verbatim: DEBUG copy, never
 /// harvested into a catalog. Absent from Release builds entirely (`TestHookBoundaryTests`).
 struct WorldFoundationGallery: View {
     let scene: String
@@ -25,6 +26,16 @@ struct WorldFoundationGallery: View {
     }
 
     var body: some View {
+        // The passport's stamp kinds (round 7, lane explore-ui) have their own board.
+        if PassportStampGallery.scenes.contains(scene) {
+            PassportStampGallery(scene: scene)
+        } else {
+            foundation
+        }
+    }
+
+    /// The foundation primitives' panel.
+    private var foundation: some View {
         WorldPanelFrame(panel: .settings, onClose: {}) {
             NavigationStack(path: $path) {
                 GalleryRows()
