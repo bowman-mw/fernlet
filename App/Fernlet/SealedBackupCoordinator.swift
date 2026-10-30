@@ -38,6 +38,9 @@ extension SealedBackupPayloadType {
         case .intimacyLogs:
             return String(localized: "sealedBackup.noun.intimacyLogs", defaultValue: "intimate log",
                           comment: "Mid-sentence noun for the sealed backup of intimate-activity logs.")
+        case .worldPassport:
+            return String(localized: "sealedBackup.noun.worldPassport", defaultValue: "passport",
+                          comment: "Mid-sentence noun for the sealed backup of the World passport (the places first visited), e.g. 'the encrypted passport backup'.")
         }
     }
 }
@@ -171,15 +174,16 @@ protocol SealedBackupContext: AnyObject {
     /// - Returns: False when any day write failed: the restore then stays unresolved, and the next
     ///   session's idempotent merge re-adds the missing skeletons (R1-BR-6).
     func reinstateJournalEntries(from skeletons: [JournalNarrativeSkeleton]) -> Bool
-    /// The World passport the journal's backup carries on its head (round 7; ``JournalBackupAdapter``):
-    /// the person's whole passport, empty when nothing has been visited. Throws — never an empty one in
-    /// its place — in a decoy and while it can't be read (the phone locked), so the export fails rather
-    /// than write a head without it.
+    /// The World passport its own Sealed backup carries (round 7; ``PassportBackupAdapter``): the
+    /// person's whole passport, empty when nothing has been visited. Throws — never an empty one in its
+    /// place — in a decoy and while it can't be read (the phone locked), so the export fails rather than
+    /// write a set without it.
     func sealedBackupWorldPassport() throws -> PassportBook
-    /// Merges a passport the journal's restore carried into this iPhone's (by token, the earliest date
-    /// kept, nothing local removed) and saves it. Throws in a decoy and when it was not saved: the
-    /// restore then stays unresolved and a later pass merges again.
-    func restoreSealedBackupWorldPassport(_ book: PassportBook) throws
+    /// Merges a passport the passport backup's restore carried into this iPhone's (by token, the
+    /// earliest date kept, nothing local removed) and saves it; returns how many entries were added or
+    /// moved earlier. Throws in a decoy and when it was not saved: the restore then stays unresolved and
+    /// a later pass merges again.
+    func restoreSealedBackupWorldPassport(_ book: PassportBook) throws -> Int
 }
 
 /// The result of a single sealed-backup restore attempt, rich enough that the UI can show an honest,
@@ -248,7 +252,7 @@ enum SealedBackupRestoreOutcome: Equatable {
 /// `SealedBackupService` / `CloudKitDataService` dependencies and the sealed stores' backup seams,
 /// keeping the CloudKit egress off the store/core path.
 ///
-/// **Every live payload — period, intimate logs and journal — runs on the Sealed backup v2 engine**
+/// **Every live payload — period, intimate logs, journal and the World passport — runs on the Sealed backup v2 engine**
 /// (journal and intimacy Sealed backup v2 design 2026-09-30, §3–§8, building on the period design's
 /// §9.10): ``engine``, owned here and so by `FernletStore`, runs every pass on one serial worker
 /// behind its gates — an id-keyed MERGE restore while this install's restore is unresolved, then an
@@ -258,7 +262,8 @@ enum SealedBackupRestoreOutcome: Equatable {
 /// period adapter works through its cycle-record funnel, the intimacy adapter through the app's ONE
 /// intimacy funnel (``attachIntimacyLogStore(_:)``) and the journal adapter through the sealed journal
 /// store (``JournalBackupAdapter``: hub or device key, the referenced-ids snapshot, the fork merge and
-/// the day skeletons). The retired `sensitiveNotes` payload is never sealed or restored; a surviving
+/// the day skeletons), and the passport adapter through the app's one `WorldAtlasKeeper`
+/// (``PassportBackupAdapter``, round 7). The retired `sensitiveNotes` payload is never sealed or restored; a surviving
 /// copy is only ever deleted.
 @MainActor
 final class SealedBackupCoordinator {
@@ -326,8 +331,8 @@ final class SealedBackupCoordinator {
     /// The engine's background-task assertion. Injectable ONLY so tests need no UIKit app state.
     private let backgroundTasks: (any SealedBackupBackgroundTaskAsserting)?
 
-    /// The Sealed backup v2 engine every period, intimacy and journal pass runs on (design
-    /// 2026-09-30, §4.2). Built on first use over the three adapters; one per coordinator, so one per
+    /// The Sealed backup v2 engine every period, intimacy, journal and passport pass runs on (design
+    /// 2026-09-30, §4.2). Built on first use over the four adapters; one per coordinator, so one per
     /// `FernletStore`.
     private(set) lazy var engine: SealedBackupV2Engine = makeEngine()
 
@@ -386,14 +391,22 @@ final class SealedBackupCoordinator {
     /// or deleted journal entries seeds it resolved and never merges a stale copy back.
     var journalDivergenceLatch: Bool { journalRepository.hasEverStoredNarrative }
 
-    /// Builds the engine over the period, intimacy and journal adapters, with this coordinator's
-    /// factories.
+    /// The in-memory mirror of the passport backup's persisted owed-upload flag
+    /// (`StoragePreferences.sealedBackupPassportReuploadDeferred`, round 7), read and written only
+    /// through the host's `isSealedBackupReuploadOwed(_:)` and `recordSealedBackupReuploadDeferred(_:payloadType:)`,
+    /// which persist it through the same hook as the journal's. Re-published from the persisted flag when
+    /// the coordinator is built.
+    var passportReuploadDeferred = StoragePreferencesStore.currentPreferences().sealedBackupPassportReuploadDeferred
+
+    /// Builds the engine over the period, intimacy, journal and passport adapters, with this
+    /// coordinator's factories.
     private func makeEngine() -> SealedBackupV2Engine {
         let injectedJournal = injectedJournalRepository
         let adapters: [SealedBackupPayloadType: any SealedBackupV2Adapter] = [
             .periodData: CycleRecordBackupAdapter(store: resolvedPeriodRecordStore()),
             .intimacyLogs: IntimacyBackupAdapter(storeProvider: { [weak self] in self?.intimacyLogStore }),
-            .journalNarratives: makeJournalAdapter { injectedJournal ?? JournalNarrativeRepository() }
+            .journalNarratives: makeJournalAdapter { injectedJournal ?? JournalNarrativeRepository() },
+            .worldPassport: makePassportAdapter()
         ]
         return SealedBackupV2Engine(
             host: host,
@@ -412,9 +425,8 @@ final class SealedBackupCoordinator {
 
     /// The journal adapter over the repository `repository` answers (design 2026-09-30, §7): its seam
     /// is `!duress`, its snapshot the ids the host's days reference, its device key read without
-    /// minting from ``journalDeviceKeyService``, its skeletons rebuilt by the host, and the World
-    /// passport on its head read and merged by the host (round 7). Fail closed when the coordinator is
-    /// gone (the seam shut, the referenced ids unknown, no skeleton written, no passport read or merged).
+    /// minting from ``journalDeviceKeyService``, its skeletons rebuilt by the host. Fail closed when the
+    /// coordinator is gone (the seam shut, the referenced ids unknown, no skeleton written).
     private func makeJournalAdapter(_ repository: @escaping @MainActor () -> JournalNarrativeRepository) -> JournalBackupAdapter {
         let service = journalDeviceKeyService
         return JournalBackupAdapter(
@@ -422,14 +434,23 @@ final class SealedBackupCoordinator {
             isOpen: { [weak self] in self.map { !$0.host.duressSessionActive } ?? false },
             references: { [weak self] in self?.host.sealedBackupJournalReferences },
             deviceKey: { SealedDeviceKeyRead.read(.deviceJournalKey, service: service) },
-            reinstate: { [weak self] skeletons in self?.host.reinstateJournalEntries(from: skeletons) ?? false },
+            reinstate: { [weak self] skeletons in self?.host.reinstateJournalEntries(from: skeletons) ?? false }
+        )
+    }
+
+    /// The World passport's adapter (round 7): its seam is `!duress`, its passport read and merged by
+    /// the host (the app's one `WorldAtlasKeeper`). Fail closed when the coordinator is gone (the seam
+    /// shut, no passport read or merged).
+    private func makePassportAdapter() -> PassportBackupAdapter {
+        PassportBackupAdapter(
+            isOpen: { [weak self] in self.map { !$0.host.duressSessionActive } ?? false },
             passport: { [weak self] in
-                guard let self else { throw JournalBackupSeamClosedError() }
+                guard let self else { throw PassportBackupSeamClosedError() }
                 return try self.host.sealedBackupWorldPassport()
             },
             mergePassport: { [weak self] book in
-                guard let self else { throw JournalBackupSeamClosedError() }
-                try self.host.restoreSealedBackupWorldPassport(book)
+                guard let self else { throw PassportBackupSeamClosedError() }
+                return try self.host.restoreSealedBackupWorldPassport(book)
             }
         )
     }
@@ -644,7 +665,7 @@ final class SealedBackupCoordinator {
             FernletAuditLog.log("sealedBackup.restoreHeldForOwner", context: ["site": "launch"])
         }
         guard userInitiated else { return }
-        for payload in SealedBackupBookkeeping.v2Payloads {  // R2: the v2 payloads (three).
+        for payload in SealedBackupBookkeeping.v2Payloads {  // R2: the v2 payloads (four).
             let report = await engine.perform(payload, trigger: .retry, phases: .both)
             FernletAuditLog.log("sealedBackup.v2.retryPass", context: [
                 "payload": payload.rawValue, "ran": report.gateFailure == nil ? "true" : "false"
@@ -880,7 +901,7 @@ final class SealedBackupCoordinator {
             host.sealedBackupBookkeeping.reopenRestore(payload)
         }
         FernletAuditLog.log("sealedBackup.restoreHoldReleasedByOwner")
-        for payload in SealedBackupBookkeeping.v2Payloads {  // R2: the v2 payloads (three).
+        for payload in SealedBackupBookkeeping.v2Payloads {  // R2: the v2 payloads (four).
             _ = await engine.perform(payload, trigger: .ownerRelease, phases: .both)
         }
     }
@@ -957,6 +978,8 @@ final class SealedBackupCoordinator {
         case .journalNarratives:
             let repository = journalRepository ?? self.journalRepository
             return try applyRestoredV2Chunks(chunks, adapter: makeJournalAdapter { repository })
+        case .worldPassport:
+            return try applyRestoredV2Chunks(chunks, adapter: makePassportAdapter())
         }
     }
 

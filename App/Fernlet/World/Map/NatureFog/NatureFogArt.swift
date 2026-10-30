@@ -7,14 +7,25 @@ nonisolated struct NatureUnit: Hashable {
 }
 
 /// A piece of the fog's pixel art in units from its anchor (a hex centre, or a tree's root), as the mockup's
-/// `rect` calls lay it down: a later pixel over the same unit wins.
+/// `rect` calls lay it down: a later pixel over the same unit wins. A unit holds a palette role or, for the
+/// terrain's pieces, one of the mockup's fixed colours (``NatureInk``).
 nonisolated struct NaturePixelArt {
     /// Every painted unit.
-    private(set) var pixels: [NatureUnit: NaturePaint] = [:]
+    private(set) var pixels: [NatureUnit: NatureInk] = [:]
 
-    /// Paints one unit.
+    /// Paints one unit in a palette role.
     mutating func put(_ i: Int, _ j: Int, _ paint: NaturePaint) {
-        pixels[NatureUnit(i: i, j: j)] = paint
+        pixels[NatureUnit(i: i, j: j)] = .paint(paint)
+    }
+
+    /// Paints one unit in `ink`.
+    mutating func put(_ i: Int, _ j: Int, ink: NatureInk) {
+        pixels[NatureUnit(i: i, j: j)] = ink
+    }
+
+    /// Paints one unit in the fixed colour `rgb` (0xRRGGBB).
+    mutating func fixed(_ i: Int, _ j: Int, _ rgb: UInt32) {
+        pixels[NatureUnit(i: i, j: j)] = .fixed(rgb)
     }
 
     /// Paints a `width` × `height` block with its top-left unit at (`x`, `y`); nothing for an empty one.
@@ -23,6 +34,27 @@ nonisolated struct NaturePixelArt {
         for j in y..<(y + height) {
             for i in x..<(x + width) { put(i, j, paint) }
         }
+    }
+
+    /// Repaints every unit painted `from` in `to` (the spring blossom's canopy).
+    mutating func recolour(_ from: NatureInk, to: NatureInk) {
+        for (unit, ink) in pixels where ink == from { pixels[unit] = to }
+    }
+
+    /// The painted units as the mockup's `runs`: rows top to bottom, each split into runs of one ink left to
+    /// right, as (first column, row, ink, length).
+    var runs: [(i: Int, j: Int, ink: NatureInk, length: Int)] {
+        let ordered = pixels.keys.sorted { $0.j != $1.j ? $0.j < $1.j : $0.i < $1.i }
+        var found: [(i: Int, j: Int, ink: NatureInk, length: Int)] = []
+        for unit in ordered {
+            guard let ink = pixels[unit] else { continue }
+            if let last = found.last, last.j == unit.j, last.ink == ink, last.i + last.length == unit.i {
+                found[found.count - 1].length += 1
+            } else {
+                found.append((unit.i, unit.j, ink, 1))
+            }
+        }
+        return found
     }
 
     /// The painted units' bounding box: the top-left unit and the size; nil when nothing is painted.

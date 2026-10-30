@@ -144,7 +144,8 @@ struct PrivacyPolicyParityTests {
     /// The three markers added with car and bike detection (round 7; the Motion sentence approved by the
     /// owner 2026-10-25, "Approve both", and the background sentence's replacement 2026-10-26, both word
     /// for word) pin what driving and cycling detection do:
-    /// - `you're driving, the road you take` — background mapping traces a detected drive in full, so the
+    /// - `you're driving or riding, the road you take` — background mapping traces a detected drive or bike
+    ///   ride in full ("or riding" added with Refinements group 19, approved 2026-10-29), so the
     ///   background sentence no longer says "low-power" (`only during a walk you started` stays pinned);
     /// - `If you turn on Log my bike rides` — Motion & Fitness is read only behind that switch;
     /// - `never keeps the motion data itself` — bike rides log as exercise, and the motion data is never kept.
@@ -196,7 +197,7 @@ struct PrivacyPolicyParityTests {
         "collected while Fernlet is open",
         "only while Fernlet is open",
         "All of this is encrypted on this iPhone only: never synced",
-        "you're driving, the road you take",
+        "you're driving or riding, the road you take",
         "If you turn on Log my bike rides",
         "never keeps the motion data itself"
     ]

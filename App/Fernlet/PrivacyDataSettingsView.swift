@@ -318,6 +318,8 @@ struct PrivacyDataSettingsView: View {
         switch (pendingV2Restore?.payload, pendingV2RestoreIsAnyway) {
         case (.journalNarratives?, true): return "Add the older journal backup to this iPhone?"
         case (.journalNarratives?, false): return "Add the journal backup to this iPhone?"
+        case (.worldPassport?, true): return "Add the older passport backup to this iPhone?"
+        case (.worldPassport?, false): return "Add the passport backup to this iPhone?"
         case (_, true): return "Add the older intimate log backup to this iPhone?"
         case (_, false): return "Add the intimate log backup to this iPhone?"
         }
@@ -334,6 +336,12 @@ struct PrivacyDataSettingsView: View {
         case (.journalNarratives?, false):
             Text("Its entries are added here. If an entry was changed on both iPhones, you'll see both versions. Entries deleted since that backup was made may come back. After this, this iPhone backs up your journal, and your other iPhone will show that its backup was replaced.",
                  comment: "Privacy & Data: confirmation body for adding another iPhone's journal Sealed backup here.")
+        case (.worldPassport?, true):
+            Text("Its places are added here, each with the earliest date either iPhone has. Places deleted since that backup was made may come back. After this, this iPhone backs up your passport.",
+                 comment: "Privacy & Data: confirmation body for restoring an older World passport Sealed backup anyway.")
+        case (.worldPassport?, false):
+            Text("Its places are added here, each with the earliest date either iPhone has. Places deleted since that backup was made may come back. After this, this iPhone backs up your passport, and your other iPhone will show that its backup was replaced.",
+                 comment: "Privacy & Data: confirmation body for adding another iPhone's World passport Sealed backup here.")
         case (_, true):
             Text("Its logs are added here. After this, this iPhone backs up your intimate logs.",
                  comment: "Privacy & Data: confirmation body for restoring an older intimate-log Sealed backup anyway.")
@@ -804,6 +812,15 @@ struct PrivacyDataSettingsView: View {
 
             Toggle("Sealed backup for journal entries", isOn: sealedJournalBinding)
 
+            // The World passport's own switch (round 7, owner 2026-10-29: "Have it's own switch"):
+            // every place first visited, sealed like the journal. No hide switch, so always offered.
+            Toggle(isOn: sealedPassportBinding) {
+                // A two-line row takes the kit's row padding above and below its words.
+                FernletRowLabel(Self.passportBackupTitle, detail: "Every place your passport keeps, sealed so only your devices can read it.")
+                    .padding(.vertical, 7)
+            }
+            .accessibilityIdentifier("privacy.sealedBackup.passport")
+
             // Withheld while intimacy tracking is hidden, for exactly the reason the period toggle is:
             // the reconcile honors the hard visibility gate by SKIPPING (disabling the pref would delete
             // the iCloud backup, making "hide" destructive), and that skip is silent — so a live toggle
@@ -1165,6 +1182,7 @@ struct PrivacyDataSettingsView: View {
                 periodBackupStateLines
                 intimacyBackupStateLines
                 journalBackupStateLines
+                passportBackupStateLines
                 escrowConflictSection
                 attentionLines
                 if showsRetryRestore { retryRestoreButton }
@@ -1210,6 +1228,7 @@ struct PrivacyDataSettingsView: View {
             || store.periodBackupExportState != .clear
             || Self.showsOwnerHoldLine(kept: backupPayloadsKeptForOwner, preferences: storagePreferencesStore.preferences)
             || store.journalBackupRowState != .none || store.intimacyBackupRowState != .none
+            || store.passportBackupRowState != .none
             || !sealedBackupAttentionItems.isEmpty || !sealedBackupDisableFailures.isEmpty
             || ownPhotoAttention != nil || ownPhotoBackupDisableFailed
             || store.ownPhotoBackupEnableFailed || store.ownPhotoBackupUploadFailed
@@ -1572,6 +1591,18 @@ struct PrivacyDataSettingsView: View {
         }
     }
 
+    /// The World passport Sealed backup's rows (round 7), with the same states and choices as the
+    /// journal's. Never shown during a duress session (``FernletStore/passportBackupRowState`` is
+    /// `.none` then: the decoy's passport is empty).
+    @ViewBuilder
+    private var passportBackupStateLines: some View {
+        if let store {
+            SealedBackupV2StatusRows(copy: .passport, state: store.passportBackupRowState, isBusy: isSettlingPeriodBackupChoice) { choice in
+                confirmV2BackupChoice(choice, payload: .worldPassport)
+            }
+        }
+    }
+
     /// Confirms one intimate-log or journal choice: the restores behind their alert, Replace, Start a
     /// new backup and Remove behind a destructive confirmation (design 2026-09-30, §10.1). Nothing runs
     /// until the user confirms.
@@ -1588,6 +1619,7 @@ struct PrivacyDataSettingsView: View {
     /// words.
     private func v2DestructiveConfirmation(_ choice: SealedBackupV2RowChoice, payload: SealedBackupPayloadType) -> DestructiveConfirmation? {
         let run = { runV2BackupChoice(choice, payload: payload) }
+        if payload == .worldPassport { return passportDestructiveConfirmation(choice, perform: run) }
         let journal = payload == .journalNarratives
         switch choice {
         case .replace:
@@ -1627,12 +1659,54 @@ struct PrivacyDataSettingsView: View {
         }
     }
 
-    /// Records a confirmed intimate-log or journal choice as an intent (carried out now if the Private
-    /// tab is open, else at the next visit) and, when it waits for that visit, says so once.
+    /// The World passport's destructive confirmation for a v2 Replace, Start a new backup or Remove
+    /// (round 7), in its own words.
+    private func passportDestructiveConfirmation(_ choice: SealedBackupV2RowChoice, perform run: @escaping () -> Void) -> DestructiveConfirmation? {
+        switch choice {
+        case .replace:
+            return DestructiveConfirmation(
+                title: "Replace the passport backup with this iPhone's passport?",
+                message: "Places that are only in the backup won't be in it anymore. If your other iPhone still has them, they stay on that iPhone.",
+                confirmLabel: "Replace",
+                auditEvent: "privacy.sealedBackup.passportReplaceConfirmed",
+                perform: run
+            )
+        case .startNew:
+            return DestructiveConfirmation(
+                title: "Start a new passport backup?",
+                message: "This iPhone can't open the passport backup in iCloud. A new backup replaces it for good, for every iPhone that uses it. If its key hasn't arrived through iCloud Keychain yet, wait for it: it usually arrives, even if you no longer have the iPhone that saved it. Only start over if you've reset iCloud Keychain or the backup is damaged.",
+                confirmLabel: "Start new backup",
+                auditEvent: "privacy.sealedBackup.passportStartNewConfirmed",
+                perform: run
+            )
+        case .remove(let ids):
+            return DestructiveConfirmation(
+                title: "Remove \(ids.count) places this iPhone can't open?",
+                message: "They'll be checked again first, and only places that still can't be opened are removed. This can't be undone.",
+                confirmLabel: "Remove",
+                auditEvent: "privacy.sealedBackup.passportRemoveConfirmed",
+                perform: run
+            )
+        case .restoreHere, .restoreAnyway:
+            return nil
+        }
+    }
+
+    /// The row state Privacy & Data shows for an intimate-log, journal or passport backup.
+    private static func v2RowState(_ payload: SealedBackupPayloadType, in appStore: FernletStore) -> SealedBackupV2RowState {
+        switch payload {
+        case .journalNarratives: return appStore.journalBackupRowState
+        case .worldPassport: return appStore.passportBackupRowState
+        case .intimacyLogs, .periodData, .sensitiveNotes: return appStore.intimacyBackupRowState
+        }
+    }
+
+    /// Records a confirmed intimate-log, journal or passport choice as an intent (carried out now if
+    /// the Private tab is open, else at the next visit) and, when it waits for that visit, says so once.
     private func runV2BackupChoice(_ choice: SealedBackupV2RowChoice, payload: SealedBackupPayloadType) {
         runPeriodBackupChoice { appStore in
             await appStore.carryOutSealedBackupChoice(choice, for: payload)
-            let state = payload == .journalNarratives ? appStore.journalBackupRowState : appStore.intimacyBackupRowState
+            let state = Self.v2RowState(payload, in: appStore)
             if state == .finishing {
                 FernletAnnouncer.system.announce(.status, LocalizedStringResource(
                     "Open Private to finish.",
@@ -2142,6 +2216,17 @@ struct PrivacyDataSettingsView: View {
         )
     }
 
+    /// The World passport backup row's title, in ONE place (design session 2026-10-29): the owner may
+    /// still pick "Passport", which is this one line.
+    static let passportBackupTitle: LocalizedStringKey = "Sealed backup for your passport"
+
+    private var sealedPassportBinding: Binding<Bool> {
+        Binding(
+            get: { storagePreferencesStore.preferences.sealedBackupPassportEnabled },
+            set: { newValue in handleSealedBackupToggle(.worldPassport, enabled: newValue) }
+        )
+    }
+
     private var sealedIntimacyBinding: Binding<Bool> {
         Binding(
             get: { storagePreferencesStore.preferences.sealedBackupIntimacyEnabled },
@@ -2229,6 +2314,8 @@ struct PrivacyDataSettingsView: View {
         if enabled {
             // Require explicit, informed confirmation before any data leaves the device.
             pendingSealedBackupEnable = payload
+        } else if payload == .worldPassport {
+            confirmPassportBackupTurnOff()
         } else if payload == .intimacyLogs || payload == .journalNarratives {
             confirmV2BackupTurnOff(payload)
         } else if payload == .periodData, store?.periodBackupSlotIsAnotherIPhones == true {
@@ -2287,6 +2374,31 @@ struct PrivacyDataSettingsView: View {
                 message: journal
                     ? "This permanently deletes the journal backup from iCloud, for every iPhone that uses it. If you lose or replace this iPhone, your journal can't be recovered."
                     : "This permanently deletes the intimate log backup from iCloud, for every iPhone that uses it. If you lose or replace this iPhone, your intimate logs can't be recovered.",
+                confirmLabel: "Turn off",
+                auditEvent: "privacy.sealedBackup.disableConfirmed.\(payload.rawValue)",
+                perform: turnOff
+            )
+        }
+    }
+
+    /// Turning the World passport backup off (round 7; the journal's rules, R2-F3): on a slot this
+    /// iPhone last observed as another iPhone's, the cloud copy is KEPT and the confirmation says so;
+    /// otherwise the backup is deleted from iCloud for every iPhone that uses it.
+    private func confirmPassportBackupTurnOff() {
+        let payload = SealedBackupPayloadType.worldPassport
+        let turnOff = { applySealedBackup(payload, enabled: false) }
+        if store?.passportBackupSlotIsAnotherIPhones == true {
+            pendingDestructiveAction = DestructiveConfirmation(
+                title: "Stop backing up this iPhone's passport?",
+                message: "The passport backup saved from your other iPhone stays in iCloud.",
+                confirmLabel: "Stop",
+                auditEvent: "privacy.sealedBackup.disableKeepingOtherIPhonesConfirmed.\(payload.rawValue)",
+                perform: turnOff
+            )
+        } else {
+            pendingDestructiveAction = DestructiveConfirmation(
+                title: "Turn off Sealed backup for your passport?",
+                message: "This permanently deletes the passport backup from iCloud, for every iPhone that uses it. If you lose or replace this iPhone, your passport can't be recovered.",
                 confirmLabel: "Turn off",
                 auditEvent: "privacy.sealedBackup.disableConfirmed.\(payload.rawValue)",
                 perform: turnOff
@@ -2356,6 +2468,7 @@ struct PrivacyDataSettingsView: View {
             case .sensitiveNotes: $0.sealedBackupSensitiveNotesEnabled = value
             case .journalNarratives: $0.sealedBackupJournalEnabled = value
             case .intimacyLogs: $0.sealedBackupIntimacyEnabled = value
+            case .worldPassport: $0.sealedBackupPassportEnabled = value
             }
         }
     }
@@ -2388,6 +2501,10 @@ struct PrivacyDataSettingsView: View {
             lines.append(String(localized: "privacy.sealedBackup.disclosure.journal",
                                 defaultValue: "Your journal text is uploaded only in this encrypted form.",
                                 comment: "Encrypted backup consent alert, last paragraph when turning on the journal backup."))
+        case .worldPassport:
+            lines.append(String(localized: "privacy.sealedBackup.disclosure.passport",
+                                defaultValue: "The places in your passport are uploaded only in this encrypted form.",
+                                comment: "Encrypted backup consent alert, last paragraph when turning on the World passport backup (the places first visited)."))
         case .sensitiveNotes, nil:
             break
         }

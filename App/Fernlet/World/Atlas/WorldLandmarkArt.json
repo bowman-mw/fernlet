@@ -1,0 +1,1297 @@
+{
+  "version": 1,
+  "about": "Landmark art for the World map, approved on the Exploration page: eiffel, empire and opera with ex-landmark, colosseum with ex-colosseum, and the other 24 with ex-fam-1 to ex-fam-4 (2026-10-29). Each sprite is rows of palette letters; '.' is clear. Famous art is drawn at 3 points per pixel on the map, generic icons at 3.5, each with a one-pixel halo around every non-clear pixel.",
+  "palette": {
+    "k": "#4A2E1C",
+    "b": "#8A5A3A",
+    "l": "#B98352",
+    "g": "#D2C8B2",
+    "d": "#A39B88",
+    "w": "#FFF3C4",
+    "s": "#F6F1E4",
+    "c": "#D6CCB6",
+    "p": "#B9805A",
+    "r": "#B5523B",
+    "t": "#74482A",
+    "h": "#3D6B30",
+    "G": "#8CC063",
+    "e": "#5E9A48",
+    "y": "#F2D58A",
+    "a": "#6FA8D0",
+    "u": "#E3D3A6",
+    "n": "#4A2E1C",
+    "o": "#C9BFA8",
+    "m": "#9AA6AE",
+    "v": "#5FA894",
+    "V": "#3E7D6C",
+    "R": "#C0532F",
+    "P": "#D9A07E"
+  },
+  "halo": {
+    "found": {
+      "light": "#FFF6E2",
+      "dark": "#F3E6C8"
+    },
+    "notFound": {
+      "light": "#F4F1EA",
+      "dark": "#8B9398"
+    }
+  },
+  "notFound": {
+    "note": "Before it's found the art is grey and unnamed: 'k' takes the outline colour, every other letter the fill.",
+    "light": {
+      "outline": "#7E878C",
+      "fill": "#C3C9CC"
+    },
+    "dark": {
+      "outline": "#A7AFB4",
+      "fill": "#5E676D"
+    }
+  },
+  "scale": {
+    "famous": 3,
+    "generic": 3.5
+  },
+  "famous": {
+    "eiffel": {
+      "en": "Eiffel Tower",
+      "es": "Torre Eiffel",
+      "city": {
+        "en": "Paris",
+        "es": "París"
+      },
+      "size": [
+        17,
+        26
+      ],
+      "rows": [
+        "........k........",
+        "........k........",
+        ".......kbk.......",
+        ".......kbk.......",
+        ".......klk.......",
+        "......kblbk......",
+        "......kbbbk......",
+        "......kblbk......",
+        "......kbbbk......",
+        ".....kkkkkkk.....",
+        ".....kblllbk.....",
+        ".....kbbbbbk.....",
+        "....kbbk.kbbk....",
+        "....kblk.klbk....",
+        "....kbbk.kbbk....",
+        "...kbbk...kbbk...",
+        "..kkkkkkkkkkkkk..",
+        "..kbbbbbbbbbbbk..",
+        "..kbbk.....kbbk..",
+        "..kbk.......kbk..",
+        ".kbbk..kkk..kbbk.",
+        ".kbk..k...k..kbk.",
+        "kbbk.k.....k.kbbk",
+        "kbk..k.....k..kbk",
+        "kbk...........kbk",
+        "kkk...........kkk"
+      ]
+    },
+    "empire": {
+      "en": "Empire State Building",
+      "es": "Empire State Building",
+      "city": {
+        "en": "New York",
+        "es": "Nueva York"
+      },
+      "size": [
+        13,
+        28
+      ],
+      "rows": [
+        "......k......",
+        "......k......",
+        "......k......",
+        ".....kgk.....",
+        ".....kgk.....",
+        "....kggdk....",
+        "....kgwdk....",
+        "...kggggdk...",
+        "...kgwgwdk...",
+        "...kggggdk...",
+        "..kggggggdk..",
+        "..kgwgwgwdk..",
+        "..kggggggdk..",
+        "..kgwgwgwdk..",
+        ".kggggggggdk.",
+        ".kgwgwgwgwdk.",
+        ".kggggggggdk.",
+        ".kgwgwgwgwdk.",
+        ".kggggggggdk.",
+        ".kgwgwgwgwdk.",
+        ".kggggggggdk.",
+        ".kgwgwgwgwdk.",
+        "kggggggggggdk",
+        "kgwgwgwgwgwdk",
+        "kggggggggggdk",
+        "kgwgwgwgwgwdk",
+        "kggggggggggdk",
+        "kkkkkkkkkkkkk"
+      ]
+    },
+    "opera": {
+      "en": "Sydney Opera House",
+      "es": "Ópera de Sídney",
+      "city": {
+        "en": "Sydney",
+        "es": "Sídney"
+      },
+      "size": [
+        27,
+        13
+      ],
+      "rows": [
+        "....k........k.............",
+        "....kk......ksk............",
+        "...kssk.....kssk.......k...",
+        "..ksssck....kssck.....ksk..",
+        "..ksssck...ksssck....kssk..",
+        "..kssssck.ksssssck..kssck..",
+        ".ksssssck.ksssssck..ksssck.",
+        "ksssssssckkssssssckkssssck.",
+        "ksssssssckssssssscksssssck.",
+        "kkkkkkkkkkkkkkkkkkkkkkkkkk.",
+        "kppppppppppppppppppppppppk.",
+        "kppppppppppppppppppppppppk.",
+        "kkkkkkkkkkkkkkkkkkkkkkkkkk."
+      ]
+    },
+    "colosseum": {
+      "en": "Colosseum",
+      "es": "Coliseo",
+      "city": {
+        "en": "Rome",
+        "es": "Roma"
+      },
+      "size": [
+        30,
+        17
+      ],
+      "rows": [
+        "..kkkkkkkkkkkkkkkkk...........",
+        ".kouuuuuuuuuuuuuuuuk..........",
+        ".knuuuunuuuunuuuunuk..........",
+        "koouuuuuuuuuuuuuuuuuk.........",
+        "kuuyyyyyyyyyyyyyyyyykkkkkk....",
+        "kttuttuttuttuttuttuttdnndnkk..",
+        "knnunnunnunnunnunnunnkkndnndk.",
+        "knnunnunnunnunnunnunnunndnndk.",
+        "kuuyyyyyyyyyyyyyyyyyyyykkkkkk.",
+        "kttuttuttuttuttuttuttuttuttotk",
+        "knnunnunnunnunnunnunnunnunnonk",
+        "knnunnunnunnunnunnunnunnunnonk",
+        "kuuyyyyyyyyyyyyyyyyyyyyyyyyuuk",
+        "kttuttuttuttuttuttuttuttuttotk",
+        "knnunnunnunnunnunnunnunnunnonk",
+        "knnunnunnunnunnunnunnunnunnonk",
+        "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkk"
+      ]
+    },
+    "bigben": {
+      "en": "Big Ben",
+      "es": "Big Ben",
+      "city": {
+        "en": "London",
+        "es": "Londres"
+      },
+      "size": [
+        11,
+        34
+      ],
+      "rows": [
+        ".....k.....",
+        "....kyk....",
+        "....kyk....",
+        "....kyk....",
+        "....kyk....",
+        "...kyyyk...",
+        "..ktytytk..",
+        "..kyyyyyk..",
+        "..ktytytk..",
+        ".kyyyyyyyk.",
+        ".kuuuuuuuk.",
+        ".kunununuk.",
+        ".kunununuk.",
+        ".kuuuuuuuk.",
+        "kyyyyyyyyyk",
+        "kuuuuuuuuuk",
+        "kuusssssuuk",
+        "kusssksssuk",
+        "kussskkksuk",
+        "kusssssssuk",
+        "kusssssssuk",
+        "kuusssssuuk",
+        "kuuuuuuuuuk",
+        "kuuuuuuuuok",
+        "kuuluuuluok",
+        "kuuluuuluok",
+        "kuuuuuuuuok",
+        "kuuluuuluok",
+        "kuuluuuluok",
+        "kuuuuuuuuok",
+        "kuuluuuluok",
+        "kuuluuuluok",
+        "kuuuuuuuuok",
+        ".kkkkkkkkk."
+      ]
+    },
+    "goldengate": {
+      "en": "Golden Gate Bridge",
+      "es": "Puente Golden Gate",
+      "city": {
+        "en": "San Francisco",
+        "es": "San Francisco"
+      },
+      "size": [
+        34,
+        17
+      ],
+      "rows": [
+        "..........k............k..........",
+        "........RRrk..........krRR........",
+        ".......Rrkrk..........krkrR.......",
+        "......RkrkR............RkrkR......",
+        "......Rkrrrk..........krrrkR......",
+        ".....R.krkrR..........Rrkrk.R.....",
+        "....R..krkrkR........Rkrkrk..R....",
+        "...R...krrrkRR......RRkrrrk...R...",
+        "...R...krkrkR.R....R.Rkrkrk...R...",
+        "..R....krkrkR..RRRR..Rkrkrk....R..",
+        ".RkkkkkkrkrkRkkRkkRkkRkrkrkkkkkkR.",
+        "krrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrk",
+        "krrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrk",
+        ".kkkkkkkrkrkkkkkkkkkkkkrkrkkkkkkk.",
+        ".......krkrk..........krkrk.......",
+        ".......krkrk..........krkrk.......",
+        "........k.k............k.k........"
+      ]
+    },
+    "liberty": {
+      "en": "Statue of Liberty",
+      "es": "Estatua de la Libertad",
+      "city": {
+        "en": "New York",
+        "es": "Nueva York"
+      },
+      "size": [
+        14,
+        35
+      ],
+      "rows": [
+        "..k...........",
+        ".kyk..........",
+        "kyyyk.........",
+        "kvvvk.........",
+        ".kvk..........",
+        ".kvk...k......",
+        "..kvkkkvkk....",
+        "..kvkvkkkvk...",
+        "...kvvvvvvk...",
+        "...kvkvvvk....",
+        "...kvkvvvk....",
+        "....kvvvvk....",
+        "....kvvvvvkk..",
+        "....kvvvvvVVk.",
+        "....kvVvVvVVk.",
+        "....kvVvVvVVk.",
+        "....kvVvVvVVk.",
+        "....kvVvVvkk..",
+        "...kvvVvVvvk..",
+        "...kvvVvVvvk..",
+        "...kvvVvVvvk..",
+        "...kvvVvVvvk..",
+        "..kkvvVvVvvkk.",
+        ".kdddddddddddk",
+        "..koooooooodk.",
+        "..koooooooodk.",
+        "..koooodooodk.",
+        "..koooodooodk.",
+        "..koooodooodk.",
+        "..koooooooodk.",
+        "..koooooooodk.",
+        "..koooooooodk.",
+        "..koooooooodk.",
+        ".kdddddddddddk",
+        "..kkkkkkkkkkk."
+      ]
+    },
+    "tajmahal": {
+      "en": "Taj Mahal",
+      "es": "Taj Mahal",
+      "city": {
+        "en": "Agra",
+        "es": "Agra"
+      },
+      "size": [
+        33,
+        23
+      ],
+      "rows": [
+        "................k................",
+        "...............kyk...............",
+        "...............kyk...............",
+        "...............ksk...............",
+        "..............ksssk..............",
+        "..k..........ksssssk.........k...",
+        ".kck........ksssssssk.......kck..",
+        ".kcck......ksssssssssk......kcck.",
+        ".kssk.....kkssssssssskk.....kssk.",
+        ".kssk....ksksssssssssksk....kssk.",
+        ".kssk...ksssksssssssksssk...kssk.",
+        ".kcck...kssskkssssskksssk...kcck.",
+        ".kssk..ksssssssssssssssssk..kssk.",
+        ".kssk..kssssssscccsssssssk..kssk.",
+        ".kssk..ksssssscccccssssssk..kssk.",
+        ".kcck..kscccsscccccsscccsk..kcck.",
+        ".kssk..kscccsscccccsscccsk..kssk.",
+        ".kssk..kscccsscccccsscccsk..kssk.",
+        ".kssk..kscccsscccccsscccsk..kssk.",
+        ".ksskkkksssssscccccsssssskkkkssk.",
+        "kccccccccccccccccccccccccccccccck",
+        "kccccccccccccccccccccccccccccccck",
+        ".kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk."
+      ]
+    },
+    "greatwall": {
+      "en": "Great Wall at Badaling",
+      "es": "Gran Muralla en Badaling",
+      "city": {
+        "en": "Beijing",
+        "es": "Pekín"
+      },
+      "size": [
+        33,
+        20
+      ],
+      "rows": [
+        "................kokokok..........",
+        "................koooodk..........",
+        "................koooodk..........",
+        "................koooodk.k.k.k....",
+        "................koooodkkokokokk..",
+        "................koonodoooooookok.",
+        ".kk.............koonodoooooooook.",
+        "kookk...........koonodooooooooook",
+        "kookokk.......kkooooodoGGGGGGoook",
+        "kooookokk.k.kkokoooooGGeeeeeeGGok",
+        "kGoooookokokoooooooGGeeeeeeeeeeGk",
+        "keGooooooooooooooGGeeeeeeeeeeeeek",
+        "keeGGoooooooooooGeeeeeeeeeeeeeeek",
+        "keeeeGGooooooGGGeeeeeeeeeeeeeeeek",
+        "keeeeeeGGGGGGeeeeeeeeeeeeeeeeeeek",
+        "keeeeeeeeeeeeeeeeeeeeeeeeeeeeeeek",
+        "keeeeeeeeeeeeeeeeeeeeeeeeeeeeeeek",
+        "keeeeeeeeeeeeeeeeeeeeeeeeeeeeeeek",
+        "keeeeeeeeeeeeeeeeeeeeeeeeeeeeeeek",
+        ".kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk."
+      ]
+    },
+    "redeemer": {
+      "en": "Christ the Redeemer",
+      "es": "Cristo Redentor",
+      "city": {
+        "en": "Rio de Janeiro",
+        "es": "Río de Janeiro"
+      },
+      "size": [
+        31,
+        26
+      ],
+      "rows": [
+        "..............kkk..............",
+        ".............ksssk.............",
+        ".............ksssk.............",
+        ".............ksssk.............",
+        "....kkkkkkkkkkssckkkkkkkkkk....",
+        "...ksssssssssssssssssssssssk...",
+        "...ksssssssssssssssssssssssk...",
+        "....kkkkkkkkkkssckkkkkkkkkk....",
+        ".............kssck.............",
+        "............kssscsk............",
+        "............kssscsk............",
+        "............kssscsk............",
+        "............kssscsk............",
+        "............kssscsk............",
+        ".............kccck.............",
+        ".............kccck.............",
+        ".............kccck.............",
+        "............kGGeeek............",
+        "..........kkGGeeeeekk..........",
+        "........kkGGeeeeeeeeekk........",
+        ".......kGGeeeeeeeeeeeeek.......",
+        ".....kkGGeeeeeeeeeeeeeeekk.....",
+        "...kkGGeeeeeeeeeeeeeeeeeeekk...",
+        ".kkGGeeeeeeeeeeeeeeeeeeeeeeekk.",
+        "kGGeeeeeeeeeeeeeeeeeeeeeeeeeeek",
+        ".kkkkkkkkkkkkkkkkkkkkkkkkkkkkk."
+      ]
+    },
+    "pyramids": {
+      "en": "Pyramids of Giza",
+      "es": "Pirámides de Guiza",
+      "city": {
+        "en": "Cairo",
+        "es": "El Cairo"
+      },
+      "size": [
+        33,
+        17
+      ],
+      "rows": [
+        ".............k...................",
+        "............kyk..................",
+        "...........kyylk.................",
+        "..........kyyyllk................",
+        ".........kyyyylllk........k......",
+        ".........kyyyylllk.......kyk.....",
+        "........kuuuuullllk.....kuulk....",
+        ".......kyyyyyylllllk...kyyyllk...",
+        "......kyyyyyyyllllllk..kyyyllk...",
+        ".....kyyyyyyyylllllllkkyyyylllk..",
+        "....kuuuuuuuuulllllllluuuuullluk.",
+        "...kyyyyyyyyyylllllllllyyyyllyylk",
+        "...kyyyyyyyyyylllllllllyyyylyyyll",
+        "..kyyyyyyyyyyyllllllllllyyylyyyll",
+        ".kuuuuuuuuuuuullllllllllluuuuuull",
+        "kyyyyyyyyyyyyyllllllllllllyyyyyll",
+        ".kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk"
+      ]
+    },
+    "pisa": {
+      "en": "Leaning Tower of Pisa",
+      "es": "Torre inclinada de Pisa",
+      "city": {
+        "en": "Pisa",
+        "es": "Pisa"
+      },
+      "size": [
+        16,
+        26
+      ],
+      "rows": [
+        "........kkkkkkk.",
+        ".......kccccccck",
+        ".......ksssssssk",
+        "......kksssssssk",
+        ".....kccccccccck",
+        ".....ksososososk",
+        ".....ksososososk",
+        "....kccccccccck.",
+        "....ksososososk.",
+        "....ksososososk.",
+        "...kccccccccck..",
+        "...ksososososk..",
+        "...ksososososk..",
+        "..kccccccccck...",
+        "..ksososososk...",
+        "..ksososososk...",
+        "..kccccccccck...",
+        "..ksososososk...",
+        "..ksososososk...",
+        ".kccccccccck....",
+        ".ksososososk....",
+        ".ksososososk....",
+        "kccccccccck.....",
+        "ksossossosk.....",
+        "ksossossosk.....",
+        ".kkkkkkkkk......"
+      ]
+    },
+    "sagrada": {
+      "en": "Sagrada Família",
+      "es": "Sagrada Familia",
+      "city": {
+        "en": "Barcelona",
+        "es": "Barcelona"
+      },
+      "size": [
+        27,
+        33
+      ],
+      "rows": [
+        ".............k.............",
+        "............kyk............",
+        "............kyk............",
+        "...........kuuuk...........",
+        "...........kuuuk...........",
+        "........k..kuouk..k........",
+        ".......kyk.kuuuk.kyk.......",
+        ".......kykkuuuuukkyk.......",
+        "......kuuukuuouukuuuk......",
+        "......kuuukuuuuukuuuk......",
+        "...k..kuoukuuuuukuouk..k...",
+        "..kyk.kuuukuuouukuuuk.kyk..",
+        "..kyk.kuuukuuuuukuuuk.kyk..",
+        ".kuuukkuoukuuuuukuoukkuuuk.",
+        ".kuuukkuuukuuouukuuukkuuuk.",
+        ".kuoukkuuukuuuuukuuukkuouk.",
+        ".kuuukkuoukuuuuukuoukkuuuk.",
+        ".kuuukkuuukuuouukuuukkuuuk.",
+        ".kuoukkuuukuuuuukuuukkuouk.",
+        ".kuuukkuoukuuuuukuoukkuuuk.",
+        ".kuuukkuuukuuouukuuukkuuuk.",
+        ".kuuukkuuukuuuuukuuukkuuuk.",
+        "kuuuuuuuuuuuuuuuuuuuuuuuuuk",
+        "kuuuuuuuuuuuuuuuuuuuuuuuuuk",
+        "kuuuuuuuuuuunnnuuuuuuuuuuuk",
+        "kuuuuuuuuuunnnnnuuuuuuuuuuk",
+        "kuuuooouuuunnnnnuuuuooouuuk",
+        "kuuuooouuuunnnnnuuuuooouuuk",
+        "kuuuooouuuunnnnnuuuuooouuuk",
+        "kuuuooouuuunnnnnuuuuooouuuk",
+        "kuuuooouuuunnnnnuuuuooouuuk",
+        "kuuuooouuuunnnnnuuuuooouuuk",
+        ".kkkkkkkkkkkkkkkkkkkkkkkkk."
+      ]
+    },
+    "burjkhalifa": {
+      "en": "Burj Khalifa",
+      "es": "Burj Khalifa",
+      "city": {
+        "en": "Dubai",
+        "es": "Dubái"
+      },
+      "size": [
+        15,
+        37
+      ],
+      "rows": [
+        ".......k.......",
+        "......kmk......",
+        "......kmk......",
+        "......kmk......",
+        "......kmk......",
+        "......kmk......",
+        "......kmk......",
+        "......kmk......",
+        ".....kmamk.....",
+        ".....kmamk.....",
+        ".....kmamk.....",
+        ".....kmamk.....",
+        "....kmammdk....",
+        "....kmammdk....",
+        "....kmammdk....",
+        "....kmammdk....",
+        "...kmammmmdk...",
+        "...kmammmmdk...",
+        "...kmammmmdk...",
+        "...kmammmmdk...",
+        "..kmammmmmmdk..",
+        "..kmammmmmmdk..",
+        "..kmammmmmmdk..",
+        "..kmammmmmmdk..",
+        ".kmammmmmmmmdk.",
+        ".kmammmmmmmmdk.",
+        ".kmammmmmmmmdk.",
+        ".kmammmmmmmmdk.",
+        "kmammmmmmmmmmdk",
+        "kmammmmmmmmmmdk",
+        "kmammmmmmmmmmdk",
+        "kmammmmmmmmmmdk",
+        "kmammmmmmmmmmdk",
+        "kmammmmmmmmmmdk",
+        "kmammmmmmmmmmdk",
+        "kmammmmmmmmmmdk",
+        ".kkkkkkkkkkkkk."
+      ]
+    },
+    "spaceneedle": {
+      "en": "Space Needle",
+      "es": "Space Needle",
+      "city": {
+        "en": "Seattle",
+        "es": "Seattle"
+      },
+      "size": [
+        17,
+        33
+      ],
+      "rows": [
+        "........k........",
+        ".......kgk.......",
+        ".......kgk.......",
+        ".......kgk.......",
+        "......kkgkk......",
+        "...kkkssssskkk...",
+        "..ksssssssssssk..",
+        ".kksaaaaaaaaaskk.",
+        "kgggggggggggggggk",
+        ".kkoooooooooookk.",
+        "...kkgkkckkgkk...",
+        "....kgkkckkgk....",
+        "....kgkkckkgk....",
+        ".....kgkckgk.....",
+        ".....kgkckgk.....",
+        ".....kgggggk.....",
+        ".....kgkckgk.....",
+        ".....kgkckgk.....",
+        "......kgcgk......",
+        "......kgcgk......",
+        "......kgcgk......",
+        "......kgcgk......",
+        ".....kgkckgk.....",
+        ".....kgkckgk.....",
+        ".....kgkckgk.....",
+        "....kgkkckkgk....",
+        "....kgkkckkgk....",
+        "....kgkkckkgk....",
+        "....kgkkckkgk....",
+        "...kgk.kck.kgk...",
+        "...kgkkkckkkgk...",
+        "..koooooooooook..",
+        "...kkkkkkkkkkk..."
+      ]
+    },
+    "acropolis": {
+      "en": "Acropolis",
+      "es": "Acrópolis",
+      "city": {
+        "en": "Athens",
+        "es": "Atenas"
+      },
+      "size": [
+        33,
+        19
+      ],
+      "rows": [
+        "................k................",
+        "............kkkkskkkk............",
+        ".......kkkkkssssssssskkkkk.......",
+        "...kkkkssssssssssssssssssskkkk...",
+        "..ksssssssssssssssssssssssssssk..",
+        "...kccccccccccccccccccccccccck...",
+        "....ksskssksskssksskssksskssk....",
+        "....ksskssksskssksskssksskssk....",
+        "....ksskssksskssksskssksskssk....",
+        "....ksskssksskssksskssksskssk....",
+        "...kccccccccccccccccccccccccck...",
+        "...kccccccccccccccccccccccccck...",
+        "..kkdddddddddddddddddddddddddkk..",
+        ".kdddodddodddodddodddodddodddddk.",
+        "kddddddddddddddddddddddddddddoddk",
+        "koddddddddddddddddddddddddddddddk",
+        "kdddddddddddddddddddddddddddddddk",
+        "kdddddddddddddddddddddddddddddddk",
+        ".kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk."
+      ]
+    },
+    "towerbridge": {
+      "en": "Tower Bridge",
+      "es": "Puente de la Torre",
+      "city": {
+        "en": "London",
+        "es": "Londres"
+      },
+      "size": [
+        33,
+        19
+      ],
+      "rows": [
+        "........k.k.k.......k.k.k........",
+        ".......kmkmkmk.....kmkmkmk.......",
+        ".......kmkmkmk.....kmkmkmk.......",
+        ".......kmmmmmk.....kmmmmmk.......",
+        ".......kmmmmmkkkkkkkmmmmmk.......",
+        ".......koooooaaaaaaaoooook.......",
+        "......kaoooooaaaaaaaoooooak......",
+        "....kkakooooosssssssoooookak.....",
+        "...kaakkoooookkkkkkkoooookkakk...",
+        "..kakk.koonook.....koonook.kaak..",
+        ".kak...koonook.....koonook..kkak.",
+        "kak....koonook.....koonook....kak",
+        ".kkkkkkkoooookkkkkkkoooookkkkkkk.",
+        "kaaaaaaaoooooaaaaaaaoooooaaaaaaak",
+        "kaaaaaaaoonooaaaaaaaoonooaaaaaaak",
+        ".kkkkkkkoonookkkkkkkoonookkkkkkk.",
+        ".......koonook.....koonook.......",
+        ".......koooook.....koooook.......",
+        "........kkkkk.......kkkkk........"
+      ]
+    },
+    "harbourbridge": {
+      "en": "Sydney Harbour Bridge",
+      "es": "Puente de la Bahía de Sídney",
+      "city": {
+        "en": "Sydney",
+        "es": "Sídney"
+      },
+      "size": [
+        35,
+        15
+      ],
+      "rows": [
+        "...............kkkkk...............",
+        ".............kkmmmmmkk.............",
+        "...........kkmmmmmmmmmkk...........",
+        "..kkk.....kmmmmmmmmmmmmmk.....kkk..",
+        ".koook...kmmmmmdkkdkmmmmmk...koook.",
+        "koooook.kmmmmkkdkkdkkdmmmmk.koooook",
+        "koooook.kmmkdkkdkkdkkdkkmmk.koooook",
+        "koooookkmmkkdkkdkkdkkdkkdmmkkoooook",
+        "koooookmmdkkdkkdkkdkkdkkdkmmkoooook",
+        "kooooommmdkkdkkdkkdkkdkkdkmmmoooook",
+        "kooooommmmmmmmmmmmmmmmmmmmmmmoooook",
+        "kooooomkkkkkkkkkkkkkkkkkkkkkmoooook",
+        "koooook.....................koooook",
+        "koooook.....................koooook",
+        ".kkkkk.......................kkkkk."
+      ]
+    },
+    "cntower": {
+      "en": "CN Tower",
+      "es": "Torre CN",
+      "city": {
+        "en": "Toronto",
+        "es": "Toronto"
+      },
+      "size": [
+        11,
+        39
+      ],
+      "rows": [
+        ".....k.....",
+        "....kgk....",
+        "....kgk....",
+        "....kgk....",
+        "....kgk....",
+        "....kgk....",
+        "....kgk....",
+        "....kgk....",
+        "....kgk....",
+        "....kgk....",
+        "....kgk....",
+        "...kgggk...",
+        "...kgggk...",
+        "...kggck...",
+        "...kggck...",
+        "...kggck...",
+        "...kggck...",
+        ".kkgggcgkk.",
+        "kdddddcdddk",
+        "kdaaaacaadk",
+        "kdddddcdddk",
+        "kdddddcdddk",
+        ".kkkggckkk.",
+        "...kggck...",
+        "...kggck...",
+        "...kggck...",
+        "...kggck...",
+        "...kggck...",
+        "...kggck...",
+        "...kggck...",
+        "..kgggcgk..",
+        "..kgggcgk..",
+        "..kgggcgk..",
+        "..kgggcgk..",
+        "..kgggcgk..",
+        ".kggggcggk.",
+        ".kggggcggk.",
+        ".kggggcggk.",
+        "..kkkkkkk.."
+      ]
+    },
+    "skytree": {
+      "en": "Tokyo Skytree",
+      "es": "Tokyo Skytree",
+      "city": {
+        "en": "Tokyo",
+        "es": "Tokio"
+      },
+      "size": [
+        13,
+        41
+      ],
+      "rows": [
+        "......k......",
+        ".....ksk.....",
+        ".....ksk.....",
+        ".....ksk.....",
+        ".....ksk.....",
+        ".....ksk.....",
+        ".....ksk.....",
+        ".....ksk.....",
+        ".....ksk.....",
+        ".....ksk.....",
+        "....kmssk....",
+        "....ksssk....",
+        "...kkssmkk...",
+        "..kgggggggk..",
+        "..kgggggggk..",
+        "...kkssskk...",
+        "....kssmk....",
+        "....ksmsk....",
+        "..kksmssskk..",
+        ".kgggggggggk.",
+        ".kgaaaaaaagk.",
+        ".kgggggggggk.",
+        "..kksmssskk..",
+        "...kmsssmk...",
+        "...ksssmsk...",
+        "..ksssmsssk..",
+        "..kssmsssmk..",
+        "..ksmsssmsk..",
+        "..kmsssmssk..",
+        "..ksssmsssk..",
+        "..kssmsssmk..",
+        "..ksmsssmsk..",
+        ".ksmsssmsssk.",
+        ".kmsssmsssmk.",
+        ".ksssmsssmsk.",
+        ".kssmsssmssk.",
+        ".ksmsssmsssk.",
+        ".kmsssmsssmk.",
+        ".ksssmsssmsk.",
+        "ksssmsssmsssk",
+        ".kkkkkkkkkkk."
+      ]
+    },
+    "stbasils": {
+      "en": "St Basil's Cathedral",
+      "es": "Catedral de San Basilio",
+      "city": {
+        "en": "Moscow",
+        "es": "Moscú"
+      },
+      "size": [
+        31,
+        31
+      ],
+      "rows": [
+        "...............k...............",
+        "..............kyk..............",
+        ".............kyyyk.............",
+        "..........k...kyk...k..........",
+        ".........kyk..kyk..kyk.........",
+        ".........kek..kyk..kak.........",
+        "........kGeGkkyyykksask........",
+        "....k..keGeGekyeykasasak..k....",
+        "...kykkGeGeGeGyyysasasaskkyk...",
+        "...krkkGeGeGeGyeysasasaskkyk...",
+        "..ksrskkeGeGeyyyyyasasakkeyek..",
+        ".krsrsrkkGeGkyyeyyksaskkyeyeyk.",
+        "ksrsrsrsuuuuuyyyyyuuuuueyeyeyek",
+        "ksrsrsrsuuuuuyyeyyuuuuueyeyeyek",
+        ".krsrsrkununuyyyyyununukyeyeyk.",
+        "..ksrskkununuyyyyyununukkeyek..",
+        ".kuuuuukuuuuuuuuuuuuuuukuuuuuk.",
+        ".kuuuuukuuuuuuuuuuuuuuukuuuuuk.",
+        ".kununukuuuuuuuuuuuuuuukununuk.",
+        ".kununukuuuuuuuuuuuuuuukununuk.",
+        ".kuuuuukuuuuuuuuuuuuuuukuuuuuk.",
+        ".kuuuuukuuuuuuuuuuuuuuukuuuuuk.",
+        "kuuuuuuuuuuuuuuuuuuuuuuuuuuuuuk",
+        "krrrrrrrrrrrrrrrrrrrrrrrrrrrrrk",
+        "krrrrrrrrrrrrrrrrrrrrrrrrrrrrrk",
+        "krrrpprrrpprrrpprrrpprrrpprrrrk",
+        "krrrpprrrpprrrpprrrpprrrpprrrrk",
+        "krrrpprrrpprrrpprrrpprrrpprrrrk",
+        "krrrpprrrpprrrpprrrpprrrpprrrrk",
+        "krrrpprrrpprrrpprrrpprrrpprrrrk",
+        ".kkkkkkkkkkkkkkkkkkkkkkkkkkkkk."
+      ]
+    },
+    "brandenburg": {
+      "en": "Brandenburg Gate",
+      "es": "Puerta de Brandeburgo",
+      "city": {
+        "en": "Berlin",
+        "es": "Berlín"
+      },
+      "size": [
+        30,
+        22
+      ],
+      "rows": [
+        "..............k...............",
+        ".............kVk..............",
+        "............kVVVk.............",
+        "..........k.kVVVk..k..........",
+        ".........kvkkVVVvkkvk.........",
+        "........kvvvvvvvvvvvk.........",
+        "........kvvvvvvvvvvvk.........",
+        "..kkkkkkkvvvvvvvvvvvkkkkkkk...",
+        ".kuuuuuuuuuuuuuuuuuuuuuuuuuk..",
+        ".kuuuuuuuuuuuuuuuuuuuuuuuuuk..",
+        ".kuuuuuuuuuuuuuuuuuuuuuuuuuk..",
+        "kyyyyyyyyyyyyyyyyyyyyyyyyyyyk.",
+        ".kuukkkuukkkuukkuukkkuukkkuuk.",
+        ".kuuk.kuuk.kuukkuuk.kuuk.kuuk.",
+        ".kuuk.kuuk.kuukkuuk.kuuk.kuuk.",
+        ".kuuk.kuuk.kuukkuuk.kuuk.kuuk.",
+        ".kuuk.kuuk.kuukkuuk.kuuk.kuuk.",
+        ".kuuk.kuuk.kuukkuuk.kuuk.kuuk.",
+        ".kuuk.kuuk.kuukkuuk.kuuk.kuuk.",
+        ".kuukkkuukkkuukkuukkkuukkkuuk.",
+        "kooooooooooooooooooooooooooook",
+        ".kkkkkkkkkkkkkkkkkkkkkkkkkkkk."
+      ]
+    },
+    "petronas": {
+      "en": "Petronas Towers",
+      "es": "Torres Petronas",
+      "city": {
+        "en": "Kuala Lumpur",
+        "es": "Kuala Lumpur"
+      },
+      "size": [
+        23,
+        37
+      ],
+      "rows": [
+        "....k.............k....",
+        "...kmk...........kmk...",
+        "...kmk...........kmk...",
+        "...kmk...........kmk...",
+        "...kmk...........kmk...",
+        "..kmamk.........kmamk..",
+        "..kmamk.........kmamk..",
+        "..kmamk.........kmamk..",
+        "..kmamk.........kmamk..",
+        "..kmamk.........kmamk..",
+        ".kmmammk.......kmmammk.",
+        ".kmmammk.......kmmammk.",
+        ".kmmammk.......kmmammk.",
+        ".kmmammk.......kmmammk.",
+        ".kmmammk.......kmmammk.",
+        ".kmmammk.......kmmammk.",
+        "kmmmammmk.....kmmmammmk",
+        "kmmmammmkkkkkkkmmmammmk",
+        "kgggggggggggggggggggggk",
+        "kmmmammmgggggggmmmammmk",
+        "kmmmammmkkkkkkkmmmammmk",
+        "kgggggggk.....kgggggggk",
+        "kmmmammmk.....kmmmammmk",
+        "kmmmammmk.....kmmmammmk",
+        "kgggggggk.....kgggggggk",
+        "kmmmammmk.....kmmmammmk",
+        "kmmmammmk.....kmmmammmk",
+        "kgggggggk.....kgggggggk",
+        "kmmmammmk.....kmmmammmk",
+        "kmmmammmk.....kmmmammmk",
+        "kgggggggk.....kgggggggk",
+        "kmmmammmk.....kmmmammmk",
+        "kmmmammmk.....kmmmammmk",
+        "kgggggggk.....kgggggggk",
+        "kmmmammmk.....kmmmammmk",
+        "kmmmammmk.....kmmmammmk",
+        ".kkkkkkk.......kkkkkkk."
+      ]
+    },
+    "machupicchu": {
+      "en": "Machu Picchu",
+      "es": "Machu Picchu",
+      "city": {
+        "en": "near Cusco",
+        "es": "cerca de Cusco"
+      },
+      "size": [
+        33,
+        22
+      ],
+      "rows": [
+        "......................k..........",
+        ".....................kek.........",
+        ".....................kek.........",
+        "....................keehk........",
+        "....................keehk........",
+        "...................keeehhk.......",
+        "...................keeehhk.......",
+        "..................keeeehhhk......",
+        ".......k..........keeeehhhk......",
+        "......kek........keeeeehhhhk.....",
+        ".....keehk.......keeeeehhhhk.....",
+        ".....keehkkk..kkkeeeeeehhhhhk....",
+        "....keeeooookkoooooeeeehhhhhk....",
+        ".kkkkeeeonookkoonooeeoooohhhhkkk.",
+        "keeeeeeeeeeeeeeeeeeeeeeeeeeeeeeek",
+        "kGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGk",
+        "keeeeeeeeeeeeeeeeeeeeeeeeeeeeeeek",
+        "kGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGk",
+        "keeeeeeeeeeeeeeeeeeeeeeeeeeeeeeek",
+        "kGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGk",
+        "keeeeeeeeeeeeeeeeeeeeeeeeeeeeeeek",
+        ".kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk."
+      ]
+    },
+    "chichenitza": {
+      "en": "Chichén Itzá",
+      "es": "Chichén Itzá",
+      "city": {
+        "en": "Yucatán",
+        "es": "Yucatán"
+      },
+      "size": [
+        31,
+        20
+      ],
+      "rows": [
+        "...........kkkkkkkkk...........",
+        "..........koooooooook..........",
+        "..........kuuuuuuuuuk..........",
+        "..........kuuunnnuuuk..........",
+        "..........kuuunnnuuuk..........",
+        "..........kuuunnnuuuk..........",
+        "...........kkccccckk...........",
+        "..........kuuooooouuk..........",
+        ".........kkoocccccookk.........",
+        "........kuuuuooooouuuuk........",
+        ".......kkoooocccccooookk.......",
+        "......kuuuuuuooooouuuuuuk......",
+        ".....kkoooooocccccooooookk.....",
+        "....kuuuuuuuuooooouuuuuuuuk....",
+        "...kkoooooooocccccooooooookk...",
+        "..kuuuuuuuuuuooooouuuuuuuuuuk..",
+        ".kkoooooooooocccccooooooooookk.",
+        "kuuuuuuuuuuuuooooouuuuuuuuuuuuk",
+        "koooooooooooocccccooooooooooook",
+        ".kkkkkkkkkkkkkkkkkkkkkkkkkkkkk."
+      ]
+    },
+    "petra": {
+      "en": "Petra, the Treasury",
+      "es": "Petra, el Tesoro",
+      "city": {
+        "en": "Jordan",
+        "es": "Jordania"
+      },
+      "size": [
+        31,
+        31
+      ],
+      "rows": [
+        "krrrk.........kPk.........krrrk",
+        "krrrk.........kPk.........krrrk",
+        "krrrk........kkpkk........krrrk",
+        "krrrk.......kpppppk.......krrrk",
+        "krrrk......kpppppppk......krrrk",
+        "krrrk......kpppppppk......krrrk",
+        "krrrkkkkkkkkPppPppPkkkkkkkkrrrk",
+        "krrrkPPPPPPkPppPppPkPPPPPPkrrrk",
+        "krrrkppppppkPppPppPkppppppkrrrk",
+        "krrrkpPppPpkPppPppPkpPppPpkrrrk",
+        "krrrkpPppPpkPppPppPkpPppPpkrrrk",
+        "krrrkpPppPpkPppPppPkpPppPpkrrrk",
+        "krrrkpPppPpkPppPppPkpPppPpkrrrk",
+        "krrrkkkkkkk.kkkpkkk.kkkkkkkrrrk",
+        "krrrk...kkkkpppppppkkkk...krrrk",
+        "krrrkkkkpppppppppppppppkkkkrrrk",
+        "krrrkpppppppppppppppppppppkrrrk",
+        "krrrkPPPPPPPPPPPPPPPPPPPPPkrrrk",
+        "krrrkpppppppppppppppppppppkrrrk",
+        "krrrkpPppPppPpppppPppPppPpkrrrk",
+        "krrrkpPppPppPpppppPppPppPpkrrrk",
+        "krrrkpPppPppPpnnnpPppPppPpkrrrk",
+        "krrrkpPppPppPpnnnpPppPppPpkrrrk",
+        "krrrkpPppPppPpnnnpPppPppPpkrrrk",
+        "krrrkpPppPppPpnnnpPppPppPpkrrrk",
+        "krrrkpPppPppPpnnnpPppPppPpkrrrk",
+        "krrrkpPppPppPpnnnpPppPppPpkrrrk",
+        "krrrkpPppPppPpnnnpPppPppPpkrrrk",
+        "krrrkpPppPppPpnnnpPppPppPpkrrrk",
+        "krrrkpPppPppPpnnnpPppPppPpkrrrk",
+        ".kkk.kkkkkkkkkkkkkkkkkkkkk.kkk."
+      ]
+    },
+    "angkorwat": {
+      "en": "Angkor Wat",
+      "es": "Angkor Wat",
+      "city": {
+        "en": "Siem Reap",
+        "es": "Siem Reap"
+      },
+      "size": [
+        33,
+        20
+      ],
+      "rows": [
+        "................k................",
+        "...............kok...............",
+        "..............kdddk..............",
+        "..............koook..............",
+        ".........k...kdddddk...k.........",
+        "........kok..koooook..kok........",
+        ".......kdddk.kdddddk.kdddk.......",
+        "......koooookoooooookoooook......",
+        "....k.kdddddkdddddddkdddddk.k....",
+        "..kkokoooooooooooooooooooookokk..",
+        ".kdddddddddddddddddddddddddddddk.",
+        "koooooooooooooooooooooooooooooook",
+        "kdddddddddddddddddddddddddddddddk",
+        "kooooooodddddddddddddddddoooooook",
+        "koooooooooooooooooooooooooooooook",
+        "koooooooooooooooooooooooooooooook",
+        "koodoodoodoodoodoodoodoodoodoodok",
+        "koodoodoodoodoodoodoodoodoodoodok",
+        "koooooooooooooooooooooooooooooook",
+        ".kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk."
+      ]
+    },
+    "hollywood": {
+      "en": "Hollywood Sign",
+      "es": "Letrero de Hollywood",
+      "city": {
+        "en": "Los Angeles",
+        "es": "Los Ángeles"
+      },
+      "size": [
+        41,
+        14
+      ],
+      "rows": [
+        "..................kkkkk..................",
+        ".............kkkkkeeeeekkkkk.............",
+        "........kkkkkeeeeeeeeleeeeeekkkkk........",
+        "...kkkkkeeeeeleeeleeeeeeeleeeeeeekkkkk...",
+        ".kkeeeeeeleeeeeeeeeeeeeeeeeeeleeeeeeeekk.",
+        "keesesessseseeeseeesesesesesssesssessleek",
+        "kleseseseseseeeseeeseseseseseseseseseseek",
+        "keessseseseseeeseeeeseeseseseseseseseseek",
+        "keeseseseseseeeseeeeseessseseseseseseseek",
+        "keesesesssesssessseeseesesesssesssesseeek",
+        "keeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeek",
+        "keheeeeheeeeheeeeheeeeheeeeheeeeheeeeheek",
+        "keeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeek",
+        ".kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk."
+      ]
+    }
+  },
+  "generic": {
+    "park": {
+      "en": "Big park",
+      "es": "Gran parque",
+      "size": [
+        16,
+        11
+      ],
+      "rows": [
+        "...hhhhh........",
+        "..hGGeeeh..hhh..",
+        ".hhGeeeehhhGehh.",
+        ".hGeeeeeehGeeeh.",
+        ".heeeeeeeheeeeh.",
+        "..heeeeeh.heehh.",
+        "...hhhhh...hh...",
+        ".....tt.....t...",
+        ".....tt.....t...",
+        "............t...",
+        "uuuuuuuuuuuuuuuu"
+      ]
+    },
+    "bridge": {
+      "en": "Bridge",
+      "es": "Puente",
+      "size": [
+        16,
+        12
+      ],
+      "rows": [
+        "...r........r...",
+        "..rrr......rrr..",
+        "..nrn......nrn..",
+        ".n.r.n....n.r.n.",
+        ".n.r..n..n..r.n.",
+        "n..r...nn...r..n",
+        "n..r........r..n",
+        "kkkkkkkkkkkkkkkk",
+        "oooooooooooooooo",
+        "...r........r...",
+        "aaaraaaaaaaaraaa",
+        "aaaaaaaaaaaaaaaa"
+      ]
+    },
+    "lighthouse": {
+      "en": "Lighthouse",
+      "es": "Faro",
+      "size": [
+        12,
+        16
+      ],
+      "rows": [
+        ".....kk.....",
+        "....kyyk....",
+        "...kkkkkk...",
+        "....kssk....",
+        "....krrk....",
+        "....kssk....",
+        "...kssssk...",
+        "...krrrrk...",
+        "...kssssk...",
+        "...kssssk...",
+        "..kssssssk..",
+        "..krrrrrrk..",
+        "..kssssssk..",
+        ".kkkkkkkkkk.",
+        ".mmmmmmmmmm.",
+        "mmmmmmmmmmmm"
+      ]
+    },
+    "stadium": {
+      "en": "Stadium",
+      "es": "Estadio",
+      "size": [
+        16,
+        9
+      ],
+      "rows": [
+        "k..............k",
+        "kk............kk",
+        "k..kkkkkkkkkk..k",
+        "k.kssssssssssk.k",
+        "kkkrsrsrsrsrsrkk",
+        "kssssssssssssssk",
+        "krrrrrrrrrrrrrrk",
+        "kssssssssssssssk",
+        "kkkkkkkkkkkkkkkk"
+      ]
+    },
+    "castle": {
+      "en": "Castle",
+      "es": "Castillo",
+      "size": [
+        17,
+        9
+      ],
+      "rows": [
+        "k.k.k.......k.k.k",
+        "kkkkk.k.k.k.kkkkk",
+        "koookkkkkkkkkoook",
+        "konokoooooookonok",
+        "koookoooooookoook",
+        "koookookkkookoook",
+        "konokoktttkokonok",
+        "koookoktttkokoook",
+        "kkkkkkkkkkkkkkkkk"
+      ]
+    },
+    "tower": {
+      "en": "Tower",
+      "es": "Torre",
+      "size": [
+        13,
+        14
+      ],
+      "rows": [
+        "......k......",
+        "......k......",
+        ".....kmk.....",
+        "..kkkkkkkkk..",
+        ".kwwwwwwwwwk.",
+        "..kkkkkkkkk..",
+        ".....kmk.....",
+        ".....kmk.....",
+        "....kmkmk....",
+        "....km.mk....",
+        "...kmk.kmk...",
+        "...km...mk...",
+        "..kmk...kmk..",
+        "..kkk...kkk.."
+      ]
+    }
+  }
+}

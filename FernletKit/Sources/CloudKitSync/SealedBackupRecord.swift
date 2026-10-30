@@ -13,8 +13,8 @@
 
 import Foundation
 
-/// Which sealed dataset a backup record carries: period data, journal narratives, or intimacy logs
-/// — plus the RETIRED sensitive-notes payload, which only ever appears here so its surviving
+/// Which sealed dataset a backup record carries: period data, journal narratives, intimacy logs or
+/// the World passport — plus the RETIRED sensitive-notes payload, which only ever appears here so its surviving
 /// records can still be found and deleted.
 ///
 /// The raw value keys the deterministic CloudKit record name (`sealed-backup.<type>`), so each
@@ -44,6 +44,12 @@ public enum SealedBackupPayloadType: String, Codable, CaseIterable {
     /// Sealed intimacy logs (`IntimacyLog` rows). Added 2026-08-10; this **reverses** the earlier
     /// "intimacy is not part of any sealed backup" decision (see `Docs/Verifiability.md` §6.1).
     case intimacyLogs
+    /// The sealed World passport: every country, continent, ocean, sea, city, landmark and terrain
+    /// class first visited, each by its frozen token with the first date. Added 2026-10-29 (round 7;
+    /// owner: the passport backup should "have its own switch"), with a switch of its own. This module
+    /// knows only the name: the records are opaque ciphertext like every other payload's, and nothing
+    /// here reads the passport's store.
+    case worldPassport
 }
 
 /// Opaque encrypted envelope for one chunk of a sealed backup, as stored in CloudKit.

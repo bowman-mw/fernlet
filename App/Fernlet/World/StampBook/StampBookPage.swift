@@ -43,6 +43,8 @@ struct StampBookPage: View {
                     StampBookKeepsakesCard(rows: rows, totalGifts: gifts.values.reduce(0, +), totalCoins: coins)
                     SillyStampBookCard(stamps: store.sillyStats.stamps)
                         .id(Self.stampsAnchor)
+                    // Sprout's passport (World-Passport-Spec §9): opens on page 2.
+                    StampBookPassportRow(store: store)
                     SillyStatsList(stats: store.sillyStats)
                 }
                 .padding(20)

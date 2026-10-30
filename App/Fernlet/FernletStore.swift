@@ -771,8 +771,8 @@ final class FernletStore {
     @ObservationIgnored private(set) lazy var worldFog: WorldFogKeeper = {
         let keeper = WorldFogKeeper(vault: worldMapVault)
         keeper.widgetMap = WorldWidgetMapFile(directory: appGroupDirectory)
-        // Round 7: a new passport discovery rides the journal's sealed iCloud backup set, so it owes an upload.
-        keeper.atlas.onPassportChanged = { [weak self] in self?.markSealedBackupDirty(.journalNarratives) }
+        // The passport's own Sealed backup owes an upload after a saved first visit or a wipe (round 7).
+        keeper.atlas.onPassportChanged = { [weak self] in self?.markSealedBackupDirty(.worldPassport) }
         return keeper
     }()
     /// The World map's location (`WorldLocationSource`), following the permission the person gave.
@@ -3803,6 +3803,8 @@ final class FernletStore {
         case .periodData: return MenstrualNarrativeRepository().hasEverStoredNarrative
         case .intimacyLogs: return sealedBackupCoordinator.intimacyDivergenceLatch ?? false
         case .journalNarratives: return sealedBackupCoordinator.journalDivergenceLatch
+        // No legacy latch: the passport's marker seeds unresolved, like a fresh install's (round 7).
+        case .worldPassport: return false
         case .sensitiveNotes: return false
         }
     }
@@ -3924,7 +3926,7 @@ final class FernletStore {
         if payload == .periodData, duressSessionActive || !isPeriodTrackingVisible { return nil }
         // The intimate-log and journal backups speak through their own rows, which name every restore
         // and export state with the choice that answers it — and never while hidden or in duress.
-        if payload == .intimacyLogs || payload == .journalNarratives { return nil }
+        if payload == .intimacyLogs || payload == .journalNarratives || payload == .worldPassport { return nil }
         switch sealedBackupV2Status[payload] {
         case .waitingForBackupKey?: return .deferredKeyNotSynced
         case .headDamaged?: return .notRecognized
@@ -8235,6 +8237,7 @@ extension FernletStore: SealedBackupContext {
         case .periodData: return sealedBackupPeriodReuploadDeferred
         case .journalNarratives: return sealedBackupJournalReuploadDeferred
         case .intimacyLogs: return sealedBackupIntimacyReuploadDeferred
+        case .worldPassport: return sealedBackupCoordinator.passportReuploadDeferred
         case .sensitiveNotes: return false
         }
     }
@@ -8264,6 +8267,7 @@ extension FernletStore: SealedBackupContext {
         case .periodData: sealedBackupPeriodReuploadDeferred = deferred
         case .journalNarratives: sealedBackupJournalReuploadDeferred = deferred
         case .intimacyLogs: sealedBackupIntimacyReuploadDeferred = deferred
+        case .worldPassport: sealedBackupCoordinator.passportReuploadDeferred = deferred
         // The retired payload never seals, so it can never owe a re-upload.
         case .sensitiveNotes: return
         }

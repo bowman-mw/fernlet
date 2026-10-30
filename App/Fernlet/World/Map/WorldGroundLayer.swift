@@ -16,6 +16,10 @@ struct WorldGround: Equatable {
     var trails: [[GeoPoint]] = []
     /// Lines in progress or from this session, drawn as dotted footsteps.
     var traces: [[GeoPoint]] = []
+
+    /// How wide a saved line draws, in points: the mockups' `--m-trail` line, the same for a walk's and a
+    /// ride's (owner 2026-10-29, Refinements group 19).
+    static let trailWidth: CGFloat = 5
 }
 
 /// Fernlet's own ground layer over whichever base map is underneath: trails, the nature fog with its
@@ -31,6 +35,9 @@ struct WorldGroundLayer: View {
     let darkStyle: Bool
     /// Fernlet's camera request, so the fog draws a glide's end before the map gets there.
     var camera: WorldCamera?
+    /// The land under the fog (World-Exploration-Spec §1: the sea, desert, mountains, roofs, the seasons…), from
+    /// the bundled atlas; nil, or no atlas, draws today's nature fog everywhere.
+    var terrain: NatureFogTerrain? = nil
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -40,13 +47,13 @@ struct WorldGroundLayer: View {
                 let trailColor = darkStyle ? WorldPalette.nightTrail : WorldPalette.trail
                 for trail in ground.trails {
                     context.stroke(path(for: trail, size: size), with: .color(trailColor),
-                                   style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+                                   style: StrokeStyle(lineWidth: WorldGround.trailWidth, lineCap: .square, lineJoin: .miter))
                 }
             }
             NatureFogLayer(scene: NatureFogScene(viewport: viewport,
                                                  clearing: NatureFogClearing(lifted: ground.lifted, uncovered: ground.uncovered),
                                                  palette: NatureFogPalette(dark: darkStyle, highContrast: contrast == .increased),
-                                                 motion: NatureFogMotion(reduceMotion: reduceMotion), camera: camera))
+                                                 motion: NatureFogMotion(reduceMotion: reduceMotion), camera: camera, terrain: terrain))
             traces
         }
         .allowsHitTesting(false)

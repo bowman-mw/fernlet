@@ -71,6 +71,14 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
     /// Separate from ``sealedBackupPeriodEnabled`` for the same reason the surfaces are separately
     /// hideable: someone may want their cycle history recoverable and their intimacy notes not.
     public var sealedBackupIntimacyEnabled: Bool
+    /// Whether the sealed (encrypted) backup of the World PASSPORT is uploaded to iCloud (round 7, owner
+    /// 2026-10-29: the passport backup should "have its own switch"): every place first visited, by its
+    /// frozen token, with the first date.
+    ///
+    /// Its own toggle rather than a rider on ``sealedBackupJournalEnabled``, which carried it before it
+    /// shipped: where someone has been is a different consent question from what they wrote. Off by
+    /// default, like the journal's.
+    public var sealedBackupPassportEnabled: Bool
     /// Whether the user's OWN photos (meal, recipe and gym-progress pictures plus the sealed
     /// progress index) are backed up to iCloud through the per-photo escrow route
     /// (security-hardening Phase 5, step 5b).
@@ -99,6 +107,10 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
     /// ``sealedBackupJournalReuploadDeferred`` plus one more: intimacy tracking was hidden, so the
     /// reconcile could not page the (gated) log store. Un-hiding discharges it.
     public var sealedBackupIntimacyReuploadDeferred: Bool
+    /// Set when the sealed PASSPORT backup still owes an upload: a first visit was saved, "Delete map
+    /// history" removed the passport, the backup was turned on, or an escrow adopt could not re-seal it.
+    /// Same contract as ``sealedBackupJournalReuploadDeferred``.
+    public var sealedBackupPassportReuploadDeferred: Bool
     /// Set when the user chose "Stop syncing, keep cloud data": sync is off, but a full copy of the day
     /// blob is deliberately left in the user's private CloudKit zone. Nothing else records that choice,
     /// so without this flag `hasAnyCloudCopy` reads false for exactly that user — the delete dialog then
@@ -122,10 +134,12 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         sealedBackupPeriodEnabled: Bool = false,
         sealedBackupJournalEnabled: Bool = false,
         sealedBackupIntimacyEnabled: Bool = false,
+        sealedBackupPassportEnabled: Bool = false,
         sealedBackupOwnPhotosEnabled: Bool = false,
         sealedBackupPeriodReuploadDeferred: Bool = false,
         sealedBackupJournalReuploadDeferred: Bool = false,
         sealedBackupIntimacyReuploadDeferred: Bool = false,
+        sealedBackupPassportReuploadDeferred: Bool = false,
         cloudCopyKept: Bool = false,
         // Default false = "never decided", NOT "keep included": the launch gate reads false as
         // permission to run (fresh installs adopt excluded; existing installs get the one-time
@@ -142,10 +156,12 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         self.sealedBackupPeriodEnabled = sealedBackupPeriodEnabled
         self.sealedBackupJournalEnabled = sealedBackupJournalEnabled
         self.sealedBackupIntimacyEnabled = sealedBackupIntimacyEnabled
+        self.sealedBackupPassportEnabled = sealedBackupPassportEnabled
         self.sealedBackupOwnPhotosEnabled = sealedBackupOwnPhotosEnabled
         self.sealedBackupPeriodReuploadDeferred = sealedBackupPeriodReuploadDeferred
         self.sealedBackupJournalReuploadDeferred = sealedBackupJournalReuploadDeferred
         self.sealedBackupIntimacyReuploadDeferred = sealedBackupIntimacyReuploadDeferred
+        self.sealedBackupPassportReuploadDeferred = sealedBackupPassportReuploadDeferred
         self.cloudCopyKept = cloudCopyKept
         self.backupExclusionChoiceMade = backupExclusionChoiceMade
         self.lastModifiedAt = lastModifiedAt
@@ -170,10 +186,12 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         sealedBackupPeriodEnabled = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupPeriodEnabled) ?? false
         sealedBackupJournalEnabled = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupJournalEnabled) ?? false
         sealedBackupIntimacyEnabled = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupIntimacyEnabled) ?? false
+        sealedBackupPassportEnabled = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupPassportEnabled) ?? false
         sealedBackupOwnPhotosEnabled = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupOwnPhotosEnabled) ?? false
         sealedBackupPeriodReuploadDeferred = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupPeriodReuploadDeferred) ?? false
         sealedBackupJournalReuploadDeferred = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupJournalReuploadDeferred) ?? false
         sealedBackupIntimacyReuploadDeferred = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupIntimacyReuploadDeferred) ?? false
+        sealedBackupPassportReuploadDeferred = try container.decodeIfPresent(Bool.self, forKey: .sealedBackupPassportReuploadDeferred) ?? false
         cloudCopyKept = try container.decodeIfPresent(Bool.self, forKey: .cloudCopyKept) ?? false
         // Phase-6 pin: the DEFAULT FLIP MUST NOT RIDE THIS DECODE. Both this `?? false` and the
         // `localBackupExcludedFromiOSBackup` decode above stay false-for-absent forever, so an
@@ -203,7 +221,7 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
 
     /// Whether a sealed (encrypted) backup of the sensitive stores may be sitting in iCloud.
     ///
-    /// - Important: EVERY sealed-backup flag must be OR'd in here — the four chunked payload types
+    /// - Important: EVERY sealed-backup flag must be OR'd in here — the five chunked payload types
     ///   AND the own-photo escrow route, which is its own record namespace rather than a
     ///   `SealedBackupPayloadType` case. This is what the delete dialog reads to decide whether it
     ///   may truthfully claim to remove an iCloud copy; a flag missing from this expression is a
@@ -213,6 +231,7 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
             || sealedBackupPeriodEnabled
             || sealedBackupJournalEnabled
             || sealedBackupIntimacyEnabled
+            || sealedBackupPassportEnabled
             || sealedBackupOwnPhotosEnabled
     }
 
@@ -233,6 +252,7 @@ public nonisolated struct StoragePreferences: Codable, Equatable, Sendable {
         sealedBackupPeriodEnabled = other.sealedBackupPeriodEnabled
         sealedBackupJournalEnabled = other.sealedBackupJournalEnabled
         sealedBackupIntimacyEnabled = other.sealedBackupIntimacyEnabled
+        sealedBackupPassportEnabled = other.sealedBackupPassportEnabled
         sealedBackupOwnPhotosEnabled = other.sealedBackupOwnPhotosEnabled
     }
 

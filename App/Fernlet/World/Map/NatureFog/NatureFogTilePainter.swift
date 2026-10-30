@@ -12,6 +12,9 @@ nonisolated struct NatureFogTileOrder: Sendable {
     let generation: Int
     /// Pixels a point in the tile's picture.
     let pixelScale: CGFloat
+    /// The land under the fog (World-Exploration-Spec §1), an immutable snapshot of the bundled atlas; nil for
+    /// today's nature fog. Its own `generation` moves when the atlas arrives late or the season changes.
+    var terrain: NatureFogTerrain? = nil
 }
 
 /// What a tile shows, drawn from its order: the seam where the fog's art plugs into the tile pipeline. It runs
@@ -22,7 +25,8 @@ nonisolated enum NatureFogTileContent {
     static func draw(_ order: NatureFogTileOrder, grower: NatureFogGrower) -> NatureFogTile {
         let area = NatureFogTileBook.area(of: order.key)
         let layout = grower.layout(in: area)
-        guard !layout.hexes.isEmpty else {
+        // A tile of open sea has no land hexes but still draws its water (World-Exploration-Spec §1).
+        guard !layout.hexes.isEmpty || !layout.seas.isEmpty else {
             return NatureFogTile(key: order.key, ground: nil, pieces: [], trees: layout.trees)
         }
         let format = UIGraphicsImageRendererFormat()
@@ -43,11 +47,15 @@ nonisolated enum NatureFogTileContent {
 ///
 /// Each painter keeps its own atlas and grower (neither is shared with the main thread or another painter);
 /// the grower is grown again when an order brings a new generation, so its memo never mixes two clearings.
+/// With terrain, the painter also keeps one ``NatureTerrainMemo`` (each hex's land, read from the atlas once)
+/// across clearings, and starts a new one only when the terrain snapshot itself changes.
 /// The cells it reads are the in-memory copy the order carries: nothing is written anywhere.
 actor NatureFogTilePainter {
     private let atlas: NatureFogAtlas
     private var grower: NatureFogGrower?
     private var grownFor = -1
+    private var memo: NatureTerrainMemo?
+    private var memoFor: NatureFogTerrain?
 
     /// A painter for the tiles of one book (one scale and palette).
     init(palette: NatureFogPalette) {
@@ -60,8 +68,12 @@ actor NatureFogTilePainter {
     }
 
     private func currentGrower(for order: NatureFogTileOrder) -> NatureFogGrower {
-        if let grower, grownFor == order.generation { return grower }
-        let grown = NatureFogGrower(scale: order.scale, clearing: order.clearing, atlas: atlas)
+        if let grower, grownFor == order.generation, memoFor == order.terrain { return grower }
+        if memoFor != order.terrain {
+            memo = order.terrain.map(NatureTerrainMemo.init(terrain:))
+            memoFor = order.terrain
+        }
+        let grown = NatureFogGrower(scale: order.scale, clearing: order.clearing, atlas: atlas, terrain: memo)
         grower = grown
         grownFor = order.generation
         return grown

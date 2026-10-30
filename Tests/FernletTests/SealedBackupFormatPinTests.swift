@@ -312,7 +312,7 @@ struct SealedBackupFormatPinTests {
         // The rawValues are at-rest format. Spelled out literally so a rename is a failing diff here
         // rather than a silent orphaning of existing CloudKit records.
         #expect(Set(SealedBackupPayloadType.allCases.map(\.rawValue))
-                == ["sensitiveNotes", "periodData", "journalNarratives", "intimacyLogs"])
+                == ["sensitiveNotes", "periodData", "journalNarratives", "intimacyLogs", "worldPassport"])
 
         for payloadType in SealedBackupPayloadType.allCases {
             let plaintext = Data("payload for \(payloadType.rawValue)".utf8)

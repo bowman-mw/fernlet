@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 import Testing
 import WorldMapStore
@@ -38,6 +39,54 @@ struct WorldDriveTraceTests {
         #expect(!WorldLocationSource.tracesDrive(permission: .always, backgroundMapping: false, declaresBackground: true, walking: false))
         #expect(!WorldLocationSource.tracesDrive(permission: .always, backgroundMapping: true, declaresBackground: false, walking: false))
         #expect(!WorldLocationSource.tracesDrive(permission: .always, backgroundMapping: true, declaresBackground: true, walking: true))
+    }
+
+    // MARK: When a bike ride is followed (Refinements group 19, ref-ride-line)
+
+    /// A bike ride is followed closely under exactly the drive trace's conditions (Always, background mapping
+    /// on, the `location` background mode declared, no walk), for the fitness activity; a drive keeps
+    /// automotive navigation.
+    @Test func aRideIsFollowedExactlyAsADriveIsTraced() {
+        var followed: [String] = []
+        for permission in Self.permissions {
+            for mapping in [false, true] {
+                for declared in [false, true] {
+                    for walking in [false, true] {
+                        let ride = WorldLocationSource.followsRide(permission: permission, backgroundMapping: mapping,
+                                                                   declaresBackground: declared, walking: walking)
+                        let drive = WorldLocationSource.tracesDrive(permission: permission, backgroundMapping: mapping,
+                                                                    declaresBackground: declared, walking: walking)
+                        #expect(ride == drive)
+                        if ride { followed.append("\(permission) \(mapping) \(declared) \(walking)") }
+                    }
+                }
+            }
+        }
+        #expect(followed == ["always true true false"])
+        #expect(WorldLocationSource.activityType(for: .ride) == .fitness)
+        #expect(WorldLocationSource.activityType(for: .drive) == .automotiveNavigation)
+    }
+
+    /// A ride found in delivered readings is not followed without Always (the test host has none), and a
+    /// reading on a bike lifts the fog like a walk's: the store's thin line is for a drive alone.
+    @Test func aRideWithoutAlwaysIsNotFollowedAndLiftsLikeAWalk() async throws {
+        let source = WorldLocationSource()
+        let motion = RideMotion()
+        source.rides.replaceMotion(with: motion)
+        source.rides.usesMotion = true
+        for step in 0...6 {
+            source.deliver(WorldFix(point: Self.here.offset(east: Double(step) * 50, north: 0), accuracy: 8,
+                                    at: Self.now.addingTimeInterval(Double(step) * 10), isPrecise: true, speed: 5))
+            await source.rides.motionQuery?.value
+        }
+        #expect(source.rides.isCycling && !source.rides.isDriving)
+        #expect(!source.isFollowingRide && source.trace == nil, "no Always in the test host")
+
+        let (keeper, vault) = try Self.keeper()
+        defer { _ = vault.clearAll() }
+        let fix = WorldFix(point: Self.here, accuracy: 8, at: Self.now, isPrecise: true, speed: 5)
+        let circle = Set(MercatorHexGrid.cells(around: fix.point, within: WorldFogKeeper.liftRadius))
+        #expect(keeper.handle(fix, thinLine: source.rides.isDriving) == circle.count, "a ride lifts the walk's clearing")
     }
 
     // MARK: The thin line
@@ -128,5 +177,18 @@ struct WorldDriveTraceTests {
         source.deliver(WorldFix(point: Self.here, accuracy: .infinity, at: Self.now, isPrecise: true))
         #expect(handed == 0)
         #expect(source.latest == nil)
+    }
+}
+
+/// Motion that says cycling from just after the tests' moment on, allowed.
+@MainActor
+private final class RideMotion: WorldMotionReading {
+    let permission: WorldMotionPermission = .allowed
+
+    func requestAccess() async -> Bool { true }
+
+    func samples(from start: Date, to end: Date) async -> [WorldMotionSample] {
+        let cycling = WorldMotionSample(kind: .cycling, isConfident: true, at: Date(timeIntervalSince1970: 2_000_000_001))
+        return cycling.at > start && cycling.at <= end ? [cycling] : []
     }
 }

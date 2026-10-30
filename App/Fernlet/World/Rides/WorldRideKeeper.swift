@@ -1,4 +1,5 @@
 import Foundation
+import WorldMapStore
 
 /// Car and bike detection on the phone (round 7; `b1-home-car`, `b1-home-bike`): the ``WorldRideWatch``
 /// fed with the map's readings and, while "Log my bike rides" is on and Motion & Fitness is allowed, the
@@ -7,7 +8,9 @@ import Foundation
 ///
 /// - **Home reads** ``isDriving`` (riding along) and ``loggedRide`` (the bike-ride note).
 /// - **The location source reads** ``isDriving`` through ``onDrivingChanged`` to trace a drive in the
-///   background when background mapping is on.
+///   background when background mapping is on, and ``isCycling`` through ``onCyclingChanged`` to follow a
+///   bike ride the same way (Refinements group 19, `ref-ride-line`).
+/// - **Home reads** ``ridePoints``, the ride's line so far, while a ride is on.
 /// - **The store logs** each finished bike ride through ``onBikeRide`` (`FernletStore+WorldRides`), which
 ///   also sets ``loggedRide`` for the note.
 /// - **Motion is read in order:** while ``usesMotion``, each reading may ask for the samples since the last
@@ -34,8 +37,15 @@ final class WorldRideKeeper {
         return false
     }
 
+    /// The bike ride's line so far, while a ride is under way (Refinements group 19, `ref-ride-line`): the
+    /// readings Home draws behind the bike in the walk line's green, empty on foot or in a car.
+    private(set) var ridePoints: [RoutePoint] = []
+
     /// Called when a drive starts (true) or ends (false).
     @ObservationIgnored var onDrivingChanged: ((Bool) -> Void)?
+    /// Called when a bike ride starts (true) or ends, logged or not (false): the location source follows a
+    /// ride closely while it is on (Refinements group 19, `ref-ride-line`).
+    @ObservationIgnored var onCyclingChanged: ((Bool) -> Void)?
     /// Called with each finished bike ride long enough to log.
     @ObservationIgnored var onBikeRide: ((WorldBikeRide) -> Void)?
 
@@ -119,9 +129,13 @@ final class WorldRideKeeper {
         apply(watch.tick(at: end))
     }
 
-    /// Applies what changed: the mode first, then the drive callback and finished rides, then the tick loop.
+    /// Applies what changed: the mode and the ride's line first, then the drive callback and finished rides,
+    /// then the ride callback (also when Motion went off mid-ride, which ends it unlogged), then the tick loop.
     private func apply(_ events: [WorldRideEvent]) {
+        let wasCycling = isCycling
         if mode != watch.mode { mode = watch.mode }
+        let points = watch.ridePoints
+        if points != ridePoints { ridePoints = points }
         for event in events.prefix(Self.maxEvents) {
             switch event {
             case .driveStarted:
@@ -134,6 +148,7 @@ final class WorldRideKeeper {
                 onBikeRide?(ride)
             }
         }
+        if wasCycling != isCycling { onCyclingChanged?(isCycling) }
         followTicks()
     }
 

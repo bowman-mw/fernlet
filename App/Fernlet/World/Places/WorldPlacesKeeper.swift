@@ -20,7 +20,8 @@ import WorldMapStore
 /// - **With background mapping on**, iOS's low-power visits are matched on the phone against the places
 ///   already known, and nothing else: no lookup ever runs in the background, so a stop at a new place is
 ///   learned only once the person opens the map there.
-/// - **Walks and runs** recorded on the map join the timeline with their length.
+/// - **Walks and runs** recorded on the map join the timeline with their length, and **bike rides**
+///   Fernlet logged with theirs when known (Refinements group 19, `ref-ride-timeline`).
 ///
 /// **Round 6** (owner-approved 2026-10-25):
 /// - **Remember this place** (`ref-tag-home`; round 7, draft 2: anywhere the person stays): once they have
@@ -179,11 +180,31 @@ final class WorldPlacesKeeper {
         return noteKnownVisit(at: visit.point, now: visit.arrived) ?? false
     }
 
-    /// A walk or run recorded on the map joins the timeline (`at` is when it started).
+    /// A walk or run recorded on the map, or a bike ride Fernlet logged (Refinements group 19), joins the
+    /// timeline (`at` is when it started). A walk or run needs its length; a ride's is optional (nil when the
+    /// readings couldn't say).
     @discardableResult
-    func recordOuting(_ kind: PlaceStop.Kind, at date: Date, metres: Double, workoutID: UUID?) -> Bool {
-        guard !isDecoy, remembersPlaces(), kind == .walk || kind == .run, metres.isFinite else { return false }
-        return update { $0.appending(PlaceStop(kind: kind, at: date, metres: max(0, metres), workoutID: workoutID)) }
+    func recordOuting(_ kind: PlaceStop.Kind, at date: Date, metres: Double?, workoutID: UUID?) -> Bool {
+        guard !isDecoy, remembersPlaces(), kind == .walk || kind == .run || kind == .ride else { return false }
+        guard kind == .ride || metres?.isFinite == true else { return false }
+        let length = metres.flatMap { $0.isFinite ? max(0, $0) : nil }
+        return update { $0.appending(PlaceStop(kind: kind, at: date, metres: length, workoutID: workoutID)) }
+    }
+
+    /// Takes the waiting walk, run or bike ride whose workout is `workoutID` off the timeline (a bike ride's
+    /// note's Undo). Nothing in a decoy. Whether one was removed.
+    @discardableResult
+    func removeOuting(workoutID: UUID) -> Bool {
+        guard !isDecoy else { return false }
+        return update { $0.removingOuting(workoutID: workoutID) }
+    }
+
+    /// Queues workout `workoutID`'s outing stop to leave the timeline at Private's next fold (an Undo while
+    /// Private is locked, so its folded log can't be opened). Nothing in a decoy; whether it was queued.
+    @discardableResult
+    func queueOutingRemoval(workoutID: UUID) -> Bool {
+        guard !isDecoy else { return false }
+        return update { $0.queuingOutingRemoval(workoutID: workoutID) }
     }
 
     /// A verdict's audit token: its kind alone (never the place's kind, name or reference).

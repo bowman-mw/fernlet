@@ -14,7 +14,7 @@ struct WorldAtlasTestPackBuilder {
         var sovereign: String
         /// Continent code.
         var continent: UInt8 = 1
-        /// Flags (bit 0: one of the 195).
+        /// Flags (bit 0: one of the passport's countries).
         var flags: UInt8 = 1
         /// The outline.
         var feature: Feature
@@ -65,6 +65,34 @@ struct WorldAtlasTestPackBuilder {
         var name: String
     }
 
+    /// A state or province row for `ADM1`.
+    struct Admin1 {
+        /// Its token (an ISO 3166-2 code or "ne:<id>").
+        var token: String
+        /// Country alpha-2 (a CTRY code).
+        var country: String
+        /// English name.
+        var name: String
+        /// Spanish name (empty: use English).
+        var spanish: String = ""
+        /// The outline.
+        var feature: Feature
+        /// Its plate group's index into ``admin1Groups``, 0xFFFF for its own.
+        var group: UInt16 = 0xFFFF
+    }
+
+    /// A plate group row at the head of `ADM1`.
+    struct Admin1Group {
+        /// Its token (an ISO 3166-2 code or "ne:region:<country>:<slug>").
+        var token: String
+        /// Country alpha-2 (a CTRY code).
+        var country: String
+        /// English name.
+        var name: String
+        /// Spanish name (empty: use English).
+        var spanish: String = ""
+    }
+
     let rows: Int
     var cols: Int { rows * 2 }
     var land: [UInt8]
@@ -76,6 +104,8 @@ struct WorldAtlasTestPackBuilder {
     var countries: [Country] = []
     var urban: [Feature] = []
     var cities: [City] = []
+    var admin1s: [Admin1] = []
+    var admin1Groups: [Admin1Group] = []
     var meta: String? = #"{"generator":"tests"}"#
 
     /// An all-water grid of `rows` rows.
@@ -126,6 +156,7 @@ struct WorldAtlasTestPackBuilder {
         var sections: [(tag: String, raw: Data)] = [
             ("LAND", landSection()), ("CLIM", Data(climate)), ("OCEA", Data(ocean)), ("CONT", Data(continent)),
             ("SEAS", seasSection()), ("CTRY", countriesSection()), ("URBN", urbanSection()), ("CITY", citiesSection()),
+            ("ADM1", admin1Section()),
         ]
         if let meta { sections.append(("META", Data(meta.utf8))) }
         return sections
@@ -215,6 +246,27 @@ struct WorldAtlasTestPackBuilder {
         return data
     }
 
+    private func admin1Section() -> Data {
+        var data = Data()
+        data.appendLE(UInt16(admin1Groups.count))
+        for group in admin1Groups {
+            data.appendShort(group.token)
+            data.append(Data(group.country.utf8))
+            data.appendShort(group.name)
+            data.appendShort(group.spanish)
+        }
+        data.appendLE(UInt16(admin1s.count))
+        for entry in admin1s {
+            data.appendShort(entry.token)
+            data.append(Data(entry.country.utf8))
+            data.appendShort(entry.name)
+            data.appendShort(entry.spanish)
+            data.appendLE(entry.group)
+            data.appendFeature(entry.feature)
+        }
+        return data
+    }
+
     /// Degrees in the pack's 1e-5 units.
     static func units(_ degrees: Double) -> Int32 {
         Int32((degrees * 100_000).rounded())
@@ -290,7 +342,12 @@ extension WorldAtlasTestPackBuilder {
     /// - a metro area cut the way Natural Earth cuts one: an urban boundary (100–100.35°E, 10–10.22°N) holding
     ///   city Q1 (10.1°N 100.1°E) and large city Q2 (10.2°N 100.3°E), and a fragment beside it
     ///   (100.4–100.6°E, 10.1–10.3°N) holding no city's point; town ne:5 (10.05°N 100.38°E) in the gap between
-    ///   them; a loose town ne:3 at 15°N 120°E and a loose city Q4 at 15°N 130°E.
+    ///   them; a loose town ne:3 at 15°N 120°E and a loose city Q4 at 15°N 130°E;
+    /// - states: BB's "ne:9" listed first, its ring wrongly over AA's west half (so only a fix whose country
+    ///   is unknown can find it there); AA-01 (20–30°E) and AA-02 (30–40°E), each 20–40°S; BB's "ne:7" over
+    ///   50–55°E only, so BB's east half has no state;
+    /// - plate groups: AA-01 and AA-02 are both in "ne:region:AA:south" (South Region); BB's entries are their
+    ///   own.
     static func standardWorld(rows: Int = 18) -> WorldAtlasTestPackBuilder {
         var world = WorldAtlasTestPackBuilder(rows: rows)
         world.seas = [Sea(token: "Q1247", parent: 2, name: "Caribbean Sea", spanish: "Mar Caribe")]
@@ -319,6 +376,18 @@ extension WorldAtlasTestPackBuilder {
             City(token: "Q4", country: "EE", size: 1, lat: 15, lon: 130, name: "Middle City"),
             City(token: "ne:5", country: "EE", size: 0, lat: 10.05, lon: 100.38, name: "Gap Town"),
         ]
+        world.admin1s = [
+            Admin1(token: "ne:9", country: "BB", name: "Stray",
+                   feature: Feature(bbox: (20, -40, 30, -20), rings: [Feature.box(20, -40, 30, -20)])),
+            Admin1(token: "AA-01", country: "AA", name: "West Province", spanish: "Provincia Oeste",
+                   feature: Feature(bbox: (20, -40, 30, -20), rings: [Feature.box(20, -40, 30, -20)]), group: 0),
+            Admin1(token: "AA-02", country: "AA", name: "East Province",
+                   feature: Feature(bbox: (30, -40, 40, -20), rings: [Feature.box(30, -40, 40, -20)]), group: 0),
+            Admin1(token: "ne:7", country: "BB", name: "Bee Isle",
+                   feature: Feature(bbox: (50, -40, 55, -30), rings: [Feature.box(50, -40, 55, -30)])),
+        ]
+        world.admin1Groups = [Admin1Group(token: "ne:region:AA:south", country: "AA", name: "South Region",
+                                          spanish: "Región Sur")]
         return world
     }
 }

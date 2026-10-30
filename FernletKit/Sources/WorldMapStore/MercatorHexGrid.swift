@@ -157,8 +157,9 @@ public nonisolated enum MercatorHexGrid {
         return cells
     }
 
-    /// Rounds fractional axial coordinates to the nearest cell (cube rounding).
-    private static func round(q: Double, r: Double) -> HexCell {
+    /// Rounds fractional axial coordinates to the nearest cell (cube rounding). Internal, so the world
+    /// view's coarser grid (``WorldViewHexGrid``) rounds exactly as the fog's does.
+    static func round(q: Double, r: Double) -> HexCell {
         guard q.isFinite, r.isFinite, abs(q) < 1e9, abs(r) < 1e9 else { return HexCell(q: 0, r: 0) }
         let s = -q - r
         var rq = q.rounded(), rr = r.rounded()

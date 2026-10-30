@@ -75,6 +75,26 @@ struct CloudKitDataServiceTests {
         #expect(summary.sealedBackups.offersRestore)
     }
 
+    /// Round 7: the World passport's own set (`sealed-backup.worldPassport`) is found by the same probe,
+    /// by name and with no schema change (one more value of the same record type), offers a restore, and
+    /// is deleted on its own.
+    @Test func detectionFindsThePassportsOwnSealedBackup() async throws {
+        let database = MockCloudKitRecordDatabase()
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName)
+        database.recordsByType["SealedBackupRecord"] = [
+            record(type: "SealedBackupRecord", name: "sealed-backup.worldPassport", zoneID: zoneID),
+            record(type: "SealedBackupRecord", name: "sealed-backup.journalNarratives", zoneID: zoneID)
+        ]
+        let service = makeService(database: database, zoneID: zoneID)
+
+        let summary = try #require(try await service.detectExistingData())
+        #expect(summary.sealedBackups.payloads == [.journalNarratives, .worldPassport])
+        #expect(summary.sealedBackups.restorablePayloads.contains(.worldPassport))
+        try await service.deleteSealedBackup(payloadType: .worldPassport)
+        let names = Set((database.recordsByType["SealedBackupRecord"] ?? []).map(\.recordID.recordName))
+        #expect(names == ["sealed-backup.journalNarratives"], "deleting the passport's set leaves the journal's")
+    }
+
     /// The retired sensitive-notes copy is found (a wipe deletes it) but offers no restore: nothing
     /// seals or restores it again.
     @Test func aRetiredPayloadAloneOffersNoRestore() {

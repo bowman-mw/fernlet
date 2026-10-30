@@ -124,7 +124,7 @@ public nonisolated struct AtlasCityNames: Hashable, Sendable {
 public nonisolated struct AtlasVisit: Hashable, Sendable {
     /// The territory's ISO 3166-1 alpha-2 code, or nil at sea or where the pack has no country.
     public var countryCode: String?
-    /// The sovereign state's alpha-2 code (a territory counts toward it in "N of 195"), or nil.
+    /// The sovereign state's alpha-2 code (a territory counts toward it in "N of 194"), or nil.
     public var sovereignCode: String?
     /// The continent the fix counts toward, or nil (at sea, unless Antarctica's rule holds).
     public var continent: AtlasContinent?

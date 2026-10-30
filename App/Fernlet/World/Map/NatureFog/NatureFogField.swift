@@ -70,12 +70,23 @@ nonisolated struct NaturePiece {
     let sortX: Double
     /// The sway phase group (0, 1, 2) for long grass and flowers; nil for what stays still.
     let swayGroup: Int?
+    /// The terrain colours the sprite is painted in (the approved nature fog's unless the land says otherwise).
+    var look: TerrainLook = .approved
 }
 
-/// A filled block of the ground: a speck, a ripple, a lily pad or a far-off flower.
+/// A filled block of the ground: a speck, a ripple, a lily pad or a far-off flower, in its hex's look.
 nonisolated struct NatureFogBlock {
     let rect: CGRect
     let paint: NaturePaint
+    var look: TerrainLook = .approved
+}
+
+/// A terrain mark on the ground (sea waves, sand ripples, scree, lichen, ice cracks, snow, a desert or tundra
+/// speck), in a palette role of its hex's look or a fixed colour.
+nonisolated struct NatureFogMark {
+    let rect: CGRect
+    let ink: NatureInk
+    let look: TerrainLook
 }
 
 /// A tree that stands, for the leaves it scatters when it lifts.
@@ -88,19 +99,26 @@ nonisolated struct NatureStandingTree: Hashable {
     func hash(into hasher: inout Hasher) { hasher.combine(anchor) }
 }
 
-/// Everything one area of fog draws, back to front (spec "Draw order"): ground hexes with their seams and
-/// specks, water with its shores, ripples and lilies, then the growing pieces sorted top of screen to bottom.
+/// Everything one area of fog draws, back to front (spec "Draw order"): ground hexes with their seams, the
+/// sea's hexes (no seams), specks and terrain marks, water with its shores, ripples and lilies and the sand line
+/// along the coast, then the growing pieces sorted top of screen to bottom. Each land hex keeps its terrain
+/// look; with no atlas every look is the approved one and the layout is today's nature fog exactly.
 nonisolated struct NatureFogLayout {
-    var hexes: [(centre: CGPoint, paint: NaturePaint)] = []
+    var hexes: [(centre: CGPoint, paint: NaturePaint, look: TerrainLook)] = []
+    /// Water-set hexes (World-Exploration-Spec §1: no seams), in the water look.
+    var seas: [(centre: CGPoint, paint: NaturePaint)] = []
     var specks: [NatureFogBlock] = []
+    var marks: [NatureFogMark] = []
     var ponds: [CGPoint] = []
     var shores: [(from: CGPoint, to: CGPoint)] = []
+    /// The sand line along a sea hex's sides that meet land.
+    var coasts: [(from: CGPoint, to: CGPoint)] = []
     var waterMarks: [NatureFogBlock] = []
     var pieces: [NaturePiece] = []
     var trees: [NatureStandingTree] = []
 }
 
-/// A tree a hex may stand: its sprite, root and canopy, before the wildness check.
+/// A tree (or palm, cactus or peak) a hex may stand: its sprite, root and canopy, before the wildness check.
 nonisolated struct NatureTreePlan {
     let anchor: HexCell
     let sprite: NatureSprite
@@ -109,4 +127,6 @@ nonisolated struct NatureTreePlan {
     /// The canopy's centre and radius, in global points.
     let canopy: CGPoint
     let canopyRadius: Double
+    /// The colours it is painted in.
+    var look: TerrainLook = .approved
 }

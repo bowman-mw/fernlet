@@ -11,6 +11,8 @@ struct NatureFogScene {
     let motion: NatureFogMotion
     /// Where Fernlet last asked the camera to go (following, Back to Sprout); nil when the caller has none.
     var camera: WorldCamera?
+    /// The land under the fog (World-Exploration-Spec §1); nil for today's nature fog.
+    var terrain: NatureFogTerrain? = nil
 }
 
 /// The nature fog on the live map, in the fog's old place in the stack (``WorldGroundLayer``: over the saved
@@ -163,7 +165,7 @@ final class NatureFogMapView: UIView {
     /// in, unless the clearing changed with it (then they go at once, so a decoy session never shows the
     /// history even for a moment); the old book becomes a spare. Fog coming back forgets every spare.
     private func sync(scale: NatureFogScale, scene: NatureFogScene) -> NatureFogChange? {
-        if let book, book.scale == scale, book.palette == scene.palette {
+        if let book, book.scale == scale, book.palette == scene.palette, book.terrain == scene.terrain {
             let change = book.change(to: scene.clearing)
             if change.reset { dropAll() }
             // Fog coming back: the old scale's tiles were drawn from the history and go at once.
@@ -195,7 +197,7 @@ final class NatureFogMapView: UIView {
 
     /// The spare book at `scale`, brought up to the scene's clearing (dropping the tiles a change reached).
     private func reuse(_ scale: NatureFogScale, scene: NatureFogScene) -> NatureFogTileBook? {
-        guard let index = spareBooks.firstIndex(where: { $0.scale == scale && $0.palette == scene.palette }) else { return nil }
+        guard let index = spareBooks.firstIndex(where: { $0.scale == scale && $0.palette == scene.palette && $0.terrain == scene.terrain }) else { return nil }
         let spare = spareBooks.remove(at: index)
         _ = spare.change(to: scene.clearing)
         return spare
@@ -204,7 +206,7 @@ final class NatureFogMapView: UIView {
     /// A new book at `scale` whose tiles reach the screen only while it's the current one.
     private func fresh(_ scale: NatureFogScale, scene: NatureFogScene) -> NatureFogTileBook {
         let next = NatureFogTileBook(scale: scale, palette: scene.palette, clearing: scene.clearing,
-                                     pixelScale: min(traitCollection.displayScale, 2))
+                                     pixelScale: min(traitCollection.displayScale, 2), terrain: scene.terrain)
         next.onReady = { [weak self, weak next] tile in
             guard let self, let next, self.book === next else { return }
             self.arrived(tile)
@@ -404,7 +406,7 @@ final class NatureFogMapView: UIView {
         rejections.note(culled.rejected == 0, at: .fogPiece)
         var swaying: [(layer: CALayer, group: Int)] = []
         for (piece, frame) in culled.kept {
-            guard let sprite = book.atlas.sprite(piece.sprite) else { continue }
+            guard let sprite = book.atlas.sprite(piece.sprite, look: piece.look) else { continue }
             let sprout = CALayer()
             sprout.contents = sprite.image
             sprout.magnificationFilter = .nearest

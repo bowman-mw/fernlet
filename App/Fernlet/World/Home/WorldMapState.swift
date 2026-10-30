@@ -72,6 +72,10 @@ nonisolated enum WorldMapNoticeKind: Equatable, Sendable {
     /// offline's line is about walks (none record in a car) and approximate's Use precise is no control to
     /// reach for on the road, so the other plates wait until the person is on foot.
     case ridingAlong
+    /// "Riding along" on a bike, with the car's line under it (Refinements group 19, `ref-ride-home`), while
+    /// the ride engine says a bike ride is under way. It stands where the car's plate stands, first of all;
+    /// only its title's key and what VoiceOver hears ("Riding along on your bike") are its own.
+    case ridingAlongBike
     /// "Offline · Walks still record. The map returns with signal." (`b1-home-offline`)
     case offline
     /// "Approximate location · The companion stands in your area, not on your street." with Use precise
@@ -85,12 +89,14 @@ nonisolated enum WorldMapNoticeKind: Equatable, Sendable {
 
     /// The notice for these facts, or nil for none. A decoy never shows the first-day plate (it must look
     /// like any day), and neither does a walk under way, or a map set not to uncover as you go. While
-    /// `isDriving` (``WorldRideKeeper/isDriving``) the riding-along plate stands in for every other one.
+    /// `isDriving` (``WorldRideKeeper/isDriving``) the riding-along plate stands in for every other one, and
+    /// while `isCycling` (``WorldRideKeeper/isCycling``) the bike's does.
     static func make(presence: WorldMapPresence, tiles: WorldTileState, loadingLong: Bool,
                      liftedCells: Int, uncovers: Bool = true, isDecoy: Bool, isWalking: Bool,
-                     isDriving: Bool = false) -> WorldMapNoticeKind? {
+                     isDriving: Bool = false, isCycling: Bool = false) -> WorldMapNoticeKind? {
         guard presence != .off else { return nil }
         if isDriving { return .ridingAlong }
+        if isCycling { return .ridingAlongBike }
         if tiles == .failed { return .offline }
         if presence == .approximate { return .approximate }
         if tiles == .loading && loadingLong { return .loading }
