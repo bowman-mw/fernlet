@@ -102,9 +102,13 @@ for the simulator, so the suite is what catches a device-only break before an ar
     Availability → iPhone and iPad Apps on Apple Silicon Macs). On a Mac, Fernlet's core features are
     absent anyway: no Apple Health data, no UWB ranging, no in-person mesh. No build setting changed.
   - **If Mac availability is ever turned back on:** set the minimum macOS version to 26.5 on that App
-    Store Connect page, or add `INFOPLIST_KEY_LSMinimumSystemVersion = 26.5` to the Fernlet target, which
-    iOS ignores, with a cell in `EnhancedSecurityConfigurationTests` to hold it. Otherwise a Mac on
-    26.0–26.4 would offer the app and then fail to launch it.
+    Store Connect page, or declare it in the bundle. Otherwise a Mac on 26.0–26.4 would offer the app
+    and then fail to launch it.
+  - **The bundle declares it (2026-10-30).** `LSMinimumSystemVersion` = 26.5 sits in
+    `App/Fernlet/Info.plist`, held by `EnhancedSecurityConfigurationTests`. PR #70 (2026-10-26) had used
+    the build setting `INFOPLIST_KEY_LSMinimumSystemVersion` instead, but Xcode leaves that key out of an
+    iOS target's generated plist, so build 375 still carried no minimum and validation warned again
+    (ITMS-91305). The test also keeps the dead setting out of the project.
 - **The app's `arm64e` slice had no class_ro_t pointer signing (found 2026-10-17, fixed 2026-10-25).**
   Every iOS archive printed 29 linker warnings: "'<Module>.o' was built with class_ro_t pointer signing
   enabled, but previous .o file was not", once per FernletKit module, plus the reverse for `CryptoSwift.o`.
