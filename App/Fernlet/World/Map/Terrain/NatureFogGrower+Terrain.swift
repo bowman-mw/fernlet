@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 import WorldMapStore
 
-extension NatureFogGrower {
+nonisolated extension NatureFogGrower {
     /// The sand-ripple colours (the mockup's `ripples`).
     private static let rippleShadow: UInt32 = 0xC9AA6A
     private static let rippleLight: UInt32 = 0xF1E0B6
