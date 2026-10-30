@@ -1,0 +1,2946 @@
+{
+ "environment": "iOS 26.5 Simulator (iPhone 17), Debug build of ad3e7701, Apple silicon Mac under concurrent load; NOT a device measurement",
+ "measuredAt": "2026-10-29",
+ "panelReviewStatus": "draft",
+ "panelVersion": 1,
+ "queries": {
+  "ben-and-jerrys-ice-cream": {
+   "base-branded/cold": {
+    "acceptableInPool": 7,
+    "brandMismatchesInTop6": 0,
+    "first": "Ben & Jerry's, Ice Cream, Cherry Garcia",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 7,
+    "brandMismatchesInTop6": 0,
+    "first": "Ben & Jerry's, Ice Cream, Cherry Garcia",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 7,
+    "brandMismatchesInTop6": 0,
+    "first": "Ben & Jerry's, Ice Cream, Cherry Garcia",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 7,
+    "brandMismatchesInTop6": 0,
+    "first": "Ben & Jerry's, Ice Cream, Cherry Garcia",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "chick-fil-a-sandwich": {
+   "base-branded/cold": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 5,
+    "first": "Breaded Chicken Breast Fillet Sandwich, Chicken",
+    "firstAcceptableRank": 3,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 5,
+    "first": "Breaded Chicken Breast Fillet Sandwich, Chicken",
+    "firstAcceptableRank": 3,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 4,
+    "first": "CHICK-FIL-A, chicken sandwich",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 4,
+    "first": "WENDY'S, Homestyle Chicken Fillet Sandwich",
+    "firstAcceptableRank": 2,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "chick-fil-a-spaced": {
+   "base-branded/cold": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 5,
+    "first": "Breaded Chicken Breast Fillet Sandwich, Chicken",
+    "firstAcceptableRank": 3,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 5,
+    "first": "Breaded Chicken Breast Fillet Sandwich, Chicken",
+    "firstAcceptableRank": 3,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 4,
+    "first": "CHICK-FIL-A, chicken sandwich",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 4,
+    "first": "WENDY'S, Homestyle Chicken Fillet Sandwich",
+    "firstAcceptableRank": 2,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "chicken-burrito-bowl": {
+   "base-branded/cold": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "Burrito bowl, chicken",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "Burrito bowl, chicken",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "Burrito bowl, chicken",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "Burrito bowl, chicken",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "chickfila-nuggets": {
+   "base-branded/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   },
+   "base/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   },
+   "base/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   }
+  },
+  "chipotle-burrito": {
+   "base-branded/cold": {
+    "acceptableInPool": 13,
+    "brandMismatchesInTop6": 0,
+    "first": "Chicken Chipotle Burrito",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 13,
+    "brandMismatchesInTop6": 0,
+    "first": "Chicken Chipotle Burrito",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 7,
+    "brandMismatchesInTop6": 0,
+    "first": "Chicken Chipotle Burrito",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 7,
+    "brandMismatchesInTop6": 0,
+    "first": "Chicken Chipotle Burrito",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "chipotle-seasoning": {
+   "base-branded/cold": {
+    "acceptableInPool": 82,
+    "brandMismatchesInTop6": 0,
+    "first": "Chipotle Seasoning",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 82,
+    "brandMismatchesInTop6": 0,
+    "first": "Chipotle Seasoning",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 14,
+    "brandMismatchesInTop6": 0,
+    "first": "Southwest Style Chipotle Seasoning Turkey Breast Tenderloins, Southwest Style Chipotle",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 14,
+    "brandMismatchesInTop6": 0,
+    "first": "Southwest Style Chipotle Seasoning Turkey Breast Tenderloins, Southwest Style Chipotle",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "chobani": {
+   "base-branded/cold": {
+    "acceptableInPool": 23,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, Blueberry, CHOBANI",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 23,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, Blueberry, CHOBANI",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 19,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, Blueberry, CHOBANI",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 19,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, Blueberry, CHOBANI",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "chobani-blueberry-yogurt": {
+   "base-branded/cold": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, Blueberry, CHOBANI",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, Blueberry, CHOBANI",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, Blueberry, CHOBANI",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, Blueberry, CHOBANI",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "chobani-yogurt": {
+   "base-branded/cold": {
+    "acceptableInPool": 21,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, 2% fat, apricot, CHOBANI",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 21,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, Blueberry, CHOBANI",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 18,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, 2% fat, apricot, CHOBANI",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 18,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, Blueberry, CHOBANI",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "chobanni-yogurt": {
+   "base-branded/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   },
+   "base/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   },
+   "base/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   }
+  },
+  "chocolate": {
+   "base-branded/cold": {
+    "acceptableInPool": 231,
+    "brandMismatchesInTop6": 0,
+    "first": "Chocolate-flavored hazelnut spread",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 231,
+    "brandMismatchesInTop6": 0,
+    "first": "Chocolate-flavored hazelnut spread",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 231,
+    "brandMismatchesInTop6": 0,
+    "first": "Chocolate-flavored hazelnut spread",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 231,
+    "brandMismatchesInTop6": 0,
+    "first": "Chocolate-flavored hazelnut spread",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "chocolate-chips": {
+   "base-branded/cold": {
+    "acceptableInPool": 25,
+    "brandMismatchesInTop6": 0,
+    "first": "Candies, semisweet chocolate",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 25,
+    "brandMismatchesInTop6": 0,
+    "first": "Candies, semisweet chocolate",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 25,
+    "brandMismatchesInTop6": 0,
+    "first": "Candies, semisweet chocolate",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 25,
+    "brandMismatchesInTop6": 0,
+    "first": "Candies, semisweet chocolate",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "chocolate-protein-shake": {
+   "base-branded/cold": {
+    "acceptableInPool": 331,
+    "brandMismatchesInTop6": 0,
+    "first": "Chocolate Protein Shake, Chocolate",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 331,
+    "brandMismatchesInTop6": 0,
+    "first": "Chocolate Protein Shake, Chocolate",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 100,
+    "brandMismatchesInTop6": 0,
+    "first": "Chocolate Protein Shake, Chocolate",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 100,
+    "brandMismatchesInTop6": 0,
+    "first": "Chocolate Protein Shake, Chocolate",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "clif-bar": {
+   "base-branded/cold": {
+    "acceptableInPool": 10,
+    "brandMismatchesInTop6": 0,
+    "first": "Snacks, CLIF BAR, mixed flavors",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 10,
+    "brandMismatchesInTop6": 0,
+    "first": "Snacks, CLIF BAR, mixed flavors",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 2,
+    "brandMismatchesInTop6": 0,
+    "first": "Snacks, CLIF BAR, mixed flavors",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 2,
+    "brandMismatchesInTop6": 0,
+    "first": "Snacks, CLIF BAR, mixed flavors",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "cooked-white-rice": {
+   "base-branded/cold": {
+    "acceptableInPool": 11,
+    "brandMismatchesInTop6": 0,
+    "first": "Rice, white, glutinous, unenriched, cooked",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 11,
+    "brandMismatchesInTop6": 0,
+    "first": "Rice, white, glutinous, unenriched, cooked",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 11,
+    "brandMismatchesInTop6": 0,
+    "first": "Rice, white, glutinous, unenriched, cooked",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 11,
+    "brandMismatchesInTop6": 0,
+    "first": "Rice, white, glutinous, unenriched, cooked",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "diet-coke": {
+   "base-branded/cold": {
+    "acceptableInPool": 26,
+    "brandMismatchesInTop6": 0,
+    "first": "Diet Coke Can, 12 Fl Oz",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 26,
+    "brandMismatchesInTop6": 0,
+    "first": "Diet Coke Can, 12 Fl Oz",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 17,
+    "brandMismatchesInTop6": 0,
+    "first": "Diet Coke Can, 12 Fl Oz",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 17,
+    "brandMismatchesInTop6": 0,
+    "first": "Diet Coke Can, 12 Fl Oz",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "doritos-nacho-cheese": {
+   "base-branded/cold": {
+    "acceptableInPool": 16,
+    "brandMismatchesInTop6": 0,
+    "first": "Doritos Nacho Cheese Flavored Popcorn",
+    "firstAcceptableRank": 2,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 16,
+    "brandMismatchesInTop6": 0,
+    "first": "Doritos Nacho Cheese Flavored Popcorn",
+    "firstAcceptableRank": 2,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 8,
+    "brandMismatchesInTop6": 0,
+    "first": "Doritos Nacho Cheese Tortilla Chips 11 Ounce Bag",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 8,
+    "brandMismatchesInTop6": 0,
+    "first": "Doritos Nacho Cheese Tortilla Chips 11 Ounce Bag",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "eggs": {
+   "base-branded/cold": {
+    "acceptableInPool": 124,
+    "brandMismatchesInTop6": 0,
+    "first": "Eggs, Grade A, Large, egg whole",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 124,
+    "brandMismatchesInTop6": 0,
+    "first": "Eggs, Grade A, Large, egg whole",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 124,
+    "brandMismatchesInTop6": 0,
+    "first": "Eggs, Grade A, Large, egg whole",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 124,
+    "brandMismatchesInTop6": 0,
+    "first": "Eggs, Grade A, Large, egg whole",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "es-leche-descremada": {
+   "base-branded/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   },
+   "base/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   },
+   "base/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   }
+  },
+  "es-pechuga-de-pollo": {
+   "base-branded/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   },
+   "base/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   },
+   "base/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   }
+  },
+  "es-yogur-griego": {
+   "base-branded/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   },
+   "base/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   },
+   "base/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   }
+  },
+  "fage-yogurt": {
+   "base-branded/cold": {
+    "acceptableInPool": 2,
+    "brandMismatchesInTop6": 0,
+    "first": "Fage, Nonfat Greek Strained Yogurt, Blueberry",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 2,
+    "brandMismatchesInTop6": 0,
+    "first": "Fage, Nonfat Greek Strained Yogurt, Blueberry",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "Fage, Nonfat Greek Strained Yogurt, Blueberry",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "Fage, Nonfat Greek Strained Yogurt, Blueberry",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "five-hour-energy": {
+   "base-branded/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": "Beverages,  Energy drink, Citrus",
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": "Beverages,  Energy drink, Citrus",
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": "Beverages,  Energy drink, Citrus",
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": "Beverages,  Energy drink, Citrus",
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": false
+   }
+  },
+  "full-fat-yogurt": {
+   "base-branded/cold": {
+    "acceptableInPool": 5,
+    "brandMismatchesInTop6": 0,
+    "first": "Plain Full Fat Yogurt, Plain",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 5,
+    "brandMismatchesInTop6": 0,
+    "first": "Plain Full Fat Yogurt, Plain",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "Black Cherry Fruit On The Bottom Oatgurt Non-dairy Full-fat Yogurt Alternative, Black Cherry",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "Black Cherry Fruit On The Bottom Oatgurt Non-dairy Full-fat Yogurt Alternative, Black Cherry",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "greek-yogurt-blueberry": {
+   "base-branded/cold": {
+    "acceptableInPool": 256,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, Blueberry, CHOBANI",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 256,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, Blueberry, CHOBANI",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 37,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, Blueberry, CHOBANI",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 37,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, Blueberry, CHOBANI",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "haagen-dazs-accented": {
+   "base-branded/cold": {
+    "acceptableInPool": 8,
+    "brandMismatchesInTop6": 0,
+    "first": "Haagen-dazs, Ice Cream, Banana Rum Jam",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 8,
+    "brandMismatchesInTop6": 0,
+    "first": "Haagen-dazs, Ice Cream, Banana Rum Jam",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   },
+   "base/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   }
+  },
+  "haagen-dazs-plain": {
+   "base-branded/cold": {
+    "acceptableInPool": 8,
+    "brandMismatchesInTop6": 0,
+    "first": "Haagen-dazs, Ice Cream, Banana Rum Jam",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 8,
+    "brandMismatchesInTop6": 0,
+    "first": "Haagen-dazs, Ice Cream, Banana Rum Jam",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   },
+   "base/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   }
+  },
+  "heinz": {
+   "base-branded/cold": {
+    "acceptableInPool": 34,
+    "brandMismatchesInTop6": 0,
+    "first": "Heinz, Weight Watcher, Chocolate Eclair, frozen",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 34,
+    "brandMismatchesInTop6": 0,
+    "first": "Heinz, Weight Watcher, Chocolate Eclair, frozen",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 18,
+    "brandMismatchesInTop6": 0,
+    "first": "Heinz, Weight Watcher, Chocolate Eclair, frozen",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 18,
+    "brandMismatchesInTop6": 0,
+    "first": "Heinz, Weight Watcher, Chocolate Eclair, frozen",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "heinz-ketchip": {
+   "base-branded/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   },
+   "base/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   },
+   "base/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   }
+  },
+  "heinz-ketchup": {
+   "base-branded/cold": {
+    "acceptableInPool": 4,
+    "brandMismatchesInTop6": 0,
+    "first": "Potato Chips, Heinz Ketchup",
+    "firstAcceptableRank": 2,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 4,
+    "brandMismatchesInTop6": 0,
+    "first": "Potato Chips, Heinz Ketchup",
+    "firstAcceptableRank": 2,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 2,
+    "brandMismatchesInTop6": 0,
+    "first": "Potato Chips, Heinz Ketchup",
+    "firstAcceptableRank": 2,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 2,
+    "brandMismatchesInTop6": 0,
+    "first": "Potato Chips, Heinz Ketchup",
+    "firstAcceptableRank": 2,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "jalapeno-chips": {
+   "base-branded/cold": {
+    "acceptableInPool": 459,
+    "brandMismatchesInTop6": 0,
+    "first": "Jalapeno Chips",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 459,
+    "brandMismatchesInTop6": 0,
+    "first": "Jalapeno Chips",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 85,
+    "brandMismatchesInTop6": 0,
+    "first": "Cape Cod Sweet & Spicy Jalapeno Chips, 2 Oz Bag",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 85,
+    "brandMismatchesInTop6": 0,
+    "first": "Cape Cod Sweet & Spicy Jalapeno Chips, 2 Oz Bag",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "ketchup-heinz": {
+   "base-branded/cold": {
+    "acceptableInPool": 4,
+    "brandMismatchesInTop6": 0,
+    "first": "Heinz, Tomato Ketchup",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 4,
+    "brandMismatchesInTop6": 0,
+    "first": "Heinz, Tomato Ketchup",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 2,
+    "brandMismatchesInTop6": 0,
+    "first": "Heinz, Tomato Ketchup",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 2,
+    "brandMismatchesInTop6": 0,
+    "first": "Heinz, Tomato Ketchup",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "kind-bar": {
+   "base-branded/cold": {
+    "acceptableInPool": 28,
+    "brandMismatchesInTop6": 0,
+    "first": "Kind, Bar, Peanut Butter Dark Chocolate",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 28,
+    "brandMismatchesInTop6": 1,
+    "first": "Kinder Bueno Riegel Bar",
+    "firstAcceptableRank": 2,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 4,
+    "brandMismatchesInTop6": 1,
+    "first": "Kind, Bar, Peanut Butter Dark Chocolate, Peanut Butter Dark Chocolate",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 4,
+    "brandMismatchesInTop6": 1,
+    "first": "Kinder Bueno Riegel Bar",
+    "firstAcceptableRank": 2,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "larabar": {
+   "base-branded/cold": {
+    "acceptableInPool": 93,
+    "brandMismatchesInTop6": 0,
+    "first": "Larabar, Bar, Lemon",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 93,
+    "brandMismatchesInTop6": 0,
+    "first": "Larabar, Bar, Lemon",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 34,
+    "brandMismatchesInTop6": 0,
+    "first": "Larabar Chocolate Truffles",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 34,
+    "brandMismatchesInTop6": 0,
+    "first": "Larabar Chocolate Truffles",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "low-sodium-soy-sauce": {
+   "base-branded/cold": {
+    "acceptableInPool": 2,
+    "brandMismatchesInTop6": 0,
+    "first": "Soy sauce made from soy and wheat (shoyu), low sodium",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 2,
+    "brandMismatchesInTop6": 0,
+    "first": "Soy sauce made from soy and wheat (shoyu), low sodium",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "Soy sauce made from soy and wheat (shoyu), low sodium",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "Soy sauce made from soy and wheat (shoyu), low sodium",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "mcdonalds-apostrophe-big-mac": {
+   "base-branded/cold": {
+    "acceptableInPool": 2,
+    "brandMismatchesInTop6": 0,
+    "first": "McDONALD'S, BIG MAC",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 2,
+    "brandMismatchesInTop6": 0,
+    "first": "McDONALD'S, BIG MAC",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 2,
+    "brandMismatchesInTop6": 0,
+    "first": "McDONALD'S, BIG MAC",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 2,
+    "brandMismatchesInTop6": 0,
+    "first": "McDONALD'S, BIG MAC",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "mcdonalds-big-mac": {
+   "base-branded/cold": {
+    "acceptableInPool": 2,
+    "brandMismatchesInTop6": 0,
+    "first": "McDONALD'S, BIG MAC",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 2,
+    "brandMismatchesInTop6": 0,
+    "first": "McDONALD'S, BIG MAC",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 2,
+    "brandMismatchesInTop6": 0,
+    "first": "McDONALD'S, BIG MAC",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 2,
+    "brandMismatchesInTop6": 0,
+    "first": "McDONALD'S, BIG MAC",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "milk": {
+   "base-branded/cold": {
+    "acceptableInPool": 111,
+    "brandMismatchesInTop6": 0,
+    "first": "Milk and cereal bar",
+    "firstAcceptableRank": 2,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 111,
+    "brandMismatchesInTop6": 0,
+    "first": "Milk, sheep, fluid",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 111,
+    "brandMismatchesInTop6": 0,
+    "first": "Milk and cereal bar",
+    "firstAcceptableRank": 2,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 111,
+    "brandMismatchesInTop6": 0,
+    "first": "Milk, sheep, fluid",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "nature-valley-granola-bar": {
+   "base-branded/cold": {
+    "acceptableInPool": 68,
+    "brandMismatchesInTop6": 0,
+    "first": "Snacks, granola bar, GENERAL MILLS, NATURE VALLEY, CHEWY TRAIL MIX",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 68,
+    "brandMismatchesInTop6": 0,
+    "first": "Snacks, granola bar, GENERAL MILLS, NATURE VALLEY, CHEWY TRAIL MIX",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 26,
+    "brandMismatchesInTop6": 0,
+    "first": "Snacks, granola bar, GENERAL MILLS, NATURE VALLEY, CHEWY TRAIL MIX",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 26,
+    "brandMismatchesInTop6": 0,
+    "first": "Snacks, granola bar, GENERAL MILLS, NATURE VALLEY, CHEWY TRAIL MIX",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "nonfat-milk": {
+   "base-branded/cold": {
+    "acceptableInPool": 119,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, chocolate, nonfat milk",
+    "firstAcceptableRank": 5,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 119,
+    "brandMismatchesInTop6": 0,
+    "first": "Milk, lowfat, fluid, 1% milkfat, with added nonfat milk solids, vitamin A and vitamin D",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 24,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, chocolate, nonfat milk",
+    "firstAcceptableRank": 5,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 24,
+    "brandMismatchesInTop6": 0,
+    "first": "Milk, lowfat, fluid, 1% milkfat, with added nonfat milk solids, vitamin A and vitamin D",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "oikos-greek-yogurt": {
+   "base-branded/cold": {
+    "acceptableInPool": 25,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, nonfat, vanilla, DANNON OIKOS",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 25,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, nonfat, vanilla, DANNON OIKOS",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 3,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, nonfat, vanilla, DANNON OIKOS",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 3,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, nonfat, vanilla, DANNON OIKOS",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "olive-oil": {
+   "base-branded/cold": {
+    "acceptableInPool": 3,
+    "brandMismatchesInTop6": 0,
+    "first": "Mayonnaise, reduced fat, with olive oil",
+    "firstAcceptableRank": 2,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 3,
+    "brandMismatchesInTop6": 0,
+    "first": "Anchovies, canned in olive oil, with salt, drained",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 3,
+    "brandMismatchesInTop6": 0,
+    "first": "Mayonnaise, reduced fat, with olive oil",
+    "firstAcceptableRank": 2,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 3,
+    "brandMismatchesInTop6": 0,
+    "first": "Anchovies, canned in olive oil, with salt, drained",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "protein-bar-quest": {
+   "base-branded/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 5,
+    "first": "Formulated Bar, SOUTH BEACH protein bar",
+    "firstAcceptableRank": 5,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 5,
+    "first": "Formulated Bar, SOUTH BEACH protein bar",
+    "firstAcceptableRank": 5,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 5,
+    "first": "Formulated Bar, SOUTH BEACH protein bar",
+    "firstAcceptableRank": 5,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 5,
+    "first": "Formulated Bar, SOUTH BEACH protein bar",
+    "firstAcceptableRank": 5,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "quest": {
+   "base-branded/cold": {
+    "acceptableInPool": 8,
+    "brandMismatchesInTop6": 0,
+    "first": "Quest, Protein Chips, Sea Salt",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 8,
+    "brandMismatchesInTop6": 0,
+    "first": "Quest, Protein Chips, Sea Salt",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 2,
+    "brandMismatchesInTop6": 0,
+    "first": "Quest, Protein Chips, Sea Salt, Sea Salt",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 2,
+    "brandMismatchesInTop6": 0,
+    "first": "Quest, Protein Chips, Sea Salt, Sea Salt",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "quest-prot": {
+   "base-branded/cold": {
+    "acceptableInPool": 4,
+    "brandMismatchesInTop6": 0,
+    "first": "Quest, Protein Chips, Salt & Vinegar",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 4,
+    "brandMismatchesInTop6": 0,
+    "first": "Quest, Protein Chips, Salt & Vinegar",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 2,
+    "brandMismatchesInTop6": 0,
+    "first": "Quest, Protein Chips, Sea Salt, Sea Salt",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 2,
+    "brandMismatchesInTop6": 0,
+    "first": "Quest, Protein Chips, Sea Salt, Sea Salt",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "quest-protein-bar": {
+   "base-branded/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 4,
+    "first": "Formulated Bar, SOUTH BEACH protein bar",
+    "firstAcceptableRank": 5,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 4,
+    "first": "Formulated Bar, SOUTH BEACH protein bar",
+    "firstAcceptableRank": 5,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 4,
+    "first": "Formulated Bar, SOUTH BEACH protein bar",
+    "firstAcceptableRank": 5,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 4,
+    "first": "Formulated Bar, SOUTH BEACH protein bar",
+    "firstAcceptableRank": 5,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "quest-protien-bar": {
+   "base-branded/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 1,
+    "first": "Blueberry Protien Bar, Blueberry",
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 1,
+    "first": "Blueberry Protien Bar, Blueberry",
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   },
+   "base/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   }
+  },
+  "raw-chicken-breast": {
+   "base-branded/cold": {
+    "acceptableInPool": 5,
+    "brandMismatchesInTop6": 0,
+    "first": "Chicken, breast, boneless, skinless, raw",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 5,
+    "brandMismatchesInTop6": 0,
+    "first": "Chicken, breast, boneless, skinless, raw",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 5,
+    "brandMismatchesInTop6": 0,
+    "first": "Chicken, breast, boneless, skinless, raw",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 5,
+    "brandMismatchesInTop6": 0,
+    "first": "Chicken, breast, boneless, skinless, raw",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "rxbar": {
+   "base-branded/cold": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "Rxbar Protein Bar, 1.83 Oz, 10 Count",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "Rxbar Protein Bar, 1.83 Oz, 10 Count",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   },
+   "base/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   }
+  },
+  "seven-up": {
+   "base-branded/cold": {
+    "acceptableInPool": 8,
+    "brandMismatchesInTop6": 0,
+    "first": "7UP, Caffeine Free Soda",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 8,
+    "brandMismatchesInTop6": 0,
+    "first": "7UP, Caffeine Free Soda",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "7UP, FLAVORED SOFT DRINK, CHERRY",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "7UP, FLAVORED SOFT DRINK, CHERRY",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "sonic": {
+   "base-branded/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": "Sonic The Hedgehog Assorted Fruit Flavored Snacks",
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": "Sonic The Hedgehog Assorted Fruit Flavored Snacks",
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": "Betty Crocker Sonic The Hedgehog Fruit Snacks 22 Count",
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": "Betty Crocker Sonic The Hedgehog Fruit Snacks 22 Count",
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": false
+   }
+  },
+  "starbucks": {
+   "base-branded/cold": {
+    "acceptableInPool": 94,
+    "brandMismatchesInTop6": 0,
+    "first": "Starbucks, Frappuccino, Chilled Coffee Drink",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 94,
+    "brandMismatchesInTop6": 0,
+    "first": "Starbucks, Frappuccino, Chilled Coffee Drink",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 79,
+    "brandMismatchesInTop6": 0,
+    "first": "Starbucks, Frappuccino, Chilled Coffee Drink",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 79,
+    "brandMismatchesInTop6": 0,
+    "first": "Starbucks, Frappuccino, Chilled Coffee Drink",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "starbucks-frappuccino": {
+   "base-branded/cold": {
+    "acceptableInPool": 20,
+    "brandMismatchesInTop6": 0,
+    "first": "Starbucks, Frappuccino, Chilled Coffee Drink",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 20,
+    "brandMismatchesInTop6": 0,
+    "first": "Starbucks, Frappuccino, Chilled Coffee Drink",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 12,
+    "brandMismatchesInTop6": 0,
+    "first": "Starbucks, Frappuccino, Chilled Coffee Drink",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 12,
+    "brandMismatchesInTop6": 0,
+    "first": "Starbucks, Frappuccino, Chilled Coffee Drink",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "starbucks-latte": {
+   "base-branded/cold": {
+    "acceptableInPool": 16,
+    "brandMismatchesInTop6": 0,
+    "first": "Starbucks Via, Latte Speciality Coffee Beverage, Caramel, Caramel",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 16,
+    "brandMismatchesInTop6": 0,
+    "first": "Starbucks Via, Latte Speciality Coffee Beverage, Caramel, Caramel",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 15,
+    "brandMismatchesInTop6": 0,
+    "first": "Starbucks Via, Latte Speciality Coffee Beverage, Caramel, Caramel",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 15,
+    "brandMismatchesInTop6": 0,
+    "first": "Starbucks Via, Latte Speciality Coffee Beverage, Caramel, Caramel",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "sugar-free-syrup": {
+   "base-branded/cold": {
+    "acceptableInPool": 106,
+    "brandMismatchesInTop6": 0,
+    "first": "Popcorn, sugar syrup/caramel, fat-free",
+    "firstAcceptableRank": 2,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 106,
+    "brandMismatchesInTop6": 0,
+    "first": "Syrups, chocolate, HERSHEY'S Sugar free, Genuine Chocolate Flavored, Lite Syrup",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 13,
+    "brandMismatchesInTop6": 0,
+    "first": "Popcorn, sugar syrup/caramel, fat-free",
+    "firstAcceptableRank": 2,
+    "top1": false,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 13,
+    "brandMismatchesInTop6": 0,
+    "first": "Syrups, chocolate, HERSHEY'S Sugar free, Genuine Chocolate Flavored, Lite Syrup",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "tillamook-cheddar": {
+   "base-branded/cold": {
+    "acceptableInPool": 18,
+    "brandMismatchesInTop6": 0,
+    "first": "Tillamook, Cheddar Cheese, Medium Smoked",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 18,
+    "brandMismatchesInTop6": 0,
+    "first": "Tillamook, Cheddar Cheese, Medium Smoked",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 4,
+    "brandMismatchesInTop6": 0,
+    "first": "Tillamook, Cheddar Cheese, Medium Smoked, Medium Smoked",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 4,
+    "brandMismatchesInTop6": 0,
+    "first": "Tillamook, Cheddar Cheese, Medium Smoked, Medium Smoked",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "tomato-ketchup": {
+   "base-branded/cold": {
+    "acceptableInPool": 550,
+    "brandMismatchesInTop6": 0,
+    "first": "Tomato Ketchup",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 550,
+    "brandMismatchesInTop6": 0,
+    "first": "Tomato Ketchup",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 79,
+    "brandMismatchesInTop6": 0,
+    "first": "Tomato Ketchup",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 79,
+    "brandMismatchesInTop6": 0,
+    "first": "Tomato Ketchup",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "unknown-brand-bar": {
+   "base-branded/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   },
+   "base/cold": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   },
+   "base/warm": {
+    "acceptableInPool": 0,
+    "brandMismatchesInTop6": 0,
+    "first": null,
+    "firstAcceptableRank": null,
+    "top1": false,
+    "top6": false,
+    "zero": true
+   }
+  },
+  "vanilla-greek-yogurt": {
+   "base-branded/cold": {
+    "acceptableInPool": 406,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, vanilla, lowfat",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 406,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, vanilla, lowfat",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 40,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, vanilla, lowfat",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 40,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, vanilla, lowfat",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "wendys-apostrophe-frosty": {
+   "base-branded/cold": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "WENDY'S, Frosty Dairy Dessert",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "WENDY'S, Frosty Dairy Dessert",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "WENDY'S, Frosty Dairy Dessert",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "WENDY'S, Frosty Dairy Dessert",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "wendys-frosty": {
+   "base-branded/cold": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "WENDY'S, Frosty Dairy Dessert",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "WENDY'S, Frosty Dairy Dessert",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "WENDY'S, Frosty Dairy Dessert",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 1,
+    "brandMismatchesInTop6": 0,
+    "first": "WENDY'S, Frosty Dairy Dessert",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "yogurt": {
+   "base-branded/cold": {
+    "acceptableInPool": 91,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, plain, low fat",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 91,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, plain, low fat",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 91,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, plain, low fat",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 91,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, plain, low fat",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  },
+  "yogurt-chobani": {
+   "base-branded/cold": {
+    "acceptableInPool": 21,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, 2% fat, apricot, CHOBANI",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base-branded/warm": {
+    "acceptableInPool": 21,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, Blueberry, CHOBANI",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/cold": {
+    "acceptableInPool": 18,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, 2% fat, apricot, CHOBANI",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   },
+   "base/warm": {
+    "acceptableInPool": 18,
+    "brandMismatchesInTop6": 0,
+    "first": "Yogurt, Greek, Blueberry, CHOBANI",
+    "firstAcceptableRank": 1,
+    "top1": true,
+    "top6": true,
+    "zero": false
+   }
+  }
+ },
+ "summary": [
+  {
+   "brandMismatchRate": 0.192,
+   "configuration": "base",
+   "gateRecall": 0.81,
+   "intentGroup": "brand",
+   "labeled": 21,
+   "poolRecall": 0.81,
+   "profile": "cold",
+   "queries": 22,
+   "split": "tuning",
+   "top1": 0.762,
+   "top6": 0.905,
+   "totalMaxMs": 10.15,
+   "totalP50Ms": 0.55,
+   "totalP95Ms": 9.32,
+   "truncatedQueries": 0,
+   "zeroResultRate": 0.136
+  },
+  {
+   "brandMismatchRate": 0,
+   "configuration": "base",
+   "gateRecall": 0.933,
+   "intentGroup": "generic",
+   "labeled": 15,
+   "poolRecall": 0.933,
+   "profile": "cold",
+   "queries": 15,
+   "split": "tuning",
+   "top1": 0.733,
+   "top6": 0.933,
+   "totalMaxMs": 585.24,
+   "totalP50Ms": 4.25,
+   "totalP95Ms": 585.24,
+   "truncatedQueries": 0,
+   "zeroResultRate": 0.067
+  },
+  {
+   "brandMismatchRate": 0.093,
+   "configuration": "base",
+   "gateRecall": 0.861,
+   "intentGroup": "all",
+   "labeled": 36,
+   "poolRecall": 0.861,
+   "profile": "cold",
+   "queries": 37,
+   "split": "tuning",
+   "top1": 0.75,
+   "top6": 0.917,
+   "totalMaxMs": 585.24,
+   "totalP50Ms": 1.52,
+   "totalP95Ms": 232.34,
+   "truncatedQueries": 0,
+   "zeroResultRate": 0.108
+  },
+  {
+   "brandMismatchRate": 0.07,
+   "configuration": "base",
+   "gateRecall": 0.667,
+   "intentGroup": "brand",
+   "labeled": 18,
+   "poolRecall": 0.667,
+   "profile": "cold",
+   "queries": 18,
+   "split": "heldout",
+   "top1": 0.667,
+   "top6": 0.667,
+   "totalMaxMs": 8.79,
+   "totalP50Ms": 0.55,
+   "totalP95Ms": 8.79,
+   "truncatedQueries": 0,
+   "zeroResultRate": 0.278
+  },
+  {
+   "brandMismatchRate": 0,
+   "configuration": "base",
+   "gateRecall": 0.75,
+   "intentGroup": "generic",
+   "labeled": 8,
+   "poolRecall": 0.75,
+   "profile": "cold",
+   "queries": 9,
+   "split": "heldout",
+   "top1": 0.625,
+   "top6": 0.75,
+   "totalMaxMs": 145.17,
+   "totalP50Ms": 1.58,
+   "totalP95Ms": 145.17,
+   "truncatedQueries": 0,
+   "zeroResultRate": 0.222
+  },
+  {
+   "brandMismatchRate": 0.045,
+   "configuration": "base",
+   "gateRecall": 0.692,
+   "intentGroup": "all",
+   "labeled": 26,
+   "poolRecall": 0.692,
+   "profile": "cold",
+   "queries": 27,
+   "split": "heldout",
+   "top1": 0.654,
+   "top6": 0.692,
+   "totalMaxMs": 145.17,
+   "totalP50Ms": 0.93,
+   "totalP95Ms": 9.82,
+   "truncatedQueries": 0,
+   "zeroResultRate": 0.259
+  },
+  {
+   "brandMismatchRate": 0.075,
+   "configuration": "base",
+   "gateRecall": 0.79,
+   "intentGroup": "all",
+   "labeled": 62,
+   "poolRecall": 0.79,
+   "profile": "cold",
+   "queries": 64,
+   "split": "all",
+   "top1": 0.71,
+   "top6": 0.823,
+   "totalMaxMs": 585.24,
+   "totalP50Ms": 1.35,
+   "totalP95Ms": 145.17,
+   "truncatedQueries": 0,
+   "zeroResultRate": 0.172
+  },
+  {
+   "brandMismatchRate": 0.192,
+   "configuration": "base",
+   "gateRecall": 0.81,
+   "intentGroup": "brand",
+   "labeled": 21,
+   "poolRecall": 0.81,
+   "profile": "warm",
+   "queries": 22,
+   "split": "tuning",
+   "top1": 0.667,
+   "top6": 0.905,
+   "totalMaxMs": 9.55,
+   "totalP50Ms": 0.52,
+   "totalP95Ms": 9.42,
+   "truncatedQueries": 0,
+   "zeroResultRate": 0.136
+  },
+  {
+   "brandMismatchRate": 0,
+   "configuration": "base",
+   "gateRecall": 0.933,
+   "intentGroup": "generic",
+   "labeled": 15,
+   "poolRecall": 0.933,
+   "profile": "warm",
+   "queries": 15,
+   "split": "tuning",
+   "top1": 0.933,
+   "top6": 0.933,
+   "totalMaxMs": 600.9,
+   "totalP50Ms": 3.68,
+   "totalP95Ms": 600.9,
+   "truncatedQueries": 0,
+   "zeroResultRate": 0.067
+  },
+  {
+   "brandMismatchRate": 0.093,
+   "configuration": "base",
+   "gateRecall": 0.861,
+   "intentGroup": "all",
+   "labeled": 36,
+   "poolRecall": 0.861,
+   "profile": "warm",
+   "queries": 37,
+   "split": "tuning",
+   "top1": 0.778,
+   "top6": 0.917,
+   "totalMaxMs": 600.9,
+   "totalP50Ms": 1.48,
+   "totalP95Ms": 239.46,
+   "truncatedQueries": 0,
+   "zeroResultRate": 0.108
+  },
+  {
+   "brandMismatchRate": 0.07,
+   "configuration": "base",
+   "gateRecall": 0.667,
+   "intentGroup": "brand",
+   "labeled": 18,
+   "poolRecall": 0.667,
+   "profile": "warm",
+   "queries": 18,
+   "split": "heldout",
+   "top1": 0.611,
+   "top6": 0.667,
+   "totalMaxMs": 8.92,
+   "totalP50Ms": 0.49,
+   "totalP95Ms": 8.92,
+   "truncatedQueries": 0,
+   "zeroResultRate": 0.278
+  },
+  {
+   "brandMismatchRate": 0,
+   "configuration": "base",
+   "gateRecall": 0.75,
+   "intentGroup": "generic",
+   "labeled": 8,
+   "poolRecall": 0.75,
+   "profile": "warm",
+   "queries": 9,
+   "split": "heldout",
+   "top1": 0.75,
+   "top6": 0.75,
+   "totalMaxMs": 131.57,
+   "totalP50Ms": 1.32,
+   "totalP95Ms": 131.57,
+   "truncatedQueries": 0,
+   "zeroResultRate": 0.222
+  },
+  {
+   "brandMismatchRate": 0.045,
+   "configuration": "base",
+   "gateRecall": 0.692,
+   "intentGroup": "all",
+   "labeled": 26,
+   "poolRecall": 0.692,
+   "profile": "warm",
+   "queries": 27,
+   "split": "heldout",
+   "top1": 0.654,
+   "top6": 0.692,
+   "totalMaxMs": 131.57,
+   "totalP50Ms": 0.95,
+   "totalP95Ms": 8.92,
+   "truncatedQueries": 0,
+   "zeroResultRate": 0.259
+  },
+  {
+   "brandMismatchRate": 0.075,
+   "configuration": "base",
+   "gateRecall": 0.79,
+   "intentGroup": "all",
+   "labeled": 62,
+   "poolRecall": 0.79,
+   "profile": "warm",
+   "queries": 64,
+   "split": "all",
+   "top1": 0.726,
+   "top6": 0.823,
+   "totalMaxMs": 600.9,
+   "totalP50Ms": 1.32,
+   "totalP95Ms": 131.57,
+   "truncatedQueries": 0,
+   "zeroResultRate": 0.172
+  },
+  {
+   "brandMismatchRate": 0.143,
+   "configuration": "base+branded",
+   "gateRecall": 0.857,
+   "intentGroup": "brand",
+   "labeled": 21,
+   "poolRecall": 0.857,
+   "profile": "cold",
+   "queries": 22,
+   "split": "tuning",
+   "top1": 0.762,
+   "top6": 0.952,
+   "totalMaxMs": 14.04,
+   "totalP50Ms": 1.82,
+   "totalP95Ms": 14.02,
+   "truncatedQueries": 0,
+   "zeroResultRate": 0.091
+  },
+  {
+   "brandMismatchRate": 0,
+   "configuration": "base+branded",
+   "gateRecall": 0.933,
+   "intentGroup": "generic",
+   "labeled": 15,
+   "poolRecall": 0.933,
+   "profile": "cold",
+   "queries": 15,
+   "split": "tuning",
+   "top1": 0.733,
+   "top6": 0.933,
+   "totalMaxMs": 565.15,
+   "totalP50Ms": 19.3,
+   "totalP95Ms": 565.15,
+   "truncatedQueries": 5,
+   "zeroResultRate": 0.067
+  },
+  {
+   "brandMismatchRate": 0.078,
+   "configuration": "base+branded",
+   "gateRecall": 0.889,
+   "intentGroup": "all",
+   "labeled": 36,
+   "poolRecall": 0.889,
+   "profile": "cold",
+   "queries": 37,
+   "split": "tuning",
+   "top1": 0.75,
+   "top6": 0.944,
+   "totalMaxMs": 565.15,
+   "totalP50Ms": 2.74,
+   "totalP95Ms": 250.16,
+   "truncatedQueries": 5,
+   "zeroResultRate": 0.081
+  },
+  {
+   "brandMismatchRate": 0.083,
+   "configuration": "base+branded",
+   "gateRecall": 0.778,
+   "intentGroup": "brand",
+   "labeled": 18,
+   "poolRecall": 0.778,
+   "profile": "cold",
+   "queries": 18,
+   "split": "heldout",
+   "top1": 0.667,
+   "top6": 0.778,
+   "totalMaxMs": 10.03,
+   "totalP50Ms": 2.2,
+   "totalP95Ms": 10.03,
+   "truncatedQueries": 0,
+   "zeroResultRate": 0.111
+  },
+  {
+   "brandMismatchRate": 0,
+   "configuration": "base+branded",
+   "gateRecall": 0.75,
+   "intentGroup": "generic",
+   "labeled": 8,
+   "poolRecall": 0.75,
+   "profile": "cold",
+   "queries": 9,
+   "split": "heldout",
+   "top1": 0.625,
+   "top6": 0.75,
+   "totalMaxMs": 155.72,
+   "totalP50Ms": 4.63,
+   "totalP95Ms": 155.72,
+   "truncatedQueries": 1,
+   "zeroResultRate": 0.222
+  },
+  {
+   "brandMismatchRate": 0.057,
+   "configuration": "base+branded",
+   "gateRecall": 0.769,
+   "intentGroup": "all",
+   "labeled": 26,
+   "poolRecall": 0.769,
+   "profile": "cold",
+   "queries": 27,
+   "split": "heldout",
+   "top1": 0.654,
+   "top6": 0.769,
+   "totalMaxMs": 155.72,
+   "totalP50Ms": 2.82,
+   "totalP95Ms": 36.96,
+   "truncatedQueries": 1,
+   "zeroResultRate": 0.148
+  },
+  {
+   "brandMismatchRate": 0.07,
+   "configuration": "base+branded",
+   "gateRecall": 0.839,
+   "intentGroup": "all",
+   "labeled": 62,
+   "poolRecall": 0.839,
+   "profile": "cold",
+   "queries": 64,
+   "split": "all",
+   "top1": 0.71,
+   "top6": 0.871,
+   "totalMaxMs": 565.15,
+   "totalP50Ms": 2.74,
+   "totalP95Ms": 155.72,
+   "truncatedQueries": 6,
+   "zeroResultRate": 0.109
+  },
+  {
+   "brandMismatchRate": 0.153,
+   "configuration": "base+branded",
+   "gateRecall": 0.857,
+   "intentGroup": "brand",
+   "labeled": 21,
+   "poolRecall": 0.857,
+   "profile": "warm",
+   "queries": 22,
+   "split": "tuning",
+   "top1": 0.714,
+   "top6": 0.952,
+   "totalMaxMs": 13.46,
+   "totalP50Ms": 1.69,
+   "totalP95Ms": 13.03,
+   "truncatedQueries": 0,
+   "zeroResultRate": 0.091
+  },
+  {
+   "brandMismatchRate": 0,
+   "configuration": "base+branded",
+   "gateRecall": 0.933,
+   "intentGroup": "generic",
+   "labeled": 15,
+   "poolRecall": 0.933,
+   "profile": "warm",
+   "queries": 15,
+   "split": "tuning",
+   "top1": 0.933,
+   "top6": 0.933,
+   "totalMaxMs": 534.83,
+   "totalP50Ms": 17.78,
+   "totalP95Ms": 534.83,
+   "truncatedQueries": 5,
+   "zeroResultRate": 0.067
+  },
+  {
+   "brandMismatchRate": 0.084,
+   "configuration": "base+branded",
+   "gateRecall": 0.889,
+   "intentGroup": "all",
+   "labeled": 36,
+   "poolRecall": 0.889,
+   "profile": "warm",
+   "queries": 37,
+   "split": "tuning",
+   "top1": 0.806,
+   "top6": 0.944,
+   "totalMaxMs": 534.83,
+   "totalP50Ms": 2.65,
+   "totalP95Ms": 227.78,
+   "truncatedQueries": 5,
+   "zeroResultRate": 0.081
+  },
+  {
+   "brandMismatchRate": 0.083,
+   "configuration": "base+branded",
+   "gateRecall": 0.778,
+   "intentGroup": "brand",
+   "labeled": 18,
+   "poolRecall": 0.778,
+   "profile": "warm",
+   "queries": 18,
+   "split": "heldout",
+   "top1": 0.667,
+   "top6": 0.778,
+   "totalMaxMs": 9.14,
+   "totalP50Ms": 2.14,
+   "totalP95Ms": 9.14,
+   "truncatedQueries": 0,
+   "zeroResultRate": 0.111
+  },
+  {
+   "brandMismatchRate": 0,
+   "configuration": "base+branded",
+   "gateRecall": 0.75,
+   "intentGroup": "generic",
+   "labeled": 8,
+   "poolRecall": 0.75,
+   "profile": "warm",
+   "queries": 9,
+   "split": "heldout",
+   "top1": 0.75,
+   "top6": 0.75,
+   "totalMaxMs": 152.27,
+   "totalP50Ms": 4.39,
+   "totalP95Ms": 152.27,
+   "truncatedQueries": 1,
+   "zeroResultRate": 0.222
+  },
+  {
+   "brandMismatchRate": 0.057,
+   "configuration": "base+branded",
+   "gateRecall": 0.769,
+   "intentGroup": "all",
+   "labeled": 26,
+   "poolRecall": 0.769,
+   "profile": "warm",
+   "queries": 27,
+   "split": "heldout",
+   "top1": 0.692,
+   "top6": 0.769,
+   "totalMaxMs": 152.27,
+   "totalP50Ms": 2.79,
+   "totalP95Ms": 33.67,
+   "truncatedQueries": 1,
+   "zeroResultRate": 0.148
+  },
+  {
+   "brandMismatchRate": 0.074,
+   "configuration": "base+branded",
+   "gateRecall": 0.839,
+   "intentGroup": "all",
+   "labeled": 62,
+   "poolRecall": 0.839,
+   "profile": "warm",
+   "queries": 64,
+   "split": "all",
+   "top1": 0.758,
+   "top6": 0.871,
+   "totalMaxMs": 534.83,
+   "totalP50Ms": 2.65,
+   "totalP95Ms": 152.27,
+   "truncatedQueries": 6,
+   "zeroResultRate": 0.109
+  }
+ ]
+}
