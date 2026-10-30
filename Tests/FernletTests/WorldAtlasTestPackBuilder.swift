@@ -93,6 +93,16 @@ struct WorldAtlasTestPackBuilder {
         var spanish: String = ""
     }
 
+    /// A major road row for `ROAD`.
+    struct Road {
+        /// Its number (the token is "ne:road:<number>"); the section lists numbers ascending.
+        var number: UInt32
+        /// 1 highway, 2 main road.
+        var kind: UInt8 = 1
+        /// Its lines of (lon, lat) points.
+        var lines: [[(Double, Double)]]
+    }
+
     let rows: Int
     var cols: Int { rows * 2 }
     var land: [UInt8]
@@ -106,6 +116,7 @@ struct WorldAtlasTestPackBuilder {
     var cities: [City] = []
     var admin1s: [Admin1] = []
     var admin1Groups: [Admin1Group] = []
+    var roads: [Road] = []
     var meta: String? = #"{"generator":"tests"}"#
 
     /// An all-water grid of `rows` rows.
@@ -156,7 +167,7 @@ struct WorldAtlasTestPackBuilder {
         var sections: [(tag: String, raw: Data)] = [
             ("LAND", landSection()), ("CLIM", Data(climate)), ("OCEA", Data(ocean)), ("CONT", Data(continent)),
             ("SEAS", seasSection()), ("CTRY", countriesSection()), ("URBN", urbanSection()), ("CITY", citiesSection()),
-            ("ADM1", admin1Section()),
+            ("ADM1", admin1Section()), ("ROAD", roadsSection()),
         ]
         if let meta { sections.append(("META", Data(meta.utf8))) }
         return sections
@@ -267,6 +278,18 @@ struct WorldAtlasTestPackBuilder {
         return data
     }
 
+    private func roadsSection() -> Data {
+        var data = Data()
+        data.appendLE(UInt32(roads.count))
+        for road in roads {
+            data.appendLE(road.number)
+            data.append(road.kind)
+            data.appendLE(UInt16(road.lines.count))
+            for line in road.lines { data.appendLine(line, count: UInt16(line.count)) }
+        }
+        return data
+    }
+
     /// Degrees in the pack's 1e-5 units.
     static func units(_ degrees: Double) -> Int32 {
         Int32((degrees * 100_000).rounded())
@@ -303,6 +326,23 @@ fileprivate extension Data {
             bits >>= 7
             append(bits == 0 ? low : low | 0x80)
         } while bits != 0
+    }
+
+    /// Appends a road line: `u16 pointCount · first point · zigzag deltas` (`count` may lie on purpose).
+    mutating func appendLine(_ line: [(Double, Double)], count: UInt16) {
+        appendLE(count)
+        var last = (lon: Int64(0), lat: Int64(0))
+        for (slot, point) in line.enumerated() {
+            let now = (lon: Int64(WorldAtlasTestPackBuilder.units(point.0)), lat: Int64(WorldAtlasTestPackBuilder.units(point.1)))
+            if slot == 0 {
+                appendLE(UInt32(bitPattern: Int32(now.lon)))
+                appendLE(UInt32(bitPattern: Int32(now.lat)))
+            } else {
+                appendZigzag(now.lon - last.lon)
+                appendZigzag(now.lat - last.lat)
+            }
+            last = now
+        }
     }
 
     /// Appends `bbox · ringCount · rings`.
@@ -347,7 +387,10 @@ extension WorldAtlasTestPackBuilder {
     ///   is unknown can find it there); AA-01 (20–30°E) and AA-02 (30–40°E), each 20–40°S; BB's "ne:7" over
     ///   50–55°E only, so BB's east half has no state;
     /// - plate groups: AA-01 and AA-02 are both in "ne:region:AA:south" (South Region); BB's entries are their
-    ///   own.
+    ///   own;
+    /// - roads through the metro area: highway ne:road:4 running north along 100.2°E from 10.0°N to 10.3°N, and
+    ///   main road ne:road:9 in two lines, east along 10.25°N from 100.0°E to 100.5°E and on from 100.5°E to
+    ///   100.6°E at 10.3°N.
     static func standardWorld(rows: Int = 18) -> WorldAtlasTestPackBuilder {
         var world = WorldAtlasTestPackBuilder(rows: rows)
         world.seas = [Sea(token: "Q1247", parent: 2, name: "Caribbean Sea", spanish: "Mar Caribe")]
@@ -388,6 +431,10 @@ extension WorldAtlasTestPackBuilder {
         ]
         world.admin1Groups = [Admin1Group(token: "ne:region:AA:south", country: "AA", name: "South Region",
                                           spanish: "Región Sur")]
+        world.roads = [
+            Road(number: 4, kind: 1, lines: [[(100.2, 10.0), (100.2, 10.3)]]),
+            Road(number: 9, kind: 2, lines: [[(100.0, 10.25), (100.5, 10.25)], [(100.5, 10.25), (100.6, 10.3)]]),
+        ]
         return world
     }
 }

@@ -80,7 +80,8 @@ def box(west, south, east, north):
 
 
 def shp_bytes(shapes, kind):
-    """A .shp and its .shx for polygons (lists of rings) or points ((x, y))."""
+    """A .shp and its .shx for polygons (kind 5, lists of rings), polylines (kind 3, lists of lines) or points
+    (kind 1, (x, y))."""
     records = []
     for shape in shapes:
         if kind == 1:
@@ -92,7 +93,7 @@ def shp_bytes(shapes, kind):
         for ring in shape:
             parts.append(at)
             at += len(ring)
-        body = struct.pack("<i4dii", 5, min(xs), min(ys), max(xs), max(ys), len(shape), len(points))
+        body = struct.pack("<i4dii", kind, min(xs), min(ys), max(xs), max(ys), len(shape), len(points))
         body += struct.pack("<%di" % len(parts), *parts)
         body += b"".join(struct.pack("<dd", x, y) for x, y in points)
         records.append(body)
@@ -161,7 +162,7 @@ def climate_tif(fill):
 
 
 def write_sources(folder, crimea_in_russia=True):
-    """All nine sources (the coastline too, though only META lists it); without Crimea's part of RU when
+    """All ten sources (the coastline too, though only META lists it); without Crimea's part of RU when
     crimea_in_russia is False (the territory override must then stop the run)."""
     l_outer = box(0, -30, 65, 30)
     lake = box(20, -10, 40, 10)[::-1]
@@ -237,6 +238,37 @@ def write_sources(folder, crimea_in_russia=True):
         zf.writestr("Beck_KG_V1_future_0p083.tif", climate_tif(False))
         zf.writestr("Beck_KG_V1_present_0p083.tif", climate_tif(True))
         zf.writestr("legend.txt", "synthetic")
+    write_roads(folder)
+
+
+# The synthetic roads, by record number: 0 and 1 one named route that touches (one road, two lines); 2 the same
+# name at another level, with a bend under the tolerance (its own main road, two points); 3 and 4 unnamed, meeting
+# where only they do (one road); 5, 6 and 4 meeting at a junction (5 and 6 their own); 7 a minor road, 8 a ferry
+# and 9 a track (left out); 10 an expressway of a low rank (a highway); 11 one feature in two parts (one road).
+ROAD_FIELDS = [("FEATURECLA", "C", 10), ("TYPE", "C", 20), ("SCALERANK", "N", 4), ("EXPRESSWAY", "N", 2),
+               ("PREFIX", "C", 4), ("NAME", "C", 10), ("LABEL", "C", 10), ("LEVEL", "C", 12)]
+
+
+def write_roads(folder):
+    """ne_10m_roads: the twelve pieces above."""
+    def road(kind="Major Highway", rank=3, name="", level="", cla="Road", express=0):
+        return {"FEATURECLA": cla, "TYPE": kind, "SCALERANK": rank, "EXPRESSWAY": express, "NAME": name,
+                "LEVEL": level}
+    pieces = [
+        ([[(0, 0), (1, 0)]], road(name="5", level="Interstate")),
+        ([[(1, 0), (2, 0)]], road(name="5", level="Interstate")),
+        ([[(2, 0), (2.5, 0.0001), (3, 0)]], road("Secondary Highway", name="5", level="State")),
+        ([[(10, 10), (11, 10)]], road("Road", 4)),
+        ([[(11, 10), (12, 10)]], road("Road", 4)),
+        ([[(12, 10), (12, 11)]], road("Road", 4)),
+        ([[(12, 10), (13, 10)]], road("Road", 4)),
+        ([[(20, 20), (21, 20)]], road("Road", 7)),
+        ([[(22, 20), (23, 20)]], road("Ferry Route", 3, cla="Ferry")),
+        ([[(24, 20), (25, 20)]], road("Track", 3)),
+        ([[(30, 30), (31, 30)]], road("Road", 6, express=1)),
+        ([[(40, 40), (41, 40)], [(42, 40), (43, 40)]], road()),
+    ]
+    write_layer(folder, "ne_10m_roads", 3, [p[0] for p in pieces], ROAD_FIELDS, [p[1] for p in pieces])
 
 
 def write_admin1(folder):
@@ -400,6 +432,21 @@ def decode(sections):
     for _ in range(adm1_cur.take("H")):
         groups.append({"token": adm1_cur.text(), "country": adm1_cur.take("2s").decode(),
                        "names": [adm1_cur.text(), adm1_cur.text()]})
+    road_cur = Cursor(sections["ROAD"])
+    roads = {}
+    for _ in range(road_cur.take("I")):
+        number, kind, line_count = road_cur.take("IBH")
+        lines = []
+        for _ in range(line_count):
+            count = road_cur.take("H")
+            x, y = road_cur.take("ii")
+            line = [(x, y)]
+            for _ in range(count - 1):
+                x += road_cur.varint()
+                y += road_cur.varint()
+                line.append((x, y))
+            lines.append(line)
+        roads[number] = {"kind": kind, "lines": lines}
     admin1 = {}
     for _ in range(adm1_cur.take("H")):
         token, country = adm1_cur.text(), adm1_cur.take("2s").decode()
@@ -409,7 +456,8 @@ def decode(sections):
                          "rings": adm1_cur.polygon()[1]}
     return {"cols": cols, "rows": rows, "sub": sub, "state": state, "coast": coast, "clim": sections["CLIM"],
             "ocea": sections["OCEA"], "cont": sections["CONT"], "seas": seas, "countries": countries,
-            "urban": urban, "cities": cities, "admin1": admin1, "groups": groups, "ends": (urbn_cur.at == len(urbn_cur.data),
+            "urban": urban, "cities": cities, "admin1": admin1, "groups": groups, "roads": roads,
+            "roads_end": road_cur.at == len(road_cur.data), "ends": (urbn_cur.at == len(urbn_cur.data),
                                                                        adm1_cur.at == len(adm1_cur.data)),
             "meta": json.loads(sections["META"].decode("utf-8"))}
 
@@ -555,7 +603,7 @@ def check_tables(c, atlas):
     c.equal("city country in a hole", gamma.get("country"), "LS")
     c.equal("city population", beta.get("population"), 50000)
     c.equal("meta date", atlas["meta"].get("date"), "2026-10-29")
-    c.equal("meta sources", len(atlas["meta"].get("sources", [])), 9)
+    c.equal("meta sources", len(atlas["meta"].get("sources", [])), 10)
     c.equal("meta admin-1 tolerance", atlas["meta"].get("admin1SimplifyDegrees"), 0.008)
 
 
@@ -605,6 +653,18 @@ def check_admin1(c, atlas):
     c.equal("point in Western Cape", inside(get("ZA-WC")["rings"], 40, 0), True)
 
 
+def check_roads(c, atlas):
+    """ROAD: which pieces count, how they join into roads, their kinds and lines."""
+    roads = atlas["roads"]
+    c.equal("road numbers", sorted(roads), [0, 2, 3, 5, 6, 10, 11])
+    c.equal("road kinds", [roads[n]["kind"] for n in sorted(roads)], [1, 2, 2, 2, 2, 1, 1])
+    c.equal("a named route that touches is one road", len(roads.get(0, {}).get("lines", [])), 2)
+    c.equal("unnamed pieces where only two meet join", len(roads.get(3, {}).get("lines", [])), 2)
+    c.equal("a feature's parts are one road", len(roads.get(11, {}).get("lines", [])), 2)
+    c.equal("a bend under the tolerance goes", roads.get(2, {}).get("lines"), [[(200000, 0), (300000, 0)]])
+    c.equal("the section ends where its roads do", atlas["roads_end"], True)
+
+
 def main():
     """Builds, decodes and checks; exits non-zero on any failure."""
     c = Checks()
@@ -624,6 +684,7 @@ def main():
         check_grids(c, atlas)
         check_tables(c, atlas)
         check_admin1(c, atlas)
+        check_roads(c, atlas)
         c.equal("summary logs the admin-1 left out", "Nowhere" in log and "left out of ADM1" in log, True)
         c.equal("summary logs the unnamed admin-1", "'' (ne_id 71)" in log, True)
         c.equal("summary logs the unlisted region", "region 'FR-ZZZ' not in PLATE_GROUPS" in log, True)

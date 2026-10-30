@@ -11,7 +11,8 @@ approves those first. This file is the contract between the generator (`Scripts/
   so no project-file edit). The app opens no connection for it; the no-tracking wall gains no destination
   ([No-Tracking-Wall.md](No-Tracking-Wall.md)). Only the build machine fetches the sources, once, with the owner's
   OK, through `Scripts/world-atlas/fetch-sources.sh` (pinned URLs and SHA-256s).
-- **Size cap: 6 MiB** (6,291,456 bytes) for the whole file. The generator refuses to write a bigger pack, and
+- **Size cap: 7 MiB** (7,340,032 bytes) for the whole file: raised from 6 MiB for the major roads (owner,
+  2026-10-30: "raise the pack cap to 7 MiB", roads at about 110 m, one file and one pin). The generator refuses to write a bigger pack, and
   `WorldAtlasPackTests` fails one.
 - **Checksum.** `WorldAtlasPack.expectedSHA256` pins the shipped file's SHA-256. Regenerating the pack changes it
   on purpose, in the same commit.
@@ -25,6 +26,7 @@ approves those first. This file is the contract between the generator (`Scripts/
 | Countries | Natural Earth 1:10m `ne_10m_admin_0_countries` | public domain | none required |
 | States and provinces | Natural Earth 1:10m `ne_10m_admin_1_states_provinces` (owner's OK 2026-10-29) | public domain | none required |
 | Cities | Natural Earth 1:10m `ne_10m_populated_places` + `ne_10m_urban_areas` | public domain | none required |
+| Major roads | Natural Earth 1:10m `ne_10m_roads` (owner's OK 2026-10-30) | public domain | none required (Fernlet credits it anyway) |
 | Climate | Beck et al. (2018) Köppen-Geiger 1-km maps, `Beck_KG_V1_present_0p083.tif` | CC BY 4.0 | required: see Acknowledgments |
 
 ## File layout (all integers little-endian)
@@ -232,9 +234,19 @@ at City) would make a 6.7 MB pack and 0.005° leave 130 KB under the cap, so the
   MM, FM and VE "State", SG "Community Development Council"; a trailing one only when the rest is the feature's
   own short name) and `EVERYDAY_NAMES` (by code: Madrid, Bremen, Crimea, Chechnya, Chuvashia, Udmurtia, Yakutia
   and others, plus four of Natural Earth's broken names repaired from the feature's own fields: "Jewish", "of
-  Bougainville", "Archipelago of Saint Andréws", and "Altai Republic" on Altai Krai). A Spanish name that is a
+  Bougainville", "Archipelago of Saint Andréws", and "Altai Republic" on Altai Krai). The owner's American-style
+  picks (2026-10-30: "Go with Valencia and Kyiv city"): "Valencia" (not "Valencian Community"), "Kyiv City" and
+  "Kyiv Oblast" (Natural Earth names both "Kyiv"), "Cordillera", "Yakutia", and Japan's names without the Hepburn
+  macrons.
+- **Plain spelling** (owner, 2026-10-30). Names are written without transliteration marks in every language the
+  pack stores, the American everyday way: the macrons, the scholars' under-dots and the ayn and hamza marks go, in
+  the states and provinces and in the cities ("Kyoto", "Osaka", "Hachioji"; Spanish "Herat", not "Herāt";
+  "Al-Kaf"). A translation that still holds a letter beyond Latin-1 once they are gone (Spanish "Čaġčarān") is
+  stored as the plain English name. Kept where the marks are letters of the place's own language: Latvia
+  ("Jūrmala"), New Zealand's Māori names ("Manawatū-Whanganui", "Taupō") and Hawaiʻi's ("Līhuʻe")
+  (`TRANSLITERATION_KEPT`, `plain_names`). The 2026-10-30 pack writes 64 entries plain. A Spanish name that is a
   designation and then the English name ("Municipio de Wandsworth", "Krai de Krasnodar") becomes the name alone.
-  The 2026-10-29 pack shortens 172 English and 360 Spanish entry names.
+  The 2026-10-30 pack changes 175 English and 366 Spanish entry names.
 - **Plate groups** (coordinator, 2026-10-29). Where Natural Earth's admin-1 is a second-level unit, the plate and the
   state lines use the first-level region; the polygons are not dissolved, each entry just names its group. The
   generator's `PLATE_GROUPS` table gives, per country, the source field naming the region and each value's ISO
@@ -269,13 +281,46 @@ at City) would make a 6.7 MB pack and 0.005° leave 130 KB under the cap, so the
   117 groups holding 887 entries.
 
 The 2026-10-29 pack has 4,554 entries over 239 countries (4,293 with an ISO token), 8,480 rings and 435,491
-points; `ADM1` stores 2.02 MB of the 5.77 MB pack (5,771,019 bytes, 520 KB under the cap). A reader refuses a
+points; `ADM1` stores 2.02 MB of the pack (6,538,454 bytes since the roads, 0.8 MB under the 7 MiB cap). A reader refuses a
 count over 8,192, a token of the wrong shape or used twice, a country `CTRY` lacks, an empty English name and any
 malformed outline. `ADM1` is required in version 1 (nothing has shipped).
 
+### `ROAD`: major roads
+
+The approved major-road style (World-Exploration-Spec §2, `ex-roads`: "Only motorway, trunk and primary roads"; once
+the route crosses one, the whole road turns amber). Source: Natural Earth 1:10m `ne_10m_roads` (owner's OK
+2026-10-30).
+
+```
+u32 roadCount
+roadCount × { u32 number · u8 kind (1 highway, 2 main road) · u16 lineCount ·
+              lineCount × { u16 pointCount (≥ 2) · first point i32 lon, i32 lat · zigzag-LEB128 deltas } }
+```
+
+- **Which roads.** Natural Earth's roads carry no OSM classes, so its own ranking stands in for them. A **highway**
+  (motorway, trunk) is a piece typed "Major Highway", "Beltway" or "Bypass", or marked as an expressway. A **main
+  road** (primary) is any other road piece of `SCALERANK` 5 or less, ranked the same the world over (its "Secondary
+  Highway" type is North American only, and most of Asia's roads are typed "Unknown"). Ferries, tracks and minor
+  roads are left out.
+- **What a road is.** It is what turns amber "whole" once crossed: the touching pieces of one named route
+  (`PREFIX` + `NAME`, else `LABEL`, at one `LEVEL`: Interstate 5 and a state's route 5 stay apart), or, unnamed, the
+  pieces chained through every point where exactly two meet (a stretch between junctions). A source feature's parts
+  are always one road. Its kind is highway when any piece is.
+- **The token** is "ne:road:" and the road's number, the smallest record number among its pieces in the pinned
+  source file (Natural Earth's own `UIDENT` is 0 for most pieces). The tokens hold while the source's SHA-256 pin
+  does; a new source version re-mints them. Numbers ascend and never repeat.
+- **Geometry.** Each line is thinned by Douglas-Peucker for open lines at 0.001° (about 110 m, owner 2026-10-30;
+  both ends kept) and stored in 1e-5° integers.
+- The 2026-10-30 pack has 9,002 roads (5,582 highways), 22,626 lines and 245,340 points: 767,634 bytes stored.
+  At the old 6 MiB cap only a 1.1 km simplification fitted; the owner raised the cap instead.
+- A reader refuses more than 65,536 roads, 8,192 lines a road, 65,535 points a line or 1,000,000 points in all, a
+  number out of order or repeated, an unknown kind, a road with no line, a line under two points, and any point
+  off the globe. It buckets the segments by one-degree cell once (`AtlasRoadIndex`) and refuses a segment whose box
+  touches more than 1,024 cells. `ROAD` is required (nothing has shipped).
+
 ### `META`
 
-UTF-8 JSON: the generator version (3 since `ADM1`, 4 since its plate groups, 6 since the territory override and everyday names), the generation date, both simplification tolerances, and each
+UTF-8 JSON: the generator version (3 since `ADM1`, 4 since its plate groups, 6 since the territory override and everyday names, 7 since Kyiv's pair, plain spelling and `ROAD`), the generation date, both simplification tolerances, and each
 source's file name, URL, SHA-256 and licence.
 
 ## The rules the reader applies
@@ -316,6 +361,13 @@ source's file name, URL, SHA-256 and licence.
   the country under it when `CTRY` has one there (each box first), else among all. The plate's
   `WorldAtlas.placeName(at:)` names that entry's plate group (`admin1Group(at:)`) and the country. No entry, no
   state: the plate names just the country, and at sea nothing.
+- **Road crossed** (`WorldAtlas.roadsCrossed(from:to:)`): a road counts as discovered when the route crosses it.
+  The route's segment between two consecutive accepted fixes is tested against the road's lines; crossing or
+  touching one counts that road, once. A segment longer than `WorldAtlas.maxCrossingSegmentMetres` (5 km) is a gap,
+  not a crossing (the phone was off, or a flight), and so is one across the antimeridian. Bounded: the segment's
+  few one-degree cells of `AtlasRoadIndex`. Natural Earth's lines sit within a few hundred metres of the real road,
+  so a route from one side of a road to the other crosses its line. `roads(overlapping:)` hands the screen the
+  roads to draw.
 - **Lines on hex edges** (`WorldAtlas.border(between:and:)`): each world-view hex is named by the place at its
   centre (`placeName(of:in:)`); an edge carries a country line where the two countries differ and a state line
   where, in one country, the two plate groups differ (so London's boroughs draw none between them), and nothing
