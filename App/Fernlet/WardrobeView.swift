@@ -43,6 +43,7 @@ struct WardrobeView: View {
 
     var body: some View {
         List {
+            unlockedSection
             designNewSection
             shopStatusSection
             yourItemsHeaderSection
@@ -85,6 +86,20 @@ struct WardrobeView: View {
                                onExit: { editingItemID = nil })
         } else {
             Color.parchment.ignoresSafeArea()
+        }
+    }
+
+    /// "Everything you've unlocked stays unlocked." at the top of the closet (round 7, World-Passport-Spec §4:
+    /// the line Customize closed with moves here as Sprout's passport takes Customize's place).
+    private var unlockedSection: some View {
+        Section {
+            Text("Everything you've unlocked stays unlocked.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(WorldPalette.dim)
+                .fernletWrappingText()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .plainClosetRow(insets: EdgeInsets(top: 8, leading: 22, bottom: 2, trailing: 22))
+                .accessibilityIdentifier("wardrobe.unlockedNote")
         }
     }
 

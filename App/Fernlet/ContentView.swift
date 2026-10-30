@@ -886,6 +886,8 @@ struct ContentView: View {
             // cookie's log raises at the bottom.
             .overlay { worldOverlayPanel }
             .overlay(alignment: .top) { sillyStampBannerOverlay }
+            // DEBUG screenshots of Sprout's passport, page 1 (round 7); nothing in Release.
+            .overlay { PassportSproutHarnessHost(store: store) }
             .animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.36, dampingFraction: 0.86), value: shownStampBanner)
             .fernletKeyboardOverlap($keyboardOverlap)
             .tint(Color.moss)
